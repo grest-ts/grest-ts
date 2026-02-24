@@ -1,7 +1,7 @@
 {
   "//": "THIS FILE IS GENERATED - DO NOT EDIT",
   "name": "@grest-ts/db-postgre",
-  "version": "0.0.14",
+  "version": "0.0.15",
   "type": "module",
   "license": "MIT",
   "description": "PostgreSQL database utilities for Grest Framework",
@@ -49,15 +49,15 @@
     "node": ">=25"
   },
   "dependencies": {
-    "@grest-ts/config": "0.0.14",
-    "@grest-ts/locator": "0.0.14",
-    "@grest-ts/logger": "0.0.14",
-    "@grest-ts/schema": "0.0.14",
+    "@grest-ts/config": "0.0.15",
+    "@grest-ts/locator": "0.0.15",
+    "@grest-ts/logger": "0.0.15",
+    "@grest-ts/schema": "0.0.15",
     "pg": "^8.18.0"
   },
   "devDependencies": {
-    "@grest-ts/testkit": "0.0.14",
-    "@grest-ts/x-packager": "0.0.14",
+    "@grest-ts/testkit": "0.0.15",
+    "@grest-ts/x-packager": "0.0.15",
     "@types/pg": "^8.16.0"
   }
 }
