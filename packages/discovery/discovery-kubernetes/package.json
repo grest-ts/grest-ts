@@ -1,0 +1,51 @@
+{
+  "//": "THIS FILE IS GENERATED - DO NOT EDIT",
+  "name": "@grest-ts/discovery-kubernetes",
+  "version": "0.0.4",
+  "type": "module",
+  "license": "MIT",
+  "description": "Kubernetes service discovery implementation for Grest Framework",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "import": "./src/index.ts"
+    }
+  },
+  "files": [
+    "src"
+  ],
+  "scripts": {
+    "typecheck": "tsc --noEmit -p src"
+  },
+  "private": true,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/grest-ts/grest-ts.git",
+    "directory": "packages/discovery/discovery-kubernetes"
+  },
+  "homepage": "https://github.com/grest-ts/grest-ts/tree/master/packages/discovery/discovery-kubernetes",
+  "bugs": {
+    "url": "https://github.com/grest-ts/grest-ts/issues"
+  },
+  "keywords": [
+    "typescript",
+    "framework",
+    "contract",
+    "api",
+    "microservices",
+    "testing",
+    "service-discovery",
+    "kubernetes",
+    "k8s"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "@grest-ts/discovery": "0.0.4",
+    "@grest-ts/logger": "0.0.4"
+  },
+  "devDependencies": {
+    "@grest-ts/x-packager": "0.0.4"
+  }
+}

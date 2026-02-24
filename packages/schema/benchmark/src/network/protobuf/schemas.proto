@@ -1,0 +1,100 @@
+syntax = "proto3";
+
+message SimpleData {
+    string name = 1;
+    int32 age = 2;
+    string email = 3;
+    bool active = 4;
+    repeated string tags = 5;
+}
+
+message Social {
+    string twitter = 1;
+    string github = 2;
+}
+
+message Profile {
+    string bio = 1;
+    string website = 2;
+    Social social = 3;
+}
+
+message User {
+    string name = 1;
+    string email = 2;
+    Profile profile = 3;
+}
+
+message Metadata {
+    int32 createdAt = 1;
+    int32 updatedAt = 2;
+    int32 version = 3;
+}
+
+message NestedData {
+    int32 id = 1;
+    User user = 2;
+    Metadata metadata = 3;
+    repeated string tags = 4;
+}
+
+message RefineData {
+    string username = 1;
+    string email = 2;
+    int32 age = 3;
+    string password = 4;
+    string website = 5;
+}
+
+message DiscriminatedUser {
+    string type = 1;
+    string name = 2;
+    string email = 3;
+}
+
+message DiscriminatedAdmin {
+    string type = 1;
+    string name = 2;
+    string email = 3;
+    int32 level = 4;
+}
+
+message DiscriminatedGuest {
+    string type = 1;
+    string sessionId = 2;
+}
+
+message RecursiveData {
+    string name = 1;
+    int32 value = 2;
+    repeated RecursiveData children = 3;
+}
+
+message TupleCoords {
+    int32 x = 1;
+    int32 y = 2;
+    int32 z = 3;
+}
+
+message TupleRange {
+    int32 min = 1;
+    int32 max = 2;
+}
+
+message TupleMixed {
+    string str = 1;
+    int32 num = 2;
+    bool flag = 3;
+}
+
+message TupleData {
+    TupleCoords coords = 1;
+    TupleRange range = 2;
+    TupleMixed mixed = 3;
+}
+
+message BigStringData {
+    string content = 1;
+    string description = 2;
+    string metadata = 3;
+}

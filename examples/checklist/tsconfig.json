@@ -1,0 +1,12 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "types": ["node", "vitest/globals", "grest-ts-testkits"]
+  },
+  "include": [
+    "grest.config.ts",
+    "common/**/*.ts",
+    "checklist/**/*.ts",
+    "blocker/**/*.ts"
+  ]
+}

@@ -1,0 +1,1362 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Package Dependencies</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/split.js/dist/split.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            display: flex;
+            height: 100vh;
+            background: #1a1a2e;
+            color: #eee;
+        }
+
+        .split {
+            display: flex;
+            flex-direction: row;
+        }
+
+        .gutter {
+            background: #0f3460;
+            cursor: col-resize;
+            flex-shrink: 0;
+        }
+
+        .gutter:hover {
+            background: #1a5a9a;
+        }
+
+        .sidebar {
+            background: #16213e;
+            padding: 16px;
+            overflow-y: auto;
+            min-width: 0;
+        }
+
+        .sidebar h2 {
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #888;
+            margin-bottom: 12px;
+        }
+
+        .package-list {
+            list-style: none;
+        }
+
+        .package-group {
+            margin: 4px 0;
+        }
+
+        .package-group-header {
+            padding: 8px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: background 0.2s;
+            user-select: none;
+        }
+
+        .package-group-header:hover {
+            background: #0f3460;
+        }
+
+        .package-group-toggle {
+            width: 16px;
+            font-size: 10px;
+            color: #888;
+            flex-shrink: 0;
+        }
+
+        .package-group-children {
+            margin-left: 24px;
+            border-left: 1px solid #0f3460;
+            padding-left: 8px;
+        }
+
+        .package-group.collapsed .package-group-children {
+            display: none;
+        }
+
+        .package-group.collapsed .package-group-toggle::before {
+            content: '\25B6';
+        }
+
+        .package-group-toggle::before {
+            content: '\25BC';
+        }
+
+        .package-item {
+            padding: 8px 12px;
+            padding-left: 36px; /* Align with folder contents (12px + 16px toggle + 8px gap) */
+            margin: 4px 0;
+            border-radius: 6px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: background 0.2s;
+        }
+
+        .package-group-children .package-item {
+            padding-left: 12px; /* Reset for items inside folders */
+        }
+
+        .package-item:hover {
+            background: #0f3460;
+        }
+
+        .package-item.selected {
+            background: #0f3460;
+            box-shadow: inset 3px 0 0 var(--pkg-color, #4E79A7);
+        }
+
+        .package-color {
+            width: 12px;
+            height: 12px;
+            border-radius: 3px;
+            flex-shrink: 0;
+        }
+
+        .package-name {
+            flex: 1;
+            font-size: 13px;
+        }
+
+        .package-icons {
+            display: flex;
+            gap: 2px;
+            margin-left: auto;
+        }
+
+        .package-icon {
+            width: 14px;
+            height: 14px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+
+        .filter-controls {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-bottom: 12px;
+            padding: 8px;
+            background: #1a1a2e;
+            border-radius: 6px;
+        }
+
+        .filter-group {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .filter-group-label {
+            font-size: 9px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: #666;
+            min-width: 55px;
+        }
+
+        .filter-item {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 11px;
+            cursor: pointer;
+            user-select: none;
+            padding: 4px 8px;
+            border-radius: 4px;
+            background: rgba(255,255,255,0.05);
+            opacity: 0.5;
+        }
+
+        .filter-item.active {
+            opacity: 1;
+            background: rgba(255,255,255,0.15);
+        }
+
+        .filter-item.filter-toggle {
+            border: 1px dashed rgba(255,255,255,0.2);
+        }
+
+        .filter-item.filter-toggle.active {
+            border-color: rgba(255,255,255,0.4);
+        }
+
+        .filter-item input {
+            display: none;
+        }
+
+        .filter-item svg {
+            width: 12px;
+            height: 12px;
+        }
+
+        .main {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .header {
+            padding: 16px 24px;
+            background: #16213e;
+            border-bottom: 1px solid #0f3460;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .header h1 {
+            font-size: 18px;
+            font-weight: 500;
+        }
+
+        .content {
+            flex: 1;
+            display: flex;
+            overflow: hidden;
+        }
+
+        .graph-container {
+            flex: 1;
+            position: relative;
+            overflow: hidden;
+        }
+
+        #graph {
+            width: 100%;
+            height: 100%;
+        }
+
+        .details-panel {
+            background: #16213e;
+            padding: 20px;
+            overflow-y: auto;
+            min-width: 0;
+        }
+
+        .details-panel.hidden {
+            display: none;
+        }
+
+        .details-title {
+            font-size: 20px;
+            font-weight: 600;
+            margin-bottom: 4px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .details-description {
+            color: #888;
+            font-size: 13px;
+            margin-bottom: 16px;
+        }
+
+        .details-section {
+            margin-bottom: 20px;
+        }
+
+        .details-section h3 {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #666;
+            margin-bottom: 8px;
+        }
+
+        .dep-list {
+            list-style: none;
+        }
+
+        .dep-item {
+            padding: 6px 10px;
+            margin: 3px 0;
+            background: #1a1a2e;
+            border-radius: 4px;
+            font-size: 13px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: background 0.2s;
+        }
+
+        .dep-item:hover {
+            background: #0f3460;
+        }
+
+        .dep-color {
+            width: 8px;
+            height: 8px;
+            border-radius: 2px;
+        }
+
+        .targets {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .target-badge {
+            padding: 4px 8px;
+            background: #1a1a2e;
+            border-radius: 4px;
+            font-size: 11px;
+        }
+
+        .readme-section {
+            margin-top: 24px;
+            border-top: 1px solid #0f3460;
+            padding-top: 16px;
+        }
+
+        .readme-content {
+            font-size: 13px;
+            line-height: 1.6;
+            color: #ccc;
+        }
+
+        .readme-content h1 {
+            font-size: 18px;
+            margin: 16px 0 8px 0;
+            color: #fff;
+        }
+
+        .readme-content h2 {
+            font-size: 15px;
+            margin: 14px 0 6px 0;
+            color: #fff;
+        }
+
+        .readme-content h3 {
+            font-size: 13px;
+            margin: 12px 0 4px 0;
+            color: #fff;
+        }
+
+        .readme-content p {
+            margin: 8px 0;
+        }
+
+        .readme-content code {
+            background: #1a1a2e;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 12px;
+        }
+
+        .readme-content pre {
+            background: #1a1a2e;
+            padding: 12px;
+            border-radius: 6px;
+            overflow-x: auto;
+            margin: 8px 0;
+        }
+
+        .readme-content pre code {
+            padding: 0;
+            background: none;
+            font-size: 12px;
+        }
+
+        .readme-content pre code.hljs {
+            background: transparent;
+            padding: 0;
+        }
+
+        .readme-content ul, .readme-content ol {
+            margin: 8px 0;
+            padding-left: 20px;
+        }
+
+        .readme-content li {
+            margin: 4px 0;
+        }
+
+        .readme-content a {
+            color: #4E79A7;
+        }
+
+        .readme-content a:hover {
+            color: #6a9fd4;
+        }
+
+        .node {
+            cursor: pointer;
+        }
+
+        .node rect {
+            stroke-width: 2px;
+            rx: 6;
+            ry: 6;
+        }
+
+        .node.selected rect {
+            stroke: #fff;
+            stroke-width: 3px;
+        }
+
+        .node.dimmed {
+            opacity: 0.15;
+        }
+
+        .node.root-package rect {
+            /* Root packages no longer have special border - indicated by underscore instead */
+        }
+
+        .node.root-package::after {
+            content: '';
+        }
+
+        .root-indicator {
+            font-size: 9px;
+            fill: #fff;
+            opacity: 0.8;
+        }
+
+        .impl-indicator {
+            font-size: 8px;
+            fill: #fff;
+            opacity: 0.7;
+        }
+
+        .node text {
+            font-size: 12px;
+            /* fill set via inline attr for implementation packages */
+            pointer-events: none;
+        }
+
+        .link {
+            fill: none;
+            stroke-opacity: 0.5;
+            stroke-width: 1.5px;
+        }
+
+        .link.highlighted {
+            stroke-opacity: 1;
+            stroke-width: 2.5px;
+        }
+
+        .link.dimmed {
+            stroke-opacity: 0.08;
+        }
+
+        .layer-label {
+            font-size: 11px;
+            fill: #444;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .no-selection {
+            color: #666;
+            font-style: italic;
+        }
+
+        .search-box {
+            width: 100%;
+            padding: 8px 12px;
+            background: #1a1a2e;
+            border: 1px solid #0f3460;
+            border-radius: 6px;
+            color: #fff;
+            font-size: 13px;
+            margin-bottom: 16px;
+        }
+
+        .search-box:focus {
+            outline: none;
+            border-color: #4E79A7;
+        }
+
+        .search-box::placeholder {
+            color: #555;
+        }
+
+        .controls {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 16px;
+        }
+
+        .sort-select {
+            width: 100%;
+            padding: 6px 10px;
+            background: #1a1a2e;
+            border: 1px solid #0f3460;
+            border-radius: 4px;
+            color: #fff;
+            font-size: 12px;
+            cursor: pointer;
+        }
+
+        .sort-select:focus {
+            outline: none;
+            border-color: #4E79A7;
+        }
+    </style>
+</head>
+<body class="split">
+    <div class="sidebar" id="sidebar">
+        <input type="text" class="search-box" placeholder="Search packages..." id="search">
+        <div class="controls">
+            <select class="sort-select" id="layerSort">
+                <option value="top">Top-aligned (roots at top)</option>
+                <option value="bottom" selected>Bottom-aligned (near deps)</option>
+            </select>
+        </div>
+        <div class="filter-controls" id="filterControls">
+            <div class="filter-group">
+                <span class="filter-group-label">Category</span>
+                <label class="filter-item">
+                    <input type="checkbox" id="filterCore">
+                    <span id="iconCore"></span>
+                    Core
+                </label>
+                <label class="filter-item">
+                    <input type="checkbox" id="filterLibs">
+                    <span>📦</span>
+                    Libs
+                </label>
+                <label class="filter-item">
+                    <input type="checkbox" id="filterTooling">
+                    <span id="iconTooling"></span>
+                    Tooling
+                </label>
+            </div>
+            <div class="filter-group">
+                <span class="filter-group-label">Platform</span>
+                <label class="filter-item">
+                    <input type="checkbox" id="filterNode">
+                    <span id="iconNode"></span>
+                    Node
+                </label>
+                <label class="filter-item">
+                    <input type="checkbox" id="filterBrowser">
+                    <span id="iconBrowser"></span>
+                    Browser
+                </label>
+                <label class="filter-item">
+                    <input type="checkbox" id="filterTestkit">
+                    <span id="iconTestkit"></span>
+                    Testkit
+                </label>
+            </div>
+            <div class="filter-group">
+                <span class="filter-group-label">Publish</span>
+                <label class="filter-item">
+                    <input type="checkbox" id="filterNpm">
+                    <span id="iconNpm"></span>
+                    npm
+                </label>
+            </div>
+            <div class="filter-group">
+                <span class="filter-group-label">Include</span>
+                <label class="filter-item filter-toggle">
+                    <input type="checkbox" id="filterImplementations" checked>
+                    <span>🔌</span>
+                    Implementations
+                </label>
+                <label class="filter-item filter-toggle">
+                    <input type="checkbox" id="filterHidden">
+                    <span>👁</span>
+                    Hidden
+                </label>
+            </div>
+        </div>
+        <h2>Packages</h2>
+        <ul class="package-list" id="packageList"></ul>
+    </div>
+
+    <div class="main" id="main">
+        <div class="header">
+            <h1>Package Dependencies</h1>
+        </div>
+
+        <div class="content split" id="content">
+            <div class="graph-container" id="graphContainer">
+                <svg id="graph"></svg>
+            </div>
+
+            <div class="details-panel" id="detailsPanel">
+                <div class="no-selection">Select a package to view details</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let data = null;
+        let selectedNode = null;
+        let layerSort = 'bottom'; // 'top' or 'bottom' - default to bottom-aligned
+        let svg, g, zoom;
+        let currentTransform = null; // Preserve zoom state
+
+        // Load saved transform from localStorage
+        const STORAGE_KEY = 'depGraph_transform';
+        function saveTransform() {
+            if (currentTransform) {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify({
+                    x: currentTransform.x,
+                    y: currentTransform.y,
+                    k: currentTransform.k
+                }));
+            }
+        }
+        function loadTransform() {
+            try {
+                const saved = localStorage.getItem(STORAGE_KEY);
+                if (saved) {
+                    const { x, y, k } = JSON.parse(saved);
+                    return d3.zoomIdentity.translate(x, y).scale(k);
+                }
+            } catch (e) {
+                console.warn('Failed to load saved transform:', e);
+            }
+            return null;
+        }
+        function clearSavedTransform() {
+            localStorage.removeItem(STORAGE_KEY);
+        }
+
+        // Panel size persistence
+        const PANEL_STORAGE_KEY = 'depGraph_panels';
+        function loadPanelSizes() {
+            try {
+                const saved = localStorage.getItem(PANEL_STORAGE_KEY);
+                return saved ? JSON.parse(saved) : {};
+            } catch (e) {
+                return {};
+            }
+        }
+        function savePanelSizes(key, sizes) {
+            const saved = loadPanelSizes();
+            saved[key] = sizes;
+            localStorage.setItem(PANEL_STORAGE_KEY, JSON.stringify(saved));
+        }
+
+        // Initialize Split.js panels
+        function initSplitPanels() {
+            const savedSizes = loadPanelSizes();
+
+            // Main split: sidebar | main content
+            Split(['#sidebar', '#main'], {
+                sizes: savedSizes.main || [20, 80],
+                minSize: [200, 400],
+                gutterSize: 6,
+                onDragEnd: (sizes) => savePanelSizes('main', sizes)
+            });
+
+            // Content split: graph | details panel
+            Split(['#graphContainer', '#detailsPanel'], {
+                sizes: savedSizes.content || [70, 30],
+                minSize: [300, 250],
+                gutterSize: 6,
+                onDragEnd: (sizes) => savePanelSizes('content', sizes)
+            });
+        }
+
+        // Calculate layers based on sort mode
+        function calculateLayers(nodes, edges, mode) {
+            const dependencies = new Map(); // what a package depends on
+            const dependents = new Map();   // what depends on a package
+
+            nodes.forEach(n => {
+                dependencies.set(n.name, []);
+                dependents.set(n.name, []);
+            });
+
+            edges.forEach(e => {
+                dependencies.get(e.from).push(e.to);
+                dependents.get(e.to).push(e.from);
+            });
+
+            const layers = new Map();
+
+            if (mode === 'top') {
+                // Original: packages float to top (roots at layer 0)
+                // Use the pre-calculated layers from JSON
+                nodes.forEach(n => layers.set(n.name, n.layer));
+            } else {
+                // Bottom-aligned: packages pushed down, just above their dependencies
+                // Calculate max depth from each node to leaf nodes
+                const memo = new Map();
+
+                function getDepthToLeaf(name) {
+                    if (memo.has(name)) return memo.get(name);
+
+                    const deps = dependencies.get(name) || [];
+                    if (deps.length === 0) {
+                        memo.set(name, 0);
+                        return 0;
+                    }
+
+                    const maxChildDepth = Math.max(...deps.map(d => getDepthToLeaf(d)));
+                    const depth = maxChildDepth + 1;
+                    memo.set(name, depth);
+                    return depth;
+                }
+
+                // Calculate depth for all nodes
+                nodes.forEach(n => getDepthToLeaf(n.name));
+
+                // Find max depth
+                const maxDepth = Math.max(...[...memo.values()]);
+
+                // Invert so leaf nodes are at bottom (maxDepth), roots based on their path length
+                nodes.forEach(n => {
+                    const depthFromLeaf = memo.get(n.name);
+                    layers.set(n.name, maxDepth - depthFromLeaf);
+                });
+            }
+
+            return layers;
+        }
+
+        // Configure marked to use highlight.js for code blocks
+        marked.use({
+            renderer: {
+                code(token) {
+                    const code = token.text || token;
+                    const lang = token.lang || 'typescript';
+                    if (hljs.getLanguage(lang)) {
+                        try {
+                            const highlighted = hljs.highlight(code, { language: lang }).value;
+                            return `<pre><code class="hljs language-${lang}">${highlighted}</code></pre>`;
+                        } catch (e) {}
+                    }
+                    return `<pre><code>${code}</code></pre>`;
+                }
+            }
+        });
+
+        // Load data
+        fetch('dependencies.json')
+            .then(r => r.json())
+            .then(d => {
+                data = d;
+                init();
+            })
+            .catch(err => {
+                console.error('Failed to load dependencies.json:', err);
+                document.getElementById('graphContainer').innerHTML =
+                    '<div style="padding: 40px; color: #888;">Failed to load dependencies.json. Run the packager first.</div>';
+            });
+
+        function init() {
+            initSplitPanels();
+            renderPackageList();
+            renderTree();
+            setupEventListeners();
+        }
+
+        // SVG icons for flags
+        const ICONS = {
+            node: `<svg width="14" height="14" viewBox="0 0 256 289"><path fill="#539E43" d="M128 288.464c-3.975 0-7.685-1.06-11.13-2.915l-35.247-20.936c-5.3-2.915-2.65-3.975-1.06-4.505 7.155-2.385 8.48-2.915 15.9-7.156.796-.53 1.856-.265 2.65.265l27.032 16.166c1.06.53 2.385.53 3.18 0l105.74-61.217c1.06-.53 1.59-1.59 1.59-2.915V83.08c0-1.325-.53-2.385-1.59-2.915l-105.74-60.953c-1.06-.53-2.385-.53-3.18 0L20.405 80.166c-1.06.53-1.59 1.855-1.59 2.915v122.17c0 1.06.53 2.385 1.59 2.915l28.887 16.695c15.636 7.95 25.44-1.325 25.44-10.6V93.68c0-1.59 1.326-3.18 3.181-3.18h13.516c1.59 0 3.18 1.325 3.18 3.18v120.58c0 20.936-11.396 33.126-31.272 33.126-6.095 0-10.865 0-24.38-6.625l-27.827-15.9C4.24 220.356 0 213.2 0 205.515V83.346C0 75.66 4.24 68.505 11.13 64L116.87 2.783c6.625-3.71 15.635-3.71 22.26 0L244.87 64c6.89 4.24 11.13 11.66 11.13 19.345v122.17c0 7.685-4.24 15.105-11.13 19.345L139.13 286.08c-3.445 1.59-7.42 2.385-11.13 2.385z"/></svg>`,
+            browser: `<svg width="14" height="14" viewBox="0 0 24 24"><path fill="#4E9FD1" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/></svg>`,
+            testkit: `<svg width="14" height="14" viewBox="0 0 24 24"><path fill="#9C27B0" d="M7 2v2h1v14a4 4 0 0 0 4 4 4 4 0 0 0 4-4V4h1V2H7zm4 14c-.6 0-1-.4-1-1s.4-1 1-1 1 .4 1 1-.4 1-1 1zm2-4c-.6 0-1-.4-1-1s.4-1 1-1 1 .4 1 1-.4 1-1 1zm1-5h-4V4h4v3z"/></svg>`,
+            npm: `<svg width="14" height="14" viewBox="0 0 256 256"><path fill="#C12127" d="M0 256V0h256v256z"/><path fill="#fff" d="M48 48v160h80V80h48v128h32V48z"/></svg>`,
+            // Category icons
+            core: `<svg width="10" height="10" viewBox="0 0 24 24"><path fill="#fff" d="M19.14 12.94c.04-.31.06-.63.06-.94 0-.31-.02-.63-.06-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>`,
+            tooling: `<svg width="10" height="10" viewBox="0 0 24 24"><path fill="#888" d="M22.7 19l-9.1-9.1c.9-2.3.4-5-1.5-6.9-2-2-5-2.4-7.4-1.3L9 6 6 9 1.6 4.7C.4 7.1.9 10.1 2.9 12.1c1.9 1.9 4.6 2.4 6.9 1.5l9.1 9.1c.4.4 1 .4 1.4 0l2.3-2.3c.5-.4.5-1.1.1-1.4z"/></svg>`
+        };
+
+        function getFlagIcons(flags) {
+            return `
+                <span class="package-icon">${flags.testkit ? ICONS.testkit : ''}</span>
+                <span class="package-icon">${flags.browser ? ICONS.browser : ''}</span>
+                <span class="package-icon">${flags.node ? ICONS.node : ''}</span>
+            `;
+        }
+
+        // Filter state
+        const filters = {
+            // Category group (OR logic within group)
+            core: false,
+            libs: false,
+            tooling: false,
+            // Platform group (OR logic within group)
+            node: false,
+            browser: false,
+            testkit: false,
+            // Publish group
+            npm: false,
+            // Include toggles (special: adds to results when checked)
+            implementations: true,
+            hidden: false
+        };
+
+        // Main filter function for sidebar
+        function matchesFilters(node) {
+            // Include toggles - if off, exclude those packages
+            if (!filters.hidden && node.flags.hidden) return false;
+
+            // Publish group: if npm checked, only show npm packages
+            if (filters.npm && !node.flags.npm) return false;
+
+            // Category group: OR logic, none checked = show all
+            const categoryFiltersEnabled = filters.core || filters.libs || filters.tooling;
+            if (categoryFiltersEnabled) {
+                const categoryMatch =
+                    (filters.core && node.category === 'core') ||
+                    (filters.libs && node.category === 'libs') ||
+                    (filters.tooling && node.category === 'tooling');
+                if (!categoryMatch) return false;
+            }
+
+            // Platform group: OR logic, none checked = show all
+            const platformFiltersEnabled = filters.node || filters.browser || filters.testkit;
+            if (platformFiltersEnabled) {
+                const platformMatch =
+                    (filters.node && node.flags.node) ||
+                    (filters.browser && node.flags.browser) ||
+                    (filters.testkit && node.flags.testkit);
+                if (!platformMatch) return false;
+            }
+
+            return true;
+        }
+
+        // Filter for graph - also applies implementations toggle
+        function matchesGraphFilters(node) {
+            // Include toggles - if off, exclude those packages
+            if (!filters.hidden && node.flags.hidden) return false;
+            if (!filters.implementations && node.flags.implementation) return false;
+
+            // Publish group: if npm checked, only show npm packages
+            if (filters.npm && !node.flags.npm) return false;
+
+            // Category group: OR logic, none checked = show all
+            const categoryFiltersEnabled = filters.core || filters.libs || filters.tooling;
+            if (categoryFiltersEnabled) {
+                const categoryMatch =
+                    (filters.core && node.category === 'core') ||
+                    (filters.libs && node.category === 'libs') ||
+                    (filters.tooling && node.category === 'tooling');
+                if (!categoryMatch) return false;
+            }
+
+            // Platform group: OR logic, none checked = show all
+            const platformFiltersEnabled = filters.node || filters.browser || filters.testkit;
+            if (platformFiltersEnabled) {
+                const platformMatch =
+                    (filters.node && node.flags.node) ||
+                    (filters.browser && node.flags.browser) ||
+                    (filters.testkit && node.flags.testkit);
+                if (!platformMatch) return false;
+            }
+
+            return true;
+        }
+
+        function renderPackageList() {
+            const list = document.getElementById('packageList');
+            const sortedNodes = [...data.nodes].sort((a, b) => a.name.localeCompare(b.name));
+
+            // Filter nodes based on current filters
+            const filteredNodes = sortedNodes.filter(matchesFilters);
+
+            // Group packages by their group property
+            const groups = new Map(); // group name -> { base: node|null, children: node[] }
+            const standalone = []; // packages without group
+
+            for (const node of filteredNodes) {
+                if (node.group) {
+                    if (!groups.has(node.group)) {
+                        groups.set(node.group, { base: null, children: [] });
+                    }
+                    const group = groups.get(node.group);
+                    // If package name equals group name, it's the base
+                    if (node.name === node.group) {
+                        group.base = node;
+                    } else {
+                        group.children.push(node);
+                    }
+                } else {
+                    standalone.push(node);
+                }
+            }
+
+            // Convert single-item groups to standalone
+            for (const [groupName, group] of groups) {
+                const totalItems = (group.base ? 1 : 0) + group.children.length;
+                if (totalItems === 1) {
+                    // Single item in group - move to standalone
+                    const node = group.base || group.children[0];
+                    standalone.push(node);
+                    groups.delete(groupName);
+                }
+            }
+
+            // Render function for a single package item
+            const renderItem = (node, indent = false) => `
+                <li class="package-item${indent ? ' child-item' : ''}" data-name="${node.name}" style="--pkg-color: ${node.color}">
+                    <span class="package-color" style="background: ${node.color}"></span>
+                    <span class="package-name">${node.name}</span>
+                    <span class="package-icons">${getFlagIcons(node.flags)}</span>
+                </li>
+            `;
+
+            // Combine groups and standalone into a single sorted list
+            const allItems = [];
+
+            // Add groups
+            for (const [baseName, group] of groups) {
+                if (group.children.length > 0) {
+                    // Has children, render as group (with or without base)
+                    allItems.push({ type: 'group', name: baseName, group });
+                } else if (group.base) {
+                    // Only base, no children - render as standalone
+                    allItems.push({ type: 'standalone', name: group.base.name, node: group.base });
+                }
+            }
+
+            // Add standalone packages
+            for (const node of standalone) {
+                allItems.push({ type: 'standalone', name: node.name, node });
+            }
+
+            // Sort all items alphabetically by name
+            allItems.sort((a, b) => a.name.localeCompare(b.name));
+
+            // Helper to aggregate flags from multiple nodes
+            const aggregateFlags = (nodes) => ({
+                node: nodes.some(n => n.flags.node),
+                browser: nodes.some(n => n.flags.browser),
+                testkit: nodes.some(n => n.flags.testkit),
+                hidden: nodes.some(n => n.flags.hidden)
+            });
+
+            // Render all items
+            let html = '';
+            for (const item of allItems) {
+                if (item.type === 'group') {
+                    const { group } = item;
+                    const allMembers = group.base ? [group.base, ...group.children] : group.children;
+                    const headerColor = group.base ? group.base.color : group.children[0].color;
+                    const headerFlags = group.base ? group.base.flags : aggregateFlags(group.children);
+                    html += `
+                        <li class="package-group collapsed">
+                            <div class="package-group-header" data-group="${item.name}">
+                                <span class="package-group-toggle"></span>
+                                <span class="package-color" style="background: ${headerColor}"></span>
+                                <span class="package-name">${item.name}</span>
+                                <span class="package-icons">${getFlagIcons(headerFlags)}</span>
+                            </div>
+                            <ul class="package-group-children">
+                                ${group.base ? renderItem(group.base, true) : ''}
+                                ${group.children.map(c => renderItem(c, true)).join('')}
+                            </ul>
+                        </li>
+                    `;
+                } else {
+                    html += renderItem(item.node);
+                }
+            }
+
+            list.innerHTML = html;
+
+            // Add click handlers for group headers
+            list.querySelectorAll('.package-group-header').forEach(header => {
+                header.addEventListener('click', (e) => {
+                    if (e.target.closest('.package-item')) return;
+                    const group = header.closest('.package-group');
+                    group.classList.toggle('collapsed');
+                });
+            });
+        }
+
+        function renderTree() {
+            const container = document.getElementById('graphContainer');
+            const width = container.clientWidth;
+            const height = container.clientHeight;
+
+            svg = d3.select('#graph')
+                .attr('width', width)
+                .attr('height', height);
+
+            svg.selectAll('*').remove();
+
+            g = svg.append('g');
+
+            // Enable zoom
+            zoom = d3.zoom()
+                .scaleExtent([0.1, 4])
+                .on('zoom', (event) => {
+                    currentTransform = event.transform;
+                    g.attr('transform', event.transform);
+                    saveTransform(); // Persist to localStorage
+                });
+
+            svg.call(zoom);
+
+            // Restore previous transform if exists, or load from localStorage
+            if (!currentTransform) {
+                currentTransform = loadTransform();
+            }
+            if (currentTransform) {
+                svg.call(zoom.transform, currentTransform);
+            }
+
+            const nodeMap = new Map(data.nodes.map(n => [n.name, n]));
+
+            // Filter nodes based on current filters (graph uses matchesGraphFilters which includes implementations)
+            const visibleNodes = data.nodes.filter(matchesGraphFilters);
+            const visibleNodeNames = new Set(visibleNodes.map(n => n.name));
+
+            // Filter edges to only show connections between visible nodes
+            const visibleEdges = data.edges.filter(e => visibleNodeNames.has(e.from) && visibleNodeNames.has(e.to));
+
+            // Build adjacency lists
+            const dependencies = new Map(); // what a package depends on
+            const dependents = new Map();   // what depends on a package
+
+            visibleNodes.forEach(n => {
+                dependencies.set(n.name, []);
+                dependents.set(n.name, []);
+            });
+
+            visibleEdges.forEach(e => {
+                dependencies.get(e.from).push(e.to);
+                dependents.get(e.to).push(e.from);
+            });
+
+            // Calculate layers based on current sort mode (use visible nodes/edges)
+            const nodeLayers = calculateLayers(visibleNodes, visibleEdges, layerSort);
+
+            // Group nodes by layer
+            const layers = new Map();
+            visibleNodes.forEach(n => {
+                const layer = nodeLayers.get(n.name);
+                if (!layers.has(layer)) layers.set(layer, []);
+                layers.get(layer).push(n);
+            });
+
+            const sortedLayers = [...layers.keys()].sort((a, b) => a - b);
+            const maxLayer = Math.max(...sortedLayers);
+
+            // Calculate positions
+            const nodeWidth = 150;
+            const nodeHeight = 32;
+            const layerHeight = 80;
+            const nodeSpacing = 20;
+
+            const positions = new Map();
+
+            // Count incoming connections (dependents) for each node
+            const incomingCount = new Map();
+            visibleNodes.forEach(n => {
+                const count = (dependents.get(n.name) || []).length;
+                incomingCount.set(n.name, count);
+            });
+
+            // Position nodes by layer
+            // Sort so packages with most incoming deps are on the left
+            sortedLayers.forEach(layer => {
+                const layerNodes = layers.get(layer);
+
+                // Sort by incoming connection count descending (most depended-on first), then alphabetically for ties
+                layerNodes.sort((a, b) => {
+                    const countDiff = incomingCount.get(b.name) - incomingCount.get(a.name);
+                    if (countDiff !== 0) return countDiff;
+                    return a.name.localeCompare(b.name);
+                });
+
+                // Position left-to-right: most incoming deps on the left, left-aligned
+                let x = 60; // Fixed left margin, near the layer labels
+                const y = 60 + layer * layerHeight;
+
+                layerNodes.forEach(n => {
+                    positions.set(n.name, { x: x + nodeWidth / 2, y: y + nodeHeight / 2, node: n });
+                    x += nodeWidth + nodeSpacing;
+                });
+            });
+
+
+            // Draw layer labels
+            g.selectAll('.layer-label')
+                .data(sortedLayers)
+                .join('text')
+                .attr('class', 'layer-label')
+                .attr('x', 20)
+                .attr('y', d => 60 + d * layerHeight + nodeHeight / 2 + 4)
+                .text(d => `L${d}`);
+
+            // Draw edges with curves
+            const linkGenerator = d3.linkVertical()
+                .x(d => d.x)
+                .y(d => d.y);
+
+            g.selectAll('.link')
+                .data(visibleEdges)
+                .join('path')
+                .attr('class', 'link')
+                .attr('stroke', d => nodeMap.get(d.from)?.color || '#666')
+                .attr('d', d => {
+                    const source = positions.get(d.from);
+                    const target = positions.get(d.to);
+                    if (!source || !target) return '';
+                    return linkGenerator({
+                        source: { x: source.x, y: source.y + nodeHeight / 2 },
+                        target: { x: target.x, y: target.y - nodeHeight / 2 }
+                    });
+                });
+
+            // Draw nodes
+            const nodeGroups = g.selectAll('.node')
+                .data(visibleNodes.map(n => ({ name: n.name, category: n.category, isImpl: n.flags.implementation, ...positions.get(n.name), isRoot: (dependents.get(n.name) || []).length === 0 })))
+                .join('g')
+                .attr('class', d => d.isRoot ? 'node root-package' : 'node')
+                .attr('transform', d => `translate(${d.x - nodeWidth / 2}, ${d.y - nodeHeight / 2})`);
+
+            nodeGroups.append('rect')
+                .attr('width', nodeWidth)
+                .attr('height', nodeHeight)
+                .attr('fill', d => d.node.color)
+                .attr('stroke', d => d.node.color);
+
+            // Add category icon for core and tooling
+            nodeGroups.each(function(d) {
+                if (d.category === 'core' || d.category === 'tooling') {
+                    const iconSvg = d.category === 'core' ? ICONS.core : ICONS.tooling;
+                    d3.select(this).append('g')
+                        .attr('transform', `translate(6, ${nodeHeight / 2 - 5})`)
+                        .html(iconSvg);
+                }
+            });
+
+            nodeGroups.append('text')
+                .attr('x', d => (d.category === 'core' || d.category === 'tooling') ? 20 : 10)
+                .attr('y', nodeHeight / 2 + 4)
+                .attr('fill', d => d.isImpl ? '#aaa' : '#fff')
+                .text(d => {
+                    const maxLen = (d.category === 'core' || d.category === 'tooling') ? 15 : 17;
+                    return d.name.length > maxLen ? d.name.slice(0, maxLen - 1) + '..' : d.name;
+                });
+
+            // Add root indicator for packages with no incoming deps (entry points)
+            nodeGroups.each(function(d) {
+                if (d.isRoot) {
+                    d3.select(this).append('text')
+                        .attr('class', 'root-indicator')
+                        .attr('x', nodeWidth / 2)
+                        .attr('y', -4)
+                        .attr('text-anchor', 'middle')
+                        .text('_'); // underscore to indicate "first" / entry point
+                }
+            });
+
+            nodeGroups.on('click', (event, d) => {
+                event.stopPropagation();
+                selectNode(d.name);
+            });
+
+            svg.on('click', () => selectNode(null));
+
+            // Calculate default transform for centering
+            function getDefaultTransform() {
+                const bounds = g.node().getBBox();
+                const fullWidth = bounds.width + 100;
+                const fullHeight = bounds.height + 100;
+                const midX = bounds.x + bounds.width / 2;
+                const midY = bounds.y + bounds.height / 2;
+                const scale = Math.min(0.95, Math.min(width / fullWidth, height / fullHeight));
+                const tx = width / 2 - midX * scale;
+                const ty = 40;
+                return d3.zoomIdentity.translate(tx, ty).scale(scale);
+            }
+
+            // Check if any part of the graph is visible in the viewport
+            function isGraphVisible(transform) {
+                const bounds = g.node().getBBox();
+                // Transform the graph bounds to screen coordinates
+                const left = bounds.x * transform.k + transform.x;
+                const right = (bounds.x + bounds.width) * transform.k + transform.x;
+                const top = bounds.y * transform.k + transform.y;
+                const bottom = (bounds.y + bounds.height) * transform.k + transform.y;
+
+                // Check if any part overlaps with viewport
+                return right > 0 && left < width && bottom > 0 && top < height;
+            }
+
+            // Use cached transform if valid, otherwise center the view
+            if (currentTransform && isGraphVisible(currentTransform)) {
+                // Cached transform is valid, already applied
+            } else {
+                // No valid cached transform, center the view
+                currentTransform = getDefaultTransform();
+                svg.call(zoom.transform, currentTransform);
+                clearSavedTransform();
+            }
+
+            if (selectedNode) highlightNode(selectedNode);
+        }
+
+        function selectNode(name) {
+            selectedNode = name;
+
+            document.querySelectorAll('.package-item').forEach(el => {
+                el.classList.toggle('selected', el.dataset.name === name);
+            });
+
+            highlightNode(name);
+            updateDetailsPanel(name);
+        }
+
+        function highlightNode(name) {
+            const nodeMap = new Map(data.nodes.map(n => [n.name, n]));
+            const deps = new Set(data.edges.filter(e => e.from === name).map(e => e.to));
+            const dependents = new Set(data.edges.filter(e => e.to === name).map(e => e.from));
+            const related = new Set([name, ...deps, ...dependents]);
+
+            g.selectAll('.node')
+                .classed('selected', d => d.name === name)
+                .classed('dimmed', d => name && !related.has(d.name));
+
+            g.selectAll('.link')
+                .classed('highlighted', d => d.from === name || d.to === name)
+                .classed('dimmed', d => name && d.from !== name && d.to !== name);
+        }
+
+        function updateDetailsPanel(name) {
+            const panel = document.getElementById('detailsPanel');
+
+            if (!name) {
+                panel.innerHTML = '<div class="no-selection">Select a package to view details</div>';
+                return;
+            }
+
+            const nodeData = data.nodes.find(n => n.name === name);
+
+            panel.innerHTML = `
+                <div class="details-title">
+                    <span class="package-color" style="background: ${nodeData.color}; width: 16px; height: 16px; border-radius: 4px;"></span>
+                    ${name}
+                </div>
+                <div class="details-description">${nodeData.description || 'No description'}</div>
+                <div class="details-section">
+                    <h3>Category</h3>
+                    <div class="targets">
+                        <span class="target-badge">${nodeData.category === 'core' ? ICONS.core + ' Core' : nodeData.category === 'tooling' ? ICONS.tooling + ' Tooling' : '📦 Libs'}</span>
+                    </div>
+                </div>
+                <div class="details-section">
+                    <h3>Flags</h3>
+                    <div class="targets">
+                        ${nodeData.flags.node ? '<span class="target-badge">' + ICONS.node + ' Node.js</span>' : ''}
+                        ${nodeData.flags.browser ? '<span class="target-badge">' + ICONS.browser + ' Browser</span>' : ''}
+                        ${nodeData.flags.testkit ? '<span class="target-badge">' + ICONS.testkit + ' Testkit</span>' : ''}
+                        ${nodeData.flags.hidden ? '<span class="target-badge">👁 Hidden</span>' : ''}
+                    </div>
+                </div>
+                ${nodeData.readme ? `
+                    <div class="details-section readme-section">
+                        <h3>README</h3>
+                        <div class="readme-content">${marked.parse(nodeData.readme)}</div>
+                    </div>
+                ` : ''}
+            `;
+        }
+
+        function setupEventListeners() {
+            document.getElementById('packageList').addEventListener('click', e => {
+                const item = e.target.closest('.package-item');
+                if (item) selectNode(item.dataset.name);
+            });
+
+            document.getElementById('detailsPanel').addEventListener('click', e => {
+                const item = e.target.closest('.dep-item');
+                if (item) selectNode(item.dataset.name);
+            });
+
+            document.getElementById('search').addEventListener('input', e => {
+                const query = e.target.value.toLowerCase();
+
+                // Show/hide individual items
+                document.querySelectorAll('.package-item').forEach(item => {
+                    item.style.display = item.dataset.name.toLowerCase().includes(query) ? '' : 'none';
+                });
+
+                // Show/hide groups based on whether they have visible children
+                document.querySelectorAll('.package-group').forEach(group => {
+                    const visibleChildren = group.querySelectorAll('.package-item:not([style*="display: none"])');
+                    const headerName = group.querySelector('.package-group-header').dataset.group.toLowerCase();
+                    const matchesHeader = headerName.includes(query);
+
+                    if (matchesHeader || visibleChildren.length > 0) {
+                        group.style.display = '';
+                        // Expand group when searching
+                        if (query && (matchesHeader || visibleChildren.length > 0)) {
+                            group.classList.remove('collapsed');
+                        }
+                    } else {
+                        group.style.display = 'none';
+                    }
+                });
+            });
+
+            document.getElementById('layerSort').addEventListener('change', (e) => {
+                layerSort = e.target.value;
+                currentTransform = null; // Reset zoom to re-center
+                clearSavedTransform(); // Clear cached transform since layout changed
+                renderTree();
+                if (selectedNode) highlightNode(selectedNode);
+            });
+
+            // Filter checkboxes
+            ['Core', 'Libs', 'Tooling', 'Node', 'Browser', 'Testkit', 'Npm', 'Hidden', 'Implementations'].forEach(name => {
+                const checkbox = document.getElementById('filter' + name);
+                const label = checkbox.parentElement;
+                // Initialize active state
+                if (checkbox.checked) label.classList.add('active');
+
+                checkbox.addEventListener('change', () => {
+                    filters[name.toLowerCase()] = checkbox.checked;
+                    label.classList.toggle('active', checkbox.checked);
+                    renderPackageList();
+                    renderTree();
+                    if (selectedNode) highlightNode(selectedNode);
+                });
+            });
+
+            // Initialize filter icons
+            document.getElementById('iconCore').innerHTML = ICONS.core;
+            document.getElementById('iconTooling').innerHTML = ICONS.tooling;
+            document.getElementById('iconNode').innerHTML = ICONS.node;
+            document.getElementById('iconBrowser').innerHTML = ICONS.browser;
+            document.getElementById('iconTestkit').innerHTML = ICONS.testkit;
+            document.getElementById('iconNpm').innerHTML = ICONS.npm;
+
+            window.addEventListener('resize', () => {
+                renderTree();
+                if (selectedNode) highlightNode(selectedNode);
+            });
+        }
+    </script>
+</body>
+</html>

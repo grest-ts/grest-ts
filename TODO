@@ -1,0 +1,53 @@
+
+* res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-company-auth'); // @TODO Remove x-company-auth
+
+* symmetric codec for RPC was nice idea, but doesn't actually work. Code is filled with solutions for browser that would not "load server part". Need to fix the whole architecture.
+
+* If something internal throws VALIDATION_ERROR, it will pass through to the client. Most likely this is actually SERVER_ERROR, so we can't always safely pass VALIDATION_ERROR, only when actually handling input.
+
+* @TODO XXAsyncMethodIssue - find this. sync method "testable" is problematic, need to thing of options or not support sync methods.
+* There is an issue that callOn access kind of "finds the service where things live", but we should be able to hint it or soemthing. Linked with  @TODO XXAsyncMethodIssue
+
+* Before test take config snapshot, so that next test runs on "original" config instead. Meaning we don't have to "fix" config after each tests.
+  - Search for test 'MESSAGE_AGE_HIGH warning triggers when threshold is set to 0' as an example
+
+* Context is inherited from the test when running inline in testkit. This is not good, should isolate runtime context from testkit, as otherwise inline vs worker mode-s work differently.
+
+* Idea for @mockable to get tests run parallel also within a single describe block, though not sure if it is worth it. But could ID every "action" and @mockable can check the ID and use that to decide which spy/mock to use.
+
+* Logs access test api is not ergonomic, needs helpers
+* Logs might use some "checking helpers" more. Needs attention.
+
+* Secret and its usage. Requests etc should not log passwords in any condition.
+  This works, but is Secret class even needed at all, we have GGSecret that is used.
+  Secret might be useful as GGSchema type, so that data is not string, but Secret and logging that hides it.
+  But it can also cause massive issues when storing to DB directly, thought tests would catch it. Needs thought.
+
+* More complex mock/spy expectations - like A,B,C or (A or B) and then C and so on. I should be able to have more power over this. Becomes rather important for cron-s for example.
+
+* Mysql if fails to connect, probably fails silently on startup. Should fail if fails to connect at startup, but behavior currently fine for "config update".
+
+* SDK generation does not work currently.
+
+* SQS - if incoming message validation fails, what to do? Warn? Drop? Currently just leaves it to the queue.
+
+* Warnings for other libraries like we did for sns/sqs?
+
+* Fancy feature: await t.all().metrics.aggregate("request_count");
+
+* Cron
+* DynamoDB
+* Redis
+* S3
+
+GLOBAL STATE - these need to be checked
+
+ 1. GGSocketPool - WebSocket Connection Pool - IS IT REALLY A PROBLEM?
+  - File: packages/http/src/socket/client/GGSocketPool.ts:30-34
+  - State: Static Maps caching WebSocket connections
+  - Risk: HIGH - Memory leaks, no cleanup mechanism, persists across app lifetime
+
+  3. GGServiceDiscovery - Singleton Pattern - IS IT REALLY A PROBLEM? This is mostly issue for local testing and there why would we have different ones?
+  - File: packages/discovery/src/GGServiceDiscovery.ts:54-69
+  - State: Static singleton instance with getInstance()
+  - Risk: MEDIUM-HIGH - Only one discovery instance per process

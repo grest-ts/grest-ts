@@ -1,0 +1,55 @@
+{
+  "//": "THIS FILE IS GENERATED - DO NOT EDIT",
+  "name": "@grest-ts/events-gcp",
+  "version": "0.0.4",
+  "type": "module",
+  "license": "MIT",
+  "description": "Google Cloud Pub/Sub adapter for @grest-ts/events",
+  "exports": {
+    ".": {
+      "types": "./src/index-node.ts",
+      "import": "./src/index-node.ts"
+    }
+  },
+  "files": [
+    "src"
+  ],
+  "scripts": {
+    "typecheck": "tsc --noEmit -p src"
+  },
+  "private": true,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/grest-ts/grest-ts.git",
+    "directory": "packages-libs/events/events-gcp"
+  },
+  "homepage": "https://github.com/grest-ts/grest-ts/tree/master/packages-libs/events/events-gcp",
+  "bugs": {
+    "url": "https://github.com/grest-ts/grest-ts/issues"
+  },
+  "keywords": [
+    "typescript",
+    "framework",
+    "contract",
+    "api",
+    "microservices",
+    "testing",
+    "events",
+    "gcp",
+    "pub-sub",
+    "google-cloud"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "@google-cloud/pubsub": "^5.2.3",
+    "@grest-ts/config": "0.0.4",
+    "@grest-ts/events": "0.0.4",
+    "@grest-ts/logger": "0.0.4",
+    "@grest-ts/schema": "0.0.4"
+  },
+  "devDependencies": {
+    "@grest-ts/x-packager": "0.0.4"
+  }
+}

@@ -1,0 +1,1 @@
+export type tSpriteId = number & { tSpriteId: never };

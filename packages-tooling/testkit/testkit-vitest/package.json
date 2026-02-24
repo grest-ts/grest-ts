@@ -1,0 +1,65 @@
+{
+  "//": "THIS FILE IS GENERATED - DO NOT EDIT",
+  "name": "@grest-ts/testkit-vitest",
+  "version": "0.0.4",
+  "type": "module",
+  "license": "MIT",
+  "description": "Component testing library integration for vitest",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "import": "./src/index.ts"
+    },
+    "./globalSetup": {
+      "types": "./src/globalSetup.ts",
+      "import": "./src/globalSetup.ts"
+    }
+  },
+  "files": [
+    "src"
+  ],
+  "scripts": {
+    "typecheck": "tsc --noEmit -p src",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "test:coverage:html": "vitest run --coverage --reporter=html"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/grest-ts/grest-ts.git",
+    "directory": "packages-tooling/testkit/testkit-vitest"
+  },
+  "homepage": "https://github.com/grest-ts/grest-ts/tree/master/packages-tooling/testkit/testkit-vitest",
+  "bugs": {
+    "url": "https://github.com/grest-ts/grest-ts/issues"
+  },
+  "keywords": [
+    "typescript",
+    "framework",
+    "contract",
+    "api",
+    "microservices",
+    "testing",
+    "vitest",
+    "testkit"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "@grest-ts/common": "0.0.4",
+    "@grest-ts/discovery": "0.0.4",
+    "@grest-ts/discovery-local": "0.0.4",
+    "@grest-ts/ipc": "0.0.4",
+    "@grest-ts/locator": "0.0.4",
+    "@grest-ts/logger": "0.0.4",
+    "@grest-ts/logger-console": "0.0.4",
+    "@grest-ts/testkit": "0.0.4"
+  },
+  "devDependencies": {
+    "@grest-ts/x-packager": "0.0.4"
+  }
+}

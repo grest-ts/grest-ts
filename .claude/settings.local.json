@@ -1,0 +1,69 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm test:*)",
+      "Bash(npx vitest:*)",
+      "Bash(npm run:*)",
+      "Bash(npm install)",
+      "Bash(npx tsx:*)",
+      "Bash(npx tsc:*)",
+      "Bash(npx esbuild:*)",
+      "Bash(npx gg:*)",
+      "Bash(npx cross-env:*)",
+      "Bash(timeout:*)",
+      "Bash(cat:*)",
+      "Bash(cp:*)",
+      "Bash(ls:*)",
+      "Bash(mv:*)",
+      "Bash(mkdir:*)",
+      "Bash(dir:*)",
+      "Bash(tree:*)",
+      "Bash(find:*)",
+      "Bash(findstr:*)",
+      "Bash(copy:*)",
+      "Bash(git log:*)",
+      "Bash(git checkout:*)",
+      "Bash(git stash:*)",
+      "Bash(node:*)",
+      "Bash(bun:*)",
+      "Bash(docker compose:*)",
+      "Bash(time:*)",
+      "Bash(test:*)",
+      "WebSearch",
+      "mcp__ide__getDiagnostics",
+      "Bash(GG_LOG_LEVEL=trace npx vitest run:*)",
+      "Bash(npx --no vitest run)",
+      "Bash(GG_LOG_LEVEL=error npx vitest:*)",
+      "Bash(grep:*)",
+      "Bash(echo:*)",
+      "Bash(USE_COMPILED=false npx vitest:*)",
+      "WebFetch(domain:github.com)",
+      "Bash(wc:*)",
+      "Bash(npx autocannon:*)",
+      "Bash(npx nx test:*)",
+      "Bash(docker:*)",
+      "Bash(npm ping:*)",
+      "Bash(ping:*)",
+      "Bash(npx --no vitest run:*)"
+    ],
+    "deny": [],
+    "ask": []
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sudo apt-get update && sudo apt-get install -y mysql-server"
+          },
+          {
+            "type": "command",
+            "command": "npm install"
+          }
+        ]
+      }
+    ]
+  }
+}

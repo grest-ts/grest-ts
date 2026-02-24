@@ -1,0 +1,9 @@
+{
+  "checklist": {
+    "db": {
+      "host": {
+        "database": "checklist"
+      }
+    }
+  }
+}

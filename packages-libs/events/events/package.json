@@ -1,0 +1,64 @@
+{
+  "//": "THIS FILE IS GENERATED - DO NOT EDIT",
+  "name": "@grest-ts/events",
+  "version": "0.0.4",
+  "type": "module",
+  "license": "MIT",
+  "description": "Event-driven messaging for Grest Framework - SNS/SQS pub/sub pattern with type-safe contracts",
+  "exports": {
+    ".": {
+      "types": "./src/index-node.ts",
+      "import": "./src/index-node.ts"
+    },
+    "./testkit": {
+      "types": "./testkit/index-testkit.ts",
+      "import": "./testkit/index-testkit.ts"
+    }
+  },
+  "files": [
+    "src",
+    "testkit"
+  ],
+  "scripts": {
+    "typecheck": "tsc --noEmit -p src"
+  },
+  "private": true,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/grest-ts/grest-ts.git",
+    "directory": "packages-libs/events/events"
+  },
+  "homepage": "https://github.com/grest-ts/grest-ts/tree/master/packages-libs/events/events",
+  "bugs": {
+    "url": "https://github.com/grest-ts/grest-ts/issues"
+  },
+  "keywords": [
+    "typescript",
+    "framework",
+    "contract",
+    "api",
+    "microservices",
+    "testing",
+    "events",
+    "messaging",
+    "pub-sub"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "@grest-ts/common": "0.0.4",
+    "@grest-ts/config": "0.0.4",
+    "@grest-ts/context": "0.0.4",
+    "@grest-ts/discovery": "0.0.4",
+    "@grest-ts/locator": "0.0.4",
+    "@grest-ts/logger": "0.0.4",
+    "@grest-ts/metrics": "0.0.4",
+    "@grest-ts/schema": "0.0.4",
+    "@grest-ts/trace": "0.0.4"
+  },
+  "devDependencies": {
+    "@grest-ts/testkit": "0.0.4",
+    "@grest-ts/x-packager": "0.0.4"
+  }
+}

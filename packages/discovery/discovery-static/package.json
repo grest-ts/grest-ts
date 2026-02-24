@@ -1,0 +1,53 @@
+{
+  "//": "THIS FILE IS GENERATED - DO NOT EDIT",
+  "name": "@grest-ts/discovery-static",
+  "version": "0.0.4",
+  "type": "module",
+  "license": "MIT",
+  "description": "Static service discovery implementation for Grest Framework",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "import": "./src/index.ts"
+    }
+  },
+  "files": [
+    "src"
+  ],
+  "scripts": {
+    "typecheck": "tsc --noEmit -p src"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/grest-ts/grest-ts.git",
+    "directory": "packages/discovery/discovery-static"
+  },
+  "homepage": "https://github.com/grest-ts/grest-ts/tree/master/packages/discovery/discovery-static",
+  "bugs": {
+    "url": "https://github.com/grest-ts/grest-ts/issues"
+  },
+  "keywords": [
+    "typescript",
+    "framework",
+    "contract",
+    "api",
+    "microservices",
+    "testing",
+    "service-discovery",
+    "static",
+    "configuration"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "@grest-ts/discovery": "0.0.4",
+    "@grest-ts/logger": "0.0.4"
+  },
+  "devDependencies": {
+    "@grest-ts/x-packager": "0.0.4"
+  }
+}

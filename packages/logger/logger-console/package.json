@@ -1,0 +1,54 @@
+{
+  "//": "THIS FILE IS GENERATED - DO NOT EDIT",
+  "name": "@grest-ts/logger-console",
+  "version": "0.0.4",
+  "type": "module",
+  "license": "MIT",
+  "description": "Console logger implementation for @grest-ts/logger",
+  "exports": {
+    ".": {
+      "types": "./src/index-node.ts",
+      "import": "./src/index-node.ts"
+    }
+  },
+  "files": [
+    "src"
+  ],
+  "scripts": {
+    "typecheck": "tsc --noEmit -p src"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/grest-ts/grest-ts.git",
+    "directory": "packages/logger/logger-console"
+  },
+  "homepage": "https://github.com/grest-ts/grest-ts/tree/master/packages/logger/logger-console",
+  "bugs": {
+    "url": "https://github.com/grest-ts/grest-ts/issues"
+  },
+  "keywords": [
+    "typescript",
+    "framework",
+    "contract",
+    "api",
+    "microservices",
+    "testing",
+    "logging",
+    "console",
+    "logger"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "@grest-ts/file": "0.0.4",
+    "@grest-ts/logger": "0.0.4",
+    "@grest-ts/schema": "0.0.4"
+  },
+  "devDependencies": {
+    "@grest-ts/x-packager": "0.0.4"
+  }
+}

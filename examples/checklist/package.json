@@ -1,0 +1,21 @@
+{
+  "name": "@checklist/server",
+  "version": "1.0.0",
+  "description": "Server implementation for checklist app",
+  "type": "module",
+  "scripts": {
+    "build": "tsc --noEmit",
+    "checklist": "tsx checklist/checklist.ts",
+    "blocker": "tsx blocker/blocker.ts",
+    "test": "npx --no vitest run",
+    "test:coverage": "npx cross-env GG_COVERAGE_MODE=1 npx --no vitest run --coverage"
+  },
+  "dependencies": {
+    "@grest-ts/db-mysql": "file:../../packages/db-mysql"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.0",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3"
+  }
+}

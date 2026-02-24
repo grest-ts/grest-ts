@@ -1,0 +1,13 @@
+This package helps to maintain gg-framework itself. It is not something that is useful for developers
+
+Maintanence tooling (generation):
+* Generates all packages.json files.
+* Generates all tsconfig.json files.
+* Generates all vitest.config.ts files.
+* Fixes dependencies in case file is moved from one package to another.
+* Creates DEPENDENCIES.md graphcs for easier dependency checking.
+* Finds circular dependencies and gives errors about those.
+
+Build tooling:
+* Provides tool helper that updates built dist package with .js files
+* Provides tool that moves .mjs files to dist.

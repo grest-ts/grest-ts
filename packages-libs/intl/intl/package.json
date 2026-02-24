@@ -1,0 +1,62 @@
+{
+  "//": "THIS FILE IS GENERATED - DO NOT EDIT",
+  "name": "@grest-ts/intl",
+  "version": "0.0.4",
+  "type": "module",
+  "license": "MIT",
+  "description": "Internationalization and localization library with typed message descriptors",
+  "exports": {
+    ".": {
+      "browser": {
+        "types": "./src/index-browser.ts",
+        "import": "./src/index-browser.ts"
+      },
+      "default": {
+        "types": "./src/index-node.ts",
+        "import": "./src/index-node.ts"
+      }
+    }
+  },
+  "files": [
+    "src"
+  ],
+  "scripts": {
+    "typecheck": "tsc --noEmit -p src"
+  },
+  "private": true,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/grest-ts/grest-ts.git",
+    "directory": "packages-libs/intl/intl"
+  },
+  "homepage": "https://github.com/grest-ts/grest-ts/tree/master/packages-libs/intl/intl",
+  "bugs": {
+    "url": "https://github.com/grest-ts/grest-ts/issues"
+  },
+  "keywords": [
+    "typescript",
+    "framework",
+    "contract",
+    "api",
+    "microservices",
+    "testing",
+    "i18n",
+    "internationalization",
+    "localization"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "@grest-ts/context": "0.0.4",
+    "@grest-ts/schema": "0.0.4",
+    "i18next": "^25.8.10",
+    "i18next-icu": "^2.4.3"
+  },
+  "peerDependencies": {
+    "@grest-ts/locator": "0.0.4"
+  },
+  "devDependencies": {
+    "@grest-ts/x-packager": "0.0.4"
+  }
+}

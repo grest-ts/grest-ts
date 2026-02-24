@@ -1,0 +1,54 @@
+{
+  "//": "THIS FILE IS GENERATED - DO NOT EDIT",
+  "name": "@grest-ts/sql",
+  "version": "0.0.4",
+  "type": "module",
+  "license": "MIT",
+  "description": "Type-safe SQL query builder for MySQL",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "import": "./src/index.ts"
+    }
+  },
+  "files": [
+    "src"
+  ],
+  "scripts": {
+    "typecheck": "tsc --noEmit -p src && tsc --noEmit -p test"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/grest-ts/grest-ts.git",
+    "directory": "packages-libs/sql"
+  },
+  "homepage": "https://github.com/grest-ts/grest-ts/tree/master/packages-libs/sql",
+  "bugs": {
+    "url": "https://github.com/grest-ts/grest-ts/issues"
+  },
+  "keywords": [
+    "typescript",
+    "framework",
+    "contract",
+    "api",
+    "microservices",
+    "testing",
+    "sql",
+    "query-builder",
+    "mysql"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "@grest-ts/schema": "0.0.4",
+    "sqlstring": "^2.3.3"
+  },
+  "devDependencies": {
+    "@grest-ts/x-packager": "0.0.4",
+    "@types/sqlstring": "^2.3.2"
+  }
+}

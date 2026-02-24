@@ -1,0 +1,3 @@
+
+
+* for single buffer cases, returned ref can be already multiplied to speed things up.

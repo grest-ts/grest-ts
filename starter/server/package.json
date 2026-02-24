@@ -1,0 +1,30 @@
+{
+  "name": "@newproject/server",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "tsx src/AppRuntime.ts",
+    "dev": "tsx watch src/AppRuntime.ts",
+    "test": "vitest",
+    "build": "tsx esbuild.config.ts"
+  },
+  "dependencies": {
+    "@grest-ts/http": "*",
+    "@grest-ts/locator": "*",
+    "@grest-ts/logger": "*",
+    "@grest-ts/logger-console": "*",
+    "@grest-ts/runtime": "*",
+    "@grest-ts/schema": "*",
+    "@grest-ts/testkit": "*",
+    "@grest-ts/testkit-vitest": "*",
+    "@newproject/api": "*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "esbuild": "^0.27.3",
+    "tsx": "^4.0.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.18"
+  }
+}

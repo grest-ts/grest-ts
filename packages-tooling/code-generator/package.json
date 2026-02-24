@@ -1,0 +1,59 @@
+{
+  "//": "THIS FILE IS GENERATED - DO NOT EDIT",
+  "name": "@grest-ts/code-generator",
+  "version": "0.0.4",
+  "type": "module",
+  "license": "MIT",
+  "description": "TypeScript code generator for type-safe HTTP/WebSocket clients and servers",
+  "exports": {
+    ".": {
+      "types": "./src/index-node.ts",
+      "import": "./src/index-node.ts"
+    }
+  },
+  "files": [
+    "bin",
+    "src"
+  ],
+  "scripts": {
+    "typecheck": "tsc --noEmit -p src && tsc --noEmit -p test",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "test:coverage:html": "vitest run --coverage --reporter=html"
+  },
+  "private": true,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/grest-ts/grest-ts.git",
+    "directory": "packages-tooling/code-generator"
+  },
+  "homepage": "https://github.com/grest-ts/grest-ts/tree/master/packages-tooling/code-generator",
+  "bugs": {
+    "url": "https://github.com/grest-ts/grest-ts/issues"
+  },
+  "keywords": [
+    "typescript",
+    "framework",
+    "contract",
+    "api",
+    "microservices",
+    "testing",
+    "code-generation",
+    "client",
+    "server"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "bin": {
+    "grest": "./bin/grest.cjs"
+  },
+  "dependencies": {
+    "@grest-ts/common": "0.0.4",
+    "@grest-ts/http": "0.0.4",
+    "fast-glob": "^3.3.3"
+  },
+  "devDependencies": {
+    "@grest-ts/x-packager": "0.0.4"
+  }
+}

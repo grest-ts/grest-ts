@@ -1,0 +1,66 @@
+{
+  "//": "THIS FILE IS GENERATED - DO NOT EDIT",
+  "name": "@grest-ts/testkit",
+  "version": "0.0.4",
+  "type": "module",
+  "license": "MIT",
+  "description": "Component testing library for @grest-ts",
+  "exports": {
+    ".": {
+      "types": "./src/index-node.ts",
+      "import": "./src/index-node.ts"
+    }
+  },
+  "files": [
+    "src"
+  ],
+  "scripts": {
+    "typecheck": "tsc --noEmit -p src",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "test:coverage:html": "vitest run --coverage --reporter=html"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/grest-ts/grest-ts.git",
+    "directory": "packages-tooling/testkit/testkit"
+  },
+  "homepage": "https://github.com/grest-ts/grest-ts/tree/master/packages-tooling/testkit/testkit",
+  "bugs": {
+    "url": "https://github.com/grest-ts/grest-ts/issues"
+  },
+  "keywords": [
+    "typescript",
+    "framework",
+    "contract",
+    "api",
+    "microservices",
+    "testing",
+    "component-testing",
+    "testkit"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "@grest-ts/common": "0.0.4",
+    "@grest-ts/context": "0.0.4",
+    "@grest-ts/ipc": "0.0.4",
+    "@grest-ts/locator": "0.0.4",
+    "@grest-ts/logger": "0.0.4",
+    "@grest-ts/logger-console": "0.0.4",
+    "@grest-ts/runtime": "0.0.4",
+    "@grest-ts/schema": "0.0.4",
+    "@grest-ts/testkit-runtime": "0.0.4",
+    "@grest-ts/trace": "0.0.4"
+  },
+  "peerDependencies": {
+    "esbuild": ">=0.27.0"
+  },
+  "devDependencies": {
+    "@grest-ts/x-packager": "0.0.4"
+  }
+}

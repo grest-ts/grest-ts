@@ -1,0 +1,64 @@
+{
+  "//": "THIS FILE IS GENERATED - DO NOT EDIT",
+  "name": "@grest-ts/framework",
+  "version": "0.0.4",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "description": "grest-ts is a TypeScript framework for building services around contracts — typed API definitions that serve as the single source of truth between client, server, and tests. Define your contract once, implement it, and test it with a single line — no mocking infrastructure, no HTTP plumbing, no test rewrites when you refactor.",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/grest-ts/grest-ts.git"
+  },
+  "bugs": {
+    "url": "https://github.com/grest-ts/grest-ts/issues"
+  },
+  "keywords": [
+    "typescript",
+    "framework",
+    "contract",
+    "api",
+    "microservices",
+    "testing"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "workspaces": [
+    "packages-libs/*",
+    "packages-libs/db/*",
+    "packages-libs/events/*",
+    "packages-libs/intl/intl",
+    "packages-libs/lock/lock",
+    "packages-tooling/code-generator",
+    "packages-tooling/testkit/*",
+    "packages/*",
+    "packages/config/*",
+    "packages/discovery/*",
+    "packages/http/*",
+    "packages/logger/*",
+    "packages/schema/*",
+    "packages/trace/*",
+    "x-packager"
+  ],
+  "scripts": {
+    "check": "tsx grest.1.check.ts",
+    "generate": "tsx grest.x-packager.ts",
+    "typecheck": "tsc",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
+  },
+  "devDependencies": {
+    "@types/minimatch": "^6.0.0",
+    "@types/node": "^22.15.0",
+    "@types/ws": "^8.18.1",
+    "@vitest/coverage-v8": "^4.0.18",
+    "@vitest/ui": "^4.0.18",
+    "cross-env": "^10.1.0",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3",
+    "vite": "^7.3.1",
+    "vitest": "^4.0.18"
+  }
+}

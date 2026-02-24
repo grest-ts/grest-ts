@@ -1,0 +1,34 @@
+{
+  "name": "@checklist/web-app",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "test": "vitest",
+    "test:ui": "vitest --ui"
+  },
+  "dependencies": {
+    "@grest-ts/common": "file:../../../packages/common",
+    "@grest-ts/browser": "file:../../../exports/browser",
+    "@grest-ts/logger": "file:../../../packages/logger",
+    "@grest-ts/validator": "file:../../../packages/validator",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.28.0"
+  },
+  "devDependencies": {
+    "@testing-library/jest-dom": "^6.6.3",
+    "@testing-library/react": "^16.1.0",
+    "@testing-library/user-event": "^14.5.2",
+    "@types/react": "^18.3.18",
+    "@types/react-dom": "^18.3.5",
+    "@vitejs/plugin-react": "^4.3.4",
+    "jsdom": "^25.0.1",
+    "msw": "^2.12.10",
+    "typescript": "^5.9.3",
+    "vite": "^6.0.7"
+  }
+}

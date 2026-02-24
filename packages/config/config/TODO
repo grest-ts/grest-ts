@@ -1,0 +1,2 @@
+Config validation - are we getting from the store the structure we are expecting to get?
+Marking config mandatory for production, that override must exist.

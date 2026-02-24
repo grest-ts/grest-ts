@@ -1,0 +1,394 @@
+import {GGHttpRequest, GGRpc, GGServerApi} from "@gg/http"
+import {SERVER_ERROR, VALIDATION_ERROR} from "@gg/contract";
+import {IsBoolean, IsObject, IsString} from "@gg/schema";
+import {GG_LANGUAGE} from "@gg/intl-http"
+import {GGContextKey} from "@gg/context";
+
+// ============================================================================
+// Context - Define context options (async bound). Also add handling for different transport concerns, usually http.
+// ============================================================================
+
+//somewhere (or they most likely have this capability built in, but shows the pattern). Transport is basically just simple transform/middleware with types.
+GG_LANGUAGE.use(http.transport({
+    updateRequest(req: GGHttpRequest): void {
+        const lang = GG_LANGUAGE.get();
+        if (lang) {
+            req.headers['accept-language'] = lang;
+        }
+    },
+    parseRequest(req: GGHttpRequest): {} {
+        const acceptLang = req.headers['accept-language'];
+        // Handle missing header, '*' (any), or empty string as default to 'en'
+        const language = (!acceptLang || acceptLang === '*' || acceptLang.trim() === '')
+            ? 'en'
+            : acceptLang.split(',')[0].split('-')[0];
+        GG_LANGUAGE.set(language);
+        return {language};
+    }
+}))
+
+// -------------------------------------------------------------------------------
+
+export interface ClientInfo {
+    version: string;
+    platform: 'web' | 'ios' | 'android';
+}
+
+export const GG_CLIENT_INFO = GGContextKey.create<ClientInfo>('clientInfo');
+
+GG_CLIENT_INFO.use(http.transport({
+    updateRequest(req: GGHttpRequest): void {
+        const info = GG_CLIENT_INFO.get();
+        if (info) {
+            req.headers['x-client-version'] = info.version;
+            req.headers['x-client-platform'] = info.platform;
+        }
+    },
+    parseRequest(req: GGHttpRequest): void {
+        GG_CLIENT_INFO.set({
+            version: req.headers['x-client-version'] ?? 'unknown',
+            platform: (req.headers['x-client-platform'] ?? 'web') as 'web' | 'ios' | 'android'
+        });
+    }
+}));
+
+// -------------------------------------------------------------------------------
+
+export interface FeatureFlags {
+    darkMode: boolean;
+    betaFeatures: boolean;
+}
+
+export const GG_FEATURE_FLAGS = GGContextKey.create<FeatureFlags>('features');
+
+GG_FEATURE_FLAGS.use(http.transport({
+    updateRequest(req: GGHttpRequest): void {
+        const val = GG_FEATURE_FLAGS.get();
+        req.headers['x-feature-flags'] = val ? JSON.stringify(val) : "";
+    },
+    parseRequest(req: GGHttpRequest): void {
+        const data = req.headers['x-feature-flags'];
+        const raw = data ? JSON.parse(data) : {};
+        GG_FEATURE_FLAGS.set({
+            darkMode: raw.darkMode ?? false,
+            betaFeatures: raw.betaFeatures ?? false
+        });
+    }
+}));
+
+// ============================================================================
+// Type Schemas
+// ============================================================================
+
+export const IsMiddlewareTestRequest = IsObject({
+    message: IsString
+})
+
+export const IsMiddlewareTestResponse = IsObject({
+    message: IsString,
+    language: IsString,
+    clientVersion: IsString,
+    clientPlatform: IsString,
+    darkMode: IsBoolean,
+    betaFeatures: IsBoolean
+})
+
+export const IsLanguageResponse = IsObject({
+    language: IsString
+})
+
+// ============================================================================
+// OPTION 1a - concerns fully separated. (enterprise)
+// API is sharable
+// ============================================================================
+
+// SHARABLE DEFINITION
+const MiddlewareTestApiContract = gg.contract("MiddlewareTestApi")
+    .use(GG_LANGUAGE)
+    .use(GG_CLIENT_INFO)
+    .use(GG_FEATURE_FLAGS)
+    .methods({
+        echo: {
+            input: IsMiddlewareTestRequest,
+            success: IsMiddlewareTestResponse,
+            errors: [VALIDATION_ERROR, SERVER_ERROR]
+        },
+        getLanguage: {
+            success: IsLanguageResponse,
+            errors: [SERVER_ERROR]
+        }
+    })
+
+// SERVER IMPLEMENTATION
+MiddlewareTestApiContract.create()
+    .use(USER_AUTH) // Transforms user auth "data" -> "user object" and makes sure user really is authorized.
+    .impl({ // Can also define via API definition: MiddlewareTestApiContract.implement. Then inject together with the network mapping.
+        echo: async (request) => {
+            const language = GG_LANGUAGE.get();
+            const clientInfo = GG_CLIENT_INFO.get();
+            const features = GG_FEATURE_FLAGS.get();
+            return {
+                message: request.message,
+                language: language,
+                clientVersion: clientInfo.version,
+                clientPlatform: clientInfo.platform,
+                darkMode: features.darkMode,
+                betaFeatures: features.betaFeatures
+            };
+        },
+        getLanguage: async () => {
+            return {
+                language: GG_LANGUAGE.get()
+            };
+        }
+    })
+
+// Http mapping
+export const MiddlewareTestApiHttpMapping = gg.http
+    .for(MiddlewareTestApiContract)
+    .pathPrefix("api/middleware-test")
+    .routes({
+        echo: gg.http.POST("echo"),
+        getLanguage: GGRpc.GET("language")
+    })
+
+// ============================================================================
+// OPTION 1b class based - concerns fully separated. (enterprise)
+// API is sharable
+// Con: Always have to infer the types - more verbose, but you do have classes.
+// ============================================================================
+
+export type MiddlewareTestRequest = typeof IsMiddlewareTestRequest.infer
+export type MiddlewareTestResponse = typeof IsMiddlewareTestResponse.infer
+export type LanguageResponse = typeof IsLanguageResponse.infer
+
+// SHARABLE DEFINITION
+const MiddlewareTestApiContract = gg.contract("MiddlewareTestApi")
+    .use(GG_LANGUAGE)
+    .use(GG_CLIENT_INFO)
+    .use(GG_FEATURE_FLAGS)
+    .methods({
+        echo: {
+            input: IsMiddlewareTestRequest,
+            success: IsMiddlewareTestResponse,
+            errors: [VALIDATION_ERROR, SERVER_ERROR]
+        },
+        getLanguage: {
+            success: IsLanguageResponse,
+            errors: [SERVER_ERROR]
+        }
+    })
+
+// Implementation
+class MiddlewareTestApiContractImpl implements GGServerApi<typeof MiddlewareTestApiContract.infer> {
+    async echo(request: MiddlewareTestRequest): Promise<MiddlewareTestResponse> {
+        const language = GG_LANGUAGE.get();
+        const clientInfo = GG_CLIENT_INFO.get();
+        const features = GG_FEATURE_FLAGS.get();
+        return {
+            message: request.message,
+            language: language,
+            clientVersion: clientInfo.version,
+            clientPlatform: clientInfo.platform,
+            darkMode: features.darkMode,
+            betaFeatures: features.betaFeatures
+        }
+    }
+
+    async getLanguage(): Promise<LanguageResponse> {
+        return Promise.resolve({language: GG_LANGUAGE.get()})
+    }
+}
+
+// Http mapping
+export const MiddlewareTestApiHttpMapping = gg.http
+    .for(MiddlewareTestApiContract.create()
+        .use(USER_AUTH)
+        .impl(new MiddlewareTestApiContractImpl())
+    )
+    .pathPrefix("api/middleware-test")
+    .routes({
+        echo: gg.http.POST("echo"),
+        getLanguage: gg.http.GET("language")
+    })
+
+
+// ============================================================================
+// OPTION 2 implementation separated.
+// Weakness: Hard to find where things might be defined (Have to search usages), but API is still isolated, sharable
+// Weak pattern, as splits method all across files, not very intuitive.
+// ============================================================================
+
+const MiddlewareTestApiContract = gg.contract("MiddlewareTestApi")
+    .use(GG_LANGUAGE)
+    .use(GG_CLIENT_INFO)
+    .use(GG_FEATURE_FLAGS)
+    .methods({
+        echo: gg.query("echo").def({
+            input: IsMiddlewareTestRequest,
+            success: IsMiddlewareTestResponse,
+            errors: [VALIDATION_ERROR, SERVER_ERROR]
+        }),
+        getLanguage: gg.query("getLanguage").def({
+            success: IsLanguageResponse,
+            errors: [SERVER_ERROR]
+        })
+    })
+
+MiddlewareTestApiContract.echo.create()
+    .use(USER_AUTH)
+    .impl(async (request, ctx) => {
+        const language = GG_LANGUAGE.get(); // ctx.language
+        const clientInfo = GG_CLIENT_INFO.get(); // ctx.clientInfo
+        const features = GG_FEATURE_FLAGS.get(); // ctx.features
+        return {
+            message: request.message,
+            language: language,
+            clientVersion: clientInfo.version,
+            clientPlatform: clientInfo.platform,
+            darkMode: features.darkMode,
+            betaFeatures: features.betaFeatures
+        };
+    })
+
+MiddlewareTestApiContract.getLanguage.create()
+    .use(USER_AUTH)
+    .impl(async (request, ctx) => {
+        return {
+            language: GG_LANGUAGE.get() // ctx.language
+        };
+    })
+
+// Http mapping
+const MiddlewareTestApi_ApiSeparate = gg.http
+    .for(MiddlewareTestApiContract)
+    .pathPrefix("api/middleware-test")
+    .routes({
+        echo: gg.http.POST("echo"),
+        getLanguage: gg.http.GET("language")
+    })
+
+
+// ============================================================================
+// ============================================================================
+// FROM HERE - main issue is clients can only use inferred type, can't use value for contract, as it would pull the implementation as well. Weakness of "all bound together approach".
+// ============================================================================
+// ============================================================================
+
+// ============================================================================
+// OPTION 3 - functional
+// Ctrl+click works when I find the API (which is easy to ctrl+click to)
+// Con: Clients can only use inferred type, can't use "values".
+// For some reason want to separate the functions - doable.
+// ============================================================================
+
+const echo = gg.query("echo")
+    .use(GG_LANGUAGE)
+    .use(GG_CLIENT_INFO)
+    .def({
+        input: IsMiddlewareTestRequest,
+        success: IsMiddlewareTestResponse,
+        errors: [VALIDATION_ERROR, SERVER_ERROR]
+    })
+    .create()
+    .use(USER_AUTH)
+    .impl(async (request, ctx) => {
+        const language = GG_LANGUAGE.get(); // ctx.language
+        const clientInfo = GG_CLIENT_INFO.get(); // ctx.clientInfo
+        const features = GG_FEATURE_FLAGS.get(); // ctx.features
+        return {
+            message: request.message,
+            language: language,
+            clientVersion: clientInfo.version,
+            clientPlatform: clientInfo.platform,
+            darkMode: features.darkMode,
+            betaFeatures: features.betaFeatures
+        };
+    });
+
+const getLanguage = gg.query("getLanguage")
+    .use(GG_LANGUAGE)
+    .def({
+        success: IsLanguageResponse,
+        errors: [SERVER_ERROR]
+    })
+    .create()
+    .use(USER_AUTH)
+    .impl(async (request, ctx) => {
+        return {
+            language: GG_LANGUAGE.get() // ctx.language
+        };
+    });
+
+const MiddlewareTestApiContract = gg.contract("MiddlewareTestApi")
+    .use(GG_LANGUAGE)
+    .use(GG_CLIENT_INFO)
+    .use(GG_FEATURE_FLAGS)
+    .methods({
+        echo: echo,
+        getLanguage: getLanguage
+    })
+
+// Http mapping
+const MiddlewareTestApi_ApiSeparate = gg.http
+    .for(MiddlewareTestApiContract.create())
+    .pathPrefix("api/middleware-test")
+    .routes({
+        echo: gg.http.POST("echo"),
+        getLanguage: gg.http.GET("language")
+    })
+
+
+// ============================================================================
+// OPTION 4 - fully all in one, no API separation. (but can easily migrate to API separation later.)
+// Con: Clients can only use inferred type, can't use "values".
+// ============================================================================
+
+const MiddlewareTestApiContract = gg.contract("MiddlewareTestApi")
+    .use(GG_LANGUAGE)
+    .use(GG_CLIENT_INFO)
+    .use(GG_FEATURE_FLAGS)
+    .methods({
+        echo: gg.query
+            .def({
+                input: IsMiddlewareTestRequest,
+                success: IsMiddlewareTestResponse,
+                errors: [VALIDATION_ERROR, SERVER_ERROR]
+            })
+            .create()
+            .use(USER_AUTH)
+            .impl(async (request, ctx) => {
+                const language = GG_LANGUAGE.get();
+                const clientInfo = GG_CLIENT_INFO.get();
+                const features = GG_FEATURE_FLAGS.get();
+                return {
+                    message: request.message,
+                    language: language,
+                    clientVersion: clientInfo.version,
+                    clientPlatform: clientInfo.platform,
+                    darkMode: features.darkMode,
+                    betaFeatures: features.betaFeatures
+                };
+            }),
+        getLanguage: gg.query
+            .def({
+                success: IsLanguageResponse,
+                errors: [SERVER_ERROR]
+            })
+            .create()
+            .use(USER_AUTH)
+            .impl(async (request, ctx) => {
+                return {
+                    language: GG_LANGUAGE.get() // ctx.language
+                };
+            })
+    })
+
+// Http mapping
+export const MiddlewareTestApi_ApiSeparate = gg.http
+    .for(MiddlewareTestApiContract)
+    .pathPrefix("api/middleware-test")
+    .routes({
+        echo: gg.http.POST("echo"),
+        getLanguage: gg.http.GET("language")
+    })

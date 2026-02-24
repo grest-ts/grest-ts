@@ -1,0 +1,63 @@
+{
+  "//": "THIS FILE IS GENERATED - DO NOT EDIT",
+  "name": "@grest-ts/file-http",
+  "version": "0.0.4",
+  "type": "module",
+  "license": "MIT",
+  "description": "HTTP file download codec for Grest framework",
+  "exports": {
+    ".": {
+      "browser": {
+        "types": "./src/index-browser.ts",
+        "import": "./src/index-browser.ts"
+      },
+      "default": {
+        "types": "./src/index-node.ts",
+        "import": "./src/index-node.ts"
+      }
+    }
+  },
+  "files": [
+    "src"
+  ],
+  "scripts": {
+    "typecheck": "tsc --noEmit -p src"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/grest-ts/grest-ts.git",
+    "directory": "packages/http/file-http"
+  },
+  "homepage": "https://github.com/grest-ts/grest-ts/tree/master/packages/http/file-http",
+  "bugs": {
+    "url": "https://github.com/grest-ts/grest-ts/issues"
+  },
+  "keywords": [
+    "typescript",
+    "framework",
+    "contract",
+    "api",
+    "microservices",
+    "testing",
+    "http",
+    "file",
+    "upload",
+    "download"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "@grest-ts/common": "0.0.4",
+    "@grest-ts/http": "0.0.4",
+    "@grest-ts/schema": "0.0.4",
+    "busboy": "^1.6.0"
+  },
+  "devDependencies": {
+    "@grest-ts/x-packager": "0.0.4",
+    "@types/busboy": "^1.5.4"
+  }
+}

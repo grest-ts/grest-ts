@@ -1,0 +1,9 @@
+{
+  "name": "new-project",
+  "private": true,
+  "workspaces": [
+    "api",
+    "server",
+    "client"
+  ]
+}

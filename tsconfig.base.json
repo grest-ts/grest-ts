@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "compilerOptions": {
+    // Language and Environment
+    "lib": ["ES2022"],
+    "target": "ES2022",
+
+    // Modules
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "moduleDetection": "force",
+    "esModuleInterop": true,
+    "isolatedModules": true,
+
+
+    // Emit - disabled, tsx runs TypeScript directly
+    "noEmit": true,
+
+    // Type Checking
+    "noImplicitAny": true,
+    "noImplicitReturns": true,
+    "noImplicitThis": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": false,
+
+    // Interop Constraints
+    "allowJs": false,
+    "checkJs": false,
+    "skipLibCheck": true,
+
+    // Projects
+    "composite": false,
+    "incremental": true,
+
+    // Base URL
+    "baseUrl": "."
+  }
+}

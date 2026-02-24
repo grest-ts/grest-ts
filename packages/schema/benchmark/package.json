@@ -1,0 +1,70 @@
+{
+  "//": "THIS FILE IS GENERATED - DO NOT EDIT",
+  "name": "@grest-ts/schema-benchmark",
+  "version": "0.0.4",
+  "type": "module",
+  "license": "MIT",
+  "description": "Validation library benchmark suite",
+  "exports": {
+    ".": {
+      "types": "./src/index-node.ts",
+      "import": "./src/index-node.ts"
+    }
+  },
+  "files": [
+    "src"
+  ],
+  "scripts": {
+    "typecheck": "tsc --noEmit -p src",
+    "typia:generate": "typia generate --input src/libraries/typia/input --output src/libraries/typia/generated --project src/tsconfig.json",
+    "tsrc:generate": "tspc -p src/libraries/ts-runtime-checks/tsconfig.json && node -e \"const f='src/libraries/ts-runtime-checks/generated/types.js';require('fs').writeFileSync(f,require('fs').readFileSync(f,'utf8').replace(/^import.*from .ts-runtime-checks.;\\n/gm,''))\"",
+    "ajv:generate": "tsx src/libraries/ajv/generate.ts",
+    "generate": "npm run typia:generate && npm run tsrc:generate && npm run ajv:generate",
+    "benchmark": "npm run generate && tsx src/benchmark.ts"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/grest-ts/grest-ts.git",
+    "directory": "packages/schema/benchmark"
+  },
+  "homepage": "https://github.com/grest-ts/grest-ts/tree/master/packages/schema/benchmark",
+  "bugs": {
+    "url": "https://github.com/grest-ts/grest-ts/issues"
+  },
+  "keywords": [
+    "typescript",
+    "framework",
+    "contract",
+    "api",
+    "microservices",
+    "testing",
+    "benchmark",
+    "validation",
+    "performance"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "@grest-ts/schema": "0.0.4",
+    "@sinclair/typebox": "^0.34.48",
+    "ajv": "^8.18.0",
+    "arktype": "^2.1.29",
+    "cbor-x": "^1.6.0",
+    "commander": "^14.0.3",
+    "msgpackr": "^1.11.8",
+    "protobufjs": "^7.4.0",
+    "ts-patch": "^3.3.0",
+    "ts-runtime-checks": "^0.6.2",
+    "turbo-json-parse": "^2.3.0",
+    "typia": "^11.0.3",
+    "valibot": "^1.2.0",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@grest-ts/x-packager": "0.0.4"
+  }
+}

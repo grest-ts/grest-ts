@@ -1,0 +1,51 @@
+{
+  "//": "THIS FILE IS GENERATED - DO NOT EDIT",
+  "name": "@grest-ts/x-packager",
+  "version": "0.0.4",
+  "type": "module",
+  "license": "MIT",
+  "description": "Package and tsconfig utility for grest framework. Makes framework dependency management automatic and easy.",
+  "exports": {
+    ".": {
+      "types": "./src/index-node.ts",
+      "import": "./src/index-node.ts"
+    }
+  },
+  "files": [
+    "bin",
+    "src"
+  ],
+  "scripts": {
+    "typecheck": "tsc --noEmit -p src"
+  },
+  "private": true,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/grest-ts/grest-ts.git",
+    "directory": "x-packager"
+  },
+  "homepage": "https://github.com/grest-ts/grest-ts/tree/master/x-packager",
+  "bugs": {
+    "url": "https://github.com/grest-ts/grest-ts/issues"
+  },
+  "keywords": [
+    "typescript",
+    "framework",
+    "contract",
+    "api",
+    "microservices",
+    "testing",
+    "packager",
+    "monorepo",
+    "tooling"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "bin": {
+    "grest-packager": "./bin/grest-packager.mjs"
+  },
+  "dependencies": {
+    "fast-glob": "^3.3.3"
+  }
+}

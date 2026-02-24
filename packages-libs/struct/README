@@ -1,0 +1,37 @@
+
+
+Ultra-fast struct like library for typescript supporting SoA, AoS, AoSoA architectures.
+Library is heavily optimized for JS engines to get maximum performance out of those. If you spot possible improvements, let me know.
+
+It makes sense to use this library if you need thousands of objects!
+
+Main benefits:
+* Uses about 8x less memory compared to JS objects.
+* Set/get about 20% faster compared to JS objects.
+* No garbage collection issues, as there are very few objects used by the library itself. All data is stured in ArrayBuffer-rs (Massive bonus for Firefox!)
+* Export / Import support, if you want to use workers, it is very cheap to send data to workers. Uses triple buffering. SharedArrayBuffer is not supported, as for iframe games it can't be used on most sites.
+* You can try out SoA, AoS, AoSoA architectures free of charge, just change the definition, regenerate accessor class and you are good to benchmark which works best for your game.
+* Dirty / Full export support. (Examples: for terrain that changes rarely, dirty marking might be beneficial. For units that change every frame, full sync might be better.)
+* Fixed size / Dynamic size support (Examples: if map size is fixed, fixed size structure is best. For units which total numbers you don't know, dynamic length structure is best).
+
+Define structure
+file: MyObjPool.struct.ts
+new Struct()
+    .ref<tRef>()
+    .buffer()
+    .int16("x")
+    .int16("y");
+
+And run generation, this generates classes for your usage
+
+Main usage
+const pool = new MyObjPool();
+const ref = pool.new();
+pool.setX(ref, 10);
+console.log(pool.getX(ref));
+
+Keep in mind, that this library is just code generator that creates accessor classes for you to use.
+It does not have any code for runtime except what was generated, making it extremely light to use in a project.
+
+Check spec/examples for more complex use cases.
+

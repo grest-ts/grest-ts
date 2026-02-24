@@ -1,0 +1,17 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "outDir": "./generated",
+    "rootDir": ".",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "target": "ES2022",
+    "noEmit": false,
+    "declaration": true,
+    "plugins": [
+      { "transform": "ts-runtime-checks" }
+    ]
+  },
+  "include": ["types.ts"],
+  "exclude": ["generated"]
+}

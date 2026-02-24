@@ -1,0 +1,64 @@
+# Docker Compose for Grest Framework Examples
+#
+# This file defines the infrastructure services needed for local development.
+# Database instances are separate to simulate real microservice architecture.
+#
+# Usage:
+#   docker compose up -d        # Start all services in background
+#   docker compose down         # Stop all services
+#   docker compose down -v      # Stop and remove all data (fresh start)
+#   docker compose logs -f      # View logs
+#   docker compose ps           # View status
+#
+# Data is persisted in Docker volumes. Your data survives restarts.
+# Use 'down -v' to wipe data and start fresh.
+
+services:
+  # PostgreSQL for Checklist and Blocker services
+  # Connection: localhost:5432
+  # Databases: checklist, blocker (auto-created on first connect)
+  postgres:
+    image: postgres:16
+    container_name: gg-postgres
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U postgres" ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  # MySQL for Checklist service (alternative)
+  # Connection: localhost:3306
+  # Schema: checklist
+  mysql-checklist:
+    image: mysql:8.0
+    container_name: gg-mysql-checklist
+    restart: unless-stopped
+    ports:
+      - "3306:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: checklist
+    volumes:
+      - mysql_checklist_data:/var/lib/mysql
+    healthcheck:
+      test: [ "CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-proot" ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+volumes:
+  postgres_data:
+    name: gg-postgres-data
+  mysql_checklist_data:
+    name: gg-mysql-checklist-data

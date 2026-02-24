@@ -1,0 +1,59 @@
+{
+  "//": "THIS FILE IS GENERATED - DO NOT EDIT",
+  "name": "@grest-ts/metrics",
+  "version": "0.0.4",
+  "type": "module",
+  "license": "MIT",
+  "description": "Metrics library for Grest Framework",
+  "exports": {
+    ".": {
+      "types": "./src/index-node.ts",
+      "import": "./src/index-node.ts"
+    },
+    "./testkit": {
+      "types": "./testkit/index-testkit.ts",
+      "import": "./testkit/index-testkit.ts"
+    }
+  },
+  "files": [
+    "src",
+    "testkit"
+  ],
+  "scripts": {
+    "typecheck": "tsc --noEmit -p src"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/grest-ts/grest-ts.git",
+    "directory": "packages/metrics"
+  },
+  "homepage": "https://github.com/grest-ts/grest-ts/tree/master/packages/metrics",
+  "bugs": {
+    "url": "https://github.com/grest-ts/grest-ts/issues"
+  },
+  "keywords": [
+    "typescript",
+    "framework",
+    "contract",
+    "api",
+    "microservices",
+    "testing",
+    "metrics",
+    "monitoring",
+    "observability"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "@grest-ts/common": "0.0.4",
+    "@grest-ts/locator": "0.0.4"
+  },
+  "devDependencies": {
+    "@grest-ts/testkit": "0.0.4",
+    "@grest-ts/x-packager": "0.0.4"
+  }
+}
