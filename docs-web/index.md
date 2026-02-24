@@ -194,8 +194,12 @@ features:
 // api/src/api/ItemApi.ts
 
 // Standard schema definitions.
-const IsItem = IsObject({
+export const IsItem = IsObject({
     id: IsNumber,
+    title: IsString
+})
+
+export const IsCreateItemRequest = IsObject({
     title: IsString
 })
 
@@ -211,14 +215,11 @@ const ItemApiContract = new GGContractClass("ItemApi", {
         errors: [SERVER_ERROR, OUT_OF_STOCK] // We say what errors our contract can return.
     },
     create: {
-        input: IsObject({
-            title: IsString
-        }),
+        input: IsCreateItemRequest,
         success: IsItem,
         errors: [VALIDATION_ERROR, SERVER_ERROR]
     }
 })
-export type ItemApiContract = GGContractImplementation<typeof ItemApiContract.methods>;
 
 export const ItemApi = httpSchema(ItemApiContract)
     .pathPrefix("api/items")
@@ -248,6 +249,7 @@ export class AppRuntime extends GGRuntime {
 }
 
 // Simple implementation examples
+type ItemApiContract = GGContractImplementation<typeof ItemApiContract.methods>;
 export class ItemApiImpl implements ItemApiContract {
 
     private readonly geocoder = new GeocodingService();
@@ -255,7 +257,7 @@ export class ItemApiImpl implements ItemApiContract {
     public list = async (): Promise<Item[]> => {
         // ...
     }
-    public create = async (input: CreateItemRequest): Promise<Item> => {
+    public create = async (input: typeof IsCreateItemRequest.infer): Promise<Item> => {
         // ... Also use geocoder here ...
         throw OUT_OF_STOCK({amountLeft: 10}) // throw errors.
     }
