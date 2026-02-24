@@ -1,7 +1,7 @@
 {
   "//": "THIS FILE IS GENERATED - DO NOT EDIT",
   "name": "@grest-ts/ipc",
-  "version": "0.0.9",
+  "version": "0.0.10",
   "type": "module",
   "license": "MIT",
   "description": "Service internal process communications library. For local testing only.",
@@ -44,17 +44,17 @@
     "node": ">=25"
   },
   "dependencies": {
-    "@grest-ts/common": "0.0.9",
-    "@grest-ts/context": "0.0.9",
-    "@grest-ts/locator": "0.0.9",
-    "@grest-ts/logger": "0.0.9",
-    "@grest-ts/trace": "0.0.9",
+    "@grest-ts/common": "0.0.10",
+    "@grest-ts/context": "0.0.10",
+    "@grest-ts/locator": "0.0.10",
+    "@grest-ts/logger": "0.0.10",
+    "@grest-ts/trace": "0.0.10",
     "find-my-way": "^9.4.0",
     "http-proxy": "^1.18.1",
     "ws": "^8.19.0"
   },
   "devDependencies": {
-    "@grest-ts/x-packager": "0.0.9",
+    "@grest-ts/x-packager": "0.0.10",
     "@types/http-proxy": "^1.17.17"
   }
 }

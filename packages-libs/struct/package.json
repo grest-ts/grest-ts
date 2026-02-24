@@ -1,7 +1,7 @@
 {
   "//": "THIS FILE IS GENERATED - DO NOT EDIT",
   "name": "@grest-ts/struct",
-  "version": "0.0.9",
+  "version": "0.0.10",
   "type": "module",
   "license": "MIT",
   "description": "Binary struct definitions with code generation",
@@ -52,6 +52,6 @@
     "ts-morph": "^27.0.2"
   },
   "devDependencies": {
-    "@grest-ts/x-packager": "0.0.9"
+    "@grest-ts/x-packager": "0.0.10"
   }
 }
