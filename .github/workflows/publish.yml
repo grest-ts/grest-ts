@@ -5,6 +5,9 @@ on:
     workflows: [CI]
     types: [completed]
 
+permissions:
+  packages: write
+
 jobs:
   publish:
     if: github.event.workflow_run.conclusion == 'success'
@@ -27,10 +30,20 @@ jobs:
       - name: Build
         run: npx tsx grest.4.build.ts
 
-      - name: Setup .npmrc
+      - name: Setup .npmrc for npm
         run: echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > ~/.npmrc
         env:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
 
-      - name: Publish
+      - name: Publish to npm
+        run: npx tsx grest.5.npm.publish.ts --ci
+
+      - name: Setup .npmrc for GitHub Packages
+        run: |
+          echo "@grest-ts:registry=https://npm.pkg.github.com" > ~/.npmrc
+          echo "//npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}" >> ~/.npmrc
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish to GitHub Packages
         run: npx tsx grest.5.npm.publish.ts --ci
