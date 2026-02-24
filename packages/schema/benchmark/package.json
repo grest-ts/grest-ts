@@ -1,7 +1,7 @@
 {
   "//": "THIS FILE IS GENERATED - DO NOT EDIT",
   "name": "@grest-ts/schema-benchmark",
-  "version": "0.0.7",
+  "version": "0.0.8",
   "type": "module",
   "license": "MIT",
   "description": "Validation library benchmark suite",
@@ -49,7 +49,7 @@
     "node": ">=25"
   },
   "dependencies": {
-    "@grest-ts/schema": "0.0.7",
+    "@grest-ts/schema": "0.0.8",
     "@sinclair/typebox": "^0.34.48",
     "ajv": "^8.18.0",
     "arktype": "^2.1.29",
@@ -65,6 +65,6 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
-    "@grest-ts/x-packager": "0.0.7"
+    "@grest-ts/x-packager": "0.0.8"
   }
 }
