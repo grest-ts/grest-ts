@@ -1,7 +1,7 @@
 {
   "//": "THIS FILE IS GENERATED - DO NOT EDIT",
   "name": "@grest-ts/discovery-static",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "type": "module",
   "license": "MIT",
   "description": "Static service discovery implementation for Grest Framework",
@@ -44,10 +44,10 @@
     "node": ">=22"
   },
   "dependencies": {
-    "@grest-ts/discovery": "0.0.5",
-    "@grest-ts/logger": "0.0.5"
+    "@grest-ts/discovery": "0.0.6",
+    "@grest-ts/logger": "0.0.6"
   },
   "devDependencies": {
-    "@grest-ts/x-packager": "0.0.5"
+    "@grest-ts/x-packager": "0.0.6"
   }
 }

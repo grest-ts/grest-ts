@@ -1,3 +1,8 @@
+<!-- GREST-TS-BANNER-START -->
+> Part of the [grest-ts](https://github.com/grest-ts/grest-ts) framework.
+> [Documentation](https://github.com/grest-ts/grest-ts#readme) | [All packages](https://github.com/grest-ts/grest-ts#package-reference)
+<!-- GREST-TS-BANNER-END -->
+
 # Typescript Mysql query builder
 
 Powerful SQL query builder with lots of compile time errors to hint what is wrong. Some examples include:

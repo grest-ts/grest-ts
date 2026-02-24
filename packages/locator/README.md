@@ -1,3 +1,8 @@
+<!-- GREST-TS-BANNER-START -->
+> Part of the [grest-ts](https://github.com/grest-ts/grest-ts) framework.
+> [Documentation](https://github.com/grest-ts/grest-ts#readme) | [All packages](https://github.com/grest-ts/grest-ts#package-reference)
+<!-- GREST-TS-BANNER-END -->
+
 # Locator Package (@grest-ts/locator)
 
 Service locator pattern implementation using AsyncLocalStorage for managing dependency injection in async contexts. Provides type-safe access to services throughout the request lifecycle without

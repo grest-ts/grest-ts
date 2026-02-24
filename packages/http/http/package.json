@@ -1,7 +1,7 @@
 {
   "//": "THIS FILE IS GENERATED - DO NOT EDIT",
   "name": "@grest-ts/http",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "type": "module",
   "license": "MIT",
   "description": "HTTP server and client library for Node.js and browser",
@@ -56,20 +56,20 @@
     "node": ">=22"
   },
   "dependencies": {
-    "@grest-ts/common": "0.0.5",
-    "@grest-ts/context": "0.0.5",
-    "@grest-ts/logger": "0.0.5",
-    "@grest-ts/schema": "0.0.5",
-    "@grest-ts/trace": "0.0.5",
+    "@grest-ts/common": "0.0.6",
+    "@grest-ts/context": "0.0.6",
+    "@grest-ts/logger": "0.0.6",
+    "@grest-ts/schema": "0.0.6",
+    "@grest-ts/trace": "0.0.6",
     "find-my-way": "^9.4.0"
   },
   "peerDependencies": {
-    "@grest-ts/discovery": "0.0.5",
-    "@grest-ts/locator": "0.0.5",
-    "@grest-ts/metrics": "0.0.5"
+    "@grest-ts/discovery": "0.0.6",
+    "@grest-ts/locator": "0.0.6",
+    "@grest-ts/metrics": "0.0.6"
   },
   "devDependencies": {
-    "@grest-ts/testkit": "0.0.5",
-    "@grest-ts/x-packager": "0.0.5"
+    "@grest-ts/testkit": "0.0.6",
+    "@grest-ts/x-packager": "0.0.6"
   }
 }

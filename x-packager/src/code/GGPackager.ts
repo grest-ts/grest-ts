@@ -7,6 +7,7 @@ import { GGVitestConfigBuilder } from "./GGVitestConfigBuilder"
 import { GGMermaidBuilder } from "./GGMermaidBuilder"
 import { GGDependencyJsonBuilder } from "./GGDependencyJsonBuilder"
 import { GGImportFixer } from "./GGImportFixer"
+import { GGReadmeBannerBuilder } from "./GGReadmeBannerBuilder"
 import { GGCircularDependencyChecker } from "./GGCircularDependencyChecker"
 import { GGAllowedPackagesChecker } from "./GGAllowedPackagesChecker"
 import { PackagerFile } from "./PackagerFile"
@@ -159,6 +160,10 @@ export class GGPackager {
                 files.push(PackagerFile.copy(join(pkg.path, "LICENSE"), rootLicense))
             }
         }
+
+        // Update README banners
+        console.log("📝 Updating README banners...")
+        files.push(...new GGReadmeBannerBuilder(packages).build())
 
         // Generate vitest.config.ts for packages with hasTests
         console.log("🧪 Generating vitest.config.ts files...")
@@ -423,6 +428,9 @@ ${allEntries.map(p => `      '${p}'`).join(',\n')}
         if (rootLicense) {
             files.push(PackagerFile.copy(join(targetPackage.path, "LICENSE"), rootLicense))
         }
+
+        // Update README banner
+        files.push(...new GGReadmeBannerBuilder(allPackages).buildForPackage(targetPackage))
 
         await writeFiles(files, false)
     }

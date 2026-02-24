@@ -1,3 +1,8 @@
+<!-- GREST-TS-BANNER-START -->
+> Part of the [grest-ts](https://github.com/grest-ts/grest-ts) framework.
+> [Documentation](https://github.com/grest-ts/grest-ts#readme) | [All packages](https://github.com/grest-ts/grest-ts#package-reference)
+<!-- GREST-TS-BANNER-END -->
+
 # Context Package (@grest-ts/context)
 
 Request-scoped context storage using AsyncLocalStorage. Use this for short-lived data that exists during a single request, job, or message processing - such as tracing IDs, auth data, or request
