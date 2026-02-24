@@ -41,7 +41,7 @@
     "logger"
   ],
   "engines": {
-    "node": ">=22"
+    "node": ">=25"
   },
   "dependencies": {
     "@grest-ts/file": "0.0.6",

@@ -45,7 +45,7 @@
     "code-generation"
   ],
   "engines": {
-    "node": ">=22"
+    "node": ">=25"
   },
   "dependencies": {
     "fast-glob": "^3.3.3",

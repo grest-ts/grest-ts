@@ -41,7 +41,7 @@
     "secrets-manager"
   ],
   "engines": {
-    "node": ">=22"
+    "node": ">=25"
   },
   "dependencies": {
     "@aws-sdk/client-secrets-manager": "^3.991.0",

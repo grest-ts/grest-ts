@@ -40,7 +40,7 @@
     "tooling"
   ],
   "engines": {
-    "node": ">=22"
+    "node": ">=25"
   },
   "bin": {
     "grest-packager": "./bin/grest-packager.mjs"

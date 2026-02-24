@@ -39,7 +39,7 @@
     "service-bus"
   ],
   "engines": {
-    "node": ">=22"
+    "node": ">=25"
   },
   "dependencies": {
     "@azure/service-bus": "^7.9.5",

@@ -50,7 +50,7 @@
     "dependency-injection"
   ],
   "engines": {
-    "node": ">=22"
+    "node": ">=25"
   },
   "dependencies": {
     "@grest-ts/common": "0.0.6",

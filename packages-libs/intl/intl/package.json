@@ -45,7 +45,7 @@
     "localization"
   ],
   "engines": {
-    "node": ">=22"
+    "node": ">=25"
   },
   "dependencies": {
     "@grest-ts/context": "0.0.6",

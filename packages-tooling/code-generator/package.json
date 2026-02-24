@@ -43,7 +43,7 @@
     "server"
   ],
   "engines": {
-    "node": ">=22"
+    "node": ">=25"
   },
   "bin": {
     "grest": "./bin/grest.cjs"

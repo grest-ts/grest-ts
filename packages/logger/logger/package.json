@@ -51,7 +51,7 @@
     "logger"
   ],
   "engines": {
-    "node": ">=22"
+    "node": ">=25"
   },
   "peerDependencies": {
     "@grest-ts/locator": "0.0.6"
