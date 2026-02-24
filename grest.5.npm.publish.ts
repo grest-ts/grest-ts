@@ -103,18 +103,15 @@ async function main() {
         return
     }
 
-    const failed = await publishParallel(
+    const result = await publishParallel(
         toPublish, packages,
         () => `npm publish --access public`,
         version
     )
 
-    if (failed.length > 0) {
-        console.error(`\n${failed.length} package(s) failed to publish`)
+    if (result.failed.length > 0) {
         process.exit(1)
     }
-
-    console.log(`\nDone: ${toPublish.length} packages published to npm as v${version}`)
 }
 
 main()

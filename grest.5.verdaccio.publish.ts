@@ -94,7 +94,7 @@ async function main() {
         updatePackageVersion(join(entry.dir, "package.json"), publishVersion)
     }
 
-    const failed = await publishParallel(
+    const result = await publishParallel(
         names, packages,
         entry => `npm publish --registry ${REGISTRY} --tag verdaccio`,
         publishVersion
@@ -104,14 +104,11 @@ async function main() {
     for (const [pkgPath, content] of originalPackageJsons) {
         writeFileSync(pkgPath, content)
     }
+    console.log(`dist/ package.json files restored to v${baseVersion}`)
 
-    if (failed.length > 0) {
-        console.error(`\n${failed.length} package(s) failed to publish`)
+    if (result.failed.length > 0) {
         process.exit(1)
     }
-
-    console.log(`\nDone: ${names.length} packages published to ${REGISTRY} as v${publishVersion}`)
-    console.log(`dist/ package.json files restored to v${baseVersion}`)
 }
 
 main()

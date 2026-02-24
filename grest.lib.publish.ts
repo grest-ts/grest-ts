@@ -86,12 +86,18 @@ export function validateDependencies(packages: Map<string, DistPackageEntry>): v
  * Publish packages in parallel, logging progress and reporting failures.
  * Returns the list of failed package names (empty on full success).
  */
+export interface PublishResult {
+    published: string[]
+    skipped: string[]
+    failed: string[]
+}
+
 export async function publishParallel(
     names: string[],
     packages: Map<string, DistPackageEntry>,
     publishCmd: (entry: DistPackageEntry) => string,
     version: string
-): Promise<string[]> {
+): Promise<PublishResult> {
     console.log(`Publishing ${names.length} packages in parallel...\n`)
     let done = 0
 
@@ -104,16 +110,29 @@ export async function publishParallel(
         })
     )
 
+    const published: string[] = []
+    const skipped: string[] = []
     const failed: string[] = []
     for (let i = 0; i < results.length; i++) {
         const r = results[i]
-        if (r.status === "rejected") {
+        if (r.status === "fulfilled") {
+            published.push(names[i])
+        } else {
             const err = r.reason
             const stderr = err?.stderr?.toString?.() ?? err?.message ?? err
-            console.error(`  FAILED ${names[i]}: ${stderr}`)
-            failed.push(names[i])
+            if (/previously published version|Cannot publish over/i.test(String(stderr))) {
+                done++
+                console.log(`  [${done}/${names.length}] ${names[i]}@${version} (already published, skipped)`)
+                skipped.push(names[i])
+            } else {
+                console.error(`  FAILED ${names[i]}: ${stderr}`)
+                failed.push(names[i])
+            }
         }
     }
 
-    return failed
+    console.log(`\n--------------------------------------------`)
+    console.log(`Published: ${published.length}, Skipped (up to date): ${skipped.length}, Failed: ${failed.length} (version ${version})`)
+
+    return {published, skipped, failed}
 }

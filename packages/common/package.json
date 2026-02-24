@@ -1,7 +1,7 @@
 {
   "//": "THIS FILE IS GENERATED - DO NOT EDIT",
   "name": "@grest-ts/common",
-  "version": "0.0.4",
+  "version": "0.0.5",
   "type": "module",
   "license": "MIT",
   "description": "Common utility functions and types shared across all GG packages",
@@ -53,6 +53,6 @@
     "fast-glob": "^3.3.3"
   },
   "devDependencies": {
-    "@grest-ts/x-packager": "0.0.4"
+    "@grest-ts/x-packager": "0.0.5"
   }
 }
