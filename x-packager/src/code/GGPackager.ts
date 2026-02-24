@@ -292,6 +292,7 @@ export class GGPackager {
         // Build include patterns from actual package paths (supports nested packages)
         const packageIncludes = new Set<string>()
         for (const pkg of packages) {
+            if (pkg.config.noSourceCode) continue
             // Add src, test, testkit patterns for each package
             packageIncludes.add(`${pkg.relativePath}/src/**/*`)
             if (pkg.config.hasTestsFolder || pkg.hasTestDir) {

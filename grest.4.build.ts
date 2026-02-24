@@ -28,13 +28,40 @@ function readPkg(dir: string): PackageJson | null {
     return JSON.parse(readFileSync(path, "utf-8"))
 }
 
-/** Resolve workspace patterns from root package.json into all @grest-ts/* packages that have tsconfig.publish.json */
-function discoverPackages(): Map<string, { dir: string; pkg: PackageJson }> {
+interface DiscoveredPackage {
+    dir: string
+    pkg: PackageJson
+    /** If true, this package has no TypeScript source — just copy files to dist */
+    noSourceCode?: true
+}
+
+/** Resolve workspace patterns from root package.json into all buildable packages */
+function discoverPackages(): Map<string, DiscoveredPackage> {
     const rootPkg = readPkg(ROOT)
     if (!rootPkg) throw new Error("No root package.json")
     const workspaces: string[] = (rootPkg as any).workspaces ?? []
 
-    const packages = new Map<string, { dir: string; pkg: PackageJson }>()
+    const packages = new Map<string, DiscoveredPackage>()
+
+    function checkDir(dir: string): void {
+        const pkg = readPkg(dir)
+        if (!pkg) return
+
+        // Standard @grest-ts/* packages with tsconfig.publish.json
+        if (pkg.name.startsWith("@grest-ts/") && existsSync(join(dir, "tsconfig.publish.json"))) {
+            packages.set(pkg.name, {dir, pkg})
+            return
+        }
+
+        // noSourceCode packages: have grest.package.ts with noSourceCode
+        const grestPkgPath = join(dir, "grest.package.ts")
+        if (pkg.name && existsSync(grestPkgPath)) {
+            const content = readFileSync(grestPkgPath, "utf-8")
+            if (/noSourceCode\s*:/.test(content)) {
+                packages.set(pkg.name, {dir, pkg, noSourceCode: true})
+            }
+        }
+    }
 
     for (const pattern of workspaces) {
         if (pattern.endsWith("/*")) {
@@ -42,18 +69,10 @@ function discoverPackages(): Map<string, { dir: string; pkg: PackageJson }> {
             if (!existsSync(baseDir)) continue
             for (const entry of readdirSync(baseDir, {withFileTypes: true})) {
                 if (!entry.isDirectory() || entry.name === "node_modules") continue
-                const dir = join(baseDir, entry.name)
-                const pkg = readPkg(dir)
-                if (pkg && pkg.name.startsWith("@grest-ts/") && existsSync(join(dir, "tsconfig.publish.json"))) {
-                    packages.set(pkg.name, {dir, pkg})
-                }
+                checkDir(join(baseDir, entry.name))
             }
         } else {
-            const dir = join(ROOT, pattern)
-            const pkg = readPkg(dir)
-            if (pkg && pkg.name.startsWith("@grest-ts/") && existsSync(join(dir, "tsconfig.publish.json"))) {
-                packages.set(pkg.name, {dir, pkg})
-            }
+            checkDir(join(ROOT, pattern))
         }
     }
 
@@ -242,22 +261,55 @@ function assembleStaging(name: string, dir: string): void {
     cleanDir(join(dir, "dist"))
 }
 
+/**
+ * Stage a noSourceCode package: copy files + package.json + LICENSE to dist/<name>/.
+ * No compilation or export rewriting.
+ */
+function assembleNoSourceCodeStaging(name: string, dir: string): void {
+    const stagingDir = join(DIST_ROOT, name)
+    mkdirSync(stagingDir, {recursive: true})
+
+    const pkgJson = JSON.parse(readFileSync(join(dir, "package.json"), "utf-8"))
+
+    for (const entry of pkgJson.files ?? []) {
+        const srcPath = join(dir, entry)
+        if (existsSync(srcPath)) {
+            cpSync(srcPath, join(stagingDir, entry), {recursive: true})
+        }
+    }
+
+    cpSync(join(dir, "package.json"), join(stagingDir, "package.json"))
+
+    const licensePath = join(dir, "LICENSE")
+    if (existsSync(licensePath)) {
+        cpSync(licensePath, join(stagingDir, "LICENSE"))
+    }
+
+    for (const entry of readdirSync(dir)) {
+        if (/^README.*\.md$/i.test(entry)) {
+            cpSync(join(dir, entry), join(stagingDir, entry))
+        }
+    }
+}
+
 async function main() {
     const packages = discoverPackages()
     const names = [...packages.keys()].sort()
+    const compiledNames = names.filter(n => !packages.get(n)!.noSourceCode)
+    const noSourceCodeNames = names.filter(n => packages.get(n)!.noSourceCode)
 
     const rootPkg = readPkg(ROOT)
     console.log(`Version: ${rootPkg!.version}`)
-    console.log(`Found ${names.length} packages\n`)
+    console.log(`Found ${names.length} packages (${compiledNames.length} compiled, ${noSourceCodeNames.length} noSourceCode)\n`)
 
     // Clean root dist/
     cleanDir(DIST_ROOT)
 
-    // Build all packages in parallel
+    // Build compiled packages in parallel
     console.log("Building packages (parallel)...\n")
 
     const buildResults = await Promise.allSettled(
-        names.map(async name => {
+        compiledNames.map(async name => {
             const entry = packages.get(name)!
             await buildPackage(name, entry.dir)
             console.log(`  built ${name}`)
@@ -271,21 +323,27 @@ async function main() {
             const stderr = err?.stderr?.toString?.() ?? err?.message ?? err
             console.error(`  BUILD FAILED: ${stderr}`)
         }
-        for (const name of names) {
+        for (const name of compiledNames) {
             cleanDir(join(packages.get(name)!.dir, "dist"))
         }
         process.exit(1)
     }
 
-    console.log(`\nAll ${names.length} packages built successfully.`)
+    console.log(`\nAll ${compiledNames.length} compiled packages built successfully.`)
 
     // Assemble root dist/ staging area
     console.log("\nAssembling dist/...\n")
 
-    for (const name of names) {
+    for (const name of compiledNames) {
         const entry = packages.get(name)!
         assembleStaging(name, entry.dir)
         console.log(`  staged ${name}`)
+    }
+
+    for (const name of noSourceCodeNames) {
+        const entry = packages.get(name)!
+        assembleNoSourceCodeStaging(name, entry.dir)
+        console.log(`  staged ${name} (noSourceCode)`)
     }
 
     console.log(`\nDone — dist/ contains ${names.length} packages.`)

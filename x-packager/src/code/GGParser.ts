@@ -106,8 +106,15 @@ export class GGParser {
         }
 
         // Skip root configs (GGPackageRoot has 'packages' field, not 'name')
-        if (!("name" in config) || !("targets" in config)) {
+        if (!("name" in config) || (!("targets" in config) && !("noSourceCode" in config))) {
             return null
+        }
+
+        // All packages must be @grest-ts/ scoped
+        if (!config.name.startsWith("@grest-ts/")) {
+            throw new Error(
+                `Package in ${packageFile} has name "${config.name}" — all packages must be @grest-ts/ scoped.`
+            )
         }
 
         return this.buildPackageInfo(packageDir, config)
@@ -118,14 +125,32 @@ export class GGParser {
      * Shared logic between parsePackageFile and parseSinglePackage.
      */
     private async buildPackageInfo(packageDir: string, config: GGPackage): Promise<GGPackageInfo> {
+        // Calculate relative path and depth from workspace root
+        const relativePath = relative(this.rootDir, packageDir).replace(/\\/g, "/")
+        const depth = relativePath.split("/").filter(Boolean).length
+
+        // No source code packages skip all source scanning
+        if (config.noSourceCode) {
+            return {
+                name: config.name,
+                shortName: config.name.replace("@grest-ts/", ""),
+                path: packageDir,
+                relativePath,
+                depth,
+                config,
+                sourceFiles: [],
+                imports: { gg: [], external: [] },
+                testkitImports: { ggTestkit: [] },
+                vitestImports: { gg: [] },
+                hasTestDir: false,
+                entryMode: "library"
+            }
+        }
+
         const srcDir = join(packageDir, "src")
         const testDir = join(packageDir, "test")
         const testkitDir = join(packageDir, "testkit")
         const vitestDir = join(packageDir, "vitest")
-
-        // Calculate relative path and depth from workspace root
-        const relativePath = relative(this.rootDir, packageDir).replace(/\\/g, "/")
-        const depth = relativePath.split("/").filter(Boolean).length
 
         // Detect entry point mode based on existing files
         const entryMode = this.detectEntryMode(srcDir, config)

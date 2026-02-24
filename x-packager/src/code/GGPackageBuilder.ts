@@ -38,13 +38,13 @@ export interface PackageJson {
     bugs?: { url: string }
     keywords?: string[]
     engines?: Record<string, string>
-    exports: Record<string, PackageJsonExport | PackageJsonConditionalExport>
+    exports?: Record<string, PackageJsonExport | PackageJsonConditionalExport>
     files: string[]
-    scripts: Record<string, string>
+    scripts?: Record<string, string>
     dependencies?: Record<string, string>
     devDependencies?: Record<string, string>
     peerDependencies?: Record<string, string>
-    bin?: Record<string, string>
+    bin?: string | Record<string, string>
 }
 
 /**
@@ -78,15 +78,17 @@ export class GGPackageBuilder {
     private buildPackageJson(pkg: GGPackageInfo): PackagerFile {
         const {version, license, repository, bugs, keywords, engines} = this.rootMeta
 
+        const noSrc = pkg.config.noSourceCode
+
         const packageJson: PackageJson = {
             name: pkg.config.name,
             version,
             type: "module",
             license,
             description: pkg.config.description,
-            exports: this.buildExports(pkg),
-            files: this.buildFiles(pkg),
-            scripts: this.buildScripts(pkg),
+            ...(!noSrc && { exports: this.buildExports(pkg) }),
+            files: noSrc ? noSrc.files : this.buildFiles(pkg),
+            ...(!noSrc && { scripts: this.buildScripts(pkg) }),
         }
 
         // Mark as private unless explicitly opted-in to npm publishing
@@ -107,7 +109,9 @@ export class GGPackageBuilder {
         if (engines) packageJson.engines = engines
 
         // Add bin if specified
-        if (pkg.config.bin) {
+        if (noSrc?.bin) {
+            packageJson.bin = noSrc.bin
+        } else if (pkg.config.bin) {
             packageJson.bin = pkg.config.bin
         }
 

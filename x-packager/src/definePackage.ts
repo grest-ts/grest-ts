@@ -135,6 +135,19 @@ export interface GGPackage {
      * e.g. { "strict": true }
      */
     compilerOptions?: Record<string, unknown>
+
+    /**
+     * Marks this package as having no TypeScript source code.
+     * The packager will still generate package.json (with root metadata),
+     * but skips exports, tsconfig, vitest config, and source scanning.
+     * Used for CLI tools like create-grest-ts that ship plain .mjs + templates.
+     */
+    noSourceCode?: {
+        /** CLI binary entry point, e.g. "./index.mjs" */
+        bin?: string
+        /** Files to include in the published package */
+        files: string[]
+    }
 }
 
 export interface GGPackageRoot {
@@ -193,5 +206,5 @@ function isPackageRoot(pkg: GGPackage | GGPackageRoot): pkg is GGPackageRoot {
 }
 
 function isSinglePackage(pkg: GGPackage | GGPackageRoot): pkg is GGPackage {
-    return "targets" in pkg && "name" in pkg && "description" in pkg
+    return ("targets" in pkg || "noSourceCode" in pkg) && "name" in pkg && "description" in pkg
 }

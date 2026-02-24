@@ -1,23 +1,17 @@
 {
   "//": "THIS FILE IS GENERATED - DO NOT EDIT",
-  "name": "starter",
+  "name": "@grest-ts/starter",
   "version": "0.0.13",
   "type": "module",
   "license": "MIT",
   "description": "Scaffold a new grest-ts project",
-  "exports": {
-    ".": {
-      "types": "./src/index.ts",
-      "import": "./src/index.ts"
-    }
-  },
   "files": [
-    "src"
+    "index.mjs",
+    "template"
   ],
-  "scripts": {
-    "typecheck": "tsc --noEmit -p src"
+  "publishConfig": {
+    "access": "public"
   },
-  "private": true,
   "repository": {
     "type": "git",
     "url": "https://github.com/grest-ts/grest-ts.git",
@@ -33,11 +27,16 @@
     "contract",
     "api",
     "microservices",
-    "testing"
+    "testing",
+    "grest-ts",
+    "create",
+    "scaffold",
+    "starter"
   ],
   "engines": {
     "node": ">=25"
   },
+  "bin": "./index.mjs",
   "devDependencies": {
     "@grest-ts/x-packager": "0.0.13"
   }

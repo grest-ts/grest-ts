@@ -63,6 +63,8 @@ export class GGTsConfigBuilder {
      * Build tsconfig files for a single package
      */
     private buildPackageConfigs(pkg: GGPackageInfo): PackagerFile[] {
+        if (pkg.config.noSourceCode) return []
+
         const files: PackagerFile[] = []
 
         // Root tsconfig.json

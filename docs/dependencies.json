@@ -527,12 +527,12 @@
         "testkit": false,
         "hidden": false,
         "implementation": false,
-        "npm": false
+        "npm": true
       },
       "layer": 0,
       "color": "#F28E2B",
       "category": "tooling",
-      "readme": "<!-- GREST-TS-BANNER-START -->\n> Part of the [grest-ts](https://github.com/grest-ts/grest-ts) framework.\n> [Documentation](https://github.com/grest-ts/grest-ts#readme) | [All packages](https://github.com/grest-ts/grest-ts#package-reference)\n<!-- GREST-TS-BANNER-END -->\n\n"
+      "readme": "<!-- GREST-TS-BANNER-START -->\n> Part of the [grest-ts](https://github.com/grest-ts/grest-ts) framework.\n> [Documentation](https://github.com/grest-ts/grest-ts#readme) | [All packages](https://github.com/grest-ts/grest-ts#package-reference)\n<!-- GREST-TS-BANNER-END -->\n\nThis is a simple starter project template to get going with grest-ts."
     },
     {
       "name": "struct",
@@ -1167,5 +1167,5 @@
       "to": "trace"
     }
   ],
-  "generated": "2026-02-24T16:46:14.853Z"
+  "generated": "2026-02-24T16:59:35.927Z"
 }
