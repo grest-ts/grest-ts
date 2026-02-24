@@ -4,16 +4,23 @@ TypeScript framework for building services around **contracts** — typed API de
 
 ## Why grest-ts?
 
-* **AI-era ready** — Clean, explicit service code is exactly what AI assistants thrive on — no magic to misunderstand, no hidden wiring to hallucinate about. And in an era where AI writes more of your code, integration tests are the one testing layer that actually gives you confidence it works end-to-end. Unit tests check pieces; integration tests prove the system.
-* **Very fast** — `@grest-ts/schema` validation and serialization performs equally well compared to Typia — the fastest in the ecosystem. `@grest-ts/http` benchmarks close to fastify with logging disabled.
+* **AI-era ready** — Clean, explicit service code is exactly what AI assistants thrive on — no magic to misunderstand, no hidden wiring to hallucinate about. And in an era where AI writes more of your
+  code, integration tests are the one testing layer that actually gives you confidence it works end-to-end. Unit tests check pieces; integration tests prove the system.
+* **Very fast** — `@grest-ts/schema` validation and serialization performs equally well compared to Typia — the fastest in the ecosystem. `@grest-ts/http` benchmarks close to fastify with logging
+  disabled.
 * **Contract-first** — Define your API once. Get typed server handlers, typed clients, and typed test utilities automatically.
-* **Testing that survives refactors** — Integration tests at the contract level with per-request mocks and spies. Each test suite launches its own runtime instance with isolated ports and database — no shared state between suites. Mocks apply to exactly the request you specify, not globally.
+* **Testing that survives refactors** — Integration tests at the contract level with per-request mocks and spies. Each test suite launches its own runtime instance with isolated ports and database —
+  no shared state between suites. Mocks apply to exactly the request you specify, not globally.
 * **Zero-config local dev** — `tsx src/MyRuntime.ts` and your service is running. Launch multiple services, discovery handles routing. Launch multiple instances, get load balancing.
-* **Scalable** — From a single runtime to hundreds of microservices. Same patterns, same contracts, same tests. Service discovery is pluggable — built-in discovery handles local dev automatically, swap in your production implementation (Kubernetes, Consul, etc.) without changing service code.
-* **No magic** — No DI containers, no decorators-as-wiring, no hidden resolution. Your Runtime's `compose()` is your bootstrap — all wiring visible in one place, plain constructors. Framework packages are thin layers over standard libraries (for example, mysql2, pg, vitest) — use them or bring your own.
-* **Monorepo or multi-repo** — Run everything in one monorepo or split across multiple repos. The framework doesn't care — contracts are shared via packages (if you want to), choose the strategy that fits your team.
+* **Scalable** — From a single runtime to hundreds of microservices. Same patterns, same contracts, same tests. Service discovery is pluggable — built-in discovery handles local dev automatically,
+  swap in your production implementation (Kubernetes, Consul, etc.) without changing service code.
+* **No magic** — No DI containers, no decorators-as-wiring, no hidden resolution. Your Runtime's `compose()` is your bootstrap — all wiring visible in one place, plain constructors. Framework packages
+  are thin layers over standard libraries (for example, mysql2, pg, vitest) — use them or bring your own.
+* **Monorepo or multi-repo** — Run everything in one monorepo or split across multiple repos. The framework doesn't care — contracts are shared via packages (if you want to), choose the strategy that
+  fits your team.
 * **Tree-shakable** — Fully tree-shakable for minimal bundle sizes (for server package 400mb vs 5mb starts to matter at scale for release speeds)
-* **Typed errors across boundaries** — Errors carry reference IDs, typed data, and flow across service boundaries as discriminated unions. `await` to throw, `.asResult()` to handle explicitly — callers choose per call site.
+* **Typed errors across boundaries** — Errors carry reference IDs, typed data, and flow across service boundaries as discriminated unions. `await` to throw, `.asResult()` to handle explicitly —
+  callers choose per call site.
 * **Extendable** — Testkit, config sources, loggers, metrics exporters — all pluggable. Or don't even use them if you like your own opensource version – they most likely work just fine.
 
 ### Purpose
@@ -24,15 +31,15 @@ Set the standard for your whole company — from zero to unicorn, you will be re
 
 Being transparent: grest-ts is a new framework. Everything described here works — it's not a roadmap, it's shipped code.
 
-The framework is designed by a developer who co-founded and scaled a tech company well past unicorn, solving the same infrastructure problems at every stage of growth. 
+The framework is designed by a developer who co-founded and scaled a tech company well past unicorn, solving the same infrastructure problems at every stage of growth.
 grest-ts is the distillation of those lessons into a framework — what he wishes existed from day one.
 
-It's currently battle-tested on one production project: a real estate management platform with real users and non-trivial complexity — 
-JWT auth with multi-level permissions, multi-tenancy, bank integrations, automated invoice processing, 
-expense documents parsing (pdf), S3 file management, SQS background jobs, bookkeeping system integrations, 
+It's currently battle-tested on one production project: a real estate management platform with real users and non-trivial complexity —
+JWT auth with multi-level permissions, multi-tenancy, bank integrations, automated invoice processing,
+expense documents parsing (pdf), S3 file management, SQS background jobs, bookkeeping system integrations,
 audit logging, and a full React + Vite frontend consuming 100+ typed API contracts.
-That's one project more than most frameworks have at launch, but still one project. 
-APIs may evolve, rough edges exist, and you'd be an early adopter. If that excites rather than scares you — welcome. 
+That's one project more than most frameworks have at launch, but still one project.
+APIs may evolve, rough edges exist, and you'd be an early adopter. If that excites rather than scares you — welcome.
 Fair warning though: once you get used to how testing works here, you'll miss it everywhere else.
 
 ---
@@ -42,9 +49,7 @@ Fair warning though: once you get used to how testing works here, you'll miss it
 Copy the [`starter`](./starter) folder, rename it, and you have a working app:
 
 ```bash
-cp -r starter my-app
-cd my-app
-npm install
+npm create @grest-ts/starter my-app
 
 # Terminal 1 — server
 cd server && npm run dev
@@ -54,6 +59,7 @@ cd client && npm run dev
 ```
 
 The starter is an npm workspaces monorepo with three packages:
+
 - **api/** — shared contract definitions (used by both server and client)
 - **server/** — backend implementation with integration tests
 - **client/** — frontend (Vite + TypeScript, swap for whatever you prefer)
@@ -186,7 +192,8 @@ vitest    # Tests start the runtime in a worker thread with isolated ports.
 
 Testing is the core design principle of grest-ts. Tests work at the **contract level** — they call the same typed API that your clients use, so they survive internal refactors without changes.
 
-You can still write unit tests and component tests as usual — grest-ts just makes integration tests as easy to write as unit tests. No complicated bootstrapping: your Runtime already knows how to set everything up, so tests just start it and go.
+You can still write unit tests and component tests as usual — grest-ts just makes integration tests as easy to write as unit tests. No complicated bootstrapping: your Runtime already knows how to set
+everything up, so tests just start it and go.
 
 ### Test Isolation
 
@@ -242,7 +249,9 @@ test("resolves address when adding item", async () => {
 
 This works for anything — payment gateways, email senders, external API wrappers, file storage. Put `@mockable` on the class, mock it per-request in tests.
 
-**Why this is different from `jest.mock`:** Most mocking libraries replace modules globally — every test in the file shares the same mock, and parallel tests can interfere with each other. Here, mocks are scoped to a single request via `AsyncLocalStorage`. Two tests running in parallel with different mocks on the same service will never conflict. And in production, `@mockable` has zero overhead — the decorator checks for test context and if there isn't one (production), it calls the original method directly with no wrapping cost.
+**Why this is different from `jest.mock`:** Most mocking libraries replace modules globally — every test in the file shares the same mock, and parallel tests can interfere with each other. Here, mocks
+are scoped to a single request via `AsyncLocalStorage`. Two tests running in parallel with different mocks on the same service will never conflict. And in production, `@mockable` has zero overhead —
+the decorator checks for test context and if there isn't one (production), it calls the original method directly with no wrapping cost.
 
 ### Spies
 
@@ -295,7 +304,8 @@ export class OrderRuntime extends GGRuntime {
 ```typescript
 // OrderService calls InventoryService with full type safety
 export class OrderService {
-    constructor(private inventory: InventoryApiClient) {}
+    constructor(private inventory: InventoryApiClient) {
+    }
 
     public create = async (input: CreateOrderRequest) => {
         const stock = await this.inventory.checkStock({itemId: input.itemId})
@@ -338,7 +348,8 @@ if (result.success) {
 }
 ```
 
-This works the same across service boundaries. When service A calls service B, service A gets a typed union of B's possible errors — not just "it might fail," but exactly *which* errors with their typed data:
+This works the same across service boundaries. When service A calls service B, service A gets a typed union of B's possible errors — not just "it might fail," but exactly *which* errors with their
+typed data:
 
 ```typescript
 const result = await this.inventory.checkStock({itemId: input.itemId})
@@ -531,63 +542,64 @@ All packages below are published to npm under `@grest-ts/*`.
 
 ### Core
 
-| Package | Purpose |
-|---------|---------|
-| [`@grest-ts/runtime`](./packages/runtime) | Service bootstrap and lifecycle |
-| [`@grest-ts/schema`](./packages/schema/schema) | Type-safe validation, branded types, contract definitions |
-| [`@grest-ts/http`](./packages/http/http) | HTTP/WebSocket client and server |
-| [`@grest-ts/websocket`](./packages/http/websocket) | WebSocket server and client (Node.js + browser) |
-| [`@grest-ts/config`](./packages/config/config) | Configuration management — resources, secrets, settings |
-| [`@grest-ts/config-aws`](./packages/config/config-aws) | AWS Secrets Manager adapter for config |
-| [`@grest-ts/context`](./packages/context) | Async context for per-request state |
-| [`@grest-ts/locator`](./packages/locator) | Service locator with lifecycle management |
-| [`@grest-ts/common`](./packages/common) | Shared utilities and types |
-| [`@grest-ts/logger`](./packages/logger/logger) | Structured logging |
-| [`@grest-ts/discovery`](./packages/discovery/discovery) | Service discovery interface and load balancing |
-| [`@grest-ts/discovery-local`](./packages/discovery/discovery-local) | Local dev discovery (auto-finds services, zero config) |
-| [`@grest-ts/discovery-static`](./packages/discovery/discovery-static) | Static service discovery (fixed ports via config) |
-| [`@grest-ts/ipc`](./packages/ipc) | Inter-process communication (framework internal) |
+| Package                                                               | Purpose                                                   |
+|-----------------------------------------------------------------------|-----------------------------------------------------------|
+| [`@grest-ts/runtime`](./packages/runtime)                             | Service bootstrap and lifecycle                           |
+| [`@grest-ts/schema`](./packages/schema/schema)                        | Type-safe validation, branded types, contract definitions |
+| [`@grest-ts/http`](./packages/http/http)                              | HTTP/WebSocket client and server                          |
+| [`@grest-ts/websocket`](./packages/http/websocket)                    | WebSocket server and client (Node.js + browser)           |
+| [`@grest-ts/config`](./packages/config/config)                        | Configuration management — resources, secrets, settings   |
+| [`@grest-ts/config-aws`](./packages/config/config-aws)                | AWS Secrets Manager adapter for config                    |
+| [`@grest-ts/context`](./packages/context)                             | Async context for per-request state                       |
+| [`@grest-ts/locator`](./packages/locator)                             | Service locator with lifecycle management                 |
+| [`@grest-ts/common`](./packages/common)                               | Shared utilities and types                                |
+| [`@grest-ts/logger`](./packages/logger/logger)                        | Structured logging                                        |
+| [`@grest-ts/discovery`](./packages/discovery/discovery)               | Service discovery interface and load balancing            |
+| [`@grest-ts/discovery-local`](./packages/discovery/discovery-local)   | Local dev discovery (auto-finds services, zero config)    |
+| [`@grest-ts/discovery-static`](./packages/discovery/discovery-static) | Static service discovery (fixed ports via config)         |
+| [`@grest-ts/ipc`](./packages/ipc)                                     | Inter-process communication (framework internal)          |
 
-Local development uses built-in discovery automatically — services find each other with zero configuration. For production, implement the discovery interface for your infrastructure (Kubernetes, Consul, AWS Cloud Map, etc.). The adapter is a thin layer; the rest of your code doesn't change.
+Local development uses built-in discovery automatically — services find each other with zero configuration. For production, implement the discovery interface for your infrastructure (Kubernetes,
+Consul, AWS Cloud Map, etc.). The adapter is a thin layer; the rest of your code doesn't change.
 
 ### Testing
 
 Many packages provide testkit utilities making testing easier. These are
 
-| Package | Purpose |
-|---------|---------|
-| [`@grest-ts/testkit`](./packages-tooling/testkit/testkit) | Integration testing — GGTest, mockOf, spyOn |
-| [`@grest-ts/testkit-runtime`](./packages-tooling/testkit/testkit-runtime) | Runtime support for @mockable decorator |
-| [`@grest-ts/testkit-vitest`](./packages-tooling/testkit/testkit-vitest) | Vitest integration and global setup |
+| Package                                                                   | Purpose                                     |
+|---------------------------------------------------------------------------|---------------------------------------------|
+| [`@grest-ts/testkit`](./packages-tooling/testkit/testkit)                 | Integration testing — GGTest, mockOf, spyOn |
+| [`@grest-ts/testkit-runtime`](./packages-tooling/testkit/testkit-runtime) | Runtime support for @mockable decorator     |
+| [`@grest-ts/testkit-vitest`](./packages-tooling/testkit/testkit-vitest)   | Vitest integration and global setup         |
 
 ### Observability (All optional)
 
-| Package | Purpose |
-|---------|---------|
-| [`@grest-ts/logger-console`](./packages/logger/logger-console) | Console logger implementation |
-| [`@grest-ts/metrics`](./packages/metrics) | Prometheus-style application metrics |
-| [`@grest-ts/trace`](./packages/trace/trace) | Distributed tracing |
-| [`@grest-ts/trace-http`](./packages/trace/trace-http) | HTTP tracing integration |
+| Package                                                        | Purpose                              |
+|----------------------------------------------------------------|--------------------------------------|
+| [`@grest-ts/logger-console`](./packages/logger/logger-console) | Console logger implementation        |
+| [`@grest-ts/metrics`](./packages/metrics)                      | Prometheus-style application metrics |
+| [`@grest-ts/trace`](./packages/trace/trace)                    | Distributed tracing                  |
+| [`@grest-ts/trace-http`](./packages/trace/trace-http)          | HTTP tracing integration             |
 
 ### Database (All optional)
 
-| Package | Purpose |
-|---------|---------|
-| [`@grest-ts/db-mysql`](./packages-libs/db/db-mysql) | MySQL utilities (thin layer over mysql2) |
+| Package                                                 | Purpose                                   |
+|---------------------------------------------------------|-------------------------------------------|
+| [`@grest-ts/db-mysql`](./packages-libs/db/db-mysql)     | MySQL utilities (thin layer over mysql2)  |
 | [`@grest-ts/db-postgre`](./packages-libs/db/db-postgre) | PostgreSQL utilities (thin layer over pg) |
-| [`@grest-ts/sql`](./packages-libs/sql) | Type-safe SQL query builder |
+| [`@grest-ts/sql`](./packages-libs/sql)                  | Type-safe SQL query builder               |
 
 ### Files (All optional)
 
-| Package | Purpose |
-|---------|---------|
-| [`@grest-ts/file`](./packages/schema/file) | File abstraction |
+| Package                                            | Purpose                                                                                                                     |
+|----------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------|
+| [`@grest-ts/file`](./packages/schema/file)         | File abstraction                                                                                                            |
 | [`@grest-ts/file-http`](./packages/http/file-http) | HTTP file upload/download codec for simple "through the node" cases. (We recommend use direct uploads/downloads to/from S3) |
 
 ### Utilities (All optional)
 
-| Package | Purpose |
-|---------|---------|
+| Package                                      | Purpose                                         |
+|----------------------------------------------|-------------------------------------------------|
 | [`@grest-ts/struct`](./packages-libs/struct) | Binary struct serialization and code generation |
 
 ---
@@ -598,7 +610,8 @@ Many packages provide testkit utilities making testing easier. These are
 * **No magic, no DI framework** — `compose()` is your bootstrap. Plain constructors, all wiring visible in one place. No hidden resolution, no decorators-as-injection.
 * **Per-request context** — `GGContextKey` provides per-request state anywhere in the call stack via AsyncLocalStorage. No parameter threading.
 * **@mockable anything** — Decorate any class, mock or spy on it per-request in tests. Not global, survives refactors. Zero production overhead.
-* **Typed errors everywhere** — Errors carry reference IDs, typed data, and flow across service boundaries as discriminated unions. Callers choose: `await` to throw, `.asResult()` to handle explicitly.
+* **Typed errors everywhere** — Errors carry reference IDs, typed data, and flow across service boundaries as discriminated unions. Callers choose: `await` to throw, `.asResult()` to handle
+  explicitly.
 * **Watchable config** — Any setting, secret, or resource can be watched. Change a file, rotate credentials — your service reacts without restart.
 * **Event-driven communication** — Services talk via typed HTTP clients, WebSockets, or async events (SNS/SQS).
 * **Metrics-instrumented** — Built-in Prometheus-style metrics for observability.
