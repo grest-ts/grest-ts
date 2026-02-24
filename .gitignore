@@ -12,3 +12,6 @@ package-lock.json
 !**/jest.config.js
 !exports/node/vitest.d.ts
 .verdaccio/storage/
+docs-web/src/
+docs-web/.vitepress/dist/
+docs-web/.vitepress/cache/

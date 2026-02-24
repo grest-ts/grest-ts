@@ -1,0 +1,32 @@
+import {defineConfig} from "vitepress"
+import sidebar from "../src/_generated_sidebar.json"
+
+export default defineConfig({
+    title: "grest-ts",
+    description: "Contract-First TypeScript Services",
+    srcDir: "src",
+    appearance: "dark",
+    ignoreDeadLinks: true,
+
+    markdown: {
+        theme: {dark: "github-dark", light: "github-light"},
+    },
+
+    themeConfig: {
+        sidebar,
+
+        nav: [
+            {text: "Guide", link: "/guide/"},
+            {text: "Packages", link: "/packages/core/schema"},
+            {text: "GitHub", link: "https://github.com/grest-ts/grest-ts"},
+        ],
+
+        search: {provider: "local"},
+
+        outline: {level: [2, 3]},
+
+        socialLinks: [
+            {icon: "github", link: "https://github.com/grest-ts/grest-ts"},
+        ],
+    },
+})
