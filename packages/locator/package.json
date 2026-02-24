@@ -1,7 +1,7 @@
 {
   "//": "THIS FILE IS GENERATED - DO NOT EDIT",
   "name": "@grest-ts/locator",
-  "version": "0.0.13",
+  "version": "0.0.14",
   "type": "module",
   "license": "MIT",
   "description": "Hierarchical async context with tree-based inheritance",
@@ -47,9 +47,9 @@
     "node": ">=25"
   },
   "dependencies": {
-    "@grest-ts/common": "0.0.13"
+    "@grest-ts/common": "0.0.14"
   },
   "devDependencies": {
-    "@grest-ts/x-packager": "0.0.13"
+    "@grest-ts/x-packager": "0.0.14"
   }
 }
