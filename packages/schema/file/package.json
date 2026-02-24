@@ -1,7 +1,7 @@
 {
   "//": "THIS FILE IS GENERATED - DO NOT EDIT",
   "name": "@grest-ts/file",
-  "version": "0.0.8",
+  "version": "0.0.9",
   "type": "module",
   "license": "MIT",
   "description": "File abstraction for Grest framework",
@@ -49,10 +49,10 @@
     "node": ">=25"
   },
   "dependencies": {
-    "@grest-ts/schema": "0.0.8"
+    "@grest-ts/schema": "0.0.9"
   },
   "devDependencies": {
-    "@grest-ts/testkit": "0.0.8",
-    "@grest-ts/x-packager": "0.0.8"
+    "@grest-ts/testkit": "0.0.9",
+    "@grest-ts/x-packager": "0.0.9"
   }
 }
