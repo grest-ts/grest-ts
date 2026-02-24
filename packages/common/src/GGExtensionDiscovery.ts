@@ -287,8 +287,8 @@ export class GGExtensionDiscovery {
         ];
 
         for (const extension of extensions) {
-            // For types file, reference .d.ts instead of .js/.ts for TypeScript to load type augmentations
-            const typesPath = extension.replace(/\.(js|ts)$/, '.d.ts');
+            // Source .ts files can be referenced directly; compiled .js files need their .d.ts counterpart
+            const typesPath = extension.endsWith('.js') ? extension.replace(/\.js$/, '.d.ts') : extension;
             const relativePath = path.relative(typesDir, typesPath).replace(/\\/g, '/');
             lines.push(`/// <reference path="${relativePath}" />`);
         }
