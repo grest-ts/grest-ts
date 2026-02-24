@@ -49,6 +49,7 @@ Fair warning though: once you get used to how testing works here, you'll miss it
 Copy the [`starter`](./starter) folder, rename it, and you have a working app:
 
 ```bash
+# Start with a simple starter template
 npm create @grest-ts/starter my-app
 
 # Terminal 1 — server

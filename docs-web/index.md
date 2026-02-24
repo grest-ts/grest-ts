@@ -335,11 +335,8 @@ vitest    # Each test suite gets its own runtime with isolated ports.
 </div>
 
 ```bash
-# Copy the ./starter folder and you have a working app:
-
-cp -r starter my-app
-cd my-app
-npm install
+# Start with a simple starter template
+npm create @grest-ts/starter my-app
 
 # Terminal 1 — server
 cd server && npm run dev
