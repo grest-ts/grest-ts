@@ -74,5 +74,5 @@ jobs:
           git add '**/package.json'
           git diff --name-only | xargs -r git checkout --
           git commit -m "v${{ steps.version.outputs.version }}"
-          git tag "v${{ steps.version.outputs.version }}"
+          git tag -a "v${{ steps.version.outputs.version }}" -m "v${{ steps.version.outputs.version }}"
           git push --follow-tags
