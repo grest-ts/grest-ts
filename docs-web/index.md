@@ -51,6 +51,7 @@ features:
 <p class="subtitle">Define once, implement, test — three files and you have a fully typed API.</p>
 
 ### 1. Define the Contract
+Typia-class validation speed — no compiler plugin, no build step. Just TypeScript.
 
 ```typescript
 // api/src/api/ItemApi.ts
@@ -72,6 +73,7 @@ const ItemApiContract = new GGContractClass("ItemApi", {
         errors: [VALIDATION_ERROR, SERVER_ERROR]
     }
 })
+export type ItemApiContract = GGContractImplementation<typeof ItemApiContract.methods>;
 
 export const ItemApi = httpSchema(ItemApiContract)
     .pathPrefix("api/items")
@@ -82,7 +84,7 @@ export const ItemApi = httpSchema(ItemApiContract)
 
 ```
 
-### 2. Implement and Run
+### 2. Wire Up and Run
 
 ```typescript
 // server/src/AppRuntime.ts
@@ -90,31 +92,71 @@ export class AppRuntime extends GGRuntime {
     public static readonly NAME = "app"
 
     protected compose(): void {
-        new GGHttp()
-            .http(ItemApi, new ItemApiImpl())
+        new GGHttp().http(ItemApi, new ItemApiImpl())
+    }
+}
+
+export class ItemApiImpl implements ItemApiContract {
+    
+    private readonly geocoder = new GeocodingService();
+    
+    public list = async (): Promise<Item[]> => {
+        // ...
+    }
+    public create = async (input: CreateItemRequest): Promise<Item> => {
+        // ... Also use geocorer here ...
+    }
+}
+
+@mockable
+export class GeocodingService {
+    async resolve(address: string): Promise<LatLng> {
+        return await this.client.geocode(address)
     }
 }
 ```
 
 ```bash
-tsx src/AppRuntime.ts    # That's it. Service is running.
+tsx src/AppRuntime.ts    # That's it. Service is running. 
+# Launch more to get load balanced multi-instance local setup... 
 ```
 
 ### 3. Test It
 
 ```typescript
-// server/test/integration/item.test.ts
+// server/test/item.test.ts
 describe("Item API", () => {
-    GGTest.startWorker(AppRuntime)
+    GGTest.startWorker([AppRuntime, AppRuntime]) // Start as many as you want, also different services etc. 
+    // Yes, it is real worker! Can also launch startInline for fastest test run speed.
+    // Yes, you can get full coverage including integration tests.
+    // You can mock outbound service calls. If outbound service exists, calls go through. All of this is automatic.
+    // No DI - your Runtime is the bootstrap! No more duplicating whole wiring in tests.
 
-    const ctx = new TestContext("Items").apis({item: ItemApi})
+    const myApis = new TestContext("Items")
+        .apis({
+            item: ItemApi
+            // Add API-s you are going to call in the tests. 
+            // Can be many, different services/runtimes etc. Doesn't matter.
+        })
 
     test("create and list items", async () => {
-        await ctx.item.create({title: "Buy groceries"})
+
+        // Call your API-s as you normally would in clients.
+        await myApis.item.create({title: "Buy groceries"})
             .toMatchObject({id: 1, title: "Buy groceries"})
 
-        await ctx.item.list()
-            .toHaveLength(1)
+        // Anything vitest supports, you can still do - even snapshots.
+        const result = await myApis.item.list()
+        expect(result).toMatchSnapshot()
+
+        // Can even mock random internal classes running within your service.
+        await myApis.item.create({title: "Visit Times Square"})
+            .with(
+                mockOf(GeocodingService).resolve // Mock applies only during this request, nicely scoped!
+                    .toEqual({address: "Times Square, NYC"})
+                    .andReturn({lat: 40.758, lng: -73.985})
+            )
+            .toMatchObject({title: "Visit Times Square", lat: 40.758})
     })
 })
 ```
