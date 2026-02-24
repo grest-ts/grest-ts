@@ -1,7 +1,7 @@
 import {definePackage} from "@grest-ts/x-packager"
 
 definePackage({
-    name: "@grest-ts/starter",
+    name: "@grest-ts/create-starter",
     description: "Scaffold a new grest-ts project",
     publishToNpm: true,
     targets: {},
