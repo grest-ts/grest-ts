@@ -4,7 +4,7 @@ layout: home
 hero:
   name: grest-ts
   text: Contract-First Testable TypeScript Services
-  tagline: One contract. Typed server, typed tests, typed client. Zero magic.
+  tagline: One contract. Typed server, typed client, typed tests. Zero magic.
   image:
     src: /logo.png
     alt: grest-ts
@@ -17,33 +17,25 @@ hero:
       link: https://github.com/grest-ts/grest-ts
 
 features:
-  - title: Contract-First
-    details: Single source of truth — define your API contract once, get typed server, client, and tests automatically.
-  - title: AI-Era Ready
-    details: Clean, explicit service code with no magic to misunderstand and no hidden wiring to hallucinate about.
-  - title: Testing That Survives Refactors
-    details: Integration tests at the contract level with per-request mocks and spies. Each test gets its own isolated runtime.
-  - title: No Magic
-    details: No DI containers, no decorators-as-wiring. Your Runtime's compose() is your bootstrap — all wiring visible in one place.
-  - title: Performance
-    details: Schema validation as fast as Typia. HTTP server benchmarks near Fastify. Zero runtime overhead from framework abstractions.
-  - title: Service Discovery
-    details: Zero-config local dev. Services find each other automatically. Pluggable for production (Kubernetes, Consul, etc.)
-  - title: Typed Errors
-    details: Errors carry reference IDs, typed data, and flow across service boundaries as discriminated unions.
-  - title: Scalable
-    details: From a single runtime to hundreds of microservices. Same patterns, same contracts, same tests. Monorepo or multi-repo.
-  - title: Tree-Shakable
-    details: Fully tree-shakable for minimal bundle sizes. For server packages, 400 MB vs 5 MB starts to matter at scale.
+  - icon: 📝
+    title: Contract-First
+    details: Define your API once — typed server, client, and tests generated automatically.
+  - icon: 🧪
+    title: Tests That Survive Refactors
+    details: Contract-level integration tests with per-request mocks. Each test gets its own isolated runtime.
+  - icon: ⚡
+    title: Performance
+    details: Schema validation as fast as Typia. HTTP benchmarks near Fastify. Zero runtime overhead.
+  - icon: 🔍
+    title: No Magic
+    details: No DI containers, no decorator wiring. compose() is your bootstrap — all wiring in one place.
+  - icon: 🌐
+    title: Service Discovery
+    details: Services find each other automatically in dev. Pluggable for production (Kubernetes, Consul, etc.)
+  - icon: 🎯
+    title: Typed Errors
+    details: Errors carry reference IDs and typed data. Flow across service boundaries as discriminated unions.
 ---
-
-<style>
-.code-demo { max-width: 960px; margin: 0 auto; padding: 0 24px 64px; }
-.code-demo h2 { text-align: center; font-size: 28px; margin-bottom: 8px; }
-.code-demo .subtitle { text-align: center; color: var(--vp-c-text-2); margin-bottom: 32px; }
-.code-demo h3 { margin-top: 32px; }
-</style>
-
 
 <style>
 .code-showcase {
@@ -176,11 +168,10 @@ features:
 }
 </style>
 
-<div class="code-demo">
+<div class="code-showcase">
 
-## See It In Action
-
-<p class="subtitle">Define once, implement, test — three files and you have a fully typed API.</p>
+<h2 class="showcase-title">See It In Action</h2>
+<p class="showcase-subtitle">Three files. Fully typed API. Contract to tests in minutes.</p>
 
 <div class="step">
     <span class="step-badge">1</span>
@@ -190,34 +181,27 @@ features:
     </div>
 </div>
 
-```ts
+```ts{7,21,23-28}
 // api/src/api/ItemApi.ts
-
-// Standard schema definitions.
 const IsItem = IsObject({
     id: IsNumber,
     title: IsString
 })
 
-// Define custom errors with typed data.
-const OUT_OF_STOCK = GGerror.define("OUT_OF_STOCK", IsObject({ 
-    amountLeft: IsNumber 
-}));
-
-// Define your contract - think about those like a function signatures.
 const ItemApiContract = new GGContractClass("ItemApi", {
     list: {
         success: IsArray(IsItem),
-        errors: [SERVER_ERROR, OUT_OF_STOCK] // We say what errors our contract can return.
+        errors: [SERVER_ERROR]
     },
     create: {
         input: IsObject({
             title: IsString
         }),
         success: IsItem,
-        errors: [VALIDATION_ERROR, SERVER_ERROR] 
+        errors: [VALIDATION_ERROR, SERVER_ERROR]
     }
 })
+
 export type ItemApiContract = GGContractImplementation<typeof ItemApiContract.methods>;
 
 export const ItemApi = httpSchema(ItemApiContract)
@@ -226,7 +210,6 @@ export const ItemApi = httpSchema(ItemApiContract)
         list: GGRpc.GET("list"),
         create: GGRpc.POST("create")
     })
-
 ```
 
 <div class="step">
@@ -237,7 +220,7 @@ export const ItemApi = httpSchema(ItemApiContract)
     </div>
 </div>
 
-```typescript
+```ts{5,9}
 // server/src/AppRuntime.ts
 export class AppRuntime extends GGRuntime {
     public static readonly NAME = "app"
@@ -247,21 +230,19 @@ export class AppRuntime extends GGRuntime {
     }
 }
 
-// Simple implementation examples
 export class ItemApiImpl implements ItemApiContract {
 
-    private readonly geocoder = new GeocodingService();
+    private readonly geocoder = new GeocodingService()
 
     public list = async (): Promise<Item[]> => {
         // ...
     }
     public create = async (input: CreateItemRequest): Promise<Item> => {
-        // ... Also use geocoder here ...
-        throw OUT_OF_STOCK({amountLeft: 10}) // throw errors.
+        // ...
     }
 }
 
-@mockable // This enables mocking/syping in tests for internal classes.
+@mockable
 export class GeocodingService {
     async resolve(address: string): Promise<LatLng> {
         return await this.client.geocode(address)
@@ -270,8 +251,7 @@ export class GeocodingService {
 ```
 
 ```bash
-tsx src/AppRuntime.ts    # That's it. Service is running. 
-# Launch more to get load balanced multi-instance local setup... 
+tsx src/AppRuntime.ts    # That's it. Service is running.
 ```
 
 <div class="step">
@@ -282,36 +262,23 @@ tsx src/AppRuntime.ts    # That's it. Service is running.
     </div>
 </div>
 
-```typescript
+```ts{3,5-6,10-12,14-20}
 // server/test/item.test.ts
 describe("Item API", () => {
-    GGTest.startWorker([AppRuntime, AppRuntime]) // Start as many as you want, also different services etc. 
-    // Yes, it is real worker! Can also launch startInline for fastest test run speed.
-    // Yes, you can get full coverage including integration tests.
-    // You can mock outbound service calls. If outbound service exists, calls go through.
-    // No DI - your Runtime is the bootstrap! No more duplicating whole wiring in tests.
+    GGTest.startWorker([AppRuntime, AppRuntime]) // Launches real workers
 
     const myApis = new TestContext("Items")
-        .apis({
-            item: ItemApi
-            // Add API-s you are going to call in the tests. 
-            // Can be many, different services/runtimes etc. Doesn't matter.
-        })
+        .apis({ item: ItemApi })
 
     test("create and list items", async () => {
 
-        // Call your API-s as you normally would in clients.
         await myApis.item.create({title: "Buy groceries"})
             .toMatchObject({id: 1, title: "Buy groceries"})
 
-        // Anything vitest supports, you can still do - even snapshots.
-        const result = await myApis.item.list()
-        expect(result).toMatchSnapshot()
-
-        // Can even mock random internal classes running within your service.
+        // Mock scoped to a single request — no test pollution
         await myApis.item.create({title: "Visit Times Square"})
             .with(
-                mockOf(GeocodingService).resolve // Mock applies only during this request, nicely scoped!
+                mockOf(GeocodingService).resolve
                     .toEqual({address: "Times Square, NYC"})
                     .andReturn({lat: 40.758, lng: -73.985})
             )
@@ -324,47 +291,17 @@ describe("Item API", () => {
 vitest    # Each test suite gets its own runtime with isolated ports.
 ```
 
-<div class="step">
-    <span class="step-badge">4</span>
-    <div class="step-text">
-        <h3>Get started</h3>
-        <p class="step-desc">Copy the starter service to get going quickly.</p>
-    </div>
 </div>
 
+<div class="cta-section">
 
-```bash
-# Copy the ./starter folder and you have a working app:
+## Ready to Build?
 
-cp -r starter my-app
-cd my-app
-npm install
-
-# Terminal 1 — server
-cd server && npm run dev
-
-# Terminal 2 — client
-cd client && npm run dev
-```
-
-<div class="step">
-    <span class="step-badge">5</span>
-    <div class="step-text">
-        <h3>Get building</h3>
-        <p class="step-desc">Everything is wired up — API contract, server handler, integration test, and a client that calls the API. Build on it.</p>
-    </div>
-</div>
-
-
-
+Define your first contract in minutes. No boilerplate, no ceremony.
 
 <div class="cta-buttons">
     <a href="/guide/" class="cta-button primary">Get Started</a>
     <a href="https://github.com/grest-ts/grest-ts" class="cta-button secondary">View on GitHub</a>
 </div>
-
-
-
-
 
 </div>

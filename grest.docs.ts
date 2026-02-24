@@ -5,7 +5,7 @@
 // Output: docs-web/src/ (ALL generated, gitignored)
 // Usage: tsx grest.docs.ts
 
-import {readFileSync, readdirSync, existsSync, rmSync, mkdirSync, writeFileSync, cpSync} from "fs"
+import {readFileSync, readdirSync, existsSync, rmSync, mkdirSync, writeFileSync, cpSync, watch} from "fs"
 import {join, resolve, relative} from "path"
 
 const ROOT = resolve(import.meta.dirname)
@@ -392,3 +392,54 @@ function main() {
 }
 
 main()
+
+// ── Watch mode ──────────────────────────────────────────────────────────
+
+if (process.argv.includes("--watch")) {
+    let timer: ReturnType<typeof setTimeout> | null = null
+
+    const rebuild = (source: string) => {
+        if (timer) clearTimeout(timer)
+        timer = setTimeout(() => {
+            console.log(`\n  Change detected: ${source}`)
+            try {
+                main()
+            } catch (e) {
+                console.error("  Rebuild failed:", e)
+            }
+            console.log("  Watching for changes...")
+        }, 300)
+    }
+
+    // Watch workspace package dirs for README changes
+    const rootPkg = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf-8"))
+    for (const pattern of (rootPkg.workspaces as string[] ?? [])) {
+        const baseDir = join(ROOT, pattern.endsWith("/*") ? pattern.slice(0, -2) : pattern)
+        if (existsSync(baseDir)) {
+            watch(baseDir, {recursive: true}, (_, filename) => {
+                if (filename && /readme/i.test(filename) && filename.endsWith(".md")) {
+                    rebuild(filename)
+                }
+            })
+        }
+    }
+
+    // Watch docs/ for dependency metadata changes
+    if (existsSync(join(ROOT, "docs"))) {
+        watch(join(ROOT, "docs"), {recursive: true}, (_, filename) => {
+            if (filename) rebuild(`docs/${filename}`)
+        })
+    }
+
+    // Watch docs-web/index.md (landing page)
+    watch(join(DOCS_WEB, "index.md"), () => rebuild("docs-web/index.md"))
+
+    // Watch root README and logo
+    for (const file of ["README.md", "logo.png"]) {
+        if (existsSync(join(ROOT, file))) {
+            watch(join(ROOT, file), () => rebuild(file))
+        }
+    }
+
+    console.log("  Watching for changes...")
+}
