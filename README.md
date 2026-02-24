@@ -320,7 +320,7 @@ const INSUFFICIENT_FUNDS = ERROR.define("INSUFFICIENT_FUNDS", 422, IsObject({
 }))
 
 // Throw with structured data — reference ID and timestamp are added automatically
-throw INSUFFICIENT_FUNDS.error({balance: 50, required: 100})
+throw new INSUFFICIENT_FUNDS({balance: 50, required: 100})
 ```
 
 Callers choose how to handle errors — `await` throws by default (simple path), or use `.asResult()` for a typed discriminated union:
@@ -401,7 +401,7 @@ export class AuditLogApiImpl {
 }
 ```
 
-The framework manages this via `AsyncLocalStorage` — each request gets its own isolated context, even under concurrent load.
+The framework manages this via `AsyncLocalStorage`
 
 ---
 
