@@ -19,18 +19,18 @@ hero:
 features:
   - title: Contract-First
     details: Single source of truth — define your API contract once, get typed server, client, and tests automatically.
+  - title: AI-Era Ready
+    details: Clean, explicit service code with no magic to misunderstand and no hidden wiring to hallucinate about.
   - title: Testing That Survives Refactors
     details: Integration tests at the contract level with per-request mocks and spies. Each test gets its own isolated runtime.
-  - title: Performance
-    details: Schema validation as fast as Typia. HTTP server benchmarks near Fastify. Zero runtime overhead from framework abstractions.
   - title: No Magic
     details: No DI containers, no decorators-as-wiring. Your Runtime's compose() is your bootstrap — all wiring visible in one place.
+  - title: Performance
+    details: Schema validation as fast as Typia. HTTP server benchmarks near Fastify. Zero runtime overhead from framework abstractions.
   - title: Service Discovery
     details: Zero-config local dev. Services find each other automatically. Pluggable for production (Kubernetes, Consul, etc.)
   - title: Typed Errors
     details: Errors carry reference IDs, typed data, and flow across service boundaries as discriminated unions.
-  - title: AI-Era Ready
-    details: Clean, explicit service code with no magic to misunderstand and no hidden wiring to hallucinate about.
   - title: Scalable
     details: From a single runtime to hundreds of microservices. Same patterns, same contracts, same tests. Monorepo or multi-repo.
   - title: Tree-Shakable
@@ -129,7 +129,7 @@ describe("Item API", () => {
     GGTest.startWorker([AppRuntime, AppRuntime]) // Start as many as you want, also different services etc. 
     // Yes, it is real worker! Can also launch startInline for fastest test run speed.
     // Yes, you can get full coverage including integration tests.
-    // You can mock outbound service calls. If outbound service exists, calls go through. All of this is automatic.
+    // You can mock outbound service calls. If outbound service exists, calls go through.
     // No DI - your Runtime is the bootstrap! No more duplicating whole wiring in tests.
 
     const myApis = new TestContext("Items")
