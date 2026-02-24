@@ -2,38 +2,15 @@ name: Publish to NPM
 
 on:
   push:
-    branches: [master]
-
-concurrency:
-  group: publish
-  cancel-in-progress: true
+    tags: ['v*']
 
 jobs:
   publish:
-    if: "!contains(github.event.head_commit.message, '[skip ci]')"
     runs-on: ubuntu-latest
-
-    services:
-      postgres:
-        image: postgres:16
-        ports:
-          - 5432:5432
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: postgres
-        options: >-
-          --health-cmd "pg_isready -U postgres"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 10
-          --health-start-period 30s
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup Node 25
         uses: actions/setup-node@v4
@@ -42,26 +19,6 @@ jobs:
 
       - name: Install dependencies
         run: npm install
-
-      - name: Install PostgreSQL client
-        run: sudo apt-get update && sudo apt-get install -y postgresql-client
-
-      - name: Init databases
-        run: |
-          # Create PostgreSQL databases and apply schemas
-          PGPASSWORD=postgres psql -h localhost -U postgres -c "CREATE DATABASE checklist;"
-          PGPASSWORD=postgres psql -h localhost -U postgres -c "CREATE DATABASE blocker;"
-          PGPASSWORD=postgres psql -h localhost -U postgres -d checklist -f examples/checklist/checklist/schema/checklist.postgres.sql
-          PGPASSWORD=postgres psql -h localhost -U postgres -d blocker -f examples/checklist/blocker/schema/blocker.postgres.sql
-
-      - name: Check
-        run: npx tsx grest.1.check.ts
-
-      - name: Test
-        run: npx tsx grest.2.vitest.ts
-
-      - name: Version bump
-        run: npx tsx grest.3.ver.patch.ts
 
       - name: Build
         run: npx tsx grest.4.build.ts
@@ -73,12 +30,3 @@ jobs:
 
       - name: Publish
         run: npx tsx grest.5.npm.publish.ts --ci
-
-      - name: Commit & push version bump
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add '**/package.json'
-          git diff --name-only | xargs -r git checkout --
-          git commit -m "chore: bump version [skip ci]" || echo "No changes to commit"
-          git push
