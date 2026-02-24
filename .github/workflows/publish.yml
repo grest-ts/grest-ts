@@ -40,10 +40,10 @@ jobs:
 
       - name: Setup .npmrc for GitHub Packages
         run: |
-          echo "@grest-ts:registry=https://npm.pkg.github.com" > ~/.npmrc
+          echo "registry=https://npm.pkg.github.com" > ~/.npmrc
           echo "//npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}" >> ~/.npmrc
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Publish to GitHub Packages
-        run: npx tsx grest.5.npm.publish.ts --ci
+        run: npx tsx grest.5.npm.publish.ts --ci --skip-auth-check

@@ -57,6 +57,7 @@ async function main() {
     const args = process.argv.slice(2)
     const dryRun = args.includes("--dry-run")
     const ci = args.includes("--ci")
+    const skipAuthCheck = args.includes("--skip-auth-check")
 
     // Discover publishable (non-private) packages from dist/
     const packages = discoverBuiltPackages(true)
@@ -92,7 +93,7 @@ async function main() {
     }
 
     // Verify npm auth (after all local checks pass)
-    ensureNpmAuth()
+    if (!skipAuthCheck) ensureNpmAuth()
 
     // Confirm before publishing (skip in CI mode)
     if (!ci) {
