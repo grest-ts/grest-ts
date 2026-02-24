@@ -31,6 +31,7 @@
     "packages-libs/intl/intl",
     "packages-libs/lock/lock",
     "packages-tooling/code-generator",
+    "packages-tooling/create-grest-ts",
     "packages-tooling/testkit/*",
     "packages/*",
     "packages/config/*",

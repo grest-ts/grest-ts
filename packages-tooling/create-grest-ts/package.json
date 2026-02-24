@@ -1,0 +1,23 @@
+{
+  "name": "create-grest-ts",
+  "version": "0.0.13",
+  "description": "Scaffold a new grest-ts project",
+  "type": "module",
+  "license": "MIT",
+  "bin": "./index.mjs",
+  "files": [
+    "index.mjs",
+    "template"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/grest-ts/grest-ts.git",
+    "directory": "packages-tooling/create-grest-ts"
+  },
+  "keywords": [
+    "grest-ts",
+    "create",
+    "scaffold",
+    "starter"
+  ]
+}

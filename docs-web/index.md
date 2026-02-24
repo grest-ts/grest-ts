@@ -200,8 +200,8 @@ const IsItem = IsObject({
 })
 
 // Define custom errors with typed data.
-const OUT_OF_STOCK = GGerror.define("OUT_OF_STOCK", IsObject({ 
-    amountLeft: IsNumber 
+const OUT_OF_STOCK = GGerror.define("OUT_OF_STOCK", IsObject({
+    amountLeft: IsNumber
 }));
 
 // Define your contract - think about those like a function signatures.
@@ -215,7 +215,7 @@ const ItemApiContract = new GGContractClass("ItemApi", {
             title: IsString
         }),
         success: IsItem,
-        errors: [VALIDATION_ERROR, SERVER_ERROR] 
+        errors: [VALIDATION_ERROR, SERVER_ERROR]
     }
 })
 export type ItemApiContract = GGContractImplementation<typeof ItemApiContract.methods>;
@@ -332,7 +332,6 @@ vitest    # Each test suite gets its own runtime with isolated ports.
     </div>
 </div>
 
-
 ```bash
 # Copy the ./starter folder and you have a working app:
 
@@ -351,7 +350,8 @@ cd client && npm run dev
     <span class="step-badge">5</span>
     <div class="step-text">
         <h3>Get building</h3>
-        <p class="step-desc">Everything is wired up — API contract, server handler, integration test, and a client that calls the API. Build on it.</p>
+        <p class="step-desc">Everything is wired up — API contract, server handler, integration test, and a client that calls the API. Build on it. <br /> 
+            Even your AI buddy is going to enjoy it!</p>
     </div>
 </div>
 
