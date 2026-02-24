@@ -33,6 +33,7 @@
     "packages-libs/struct/test/**/*",
     "packages-tooling/code-generator/src/**/*",
     "packages-tooling/code-generator/test/**/*",
+    "packages-tooling/starter/src/**/*",
     "packages-tooling/testkit/testkit-runtime/src/**/*",
     "packages-tooling/testkit/testkit-vitest/src/**/*",
     "packages-tooling/testkit/testkit/src/**/*",

@@ -1,0 +1,13 @@
+{
+  "//": "THIS FILE IS GENERATED - DO NOT EDIT",
+  "extends": "../../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "lib": [
+      "ES2022"
+    ]
+  },
+  "include": [
+    "**/*"
+  ]
+}
