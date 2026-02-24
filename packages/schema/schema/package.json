@@ -1,7 +1,7 @@
 {
   "//": "THIS FILE IS GENERATED - DO NOT EDIT",
   "name": "@grest-ts/schema",
-  "version": "0.0.12",
+  "version": "0.0.13",
   "type": "module",
   "license": "MIT",
   "description": "Type-safe schema validation, serialization, and contract definitions for TypeScript",
@@ -54,6 +54,6 @@
     "node": ">=25"
   },
   "devDependencies": {
-    "@grest-ts/x-packager": "0.0.12"
+    "@grest-ts/x-packager": "0.0.13"
   }
 }

@@ -1,7 +1,7 @@
 {
   "//": "THIS FILE IS GENERATED - DO NOT EDIT",
   "name": "@grest-ts/events-azure",
-  "version": "0.0.12",
+  "version": "0.0.13",
   "type": "module",
   "license": "MIT",
   "description": "Azure Service Bus adapter for @grest-ts/events",
@@ -43,12 +43,12 @@
   },
   "dependencies": {
     "@azure/service-bus": "^7.9.5",
-    "@grest-ts/config": "0.0.12",
-    "@grest-ts/events": "0.0.12",
-    "@grest-ts/logger": "0.0.12",
-    "@grest-ts/schema": "0.0.12"
+    "@grest-ts/config": "0.0.13",
+    "@grest-ts/events": "0.0.13",
+    "@grest-ts/logger": "0.0.13",
+    "@grest-ts/schema": "0.0.13"
   },
   "devDependencies": {
-    "@grest-ts/x-packager": "0.0.12"
+    "@grest-ts/x-packager": "0.0.13"
   }
 }
