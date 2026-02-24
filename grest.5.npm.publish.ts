@@ -3,7 +3,7 @@
 // Skips packages whose version is already published.
 // Requires `npm login` beforehand (or NPM_TOKEN env var).
 //
-// Usage: tsx grest.5.npm.publish.ts [--dry-run]
+// Usage: tsx grest.5.npm.publish.ts [--dry-run] [--ci]
 import {execSync} from "child_process"
 import {createInterface} from "readline"
 import {discoverBuiltPackages, validateDependencies, publishParallel, execAsync} from "./grest.lib.publish"
@@ -56,6 +56,7 @@ async function confirm(message: string): Promise<boolean> {
 async function main() {
     const args = process.argv.slice(2)
     const dryRun = args.includes("--dry-run")
+    const ci = args.includes("--ci")
 
     // Discover publishable (non-private) packages from dist/
     const packages = discoverBuiltPackages(true)
@@ -93,14 +94,16 @@ async function main() {
     // Verify npm auth (after all local checks pass)
     ensureNpmAuth()
 
-    // Confirm before publishing
-    console.log("\n--------------------------------------------")
-    console.log(`About to publish ${toPublish.length} package(s) to the PUBLIC npm registry as v${version}.\n`)
+    // Confirm before publishing (skip in CI mode)
+    if (!ci) {
+        console.log("\n--------------------------------------------")
+        console.log(`About to publish ${toPublish.length} package(s) to the PUBLIC npm registry as v${version}.\n`)
 
-    const confirmed = await confirm("Proceed with publish?")
-    if (!confirmed) {
-        console.log("\nAborted.")
-        return
+        const confirmed = await confirm("Proceed with publish?")
+        if (!confirmed) {
+            console.log("\nAborted.")
+            return
+        }
     }
 
     const result = await publishParallel(

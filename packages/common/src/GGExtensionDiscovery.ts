@@ -287,7 +287,9 @@ export class GGExtensionDiscovery {
         ];
 
         for (const extension of extensions) {
-            const relativePath = path.relative(typesDir, extension).replace(/\\/g, '/');
+            // For types file, reference .d.ts instead of .js/.ts for TypeScript to load type augmentations
+            const typesPath = extension.replace(/\.(js|ts)$/, '.d.ts');
+            const relativePath = path.relative(typesDir, typesPath).replace(/\\/g, '/');
             lines.push(`/// <reference path="${relativePath}" />`);
         }
 
