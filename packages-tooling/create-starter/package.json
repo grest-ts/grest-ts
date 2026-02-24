@@ -1,6 +1,6 @@
 {
   "//": "THIS FILE IS GENERATED - DO NOT EDIT",
-  "name": "@grest-ts/starter",
+  "name": "@grest-ts/create-starter",
   "version": "0.0.14",
   "type": "module",
   "license": "MIT",
@@ -15,9 +15,9 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/grest-ts/grest-ts.git",
-    "directory": "packages-tooling/starter"
+    "directory": "packages-tooling/create-starter"
   },
-  "homepage": "https://github.com/grest-ts/grest-ts/tree/master/packages-tooling/starter",
+  "homepage": "https://github.com/grest-ts/grest-ts/tree/master/packages-tooling/create-starter",
   "bugs": {
     "url": "https://github.com/grest-ts/grest-ts/issues"
   },

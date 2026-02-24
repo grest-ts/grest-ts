@@ -9,6 +9,7 @@ flowchart TB
     subgraph L0[" "]
         code-generator["code-generator 🟢"]
         config-aws["config-aws 🟢"]
+        create-starter["create-starter "]
         db-mysql["db-mysql 🟢"]
         db-postgre["db-postgre 🟢"]
         discovery-kubernetes["discovery-kubernetes 🟢"]
@@ -22,7 +23,6 @@ flowchart TB
         poller["poller 🟢"]
         schema-benchmark["schema-benchmark 🟢"]
         sql["sql 🟢"]
-        starter["starter "]
         struct["struct 🟢"]
         testkit-vitest["testkit-vitest 🟢"]
         trace-http["trace-http 🟢"]
@@ -191,33 +191,33 @@ flowchart TB
     style config fill:#E15759,stroke:#E15759,color:#fff
     style config-aws fill:#76B7B2,stroke:#76B7B2,color:#fff
     style context fill:#59A14F,stroke:#59A14F,color:#fff
-    style db-mysql fill:#EDC948,stroke:#EDC948,color:#fff
-    style db-postgre fill:#B07AA1,stroke:#B07AA1,color:#fff
-    style discovery fill:#FF9DA7,stroke:#FF9DA7,color:#fff
-    style discovery-kubernetes fill:#9C755F,stroke:#9C755F,color:#fff
-    style discovery-local fill:#BAB0AC,stroke:#BAB0AC,color:#fff
-    style discovery-migration fill:#86BCB6,stroke:#86BCB6,color:#fff
-    style discovery-static fill:#8CD17D,stroke:#8CD17D,color:#fff
-    style events fill:#B6992D,stroke:#B6992D,color:#fff
-    style events-aws fill:#499894,stroke:#499894,color:#fff
-    style events-azure fill:#D37295,stroke:#D37295,color:#fff
-    style events-gcp fill:#A0CBE8,stroke:#A0CBE8,color:#fff
-    style file fill:#FFBE7D,stroke:#FFBE7D,color:#fff
-    style file-http fill:#D4A6C8,stroke:#D4A6C8,color:#fff
-    style http fill:#4E79A7,stroke:#4E79A7,color:#fff
-    style intl fill:#F28E2B,stroke:#F28E2B,color:#fff
-    style ipc fill:#E15759,stroke:#E15759,color:#fff
-    style locator fill:#76B7B2,stroke:#76B7B2,color:#fff
-    style lock fill:#59A14F,stroke:#59A14F,color:#fff
-    style logger fill:#EDC948,stroke:#EDC948,color:#fff
-    style logger-console fill:#B07AA1,stroke:#B07AA1,color:#fff
-    style metrics fill:#FF9DA7,stroke:#FF9DA7,color:#fff
-    style poller fill:#9C755F,stroke:#9C755F,color:#fff
-    style runtime fill:#BAB0AC,stroke:#BAB0AC,color:#fff
-    style schema fill:#86BCB6,stroke:#86BCB6,color:#fff
-    style schema-benchmark fill:#8CD17D,stroke:#8CD17D,color:#fff
-    style sql fill:#B6992D,stroke:#B6992D,color:#fff
-    style starter fill:#499894,stroke:#499894,color:#fff
+    style create-starter fill:#EDC948,stroke:#EDC948,color:#fff
+    style db-mysql fill:#B07AA1,stroke:#B07AA1,color:#fff
+    style db-postgre fill:#FF9DA7,stroke:#FF9DA7,color:#fff
+    style discovery fill:#9C755F,stroke:#9C755F,color:#fff
+    style discovery-kubernetes fill:#BAB0AC,stroke:#BAB0AC,color:#fff
+    style discovery-local fill:#86BCB6,stroke:#86BCB6,color:#fff
+    style discovery-migration fill:#8CD17D,stroke:#8CD17D,color:#fff
+    style discovery-static fill:#B6992D,stroke:#B6992D,color:#fff
+    style events fill:#499894,stroke:#499894,color:#fff
+    style events-aws fill:#D37295,stroke:#D37295,color:#fff
+    style events-azure fill:#A0CBE8,stroke:#A0CBE8,color:#fff
+    style events-gcp fill:#FFBE7D,stroke:#FFBE7D,color:#fff
+    style file fill:#D4A6C8,stroke:#D4A6C8,color:#fff
+    style file-http fill:#4E79A7,stroke:#4E79A7,color:#fff
+    style http fill:#F28E2B,stroke:#F28E2B,color:#fff
+    style intl fill:#E15759,stroke:#E15759,color:#fff
+    style ipc fill:#76B7B2,stroke:#76B7B2,color:#fff
+    style locator fill:#59A14F,stroke:#59A14F,color:#fff
+    style lock fill:#EDC948,stroke:#EDC948,color:#fff
+    style logger fill:#B07AA1,stroke:#B07AA1,color:#fff
+    style logger-console fill:#FF9DA7,stroke:#FF9DA7,color:#fff
+    style metrics fill:#9C755F,stroke:#9C755F,color:#fff
+    style poller fill:#BAB0AC,stroke:#BAB0AC,color:#fff
+    style runtime fill:#86BCB6,stroke:#86BCB6,color:#fff
+    style schema fill:#8CD17D,stroke:#8CD17D,color:#fff
+    style schema-benchmark fill:#B6992D,stroke:#B6992D,color:#fff
+    style sql fill:#499894,stroke:#499894,color:#fff
     style struct fill:#D37295,stroke:#D37295,color:#fff
     style testkit fill:#A0CBE8,stroke:#A0CBE8,color:#fff
     style testkit-runtime fill:#FFBE7D,stroke:#FFBE7D,color:#fff
@@ -234,90 +234,90 @@ flowchart TB
     linkStyle 5 stroke:#76B7B2,stroke-width:2px
     linkStyle 6 stroke:#59A14F,stroke-width:2px
     linkStyle 7 stroke:#59A14F,stroke-width:2px
-    linkStyle 8 stroke:#EDC948,stroke-width:2px
-    linkStyle 9 stroke:#EDC948,stroke-width:2px
-    linkStyle 10 stroke:#EDC948,stroke-width:2px
-    linkStyle 11 stroke:#EDC948,stroke-width:2px
-    linkStyle 12 stroke:#B07AA1,stroke-width:2px
-    linkStyle 13 stroke:#B07AA1,stroke-width:2px
-    linkStyle 14 stroke:#B07AA1,stroke-width:2px
-    linkStyle 15 stroke:#B07AA1,stroke-width:2px
-    linkStyle 16 stroke:#FF9DA7,stroke-width:2px
-    linkStyle 17 stroke:#9C755F,stroke-width:2px
-    linkStyle 18 stroke:#9C755F,stroke-width:2px
-    linkStyle 19 stroke:#BAB0AC,stroke-width:2px
-    linkStyle 20 stroke:#BAB0AC,stroke-width:2px
-    linkStyle 21 stroke:#BAB0AC,stroke-width:2px
-    linkStyle 22 stroke:#BAB0AC,stroke-width:2px
-    linkStyle 23 stroke:#BAB0AC,stroke-width:2px
-    linkStyle 24 stroke:#86BCB6,stroke-width:2px
-    linkStyle 25 stroke:#86BCB6,stroke-width:2px
-    linkStyle 26 stroke:#8CD17D,stroke-width:2px
-    linkStyle 27 stroke:#8CD17D,stroke-width:2px
-    linkStyle 28 stroke:#B6992D,stroke-width:2px
-    linkStyle 29 stroke:#B6992D,stroke-width:2px
-    linkStyle 30 stroke:#B6992D,stroke-width:2px
-    linkStyle 31 stroke:#B6992D,stroke-width:2px
-    linkStyle 32 stroke:#B6992D,stroke-width:2px
-    linkStyle 33 stroke:#B6992D,stroke-width:2px
-    linkStyle 34 stroke:#B6992D,stroke-width:2px
-    linkStyle 35 stroke:#B6992D,stroke-width:2px
-    linkStyle 36 stroke:#B6992D,stroke-width:2px
-    linkStyle 37 stroke:#499894,stroke-width:2px
-    linkStyle 38 stroke:#499894,stroke-width:2px
-    linkStyle 39 stroke:#499894,stroke-width:2px
-    linkStyle 40 stroke:#499894,stroke-width:2px
-    linkStyle 41 stroke:#D37295,stroke-width:2px
-    linkStyle 42 stroke:#D37295,stroke-width:2px
-    linkStyle 43 stroke:#D37295,stroke-width:2px
-    linkStyle 44 stroke:#D37295,stroke-width:2px
-    linkStyle 45 stroke:#A0CBE8,stroke-width:2px
-    linkStyle 46 stroke:#A0CBE8,stroke-width:2px
-    linkStyle 47 stroke:#A0CBE8,stroke-width:2px
-    linkStyle 48 stroke:#A0CBE8,stroke-width:2px
-    linkStyle 49 stroke:#FFBE7D,stroke-width:2px
-    linkStyle 50 stroke:#D4A6C8,stroke-width:2px
-    linkStyle 51 stroke:#D4A6C8,stroke-width:2px
-    linkStyle 52 stroke:#D4A6C8,stroke-width:2px
-    linkStyle 53 stroke:#4E79A7,stroke-width:2px
-    linkStyle 54 stroke:#4E79A7,stroke-width:2px
-    linkStyle 55 stroke:#4E79A7,stroke-width:2px
-    linkStyle 56 stroke:#4E79A7,stroke-width:2px
-    linkStyle 57 stroke:#4E79A7,stroke-width:2px
-    linkStyle 58 stroke:#4E79A7,stroke-width:2px
-    linkStyle 59 stroke:#4E79A7,stroke-width:2px
-    linkStyle 60 stroke:#4E79A7,stroke-width:2px
-    linkStyle 61 stroke:#F28E2B,stroke-width:2px
-    linkStyle 62 stroke:#F28E2B,stroke-width:2px
-    linkStyle 63 stroke:#F28E2B,stroke-width:2px
-    linkStyle 64 stroke:#E15759,stroke-width:2px
-    linkStyle 65 stroke:#E15759,stroke-width:2px
-    linkStyle 66 stroke:#E15759,stroke-width:2px
-    linkStyle 67 stroke:#E15759,stroke-width:2px
-    linkStyle 68 stroke:#E15759,stroke-width:2px
-    linkStyle 69 stroke:#76B7B2,stroke-width:2px
-    linkStyle 70 stroke:#59A14F,stroke-width:2px
-    linkStyle 71 stroke:#EDC948,stroke-width:2px
-    linkStyle 72 stroke:#B07AA1,stroke-width:2px
-    linkStyle 73 stroke:#B07AA1,stroke-width:2px
-    linkStyle 74 stroke:#B07AA1,stroke-width:2px
-    linkStyle 75 stroke:#FF9DA7,stroke-width:2px
-    linkStyle 76 stroke:#FF9DA7,stroke-width:2px
-    linkStyle 77 stroke:#9C755F,stroke-width:2px
-    linkStyle 78 stroke:#9C755F,stroke-width:2px
-    linkStyle 79 stroke:#9C755F,stroke-width:2px
-    linkStyle 80 stroke:#9C755F,stroke-width:2px
-    linkStyle 81 stroke:#9C755F,stroke-width:2px
-    linkStyle 82 stroke:#BAB0AC,stroke-width:2px
-    linkStyle 83 stroke:#BAB0AC,stroke-width:2px
-    linkStyle 84 stroke:#BAB0AC,stroke-width:2px
-    linkStyle 85 stroke:#BAB0AC,stroke-width:2px
-    linkStyle 86 stroke:#BAB0AC,stroke-width:2px
-    linkStyle 87 stroke:#BAB0AC,stroke-width:2px
-    linkStyle 88 stroke:#BAB0AC,stroke-width:2px
-    linkStyle 89 stroke:#BAB0AC,stroke-width:2px
-    linkStyle 90 stroke:#8CD17D,stroke-width:2px
-    linkStyle 91 stroke:#B6992D,stroke-width:2px
+    linkStyle 8 stroke:#B07AA1,stroke-width:2px
+    linkStyle 9 stroke:#B07AA1,stroke-width:2px
+    linkStyle 10 stroke:#B07AA1,stroke-width:2px
+    linkStyle 11 stroke:#B07AA1,stroke-width:2px
+    linkStyle 12 stroke:#FF9DA7,stroke-width:2px
+    linkStyle 13 stroke:#FF9DA7,stroke-width:2px
+    linkStyle 14 stroke:#FF9DA7,stroke-width:2px
+    linkStyle 15 stroke:#FF9DA7,stroke-width:2px
+    linkStyle 16 stroke:#9C755F,stroke-width:2px
+    linkStyle 17 stroke:#BAB0AC,stroke-width:2px
+    linkStyle 18 stroke:#BAB0AC,stroke-width:2px
+    linkStyle 19 stroke:#86BCB6,stroke-width:2px
+    linkStyle 20 stroke:#86BCB6,stroke-width:2px
+    linkStyle 21 stroke:#86BCB6,stroke-width:2px
+    linkStyle 22 stroke:#86BCB6,stroke-width:2px
+    linkStyle 23 stroke:#86BCB6,stroke-width:2px
+    linkStyle 24 stroke:#8CD17D,stroke-width:2px
+    linkStyle 25 stroke:#8CD17D,stroke-width:2px
+    linkStyle 26 stroke:#B6992D,stroke-width:2px
+    linkStyle 27 stroke:#B6992D,stroke-width:2px
+    linkStyle 28 stroke:#499894,stroke-width:2px
+    linkStyle 29 stroke:#499894,stroke-width:2px
+    linkStyle 30 stroke:#499894,stroke-width:2px
+    linkStyle 31 stroke:#499894,stroke-width:2px
+    linkStyle 32 stroke:#499894,stroke-width:2px
+    linkStyle 33 stroke:#499894,stroke-width:2px
+    linkStyle 34 stroke:#499894,stroke-width:2px
+    linkStyle 35 stroke:#499894,stroke-width:2px
+    linkStyle 36 stroke:#499894,stroke-width:2px
+    linkStyle 37 stroke:#D37295,stroke-width:2px
+    linkStyle 38 stroke:#D37295,stroke-width:2px
+    linkStyle 39 stroke:#D37295,stroke-width:2px
+    linkStyle 40 stroke:#D37295,stroke-width:2px
+    linkStyle 41 stroke:#A0CBE8,stroke-width:2px
+    linkStyle 42 stroke:#A0CBE8,stroke-width:2px
+    linkStyle 43 stroke:#A0CBE8,stroke-width:2px
+    linkStyle 44 stroke:#A0CBE8,stroke-width:2px
+    linkStyle 45 stroke:#FFBE7D,stroke-width:2px
+    linkStyle 46 stroke:#FFBE7D,stroke-width:2px
+    linkStyle 47 stroke:#FFBE7D,stroke-width:2px
+    linkStyle 48 stroke:#FFBE7D,stroke-width:2px
+    linkStyle 49 stroke:#D4A6C8,stroke-width:2px
+    linkStyle 50 stroke:#4E79A7,stroke-width:2px
+    linkStyle 51 stroke:#4E79A7,stroke-width:2px
+    linkStyle 52 stroke:#4E79A7,stroke-width:2px
+    linkStyle 53 stroke:#F28E2B,stroke-width:2px
+    linkStyle 54 stroke:#F28E2B,stroke-width:2px
+    linkStyle 55 stroke:#F28E2B,stroke-width:2px
+    linkStyle 56 stroke:#F28E2B,stroke-width:2px
+    linkStyle 57 stroke:#F28E2B,stroke-width:2px
+    linkStyle 58 stroke:#F28E2B,stroke-width:2px
+    linkStyle 59 stroke:#F28E2B,stroke-width:2px
+    linkStyle 60 stroke:#F28E2B,stroke-width:2px
+    linkStyle 61 stroke:#E15759,stroke-width:2px
+    linkStyle 62 stroke:#E15759,stroke-width:2px
+    linkStyle 63 stroke:#E15759,stroke-width:2px
+    linkStyle 64 stroke:#76B7B2,stroke-width:2px
+    linkStyle 65 stroke:#76B7B2,stroke-width:2px
+    linkStyle 66 stroke:#76B7B2,stroke-width:2px
+    linkStyle 67 stroke:#76B7B2,stroke-width:2px
+    linkStyle 68 stroke:#76B7B2,stroke-width:2px
+    linkStyle 69 stroke:#59A14F,stroke-width:2px
+    linkStyle 70 stroke:#EDC948,stroke-width:2px
+    linkStyle 71 stroke:#B07AA1,stroke-width:2px
+    linkStyle 72 stroke:#FF9DA7,stroke-width:2px
+    linkStyle 73 stroke:#FF9DA7,stroke-width:2px
+    linkStyle 74 stroke:#FF9DA7,stroke-width:2px
+    linkStyle 75 stroke:#9C755F,stroke-width:2px
+    linkStyle 76 stroke:#9C755F,stroke-width:2px
+    linkStyle 77 stroke:#BAB0AC,stroke-width:2px
+    linkStyle 78 stroke:#BAB0AC,stroke-width:2px
+    linkStyle 79 stroke:#BAB0AC,stroke-width:2px
+    linkStyle 80 stroke:#BAB0AC,stroke-width:2px
+    linkStyle 81 stroke:#BAB0AC,stroke-width:2px
+    linkStyle 82 stroke:#86BCB6,stroke-width:2px
+    linkStyle 83 stroke:#86BCB6,stroke-width:2px
+    linkStyle 84 stroke:#86BCB6,stroke-width:2px
+    linkStyle 85 stroke:#86BCB6,stroke-width:2px
+    linkStyle 86 stroke:#86BCB6,stroke-width:2px
+    linkStyle 87 stroke:#86BCB6,stroke-width:2px
+    linkStyle 88 stroke:#86BCB6,stroke-width:2px
+    linkStyle 89 stroke:#86BCB6,stroke-width:2px
+    linkStyle 90 stroke:#B6992D,stroke-width:2px
+    linkStyle 91 stroke:#499894,stroke-width:2px
     linkStyle 92 stroke:#A0CBE8,stroke-width:2px
     linkStyle 93 stroke:#A0CBE8,stroke-width:2px
     linkStyle 94 stroke:#A0CBE8,stroke-width:2px
@@ -371,7 +371,7 @@ flowchart TB
     code-generator --> http
     style code-generator fill:#4E79A7,stroke:#4E79A7,color:#fff
     style common fill:#F28E2B,stroke:#F28E2B,color:#fff
-    style http fill:#4E79A7,stroke:#4E79A7,color:#fff
+    style http fill:#F28E2B,stroke:#F28E2B,color:#fff
     linkStyle 0 stroke:#4E79A7,stroke-width:2px
     linkStyle 1 stroke:#4E79A7,stroke-width:2px
 ```
@@ -415,26 +415,26 @@ flowchart TB
     style code-generator fill:#4E79A7,stroke:#4E79A7,color:#fff
     style config fill:#E15759,stroke:#E15759,color:#fff
     style context fill:#59A14F,stroke:#59A14F,color:#fff
-    style events fill:#B6992D,stroke:#B6992D,color:#fff
-    style file-http fill:#D4A6C8,stroke:#D4A6C8,color:#fff
-    style http fill:#4E79A7,stroke:#4E79A7,color:#fff
-    style ipc fill:#E15759,stroke:#E15759,color:#fff
-    style locator fill:#76B7B2,stroke:#76B7B2,color:#fff
-    style metrics fill:#FF9DA7,stroke:#FF9DA7,color:#fff
-    style runtime fill:#BAB0AC,stroke:#BAB0AC,color:#fff
+    style events fill:#499894,stroke:#499894,color:#fff
+    style file-http fill:#4E79A7,stroke:#4E79A7,color:#fff
+    style http fill:#F28E2B,stroke:#F28E2B,color:#fff
+    style ipc fill:#76B7B2,stroke:#76B7B2,color:#fff
+    style locator fill:#59A14F,stroke:#59A14F,color:#fff
+    style metrics fill:#9C755F,stroke:#9C755F,color:#fff
+    style runtime fill:#86BCB6,stroke:#86BCB6,color:#fff
     style testkit fill:#A0CBE8,stroke:#A0CBE8,color:#fff
     style testkit-vitest fill:#D4A6C8,stroke:#D4A6C8,color:#fff
     style websocket fill:#E15759,stroke:#E15759,color:#fff
     linkStyle 0 stroke:#4E79A7,stroke-width:2px
     linkStyle 1 stroke:#E15759,stroke-width:2px
     linkStyle 2 stroke:#59A14F,stroke-width:2px
-    linkStyle 3 stroke:#B6992D,stroke-width:2px
-    linkStyle 4 stroke:#D4A6C8,stroke-width:2px
-    linkStyle 5 stroke:#4E79A7,stroke-width:2px
-    linkStyle 6 stroke:#E15759,stroke-width:2px
-    linkStyle 7 stroke:#76B7B2,stroke-width:2px
-    linkStyle 8 stroke:#FF9DA7,stroke-width:2px
-    linkStyle 9 stroke:#BAB0AC,stroke-width:2px
+    linkStyle 3 stroke:#499894,stroke-width:2px
+    linkStyle 4 stroke:#4E79A7,stroke-width:2px
+    linkStyle 5 stroke:#F28E2B,stroke-width:2px
+    linkStyle 6 stroke:#76B7B2,stroke-width:2px
+    linkStyle 7 stroke:#59A14F,stroke-width:2px
+    linkStyle 8 stroke:#9C755F,stroke-width:2px
+    linkStyle 9 stroke:#86BCB6,stroke-width:2px
     linkStyle 10 stroke:#A0CBE8,stroke-width:2px
     linkStyle 11 stroke:#D4A6C8,stroke-width:2px
     linkStyle 12 stroke:#E15759,stroke-width:2px
@@ -475,24 +475,24 @@ flowchart TB
     config --> schema
     style config fill:#E15759,stroke:#E15759,color:#fff
     style config-aws fill:#76B7B2,stroke:#76B7B2,color:#fff
-    style db-mysql fill:#EDC948,stroke:#EDC948,color:#fff
-    style db-postgre fill:#B07AA1,stroke:#B07AA1,color:#fff
-    style events fill:#B6992D,stroke:#B6992D,color:#fff
-    style events-aws fill:#499894,stroke:#499894,color:#fff
-    style events-azure fill:#D37295,stroke:#D37295,color:#fff
-    style events-gcp fill:#A0CBE8,stroke:#A0CBE8,color:#fff
-    style poller fill:#9C755F,stroke:#9C755F,color:#fff
+    style db-mysql fill:#B07AA1,stroke:#B07AA1,color:#fff
+    style db-postgre fill:#FF9DA7,stroke:#FF9DA7,color:#fff
+    style events fill:#499894,stroke:#499894,color:#fff
+    style events-aws fill:#D37295,stroke:#D37295,color:#fff
+    style events-azure fill:#A0CBE8,stroke:#A0CBE8,color:#fff
+    style events-gcp fill:#FFBE7D,stroke:#FFBE7D,color:#fff
+    style poller fill:#BAB0AC,stroke:#BAB0AC,color:#fff
     style common fill:#F28E2B,stroke:#F28E2B,color:#fff
-    style locator fill:#76B7B2,stroke:#76B7B2,color:#fff
-    style schema fill:#86BCB6,stroke:#86BCB6,color:#fff
+    style locator fill:#59A14F,stroke:#59A14F,color:#fff
+    style schema fill:#8CD17D,stroke:#8CD17D,color:#fff
     linkStyle 0 stroke:#76B7B2,stroke-width:2px
-    linkStyle 1 stroke:#EDC948,stroke-width:2px
-    linkStyle 2 stroke:#B07AA1,stroke-width:2px
-    linkStyle 3 stroke:#B6992D,stroke-width:2px
-    linkStyle 4 stroke:#499894,stroke-width:2px
-    linkStyle 5 stroke:#D37295,stroke-width:2px
-    linkStyle 6 stroke:#A0CBE8,stroke-width:2px
-    linkStyle 7 stroke:#9C755F,stroke-width:2px
+    linkStyle 1 stroke:#B07AA1,stroke-width:2px
+    linkStyle 2 stroke:#FF9DA7,stroke-width:2px
+    linkStyle 3 stroke:#499894,stroke-width:2px
+    linkStyle 4 stroke:#D37295,stroke-width:2px
+    linkStyle 5 stroke:#A0CBE8,stroke-width:2px
+    linkStyle 6 stroke:#FFBE7D,stroke-width:2px
+    linkStyle 7 stroke:#BAB0AC,stroke-width:2px
     linkStyle 8 stroke:#E15759,stroke-width:2px
     linkStyle 9 stroke:#E15759,stroke-width:2px
     linkStyle 10 stroke:#E15759,stroke-width:2px
@@ -546,26 +546,36 @@ flowchart TB
     context --> common
     context --> schema
     style context fill:#59A14F,stroke:#59A14F,color:#fff
-    style events fill:#B6992D,stroke:#B6992D,color:#fff
-    style http fill:#4E79A7,stroke:#4E79A7,color:#fff
-    style intl fill:#F28E2B,stroke:#F28E2B,color:#fff
-    style ipc fill:#E15759,stroke:#E15759,color:#fff
-    style runtime fill:#BAB0AC,stroke:#BAB0AC,color:#fff
+    style events fill:#499894,stroke:#499894,color:#fff
+    style http fill:#F28E2B,stroke:#F28E2B,color:#fff
+    style intl fill:#E15759,stroke:#E15759,color:#fff
+    style ipc fill:#76B7B2,stroke:#76B7B2,color:#fff
+    style runtime fill:#86BCB6,stroke:#86BCB6,color:#fff
     style testkit fill:#A0CBE8,stroke:#A0CBE8,color:#fff
     style trace fill:#4E79A7,stroke:#4E79A7,color:#fff
     style websocket fill:#E15759,stroke:#E15759,color:#fff
     style common fill:#F28E2B,stroke:#F28E2B,color:#fff
-    style schema fill:#86BCB6,stroke:#86BCB6,color:#fff
-    linkStyle 0 stroke:#B6992D,stroke-width:2px
-    linkStyle 1 stroke:#4E79A7,stroke-width:2px
-    linkStyle 2 stroke:#F28E2B,stroke-width:2px
-    linkStyle 3 stroke:#E15759,stroke-width:2px
-    linkStyle 4 stroke:#BAB0AC,stroke-width:2px
+    style schema fill:#8CD17D,stroke:#8CD17D,color:#fff
+    linkStyle 0 stroke:#499894,stroke-width:2px
+    linkStyle 1 stroke:#F28E2B,stroke-width:2px
+    linkStyle 2 stroke:#E15759,stroke-width:2px
+    linkStyle 3 stroke:#76B7B2,stroke-width:2px
+    linkStyle 4 stroke:#86BCB6,stroke-width:2px
     linkStyle 5 stroke:#A0CBE8,stroke-width:2px
     linkStyle 6 stroke:#4E79A7,stroke-width:2px
     linkStyle 7 stroke:#E15759,stroke-width:2px
     linkStyle 8 stroke:#59A14F,stroke-width:2px
     linkStyle 9 stroke:#59A14F,stroke-width:2px
+```
+
+### Create Starter
+
+```mermaid
+flowchart TB
+    subgraph Package[" "]
+        create-starter["create-starter "]
+    end
+    style create-starter fill:#EDC948,stroke:#EDC948,color:#fff
 ```
 
 ### Db Mysql
@@ -585,15 +595,15 @@ flowchart TB
     db-mysql --> locator
     db-mysql --> logger
     db-mysql --> schema
-    style db-mysql fill:#EDC948,stroke:#EDC948,color:#fff
+    style db-mysql fill:#B07AA1,stroke:#B07AA1,color:#fff
     style config fill:#E15759,stroke:#E15759,color:#fff
-    style locator fill:#76B7B2,stroke:#76B7B2,color:#fff
-    style logger fill:#EDC948,stroke:#EDC948,color:#fff
-    style schema fill:#86BCB6,stroke:#86BCB6,color:#fff
-    linkStyle 0 stroke:#EDC948,stroke-width:2px
-    linkStyle 1 stroke:#EDC948,stroke-width:2px
-    linkStyle 2 stroke:#EDC948,stroke-width:2px
-    linkStyle 3 stroke:#EDC948,stroke-width:2px
+    style locator fill:#59A14F,stroke:#59A14F,color:#fff
+    style logger fill:#B07AA1,stroke:#B07AA1,color:#fff
+    style schema fill:#8CD17D,stroke:#8CD17D,color:#fff
+    linkStyle 0 stroke:#B07AA1,stroke-width:2px
+    linkStyle 1 stroke:#B07AA1,stroke-width:2px
+    linkStyle 2 stroke:#B07AA1,stroke-width:2px
+    linkStyle 3 stroke:#B07AA1,stroke-width:2px
 ```
 
 ### Db Postgre
@@ -613,15 +623,15 @@ flowchart TB
     db-postgre --> locator
     db-postgre --> logger
     db-postgre --> schema
-    style db-postgre fill:#B07AA1,stroke:#B07AA1,color:#fff
+    style db-postgre fill:#FF9DA7,stroke:#FF9DA7,color:#fff
     style config fill:#E15759,stroke:#E15759,color:#fff
-    style locator fill:#76B7B2,stroke:#76B7B2,color:#fff
-    style logger fill:#EDC948,stroke:#EDC948,color:#fff
-    style schema fill:#86BCB6,stroke:#86BCB6,color:#fff
-    linkStyle 0 stroke:#B07AA1,stroke-width:2px
-    linkStyle 1 stroke:#B07AA1,stroke-width:2px
-    linkStyle 2 stroke:#B07AA1,stroke-width:2px
-    linkStyle 3 stroke:#B07AA1,stroke-width:2px
+    style locator fill:#59A14F,stroke:#59A14F,color:#fff
+    style logger fill:#B07AA1,stroke:#B07AA1,color:#fff
+    style schema fill:#8CD17D,stroke:#8CD17D,color:#fff
+    linkStyle 0 stroke:#FF9DA7,stroke-width:2px
+    linkStyle 1 stroke:#FF9DA7,stroke-width:2px
+    linkStyle 2 stroke:#FF9DA7,stroke-width:2px
+    linkStyle 3 stroke:#FF9DA7,stroke-width:2px
 ```
 
 ### Discovery
@@ -655,27 +665,27 @@ flowchart TB
     testkit-vitest --> discovery
     websocket --> discovery
     discovery --> locator
-    style discovery fill:#FF9DA7,stroke:#FF9DA7,color:#fff
-    style discovery-kubernetes fill:#9C755F,stroke:#9C755F,color:#fff
-    style discovery-local fill:#BAB0AC,stroke:#BAB0AC,color:#fff
-    style discovery-migration fill:#86BCB6,stroke:#86BCB6,color:#fff
-    style discovery-static fill:#8CD17D,stroke:#8CD17D,color:#fff
-    style events fill:#B6992D,stroke:#B6992D,color:#fff
-    style http fill:#4E79A7,stroke:#4E79A7,color:#fff
-    style runtime fill:#BAB0AC,stroke:#BAB0AC,color:#fff
+    style discovery fill:#9C755F,stroke:#9C755F,color:#fff
+    style discovery-kubernetes fill:#BAB0AC,stroke:#BAB0AC,color:#fff
+    style discovery-local fill:#86BCB6,stroke:#86BCB6,color:#fff
+    style discovery-migration fill:#8CD17D,stroke:#8CD17D,color:#fff
+    style discovery-static fill:#B6992D,stroke:#B6992D,color:#fff
+    style events fill:#499894,stroke:#499894,color:#fff
+    style http fill:#F28E2B,stroke:#F28E2B,color:#fff
+    style runtime fill:#86BCB6,stroke:#86BCB6,color:#fff
     style testkit-vitest fill:#D4A6C8,stroke:#D4A6C8,color:#fff
     style websocket fill:#E15759,stroke:#E15759,color:#fff
-    style locator fill:#76B7B2,stroke:#76B7B2,color:#fff
-    linkStyle 0 stroke:#9C755F,stroke-width:2px
-    linkStyle 1 stroke:#BAB0AC,stroke-width:2px
-    linkStyle 2 stroke:#86BCB6,stroke-width:2px
-    linkStyle 3 stroke:#8CD17D,stroke-width:2px
-    linkStyle 4 stroke:#B6992D,stroke-width:2px
-    linkStyle 5 stroke:#4E79A7,stroke-width:2px
-    linkStyle 6 stroke:#BAB0AC,stroke-width:2px
+    style locator fill:#59A14F,stroke:#59A14F,color:#fff
+    linkStyle 0 stroke:#BAB0AC,stroke-width:2px
+    linkStyle 1 stroke:#86BCB6,stroke-width:2px
+    linkStyle 2 stroke:#8CD17D,stroke-width:2px
+    linkStyle 3 stroke:#B6992D,stroke-width:2px
+    linkStyle 4 stroke:#499894,stroke-width:2px
+    linkStyle 5 stroke:#F28E2B,stroke-width:2px
+    linkStyle 6 stroke:#86BCB6,stroke-width:2px
     linkStyle 7 stroke:#D4A6C8,stroke-width:2px
     linkStyle 8 stroke:#E15759,stroke-width:2px
-    linkStyle 9 stroke:#FF9DA7,stroke-width:2px
+    linkStyle 9 stroke:#9C755F,stroke-width:2px
 ```
 
 ### Discovery Kubernetes
@@ -691,11 +701,11 @@ flowchart TB
     end
     discovery-kubernetes --> discovery
     discovery-kubernetes --> logger
-    style discovery-kubernetes fill:#9C755F,stroke:#9C755F,color:#fff
-    style discovery fill:#FF9DA7,stroke:#FF9DA7,color:#fff
-    style logger fill:#EDC948,stroke:#EDC948,color:#fff
-    linkStyle 0 stroke:#9C755F,stroke-width:2px
-    linkStyle 1 stroke:#9C755F,stroke-width:2px
+    style discovery-kubernetes fill:#BAB0AC,stroke:#BAB0AC,color:#fff
+    style discovery fill:#9C755F,stroke:#9C755F,color:#fff
+    style logger fill:#B07AA1,stroke:#B07AA1,color:#fff
+    linkStyle 0 stroke:#BAB0AC,stroke-width:2px
+    linkStyle 1 stroke:#BAB0AC,stroke-width:2px
 ```
 
 ### Discovery Local
@@ -723,21 +733,21 @@ flowchart TB
     discovery-local --> locator
     discovery-local --> logger
     discovery-local --> schema
-    style discovery-local fill:#BAB0AC,stroke:#BAB0AC,color:#fff
-    style runtime fill:#BAB0AC,stroke:#BAB0AC,color:#fff
+    style discovery-local fill:#86BCB6,stroke:#86BCB6,color:#fff
+    style runtime fill:#86BCB6,stroke:#86BCB6,color:#fff
     style testkit-vitest fill:#D4A6C8,stroke:#D4A6C8,color:#fff
-    style discovery fill:#FF9DA7,stroke:#FF9DA7,color:#fff
-    style ipc fill:#E15759,stroke:#E15759,color:#fff
-    style locator fill:#76B7B2,stroke:#76B7B2,color:#fff
-    style logger fill:#EDC948,stroke:#EDC948,color:#fff
-    style schema fill:#86BCB6,stroke:#86BCB6,color:#fff
-    linkStyle 0 stroke:#BAB0AC,stroke-width:2px
+    style discovery fill:#9C755F,stroke:#9C755F,color:#fff
+    style ipc fill:#76B7B2,stroke:#76B7B2,color:#fff
+    style locator fill:#59A14F,stroke:#59A14F,color:#fff
+    style logger fill:#B07AA1,stroke:#B07AA1,color:#fff
+    style schema fill:#8CD17D,stroke:#8CD17D,color:#fff
+    linkStyle 0 stroke:#86BCB6,stroke-width:2px
     linkStyle 1 stroke:#D4A6C8,stroke-width:2px
-    linkStyle 2 stroke:#BAB0AC,stroke-width:2px
-    linkStyle 3 stroke:#BAB0AC,stroke-width:2px
-    linkStyle 4 stroke:#BAB0AC,stroke-width:2px
-    linkStyle 5 stroke:#BAB0AC,stroke-width:2px
-    linkStyle 6 stroke:#BAB0AC,stroke-width:2px
+    linkStyle 2 stroke:#86BCB6,stroke-width:2px
+    linkStyle 3 stroke:#86BCB6,stroke-width:2px
+    linkStyle 4 stroke:#86BCB6,stroke-width:2px
+    linkStyle 5 stroke:#86BCB6,stroke-width:2px
+    linkStyle 6 stroke:#86BCB6,stroke-width:2px
 ```
 
 ### Discovery Migration
@@ -753,11 +763,11 @@ flowchart TB
     end
     discovery-migration --> discovery
     discovery-migration --> logger
-    style discovery-migration fill:#86BCB6,stroke:#86BCB6,color:#fff
-    style discovery fill:#FF9DA7,stroke:#FF9DA7,color:#fff
-    style logger fill:#EDC948,stroke:#EDC948,color:#fff
-    linkStyle 0 stroke:#86BCB6,stroke-width:2px
-    linkStyle 1 stroke:#86BCB6,stroke-width:2px
+    style discovery-migration fill:#8CD17D,stroke:#8CD17D,color:#fff
+    style discovery fill:#9C755F,stroke:#9C755F,color:#fff
+    style logger fill:#B07AA1,stroke:#B07AA1,color:#fff
+    linkStyle 0 stroke:#8CD17D,stroke-width:2px
+    linkStyle 1 stroke:#8CD17D,stroke-width:2px
 ```
 
 ### Discovery Static
@@ -773,11 +783,11 @@ flowchart TB
     end
     discovery-static --> discovery
     discovery-static --> logger
-    style discovery-static fill:#8CD17D,stroke:#8CD17D,color:#fff
-    style discovery fill:#FF9DA7,stroke:#FF9DA7,color:#fff
-    style logger fill:#EDC948,stroke:#EDC948,color:#fff
-    linkStyle 0 stroke:#8CD17D,stroke-width:2px
-    linkStyle 1 stroke:#8CD17D,stroke-width:2px
+    style discovery-static fill:#B6992D,stroke:#B6992D,color:#fff
+    style discovery fill:#9C755F,stroke:#9C755F,color:#fff
+    style logger fill:#B07AA1,stroke:#B07AA1,color:#fff
+    linkStyle 0 stroke:#B6992D,stroke-width:2px
+    linkStyle 1 stroke:#B6992D,stroke-width:2px
 ```
 
 ### Events
@@ -815,31 +825,31 @@ flowchart TB
     events --> metrics
     events --> schema
     events --> trace
-    style events fill:#B6992D,stroke:#B6992D,color:#fff
-    style events-aws fill:#499894,stroke:#499894,color:#fff
-    style events-azure fill:#D37295,stroke:#D37295,color:#fff
-    style events-gcp fill:#A0CBE8,stroke:#A0CBE8,color:#fff
+    style events fill:#499894,stroke:#499894,color:#fff
+    style events-aws fill:#D37295,stroke:#D37295,color:#fff
+    style events-azure fill:#A0CBE8,stroke:#A0CBE8,color:#fff
+    style events-gcp fill:#FFBE7D,stroke:#FFBE7D,color:#fff
     style common fill:#F28E2B,stroke:#F28E2B,color:#fff
     style config fill:#E15759,stroke:#E15759,color:#fff
     style context fill:#59A14F,stroke:#59A14F,color:#fff
-    style discovery fill:#FF9DA7,stroke:#FF9DA7,color:#fff
-    style locator fill:#76B7B2,stroke:#76B7B2,color:#fff
-    style logger fill:#EDC948,stroke:#EDC948,color:#fff
-    style metrics fill:#FF9DA7,stroke:#FF9DA7,color:#fff
-    style schema fill:#86BCB6,stroke:#86BCB6,color:#fff
+    style discovery fill:#9C755F,stroke:#9C755F,color:#fff
+    style locator fill:#59A14F,stroke:#59A14F,color:#fff
+    style logger fill:#B07AA1,stroke:#B07AA1,color:#fff
+    style metrics fill:#9C755F,stroke:#9C755F,color:#fff
+    style schema fill:#8CD17D,stroke:#8CD17D,color:#fff
     style trace fill:#4E79A7,stroke:#4E79A7,color:#fff
-    linkStyle 0 stroke:#499894,stroke-width:2px
-    linkStyle 1 stroke:#D37295,stroke-width:2px
-    linkStyle 2 stroke:#A0CBE8,stroke-width:2px
-    linkStyle 3 stroke:#B6992D,stroke-width:2px
-    linkStyle 4 stroke:#B6992D,stroke-width:2px
-    linkStyle 5 stroke:#B6992D,stroke-width:2px
-    linkStyle 6 stroke:#B6992D,stroke-width:2px
-    linkStyle 7 stroke:#B6992D,stroke-width:2px
-    linkStyle 8 stroke:#B6992D,stroke-width:2px
-    linkStyle 9 stroke:#B6992D,stroke-width:2px
-    linkStyle 10 stroke:#B6992D,stroke-width:2px
-    linkStyle 11 stroke:#B6992D,stroke-width:2px
+    linkStyle 0 stroke:#D37295,stroke-width:2px
+    linkStyle 1 stroke:#A0CBE8,stroke-width:2px
+    linkStyle 2 stroke:#FFBE7D,stroke-width:2px
+    linkStyle 3 stroke:#499894,stroke-width:2px
+    linkStyle 4 stroke:#499894,stroke-width:2px
+    linkStyle 5 stroke:#499894,stroke-width:2px
+    linkStyle 6 stroke:#499894,stroke-width:2px
+    linkStyle 7 stroke:#499894,stroke-width:2px
+    linkStyle 8 stroke:#499894,stroke-width:2px
+    linkStyle 9 stroke:#499894,stroke-width:2px
+    linkStyle 10 stroke:#499894,stroke-width:2px
+    linkStyle 11 stroke:#499894,stroke-width:2px
 ```
 
 ### Events Aws
@@ -859,15 +869,15 @@ flowchart TB
     events-aws --> events
     events-aws --> logger
     events-aws --> schema
-    style events-aws fill:#499894,stroke:#499894,color:#fff
+    style events-aws fill:#D37295,stroke:#D37295,color:#fff
     style config fill:#E15759,stroke:#E15759,color:#fff
-    style events fill:#B6992D,stroke:#B6992D,color:#fff
-    style logger fill:#EDC948,stroke:#EDC948,color:#fff
-    style schema fill:#86BCB6,stroke:#86BCB6,color:#fff
-    linkStyle 0 stroke:#499894,stroke-width:2px
-    linkStyle 1 stroke:#499894,stroke-width:2px
-    linkStyle 2 stroke:#499894,stroke-width:2px
-    linkStyle 3 stroke:#499894,stroke-width:2px
+    style events fill:#499894,stroke:#499894,color:#fff
+    style logger fill:#B07AA1,stroke:#B07AA1,color:#fff
+    style schema fill:#8CD17D,stroke:#8CD17D,color:#fff
+    linkStyle 0 stroke:#D37295,stroke-width:2px
+    linkStyle 1 stroke:#D37295,stroke-width:2px
+    linkStyle 2 stroke:#D37295,stroke-width:2px
+    linkStyle 3 stroke:#D37295,stroke-width:2px
 ```
 
 ### Events Azure
@@ -887,15 +897,15 @@ flowchart TB
     events-azure --> events
     events-azure --> logger
     events-azure --> schema
-    style events-azure fill:#D37295,stroke:#D37295,color:#fff
+    style events-azure fill:#A0CBE8,stroke:#A0CBE8,color:#fff
     style config fill:#E15759,stroke:#E15759,color:#fff
-    style events fill:#B6992D,stroke:#B6992D,color:#fff
-    style logger fill:#EDC948,stroke:#EDC948,color:#fff
-    style schema fill:#86BCB6,stroke:#86BCB6,color:#fff
-    linkStyle 0 stroke:#D37295,stroke-width:2px
-    linkStyle 1 stroke:#D37295,stroke-width:2px
-    linkStyle 2 stroke:#D37295,stroke-width:2px
-    linkStyle 3 stroke:#D37295,stroke-width:2px
+    style events fill:#499894,stroke:#499894,color:#fff
+    style logger fill:#B07AA1,stroke:#B07AA1,color:#fff
+    style schema fill:#8CD17D,stroke:#8CD17D,color:#fff
+    linkStyle 0 stroke:#A0CBE8,stroke-width:2px
+    linkStyle 1 stroke:#A0CBE8,stroke-width:2px
+    linkStyle 2 stroke:#A0CBE8,stroke-width:2px
+    linkStyle 3 stroke:#A0CBE8,stroke-width:2px
 ```
 
 ### Events Gcp
@@ -915,15 +925,15 @@ flowchart TB
     events-gcp --> events
     events-gcp --> logger
     events-gcp --> schema
-    style events-gcp fill:#A0CBE8,stroke:#A0CBE8,color:#fff
+    style events-gcp fill:#FFBE7D,stroke:#FFBE7D,color:#fff
     style config fill:#E15759,stroke:#E15759,color:#fff
-    style events fill:#B6992D,stroke:#B6992D,color:#fff
-    style logger fill:#EDC948,stroke:#EDC948,color:#fff
-    style schema fill:#86BCB6,stroke:#86BCB6,color:#fff
-    linkStyle 0 stroke:#A0CBE8,stroke-width:2px
-    linkStyle 1 stroke:#A0CBE8,stroke-width:2px
-    linkStyle 2 stroke:#A0CBE8,stroke-width:2px
-    linkStyle 3 stroke:#A0CBE8,stroke-width:2px
+    style events fill:#499894,stroke:#499894,color:#fff
+    style logger fill:#B07AA1,stroke:#B07AA1,color:#fff
+    style schema fill:#8CD17D,stroke:#8CD17D,color:#fff
+    linkStyle 0 stroke:#FFBE7D,stroke-width:2px
+    linkStyle 1 stroke:#FFBE7D,stroke-width:2px
+    linkStyle 2 stroke:#FFBE7D,stroke-width:2px
+    linkStyle 3 stroke:#FFBE7D,stroke-width:2px
 ```
 
 ### File
@@ -941,11 +951,11 @@ flowchart TB
     end
     logger-console --> file
     file --> schema
-    style file fill:#FFBE7D,stroke:#FFBE7D,color:#fff
-    style logger-console fill:#B07AA1,stroke:#B07AA1,color:#fff
-    style schema fill:#86BCB6,stroke:#86BCB6,color:#fff
-    linkStyle 0 stroke:#B07AA1,stroke-width:2px
-    linkStyle 1 stroke:#FFBE7D,stroke-width:2px
+    style file fill:#D4A6C8,stroke:#D4A6C8,color:#fff
+    style logger-console fill:#FF9DA7,stroke:#FF9DA7,color:#fff
+    style schema fill:#8CD17D,stroke:#8CD17D,color:#fff
+    linkStyle 0 stroke:#FF9DA7,stroke-width:2px
+    linkStyle 1 stroke:#D4A6C8,stroke-width:2px
 ```
 
 ### File Http
@@ -963,13 +973,13 @@ flowchart TB
     file-http --> common
     file-http --> http
     file-http --> schema
-    style file-http fill:#D4A6C8,stroke:#D4A6C8,color:#fff
+    style file-http fill:#4E79A7,stroke:#4E79A7,color:#fff
     style common fill:#F28E2B,stroke:#F28E2B,color:#fff
-    style http fill:#4E79A7,stroke:#4E79A7,color:#fff
-    style schema fill:#86BCB6,stroke:#86BCB6,color:#fff
-    linkStyle 0 stroke:#D4A6C8,stroke-width:2px
-    linkStyle 1 stroke:#D4A6C8,stroke-width:2px
-    linkStyle 2 stroke:#D4A6C8,stroke-width:2px
+    style http fill:#F28E2B,stroke:#F28E2B,color:#fff
+    style schema fill:#8CD17D,stroke:#8CD17D,color:#fff
+    linkStyle 0 stroke:#4E79A7,stroke-width:2px
+    linkStyle 1 stroke:#4E79A7,stroke-width:2px
+    linkStyle 2 stroke:#4E79A7,stroke-width:2px
 ```
 
 ### Http
@@ -1007,31 +1017,31 @@ flowchart TB
     http --> metrics
     http --> schema
     http --> trace
-    style http fill:#4E79A7,stroke:#4E79A7,color:#fff
+    style http fill:#F28E2B,stroke:#F28E2B,color:#fff
     style code-generator fill:#4E79A7,stroke:#4E79A7,color:#fff
-    style file-http fill:#D4A6C8,stroke:#D4A6C8,color:#fff
+    style file-http fill:#4E79A7,stroke:#4E79A7,color:#fff
     style trace-http fill:#F28E2B,stroke:#F28E2B,color:#fff
     style websocket fill:#E15759,stroke:#E15759,color:#fff
     style common fill:#F28E2B,stroke:#F28E2B,color:#fff
     style context fill:#59A14F,stroke:#59A14F,color:#fff
-    style discovery fill:#FF9DA7,stroke:#FF9DA7,color:#fff
-    style locator fill:#76B7B2,stroke:#76B7B2,color:#fff
-    style logger fill:#EDC948,stroke:#EDC948,color:#fff
-    style metrics fill:#FF9DA7,stroke:#FF9DA7,color:#fff
-    style schema fill:#86BCB6,stroke:#86BCB6,color:#fff
+    style discovery fill:#9C755F,stroke:#9C755F,color:#fff
+    style locator fill:#59A14F,stroke:#59A14F,color:#fff
+    style logger fill:#B07AA1,stroke:#B07AA1,color:#fff
+    style metrics fill:#9C755F,stroke:#9C755F,color:#fff
+    style schema fill:#8CD17D,stroke:#8CD17D,color:#fff
     style trace fill:#4E79A7,stroke:#4E79A7,color:#fff
     linkStyle 0 stroke:#4E79A7,stroke-width:2px
-    linkStyle 1 stroke:#D4A6C8,stroke-width:2px
+    linkStyle 1 stroke:#4E79A7,stroke-width:2px
     linkStyle 2 stroke:#F28E2B,stroke-width:2px
     linkStyle 3 stroke:#E15759,stroke-width:2px
-    linkStyle 4 stroke:#4E79A7,stroke-width:2px
-    linkStyle 5 stroke:#4E79A7,stroke-width:2px
-    linkStyle 6 stroke:#4E79A7,stroke-width:2px
-    linkStyle 7 stroke:#4E79A7,stroke-width:2px
-    linkStyle 8 stroke:#4E79A7,stroke-width:2px
-    linkStyle 9 stroke:#4E79A7,stroke-width:2px
-    linkStyle 10 stroke:#4E79A7,stroke-width:2px
-    linkStyle 11 stroke:#4E79A7,stroke-width:2px
+    linkStyle 4 stroke:#F28E2B,stroke-width:2px
+    linkStyle 5 stroke:#F28E2B,stroke-width:2px
+    linkStyle 6 stroke:#F28E2B,stroke-width:2px
+    linkStyle 7 stroke:#F28E2B,stroke-width:2px
+    linkStyle 8 stroke:#F28E2B,stroke-width:2px
+    linkStyle 9 stroke:#F28E2B,stroke-width:2px
+    linkStyle 10 stroke:#F28E2B,stroke-width:2px
+    linkStyle 11 stroke:#F28E2B,stroke-width:2px
 ```
 
 ### Intl
@@ -1049,13 +1059,13 @@ flowchart TB
     intl --> context
     intl --> locator
     intl --> schema
-    style intl fill:#F28E2B,stroke:#F28E2B,color:#fff
+    style intl fill:#E15759,stroke:#E15759,color:#fff
     style context fill:#59A14F,stroke:#59A14F,color:#fff
-    style locator fill:#76B7B2,stroke:#76B7B2,color:#fff
-    style schema fill:#86BCB6,stroke:#86BCB6,color:#fff
-    linkStyle 0 stroke:#F28E2B,stroke-width:2px
-    linkStyle 1 stroke:#F28E2B,stroke-width:2px
-    linkStyle 2 stroke:#F28E2B,stroke-width:2px
+    style locator fill:#59A14F,stroke:#59A14F,color:#fff
+    style schema fill:#8CD17D,stroke:#8CD17D,color:#fff
+    linkStyle 0 stroke:#E15759,stroke-width:2px
+    linkStyle 1 stroke:#E15759,stroke-width:2px
+    linkStyle 2 stroke:#E15759,stroke-width:2px
 ```
 
 ### Ipc
@@ -1085,23 +1095,23 @@ flowchart TB
     ipc --> locator
     ipc --> logger
     ipc --> trace
-    style ipc fill:#E15759,stroke:#E15759,color:#fff
-    style discovery-local fill:#BAB0AC,stroke:#BAB0AC,color:#fff
+    style ipc fill:#76B7B2,stroke:#76B7B2,color:#fff
+    style discovery-local fill:#86BCB6,stroke:#86BCB6,color:#fff
     style testkit fill:#A0CBE8,stroke:#A0CBE8,color:#fff
     style testkit-vitest fill:#D4A6C8,stroke:#D4A6C8,color:#fff
     style common fill:#F28E2B,stroke:#F28E2B,color:#fff
     style context fill:#59A14F,stroke:#59A14F,color:#fff
-    style locator fill:#76B7B2,stroke:#76B7B2,color:#fff
-    style logger fill:#EDC948,stroke:#EDC948,color:#fff
+    style locator fill:#59A14F,stroke:#59A14F,color:#fff
+    style logger fill:#B07AA1,stroke:#B07AA1,color:#fff
     style trace fill:#4E79A7,stroke:#4E79A7,color:#fff
-    linkStyle 0 stroke:#BAB0AC,stroke-width:2px
+    linkStyle 0 stroke:#86BCB6,stroke-width:2px
     linkStyle 1 stroke:#A0CBE8,stroke-width:2px
     linkStyle 2 stroke:#D4A6C8,stroke-width:2px
-    linkStyle 3 stroke:#E15759,stroke-width:2px
-    linkStyle 4 stroke:#E15759,stroke-width:2px
-    linkStyle 5 stroke:#E15759,stroke-width:2px
-    linkStyle 6 stroke:#E15759,stroke-width:2px
-    linkStyle 7 stroke:#E15759,stroke-width:2px
+    linkStyle 3 stroke:#76B7B2,stroke-width:2px
+    linkStyle 4 stroke:#76B7B2,stroke-width:2px
+    linkStyle 5 stroke:#76B7B2,stroke-width:2px
+    linkStyle 6 stroke:#76B7B2,stroke-width:2px
+    linkStyle 7 stroke:#76B7B2,stroke-width:2px
 ```
 
 ### Locator
@@ -1153,45 +1163,45 @@ flowchart TB
     testkit-vitest --> locator
     websocket --> locator
     locator --> common
-    style locator fill:#76B7B2,stroke:#76B7B2,color:#fff
+    style locator fill:#59A14F,stroke:#59A14F,color:#fff
     style config fill:#E15759,stroke:#E15759,color:#fff
-    style db-mysql fill:#EDC948,stroke:#EDC948,color:#fff
-    style db-postgre fill:#B07AA1,stroke:#B07AA1,color:#fff
-    style discovery fill:#FF9DA7,stroke:#FF9DA7,color:#fff
-    style discovery-local fill:#BAB0AC,stroke:#BAB0AC,color:#fff
-    style events fill:#B6992D,stroke:#B6992D,color:#fff
-    style http fill:#4E79A7,stroke:#4E79A7,color:#fff
-    style intl fill:#F28E2B,stroke:#F28E2B,color:#fff
-    style ipc fill:#E15759,stroke:#E15759,color:#fff
-    style lock fill:#59A14F,stroke:#59A14F,color:#fff
-    style logger fill:#EDC948,stroke:#EDC948,color:#fff
-    style metrics fill:#FF9DA7,stroke:#FF9DA7,color:#fff
-    style poller fill:#9C755F,stroke:#9C755F,color:#fff
-    style runtime fill:#BAB0AC,stroke:#BAB0AC,color:#fff
+    style db-mysql fill:#B07AA1,stroke:#B07AA1,color:#fff
+    style db-postgre fill:#FF9DA7,stroke:#FF9DA7,color:#fff
+    style discovery fill:#9C755F,stroke:#9C755F,color:#fff
+    style discovery-local fill:#86BCB6,stroke:#86BCB6,color:#fff
+    style events fill:#499894,stroke:#499894,color:#fff
+    style http fill:#F28E2B,stroke:#F28E2B,color:#fff
+    style intl fill:#E15759,stroke:#E15759,color:#fff
+    style ipc fill:#76B7B2,stroke:#76B7B2,color:#fff
+    style lock fill:#EDC948,stroke:#EDC948,color:#fff
+    style logger fill:#B07AA1,stroke:#B07AA1,color:#fff
+    style metrics fill:#9C755F,stroke:#9C755F,color:#fff
+    style poller fill:#BAB0AC,stroke:#BAB0AC,color:#fff
+    style runtime fill:#86BCB6,stroke:#86BCB6,color:#fff
     style testkit fill:#A0CBE8,stroke:#A0CBE8,color:#fff
     style testkit-runtime fill:#FFBE7D,stroke:#FFBE7D,color:#fff
     style testkit-vitest fill:#D4A6C8,stroke:#D4A6C8,color:#fff
     style websocket fill:#E15759,stroke:#E15759,color:#fff
     style common fill:#F28E2B,stroke:#F28E2B,color:#fff
     linkStyle 0 stroke:#E15759,stroke-width:2px
-    linkStyle 1 stroke:#EDC948,stroke-width:2px
-    linkStyle 2 stroke:#B07AA1,stroke-width:2px
-    linkStyle 3 stroke:#FF9DA7,stroke-width:2px
-    linkStyle 4 stroke:#BAB0AC,stroke-width:2px
-    linkStyle 5 stroke:#B6992D,stroke-width:2px
-    linkStyle 6 stroke:#4E79A7,stroke-width:2px
-    linkStyle 7 stroke:#F28E2B,stroke-width:2px
-    linkStyle 8 stroke:#E15759,stroke-width:2px
-    linkStyle 9 stroke:#59A14F,stroke-width:2px
-    linkStyle 10 stroke:#EDC948,stroke-width:2px
-    linkStyle 11 stroke:#FF9DA7,stroke-width:2px
-    linkStyle 12 stroke:#9C755F,stroke-width:2px
-    linkStyle 13 stroke:#BAB0AC,stroke-width:2px
+    linkStyle 1 stroke:#B07AA1,stroke-width:2px
+    linkStyle 2 stroke:#FF9DA7,stroke-width:2px
+    linkStyle 3 stroke:#9C755F,stroke-width:2px
+    linkStyle 4 stroke:#86BCB6,stroke-width:2px
+    linkStyle 5 stroke:#499894,stroke-width:2px
+    linkStyle 6 stroke:#F28E2B,stroke-width:2px
+    linkStyle 7 stroke:#E15759,stroke-width:2px
+    linkStyle 8 stroke:#76B7B2,stroke-width:2px
+    linkStyle 9 stroke:#EDC948,stroke-width:2px
+    linkStyle 10 stroke:#B07AA1,stroke-width:2px
+    linkStyle 11 stroke:#9C755F,stroke-width:2px
+    linkStyle 12 stroke:#BAB0AC,stroke-width:2px
+    linkStyle 13 stroke:#86BCB6,stroke-width:2px
     linkStyle 14 stroke:#A0CBE8,stroke-width:2px
     linkStyle 15 stroke:#FFBE7D,stroke-width:2px
     linkStyle 16 stroke:#D4A6C8,stroke-width:2px
     linkStyle 17 stroke:#E15759,stroke-width:2px
-    linkStyle 18 stroke:#76B7B2,stroke-width:2px
+    linkStyle 18 stroke:#59A14F,stroke-width:2px
 ```
 
 ### Lock
@@ -1209,11 +1219,11 @@ flowchart TB
     end
     poller --> lock
     lock --> locator
-    style lock fill:#59A14F,stroke:#59A14F,color:#fff
-    style poller fill:#9C755F,stroke:#9C755F,color:#fff
-    style locator fill:#76B7B2,stroke:#76B7B2,color:#fff
-    linkStyle 0 stroke:#9C755F,stroke-width:2px
-    linkStyle 1 stroke:#59A14F,stroke-width:2px
+    style lock fill:#EDC948,stroke:#EDC948,color:#fff
+    style poller fill:#BAB0AC,stroke:#BAB0AC,color:#fff
+    style locator fill:#59A14F,stroke:#59A14F,color:#fff
+    linkStyle 0 stroke:#BAB0AC,stroke-width:2px
+    linkStyle 1 stroke:#EDC948,stroke-width:2px
 ```
 
 ### Logger
@@ -1263,43 +1273,43 @@ flowchart TB
     testkit-vitest --> logger
     websocket --> logger
     logger --> locator
-    style logger fill:#EDC948,stroke:#EDC948,color:#fff
-    style db-mysql fill:#EDC948,stroke:#EDC948,color:#fff
-    style db-postgre fill:#B07AA1,stroke:#B07AA1,color:#fff
-    style discovery-kubernetes fill:#9C755F,stroke:#9C755F,color:#fff
-    style discovery-local fill:#BAB0AC,stroke:#BAB0AC,color:#fff
-    style discovery-migration fill:#86BCB6,stroke:#86BCB6,color:#fff
-    style discovery-static fill:#8CD17D,stroke:#8CD17D,color:#fff
-    style events fill:#B6992D,stroke:#B6992D,color:#fff
-    style events-aws fill:#499894,stroke:#499894,color:#fff
-    style events-azure fill:#D37295,stroke:#D37295,color:#fff
-    style events-gcp fill:#A0CBE8,stroke:#A0CBE8,color:#fff
-    style http fill:#4E79A7,stroke:#4E79A7,color:#fff
-    style ipc fill:#E15759,stroke:#E15759,color:#fff
-    style logger-console fill:#B07AA1,stroke:#B07AA1,color:#fff
-    style runtime fill:#BAB0AC,stroke:#BAB0AC,color:#fff
+    style logger fill:#B07AA1,stroke:#B07AA1,color:#fff
+    style db-mysql fill:#B07AA1,stroke:#B07AA1,color:#fff
+    style db-postgre fill:#FF9DA7,stroke:#FF9DA7,color:#fff
+    style discovery-kubernetes fill:#BAB0AC,stroke:#BAB0AC,color:#fff
+    style discovery-local fill:#86BCB6,stroke:#86BCB6,color:#fff
+    style discovery-migration fill:#8CD17D,stroke:#8CD17D,color:#fff
+    style discovery-static fill:#B6992D,stroke:#B6992D,color:#fff
+    style events fill:#499894,stroke:#499894,color:#fff
+    style events-aws fill:#D37295,stroke:#D37295,color:#fff
+    style events-azure fill:#A0CBE8,stroke:#A0CBE8,color:#fff
+    style events-gcp fill:#FFBE7D,stroke:#FFBE7D,color:#fff
+    style http fill:#F28E2B,stroke:#F28E2B,color:#fff
+    style ipc fill:#76B7B2,stroke:#76B7B2,color:#fff
+    style logger-console fill:#FF9DA7,stroke:#FF9DA7,color:#fff
+    style runtime fill:#86BCB6,stroke:#86BCB6,color:#fff
     style testkit fill:#A0CBE8,stroke:#A0CBE8,color:#fff
     style testkit-vitest fill:#D4A6C8,stroke:#D4A6C8,color:#fff
     style websocket fill:#E15759,stroke:#E15759,color:#fff
-    style locator fill:#76B7B2,stroke:#76B7B2,color:#fff
-    linkStyle 0 stroke:#EDC948,stroke-width:2px
-    linkStyle 1 stroke:#B07AA1,stroke-width:2px
-    linkStyle 2 stroke:#9C755F,stroke-width:2px
-    linkStyle 3 stroke:#BAB0AC,stroke-width:2px
-    linkStyle 4 stroke:#86BCB6,stroke-width:2px
-    linkStyle 5 stroke:#8CD17D,stroke-width:2px
-    linkStyle 6 stroke:#B6992D,stroke-width:2px
-    linkStyle 7 stroke:#499894,stroke-width:2px
-    linkStyle 8 stroke:#D37295,stroke-width:2px
-    linkStyle 9 stroke:#A0CBE8,stroke-width:2px
-    linkStyle 10 stroke:#4E79A7,stroke-width:2px
-    linkStyle 11 stroke:#E15759,stroke-width:2px
-    linkStyle 12 stroke:#B07AA1,stroke-width:2px
-    linkStyle 13 stroke:#BAB0AC,stroke-width:2px
+    style locator fill:#59A14F,stroke:#59A14F,color:#fff
+    linkStyle 0 stroke:#B07AA1,stroke-width:2px
+    linkStyle 1 stroke:#FF9DA7,stroke-width:2px
+    linkStyle 2 stroke:#BAB0AC,stroke-width:2px
+    linkStyle 3 stroke:#86BCB6,stroke-width:2px
+    linkStyle 4 stroke:#8CD17D,stroke-width:2px
+    linkStyle 5 stroke:#B6992D,stroke-width:2px
+    linkStyle 6 stroke:#499894,stroke-width:2px
+    linkStyle 7 stroke:#D37295,stroke-width:2px
+    linkStyle 8 stroke:#A0CBE8,stroke-width:2px
+    linkStyle 9 stroke:#FFBE7D,stroke-width:2px
+    linkStyle 10 stroke:#F28E2B,stroke-width:2px
+    linkStyle 11 stroke:#76B7B2,stroke-width:2px
+    linkStyle 12 stroke:#FF9DA7,stroke-width:2px
+    linkStyle 13 stroke:#86BCB6,stroke-width:2px
     linkStyle 14 stroke:#A0CBE8,stroke-width:2px
     linkStyle 15 stroke:#D4A6C8,stroke-width:2px
     linkStyle 16 stroke:#E15759,stroke-width:2px
-    linkStyle 17 stroke:#EDC948,stroke-width:2px
+    linkStyle 17 stroke:#B07AA1,stroke-width:2px
 ```
 
 ### Logger Console
@@ -1323,17 +1333,17 @@ flowchart TB
     logger-console --> file
     logger-console --> logger
     logger-console --> schema
-    style logger-console fill:#B07AA1,stroke:#B07AA1,color:#fff
+    style logger-console fill:#FF9DA7,stroke:#FF9DA7,color:#fff
     style testkit fill:#A0CBE8,stroke:#A0CBE8,color:#fff
     style testkit-vitest fill:#D4A6C8,stroke:#D4A6C8,color:#fff
-    style file fill:#FFBE7D,stroke:#FFBE7D,color:#fff
-    style logger fill:#EDC948,stroke:#EDC948,color:#fff
-    style schema fill:#86BCB6,stroke:#86BCB6,color:#fff
+    style file fill:#D4A6C8,stroke:#D4A6C8,color:#fff
+    style logger fill:#B07AA1,stroke:#B07AA1,color:#fff
+    style schema fill:#8CD17D,stroke:#8CD17D,color:#fff
     linkStyle 0 stroke:#A0CBE8,stroke-width:2px
     linkStyle 1 stroke:#D4A6C8,stroke-width:2px
-    linkStyle 2 stroke:#B07AA1,stroke-width:2px
-    linkStyle 3 stroke:#B07AA1,stroke-width:2px
-    linkStyle 4 stroke:#B07AA1,stroke-width:2px
+    linkStyle 2 stroke:#FF9DA7,stroke-width:2px
+    linkStyle 3 stroke:#FF9DA7,stroke-width:2px
+    linkStyle 4 stroke:#FF9DA7,stroke-width:2px
 ```
 
 ### Metrics
@@ -1361,21 +1371,21 @@ flowchart TB
     websocket --> metrics
     metrics --> common
     metrics --> locator
-    style metrics fill:#FF9DA7,stroke:#FF9DA7,color:#fff
-    style events fill:#B6992D,stroke:#B6992D,color:#fff
-    style http fill:#4E79A7,stroke:#4E79A7,color:#fff
-    style poller fill:#9C755F,stroke:#9C755F,color:#fff
-    style runtime fill:#BAB0AC,stroke:#BAB0AC,color:#fff
+    style metrics fill:#9C755F,stroke:#9C755F,color:#fff
+    style events fill:#499894,stroke:#499894,color:#fff
+    style http fill:#F28E2B,stroke:#F28E2B,color:#fff
+    style poller fill:#BAB0AC,stroke:#BAB0AC,color:#fff
+    style runtime fill:#86BCB6,stroke:#86BCB6,color:#fff
     style websocket fill:#E15759,stroke:#E15759,color:#fff
     style common fill:#F28E2B,stroke:#F28E2B,color:#fff
-    style locator fill:#76B7B2,stroke:#76B7B2,color:#fff
-    linkStyle 0 stroke:#B6992D,stroke-width:2px
-    linkStyle 1 stroke:#4E79A7,stroke-width:2px
-    linkStyle 2 stroke:#9C755F,stroke-width:2px
-    linkStyle 3 stroke:#BAB0AC,stroke-width:2px
+    style locator fill:#59A14F,stroke:#59A14F,color:#fff
+    linkStyle 0 stroke:#499894,stroke-width:2px
+    linkStyle 1 stroke:#F28E2B,stroke-width:2px
+    linkStyle 2 stroke:#BAB0AC,stroke-width:2px
+    linkStyle 3 stroke:#86BCB6,stroke-width:2px
     linkStyle 4 stroke:#E15759,stroke-width:2px
-    linkStyle 5 stroke:#FF9DA7,stroke-width:2px
-    linkStyle 6 stroke:#FF9DA7,stroke-width:2px
+    linkStyle 5 stroke:#9C755F,stroke-width:2px
+    linkStyle 6 stroke:#9C755F,stroke-width:2px
 ```
 
 ### Poller
@@ -1397,17 +1407,17 @@ flowchart TB
     poller --> lock
     poller --> metrics
     poller --> schema
-    style poller fill:#9C755F,stroke:#9C755F,color:#fff
+    style poller fill:#BAB0AC,stroke:#BAB0AC,color:#fff
     style config fill:#E15759,stroke:#E15759,color:#fff
-    style locator fill:#76B7B2,stroke:#76B7B2,color:#fff
-    style lock fill:#59A14F,stroke:#59A14F,color:#fff
-    style metrics fill:#FF9DA7,stroke:#FF9DA7,color:#fff
-    style schema fill:#86BCB6,stroke:#86BCB6,color:#fff
-    linkStyle 0 stroke:#9C755F,stroke-width:2px
-    linkStyle 1 stroke:#9C755F,stroke-width:2px
-    linkStyle 2 stroke:#9C755F,stroke-width:2px
-    linkStyle 3 stroke:#9C755F,stroke-width:2px
-    linkStyle 4 stroke:#9C755F,stroke-width:2px
+    style locator fill:#59A14F,stroke:#59A14F,color:#fff
+    style lock fill:#EDC948,stroke:#EDC948,color:#fff
+    style metrics fill:#9C755F,stroke:#9C755F,color:#fff
+    style schema fill:#8CD17D,stroke:#8CD17D,color:#fff
+    linkStyle 0 stroke:#BAB0AC,stroke-width:2px
+    linkStyle 1 stroke:#BAB0AC,stroke-width:2px
+    linkStyle 2 stroke:#BAB0AC,stroke-width:2px
+    linkStyle 3 stroke:#BAB0AC,stroke-width:2px
+    linkStyle 4 stroke:#BAB0AC,stroke-width:2px
 ```
 
 ### Runtime
@@ -1439,25 +1449,25 @@ flowchart TB
     runtime --> logger
     runtime --> metrics
     runtime --> trace
-    style runtime fill:#BAB0AC,stroke:#BAB0AC,color:#fff
+    style runtime fill:#86BCB6,stroke:#86BCB6,color:#fff
     style testkit fill:#A0CBE8,stroke:#A0CBE8,color:#fff
     style common fill:#F28E2B,stroke:#F28E2B,color:#fff
     style context fill:#59A14F,stroke:#59A14F,color:#fff
-    style discovery fill:#FF9DA7,stroke:#FF9DA7,color:#fff
-    style discovery-local fill:#BAB0AC,stroke:#BAB0AC,color:#fff
-    style locator fill:#76B7B2,stroke:#76B7B2,color:#fff
-    style logger fill:#EDC948,stroke:#EDC948,color:#fff
-    style metrics fill:#FF9DA7,stroke:#FF9DA7,color:#fff
+    style discovery fill:#9C755F,stroke:#9C755F,color:#fff
+    style discovery-local fill:#86BCB6,stroke:#86BCB6,color:#fff
+    style locator fill:#59A14F,stroke:#59A14F,color:#fff
+    style logger fill:#B07AA1,stroke:#B07AA1,color:#fff
+    style metrics fill:#9C755F,stroke:#9C755F,color:#fff
     style trace fill:#4E79A7,stroke:#4E79A7,color:#fff
     linkStyle 0 stroke:#A0CBE8,stroke-width:2px
-    linkStyle 1 stroke:#BAB0AC,stroke-width:2px
-    linkStyle 2 stroke:#BAB0AC,stroke-width:2px
-    linkStyle 3 stroke:#BAB0AC,stroke-width:2px
-    linkStyle 4 stroke:#BAB0AC,stroke-width:2px
-    linkStyle 5 stroke:#BAB0AC,stroke-width:2px
-    linkStyle 6 stroke:#BAB0AC,stroke-width:2px
-    linkStyle 7 stroke:#BAB0AC,stroke-width:2px
-    linkStyle 8 stroke:#BAB0AC,stroke-width:2px
+    linkStyle 1 stroke:#86BCB6,stroke-width:2px
+    linkStyle 2 stroke:#86BCB6,stroke-width:2px
+    linkStyle 3 stroke:#86BCB6,stroke-width:2px
+    linkStyle 4 stroke:#86BCB6,stroke-width:2px
+    linkStyle 5 stroke:#86BCB6,stroke-width:2px
+    linkStyle 6 stroke:#86BCB6,stroke-width:2px
+    linkStyle 7 stroke:#86BCB6,stroke-width:2px
+    linkStyle 8 stroke:#86BCB6,stroke-width:2px
 ```
 
 ### Schema
@@ -1509,44 +1519,44 @@ flowchart TB
     testkit --> schema
     trace --> schema
     websocket --> schema
-    style schema fill:#86BCB6,stroke:#86BCB6,color:#fff
+    style schema fill:#8CD17D,stroke:#8CD17D,color:#fff
     style config fill:#E15759,stroke:#E15759,color:#fff
     style context fill:#59A14F,stroke:#59A14F,color:#fff
-    style db-mysql fill:#EDC948,stroke:#EDC948,color:#fff
-    style db-postgre fill:#B07AA1,stroke:#B07AA1,color:#fff
-    style discovery-local fill:#BAB0AC,stroke:#BAB0AC,color:#fff
-    style events fill:#B6992D,stroke:#B6992D,color:#fff
-    style events-aws fill:#499894,stroke:#499894,color:#fff
-    style events-azure fill:#D37295,stroke:#D37295,color:#fff
-    style events-gcp fill:#A0CBE8,stroke:#A0CBE8,color:#fff
-    style file fill:#FFBE7D,stroke:#FFBE7D,color:#fff
-    style file-http fill:#D4A6C8,stroke:#D4A6C8,color:#fff
-    style http fill:#4E79A7,stroke:#4E79A7,color:#fff
-    style intl fill:#F28E2B,stroke:#F28E2B,color:#fff
-    style logger-console fill:#B07AA1,stroke:#B07AA1,color:#fff
-    style poller fill:#9C755F,stroke:#9C755F,color:#fff
-    style schema-benchmark fill:#8CD17D,stroke:#8CD17D,color:#fff
-    style sql fill:#B6992D,stroke:#B6992D,color:#fff
+    style db-mysql fill:#B07AA1,stroke:#B07AA1,color:#fff
+    style db-postgre fill:#FF9DA7,stroke:#FF9DA7,color:#fff
+    style discovery-local fill:#86BCB6,stroke:#86BCB6,color:#fff
+    style events fill:#499894,stroke:#499894,color:#fff
+    style events-aws fill:#D37295,stroke:#D37295,color:#fff
+    style events-azure fill:#A0CBE8,stroke:#A0CBE8,color:#fff
+    style events-gcp fill:#FFBE7D,stroke:#FFBE7D,color:#fff
+    style file fill:#D4A6C8,stroke:#D4A6C8,color:#fff
+    style file-http fill:#4E79A7,stroke:#4E79A7,color:#fff
+    style http fill:#F28E2B,stroke:#F28E2B,color:#fff
+    style intl fill:#E15759,stroke:#E15759,color:#fff
+    style logger-console fill:#FF9DA7,stroke:#FF9DA7,color:#fff
+    style poller fill:#BAB0AC,stroke:#BAB0AC,color:#fff
+    style schema-benchmark fill:#B6992D,stroke:#B6992D,color:#fff
+    style sql fill:#499894,stroke:#499894,color:#fff
     style testkit fill:#A0CBE8,stroke:#A0CBE8,color:#fff
     style trace fill:#4E79A7,stroke:#4E79A7,color:#fff
     style websocket fill:#E15759,stroke:#E15759,color:#fff
     linkStyle 0 stroke:#E15759,stroke-width:2px
     linkStyle 1 stroke:#59A14F,stroke-width:2px
-    linkStyle 2 stroke:#EDC948,stroke-width:2px
-    linkStyle 3 stroke:#B07AA1,stroke-width:2px
-    linkStyle 4 stroke:#BAB0AC,stroke-width:2px
-    linkStyle 5 stroke:#B6992D,stroke-width:2px
-    linkStyle 6 stroke:#499894,stroke-width:2px
-    linkStyle 7 stroke:#D37295,stroke-width:2px
-    linkStyle 8 stroke:#A0CBE8,stroke-width:2px
-    linkStyle 9 stroke:#FFBE7D,stroke-width:2px
-    linkStyle 10 stroke:#D4A6C8,stroke-width:2px
-    linkStyle 11 stroke:#4E79A7,stroke-width:2px
-    linkStyle 12 stroke:#F28E2B,stroke-width:2px
-    linkStyle 13 stroke:#B07AA1,stroke-width:2px
-    linkStyle 14 stroke:#9C755F,stroke-width:2px
-    linkStyle 15 stroke:#8CD17D,stroke-width:2px
-    linkStyle 16 stroke:#B6992D,stroke-width:2px
+    linkStyle 2 stroke:#B07AA1,stroke-width:2px
+    linkStyle 3 stroke:#FF9DA7,stroke-width:2px
+    linkStyle 4 stroke:#86BCB6,stroke-width:2px
+    linkStyle 5 stroke:#499894,stroke-width:2px
+    linkStyle 6 stroke:#D37295,stroke-width:2px
+    linkStyle 7 stroke:#A0CBE8,stroke-width:2px
+    linkStyle 8 stroke:#FFBE7D,stroke-width:2px
+    linkStyle 9 stroke:#D4A6C8,stroke-width:2px
+    linkStyle 10 stroke:#4E79A7,stroke-width:2px
+    linkStyle 11 stroke:#F28E2B,stroke-width:2px
+    linkStyle 12 stroke:#E15759,stroke-width:2px
+    linkStyle 13 stroke:#FF9DA7,stroke-width:2px
+    linkStyle 14 stroke:#BAB0AC,stroke-width:2px
+    linkStyle 15 stroke:#B6992D,stroke-width:2px
+    linkStyle 16 stroke:#499894,stroke-width:2px
     linkStyle 17 stroke:#A0CBE8,stroke-width:2px
     linkStyle 18 stroke:#4E79A7,stroke-width:2px
     linkStyle 19 stroke:#E15759,stroke-width:2px
@@ -1563,9 +1573,9 @@ flowchart TB
         schema["schema 🟢🌐"]
     end
     schema-benchmark --> schema
-    style schema-benchmark fill:#8CD17D,stroke:#8CD17D,color:#fff
-    style schema fill:#86BCB6,stroke:#86BCB6,color:#fff
-    linkStyle 0 stroke:#8CD17D,stroke-width:2px
+    style schema-benchmark fill:#B6992D,stroke:#B6992D,color:#fff
+    style schema fill:#8CD17D,stroke:#8CD17D,color:#fff
+    linkStyle 0 stroke:#B6992D,stroke-width:2px
 ```
 
 ### Sql
@@ -1579,19 +1589,9 @@ flowchart TB
         schema["schema 🟢🌐"]
     end
     sql --> schema
-    style sql fill:#B6992D,stroke:#B6992D,color:#fff
-    style schema fill:#86BCB6,stroke:#86BCB6,color:#fff
-    linkStyle 0 stroke:#B6992D,stroke-width:2px
-```
-
-### Starter
-
-```mermaid
-flowchart TB
-    subgraph Package[" "]
-        starter["starter "]
-    end
-    style starter fill:#499894,stroke:#499894,color:#fff
+    style sql fill:#499894,stroke:#499894,color:#fff
+    style schema fill:#8CD17D,stroke:#8CD17D,color:#fff
+    linkStyle 0 stroke:#499894,stroke-width:2px
 ```
 
 ### Struct
@@ -1641,12 +1641,12 @@ flowchart TB
     style testkit-vitest fill:#D4A6C8,stroke:#D4A6C8,color:#fff
     style common fill:#F28E2B,stroke:#F28E2B,color:#fff
     style context fill:#59A14F,stroke:#59A14F,color:#fff
-    style ipc fill:#E15759,stroke:#E15759,color:#fff
-    style locator fill:#76B7B2,stroke:#76B7B2,color:#fff
-    style logger fill:#EDC948,stroke:#EDC948,color:#fff
-    style logger-console fill:#B07AA1,stroke:#B07AA1,color:#fff
-    style runtime fill:#BAB0AC,stroke:#BAB0AC,color:#fff
-    style schema fill:#86BCB6,stroke:#86BCB6,color:#fff
+    style ipc fill:#76B7B2,stroke:#76B7B2,color:#fff
+    style locator fill:#59A14F,stroke:#59A14F,color:#fff
+    style logger fill:#B07AA1,stroke:#B07AA1,color:#fff
+    style logger-console fill:#FF9DA7,stroke:#FF9DA7,color:#fff
+    style runtime fill:#86BCB6,stroke:#86BCB6,color:#fff
+    style schema fill:#8CD17D,stroke:#8CD17D,color:#fff
     style testkit-runtime fill:#FFBE7D,stroke:#FFBE7D,color:#fff
     style trace fill:#4E79A7,stroke:#4E79A7,color:#fff
     linkStyle 0 stroke:#D4A6C8,stroke-width:2px
@@ -1679,7 +1679,7 @@ flowchart TB
     testkit-runtime --> locator
     style testkit-runtime fill:#FFBE7D,stroke:#FFBE7D,color:#fff
     style testkit fill:#A0CBE8,stroke:#A0CBE8,color:#fff
-    style locator fill:#76B7B2,stroke:#76B7B2,color:#fff
+    style locator fill:#59A14F,stroke:#59A14F,color:#fff
     linkStyle 0 stroke:#A0CBE8,stroke-width:2px
     linkStyle 1 stroke:#FFBE7D,stroke-width:2px
 ```
@@ -1711,12 +1711,12 @@ flowchart TB
     testkit-vitest --> testkit
     style testkit-vitest fill:#D4A6C8,stroke:#D4A6C8,color:#fff
     style common fill:#F28E2B,stroke:#F28E2B,color:#fff
-    style discovery fill:#FF9DA7,stroke:#FF9DA7,color:#fff
-    style discovery-local fill:#BAB0AC,stroke:#BAB0AC,color:#fff
-    style ipc fill:#E15759,stroke:#E15759,color:#fff
-    style locator fill:#76B7B2,stroke:#76B7B2,color:#fff
-    style logger fill:#EDC948,stroke:#EDC948,color:#fff
-    style logger-console fill:#B07AA1,stroke:#B07AA1,color:#fff
+    style discovery fill:#9C755F,stroke:#9C755F,color:#fff
+    style discovery-local fill:#86BCB6,stroke:#86BCB6,color:#fff
+    style ipc fill:#76B7B2,stroke:#76B7B2,color:#fff
+    style locator fill:#59A14F,stroke:#59A14F,color:#fff
+    style logger fill:#B07AA1,stroke:#B07AA1,color:#fff
+    style logger-console fill:#FF9DA7,stroke:#FF9DA7,color:#fff
     style testkit fill:#A0CBE8,stroke:#A0CBE8,color:#fff
     linkStyle 0 stroke:#D4A6C8,stroke-width:2px
     linkStyle 1 stroke:#D4A6C8,stroke-width:2px
@@ -1758,19 +1758,19 @@ flowchart TB
     trace --> context
     trace --> schema
     style trace fill:#4E79A7,stroke:#4E79A7,color:#fff
-    style events fill:#B6992D,stroke:#B6992D,color:#fff
-    style http fill:#4E79A7,stroke:#4E79A7,color:#fff
-    style ipc fill:#E15759,stroke:#E15759,color:#fff
-    style runtime fill:#BAB0AC,stroke:#BAB0AC,color:#fff
+    style events fill:#499894,stroke:#499894,color:#fff
+    style http fill:#F28E2B,stroke:#F28E2B,color:#fff
+    style ipc fill:#76B7B2,stroke:#76B7B2,color:#fff
+    style runtime fill:#86BCB6,stroke:#86BCB6,color:#fff
     style testkit fill:#A0CBE8,stroke:#A0CBE8,color:#fff
     style trace-http fill:#F28E2B,stroke:#F28E2B,color:#fff
     style websocket fill:#E15759,stroke:#E15759,color:#fff
     style context fill:#59A14F,stroke:#59A14F,color:#fff
-    style schema fill:#86BCB6,stroke:#86BCB6,color:#fff
-    linkStyle 0 stroke:#B6992D,stroke-width:2px
-    linkStyle 1 stroke:#4E79A7,stroke-width:2px
-    linkStyle 2 stroke:#E15759,stroke-width:2px
-    linkStyle 3 stroke:#BAB0AC,stroke-width:2px
+    style schema fill:#8CD17D,stroke:#8CD17D,color:#fff
+    linkStyle 0 stroke:#499894,stroke-width:2px
+    linkStyle 1 stroke:#F28E2B,stroke-width:2px
+    linkStyle 2 stroke:#76B7B2,stroke-width:2px
+    linkStyle 3 stroke:#86BCB6,stroke-width:2px
     linkStyle 4 stroke:#A0CBE8,stroke-width:2px
     linkStyle 5 stroke:#F28E2B,stroke-width:2px
     linkStyle 6 stroke:#E15759,stroke-width:2px
@@ -1792,7 +1792,7 @@ flowchart TB
     trace-http --> http
     trace-http --> trace
     style trace-http fill:#F28E2B,stroke:#F28E2B,color:#fff
-    style http fill:#4E79A7,stroke:#4E79A7,color:#fff
+    style http fill:#F28E2B,stroke:#F28E2B,color:#fff
     style trace fill:#4E79A7,stroke:#4E79A7,color:#fff
     linkStyle 0 stroke:#F28E2B,stroke-width:2px
     linkStyle 1 stroke:#F28E2B,stroke-width:2px
@@ -1828,12 +1828,12 @@ flowchart TB
     style websocket fill:#E15759,stroke:#E15759,color:#fff
     style common fill:#F28E2B,stroke:#F28E2B,color:#fff
     style context fill:#59A14F,stroke:#59A14F,color:#fff
-    style discovery fill:#FF9DA7,stroke:#FF9DA7,color:#fff
-    style http fill:#4E79A7,stroke:#4E79A7,color:#fff
-    style locator fill:#76B7B2,stroke:#76B7B2,color:#fff
-    style logger fill:#EDC948,stroke:#EDC948,color:#fff
-    style metrics fill:#FF9DA7,stroke:#FF9DA7,color:#fff
-    style schema fill:#86BCB6,stroke:#86BCB6,color:#fff
+    style discovery fill:#9C755F,stroke:#9C755F,color:#fff
+    style http fill:#F28E2B,stroke:#F28E2B,color:#fff
+    style locator fill:#59A14F,stroke:#59A14F,color:#fff
+    style logger fill:#B07AA1,stroke:#B07AA1,color:#fff
+    style metrics fill:#9C755F,stroke:#9C755F,color:#fff
+    style schema fill:#8CD17D,stroke:#8CD17D,color:#fff
     style trace fill:#4E79A7,stroke:#4E79A7,color:#fff
     linkStyle 0 stroke:#E15759,stroke-width:2px
     linkStyle 1 stroke:#E15759,stroke-width:2px
