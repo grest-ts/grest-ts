@@ -39,21 +39,27 @@ Fair warning though: once you get used to how testing works here, you'll miss it
 
 ## Getting Started
 
-Copy the [`starter`](./starter) project, rename it, install dependencies, and you're running:
+Copy the [`starter`](./starter) folder, rename it, and you have a working app:
 
 ```bash
-cp -r /somewhere/grest-ts/starter /somewhere/my-app
-cd /somewhere/my-app
+cp -r starter my-app
+cd my-app
 npm install
 
 # Terminal 1 — server
 cd server && npm run dev
 
-# Terminal 2 — client (react base, but use what ever you prefer)
+# Terminal 2 — client
 cd client && npm run dev
 ```
 
-The starter includes a working API contract, server implementation, integration test, and a Vite client that calls the API — everything wired up and ready to build on.
+The starter is an npm workspaces monorepo with three packages:
+- **api/** — shared contract definitions (used by both server and client)
+- **server/** — backend implementation with integration tests
+- **client/** — frontend (Vite + TypeScript, swap for whatever you prefer)
+
+Everything is wired up — API contract, server handler, integration test, and a client that calls the API. Build on it.
+(This structure is an example, you can restructure things however you like.)
 
 ---
 
