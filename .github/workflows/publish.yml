@@ -35,10 +35,10 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Setup Node 22
+      - name: Setup Node 25
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 25
 
       - name: Install dependencies
         run: npm install
