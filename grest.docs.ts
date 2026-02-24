@@ -366,6 +366,14 @@ function main() {
         cpSync(landingPage, join(DOCS_SRC, "index.md"))
     }
 
+    // Copy static assets (logo) into srcDir/public
+    const publicDir = join(DOCS_SRC, "public")
+    mkdirSync(publicDir, {recursive: true})
+    const logo = join(ROOT, "logo.png")
+    if (existsSync(logo)) {
+        cpSync(logo, join(publicDir, "logo.png"))
+    }
+
     // Process guides
     processGuides(dirToDocPath)
     console.log("  Processed guide docs")

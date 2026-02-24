@@ -1,13 +1,18 @@
 :root {
-    --vp-c-brand-1: #4E79A7;
-    --vp-c-brand-2: #5A8BBF;
-    --vp-c-brand-3: #3D6089;
-    --vp-home-hero-name-color: #4E79A7;
+    --vp-c-brand-1: #3B82F6;
+    --vp-c-brand-2: #2563EB;
+    --vp-c-brand-3: #1D4ED8;
+    --vp-c-brand-soft: rgba(59, 130, 246, 0.14);
+    --vp-home-hero-name-color: transparent;
+    --vp-home-hero-name-background: linear-gradient(135deg, #3B82F6, #06B6D4);
+    --vp-home-hero-image-background-image: linear-gradient(135deg, rgba(59, 130, 246, 0.2), rgba(6, 182, 212, 0.2));
+    --vp-home-hero-image-filter: blur(56px);
 }
 
 .dark {
-    --vp-c-brand-1: #5A8BBF;
-    --vp-c-brand-2: #4E79A7;
-    --vp-c-brand-3: #6B9CD3;
-    --vp-home-hero-name-color: #5A8BBF;
+    --vp-c-brand-1: #60A5FA;
+    --vp-c-brand-2: #3B82F6;
+    --vp-c-brand-3: #93C5FD;
+    --vp-c-brand-soft: rgba(96, 165, 250, 0.14);
+    --vp-home-hero-image-background-image: linear-gradient(135deg, rgba(59, 130, 246, 0.3), rgba(6, 182, 212, 0.3));
 }

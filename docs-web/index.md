@@ -3,8 +3,11 @@ layout: home
 
 hero:
   name: grest-ts
-  text: Contract-First TypeScript Services
+  text: Contract-First Testable TypeScript Services
   tagline: Define your API once. Get typed server handlers, typed clients, and typed test utilities automatically.
+  image:
+    src: /logo.png
+    alt: grest-ts
   actions:
     - theme: brand
       text: Get Started
@@ -26,4 +29,10 @@ features:
     details: Zero-config local dev. Services find each other automatically. Pluggable for production (Kubernetes, Consul, etc.)
   - title: Typed Errors
     details: Errors carry reference IDs, typed data, and flow across service boundaries as discriminated unions.
+  - title: AI-Era Ready
+    details: Clean, explicit service code with no magic to misunderstand and no hidden wiring to hallucinate about.
+  - title: Scalable
+    details: From a single runtime to hundreds of microservices. Same patterns, same contracts, same tests. Monorepo or multi-repo.
+  - title: Tree-Shakable
+    details: Fully tree-shakable for minimal bundle sizes. For server packages, 400 MB vs 5 MB starts to matter at scale.
 ---

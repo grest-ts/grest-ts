@@ -13,9 +13,8 @@ How to use the HTTP package for building type-safe HTTP and WebSocket APIs.
 
 ```typescript
 // MyApi.ts
-import { GGRpc, httpApi } from "@grest-ts/http"
-import { IsArray, IsObject, IsString, IsBoolean, IsUint } from "@grest-ts/schema"
-import { defineApi, NOT_FOUND, FORBIDDEN, VALIDATION_ERROR, SERVER_ERROR } from "@grest-ts/contract"
+import { GGRpc, httpSchema } from "@grest-ts/http"
+import { GGContractClass, IsArray, IsObject, IsString, IsBoolean, IsUint, NOT_FOUND, FORBIDDEN, VALIDATION_ERROR, SERVER_ERROR } from "@grest-ts/schema"
 
 // ---------------------------------------------------------
 // Type Schemas
@@ -55,7 +54,7 @@ export const IsItemIdParam = IsObject({
 // Contract & API
 // ---------------------------------------------------------
 
-export const MyApiContract = defineApi("MyApi", () => ({
+export const MyApiContract = new GGContractClass("MyApi", {
     list: {
         success: IsArray(IsItem),
         errors: [SERVER_ERROR]
@@ -77,12 +76,11 @@ export const MyApiContract = defineApi("MyApi", () => ({
     },
     delete: {
         input: IsItemIdParam,
-        success: undefined as undefined,
         errors: [NOT_FOUND, SERVER_ERROR]
     }
-}))
+})
 
-export const MyApi = httpApi(MyApiContract)
+export const MyApi = httpSchema(MyApiContract)
     .pathPrefix("api/items")
     .routes({
         list: GGRpc.GET("list"),
@@ -99,7 +97,6 @@ export const MyApi = httpApi(MyApiContract)
 GGRpc.GET("path")      // GET request
 GGRpc.POST("path")     // POST request
 GGRpc.PUT("path")      // PUT request
-GGRpc.PATCH("path")    // PATCH request
 GGRpc.DELETE("path")   // DELETE request
 ```
 
@@ -108,7 +105,7 @@ GGRpc.DELETE("path")   // DELETE request
 Use `:paramName` in paths - parameters are matched by position:
 
 ```typescript
-export const MyApiContract = defineApi("MyApi", () => ({
+export const MyApiContract = new GGContractClass("MyApi", {
     getUser: {
         input: IsObject({ userId: IsUserId }),
         success: IsUser,
@@ -119,9 +116,9 @@ export const MyApiContract = defineApi("MyApi", () => ({
         success: IsPost,
         errors: [NOT_FOUND, SERVER_ERROR]
     }
-}))
+})
 
-export const MyApi = httpApi(MyApiContract)
+export const MyApi = httpSchema(MyApiContract)
     .pathPrefix("api")
     .routes({
         getUser: GGRpc.GET("users/:userId"),
@@ -134,7 +131,7 @@ export const MyApi = httpApi(MyApiContract)
 For GET/DELETE, object parameters become query strings:
 
 ```typescript
-export const MyApiContract = defineApi("MyApi", () => ({
+export const MyApiContract = new GGContractClass("MyApi", {
     search: {
         input: IsObject({
             term: IsString,
@@ -144,7 +141,7 @@ export const MyApiContract = defineApi("MyApi", () => ({
         success: IsSearchResults,
         errors: [SERVER_ERROR]
     }
-}))
+})
 
 // Client usage: client.search({ term: "foo", page: 1 })
 // Results in: GET /api/search?term=foo&page=1
@@ -152,10 +149,10 @@ export const MyApiContract = defineApi("MyApi", () => ({
 
 ### Request Body
 
-For POST/PUT/PATCH, the input becomes the JSON body:
+For POST/PUT, the input becomes the JSON body:
 
 ```typescript
-export const MyApiContract = defineApi("MyApi", () => ({
+export const MyApiContract = new GGContractClass("MyApi", {
     create: {
         input: IsCreateRequest,
         success: IsItem,
@@ -166,7 +163,7 @@ export const MyApiContract = defineApi("MyApi", () => ({
         success: IsItem,
         errors: [VALIDATION_ERROR, SERVER_ERROR]
     }
-}))
+})
 ```
 
 ## Authentication & Context
@@ -261,7 +258,7 @@ import { GG_USER_AUTH } from "./auth/UserAuth"
 import { ClientInfoMiddleware } from "./middleware/ClientInfoMiddleware"
 import { GG_INTL_LOCALE } from "@grest-ts/intl"
 
-export const MyApiContract = defineApi("MyApi", () => ({
+export const MyApiContract = new GGContractClass("MyApi", {
     list: {
         success: IsArray(IsItem),
         errors: [NOT_AUTHORIZED, SERVER_ERROR]
@@ -271,10 +268,10 @@ export const MyApiContract = defineApi("MyApi", () => ({
         success: IsItem,
         errors: [NOT_AUTHORIZED, VALIDATION_ERROR, SERVER_ERROR]
     }
-}))
+})
 
 // Chain multiple context providers
-export const MyApi = httpApi(MyApiContract)
+export const MyApi = httpSchema(MyApiContract)
     .pathPrefix("api/items")
     .useHeader(GG_INTL_LOCALE)        // Use codec from context key
     .useHeader(GG_USER_AUTH)          // Use codec from context key
@@ -288,7 +285,7 @@ export const MyApi = httpApi(MyApiContract)
 ### Public API (No Auth)
 
 ```typescript
-export const PublicApiContract = defineApi("PublicApi", () => ({
+export const PublicApiContract = new GGContractClass("PublicApi", {
     status: {
         success: IsStatusResponse,
         errors: [SERVER_ERROR]
@@ -298,9 +295,9 @@ export const PublicApiContract = defineApi("PublicApi", () => ({
         success: IsLoginResponse,
         errors: [VALIDATION_ERROR, SERVER_ERROR]
     }
-}))
+})
 
-export const PublicApi = httpApi(PublicApiContract)
+export const PublicApi = httpSchema(PublicApiContract)
     .pathPrefix("pub")
     .routes({
         status: GGRpc.GET("status"),
@@ -313,18 +310,12 @@ export const PublicApi = httpApi(PublicApiContract)
 ### Declaring Errors in Contract
 
 ```typescript
-import { defineApi, NOT_FOUND, FORBIDDEN, VALIDATION_ERROR, SERVER_ERROR, BAD_REQUEST } from "@grest-ts/contract"
+import { GGContractClass, NOT_FOUND, FORBIDDEN, VALIDATION_ERROR, SERVER_ERROR, BAD_REQUEST, ERROR } from "@grest-ts/schema"
 
 // Custom error type
-export class InvalidCredentialsError extends BAD_REQUEST<"INVALID_CREDENTIALS", undefined> {
-    public static TYPE = "INVALID_CREDENTIALS"
+const INVALID_CREDENTIALS = ERROR.define("INVALID_CREDENTIALS", 400)
 
-    constructor() {
-        super("INVALID_CREDENTIALS", undefined)
-    }
-}
-
-export const MyApiContract = defineApi("MyApi", () => ({
+export const MyApiContract = new GGContractClass("MyApi", {
     get: {
         input: IsItemIdParam,
         success: IsItem,
@@ -338,17 +329,17 @@ export const MyApiContract = defineApi("MyApi", () => ({
     login: {
         input: IsLoginRequest,
         success: IsLoginResponse,
-        errors: [InvalidCredentialsError, VALIDATION_ERROR, SERVER_ERROR]
+        errors: [INVALID_CREDENTIALS, VALIDATION_ERROR, SERVER_ERROR]
     }
-}))
+})
 ```
 
 ### Throwing Errors in Service
 
 ```typescript
-import { GGServerApi, NOT_FOUND, FORBIDDEN } from "@grest-ts/node"
+import { NOT_FOUND, FORBIDDEN } from "@grest-ts/schema"
 
-export class MyService implements GGServerApi<typeof MyApiContract["methods"]> {
+export class MyService {
     async get({ id }: { id: tItemId }): Promise<Item> {
         const item = await this.findItem(id)
         if (!item) throw new NOT_FOUND()
@@ -359,7 +350,7 @@ export class MyService implements GGServerApi<typeof MyApiContract["methods"]> {
         const item = await this.findItem(request.id)
         if (!item) throw new NOT_FOUND()
 
-        const user = UserContext.get()
+        const user = GG_USER_AUTH.get()
         if (item.ownerId !== user.id) throw new FORBIDDEN()
 
         return this.updateItem(item, request)
@@ -372,32 +363,33 @@ export class MyService implements GGServerApi<typeof MyApiContract["methods"]> {
 ### Using GGHttp (Fluent API)
 
 ```typescript
-import { GGHttp } from "@grest-ts/http"
+import { GGHttp, GGHttpServer } from "@grest-ts/http"
 
 protected compose(): void {
-    new GGHttp()
+    const httpServer = new GGHttpServer()
+
+    new GGHttp(httpServer)
         .http(PublicApi, publicService)
         .http(StatusApi, {
             status: async () => ({ status: true })
         })
 
-    new GGHttp("authenticated")
+    new GGHttp(httpServer)
         .use(new UserContextMiddleware(userService))
         .http(MyApi, myService)
         .http(UserAuthApi, userService)
-        .websocket(NotificationApi, notificationService.handleConnection)
 }
 ```
 
-### Using GGHttpServer (Direct)
+### Using GGHttpSchema.register (Direct)
 
 ```typescript
 import { GGHttpServer } from "@grest-ts/http"
 
 protected compose(): void {
     const httpServer = new GGHttpServer()
-    MyApi.startServer(httpServer, myService)
-    OtherApi.startServer(httpServer, otherService)
+    MyApi.register(myService, { http: httpServer })
+    OtherApi.register(otherService, { http: httpServer })
 }
 ```
 
@@ -406,11 +398,13 @@ protected compose(): void {
 ```typescript
 protected compose(): void {
     // Main public server
-    new GGHttp()
+    const publicServer = new GGHttpServer()
+    new GGHttp(publicServer)
         .http(PublicApi, publicService)
 
     // Internal server on different port
-    new GGHttp("internal")
+    const internalServer = new GGHttpServer({ port: 9090 })
+    new GGHttp(internalServer)
         .http(InternalApi, internalService)
 }
 ```
@@ -420,29 +414,34 @@ protected compose(): void {
 ### Creating Clients
 
 ```typescript
-// Unauthenticated client
+import { GGHttpClientConfig } from "@grest-ts/http"
+
+// With explicit URL
 const client = MyApi.createClient({ url: "http://localhost:3000" })
 
-// Authenticated client
-const authClient = MyApi.createClient(authState, { url: "http://localhost:3000" })
+// Browser same-origin (use empty string)
+const client = MyApi.createClient({ url: "" })
 
-// Test client
-const testClient = MyApi.createTestClient()
+// With options
+const client = MyApi.createClient({ url: "http://localhost:3000", timeout: 30000 })
+
+// Without URL (uses service discovery)
+const client = MyApi.createClient()
 ```
 
 ### Making Requests
 
 ```typescript
-// Simple request
+// Simple request (no input)
 const items = await client.list()
 
 // With path parameter
 const item = await client.get({ id: "item-123" })
 
-// With query parameters
+// With query parameters (GET request)
 const results = await client.search({ term: "foo", page: 1 })
 
-// With body
+// With body (POST request)
 const newItem = await client.create({ title: "New Item" })
 ```
 
@@ -459,6 +458,18 @@ if (result.success) {
 } else {
     console.log("Error:", result.type)  // "NOT_FOUND", etc.
 }
+
+// Using .orDefault() for fallback values
+const item = await client.get({ id: "item-123" }).orDefault(() => defaultItem)
+
+// Using .or() for error recovery
+const item = await client.get({ id: "item-123" }).or((error) => {
+    if (error.type === "NOT_FOUND") return defaultItem
+    throw error
+})
+
+// Using .map() to transform the result
+const title = await client.get({ id: "item-123" }).map(item => item.title)
 ```
 
 ## WebSocket APIs
@@ -466,10 +477,8 @@ if (result.success) {
 ### Defining WebSocket API
 
 ```typescript
-import { webSocketApi } from "@grest-ts/http"
-import { defineTwoWayApi, SERVER_ERROR, VALIDATION_ERROR } from "@grest-ts/contract"
-import { IsObject, IsString, IsBoolean } from "@grest-ts/schema"
-import { GG_USER_AUTH_TOKEN } from "./auth/UserAuth"
+import { defineSocketContract, webSocketSchema } from "@grest-ts/websocket"
+import { IsObject, IsString, IsBoolean, SERVER_ERROR, VALIDATION_ERROR } from "@grest-ts/schema"
 
 // Message schemas
 export const IsItemMarkedEvent = IsObject({
@@ -489,7 +498,7 @@ export const IsUpdateItemResponse = IsObject({
 })
 
 // Contract definition
-export const NotificationApiContract = defineTwoWayApi("NotificationApi", () => ({
+export const NotificationApiContract = defineSocketContract("NotificationApi", {
     clientToServer: {
         updateItem: {
             input: IsUpdateItemRequest,
@@ -507,27 +516,24 @@ export const NotificationApiContract = defineTwoWayApi("NotificationApi", () => 
             errors: [SERVER_ERROR]
         }
     }
-}))
+})
 
-export const NotificationApi = webSocketApi(NotificationApiContract)
+export const NotificationApi = webSocketSchema(NotificationApiContract)
     .path("ws/notifications")
-    .use(GG_USER_AUTH_TOKEN)
+    .use(AuthMiddleware)
     .done()
 ```
 
 ### WebSocket Server Handler
 
 ```typescript
-import { GGSocketApi, WebSocketIncoming, WebSocketOutgoing } from "@grest-ts/http"
-
-type IncomingHandler = WebSocketIncoming<GGSocketApi<typeof NotificationApiContract.methods["clientToServer"]>>
-type OutgoingConnection = WebSocketOutgoing<GGSocketApi<typeof NotificationApiContract.methods["serverToClient"]>>
+import { WebSocketIncoming, WebSocketOutgoing } from "@grest-ts/websocket"
 
 export class NotificationService {
-    private connections = new Map<string, Set<OutgoingConnection>>()
+    private connections = new Map<string, Set<WebSocketOutgoing<any>>>()
 
-    handleConnection = (incoming: IncomingHandler, outgoing: OutgoingConnection): void => {
-        const user = UserContext.get()
+    handleConnection = (incoming: WebSocketIncoming<any>, outgoing: WebSocketOutgoing<any>): void => {
+        const user = GG_USER_AUTH.get()
 
         // Track connection
         if (!this.connections.has(user.id)) {
@@ -563,56 +569,44 @@ export class NotificationService {
 ### WebSocket in Runtime
 
 ```typescript
+import { GGHttpServer } from "@grest-ts/http"
+
 protected compose(): void {
-    new GGHttp()
+    const httpServer = new GGHttpServer()
+
+    new GGHttp(httpServer)
         .use(new UserContextMiddleware(userService))
-        .websocket(NotificationApi, notificationService.handleConnection)
+        .http(MyApi, myService)
+
+    // Register WebSocket on the same HTTP server
+    NotificationApi.register(notificationService.handleConnection, { http: httpServer })
 }
 ```
 
-### WebSocket Client (Browser)
+### WebSocket Client
 
 ```typescript
-// Connect with message handlers
-const socket = await authenticatedSDK.connectNotification({
-    itemMarked: (event) => {
-        console.log("Item marked:", event.item.title)
-    },
-    areYouThere: async () => {
-        return true
-    }
+import { GGSocketPool } from "@grest-ts/websocket"
+
+// Connect via socket pool (reuses connections for same URL + headers)
+const socket = await GGSocketPool.getOrConnect({
+    domain: "ws://localhost:3000",
+    path: "/ws/notifications",
+    middlewares: NotificationApi.middlewares
 })
 
-// Send messages
-const response = await socket.updateItem({ item, reason: "Updated via UI" })
+// Send messages via the socket
+const response = await socket.send("NotificationApi.updateItem", { item, reason: "Updated via UI" }, true)
+
+// Handle disconnect
+socket.onClose(() => {
+    console.log("Disconnected")
+})
 
 // Close connection
 socket.close()
+
+// Close all pooled connections
+await GGSocketPool.closeAll()
 ```
 
-## SDK (Auto-Generated)
-
-The SDK is auto-generated from your API definitions. The generated SDK provides:
-
-- Type-safe client methods for all endpoints
-- Automatic auth token handling
-- WebSocket connection management
-- Error type inference
-
-### Using Generated SDK
-
-```typescript
-import { UserAppSDK } from "./UserAppSDK.gen"
-
-const sdk = new UserAppSDK({ url: "http://localhost:3000" })
-
-// Public endpoints
-const loginResult = await sdk.login({ username, password })
-
-// Authenticated endpoints (returned from login)
-const authSDK = loginResult.data.sdk
-const items = await authSDK.checklist.list()
-const socket = await authSDK.connectNotification({
-    itemMarked: (event) => console.log(event)
-})
-```
