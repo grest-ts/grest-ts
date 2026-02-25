@@ -48,10 +48,7 @@
     "node": ">=25"
   },
   "dependencies": {
-  },
-  "devDependencies": {
     "fast-glob": "^3.3.3",
-    "ts-morph": "^27.0.2",
-    "@grest-ts/x-packager": "0.0.15"
+    "ts-morph": "^27.0.2"
   }
 }

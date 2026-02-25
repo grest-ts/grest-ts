@@ -1,7 +1,7 @@
 import {definePackage} from "#scripts/packager/definePackage";
 
 definePackage({
-    name: "@grest-ts/file-http",
+    name: "@grest-ts/http-file",
     description: "HTTP file download codec for Grest framework",
     publishToNpm: true,
     keywords: ["http", "file", "upload", "download"],

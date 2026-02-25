@@ -1,6 +1,6 @@
 {
   "//": "THIS FILE IS GENERATED - DO NOT EDIT",
-  "name": "@grest-ts/file",
+  "name": "@grest-ts/schema-file",
   "version": "0.0.15",
   "type": "module",
   "license": "MIT",
@@ -28,9 +28,9 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/grest-ts/grest-ts.git",
-    "directory": "packages/schema/file"
+    "directory": "packages/schema/schema-file"
   },
-  "homepage": "https://github.com/grest-ts/grest-ts/tree/master/packages/schema/file",
+  "homepage": "https://github.com/grest-ts/grest-ts/tree/master/packages/schema/schema-file",
   "bugs": {
     "url": "https://github.com/grest-ts/grest-ts/issues"
   },

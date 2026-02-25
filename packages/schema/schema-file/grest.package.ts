@@ -1,7 +1,7 @@
 import {definePackage} from "#scripts/packager/definePackage";
 
 definePackage({
-    name: "@grest-ts/file",
+    name: "@grest-ts/schema-file",
     description: "File abstraction for Grest framework",
     publishToNpm: true,
     keywords: ["file", "abstraction", "binary"],
