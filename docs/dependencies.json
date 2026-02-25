@@ -651,22 +651,6 @@
       "category": "core",
       "group": "http",
       "readme": "<!-- GREST-TS-BANNER-START -->\r\n> Part of the [grest-ts](https://github.com/grest-ts/grest-ts) framework.\r\n> [Documentation](https://github.com/grest-ts/grest-ts#readme) | [All packages](https://github.com/grest-ts/grest-ts#package-reference)\r\n<!-- GREST-TS-BANNER-END -->\r\n\r\n"
-    },
-    {
-      "name": "x-packager",
-      "description": "Package and tsconfig utility for grest framework. Makes framework dependency management automatic and easy.",
-      "flags": {
-        "node": true,
-        "browser": false,
-        "testkit": false,
-        "hidden": false,
-        "implementation": false,
-        "npm": false
-      },
-      "layer": 0,
-      "color": "#F28E2B",
-      "category": "tooling",
-      "readme": "<!-- GREST-TS-BANNER-START -->\r\n> Part of the [grest-ts](https://github.com/grest-ts/grest-ts) framework.\r\n> [Documentation](https://github.com/grest-ts/grest-ts#readme) | [All packages](https://github.com/grest-ts/grest-ts#package-reference)\r\n<!-- GREST-TS-BANNER-END -->\r\n\r\n"
     }
   ],
   "edges": [
@@ -1167,5 +1151,5 @@
       "to": "trace"
     }
   ],
-  "generated": "2026-02-25T13:51:25.294Z"
+  "generated": "2026-02-25T14:12:48.239Z"
 }

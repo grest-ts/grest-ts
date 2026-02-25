@@ -23,8 +23,7 @@ export class GGAllowedPackagesChecker {
 
             // Get all @grest-ts/* imports (short names without @grest-ts/ prefix)
             const imports = pkg.imports.gg.filter(imp =>
-                imp !== pkg.shortName && // Exclude self
-                imp !== "x-packager"      // Exclude x-packager (always allowed for config)
+                imp !== pkg.shortName // Exclude self
             )
 
             // Find imports that are not in the allowed list

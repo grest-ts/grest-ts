@@ -52,8 +52,5 @@
     "@grest-ts/common": "0.0.15",
     "@grest-ts/http": "0.0.15",
     "fast-glob": "^3.3.3"
-  },
-  "devDependencies": {
-    "@grest-ts/x-packager": "0.0.15"
   }
 }

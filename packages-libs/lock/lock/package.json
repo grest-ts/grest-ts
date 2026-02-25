@@ -46,8 +46,5 @@
   },
   "dependencies": {
     "@grest-ts/locator": "0.0.15"
-  },
-  "devDependencies": {
-    "@grest-ts/x-packager": "0.0.15"
   }
 }

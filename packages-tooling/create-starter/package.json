@@ -36,8 +36,5 @@
   "engines": {
     "node": ">=25"
   },
-  "bin": "./index.mjs",
-  "devDependencies": {
-    "@grest-ts/x-packager": "0.0.15"
-  }
+  "bin": "./index.mjs"
 }

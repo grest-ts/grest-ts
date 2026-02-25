@@ -52,8 +52,5 @@
     "@grest-ts/logger": "0.0.15",
     "@grest-ts/metrics": "0.0.15",
     "@grest-ts/trace": "0.0.15"
-  },
-  "devDependencies": {
-    "@grest-ts/x-packager": "0.0.15"
   }
 }

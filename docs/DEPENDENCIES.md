@@ -27,7 +27,6 @@ flowchart TB
         testkit-vitest["testkit-vitest 🟢"]
         trace-http["trace-http 🟢"]
         websocket["websocket 🟢🌐"]
-        x-packager["x-packager 🟢"]
     end
     subgraph L1[" "]
         events["events 🟢"]
@@ -225,7 +224,6 @@ flowchart TB
     style trace fill:#4E79A7,stroke:#4E79A7,color:#fff
     style trace-http fill:#F28E2B,stroke:#F28E2B,color:#fff
     style websocket fill:#E15759,stroke:#E15759,color:#fff
-    style x-packager fill:#76B7B2,stroke:#76B7B2,color:#fff
     linkStyle 0 stroke:#4E79A7,stroke-width:2px
     linkStyle 1 stroke:#4E79A7,stroke-width:2px
     linkStyle 2 stroke:#E15759,stroke-width:2px
@@ -1844,14 +1842,4 @@ flowchart TB
     linkStyle 6 stroke:#E15759,stroke-width:2px
     linkStyle 7 stroke:#E15759,stroke-width:2px
     linkStyle 8 stroke:#E15759,stroke-width:2px
-```
-
-### X Packager
-
-```mermaid
-flowchart TB
-    subgraph Package[" "]
-        x-packager["x-packager 🟢"]
-    end
-    style x-packager fill:#76B7B2,stroke:#76B7B2,color:#fff
 ```

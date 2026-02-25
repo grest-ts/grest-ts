@@ -15,6 +15,7 @@
 
     // Emit - disabled, tsx runs TypeScript directly
     "noEmit": true,
+    "allowImportingTsExtensions": true,
 
     // Type Checking
     "noImplicitAny": true,
@@ -33,6 +34,11 @@
     "incremental": true,
 
     // Base URL
-    "baseUrl": "."
+    "baseUrl": ".",
+
+    // Import aliases
+    "paths": {
+      "#scripts/*": ["./scripts/*"]
+    }
   }
 }

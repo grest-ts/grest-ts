@@ -50,8 +50,5 @@
   "dependencies": {
     "fast-glob": "^3.3.3",
     "ts-morph": "^27.0.2"
-  },
-  "devDependencies": {
-    "@grest-ts/x-packager": "0.0.15"
   }
 }

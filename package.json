@@ -24,6 +24,9 @@
   "engines": {
     "node": ">=25"
   },
+  "imports": {
+    "#scripts/*": "./scripts/*"
+  },
   "workspaces": [
     "docs-web",
     "packages-libs/*",
@@ -42,8 +45,7 @@
     "packages/http/*",
     "packages/logger/*",
     "packages/schema/*",
-    "packages/trace/*",
-    "x-packager"
+    "packages/trace/*"
   ],
   "scripts": {
     "generate": "tsx grest.x-packager.ts",
@@ -55,6 +57,7 @@
   },
   "devDependencies": {
     "@types/minimatch": "^6.0.0",
+    "fast-glob": "^3.3.3",
     "@types/node": "^22.15.0",
     "@types/ws": "^8.18.1",
     "@vitest/coverage-v8": "^4.0.18",

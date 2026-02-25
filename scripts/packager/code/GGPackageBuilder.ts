@@ -126,7 +126,7 @@ export class GGPackageBuilder {
             packageJson.peerDependencies = peerDependencies
         }
 
-        // Add devDependencies (always includes @grest-ts/x-packager)
+        // Add devDependencies
         const devDeps = this.buildDevDependencies(pkg)
         if (Object.keys(devDeps).length > 0) {
             packageJson.devDependencies = devDeps
@@ -317,11 +317,6 @@ export class GGPackageBuilder {
      */
     private buildDevDependencies(pkg: GGPackageInfo): Record<string, string> {
         const devDeps: Record<string, string> = {}
-
-        // Always add @grest-ts/x-packager (unless this is x-packager itself)
-        if (pkg.shortName !== "x-packager") {
-            devDeps["@grest-ts/x-packager"] = this.rootMeta.version
-        }
 
         // Add @grest-ts/code-generator when package extends codegen
         if (pkg.config.extendsCodeGen) {

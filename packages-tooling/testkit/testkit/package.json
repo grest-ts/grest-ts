@@ -59,8 +59,5 @@
   },
   "peerDependencies": {
     "esbuild": ">=0.27.0"
-  },
-  "devDependencies": {
-    "@grest-ts/x-packager": "0.0.15"
   }
 }

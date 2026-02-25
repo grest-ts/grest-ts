@@ -52,8 +52,5 @@
   ],
   "engines": {
     "node": ">=25"
-  },
-  "devDependencies": {
-    "@grest-ts/x-packager": "0.0.15"
   }
 }

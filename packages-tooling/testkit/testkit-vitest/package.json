@@ -58,8 +58,5 @@
     "@grest-ts/logger": "0.0.15",
     "@grest-ts/logger-console": "0.0.15",
     "@grest-ts/testkit": "0.0.15"
-  },
-  "devDependencies": {
-    "@grest-ts/x-packager": "0.0.15"
   }
 }
