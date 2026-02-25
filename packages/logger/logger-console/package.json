@@ -45,6 +45,7 @@
   },
   "dependencies": {
     "@grest-ts/logger": "0.0.15",
-    "@grest-ts/schema": "0.0.15"
+    "@grest-ts/schema": "0.0.15",
+    "@grest-ts/schema-file": "0.0.15"
   }
 }

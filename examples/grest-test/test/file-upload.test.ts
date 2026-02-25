@@ -2,8 +2,8 @@ import {callOn, GGTest} from "@grest-ts/testkit";
 import {VALIDATION_ERROR, SERVER_ERROR} from "@grest-ts/schema";
 import {FileUploadTestApi} from "../src/api/FileUploadTestApi";
 import {MainRuntime} from "../src/main";
-import {GGTestFile} from "@grest-ts/file/testkit";
-import type {GGFile} from "@grest-ts/file";
+import {GGTestFile} from "@grest-ts/schema-file/testkit";
+import type {GGFile} from "@grest-ts/schema-file";
 
 describe("File upload tests", async () => {
 

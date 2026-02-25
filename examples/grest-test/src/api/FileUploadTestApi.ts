@@ -1,7 +1,7 @@
 import {httpSchema} from "@grest-ts/http"
-import {GGFileUpload, GGFileDownload} from "@grest-ts/file-http"
+import {GGFileUpload, GGFileDownload} from "@grest-ts/http-file"
 import {GGContractClass, GGContractImplementation, IsArray, IsNumber, IsObject, IsString, VALIDATION_ERROR, SERVER_ERROR} from "@grest-ts/schema";
-import {IsFile} from "@grest-ts/file";
+import {IsFile} from "@grest-ts/schema-file";
 
 // ---------------------------------------------------------
 // Type Schemas

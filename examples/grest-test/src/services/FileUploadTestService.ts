@@ -9,7 +9,7 @@ import {
     DownloadFileRequest,
     DownloadByIdRequest
 } from "../api/FileUploadTestApi";
-import {GGFile} from "@grest-ts/file";
+import {GGFile} from "@grest-ts/schema-file";
 import {SERVER_ERROR} from "@grest-ts/schema";
 
 export class FileUploadTestService implements IFileUploadTestApi {

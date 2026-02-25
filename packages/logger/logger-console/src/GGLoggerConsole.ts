@@ -1,6 +1,6 @@
 import {GGLogger, LogEntry, LogLevel} from "@grest-ts/logger";
 import {ERROR, VALIDATION_ERROR, ValidationIssueJson} from "@grest-ts/schema";
-import {GGFile} from "@grest-ts/file";
+import {GGFile} from "@grest-ts/schema-file";
 
 export const LOG_LEVELS = [undefined, "DEBUG", "INFO", "WARN", "ERROR", "CRITICAL"]
 

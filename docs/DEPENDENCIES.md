@@ -22,7 +22,6 @@ flowchart TB
         intl["intl 🟢🌐"]
         poller["poller 🟢"]
         schema-benchmark["schema-benchmark 🟢"]
-        schema-file["schema-file 🟢🌐"]
         sql["sql 🟢"]
         struct["struct 🟢"]
         testkit-vitest["testkit-vitest 🟢"]
@@ -44,6 +43,7 @@ flowchart TB
     subgraph L3[" "]
         discovery-local["discovery-local 🟢"]
         metrics["metrics 🟢"]
+        schema-file["schema-file 🟢🌐"]
     end
     subgraph L4[" "]
         discovery["discovery 🟢"]
@@ -134,6 +134,7 @@ flowchart TB
     logger --> locator
     logger-console --> logger
     logger-console --> schema
+    logger-console --> schema-file
     metrics --> common
     metrics --> locator
     poller --> config
@@ -296,14 +297,14 @@ flowchart TB
     linkStyle 70 stroke:#EDC948,stroke-width:2px
     linkStyle 71 stroke:#B07AA1,stroke-width:2px
     linkStyle 72 stroke:#B07AA1,stroke-width:2px
-    linkStyle 73 stroke:#FF9DA7,stroke-width:2px
+    linkStyle 73 stroke:#B07AA1,stroke-width:2px
     linkStyle 74 stroke:#FF9DA7,stroke-width:2px
-    linkStyle 75 stroke:#9C755F,stroke-width:2px
+    linkStyle 75 stroke:#FF9DA7,stroke-width:2px
     linkStyle 76 stroke:#9C755F,stroke-width:2px
     linkStyle 77 stroke:#9C755F,stroke-width:2px
     linkStyle 78 stroke:#9C755F,stroke-width:2px
     linkStyle 79 stroke:#9C755F,stroke-width:2px
-    linkStyle 80 stroke:#BAB0AC,stroke-width:2px
+    linkStyle 80 stroke:#9C755F,stroke-width:2px
     linkStyle 81 stroke:#BAB0AC,stroke-width:2px
     linkStyle 82 stroke:#BAB0AC,stroke-width:2px
     linkStyle 83 stroke:#BAB0AC,stroke-width:2px
@@ -311,10 +312,10 @@ flowchart TB
     linkStyle 85 stroke:#BAB0AC,stroke-width:2px
     linkStyle 86 stroke:#BAB0AC,stroke-width:2px
     linkStyle 87 stroke:#BAB0AC,stroke-width:2px
-    linkStyle 88 stroke:#8CD17D,stroke-width:2px
-    linkStyle 89 stroke:#B6992D,stroke-width:2px
-    linkStyle 90 stroke:#499894,stroke-width:2px
-    linkStyle 91 stroke:#A0CBE8,stroke-width:2px
+    linkStyle 88 stroke:#BAB0AC,stroke-width:2px
+    linkStyle 89 stroke:#8CD17D,stroke-width:2px
+    linkStyle 90 stroke:#B6992D,stroke-width:2px
+    linkStyle 91 stroke:#499894,stroke-width:2px
     linkStyle 92 stroke:#A0CBE8,stroke-width:2px
     linkStyle 93 stroke:#A0CBE8,stroke-width:2px
     linkStyle 94 stroke:#A0CBE8,stroke-width:2px
@@ -324,8 +325,8 @@ flowchart TB
     linkStyle 98 stroke:#A0CBE8,stroke-width:2px
     linkStyle 99 stroke:#A0CBE8,stroke-width:2px
     linkStyle 100 stroke:#A0CBE8,stroke-width:2px
-    linkStyle 101 stroke:#FFBE7D,stroke-width:2px
-    linkStyle 102 stroke:#D4A6C8,stroke-width:2px
+    linkStyle 101 stroke:#A0CBE8,stroke-width:2px
+    linkStyle 102 stroke:#FFBE7D,stroke-width:2px
     linkStyle 103 stroke:#D4A6C8,stroke-width:2px
     linkStyle 104 stroke:#D4A6C8,stroke-width:2px
     linkStyle 105 stroke:#D4A6C8,stroke-width:2px
@@ -333,11 +334,11 @@ flowchart TB
     linkStyle 107 stroke:#D4A6C8,stroke-width:2px
     linkStyle 108 stroke:#D4A6C8,stroke-width:2px
     linkStyle 109 stroke:#D4A6C8,stroke-width:2px
-    linkStyle 110 stroke:#4E79A7,stroke-width:2px
+    linkStyle 110 stroke:#D4A6C8,stroke-width:2px
     linkStyle 111 stroke:#4E79A7,stroke-width:2px
-    linkStyle 112 stroke:#F28E2B,stroke-width:2px
+    linkStyle 112 stroke:#4E79A7,stroke-width:2px
     linkStyle 113 stroke:#F28E2B,stroke-width:2px
-    linkStyle 114 stroke:#E15759,stroke-width:2px
+    linkStyle 114 stroke:#F28E2B,stroke-width:2px
     linkStyle 115 stroke:#E15759,stroke-width:2px
     linkStyle 116 stroke:#E15759,stroke-width:2px
     linkStyle 117 stroke:#E15759,stroke-width:2px
@@ -346,6 +347,7 @@ flowchart TB
     linkStyle 120 stroke:#E15759,stroke-width:2px
     linkStyle 121 stroke:#E15759,stroke-width:2px
     linkStyle 122 stroke:#E15759,stroke-width:2px
+    linkStyle 123 stroke:#E15759,stroke-width:2px
 ```
 
 ---
@@ -1300,20 +1302,24 @@ flowchart TB
     subgraph Dependencies[" "]
         logger["logger 🟢🌐"]
         schema["schema 🟢🌐"]
+        schema-file["schema-file 🟢🌐"]
     end
     testkit --> logger-console
     testkit-vitest --> logger-console
     logger-console --> logger
     logger-console --> schema
+    logger-console --> schema-file
     style logger-console fill:#B07AA1,stroke:#B07AA1,color:#fff
     style testkit fill:#A0CBE8,stroke:#A0CBE8,color:#fff
     style testkit-vitest fill:#D4A6C8,stroke:#D4A6C8,color:#fff
     style logger fill:#EDC948,stroke:#EDC948,color:#fff
     style schema fill:#86BCB6,stroke:#86BCB6,color:#fff
+    style schema-file fill:#B6992D,stroke:#B6992D,color:#fff
     linkStyle 0 stroke:#A0CBE8,stroke-width:2px
     linkStyle 1 stroke:#D4A6C8,stroke-width:2px
     linkStyle 2 stroke:#B07AA1,stroke-width:2px
     linkStyle 3 stroke:#B07AA1,stroke-width:2px
+    linkStyle 4 stroke:#B07AA1,stroke-width:2px
 ```
 
 ### Metrics
@@ -1552,16 +1558,22 @@ flowchart TB
 
 ```mermaid
 flowchart TB
+    subgraph Dependents[" "]
+        logger-console["logger-console 🟢"]
+    end
     subgraph Package[" "]
         schema-file["schema-file 🟢🌐"]
     end
     subgraph Dependencies[" "]
         schema["schema 🟢🌐"]
     end
+    logger-console --> schema-file
     schema-file --> schema
     style schema-file fill:#B6992D,stroke:#B6992D,color:#fff
+    style logger-console fill:#B07AA1,stroke:#B07AA1,color:#fff
     style schema fill:#86BCB6,stroke:#86BCB6,color:#fff
-    linkStyle 0 stroke:#B6992D,stroke-width:2px
+    linkStyle 0 stroke:#B07AA1,stroke-width:2px
+    linkStyle 1 stroke:#B6992D,stroke-width:2px
 ```
 
 ### Sql

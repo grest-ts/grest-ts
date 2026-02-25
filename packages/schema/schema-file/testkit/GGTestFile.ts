@@ -1,4 +1,4 @@
-import {GGFile} from "@grest-ts/file";
+import {GGFile} from "@grest-ts/schema-file";
 
 /**
  * Test utilities for creating GGFile instances in tests.
