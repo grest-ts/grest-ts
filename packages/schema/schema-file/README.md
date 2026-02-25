@@ -3,7 +3,7 @@
 > [Documentation](https://github.com/grest-ts/grest-ts#readme) | [All packages](https://github.com/grest-ts/grest-ts#package-reference)
 <!-- GREST-TS-BANNER-END -->
 
-# @grest-ts/file
+# @grest-ts/schema-file
 
 Unified file abstraction for the Grest framework. Works across HTTP (multipart upload/download), WebSocket (base64 JSON), and tests (in-memory buffers) with a single API.
 
@@ -26,7 +26,7 @@ For production systems handling large files or high throughput, pass files throu
 ### Defining a contract with file fields
 
 ```typescript
-import { IsFile } from "@grest-ts/file"
+import { IsFile } from "@grest-ts/schema-file"
 import { IsObject, IsString, IsArray } from "@grest-ts/schema"
 
 // Accept any file
@@ -59,7 +59,7 @@ const contract = {
 ### Reading file content in a service
 
 ```typescript
-import { GGFile } from "@grest-ts/file"
+import { GGFile } from "@grest-ts/schema-file"
 
 async function handleUpload(file: GGFile): Promise<void> {
     console.log(file.name)      // "report.pdf"
@@ -155,7 +155,7 @@ GGFile.isJSON(value) // boolean
 `IsFile` is a `GGSchema` for validating files in contracts. It supports MIME type filtering and size limits.
 
 ```typescript
-import { IsFile } from "@grest-ts/file"
+import { IsFile } from "@grest-ts/schema-file"
 
 // Accept any file
 IsFile
@@ -199,10 +199,10 @@ FileSchema.any({ maxSize: 50_000_000 })
 
 ## Testkit
 
-Import `@grest-ts/file/testkit` for test utilities that create `GGFile` instances without real I/O.
+Import `@grest-ts/schema-file/testkit` for test utilities that create `GGFile` instances without real I/O.
 
 ```typescript
-import { GGTestFile } from "@grest-ts/file/testkit"
+import { GGTestFile } from "@grest-ts/schema-file/testkit"
 ```
 
 ### Generators
@@ -234,7 +234,7 @@ GGTestFile.csv([
 
 ```typescript
 import { callOn, GGTest } from "@grest-ts/testkit"
-import { GGTestFile } from "@grest-ts/file/testkit"
+import { GGTestFile } from "@grest-ts/schema-file/testkit"
 import { VALIDATION_ERROR } from "@grest-ts/schema"
 
 const api = callOn(FileUploadTestApi)

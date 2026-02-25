@@ -3,7 +3,7 @@
 > [Documentation](https://github.com/grest-ts/grest-ts#readme) | [All packages](https://github.com/grest-ts/grest-ts#package-reference)
 <!-- GREST-TS-BANNER-END -->
 
-# @grest-ts/file-http
+# @grest-ts/http-file
 
 HTTP codecs for file uploads and downloads in the Grest framework. Handles multipart `FormData` encoding for uploads and binary response streaming for downloads — automatically, on both client and server.
 
@@ -17,9 +17,9 @@ For production systems handling large files or high throughput, consider uploadi
 
 ```typescript
 import { httpSchema } from "@grest-ts/http"
-import { GGFileUpload, GGFileDownload } from "@grest-ts/file-http"
+import { GGFileUpload, GGFileDownload } from "@grest-ts/http-file"
 import { GGContractClass, IsObject, IsString, IsArray, VALIDATION_ERROR, SERVER_ERROR } from "@grest-ts/schema"
-import { IsFile } from "@grest-ts/file"
+import { IsFile } from "@grest-ts/schema-file"
 
 const FileApiContract = new GGContractClass("FileApi", {
     upload: {
@@ -58,7 +58,7 @@ That's it — the codecs handle multipart encoding, binary streaming, content he
 Codec for uploading files from client to server via `multipart/form-data`.
 
 ```typescript
-import { GGFileUpload } from "@grest-ts/file-http"
+import { GGFileUpload } from "@grest-ts/http-file"
 
 GGFileUpload.POST(path)
 ```
@@ -112,7 +112,7 @@ const IsBatchRequest = IsObject({
 Codec for downloading files from server to client as binary HTTP responses.
 
 ```typescript
-import { GGFileDownload } from "@grest-ts/file-http"
+import { GGFileDownload } from "@grest-ts/http-file"
 
 GGFileDownload.GET(path)
 GGFileDownload.POST(path)
@@ -159,7 +159,7 @@ Use `GET` for simple key-based lookups. Use `POST` when the request body is comp
 Services return `GGFile` for downloads and receive `GGFile` for uploads — no transport details leak into business logic:
 
 ```typescript
-import { GGFile } from "@grest-ts/file"
+import { GGFile } from "@grest-ts/schema-file"
 
 class FileService implements IFileApi {
     async upload(request: { file: GGFile, description?: string }) {

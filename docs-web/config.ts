@@ -9,8 +9,8 @@ export const DOC_TREE: Record<string, DocEntry[]> = {
         "create-starter",
     ],
     "Framework": [
-        {schema: ["schema", "file"]},
-        {http: ["http", "file-http", "websocket"]},
+        {schema: ["schema", "schema-file"]},
+        {http: ["http", "http-file", "websocket"]},
         "runtime",
         {testkit: ["testkit", "testkit-runtime", "testkit-vitest"]},
     ],
