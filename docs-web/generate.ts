@@ -7,6 +7,7 @@
 
 import {readFileSync, readdirSync, existsSync, rmSync, mkdirSync, writeFileSync, cpSync, watch} from "fs"
 import {join, resolve, relative} from "path"
+import {DOC_TREE, COLLAPSED_CATEGORIES, categorySlug, getDocCategory, type DocEntry} from "./config"
 
 const ROOT = resolve(import.meta.dirname, "..")
 const DOCS_WEB = join(ROOT, "docs-web")
@@ -130,12 +131,16 @@ function rewritePackageLinks(content: string, pkgName: string): string {
     )
 }
 
-/** Rewrite links in guide pages — package directory refs → doc paths, README-extending → guide */
+/** Rewrite links in guide pages — package directory refs → doc paths, root README-*.md → guide */
 function rewriteGuideLinks(content: string, dirToDocPath: Map<string, string>): string {
-    // ./README-extending.md → /guide/extending
+    // ./README-<slug>.md → /guide/<slug> for all discovered root guides
+    const guideSlugs = new Set(GUIDE_DOCS.filter(d => d.slug !== "index").map(d => d.slug))
     content = content.replace(
-        /\(\.\/README-extending\.md\)/g,
-        "(/guide/extending)"
+        /\(\.\/README-([^)]+)\.md\)/g,
+        (match, name) => {
+            const slug = name.toLowerCase()
+            return guideSlugs.has(slug) ? `(/guide/${slug})` : match
+        }
     )
     // ./packages/... and ./packages-libs/... and ./packages-tooling/... → doc paths
     content = content.replace(
@@ -154,10 +159,27 @@ function rewriteGuideLinks(content: string, dirToDocPath: Map<string, string>): 
     return content
 }
 
+// ── Root-level README-*.md discovery ────────────────────────────────────
+
+function discoverRootGuides(): { src: string; slug: string; title: string }[] {
+    const entries: { src: string; slug: string; title: string }[] = []
+    for (const file of readdirSync(ROOT)) {
+        if (!/^README-.+\.md$/i.test(file)) continue
+        const slug = file.replace(/^README-/i, "").replace(/\.md$/i, "").toLowerCase()
+        const src = join(ROOT, file)
+        const content = readFileSync(src, "utf-8")
+        const headingMatch = content.match(/^#\s+(.+)$/m)
+        const title = headingMatch ? headingMatch[1].trim() : titleize(slug)
+        entries.push({src, slug, title})
+    }
+    return entries.sort((a, b) => a.slug.localeCompare(b.slug))
+}
+
 // ── Guide processing ───────────────────────────────────────────────────
 
 const GUIDE_DOCS: { src: string; slug: string; title: string }[] = [
     {src: join(ROOT, "README.md"), slug: "index", title: "Framework Overview"},
+    ...discoverRootGuides(),
 ]
 
 function processGuides(dirToDocPath: Map<string, string>): void {
@@ -176,48 +198,13 @@ function processGuides(dirToDocPath: Map<string, string>): void {
     }
 }
 
-// ── Doc-category overrides ──────────────────────────────────────────────
-// Maps package names to their doc sidebar category, overriding the
-// filesystem-derived category from dependencies.json. Packages not listed
-// here keep their original category (with "libs" renamed to "integrations").
-
-const DOC_CATEGORY_OVERRIDES: Record<string, string> = {
-    // tooling → core
-    "testkit": "core",
-    "testkit-runtime": "core",
-    "testkit-vitest": "core",
-    "create-starter": "core",
-    // core → internals
-    "common": "internals",
-    "ipc": "internals",
-    // core → production
-    "config": "production",
-    "config-aws": "production",
-    "discovery": "production",
-    "discovery-local": "production",
-    "discovery-static": "production",
-    "discovery-kubernetes": "production",
-    "discovery-migration": "production",
-    "logger": "production",
-    "logger-console": "production",
-    "metrics": "production",
-    "trace": "production",
-    "trace-http": "production",
-}
-
-function getDocCategory(node: DependencyNode): string {
-    if (DOC_CATEGORY_OVERRIDES[node.name]) return DOC_CATEGORY_OVERRIDES[node.name]
-    if (node.category === "libs") return "integrations"
-    return node.category
-}
-
 // ── Package processing ─────────────────────────────────────────────────
 
 function processPackages(nodes: DependencyNode[], packageDirs: Map<string, string>): void {
     for (const node of nodes) {
         if (node.flags.hidden || !node.flags.npm) continue
 
-        const docCat = getDocCategory(node)
+        const docCat = getDocCategory(node.name)
         const catDir = join(DOCS_SRC, "packages", docCat)
         mkdirSync(catDir, {recursive: true})
 
@@ -271,16 +258,8 @@ function processPackages(nodes: DependencyNode[], packageDirs: Map<string, strin
 
 // ── Sidebar generation ─────────────────────────────────────────────────
 
-const CATEGORY_LABELS: Record<string, string> = {
-    core: "Core",
-    production: "Production",
-    integrations: "Integrations",
-    internals: "Internals",
-}
-const CATEGORY_ORDER = ["core", "production", "integrations", "internals"]
-
 function buildPackageItem(node: DependencyNode, packageDirs: Map<string, string>, useShortName?: boolean): SidebarItem {
-    const docCat = getDocCategory(node)
+    const docCat = getDocCategory(node.name)
     const link = `/packages/${docCat}/${node.name}`
     const text = useShortName ? titleize(node.name) : `@grest-ts/${node.name}`
     const item: SidebarItem = {text, link}
@@ -304,7 +283,7 @@ function buildPackageItem(node: DependencyNode, packageDirs: Map<string, string>
     return item
 }
 
-function generateSidebar(nodes: DependencyNode[], packageDirs: Map<string, string>): Record<string, SidebarItem[]> {
+function generateSidebar(nodesByName: Map<string, DependencyNode>, packageDirs: Map<string, string>): Record<string, SidebarItem[]> {
     // Guide sidebar
     const guideSidebar: SidebarItem[] = [{
         text: "Guide",
@@ -314,53 +293,37 @@ function generateSidebar(nodes: DependencyNode[], packageDirs: Map<string, strin
         })),
     }]
 
-    // Package sidebar — organized by doc category, grouped by group field
-    const visibleNodes = nodes.filter(n => !n.flags.hidden && n.flags.npm)
-    const byCategory = new Map<string, DependencyNode[]>()
-    for (const node of visibleNodes) {
-        const docCat = getDocCategory(node)
-        if (!byCategory.has(docCat)) byCategory.set(docCat, [])
-        byCategory.get(docCat)!.push(node)
-    }
-
+    // Package sidebar — driven by DOC_TREE config
     const packagesSidebar: SidebarItem[] = []
 
-    for (const cat of CATEGORY_ORDER) {
-        const catNodes = byCategory.get(cat)
-        if (!catNodes) continue
+    for (const [label, entries] of Object.entries(DOC_TREE)) {
+        const slug = categorySlug(label)
+        const items: SidebarItem[] = []
 
-        const grouped = new Map<string, DependencyNode[]>()
-        const ungrouped: DependencyNode[] = []
-
-        for (const node of catNodes) {
-            if (node.group) {
-                if (!grouped.has(node.group)) grouped.set(node.group, [])
-                grouped.get(node.group)!.push(node)
+        for (const entry of entries) {
+            if (typeof entry === "string") {
+                const node = nodesByName.get(entry)
+                if (node) items.push(buildPackageItem(node, packageDirs))
             } else {
-                ungrouped.push(node)
+                for (const [groupName, packages] of Object.entries(entry)) {
+                    const groupItems = packages
+                        .map(name => nodesByName.get(name))
+                        .filter((n): n is DependencyNode => !!n)
+                        .map(node => buildPackageItem(node, packageDirs))
+                    if (groupItems.length > 0) {
+                        items.push({
+                            text: `@grest-ts/${groupName}*`,
+                            link: `/packages/${slug}/${packages[0]}`,
+                            collapsed: true,
+                            items: groupItems,
+                        })
+                    }
+                }
             }
         }
 
-        const items: SidebarItem[] = []
-
-        // Grouped items — sorted by group name, packages by layer descending
-        for (const [groupName, groupNodes] of [...grouped.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
-            const sorted = groupNodes.sort((a, b) => b.layer - a.layer || a.name.localeCompare(b.name))
-            items.push({
-                text: `@grest-ts/${groupName}*`,
-                link: `/packages/${cat}/${sorted[0].name}`,
-                collapsed: true,
-                items: sorted.map(node => buildPackageItem(node, packageDirs)),
-            })
-        }
-
-        // Ungrouped items — alphabetical
-        ungrouped
-            .sort((a, b) => a.name.localeCompare(b.name))
-            .forEach(node => items.push(buildPackageItem(node, packageDirs)))
-
-        const section: SidebarItem = {text: CATEGORY_LABELS[cat] ?? cat, items}
-        if (cat === "internals") section.collapsed = true
+        const section: SidebarItem = {text: label, items}
+        if (COLLAPSED_CATEGORIES.has(label)) section.collapsed = true
         packagesSidebar.push(section)
     }
 
@@ -391,7 +354,7 @@ function main() {
         const dir = packageDirs.get(node.name)
         if (dir) {
             const relPath = relative(ROOT, dir).replace(/\\/g, "/")
-            dirToDocPath.set(relPath, `/packages/${getDocCategory(node)}/${node.name}`)
+            dirToDocPath.set(relPath, `/packages/${getDocCategory(node.name)}/${node.name}`)
         }
     }
 
@@ -405,6 +368,14 @@ function main() {
     const landingPage = join(DOCS_WEB, "index.md")
     if (existsSync(landingPage)) {
         cpSync(landingPage, join(DOCS_SRC, "index.md"))
+    }
+
+    // Copy packages overview page into srcDir
+    const packagesPage = join(DOCS_WEB, "packages.md")
+    if (existsSync(packagesPage)) {
+        const packagesDir = join(DOCS_SRC, "packages")
+        mkdirSync(packagesDir, {recursive: true})
+        cpSync(packagesPage, join(packagesDir, "index.md"))
     }
 
     // Copy static assets (logo) into srcDir/public
@@ -425,7 +396,8 @@ function main() {
     console.log(`  Processed ${visible} package docs`)
 
     // Generate sidebar
-    const sidebar = generateSidebar(nodes, packageDirs)
+    const nodesByName = new Map(nodes.filter(n => !n.flags.hidden && n.flags.npm).map(n => [n.name, n]))
+    const sidebar = generateSidebar(nodesByName, packageDirs)
     writeFileSync(join(DOCS_SRC, "_generated_sidebar.json"), JSON.stringify(sidebar, null, 2) + "\n")
     console.log("  Generated sidebar configuration")
 
@@ -472,11 +444,13 @@ if (process.argv.includes("--watch")) {
         })
     }
 
-    // Watch docs-web/index.md (landing page)
+    // Watch docs-web/index.md (landing page) and packages.md (overview page)
     watch(join(DOCS_WEB, "index.md"), () => rebuild("docs-web/index.md"))
+    watch(join(DOCS_WEB, "packages.md"), () => rebuild("docs-web/packages.md"))
 
-    // Watch root README and logo
-    for (const file of ["README.md", "logo.png"]) {
+    // Watch root README, logo, and discovered root README-*.md files
+    const rootWatchFiles = ["README.md", "logo.png", ...GUIDE_DOCS.filter(d => d.slug !== "index").map(d => `README-${d.slug}.md`)]
+    for (const file of rootWatchFiles) {
         if (existsSync(join(ROOT, file))) {
             watch(join(ROOT, file), () => rebuild(file))
         }

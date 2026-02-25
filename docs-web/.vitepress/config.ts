@@ -1,7 +1,8 @@
 import {defineConfig} from "vitepress"
+import {withMermaid} from "vitepress-plugin-mermaid"
 import sidebar from "../src/_generated_sidebar.json"
 
-export default defineConfig({
+export default withMermaid(defineConfig({
     title: "grest-ts",
     description: "Contract-First TypeScript Services",
     srcDir: "src",
@@ -19,7 +20,7 @@ export default defineConfig({
 
         nav: [
             {text: "Guide", link: "/guide/"},
-            {text: "Packages", link: "/packages/core/schema"},
+            {text: "Packages", link: "/packages/"},
             {text: "GitHub", link: "https://github.com/grest-ts/grest-ts"},
         ],
 
@@ -31,4 +32,4 @@ export default defineConfig({
             {icon: "github", link: "https://github.com/grest-ts/grest-ts"},
         ],
     },
-})
+}))
