@@ -23,7 +23,7 @@ export const DOC_TREE: Record<string, DocEntry[]> = {
         "metrics",
         {trace: ["trace", "trace-http"]},
     ],
-    "Wrappers": [
+    "Libraries": [
         {db: ["db-mysql", "db-postgre"]},
     ],
     "Useful": [
