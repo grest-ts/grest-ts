@@ -1,7 +1,7 @@
 {
   "//": "THIS FILE IS GENERATED - DO NOT EDIT",
   "name": "@grest-ts/discovery-migration",
-  "version": "0.0.13",
+  "version": "0.0.15",
   "type": "module",
   "license": "MIT",
   "description": "Migration service discovery implementation for Grest Framework",
@@ -41,10 +41,10 @@
     "node": ">=25"
   },
   "dependencies": {
-    "@grest-ts/discovery": "0.0.13",
-    "@grest-ts/logger": "0.0.13"
+    "@grest-ts/discovery": "0.0.15",
+    "@grest-ts/logger": "0.0.15"
   },
   "devDependencies": {
-    "@grest-ts/x-packager": "0.0.13"
+    "@grest-ts/x-packager": "0.0.15"
   }
 }

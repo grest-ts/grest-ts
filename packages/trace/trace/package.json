@@ -1,7 +1,7 @@
 {
   "//": "THIS FILE IS GENERATED - DO NOT EDIT",
   "name": "@grest-ts/trace",
-  "version": "0.0.13",
+  "version": "0.0.15",
   "type": "module",
   "license": "MIT",
   "description": "Tracing support for GGContext",
@@ -53,10 +53,10 @@
     "node": ">=25"
   },
   "dependencies": {
-    "@grest-ts/context": "0.0.13",
-    "@grest-ts/schema": "0.0.13"
+    "@grest-ts/context": "0.0.15",
+    "@grest-ts/schema": "0.0.15"
   },
   "devDependencies": {
-    "@grest-ts/x-packager": "0.0.13"
+    "@grest-ts/x-packager": "0.0.15"
   }
 }

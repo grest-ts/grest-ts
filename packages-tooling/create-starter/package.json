@@ -1,7 +1,7 @@
 {
   "//": "THIS FILE IS GENERATED - DO NOT EDIT",
   "name": "@grest-ts/create-starter",
-  "version": "0.0.13",
+  "version": "0.0.15",
   "type": "module",
   "license": "MIT",
   "description": "Scaffold a new grest-ts project",
@@ -38,6 +38,6 @@
   },
   "bin": "./index.mjs",
   "devDependencies": {
-    "@grest-ts/x-packager": "0.0.13"
+    "@grest-ts/x-packager": "0.0.15"
   }
 }
