@@ -6,10 +6,23 @@ Create new key types by extending `GGConfigKey`:
 
 ```typescript
 import {GGConfigKey} from "@grest-ts/config"
+import {GGValidator} from "@grest-ts/schema"
+import {deepFreeze} from "@grest-ts/common"
 
 export class GGFeatureFlag<T> extends GGConfigKey<T> {
 
     public static readonly NAME = "[GGFeatureFlag]";
+
+    readonly #default: T;
+
+    constructor(name: string, schema: GGValidator<T>, defaultValue: T, description: string) {
+        super(name, schema, description);
+        this.#default = deepFreeze(defaultValue);
+    }
+
+    public override getDefault(): T {
+        return this.#default;
+    }
 
     public getStoreKey(): string {
         return GGFeatureFlag.NAME;
@@ -25,8 +38,8 @@ Usage:
 
 ```typescript
 export const Features = GGConfig.define('/features/', () => ({
-    darkMode: new GGFeatureFlag('darkMode', false, 'Dark mode toggle', tBoolean),
-    newCheckout: new GGFeatureFlag('newCheckout', false, 'New checkout flow', tBoolean)
+    darkMode: new GGFeatureFlag('darkMode', IsBoolean, false, 'Dark mode toggle'),
+    newCheckout: new GGFeatureFlag('newCheckout', IsBoolean, false, 'New checkout flow')
 }));
 
 if (Features.darkMode.isEnabled()) {
@@ -41,28 +54,26 @@ Create custom storage backends by extending `GGConfigStore`:
 ```typescript
 import {GGConfigStore, GGConfigKey} from "@grest-ts/config"
 
-export class GGConfigStoreEnv extends GGConfigStore {
+export class GGConfigStoreEnv extends GGConfigStore<GGConfigKey> {
 
-    protected findValue<T>(key: GGConfigKey<T>): T {
-        // Convert /app/server/port to APP_SERVER_PORT
-        const envKey = key.name
-            .replace(/\//g, '_')
-            .toUpperCase()
-            .replace(/^_/, '');
+    readonly #cache = new Map<GGConfigKey, unknown>();
 
-        const envValue = process.env[envKey];
-        if (envValue === undefined) {
-            return key.getDefault();
-        }
+    public override async start(): Promise<void> {
+        this.keys.forEach(key => {
+            // Convert /app/server/port to APP_SERVER_PORT
+            const envKey = key.name
+                .replace(/\//g, '_')
+                .toUpperCase()
+                .replace(/^_/, '');
 
-        // Parse based on default value type
-        if (typeof key.getDefault() === 'number') {
-            return Number(envValue) as T;
-        }
-        if (typeof key.getDefault() === 'boolean') {
-            return (envValue === 'true') as T;
-        }
-        return envValue as T;
+            const envValue = process.env[envKey];
+            this.#cache.set(key, this.resolveValue(key, envValue, true));
+        });
+        await super.start();
+    }
+
+    public getValue<T>(key: GGConfigKey<T>): T {
+        return this.#cache.get(key) as T;
     }
 }
 ```
@@ -70,12 +81,10 @@ export class GGConfigStoreEnv extends GGConfigStore {
 Usage:
 
 ```typescript
-import {GGConfigLoader} from "@grest-ts/config"
-import {GGSecret} from "@grest-ts/config"
+import {GGConfigLocator, GGSecret} from "@grest-ts/config"
 
-new GGConfigLoader(new Map([
-    [GGSecret, new GGConfigStoreEnv()]
-]));
+new GGConfigLocator(AppConfig)
+    .add(GGSecret, new GGConfigStoreEnv())
 ```
 
 ## Remote Configuration Store
@@ -83,9 +92,9 @@ new GGConfigLoader(new Map([
 Example fetching config from a remote service:
 
 ```typescript
-export class GGConfigStoreRemote extends GGConfigStore {
+export class GGConfigStoreRemote extends GGConfigStore<GGConfigKey> {
 
-    private config: Record<string, unknown> = {};
+    readonly #cache = new Map<GGConfigKey, unknown>();
     private readonly url: string;
 
     constructor(url: string) {
@@ -94,36 +103,49 @@ export class GGConfigStoreRemote extends GGConfigStore {
     }
 
     public override async start(): Promise<void> {
+        await this.load(true);
         await super.start();
-        await this.refresh();
     }
 
-    public override async refresh(): Promise<void> {
+    private async load(isInitialLoad: boolean): Promise<void> {
         const response = await fetch(this.url);
-        this.config = await response.json();
-        await super.refresh(); // Notify watchers
+        const config = await response.json();
+
+        for (const key of this.keys) {
+            const path = key.name.split('/').filter(s => s);
+            let value: any = config;
+            for (const segment of path) {
+                value = value?.[segment];
+            }
+            this.#cache.set(key, this.resolveValue(key, value, isInitialLoad));
+        }
+
+        // Notify watchers on reload
+        if (!isInitialLoad) {
+            for (const key of this.keys) {
+                await this.notify(key);
+            }
+        }
     }
 
-    protected findValue<T>(key: GGConfigKey<T>): T {
-        const path = key.name.split('/').filter(s => s);
-        let value: any = this.config;
-        for (const segment of path) {
-            value = value?.[segment];
-        }
-        return value ?? key.getDefault();
+    public async reload(): Promise<void> {
+        await this.load(false);
+    }
+
+    public getValue<T>(key: GGConfigKey<T>): T {
+        return this.#cache.get(key) as T;
     }
 }
 ```
 
 ## Registering Custom Stores
 
-Register stores for custom key types in the loader:
+Register stores for custom key types using `.add()`:
 
 ```typescript
-new GGConfigLoader(new Map([
-    [GGSetting, new GGConfigStoreFile('settings.json', import.meta.url)],
-    [GGSecret, new GGConfigStoreEnv()],
-    [GGResource, new GGConfigStoreRemote('https://config.example.com/resources')], // Don't really use URL-s, you want discovery here!
-    [GGFeatureFlag, new GGConfigStoreRemote('https://config.example.com/features')]
-]));
+new GGConfigLocator(AppConfig)
+    .add(GGSetting, new GGConfigStoreFile('settings.json', import.meta.url))
+    .add(GGSecret, new GGConfigStoreEnv())
+    .add(GGResource, new GGConfigStoreRemote('https://config.example.com/resources'))
+    .add(GGFeatureFlag, new GGConfigStoreRemote('https://config.example.com/features'))
 ```
