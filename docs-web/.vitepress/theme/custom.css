@@ -9,6 +9,12 @@
     --vp-home-hero-image-filter: blur(56px);
 }
 
+/* Package overview tables — wider first column */
+table th:first-child,
+table td:first-child {
+    white-space: nowrap;
+}
+
 .dark {
     --vp-c-brand-1: #60A5FA;
     --vp-c-brand-2: #3B82F6;

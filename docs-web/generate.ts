@@ -277,10 +277,11 @@ function generatePackageTables(nodes: DependencyNode[]): string {
     const nodesByName = new Map(nodes.map(n => [n.name, n]))
     const lines: string[] = []
 
-    function pkgRow(name: string): string {
+    function pkgRow(name: string, sub?: boolean): string {
         const node = nodesByName.get(name)
         const desc = node?.description ?? ""
-        return `| [@grest-ts/${name}](/packages/${getDocCategory(name)}/${name}) | ${desc} |`
+        const prefix = sub ? "&ensp;&ensp;↳ " : ""
+        return `| ${prefix}[@grest-ts/${name}](/packages/${getDocCategory(name)}/${name}) | ${desc} |`
     }
 
     for (const [label, entries] of Object.entries(DOC_TREE)) {
@@ -290,8 +291,13 @@ function generatePackageTables(nodes: DependencyNode[]): string {
             if (typeof entry === "string") {
                 lines.push(pkgRow(entry))
             } else {
-                for (const packages of Object.values(entry)) {
-                    for (const pkg of packages) lines.push(pkgRow(pkg))
+                for (const [, packages] of Object.entries(entry)) {
+                    const [main, ...rest] = packages
+                    lines.push(pkgRow(main))
+                    for (const pkg of rest) {
+                        const isSub = pkg.startsWith(main + "-")
+                        lines.push(pkgRow(pkg, isSub))
+                    }
                 }
             }
         }
