@@ -1,7 +1,7 @@
 {
   "//": "THIS FILE IS GENERATED - DO NOT EDIT",
   "name": "@grest-ts/db-mysql",
-  "version": "0.0.16",
+  "version": "0.0.17",
   "type": "module",
   "license": "MIT",
   "description": "MySQL database utilities for Grest Framework",
@@ -49,13 +49,13 @@
     "node": ">=25"
   },
   "dependencies": {
-    "@grest-ts/config": "0.0.16",
-    "@grest-ts/locator": "0.0.16",
-    "@grest-ts/logger": "0.0.16",
-    "@grest-ts/schema": "0.0.16",
+    "@grest-ts/config": "0.0.17",
+    "@grest-ts/locator": "0.0.17",
+    "@grest-ts/logger": "0.0.17",
+    "@grest-ts/schema": "0.0.17",
     "mysql2": "^3.17.2"
   },
   "devDependencies": {
-    "@grest-ts/testkit": "0.0.16"
+    "@grest-ts/testkit": "0.0.17"
   }
 }

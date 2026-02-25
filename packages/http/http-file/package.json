@@ -1,7 +1,7 @@
 {
   "//": "THIS FILE IS GENERATED - DO NOT EDIT",
   "name": "@grest-ts/http-file",
-  "version": "0.0.16",
+  "version": "0.0.17",
   "type": "module",
   "license": "MIT",
   "description": "HTTP file download codec for Grest framework",
@@ -51,9 +51,9 @@
     "node": ">=25"
   },
   "dependencies": {
-    "@grest-ts/common": "0.0.16",
-    "@grest-ts/http": "0.0.16",
-    "@grest-ts/schema": "0.0.16",
+    "@grest-ts/common": "0.0.17",
+    "@grest-ts/http": "0.0.17",
+    "@grest-ts/schema": "0.0.17",
     "busboy": "^1.6.0"
   },
   "devDependencies": {
