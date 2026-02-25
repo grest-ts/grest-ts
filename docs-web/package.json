@@ -1,0 +1,15 @@
+{
+  "name": "@grest-ts/docs-web",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "generate": "tsx generate.ts",
+    "generate:watch": "tsx generate.ts --watch",
+    "dev": "vitepress dev",
+    "build": "tsx generate.ts && vitepress build",
+    "preview": "vitepress preview"
+  },
+  "devDependencies": {
+    "vitepress": "^1.6.3"
+  }
+}

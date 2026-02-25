@@ -25,6 +25,7 @@
     "node": ">=25"
   },
   "workspaces": [
+    "docs-web",
     "packages-libs/*",
     "packages-libs/db/*",
     "packages-libs/events/*",
@@ -47,12 +48,7 @@
     "typecheck": "tsc",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage",
-    "docs:prepare": "tsx grest.docs.ts",
-    "docs:prepare:watch": "tsx grest.docs.ts --watch",
-    "docs:dev": "vitepress dev docs-web",
-    "docs:build": "tsx grest.docs.ts && vitepress build docs-web",
-    "docs:preview": "vitepress preview docs-web"
+    "test:coverage": "vitest run --coverage"
   },
   "devDependencies": {
     "@types/minimatch": "^6.0.0",
@@ -64,7 +60,6 @@
     "tsx": "^4.21.0",
     "typescript": "^5.9.3",
     "vite": "^7.3.1",
-    "vitepress": "^1.6.3",
     "vitest": "^4.0.18"
   }
 }

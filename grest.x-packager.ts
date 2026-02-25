@@ -9,5 +9,8 @@ definePackage({
     vitestWorkspaceExtraEntries: [
         'examples/checklist',
         'examples/grest-test'
+    ],
+    workspaceExtraEntries: [
+        'docs-web'
     ]
 })

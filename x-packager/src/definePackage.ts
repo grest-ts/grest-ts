@@ -166,6 +166,12 @@ export interface GGPackageRoot {
     vitestWorkspaceExtraEntries?: string[]
 
     /**
+     * Additional workspace entries to include in the root package.json workspaces array.
+     * Use for non-package workspace members (e.g. docs sites).
+     */
+    workspaceExtraEntries?: string[]
+
+    /**
      * Output path for the dependencies graph markdown file.
      * e.g. "docs/DEPENDENCIES.md"
      */

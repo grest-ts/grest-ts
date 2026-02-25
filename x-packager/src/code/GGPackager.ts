@@ -199,7 +199,7 @@ export class GGPackager {
             : {}
 
         // Build workspace patterns from discovered packages
-        const workspaces = this.buildWorkspacePatterns(packages)
+        const workspaces = this.buildWorkspacePatterns(packages, rootConfig)
 
         // Update workspaces field
         const updatedContent = {
@@ -214,7 +214,7 @@ export class GGPackager {
      * Build optimal workspace patterns from discovered packages.
      * Groups packages by parent directory and creates glob patterns.
      */
-    private buildWorkspacePatterns(packages: GGPackageInfo[]): string[] {
+    private buildWorkspacePatterns(packages: GGPackageInfo[], rootConfig: GGPackageRoot): string[] {
         // Group packages by their parent directory
         const byParent = new Map<string, string[]>()
 
@@ -278,6 +278,11 @@ export class GGPackager {
         // Add exports/* if it exists
         if (existsSync(join(this.options.rootDir, "exports"))) {
             finalPatterns.add("exports/*")
+        }
+
+        // Add extra workspace entries from root config
+        for (const entry of rootConfig.workspaceExtraEntries ?? []) {
+            finalPatterns.add(entry)
         }
 
         return Array.from(finalPatterns).sort()

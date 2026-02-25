@@ -3,12 +3,12 @@
 // for supplementary README-*.md files, and generates sidebar configuration.
 //
 // Output: docs-web/src/ (ALL generated, gitignored)
-// Usage: tsx grest.docs.ts
+// Usage: tsx generate.ts
 
 import {readFileSync, readdirSync, existsSync, rmSync, mkdirSync, writeFileSync, cpSync, watch} from "fs"
 import {join, resolve, relative} from "path"
 
-const ROOT = resolve(import.meta.dirname)
+const ROOT = resolve(import.meta.dirname, "..")
 const DOCS_WEB = join(ROOT, "docs-web")
 const DOCS_SRC = join(DOCS_WEB, "src")
 
