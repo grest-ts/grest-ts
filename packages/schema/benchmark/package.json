@@ -1,7 +1,7 @@
 {
   "//": "THIS FILE IS GENERATED - DO NOT EDIT",
   "name": "@grest-ts/schema-benchmark",
-  "version": "0.0.17",
+  "version": "0.0.18",
   "type": "module",
   "license": "MIT",
   "description": "Validation library benchmark suite",
@@ -49,7 +49,7 @@
     "node": ">=25"
   },
   "dependencies": {
-    "@grest-ts/schema": "0.0.17",
+    "@grest-ts/schema": "0.0.18",
     "@sinclair/typebox": "^0.34.48",
     "ajv": "^8.18.0",
     "arktype": "^2.1.29",
