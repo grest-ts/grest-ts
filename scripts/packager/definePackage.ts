@@ -184,7 +184,7 @@ export interface GGPackageRoot {
  *
  * @example
  * ```typescript
- * import { definePackage } from "#scripts/packager/definePackage.ts";
+ * import { definePackage } from "#scripts/packager/definePackage";
  *
  * definePackage({
  *     name: "@grest-ts/common",

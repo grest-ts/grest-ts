@@ -1,7 +1,7 @@
 // Config generation entry point: generates tsconfig.json, package.json,
 // vitest workspace config, and dependency graph for all monorepo packages.
 // Run via `npm run generate`.
-import {definePackage} from "#scripts/packager/definePackage.ts"
+import {definePackage} from "#scripts/packager/definePackage"
 
 definePackage({
     packages: ["packages", "packages-libs", "packages-tooling"],

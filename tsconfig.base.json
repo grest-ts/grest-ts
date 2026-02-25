@@ -15,7 +15,6 @@
 
     // Emit - disabled, tsx runs TypeScript directly
     "noEmit": true,
-    "allowImportingTsExtensions": true,
 
     // Type Checking
     "noImplicitAny": true,

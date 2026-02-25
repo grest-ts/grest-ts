@@ -1,4 +1,4 @@
-import {definePackage} from "#scripts/packager/definePackage.ts";
+import {definePackage} from "#scripts/packager/definePackage";
 
 definePackage({
     name: "@grest-ts/struct",
