@@ -176,13 +176,49 @@ function processGuides(dirToDocPath: Map<string, string>): void {
     }
 }
 
+// ── Doc-category overrides ──────────────────────────────────────────────
+// Maps package names to their doc sidebar category, overriding the
+// filesystem-derived category from dependencies.json. Packages not listed
+// here keep their original category (with "libs" renamed to "integrations").
+
+const DOC_CATEGORY_OVERRIDES: Record<string, string> = {
+    // tooling → core
+    "testkit": "core",
+    "testkit-runtime": "core",
+    "testkit-vitest": "core",
+    "create-starter": "core",
+    // core → internals
+    "common": "internals",
+    "ipc": "internals",
+    // core → production
+    "config": "production",
+    "config-aws": "production",
+    "discovery": "production",
+    "discovery-local": "production",
+    "discovery-static": "production",
+    "discovery-kubernetes": "production",
+    "discovery-migration": "production",
+    "logger": "production",
+    "logger-console": "production",
+    "metrics": "production",
+    "trace": "production",
+    "trace-http": "production",
+}
+
+function getDocCategory(node: DependencyNode): string {
+    if (DOC_CATEGORY_OVERRIDES[node.name]) return DOC_CATEGORY_OVERRIDES[node.name]
+    if (node.category === "libs") return "integrations"
+    return node.category
+}
+
 // ── Package processing ─────────────────────────────────────────────────
 
 function processPackages(nodes: DependencyNode[], packageDirs: Map<string, string>): void {
     for (const node of nodes) {
         if (node.flags.hidden || !node.flags.npm) continue
 
-        const catDir = join(DOCS_SRC, "packages", node.category)
+        const docCat = getDocCategory(node)
+        const catDir = join(DOCS_SRC, "packages", docCat)
         mkdirSync(catDir, {recursive: true})
 
         const dir = packageDirs.get(node.name)
@@ -236,14 +272,16 @@ function processPackages(nodes: DependencyNode[], packageDirs: Map<string, strin
 // ── Sidebar generation ─────────────────────────────────────────────────
 
 const CATEGORY_LABELS: Record<string, string> = {
-    core: "Core Packages",
-    libs: "Libraries",
-    tooling: "Tooling",
+    core: "Core",
+    production: "Production",
+    integrations: "Integrations",
+    internals: "Internals",
 }
-const CATEGORY_ORDER = ["core", "libs", "tooling"]
+const CATEGORY_ORDER = ["core", "production", "integrations", "internals"]
 
 function buildPackageItem(node: DependencyNode, packageDirs: Map<string, string>, useShortName?: boolean): SidebarItem {
-    const link = `/packages/${node.category}/${node.name}`
+    const docCat = getDocCategory(node)
+    const link = `/packages/${docCat}/${node.name}`
     const text = useShortName ? titleize(node.name) : `@grest-ts/${node.name}`
     const item: SidebarItem = {text, link}
 
@@ -255,7 +293,7 @@ function buildPackageItem(node: DependencyNode, packageDirs: Map<string, string>
             const suffix = entry.replace(/^README-/i, "").replace(/\.md$/i, "").toLowerCase()
             subPages.push({
                 text: titleize(suffix),
-                link: `/packages/${node.category}/${node.name}-${suffix}`,
+                link: `/packages/${docCat}/${node.name}-${suffix}`,
             })
         }
         if (subPages.length > 0) {
@@ -276,12 +314,13 @@ function generateSidebar(nodes: DependencyNode[], packageDirs: Map<string, strin
         })),
     }]
 
-    // Package sidebar — organized by category, grouped by group field
+    // Package sidebar — organized by doc category, grouped by group field
     const visibleNodes = nodes.filter(n => !n.flags.hidden && n.flags.npm)
     const byCategory = new Map<string, DependencyNode[]>()
     for (const node of visibleNodes) {
-        if (!byCategory.has(node.category)) byCategory.set(node.category, [])
-        byCategory.get(node.category)!.push(node)
+        const docCat = getDocCategory(node)
+        if (!byCategory.has(docCat)) byCategory.set(docCat, [])
+        byCategory.get(docCat)!.push(node)
     }
 
     const packagesSidebar: SidebarItem[] = []
@@ -320,7 +359,9 @@ function generateSidebar(nodes: DependencyNode[], packageDirs: Map<string, strin
             .sort((a, b) => a.name.localeCompare(b.name))
             .forEach(node => items.push(buildPackageItem(node, packageDirs)))
 
-        packagesSidebar.push({text: CATEGORY_LABELS[cat] ?? cat, items})
+        const section: SidebarItem = {text: CATEGORY_LABELS[cat] ?? cat, items}
+        if (cat === "internals") section.collapsed = true
+        packagesSidebar.push(section)
     }
 
     return {
@@ -350,7 +391,7 @@ function main() {
         const dir = packageDirs.get(node.name)
         if (dir) {
             const relPath = relative(ROOT, dir).replace(/\\/g, "/")
-            dirToDocPath.set(relPath, `/packages/${node.category}/${node.name}`)
+            dirToDocPath.set(relPath, `/packages/${getDocCategory(node)}/${node.name}`)
         }
     }
 
