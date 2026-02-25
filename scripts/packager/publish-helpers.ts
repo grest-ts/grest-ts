@@ -6,7 +6,7 @@ import {join, resolve} from "path"
 
 export const execAsync = promisify(exec)
 
-export const ROOT = resolve(import.meta.dirname)
+export const ROOT = resolve(import.meta.dirname, "..", "..")
 export const DIST_ROOT = join(ROOT, "dist")
 
 export interface DistPackageJson {
