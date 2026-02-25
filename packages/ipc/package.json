@@ -54,7 +54,6 @@
     "ws": "^8.19.0"
   },
   "devDependencies": {
-    "@grest-ts/x-packager": "0.0.15",
     "@types/http-proxy": "^1.17.17"
   }
 }

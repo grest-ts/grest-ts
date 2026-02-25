@@ -33,6 +33,11 @@
     "incremental": true,
 
     // Base URL
-    "baseUrl": "."
+    "baseUrl": ".",
+
+    // Import aliases
+    "paths": {
+      "#scripts/*": ["./scripts/*"]
+    }
   }
 }

@@ -48,7 +48,6 @@
     "sqlstring": "^2.3.3"
   },
   "devDependencies": {
-    "@grest-ts/x-packager": "0.0.15",
     "@types/sqlstring": "^2.3.2"
   }
 }

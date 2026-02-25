@@ -67,7 +67,7 @@
     "packages/schema/schema/src/**/*",
     "packages/trace/trace-http/src/**/*",
     "packages/trace/trace/src/**/*",
-    "x-packager/src/**/*",
-    "exports/*/**/*"
+    "exports/*/**/*",
+    "scripts/**/*"
   ]
 }

@@ -79,17 +79,16 @@ export class GGCircularDependencyChecker {
         const graph = new Map<string, string[]>()
 
         for (const pkg of this.packages) {
-            // Get @grest-ts/* imports that are actual packages (not self, not x-packager)
+            // Get @grest-ts/* imports that are actual packages (not self)
             const deps = pkg.imports.gg.filter(dep =>
                 dep !== pkg.shortName &&
-                dep !== "x-packager" &&
                 this.packageMap.has(dep)
             )
 
             // Add manual references from config
             if (pkg.config.references) {
                 for (const ref of pkg.config.references) {
-                    if (ref !== pkg.shortName && ref !== "x-packager" && this.packageMap.has(ref)) {
+                    if (ref !== pkg.shortName && this.packageMap.has(ref)) {
                         if (!deps.includes(ref)) {
                             deps.push(ref)
                         }

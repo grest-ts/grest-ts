@@ -69,7 +69,6 @@
     "ws": "^8.19.0"
   },
   "devDependencies": {
-    "@grest-ts/testkit": "0.0.15",
-    "@grest-ts/x-packager": "0.0.15"
+    "@grest-ts/testkit": "0.0.15"
   }
 }

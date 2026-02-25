@@ -63,8 +63,5 @@
     "typia": "^11.0.3",
     "valibot": "^1.2.0",
     "zod": "^4.3.6"
-  },
-  "devDependencies": {
-    "@grest-ts/x-packager": "0.0.15"
   }
 }

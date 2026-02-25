@@ -1,4 +1,4 @@
-import {definePackage} from "@grest-ts/x-packager";
+import {definePackage} from "#scripts/packager/definePackage";
 
 definePackage({
     name: "@grest-ts/lock",

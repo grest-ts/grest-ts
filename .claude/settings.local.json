@@ -48,7 +48,8 @@
       "Bash(xargs -0 ls -lh)",
       "Bash(cd /c/GG/grest-ts && npx vitepress build docs-web 2>&1)",
       "Bash(cd /c/GG/grest-ts && npx tsx grest.docs.ts 2>&1 && npx vitepress build docs-web 2>&1)",
-      "Bash(pkill:*)"
+      "Bash(pkill:*)",
+      "Bash(cd:*)"
     ],
     "deny": [],
     "ask": []

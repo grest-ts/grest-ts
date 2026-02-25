@@ -163,7 +163,7 @@ export class GGDependencyJsonBuilder {
             if (normalizedPath.startsWith("packages-libs/")) return "libs"
             if (normalizedPath.startsWith("packages-tooling/")) return "tooling"
             if (normalizedPath.startsWith("packages/")) return "core"
-            // Root-level packages (like x-packager) are tooling
+            // Root-level packages are tooling
             return "tooling"
         }
 

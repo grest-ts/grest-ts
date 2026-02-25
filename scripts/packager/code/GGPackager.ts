@@ -229,7 +229,7 @@ export class GGPackager {
                 existing.push(pkg.relativePath)
                 byParent.set(parent, existing)
             } else {
-                // Root-level package (e.g., "x-packager")
+                // Root-level package
                 rootLevelPackages.push(pkg.relativePath)
             }
         }
@@ -318,7 +318,8 @@ export class GGPackager {
         const includes = [
             "grest.package.ts",
             ...Array.from(packageIncludes).sort(),
-            "exports/*/**/*"
+            "exports/*/**/*",
+            "scripts/**/*"
         ]
 
         const config: TsConfig = {
