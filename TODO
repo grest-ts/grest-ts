@@ -1,4 +1,8 @@
 
+* schema/file -> schema/schema-file
+* http/file-http -> http/http-file
+
+
 * res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-company-auth'); // @TODO Remove x-company-auth
 
 * symmetric codec for RPC was nice idea, but doesn't actually work. Code is filled with solutions for browser that would not "load server part". Need to fix the whole architecture.

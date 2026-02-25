@@ -294,7 +294,9 @@ function generateSidebar(nodesByName: Map<string, DependencyNode>, packageDirs: 
     }]
 
     // Package sidebar — driven by DOC_TREE config
-    const packagesSidebar: SidebarItem[] = []
+    const packagesSidebar: SidebarItem[] = [
+        {text: "Overview", link: "/packages/"},
+    ]
 
     for (const [label, entries] of Object.entries(DOC_TREE)) {
         const slug = categorySlug(label)

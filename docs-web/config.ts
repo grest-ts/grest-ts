@@ -5,29 +5,28 @@
 export type DocEntry = string | Record<string, string[]>
 
 export const DOC_TREE: Record<string, DocEntry[]> = {
-    "Core": [
-        {http: ["http", "file-http", "websocket"]},
-        {schema: ["schema", "file"]},
-        {testkit: ["testkit-runtime", "testkit", "testkit-vitest"]},
-        "context",
+    "Starter": [
         "create-starter",
-        "locator",
+    ],
+    "Framework": [
+        {schema: ["schema", "file"]},
+        {http: ["http", "file-http", "websocket"]},
         "runtime",
+        {testkit: ["testkit", "testkit-runtime", "testkit-vitest"]},
+    ],
+    "Platform": [
         {config: ["config", "config-aws"]},
         {discovery: ["discovery", "discovery-local", "discovery-static"]},
         {logger: ["logger", "logger-console"]},
-        {trace: ["trace", "trace-http"]},
+        "context",
+        "locator",
         "metrics",
-    ],
-    "Production": [
-        {config: ["config", "config-aws"]},
-        {discovery: ["discovery", "discovery-local", "discovery-static"]},
-        {logger: ["logger", "logger-console"]},
         {trace: ["trace", "trace-http"]},
-        "metrics",
     ],
-    "Integrations": [
+    "Wrappers": [
         {db: ["db-mysql", "db-postgre"]},
+    ],
+    "Useful": [
         "sql",
         "struct",
     ],
