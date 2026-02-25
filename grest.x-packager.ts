@@ -11,6 +11,9 @@ definePackage({
         'examples/grest-test'
     ],
     workspaceExtraEntries: [
-        'docs-web'
+        'docs-web',
+        'packages-tooling/create-starter/template/api',
+        'packages-tooling/create-starter/template/server',
+        'packages-tooling/create-starter/template/client'
     ]
 })
