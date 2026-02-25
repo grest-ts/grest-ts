@@ -254,6 +254,47 @@ This works for anything — payment gateways, email senders, external API wrappe
 are scoped to a single request via `AsyncLocalStorage`. Two tests running in parallel with different mocks on the same service will never conflict. And in production, `@mockable` has zero overhead —
 the decorator checks for test context and if there isn't one (production), it calls the original method directly with no wrapping cost.
 
+### @testable — Call Any Class Directly
+
+`@mockable` lets you control what services return. `@testable` goes further — it lets you **call any class directly** from tests, bypassing the API layer entirely. No dependency injection, no wiring setup. The runtime already assembled your object graph in `compose()`, `@testable` just gives your tests a handle to any class in it.
+
+```typescript
+@testable
+@mockable
+export class WeatherService {
+    async getWeather(city: string): Promise<WeatherData> {
+        return await this.weatherClient.fetch(city)
+    }
+}
+```
+
+Now tests can call `WeatherService` directly — and still use `@mockable` to control anything it depends on:
+
+```typescript
+import {callOn, mockOf} from "@grest-ts/testkit"
+
+describe("WeatherService", () => {
+    GGTest.startWorker(AppRuntime)
+
+    test("call getWeather directly on the real, composed instance", async () => {
+        const weather = await callOn(WeatherService).getWeather("Miami")
+        expect(weather.temperature).toBe(72)
+    })
+
+    test("call it directly, but mock what it calls internally", async () => {
+        await callOn(WeatherService)
+            .getWeather("Alaska")
+            .with(
+                mockOf(ExternalWeatherClient).fetch
+                    .andReturn({temperature: -10, condition: "blizzard"})
+            )
+            .toMatchObject({temperature: -10, condition: "blizzard"})
+    })
+})
+```
+
+This gives you testing at any granularity — API-level integration tests, service-level tests, or anything in between — all against the real composed object graph, not test doubles. Combined with `@mockable`, you can test any class while controlling exactly what its dependencies return, per request.
+
 ### Spies
 
 Verify that services were called correctly without changing their behavior:
@@ -570,7 +611,7 @@ Many packages provide testkit utilities making testing easier. These are
 | Package                                                                   | Purpose                                     |
 |---------------------------------------------------------------------------|---------------------------------------------|
 | [`@grest-ts/testkit`](./packages-tooling/testkit/testkit)                 | Integration testing — GGTest, mockOf, spyOn |
-| [`@grest-ts/testkit-runtime`](./packages-tooling/testkit/testkit-runtime) | Runtime support for @mockable decorator     |
+| [`@grest-ts/testkit-runtime`](./packages-tooling/testkit/testkit-runtime) | Runtime support for @mockable and @testable  |
 | [`@grest-ts/testkit-vitest`](./packages-tooling/testkit/testkit-vitest)   | Vitest integration and global setup         |
 
 ### Observability (All optional)
@@ -611,6 +652,7 @@ Many packages provide testkit utilities making testing easier. These are
 * **No magic, no DI framework** — `compose()` is your bootstrap. Plain constructors, all wiring visible in one place. No hidden resolution, no decorators-as-injection.
 * **Per-request context** — `GGContextKey` provides per-request state anywhere in the call stack via AsyncLocalStorage. No parameter threading.
 * **@mockable anything** — Decorate any class, mock or spy on it per-request in tests. Not global, survives refactors. Zero production overhead.
+* **@testable — test at any depth** — Call any class directly from tests against the real composed object graph. No DI gymnastics, no test doubles — just reach into your running service and invoke the method you want to test, with full `@mockable` control over its dependencies.
 * **Typed errors everywhere** — Errors carry reference IDs, typed data, and flow across service boundaries as discriminated unions. Callers choose: `await` to throw, `.asResult()` to handle
   explicitly.
 * **Watchable config** — Any setting, secret, or resource can be watched. Change a file, rotate credentials — your service reacts without restart.

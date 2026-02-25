@@ -8,6 +8,7 @@
 import {readFileSync, readdirSync, existsSync, rmSync, mkdirSync, writeFileSync, cpSync, watch} from "fs"
 import {join, resolve, relative} from "path"
 import {DOC_TREE, COLLAPSED_CATEGORIES, categorySlug, getDocCategory, type DocEntry} from "./config"
+import {resolveDocLink} from "./links"
 
 const ROOT = resolve(import.meta.dirname, "..")
 const DOCS_WEB = join(ROOT, "docs-web")
@@ -159,6 +160,17 @@ function rewriteGuideLinks(content: string, dirToDocPath: Map<string, string>): 
     return content
 }
 
+/** Rewrite @-prefixed link placeholders using the centralized link index (docs-web/links.ts) */
+function rewriteDocLinks(content: string): string {
+    return content.replace(
+        /\]\(@([^)]+)\)/g,
+        (match, key) => {
+            const resolved = resolveDocLink(key)
+            return resolved ? `](${resolved})` : match
+        }
+    )
+}
+
 // ── Root-level README-*.md discovery ────────────────────────────────────
 
 function discoverRootGuides(): { src: string; slug: string; title: string }[] {
@@ -193,6 +205,7 @@ function processGuides(dirToDocPath: Map<string, string>): void {
         }
         let content = normalize(readFileSync(doc.src, "utf-8"))
         content = rewriteGuideLinks(content, dirToDocPath)
+        content = rewriteDocLinks(content)
         content = escapeVueSyntax(content)
         writeFileSync(join(guideDir, `${doc.slug}.md`), addFrontmatter(content, doc.title))
     }
@@ -218,6 +231,7 @@ function processPackages(nodes: DependencyNode[], packageDirs: Map<string, strin
 
         content = stripBanner(content).trim()
         content = rewritePackageLinks(content, node.name)
+        content = rewriteDocLinks(content)
         content = escapeVueSyntax(content)
 
         // Empty READMEs (just banner) → minimal page
@@ -243,6 +257,7 @@ function processPackages(nodes: DependencyNode[], packageDirs: Map<string, strin
                 let subContent = normalize(readFileSync(join(dir, entry), "utf-8"))
                 subContent = stripBanner(subContent).trim()
                 subContent = rewritePackageLinks(subContent, node.name)
+                subContent = rewriteDocLinks(subContent)
                 subContent = escapeVueSyntax(subContent)
 
                 if (!subContent || subContent.length < 10) continue
@@ -254,6 +269,37 @@ function processPackages(nodes: DependencyNode[], packageDirs: Map<string, strin
             }
         }
     }
+}
+
+// ── Package overview tables ──────────────────────────────────────────────
+
+function generatePackageTables(nodes: DependencyNode[]): string {
+    const nodesByName = new Map(nodes.map(n => [n.name, n]))
+    const lines: string[] = []
+
+    function pkgRow(name: string): string {
+        const node = nodesByName.get(name)
+        const desc = node?.description ?? ""
+        return `| [@grest-ts/${name}](/packages/${getDocCategory(name)}/${name}) | ${desc} |`
+    }
+
+    for (const [label, entries] of Object.entries(DOC_TREE)) {
+        lines.push(`## ${label}`, "", "| Package | Description |", "|---------|-------------|")
+
+        for (const entry of entries) {
+            if (typeof entry === "string") {
+                lines.push(pkgRow(entry))
+            } else {
+                for (const packages of Object.values(entry)) {
+                    for (const pkg of packages) lines.push(pkgRow(pkg))
+                }
+            }
+        }
+
+        lines.push("")
+    }
+
+    return lines.join("\n")
 }
 
 // ── Sidebar generation ─────────────────────────────────────────────────
@@ -372,12 +418,14 @@ function main() {
         cpSync(landingPage, join(DOCS_SRC, "index.md"))
     }
 
-    // Copy packages overview page into srcDir
+    // Generate packages overview page with dynamic tables
     const packagesPage = join(DOCS_WEB, "packages.md")
     if (existsSync(packagesPage)) {
         const packagesDir = join(DOCS_SRC, "packages")
         mkdirSync(packagesDir, {recursive: true})
-        cpSync(packagesPage, join(packagesDir, "index.md"))
+        let content = normalize(readFileSync(packagesPage, "utf-8"))
+        content = content.replace("<!-- GENERATED-PACKAGE-TABLES -->", generatePackageTables(nodes))
+        writeFileSync(join(packagesDir, "index.md"), content)
     }
 
     // Copy static assets (logo) into srcDir/public
