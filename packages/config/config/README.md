@@ -22,41 +22,153 @@ Type-safe configuration management for Grest Framework.
 - Different key types (Setting, Secret, Resource) can use different storage backends (Strategy pattern)
 - Supports watching for runtime configuration changes (Observer pattern)
 
-## Quick usage example
+## Getting Started
+
+### 1. Define your configuration
 
 ```typescript
-import {GGConfig, GGResource, GGSecret, GGSetting} from "@grest-ts/config"
+import {GGConfig, GGSetting, GGSecret, GGResource} from "@grest-ts/config"
+import {IsString, IsPosInt, IsBoolean} from "@grest-ts/schema"
 
-// Define configuration keys
 export const AppConfig = GGConfig.define('/app/', () => ({
-    port: new GGSetting('port', 3000, 'Server port', IsInt),
-    apiKey: new GGSecret('apiKey', '', 'External API key', IsString),
-    dbUrl: new GGResource('db/url', 'localhost:5432', 'Database URL', IsString)
+    server: {
+        port: new GGSetting('server/port', IsPosInt, 3000, 'HTTP server port'),
+        debug: new GGSetting('debug', IsBoolean, false, 'Enable debug mode'),
+    },
+    database: {
+        host: new GGResource('db/host', IsString, 'Database host'),
+        password: new GGSecret('db/password', IsString, 'Database password'),
+    }
 }));
-
-// Usage in runtime
-const port = AppConfig.port.get();
-const apiKey = AppConfig.apiKey.reveal();
-const dbUrl = AppConfig.dbUrl.get(); // if value changes, you get the new value
-
-// Watch for changes (in case you need to) - as a simple example: you need to roll a mysql user password and start a new pool without any downtime.
-AppConfig.dbUrl.watch(() => {
-    // Do something when dbUrl changes
-})
-
-// Where actually values come from? You define the source in the runtime compose.
-// in example we use a file (don't really use files, use proper services for each category!)
-// These particular stores also watch the file for updates. Most stores should allow dynamic config updates!
-// You can also add your own stores, groups etc rather easily.
-new GGConfigLoader(new Map<any, any>([
-    [GGSetting, new GGConfigStoreFile("./config/settings.json", import.meta.url)],
-    [GGSecret, new GGConfigStoreFile("./config/secrets.json", import.meta.url)],
-    [GGResource, new GGConfigStoreFile("./config/resources.json", import.meta.url)]
-]));
-
 ```
 
-## Documentation
+### 2. Provide local values for development
 
-- [Usage](./README-usage.md) - How to define and use configuration
+```typescript
+import {createLocalConfig} from "@grest-ts/config"
+
+export const localConfig = createLocalConfig(AppConfig, {
+    database: {
+        host: "localhost:5432",
+        password: "root"
+    }
+});
+```
+
+`createLocalConfig` is a compile-time helper — it type-checks the values against your config definition.
+
+### 3. Wire it up in your runtime
+
+```typescript
+import {GGConfigLocator, GGConfigStoreFile} from "@grest-ts/config"
+
+new GGConfigLocator(AppConfig, localConfig)
+    .add(GGSetting, new GGConfigStoreFile('./config/settings.json', import.meta.url))
+    .add([GGSecret, GGResource], new GGConfigStoreAwsSecretsManager({ ... }))
+```
+
+When `localConfig` is passed to the constructor, stores are automatically swapped for `GGConfigStoreLocal` outside of production — so your real stores (AWS, files, etc.) are only used when `NODE_ENV=production`.
+
+### 4. Use it
+
+```typescript
+// Settings - .get()
+const port = AppConfig.server.port.get();
+const debug = AppConfig.server.debug.get();
+
+// Secrets - .reveal() to make intent explicit
+const dbPassword = AppConfig.database.password.reveal();
+
+// Resources - .get()
+const dbHost = AppConfig.database.host.get();
+
+// Watch for runtime changes
+const unwatch = AppConfig.server.port.watch((newPort) => {
+    console.log('Port changed to:', newPort);
+});
+unwatch(); // stop watching
+```
+
+## Key Types
+
+| Type           | Constructor                          | Read method | Use Case                             |
+|----------------|--------------------------------------|-------------|--------------------------------------|
+| **GGSetting**  | `(name, schema, default, description)` | `.get()`    | General configuration (ports, flags) |
+| **GGSecret**   | `(name, schema, description)`          | `.reveal()` | Sensitive data (API keys, passwords) |
+| **GGResource** | `(name, schema, description)`          | `.get()`    | Infrastructure (URLs, hosts, paths)  |
+
+Settings have a default value. Secrets and resources do not — their values must come from a store.
+
+## Validation
+
+All keys require a `@grest-ts/schema` validator. Values are validated when loaded from a store.
+Invalid config at startup prevents the service from starting. Invalid config during a runtime reload is rejected and an error is raised — the previous valid value remains in effect.
+
+```typescript
+import {IsString, IsPosInt, IsBoolean, IsLiteral} from "@grest-ts/schema"
+
+port: new GGSetting('port', IsPosInt, 8080, 'Server port')
+name: new GGSetting('name', IsString, 'default', 'App name')
+env:  new GGSetting('env', IsLiteral('dev', 'staging', 'prod'), 'dev', 'Environment')
+```
+
+## Storage Backends
+
+`GGConfigLocator` maps key types to stores. Each key type must have a store registered before start.
+
+```typescript
+new GGConfigLocator(AppConfig)
+    .add(GGSetting, new GGConfigStoreFile("./config/settings.json", import.meta.url))
+    .add(GGResource, new GGConfigStoreFile("./config/resources.json", import.meta.url))
+```
+
+Multiple key types can share a store:
+
+```typescript
+new GGConfigLocator(AppConfig)
+    .add([GGSetting, GGResource], new GGConfigStoreFile("./config/config.json", import.meta.url))
+```
+
+### GGConfigStoreFile
+
+Reads values from a JSON file. Watches the file for changes and automatically reloads (100ms debounce).
+
+The key path `/app/server/port` maps to `app.server.port` in JSON:
+
+```json
+{
+    "app": {
+        "server": {
+            "port": 8080
+        },
+        "debug": true
+    }
+}
+```
+
+### GGConfigStoreLocal
+
+Type-safe development store. Refuses to start when `NODE_ENV=production`.
+
+```typescript
+import {createLocalConfig, GGConfigStoreLocal} from "@grest-ts/config"
+
+const localConfig = createLocalConfig(AppConfig, {
+    database: {
+        host: "localhost:5432",
+        password: "root"
+    }
+});
+
+new GGConfigLocator(AppConfig)
+    .add([GGResource, GGSecret], new GGConfigStoreLocal(AppConfig, localConfig))
+    .add(GGSetting, new GGConfigStoreFile('./config/settings.json', import.meta.url))
+```
+
+### GGConfigStoreAwsSecretsManager
+
+See [@grest-ts/config-aws](../config-aws/README.md).
+
+## Further Reading
+
 - [Extending](./README-extending.md) - How to add custom key types and stores
