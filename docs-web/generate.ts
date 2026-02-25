@@ -7,7 +7,7 @@
 
 import {readFileSync, readdirSync, existsSync, rmSync, mkdirSync, writeFileSync, cpSync, watch} from "fs"
 import {join, resolve, relative} from "path"
-import {DOC_TREE, COLLAPSED_CATEGORIES, categorySlug, getDocCategory, type DocEntry} from "./config"
+import {DOC_TREE, COLLAPSED_CATEGORIES, type DocEntry} from "./config"
 import {resolveDocLink} from "./links"
 
 const ROOT = resolve(import.meta.dirname, "..")
@@ -217,8 +217,7 @@ function processPackages(nodes: DependencyNode[], packageDirs: Map<string, strin
     for (const node of nodes) {
         if (node.flags.hidden || !node.flags.npm) continue
 
-        const docCat = getDocCategory(node.name)
-        const catDir = join(DOCS_SRC, "packages", docCat)
+        const catDir = join(DOCS_SRC, "packages")
         mkdirSync(catDir, {recursive: true})
 
         const dir = packageDirs.get(node.name)
@@ -281,7 +280,7 @@ function generatePackageTables(nodes: DependencyNode[]): string {
         const node = nodesByName.get(name)
         const desc = node?.description ?? ""
         const prefix = sub ? "&ensp;&ensp;↳ " : ""
-        return `| ${prefix}[@grest-ts/${name}](/packages/${getDocCategory(name)}/${name}) | ${desc} |`
+        return `| ${prefix}[@grest-ts/${name}](/packages/${name}) | ${desc} |`
     }
 
     for (const [label, entries] of Object.entries(DOC_TREE)) {
@@ -311,8 +310,7 @@ function generatePackageTables(nodes: DependencyNode[]): string {
 // ── Sidebar generation ─────────────────────────────────────────────────
 
 function buildPackageItem(node: DependencyNode, packageDirs: Map<string, string>, useShortName?: boolean): SidebarItem {
-    const docCat = getDocCategory(node.name)
-    const link = `/packages/${docCat}/${node.name}`
+    const link = `/packages/${node.name}`
     const text = useShortName ? titleize(node.name) : `@grest-ts/${node.name}`
     const item: SidebarItem = {text, link}
 
@@ -324,7 +322,7 @@ function buildPackageItem(node: DependencyNode, packageDirs: Map<string, string>
             const suffix = entry.replace(/^README-/i, "").replace(/\.md$/i, "").toLowerCase()
             subPages.push({
                 text: titleize(suffix),
-                link: `/packages/${docCat}/${node.name}-${suffix}`,
+                link: `/packages/${node.name}-${suffix}`,
             })
         }
         if (subPages.length > 0) {
@@ -351,7 +349,6 @@ function generateSidebar(nodesByName: Map<string, DependencyNode>, packageDirs: 
     ]
 
     for (const [label, entries] of Object.entries(DOC_TREE)) {
-        const slug = categorySlug(label)
         const items: SidebarItem[] = []
 
         for (const entry of entries) {
@@ -367,7 +364,7 @@ function generateSidebar(nodesByName: Map<string, DependencyNode>, packageDirs: 
                     if (groupItems.length > 0) {
                         items.push({
                             text: `@grest-ts/${groupName}*`,
-                            link: `/packages/${slug}/${packages[0]}`,
+                            link: `/packages/${packages[0]}`,
                             collapsed: true,
                             items: groupItems,
                         })
@@ -408,7 +405,7 @@ function main() {
         const dir = packageDirs.get(node.name)
         if (dir) {
             const relPath = relative(ROOT, dir).replace(/\\/g, "/")
-            dirToDocPath.set(relPath, `/packages/${getDocCategory(node.name)}/${node.name}`)
+            dirToDocPath.set(relPath, `/packages/${node.name}`)
         }
     }
 

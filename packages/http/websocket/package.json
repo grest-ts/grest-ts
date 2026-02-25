@@ -36,7 +36,7 @@
     "url": "https://github.com/grest-ts/grest-ts.git",
     "directory": "packages/http/websocket"
   },
-  "homepage": "https://github.com/grest-ts/grest-ts/tree/master/packages/http/websocket",
+  "homepage": "https://grest-ts.com/packages/websocket",
   "bugs": {
     "url": "https://github.com/grest-ts/grest-ts/issues"
   },

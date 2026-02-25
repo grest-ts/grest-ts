@@ -1,2 +1,4 @@
+2026.02.25 17:51:10 UTC released version: 0.0.8
+2026.02.25 17:48:36 UTC released version: 0.0.7
 2026.02.25 17:20:50 UTC released version: 0.0.6
 2026.02.25 13:37:33 UTC released version: 0.0.5

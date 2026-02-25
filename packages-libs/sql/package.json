@@ -25,7 +25,7 @@
     "url": "https://github.com/grest-ts/grest-ts.git",
     "directory": "packages-libs/sql"
   },
-  "homepage": "https://github.com/grest-ts/grest-ts/tree/master/packages-libs/sql",
+  "homepage": "https://grest-ts.com/packages/sql",
   "bugs": {
     "url": "https://github.com/grest-ts/grest-ts/issues"
   },

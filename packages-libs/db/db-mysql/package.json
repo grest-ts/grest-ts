@@ -30,7 +30,7 @@
     "url": "https://github.com/grest-ts/grest-ts.git",
     "directory": "packages-libs/db/db-mysql"
   },
-  "homepage": "https://github.com/grest-ts/grest-ts/tree/master/packages-libs/db/db-mysql",
+  "homepage": "https://grest-ts.com/packages/db-mysql",
   "bugs": {
     "url": "https://github.com/grest-ts/grest-ts/issues"
   },

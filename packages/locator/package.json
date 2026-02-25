@@ -28,7 +28,7 @@
     "url": "https://github.com/grest-ts/grest-ts.git",
     "directory": "packages/locator"
   },
-  "homepage": "https://github.com/grest-ts/grest-ts/tree/master/packages/locator",
+  "homepage": "https://grest-ts.com/packages/locator",
   "bugs": {
     "url": "https://github.com/grest-ts/grest-ts/issues"
   },

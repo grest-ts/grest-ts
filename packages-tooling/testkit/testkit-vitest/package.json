@@ -32,7 +32,7 @@
     "url": "https://github.com/grest-ts/grest-ts.git",
     "directory": "packages-tooling/testkit/testkit-vitest"
   },
-  "homepage": "https://github.com/grest-ts/grest-ts/tree/master/packages-tooling/testkit/testkit-vitest",
+  "homepage": "https://grest-ts.com/packages/testkit-vitest",
   "bugs": {
     "url": "https://github.com/grest-ts/grest-ts/issues"
   },

@@ -8,6 +8,7 @@ export default withMermaid(defineConfig({
     srcDir: "src",
     outDir: "build",
     appearance: "dark",
+    cleanUrls: true,
     ignoreDeadLinks: true,
 
     markdown: {

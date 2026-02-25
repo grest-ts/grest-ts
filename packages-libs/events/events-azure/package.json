@@ -23,7 +23,7 @@
     "url": "https://github.com/grest-ts/grest-ts.git",
     "directory": "packages-libs/events/events-azure"
   },
-  "homepage": "https://github.com/grest-ts/grest-ts/tree/master/packages-libs/events/events-azure",
+  "homepage": "https://grest-ts.com/packages/events-azure",
   "bugs": {
     "url": "https://github.com/grest-ts/grest-ts/issues"
   },

@@ -7,8 +7,6 @@
 //
 // generate.ts rewrites these to VitePress-compatible paths during doc generation.
 
-import {getDocCategory} from "./config"
-
 /** Guide pages — add entries here as guides are created. */
 export const GUIDE_LINKS: Record<string, string> = {
     "discovery": "/guide/discovery",
@@ -25,7 +23,7 @@ export function resolveDocLink(key: string): string | undefined {
     }
     if (key.startsWith("pkg/")) {
         const name = key.slice("pkg/".length)
-        return `/packages/${getDocCategory(name)}/${name}`
+        return `/packages/${name}`
     }
     return undefined
 }

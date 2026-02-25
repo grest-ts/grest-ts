@@ -101,7 +101,7 @@ export class GGPackageBuilder {
         // Add repository, homepage, bugs, keywords, engines from root
         if (repository) {
             packageJson.repository = {...repository, directory: pkg.relativePath}
-            packageJson.homepage = `${repository.url.replace(/\.git$/, "")}/tree/master/${pkg.relativePath}`
+            packageJson.homepage = `https://grest-ts.com/packages/${pkg.shortName}`
         }
         if (bugs) packageJson.bugs = bugs
         const mergedKeywords = [...(keywords ?? []), ...(pkg.config.keywords ?? [])]

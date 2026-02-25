@@ -30,7 +30,7 @@
     "url": "https://github.com/grest-ts/grest-ts.git",
     "directory": "packages/discovery/discovery-local"
   },
-  "homepage": "https://github.com/grest-ts/grest-ts/tree/master/packages/discovery/discovery-local",
+  "homepage": "https://grest-ts.com/packages/discovery-local",
   "bugs": {
     "url": "https://github.com/grest-ts/grest-ts/issues"
   },

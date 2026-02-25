@@ -25,7 +25,7 @@
     "url": "https://github.com/grest-ts/grest-ts.git",
     "directory": "packages/config/config-aws"
   },
-  "homepage": "https://github.com/grest-ts/grest-ts/tree/master/packages/config/config-aws",
+  "homepage": "https://grest-ts.com/packages/config-aws",
   "bugs": {
     "url": "https://github.com/grest-ts/grest-ts/issues"
   },

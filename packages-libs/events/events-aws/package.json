@@ -23,7 +23,7 @@
     "url": "https://github.com/grest-ts/grest-ts.git",
     "directory": "packages-libs/events/events-aws"
   },
-  "homepage": "https://github.com/grest-ts/grest-ts/tree/master/packages-libs/events/events-aws",
+  "homepage": "https://grest-ts.com/packages/events-aws",
   "bugs": {
     "url": "https://github.com/grest-ts/grest-ts/issues"
   },

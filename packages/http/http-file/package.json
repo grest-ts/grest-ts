@@ -31,7 +31,7 @@
     "url": "https://github.com/grest-ts/grest-ts.git",
     "directory": "packages/http/http-file"
   },
-  "homepage": "https://github.com/grest-ts/grest-ts/tree/master/packages/http/http-file",
+  "homepage": "https://grest-ts.com/packages/http-file",
   "bugs": {
     "url": "https://github.com/grest-ts/grest-ts/issues"
   },

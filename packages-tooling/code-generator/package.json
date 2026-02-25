@@ -27,7 +27,7 @@
     "url": "https://github.com/grest-ts/grest-ts.git",
     "directory": "packages-tooling/code-generator"
   },
-  "homepage": "https://github.com/grest-ts/grest-ts/tree/master/packages-tooling/code-generator",
+  "homepage": "https://grest-ts.com/packages/code-generator",
   "bugs": {
     "url": "https://github.com/grest-ts/grest-ts/issues"
   },

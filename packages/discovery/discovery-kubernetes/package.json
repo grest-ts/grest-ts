@@ -23,7 +23,7 @@
     "url": "https://github.com/grest-ts/grest-ts.git",
     "directory": "packages/discovery/discovery-kubernetes"
   },
-  "homepage": "https://github.com/grest-ts/grest-ts/tree/master/packages/discovery/discovery-kubernetes",
+  "homepage": "https://grest-ts.com/packages/discovery-kubernetes",
   "bugs": {
     "url": "https://github.com/grest-ts/grest-ts/issues"
   },

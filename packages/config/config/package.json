@@ -30,7 +30,7 @@
     "url": "https://github.com/grest-ts/grest-ts.git",
     "directory": "packages/config/config"
   },
-  "homepage": "https://github.com/grest-ts/grest-ts/tree/master/packages/config/config",
+  "homepage": "https://grest-ts.com/packages/config",
   "bugs": {
     "url": "https://github.com/grest-ts/grest-ts/issues"
   },

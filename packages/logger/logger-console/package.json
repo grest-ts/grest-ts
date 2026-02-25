@@ -25,7 +25,7 @@
     "url": "https://github.com/grest-ts/grest-ts.git",
     "directory": "packages/logger/logger-console"
   },
-  "homepage": "https://github.com/grest-ts/grest-ts/tree/master/packages/logger/logger-console",
+  "homepage": "https://grest-ts.com/packages/logger-console",
   "bugs": {
     "url": "https://github.com/grest-ts/grest-ts/issues"
   },

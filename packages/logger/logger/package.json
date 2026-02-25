@@ -36,7 +36,7 @@
     "url": "https://github.com/grest-ts/grest-ts.git",
     "directory": "packages/logger/logger"
   },
-  "homepage": "https://github.com/grest-ts/grest-ts/tree/master/packages/logger/logger",
+  "homepage": "https://grest-ts.com/packages/logger",
   "bugs": {
     "url": "https://github.com/grest-ts/grest-ts/issues"
   },
