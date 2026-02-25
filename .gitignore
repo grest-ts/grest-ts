@@ -13,5 +13,5 @@ package-lock.json
 !exports/node/vitest.d.ts
 .verdaccio/storage/
 docs-web/src/
-docs-web/.vitepress/dist/
+docs-web/build/
 docs-web/.vitepress/cache/

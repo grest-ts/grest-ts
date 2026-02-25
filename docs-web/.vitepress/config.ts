@@ -5,6 +5,7 @@ export default defineConfig({
     title: "grest-ts",
     description: "Contract-First TypeScript Services",
     srcDir: "src",
+    outDir: "build",
     appearance: "dark",
     ignoreDeadLinks: true,
 
