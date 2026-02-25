@@ -6,7 +6,7 @@
 // Usage: tsx grest.5.npm.publish.ts [--dry-run] [--ci]
 import {execSync} from "child_process"
 import {createInterface} from "readline"
-import {discoverBuiltPackages, validateDependencies, publishParallel, execAsync} from "./grest.lib.publish"
+import {discoverBuiltPackages, validateDependencies, publishParallel, execAsync} from "./x-packager/src/publish-helpers"
 
 /** Verify npm auth is configured */
 function ensureNpmAuth(): void {

@@ -43,8 +43,8 @@
     "x-packager"
   ],
   "scripts": {
-    "check": "tsx grest.1.check.ts",
     "generate": "tsx grest.x-packager.ts",
+    "check": "tsx grest.1.check.ts",
     "typecheck": "tsc",
     "test": "vitest run",
     "test:watch": "vitest",

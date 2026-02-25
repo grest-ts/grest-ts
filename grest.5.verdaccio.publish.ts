@@ -5,7 +5,7 @@
 // Usage: tsx grest.5.verdaccio.publish.ts [--dry-run]
 import {readFileSync, writeFileSync} from "fs"
 import {join} from "path"
-import {discoverBuiltPackages, publishParallel, validateDependencies} from "./grest.lib.publish"
+import {discoverBuiltPackages, publishParallel, validateDependencies} from "./x-packager/src/publish-helpers"
 
 const REGISTRY = "http://localhost:4873"
 
