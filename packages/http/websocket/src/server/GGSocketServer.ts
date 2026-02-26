@@ -13,7 +13,7 @@ import {GG_WS_CONNECTION} from "./GG_WS_CONNECTION";
 import {GGWebSocketMetrics} from "./GGWebSocketMetrics";
 import {Message, MessageType} from "../socket/SocketMessage";
 import {GG_TRACE} from "@grest-ts/trace";
-import {GGSocket} from "../socket/GGSocket";
+import {GGSocket, GGSocketLogger, GGSocketMetrics} from "../socket/GGSocket";
 import {GGLocator, GGLocatorScope} from "@grest-ts/locator";
 import {GG_METRICS} from "@grest-ts/metrics";
 import {withTimeout} from "@grest-ts/common";
@@ -127,7 +127,10 @@ export class GGSocketServer<TContext, Query> {
                 const socket = new GGSocket(adapter, {
                     apiName: this.apiName,
                     socketPath: this.path,
-                    connectionContext: context
+                    connectionContext: context,
+                    scope: this.scope,
+                    metrics: this.createMetrics(),
+                    log: this.createLogger(),
                 });
                 this.activeSockets.add(socket);
 
@@ -159,6 +162,32 @@ export class GGSocketServer<TContext, Query> {
                 }
             }
         });
+    }
+
+    private createLogger(): GGSocketLogger {
+        return {
+            debug: (source: any, message: string) => GGLog.debug(source, message),
+            warn: (source: any, message: string) => GGLog.warn(source, message),
+            error: (source: any, ...args: any[]) => GGLog.error(source, ...(args as [any])),
+        }
+    }
+
+    private createMetrics(): GGSocketMetrics | undefined {
+        if (!GG_METRICS.has()) return undefined;
+        return {
+            recordIn(labels, result, startTime) {
+                GGWebSocketMetrics.requests.inc(1, {...labels, result});
+                if (startTime !== undefined) {
+                    GGWebSocketMetrics.requestDuration.observe(performance.now() - startTime, labels);
+                }
+            },
+            recordOut(labels, result, startTime) {
+                GGWebSocketMetrics.outRequests.inc(1, {...labels, result});
+                if (startTime !== undefined) {
+                    GGWebSocketMetrics.outRequestDuration.observe(performance.now() - startTime, labels);
+                }
+            },
+        };
     }
 
     /**

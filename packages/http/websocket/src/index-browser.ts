@@ -1,9 +1,6 @@
 // Type helpers
 export * from "./socket/WebSocketTypes";
 
-// Metrics
-export * from "./server/GGWebSocketMetrics";
-
 // Context
 export * from "./server/GG_WS_CONNECTION";
 export * from "./server/GG_WS_MESSAGE";

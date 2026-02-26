@@ -7,11 +7,7 @@ import {Message, MessageType, RegularMessage, RequestMessage} from "./SocketMess
 import {SocketAdapter} from "./SocketAdapter";
 import {PendingRequestsMap} from "./utils/PendingRequestsMap";
 import {GG_WS_MESSAGE} from "../server/GG_WS_MESSAGE";
-import {GGWebSocketMetrics} from "../server/GGWebSocketMetrics";
-import {GGLog} from "@grest-ts/logger";
 import {ERROR, GGPromise, ROUTE_NOT_FOUND, SERVER_ERROR} from "@grest-ts/schema";
-import {GG_METRICS} from "@grest-ts/metrics";
-import {GGLocator} from "@grest-ts/locator";
 import {GGContext} from "@grest-ts/context";
 import {GG_TRACE} from "@grest-ts/trace";
 
@@ -24,11 +20,34 @@ export interface SocketHandlerConfig {
     handler: (data?: any) => GGPromise<any, any> | Promise<any> | void;
 }
 
+export interface GGSocketLogger {
+    debug(source: any, message: string, ...args: any[]): void;
+    warn(source: any, message: string, ...args: any[]): void;
+    error(source: any, ...args: any[]): void;
+}
+
+const consoleLogger: GGSocketLogger = {
+    debug(_source, message, ...args) { console.debug("[GGSocket]", message, ...args) },
+    warn(_source, message, ...args) { console.warn("[GGSocket]", message, ...args) },
+    error(_source, ...args) { console.error("[GGSocket]", ...args) },
+}
+
+export interface GGSocketMetrics {
+    recordIn(labels: {api: string, path: string, method: string}, result: string, startTime?: number): void;
+    recordOut(labels: {api: string, path: string, method: string}, result: string, startTime?: number): void;
+}
+
 export interface GGSocketConfig {
     apiName?: string;
     socketPath?: string;
     /** Optional wrapper that runs handlers in the context established at connection time */
     connectionContext?: GGContext;
+    /** Optional locator scope for re-entering async context in event callbacks (server-only) */
+    scope?: {ensureEntered(): void};
+    /** Optional metrics recorder (server-only) */
+    metrics?: GGSocketMetrics;
+    /** Optional logger (defaults to console) */
+    log?: GGSocketLogger;
 }
 
 interface MetricLabels {
@@ -57,6 +76,8 @@ export class GGSocket {
     private readonly apiName: string;
     private readonly socketPath: string;
     private readonly connectionContext: GGContext;
+    private readonly metrics?: GGSocketMetrics;
+    private readonly log: GGSocketLogger;
 
     constructor(socket: SocketAdapter, config?: GGSocketConfig) {
         this.socket = socket;
@@ -64,12 +85,14 @@ export class GGSocket {
         this.socketPath = config?.socketPath ?? 'unknown';
         // Default to passthrough if no context wrapper provided
         this.connectionContext = config?.connectionContext ?? new GGContext('__unnamed_GGSocket_context');
+        this.metrics = config?.metrics;
+        this.log = config?.log ?? consoleLogger;
 
-        // Capture contexts at construction - socket events lose AsyncLocalStorage context
-        const scope = GGLocator.getScope();
+        // Scope is provided by server for re-entering async context in event callbacks
+        const scope = config?.scope;
 
         this.socket.onMessage(async (data: string) => {
-            scope.ensureEntered();
+            scope?.ensureEntered();
             const context = new GGContext("ws-message", this.connectionContext);
             await context.run(async () => {
                 GG_TRACE.init();
@@ -91,7 +114,7 @@ export class GGSocket {
         });
 
         this.socket.onClose(() => {
-            scope.ensureEntered();
+            scope?.ensureEntered();
             this.connectionContext.run(() => {
                 this.isActive = false;
                 if (!this.isCleanedUp) {
@@ -109,7 +132,7 @@ export class GGSocket {
         });
 
         this.socket.onError((error: Error) => {
-            scope.ensureEntered();
+            scope?.ensureEntered();
             this.connectionContext.run(() => {
                 this.onErrorCallbacks.forEach(cb => cb(error));
             });
@@ -143,7 +166,7 @@ export class GGSocket {
                 this.handleFireAndForgetResult(res, labels, startTime);
             }
         } catch (error) {
-            GGLog.error(this, error);
+            this.log.error(this, error);
             this.onErrorCallbacks.forEach(cb => cb(error as Error));
         }
     }
@@ -156,13 +179,13 @@ export class GGSocket {
     ): void {
         if (expectsResponse) {
             const error = new ROUTE_NOT_FOUND({displayMessage: "Route not found: " + msg.path});
-            GGLog.error(this, error);
+            this.log.error(this, error);
             this.sendResponse(msg as RequestMessage, error, labels, startTime);
         } else {
             if (this.unknownMessageHandler) {
                 this.unknownMessageHandler(msg.path, msg.data);
             } else {
-                GGLog.warn(this, 'Unknown method ' + msg.path);
+                this.log.warn(this, 'Unknown method ' + msg.path);
             }
             this.recordInMetric(labels, 'ROUTE_NOT_FOUND', startTime);
         }
@@ -184,7 +207,7 @@ export class GGSocket {
         try {
             this.socket.send(Message.create(MessageType.RES, msg.path, msg.id, data));
         } catch (error) {
-            GGLog.error(this, "ERROR_SENDING_RESPONSE", ERROR.fromUnknown(error));
+            this.log.error(this, "ERROR_SENDING_RESPONSE", ERROR.fromUnknown(error));
         }
     }
 
@@ -242,21 +265,11 @@ export class GGSocket {
     // --------------------------------------------------------------------------------------
 
     private recordInMetric(labels: MetricLabels, result: string, startTime?: number): void {
-        if (GG_METRICS.has()) {
-            GGWebSocketMetrics.requests.inc(1, {...labels, result});
-            if (startTime !== undefined) {
-                GGWebSocketMetrics.requestDuration.observe(performance.now() - startTime, labels);
-            }
-        }
+        this.metrics?.recordIn(labels, result, startTime);
     }
 
     private recordOutMetric(labels: MetricLabels, result: string, startTime?: number): void {
-        if (GG_METRICS.has()) {
-            GGWebSocketMetrics.outRequests.inc(1, {...labels, result});
-            if (startTime !== undefined) {
-                GGWebSocketMetrics.outRequestDuration.observe(performance.now() - startTime, labels);
-            }
-        }
+        this.metrics?.recordOut(labels, result, startTime);
     }
 
     // --------------------------------------------------------------------------------------
@@ -316,18 +329,18 @@ export class GGSocket {
      */
     public async teardown(pendingRequestsTimeoutMs: number = 5000, callbacksTimeoutMs: number = 5000): Promise<void> {
         if (this.tearingDownPromise) {
-            GGLog.warn(this, 'Already tearing down!');
+            this.log.warn(this, 'Already tearing down!');
             return this.tearingDownPromise;
         }
-        GGLog.debug(this, 'Teardown started');
+        this.log.debug(this, 'Teardown started');
 
         this.tearingDownPromise = (async () => {
             // Step 1: Wait for pending outgoing requests to complete
             if (this.pendingRequests.hasPending()) {
-                GGLog.debug(this, `Waiting for ${this.pendingRequests.size} pending request(s) to complete...`);
+                this.log.debug(this, `Waiting for ${this.pendingRequests.size} pending request(s) to complete...`);
                 await this.pendingRequests.waitForPending(pendingRequestsTimeoutMs);
                 if (this.pendingRequests.hasPending()) {
-                    GGLog.warn(this, `Timeout waiting for pending requests, ${this.pendingRequests.size} request(s) still pending`);
+                    this.log.warn(this, `Timeout waiting for pending requests, ${this.pendingRequests.size} request(s) still pending`);
                 }
             }
 
@@ -362,13 +375,13 @@ export class GGSocket {
             };
 
             const timeout = setTimeout(() => {
-                GGLog.warn(this, `Teardown timeout - ${remaining} callback(s) still pending after ${timeoutMs}ms`);
+                this.log.warn(this, `Teardown timeout - ${remaining} callback(s) still pending after ${timeoutMs}ms`);
                 finish();
             }, timeoutMs);
 
             for (const callback of this.onTearDownCallbacks) {
                 callback()
-                    .catch((err) => GGLog.error(this, 'Error in teardown callback', err))
+                    .catch((err) => this.log.error(this, 'Error in teardown callback', err))
                     .finally(() => {
                         remaining--;
                         if (remaining === 0) finish();

@@ -11,6 +11,11 @@ export default withMermaid(defineConfig({
     cleanUrls: true,
     ignoreDeadLinks: true,
 
+    head: [
+        ["script", {async: "", src: "https://www.googletagmanager.com/gtag/js?id=G-Z2BGL7EF57"}],
+        ["script", {}, "window.dataLayer = window.dataLayer || [];\nfunction gtag(){dataLayer.push(arguments);}\ngtag('js', new Date());\ngtag('config', 'G-Z2BGL7EF57');"],
+    ],
+
     markdown: {
         theme: {dark: "github-dark", light: "github-light"},
     },
