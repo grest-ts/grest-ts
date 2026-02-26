@@ -102,14 +102,14 @@ export class GGMysql {
 
     public async query<T extends RowDataPacket[]>(sql: string, params?: unknown[]): Promise<T> {
         GGLog.debug(this, 'query', {sql, params});
-        const [rows] = await this.getPool().query<T>(sql, params);
+        const [rows] = await this.getPool().query<T>(sql, params as any);
         GGLog.debug(this, 'query result', {rowCount: rows.length});
         return rows;
     }
 
     public async execute(sql: string, params?: unknown[]): Promise<ResultSetHeader> {
         GGLog.debug(this, 'execute', {sql, params});
-        const [result] = await this.getPool().execute<ResultSetHeader>(sql, params);
+        const [result] = await this.getPool().execute<ResultSetHeader>(sql, params as any);
         GGLog.debug(this, 'execute result', {affectedRows: result.affectedRows, insertId: result.insertId});
         return result;
     }

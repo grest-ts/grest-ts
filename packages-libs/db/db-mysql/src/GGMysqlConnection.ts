@@ -41,7 +41,7 @@ export class GGMysqlConnection {
         this.checkReleased();
         GGLog.debug(this, 'query', { sql, params });
         try {
-            const [rows] = await this.conn.query<T>(sql, params);
+            const [rows] = await this.conn.query<T>(sql, params as any);
             GGLog.debug(this, 'query result', { rowCount: rows.length });
             return rows;
         } catch (err: any) {
@@ -57,7 +57,7 @@ export class GGMysqlConnection {
         this.checkReleased();
         GGLog.debug(this, 'execute', { sql, params });
         try {
-            const [result] = await this.conn.execute<ResultSetHeader>(sql, params);
+            const [result] = await this.conn.execute<ResultSetHeader>(sql, params as any);
             GGLog.debug(this, 'execute result', { affectedRows: result.affectedRows, insertId: result.insertId });
             return result;
         } catch (err: any) {
