@@ -48,7 +48,7 @@ export class GGHttpServer {
                 if (req.headers.origin) { // For browsers
                     res.setHeader('Access-Control-Allow-Origin', '*');
                     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
-                    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-company-auth'); // @TODO Remove x-company-auth
+                    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-org-token');
                     res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition');
                 }
                 if (req.method === 'OPTIONS') {
