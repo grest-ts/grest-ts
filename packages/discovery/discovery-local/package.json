@@ -1,7 +1,7 @@
 {
   "//": "THIS FILE IS GENERATED - DO NOT EDIT",
   "name": "@grest-ts/discovery-local",
-  "version": "0.0.18",
+  "version": "0.0.19",
   "type": "module",
   "license": "MIT",
   "description": "Local service discovery implementation for Grest Framework",
@@ -49,14 +49,14 @@
     "node": ">=25"
   },
   "dependencies": {
-    "@grest-ts/discovery": "0.0.18",
-    "@grest-ts/ipc": "0.0.18",
-    "@grest-ts/locator": "0.0.18",
-    "@grest-ts/logger": "0.0.18",
-    "@grest-ts/schema": "0.0.18",
+    "@grest-ts/discovery": "0.0.19",
+    "@grest-ts/ipc": "0.0.19",
+    "@grest-ts/locator": "0.0.19",
+    "@grest-ts/logger": "0.0.19",
+    "@grest-ts/schema": "0.0.19",
     "ws": "^8.19.0"
   },
   "devDependencies": {
-    "@grest-ts/testkit": "0.0.18"
+    "@grest-ts/testkit": "0.0.19"
   }
 }
