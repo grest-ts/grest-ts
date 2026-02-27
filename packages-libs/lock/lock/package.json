@@ -1,7 +1,7 @@
 {
   "//": "THIS FILE IS GENERATED - DO NOT EDIT",
   "name": "@grest-ts/lock",
-  "version": "0.0.19",
+  "version": "0.0.20",
   "type": "module",
   "license": "MIT",
   "description": "Distributed lock interface and implementations for Grest Framework",
@@ -45,6 +45,6 @@
     "node": ">=25"
   },
   "dependencies": {
-    "@grest-ts/locator": "0.0.19"
+    "@grest-ts/locator": "0.0.20"
   }
 }
