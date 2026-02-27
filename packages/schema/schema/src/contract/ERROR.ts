@@ -97,6 +97,11 @@ export abstract class ERROR<Type extends string, Data> extends Error {
         return this.#debugContext
     }
 
+    public hasDebugContext(): boolean {
+        const d = this.#debugContext
+        return !!(d && (d.debugMessage || d.debugData || d.originalError))
+    }
+
     public static define<Type extends string>(type: Type, statusCode: number): ERR_CLASS<Type>
     public static define<Type extends string, Data>(type: Type, statusCode: number, schema: GGSchema<Data>): ERR_CLASS_DATA<Type, Data>
     public static define(type: string, statusCode: number, schema?: GGSchema<any>): any {
