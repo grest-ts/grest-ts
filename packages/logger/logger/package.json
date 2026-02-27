@@ -1,7 +1,7 @@
 {
   "//": "THIS FILE IS GENERATED - DO NOT EDIT",
   "name": "@grest-ts/logger",
-  "version": "0.0.20",
+  "version": "0.0.21",
   "type": "module",
   "license": "MIT",
   "description": "Basic logging library to standardize logging over GG projects",
@@ -54,9 +54,9 @@
     "node": ">=25"
   },
   "peerDependencies": {
-    "@grest-ts/locator": "0.0.20"
+    "@grest-ts/locator": "0.0.21"
   },
   "devDependencies": {
-    "@grest-ts/testkit": "0.0.20"
+    "@grest-ts/testkit": "0.0.21"
   }
 }
