@@ -117,7 +117,7 @@ function setupRoutes<TContract extends GGContractApiDefinition>(
                         // GGLog.debug(httpSchema, "Response", rpcResult) // This is very slow to log this (like 3x performance loss)
                     } catch (error: unknown) {
                         rpcResult = ERROR.fromUnknown(error);
-                        if (rpcResult instanceof SERVER_ERROR || rpcResult.hasDebugContext()) {
+                        if (rpcResult instanceof SERVER_ERROR || (rpcResult as ERROR<string, unknown>).hasDebugContext()) {
                             GGLog.error(httpSchema, rpcResult)
                         }
                     }
