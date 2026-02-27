@@ -48,12 +48,23 @@ export class GGContractClass<ContractMethods extends GGContractApiDefinition> {
 
     public readonly name: string
     public readonly methods: ContractMethods
+    declare readonly infer: GGContractImplementation<ContractMethods>
 
     constructor(name: string, methods: ContractMethods) {
         this.name = name;
         this.methods = methods;
         Object.freeze(this);
         Object.values(this.methods).forEach(method => Object.freeze(method))
+    }
+
+    public create<Args extends any[]>(
+        factory: (
+            $: (impl: GGContractImplementation<ContractMethods>) => GGContractImplementation<ContractMethods>,
+            ...args: Args
+        ) => GGContractImplementation<ContractMethods>,
+    ): (...args: Args) => GGContractImplementation<ContractMethods> {
+        const validate: (impl: GGContractImplementation<ContractMethods>) => GGContractImplementation<ContractMethods> = impl => impl
+        return (...args: Args) => factory(validate, ...args)
     }
 
     public implement(
