@@ -184,7 +184,7 @@ export class GGDependencyJsonBuilder {
             const readmePath = join(pkg.path, "README.md")
             if (existsSync(readmePath)) {
                 try {
-                    readme = readFileSync(readmePath, "utf-8")
+                    readme = readFileSync(readmePath, "utf-8").replace(/\r\n/g, "\n")
                 } catch {
                     // Silently ignore read errors
                 }
