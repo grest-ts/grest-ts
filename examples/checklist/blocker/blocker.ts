@@ -1,4 +1,5 @@
 import {GGHttp, GGHttpServer} from "@grest-ts/http"
+import "@grest-ts/openapi"
 import {GGLog} from "@grest-ts/logger"
 import {BlockerService} from "./services/BlockerService";
 import {BlockerConfig} from "./BlockerConfig";
@@ -35,6 +36,7 @@ export class BlockerRuntime extends MyRuntime {
         // startServer auto-processes the use class
         new GGHttp(new GGHttpServer())
             .http(BlockerApi, new BlockerService(blockerDb))
+            .openApi({title: "Blocker API", version: "1.0.0"})
 
     }
 }

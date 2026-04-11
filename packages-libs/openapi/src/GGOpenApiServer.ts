@@ -18,35 +18,45 @@ export interface GGOpenApiServerOptions extends ToOpenApiOptions {
 
     /**
      * If true, the OpenAPI spec is built immediately on construction rather
-     * than on first request.
+     * than on first request. When false (default), the spec is built lazily
+     * on the first GET /openapi.json request, which means it captures every
+     * schema that was registered during compose().
      * @default false
      */
     eager?: boolean;
 }
 
 /**
- * Serves GET /openapi.json and GET /docs (Swagger UI) for a set of GGHttpSchema instances.
+ * Serves GET /openapi.json and GET /docs (Swagger UI) for all schemas
+ * registered on a GGHttpServer.
+ *
+ * Schemas are collected automatically — every schema.register() / GGHttp.http()
+ * call during compose() is tracked on the server. The spec is built lazily
+ * on first request (or eagerly if { eager: true }) so it always reflects the
+ * full set of registered schemas.
  *
  * @example
- * // Register via GGHttp builder (import side-effect augments GGHttp):
+ * // Fluent builder — openApi() reads all .http() schemas automatically:
  * import "@grest-ts/openapi";
  *
- * const gg = new GGHttp(server);
- * gg.http(MyApiSchema, impl)
- *   .openApi([MyApiSchema], { title: "My API", version: "1.0.0" });
+ * const server = new GGHttpServer();
+ * new GGHttp(server)
+ *     .http(MyApiSchema, impl)
+ *     .openApi({ title: "My API", version: "1.0.0" });
  *
  * @example
- * // Or use standalone:
- * const openApiServer = new GGOpenApiServer([MyApiSchema], { title: "My API" });
- * openApiServer.registerWith(server);
+ * // Standalone — also works when using schema.register() directly:
+ * const httpServer = new GGHttpServer();
+ * MyApi.register(impl);
+ * new GGOpenApiServer(httpServer, { title: "My API" }).registerWith(httpServer);
  */
 export class GGOpenApiServer {
-    private readonly schemas: GGHttpSchema<any, any>[];
+    private readonly server: GGHttpServer;
     private readonly options: GGOpenApiServerOptions;
     private _spec: OpenAPIV3_1.Document | undefined;
 
-    constructor(schemas: GGHttpSchema<any, any>[], options: GGOpenApiServerOptions = {}) {
-        this.schemas = schemas;
+    constructor(server: GGHttpServer, options: GGOpenApiServerOptions = {}) {
+        this.server = server;
         this.options = options;
         if (options.eager) {
             this._spec = this.buildSpec();
@@ -54,7 +64,7 @@ export class GGOpenApiServer {
     }
 
     private buildSpec(): OpenAPIV3_1.Document {
-        return toOpenApi(this.schemas, this.options);
+        return toOpenApi(this.server.registeredSchemas, this.options);
     }
 
     public getSpec(): OpenAPIV3_1.Document {
@@ -120,23 +130,31 @@ function buildSwaggerUiHtml(specUrl: string): string {
 declare module "@grest-ts/http" {
     interface GGHttp<TContext = undefined> {
         /**
-         * Register OpenAPI spec endpoint and Swagger UI on this HTTP server.
+         * Register OpenAPI spec endpoint and Swagger UI for all schemas
+         * registered on this GGHttp instance via .http().
+         *
+         * Schemas are collected automatically — no need to list them again.
+         * The spec is built lazily on the first request so it captures every
+         * schema registered before the server starts.
          *
          * @example
          * new GGHttp(server)
          *   .http(MyApiSchema, impl)
-         *   .openApi([MyApiSchema], { title: "My API" });
+         *   .openApi({ title: "My API" });
          */
-        openApi(schemas: GGHttpSchema<any, any>[], options?: GGOpenApiServerOptions): this;
+        openApi(options?: GGOpenApiServerOptions): this;
     }
 }
 
 GGHttp.prototype.openApi = function (
     this: GGHttp,
-    schemas: GGHttpSchema<any, any>[],
     options: GGOpenApiServerOptions = {}
 ): typeof this {
-    const openApiServer = new GGOpenApiServer(schemas, options);
+    const openApiServer = new GGOpenApiServer(this.httpServer, options);
     openApiServer.registerWith(this.httpServer);
     return this;
 };
+
+// Keep backward-compatible overload that still accepts an explicit schema list.
+// This is useful for toOpenApi() in CI scripts and standalone GGOpenApiServer usage.
+export type {GGHttpSchema};

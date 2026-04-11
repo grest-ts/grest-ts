@@ -4,6 +4,7 @@ import {GGLocator, GGLocatorKey, GGLocatorScope, GGLocatorServiceType} from "@gr
 import {GG_HTTP_SERVER} from "./GG_HTTP_SERVER";
 import {GGLog} from "@grest-ts/logger";
 import findMyWay, {HTTPMethod} from "find-my-way";
+import type {GGHttpSchema} from "../schema/GGHttpSchema";
 
 export interface GGHttpServerAdapterConfig {
     key?: GGLocatorKey<GGHttpServer>;
@@ -20,6 +21,13 @@ export class GGHttpServer {
 
     private readonly _onStart: Array<() => void> = [];
     private readonly _onTeardown: Array<() => void> = [];
+
+    /**
+     * All GGHttpSchema instances registered on this server, in order of registration.
+     * Populated automatically by schema.register() / GGHttp.http() during compose().
+     * Useful for tools like @grest-ts/openapi that need the full set of registered schemas.
+     */
+    public readonly registeredSchemas: GGHttpSchema<any, any>[] = [];
 
     public readonly httpServer: http.Server;
     private activeRequests = 0;

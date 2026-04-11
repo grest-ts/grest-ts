@@ -1,4 +1,5 @@
 import {GGHttp, GGHttpServer} from "@grest-ts/http"
+import "@grest-ts/openapi"
 import {UserService} from "./services/UserService"
 import {ChecklistService} from "./services/ChecklistService"
 import {BlockerApi, BlockUserRequest} from "../common/api-internal/BlockerApi";
@@ -41,6 +42,7 @@ export class ChecklistRuntime extends MyRuntime {
                     return {status: true}
                 }
             })
+            .openApi({title: "Checklist Public API", version: "1.0.0"})
 
         new GGHttp(new GGHttpServer({key: new GGLocatorKey("two")}))
             .use(new UserContextMiddleware(userService))
@@ -51,6 +53,7 @@ export class ChecklistRuntime extends MyRuntime {
                     await blockerClient.blockUser(request);
                 }
             })
+            .openApi({title: "Checklist Auth API", version: "1.0.0"})
 
         ChecklistNotificationApi.register(new NotificationService(checklistService).handleConnection, {
             middlewares: [new UserContextMiddleware(userService)]

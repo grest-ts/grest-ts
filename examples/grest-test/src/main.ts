@@ -1,5 +1,6 @@
 import {GGRuntime} from "@grest-ts/runtime"
 import {GGHttpServer} from "@grest-ts/http"
+import {GGOpenApiServer} from "@grest-ts/openapi"
 import {ConfigTestApi} from "./api/ConfigTestApi"
 import {MetricsTestApi} from "./api/MetricsTestApi"
 import {HttpMetricsTestApi} from "./api/HttpMetricsTestApi"
@@ -65,7 +66,7 @@ export class MainRuntime extends GGRuntime {
         const fileUploadTestService = new FileUploadTestService();
         const benchmarkService = new BenchmarkService();
 
-        new GGHttpServer();
+        const httpServer = new GGHttpServer();
         ConfigTestApi.register(configTestService);
         MetricsTestApi.register(metricsTestService);
         HttpMetricsTestApi.register(httpMetricsTestService);
@@ -75,6 +76,9 @@ export class MainRuntime extends GGRuntime {
         FileUploadTestApi.register(fileUploadTestService);
         BenchmarkApi.register(benchmarkService);
         ConfigTestSocketApi.register(configTestService.handleSocketConnection);
+
+        new GGOpenApiServer(httpServer, {title: "Grest Test API", version: "1.0.0"})
+            .registerWith(httpServer);
 
         // new GGHttp()
         //     .http(ConfigTestApi, configTestService)

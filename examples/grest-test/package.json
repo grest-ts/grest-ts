@@ -8,7 +8,8 @@
     "test": "npx --no vitest run"
   },
   "dependencies": {
-    "busboy": "^1.6.0"
+    "busboy": "^1.6.0",
+    "@grest-ts/openapi": "*"
   },
   "devDependencies": {
     "@types/node": "^22.15.0",

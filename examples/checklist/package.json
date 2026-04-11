@@ -11,7 +11,8 @@
     "test:coverage": "npx cross-env GG_COVERAGE_MODE=1 npx --no vitest run --coverage"
   },
   "dependencies": {
-    "@grest-ts/db-mysql": "file:../../packages/db-mysql"
+    "@grest-ts/db-mysql": "file:../../packages/db-mysql",
+    "@grest-ts/openapi": "*"
   },
   "devDependencies": {
     "@types/node": "^22.15.0",
