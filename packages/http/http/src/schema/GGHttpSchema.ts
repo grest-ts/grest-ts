@@ -2,6 +2,7 @@ import {ERROR, ERROR_JSON, GGContractApiDefinition, GGContractClass, GGContractM
 import type {HttpMethod} from "@grest-ts/common";
 import type http from "http";
 import type {GGHttpServerMiddleware} from "../server/GGHttpSchema.startServer";
+import type {OpenAPIV3_1} from "openapi-types";
 
 export class GGHttpSchema<TContract extends GGContractApiDefinition, TContext> {
 
@@ -69,6 +70,16 @@ export interface ClientHttpRouteToRpcTransformServerCodec {
 // Codec
 // --------------------------------------------------------------------------------------------------------
 
+/**
+ * Config passed to toOpenApiOperation? — gives the codec access to the contract and route context
+ * so it can produce accurate OpenAPI operation metadata.
+ */
+export interface GGHttpCodecOpenApiConfig {
+    readonly pathPrefix: string;
+    readonly methodName: string;
+    readonly contract: GGContractMethod;
+}
+
 export interface GGHttpCodec {
     readonly method: HttpMethod;
     readonly path: string;
@@ -77,6 +88,15 @@ export interface GGHttpCodec {
 
     createForServer(config: ClientHttpRouteToRpcTransformServerConfig): ClientHttpRouteToRpcTransformServerCodec
 
+    /**
+     * Optional hook for custom codecs to describe their OpenAPI operation semantics.
+     * The returned partial is merged on top of the auto-generated operation object,
+     * allowing overrides for requestBody content type, security schemes, etc.
+     *
+     * Built-in GGRpc.* codecs implement this automatically.
+     * Custom codec authors (e.g. GGFileUpload) may implement it for accurate docs.
+     */
+    toOpenApiOperation?(config: GGHttpCodecOpenApiConfig): Partial<OpenAPIV3_1.OperationObject>
 }
 
 // --------------------------------------------------------------------------------------------------------

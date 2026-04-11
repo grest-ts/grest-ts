@@ -7,6 +7,7 @@ import {AOTExecutor} from "./executor/aot/AOTExecutor";
 import {GGCodec} from "./GGCodec";
 import {GGTransform} from "./GGTransform";
 import {Raw} from "./issue/types";
+import type {OpenAPIV3_1} from "openapi-types";
 
 export type GGParseResult<T> =
     | { success: true; value: T }
@@ -268,8 +269,8 @@ export abstract class GGSchema<Type, TDef extends GGSchemaDefinition = GGSchemaD
 
     // ---------------------------------------------------------------------------------------------------------
 
-    public toJSONSchema(): object {
-        // Default implementation - subclasses should override
+    public toJSONSchema(): OpenAPIV3_1.SchemaObject {
+        // Default implementation — subclasses override for accurate output
         return {};
     }
 

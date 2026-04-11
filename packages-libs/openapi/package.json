@@ -1,20 +1,14 @@
 {
   "//": "THIS FILE IS GENERATED - DO NOT EDIT",
-  "name": "@grest-ts/schema",
+  "name": "@grest-ts/openapi",
   "version": "0.0.22",
   "type": "module",
   "license": "MIT",
-  "description": "Type-safe schema validation, serialization, and contract definitions for TypeScript",
+  "description": "OpenAPI 3.1 spec generation and Swagger UI server for grest-ts",
   "exports": {
     ".": {
-      "browser": {
-        "types": "./src/index-browser.ts",
-        "import": "./src/index-browser.ts"
-      },
-      "default": {
-        "types": "./src/index-node.ts",
-        "import": "./src/index-node.ts"
-      }
+      "types": "./src/index-node.ts",
+      "import": "./src/index-node.ts"
     }
   },
   "files": [
@@ -32,9 +26,9 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/grest-ts/grest-ts.git",
-    "directory": "packages/schema/schema"
+    "directory": "packages-libs/openapi"
   },
-  "homepage": "https://grest-ts.com/packages/schema",
+  "homepage": "https://grest-ts.com/packages/openapi",
   "bugs": {
     "url": "https://github.com/grest-ts/grest-ts/issues"
   },
@@ -45,15 +39,17 @@
     "api",
     "microservices",
     "testing",
-    "schema",
-    "validation",
-    "serialization",
-    "type-safe"
+    "openapi",
+    "swagger",
+    "api-docs",
+    "openapi3"
   ],
   "engines": {
     "node": ">=25"
   },
   "dependencies": {
+    "@grest-ts/http": "0.0.22",
+    "@grest-ts/schema": "0.0.22",
     "openapi-types": "^12.1.3"
   }
 }

@@ -61,7 +61,8 @@
     "@grest-ts/logger": "0.0.22",
     "@grest-ts/schema": "0.0.22",
     "@grest-ts/trace": "0.0.22",
-    "find-my-way": "^9.4.0"
+    "find-my-way": "^9.4.0",
+    "openapi-types": "^12.1.3"
   },
   "peerDependencies": {
     "@grest-ts/discovery": "0.0.22",

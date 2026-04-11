@@ -1,7 +1,8 @@
 import {HttpMethod} from "@grest-ts/common"
-import {ClientHttpRouteToRpcTransformClientCodec, ClientHttpRouteToRpcTransformClientConfig, ClientHttpRouteToRpcTransformServerCodec, ClientHttpRouteToRpcTransformServerConfig, GGHttpCodec, GGRpcResponseParser, GGRpcResponseBuilder} from "@grest-ts/http"
+import {ClientHttpRouteToRpcTransformClientCodec, ClientHttpRouteToRpcTransformClientConfig, ClientHttpRouteToRpcTransformServerCodec, ClientHttpRouteToRpcTransformServerConfig, GGHttpCodec, GGHttpCodecOpenApiConfig, GGRpcResponseParser, GGRpcResponseBuilder} from "@grest-ts/http"
 import {GGFileUploadRequestBuilder} from "./GGFileUploadRequestBuilder";
 import {GGFileUploadRequestParser} from "./GGFileUploadRequestParser";
+import type {OpenAPIV3_1} from "openapi-types";
 
 export const GGFileUpload = {
     POST: (path: string) => new GGFileUploadCodec("POST", path),
@@ -31,6 +32,49 @@ class GGFileUploadCodec implements GGHttpCodec {
             parseRequest: new GGFileUploadRequestParser(this.method, this.path, config).parseRequest,
             sendResponse: new GGRpcResponseBuilder(config).sendResponse
         }
+    }
+
+    public toOpenApiOperation(config: GGHttpCodecOpenApiConfig): Partial<OpenAPIV3_1.OperationObject> {
+        const pathParams = (this.path.match(/:(\w+)/g) || []).map(m => m.slice(1));
+        const parameters: OpenAPIV3_1.ParameterObject[] = pathParams.map(name => ({
+            name,
+            in: 'path',
+            required: true,
+            schema: {type: 'string'}
+        }));
+
+        const inputSchema = config.contract.input?.toJSONSchema();
+        const properties = inputSchema ? (inputSchema as any).properties as Record<string, OpenAPIV3_1.SchemaObject> | undefined : undefined;
+
+        const schemaProperties: Record<string, OpenAPIV3_1.SchemaObject> = {};
+        const required: string[] = [];
+
+        if (properties) {
+            for (const [name, schema] of Object.entries(properties)) {
+                if (pathParams.includes(name)) continue;
+                schemaProperties[name] = schema;
+                if ((inputSchema as any).required?.includes(name)) {
+                    required.push(name);
+                }
+            }
+        }
+
+        return {
+            operationId: config.methodName,
+            parameters,
+            requestBody: {
+                required: true,
+                content: {
+                    'multipart/form-data': {
+                        schema: {
+                            type: 'object',
+                            properties: schemaProperties,
+                            ...(required.length > 0 ? {required} : {})
+                        }
+                    }
+                }
+            }
+        };
     }
 
     private assertHasNonJsonData(contract: { input?: { toCompilerDef(): { hasNonJsonData?: boolean } } }): void {

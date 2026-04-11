@@ -1,5 +1,6 @@
 import {GGSchema, Opt} from "../GGSchema";
 import {AnyDef} from "../Definition";
+import type {OpenAPIV3_1} from "openapi-types";
 
 export class AnySchema<T = any> extends GGSchema<T, AnyDef> {
 
@@ -13,6 +14,10 @@ export class AnySchema<T = any> extends GGSchema<T, AnyDef> {
 
     get orNull(): AnySchema<T | null> {
         return super.orNull as any
+    }
+
+    toJSONSchema(): OpenAPIV3_1.SchemaObject {
+        return {};
     }
 }
 

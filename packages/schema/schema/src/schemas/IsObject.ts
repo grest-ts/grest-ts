@@ -1,6 +1,7 @@
 import {GGSchema, Opt} from "../GGSchema";
 import {IsLiteral} from "./IsLiteral";
 import {ObjectDef, ShapeInput} from "../Definition";
+import type {OpenAPIV3_1} from "openapi-types";
 
 type Shape = Record<string, GGSchema<any>>;
 
@@ -109,11 +110,11 @@ export class ObjectSchema<T extends object | undefined | null = object> extends 
 
     // --------------------------------------------------------------------------------------
 
-    toJSONSchema(): object {
+    toJSONSchema(): OpenAPIV3_1.SchemaObject {
         const shape = this.toCompilerDef().shape! as Shape;
         const keys = Object.keys(shape);
 
-        const properties: Record<string, object> = {};
+        const properties: Record<string, OpenAPIV3_1.SchemaObject> = {};
         const required: string[] = [];
 
         for (const k of keys) {
@@ -124,7 +125,7 @@ export class ObjectSchema<T extends object | undefined | null = object> extends 
             }
         }
 
-        const result: Record<string, unknown> = {
+        const result: OpenAPIV3_1.NonArraySchemaObject = {
             type: 'object',
             properties,
         };
@@ -134,7 +135,7 @@ export class ObjectSchema<T extends object | undefined | null = object> extends 
         }
 
         if (this.def.nullable) {
-            return {anyOf: [result, {type: 'null'}]};
+            return {oneOf: [result, {type: 'null'}]};
         }
 
         return result;

@@ -240,7 +240,7 @@ testUtils('IsArray', () => {
 
         it('should handle nullable', () => {
             expect(IsArray(IsAny).orNull.toJSONSchema()).toEqual({
-                anyOf: [{type: 'array', items: {}}, {type: 'null'}]
+                oneOf: [{type: 'array', items: {}}, {type: 'null'}]
             });
         });
 

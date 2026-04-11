@@ -1,5 +1,6 @@
 import {GGSchema, Opt} from "../GGSchema";
 import {DiscriminatedDef} from "../Definition";
+import type {OpenAPIV3_1} from "openapi-types";
 
 type InferDiscriminated<V extends GGSchema<any>> = V extends GGSchema<infer U> ? U : never;
 
@@ -30,6 +31,18 @@ export class DiscriminatedSchema<T = unknown> extends GGSchema<T, DiscriminatedD
 
     get orNull(): DiscriminatedSchema<T | null> {
         return super.orNull as any
+    }
+
+    toJSONSchema(): OpenAPIV3_1.SchemaObject {
+        const def = this.toCompilerDef();
+        const variantMap = def.variantMap!;
+        const variants = Array.from(variantMap.values()).map(v => v.toJSONSchema());
+        const schema: OpenAPIV3_1.SchemaObject = {
+            oneOf: variants,
+            discriminator: {propertyName: def.discriminator}
+        };
+        if (this.def.nullable) return {oneOf: [schema, {type: 'null'}]};
+        return schema;
     }
 
     protected _toCompilerDef(): DiscriminatedDef & { variantArray: GGSchema<any>[] } {

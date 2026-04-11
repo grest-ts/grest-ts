@@ -1,5 +1,6 @@
 import {GGSchema, Opt} from "../GGSchema";
 import {NumberDef} from "../Definition";
+import type {OpenAPIV3_1} from "openapi-types";
 
 export class NumberSchema<T extends Number | number | undefined | null = number> extends GGSchema<T, NumberDef> {
 
@@ -51,12 +52,12 @@ export class NumberSchema<T extends Number | number | undefined | null = number>
 
     // --------------------------------------------------------------------------------------
 
-    toJSONSchema(): object {
-        const schema: Record<string, unknown> = this.def.integer ? {type: 'integer'} : {type: 'number'};
+    toJSONSchema(): OpenAPIV3_1.SchemaObject {
+        const schema: OpenAPIV3_1.NonArraySchemaObject = {type: this.def.integer ? 'integer' : 'number'};
         if (this.def.min !== undefined) schema.minimum = this.def.min;
         if (this.def.max !== undefined) schema.maximum = this.def.max;
         if (this.def.multipleOf !== undefined) schema.multipleOf = this.def.multipleOf;
-        if (this.def.nullable) return {anyOf: [schema, {type: 'null'}]};
+        if (this.def.nullable) return {oneOf: [schema, {type: 'null'}]};
         return schema;
     }
 }

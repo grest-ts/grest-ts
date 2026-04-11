@@ -1,5 +1,6 @@
 import {GGSchema, Opt} from "../GGSchema";
 import {UnknownDef} from "../Definition";
+import type {OpenAPIV3_1} from "openapi-types";
 
 export class UnknownSchema<T = unknown> extends GGSchema<T, UnknownDef> {
 
@@ -13,6 +14,10 @@ export class UnknownSchema<T = unknown> extends GGSchema<T, UnknownDef> {
 
     get orNull(): UnknownSchema<T | null> {
         return super.orNull as any
+    }
+
+    toJSONSchema(): OpenAPIV3_1.SchemaObject {
+        return {};
     }
 }
 

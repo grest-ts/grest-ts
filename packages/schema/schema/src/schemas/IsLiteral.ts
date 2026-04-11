@@ -1,5 +1,6 @@
 import {GGSchema, Opt} from "../GGSchema";
 import {LiteralDef, LiteralValue} from "../Definition";
+import type {OpenAPIV3_1} from "openapi-types";
 
 export class LiteralSchema<T extends LiteralValue | undefined | null = LiteralValue> extends GGSchema<T, LiteralDef> {
 
@@ -25,6 +26,12 @@ export class LiteralSchema<T extends LiteralValue | undefined | null = LiteralVa
 
     protected derive<NewT extends LiteralValue | undefined | null = T>(changes: Partial<LiteralDef>): LiteralSchema<NewT> {
         return new LiteralSchema<NewT>({...this.def, ...changes});
+    }
+
+    toJSONSchema(): OpenAPIV3_1.SchemaObject {
+        const schema: OpenAPIV3_1.SchemaObject = {enum: [...this.def.values]};
+        if (this.def.nullable) return {oneOf: [schema, {type: 'null'}]};
+        return schema;
     }
 }
 

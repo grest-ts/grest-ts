@@ -1,5 +1,6 @@
 import {GGSchema, Opt} from "../GGSchema";
 import {UnionDef} from "../Definition";
+import type {OpenAPIV3_1} from "openapi-types";
 
 type InferUnion<T extends GGSchema<any>[]> = T[number] extends GGSchema<infer U> ? U : never;
 
@@ -15,6 +16,13 @@ export class UnionSchema<T = unknown> extends GGSchema<T, UnionDef> {
 
     get orNull(): UnionSchema<T | null> {
         return super.orNull as any
+    }
+
+    toJSONSchema(): OpenAPIV3_1.SchemaObject {
+        const variants = this.def.variants.map(v => v.toJSONSchema());
+        const schema: OpenAPIV3_1.SchemaObject = {oneOf: variants};
+        if (this.def.nullable) return {oneOf: [schema, {type: 'null'}]};
+        return schema;
     }
 }
 

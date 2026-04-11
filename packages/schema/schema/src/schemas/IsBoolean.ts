@@ -1,5 +1,6 @@
 import {GGSchema, Opt} from "../GGSchema";
 import {BooleanDef} from "../Definition";
+import type {OpenAPIV3_1} from "openapi-types";
 
 export class BooleanSchema<T extends boolean | undefined | null = boolean> extends GGSchema<T, BooleanDef> {
 
@@ -19,9 +20,9 @@ export class BooleanSchema<T extends boolean | undefined | null = boolean> exten
 
     // --------------------------------------------------------------------------------------
 
-    toJSONSchema(): object {
-        const schema = {type: 'boolean'};
-        if (this.def.nullable) return {anyOf: [schema, {type: 'null'}]};
+    toJSONSchema(): OpenAPIV3_1.SchemaObject {
+        const schema: OpenAPIV3_1.NonArraySchemaObject = {type: 'boolean'};
+        if (this.def.nullable) return {oneOf: [schema, {type: 'null'}]};
         return schema;
     }
 }
