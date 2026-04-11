@@ -70,6 +70,7 @@ function wrapDescribeFunction(target: any): any {
                     // This ensures Vitest properly associates hooks with this suite
                     target.call(thisArg, name, (...cbArgs: any[]) => describeBlockCtx.run(() => {
                         beforeAll(() => ggTest.start(), 30000);
+                        beforeEach(() => ggTest.runBeforeEachHooks());
                         afterEach(() => ggTest.runAfterEachHooks());
                         afterAll(() => ggTest.teardown(), 30000);
                         callback(...cbArgs);

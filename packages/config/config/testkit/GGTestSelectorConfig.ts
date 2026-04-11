@@ -52,8 +52,8 @@ export class GGTestConfigUpdateAction<V> extends GGTestAction<void> {
 
     protected async executeAction(): Promise<tActionRawData> {
         const command = this.mode === 'update' ? GGConfigIPC.worker.update : GGConfigIPC.worker.replace;
-        await Promise.all(this.runtimes.map(async runtime => {
-            await runtime.runner.getExtensionInstance(GGConfigTestComponent).markConfigModified();
+        await Promise.all(this.runtimes.map(runtime => {
+            runtime.runner.getExtensionInstance(GGConfigTestComponent).markConfigModified();
             return runtime.sendCommand(command, {
                 storeName: this.key.getStoreKey(),
                 keyName: this.key.name,
