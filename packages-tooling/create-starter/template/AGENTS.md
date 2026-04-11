@@ -1,9 +1,3 @@
----
-description: grest-ts framework — contract-first TypeScript service development
-globs: ["**/*.ts", "**/*.tsx"]
-alwaysApply: true
----
-
 # grest-ts coding rules
 
 grest-ts is a **contract-first** TypeScript framework. The pattern is always:

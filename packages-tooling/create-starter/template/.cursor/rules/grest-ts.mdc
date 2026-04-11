@@ -19,7 +19,7 @@ Contracts live in a shared `api/` package, imported by both server and client.
 
 ```typescript
 // api/src/api/ItemApi.ts
-import {GGContractClass, IsObject, IsString, IsArray, IsUint, NOT_FOUND, VALIDATION_ERROR, SERVER_ERROR} from "@grest-ts/schema"
+import {GGContractClass, IsObject, IsString, IsBoolean, IsArray, IsUint, NOT_FOUND, VALIDATION_ERROR, SERVER_ERROR} from "@grest-ts/schema"
 import {httpSchema, GGRpc} from "@grest-ts/http"
 
 // --- Type schemas ---
@@ -127,7 +127,7 @@ Method signatures must match what the contract expects.
 ```typescript
 // server/src/services/ItemApiImpl.ts
 import type {CreateItemRequest, Item} from "@myapp/api/api/ItemApi"
-import {NOT_FOUND, SERVER_ERROR} from "@grest-ts/schema"
+import {NOT_FOUND} from "@grest-ts/schema"
 
 export class ItemApiImpl {
     private items = new Map<number, Item>()
