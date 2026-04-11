@@ -4,14 +4,15 @@ import {IsString} from "../schemas/IsString";
 import {IsAny} from "../schemas/IsAny";
 import {IsRecord} from "../schemas/IsRecord";
 import {ERROR} from "./ERROR";
+import {IsLocale} from "../custom/IsLocale";
 
 export const VALIDATION_ERROR = ERROR.define("VALIDATION_ERROR", 422, IsArray(IsObject({
     path: IsString.nonEmpty,
-    code: IsString.nonEmpty,
+    code: IsString.nonEmpty,     // dot-separated issue key e.g. "invalid.string.type"
     message: IsString.nonEmpty,
     params: IsRecord(IsString, IsAny).orUndefined,
-    usedLanguage: IsString.orUndefined,
-    expectedLanguage: IsString.orUndefined
+    usedLanguage: IsLocale.orUndefined,      // language actually used for translation
+    expectedLanguage: IsLocale.orUndefined   // language/locale requested by client
 })))
 
 export const NOT_AUTHORIZED = ERROR.define("NOT_AUTHORIZED", 401)
