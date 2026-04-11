@@ -11,23 +11,25 @@ alwaysApply: true
 `
 
 /**
- * Generates AI assistant rule files from two source markdown files.
+ * Generates AI assistant rule files from source markdown files.
  *
  * Sources:
- *   scripts/ai-rules/grest-ts.md        — full framework reference
- *   scripts/ai-rules/project-context.md — minimal project-layout stub for user projects
+ *   scripts/ai-rules/grest-ts.md          — full framework reference
+ *   scripts/ai-rules/project-context.md   — project-layout stub for the starter template
+ *   scripts/ai-rules/checklist-context.md — project-layout stub for the checklist example
  *
  * Repo root outputs (full framework reference — for framework contributors):
  *   CLAUDE.md
  *   AGENTS.md
- *   .cursor/rules/grest-ts.mdc   (frontmatter + body)
+ *   .cursor/rules/grest-ts.mdc
  *
- * Starter template output (single source file — fanned out by create-starter CLI at scaffold time):
+ * Starter template output (single source — fanned out by create-starter CLI at scaffold time):
  *   packages-tooling/create-starter/template/project-context.md
  *
- * The create-starter CLI (index.mjs) copies project-context.md to CLAUDE.md, AGENTS.md,
- * and .cursor/rules/project.mdc in the new project at scaffold time.
- * This way only one file lives in the template, not three identical copies.
+ * Checklist example outputs (project-layout stub — for developers working in the example):
+ *   examples/checklist/CLAUDE.md
+ *   examples/checklist/AGENTS.md
+ *   examples/checklist/.cursor/rules/project.mdc
  */
 export class GGAiRulesBuilder {
     constructor(private readonly rootDir: string) {}
@@ -35,16 +37,20 @@ export class GGAiRulesBuilder {
     build(): PackagerFile[] {
         const frameworkBody = this.read("scripts/ai-rules/grest-ts.md")
         const projectBody = this.read("scripts/ai-rules/project-context.md")
+        const checklistBody = this.read("scripts/ai-rules/checklist-context.md")
 
-        if (!frameworkBody || !projectBody) return []
+        if (!frameworkBody || !projectBody || !checklistBody) return []
 
         const starterDir = join(this.rootDir, "packages-tooling", "create-starter", "template")
+        const checklistDir = join(this.rootDir, "examples", "checklist")
 
         return [
-            // Repo root — full framework reference, fanned out to all tool formats
+            // Repo root — full framework reference
             ...this.destinations(this.rootDir, "grest-ts", frameworkBody),
             // Starter template — single source file; create-starter CLI fans it out at scaffold time
             PackagerFile.copy(join(starterDir, "project-context.md"), projectBody),
+            // Checklist example — project-layout stub
+            ...this.destinations(checklistDir, "project", checklistBody),
         ]
     }
 
