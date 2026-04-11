@@ -25,7 +25,7 @@ export class GGHttpServer {
     private activeRequests = 0;
     private router = findMyWay<findMyWay.HTTPVersion.V1>();
 
-    private static readonly DEFAULT_CORS_HEADERS = ['Content-Type', 'Authorization'];
+    private static readonly DEFAULT_CORS_HEADERS = ['Content-Type'];
     private readonly _corsHeaders = new Set<string>(GGHttpServer.DEFAULT_CORS_HEADERS);
     private _corsHeadersCache: string = GGHttpServer.DEFAULT_CORS_HEADERS.join(', ');
 

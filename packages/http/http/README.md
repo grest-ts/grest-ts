@@ -413,7 +413,9 @@ protected compose(): void {
 ### CORS Headers
 
 CORS `Access-Control-Allow-Headers` are auto-discovered from middleware and codecs.
-`Content-Type` and `Authorization` are included by default.
+Only `Content-Type` is included by default (it's set by the framework's RPC layer).
+All other headers — including `Authorization` — are registered automatically when
+middleware declares them via `headers` or when `useHeader()` extracts them from codecs.
 
 When using `useHeader()`, header names are extracted from the codec's input schema automatically:
 
