@@ -14,6 +14,7 @@ class GGFileDownloadCodec implements GGHttpCodec {
 
     public readonly method: HttpMethod
     public readonly path: string
+    public readonly responseHeaders = ['Content-Disposition'] as const
 
     constructor(method: HttpMethod, path: string) {
         this.method = method

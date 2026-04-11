@@ -25,6 +25,7 @@ class GGHttpRpcCodec implements GGHttpCodec {
 
     public readonly method: HttpMethod
     public readonly path: string
+    public readonly responseHeaders: readonly string[] = []
 
     constructor(method: HttpMethod, path: string) {
         this.method = method

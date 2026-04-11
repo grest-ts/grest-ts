@@ -20,7 +20,8 @@ export const GGConfigIPC = {
         update: IPCClient.defineRequest<ConfigUpdatePayload, void>("config.update"),
         replace: IPCClient.defineRequest<ConfigUpdatePayload, void>("config.replace"),
         get: IPCClient.defineRequest<ConfigGetPayload, unknown>("config.get"),
-        resetAfterTest: IPCClient.defineRequest<void, void>("config.resetAfterTest"),
+        pushUndoFrame: IPCClient.defineRequest<void, void>("config.pushUndoFrame"),
+        popUndoFrame: IPCClient.defineRequest<void, void>("config.popUndoFrame"),
     }
 }
 
@@ -49,10 +50,17 @@ GGTestRuntimeWorker.onBeforeRuntimeStart(() => {
         await getStore(payload.storeName).replaceValueOverride(GGConfigKey.getKey(payload.keyName), payload.value);
     });
 
-    worker.ipcClient.onFrameworkRequest(GGConfigIPC.worker.resetAfterTest, async () => {
+    worker.ipcClient.onFrameworkRequest(GGConfigIPC.worker.pushUndoFrame, async () => {
         worker.runtime.scope.enter();
         for (const store of GG_CONFIG.get().getStores().values()) {
-            await (store as GGConfigTestStore).resetAfterTest();
+            (store as GGConfigTestStore).pushUndoFrame();
+        }
+    });
+
+    worker.ipcClient.onFrameworkRequest(GGConfigIPC.worker.popUndoFrame, async () => {
+        worker.runtime.scope.enter();
+        for (const store of GG_CONFIG.get().getStores().values()) {
+            (store as GGConfigTestStore).popUndoFrame();
         }
     });
 });

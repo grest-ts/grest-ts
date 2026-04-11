@@ -48,10 +48,13 @@ function wrapDescribeFunction(target: any): any {
             const [name, callback, ...rest] = args;
 
             if (GG_TEST_RUNNER.has()) {
-                // This means it is describe block within another describe block that has test infra.
-                // Don't use .enter() - just branch and use .run() via callOriginalDescribe
+                const ggTest = GG_TEST_RUNNER.get();
                 const scope = GGLocator.getScope().branch(name);
-                target.call(thisArg, name, (...cbArgs: any[]) => scope.run(() => callback(...cbArgs)), ...rest)
+                target.call(thisArg, name, (...cbArgs: any[]) => scope.run(() => {
+                    beforeAll(() => ggTest.runBeforeAllHooks());
+                    afterAll(() => ggTest.runAfterAllHooks());
+                    callback(...cbArgs);
+                }), ...rest)
 
             } else {
                 scope.run(() => {
@@ -70,6 +73,7 @@ function wrapDescribeFunction(target: any): any {
                     // This ensures Vitest properly associates hooks with this suite
                     target.call(thisArg, name, (...cbArgs: any[]) => describeBlockCtx.run(() => {
                         beforeAll(() => ggTest.start(), 30000);
+                        beforeEach(() => ggTest.runBeforeEachHooks());
                         afterEach(() => ggTest.runAfterEachHooks());
                         afterAll(() => ggTest.teardown(), 30000);
                         callback(...cbArgs);

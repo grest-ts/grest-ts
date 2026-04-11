@@ -169,6 +169,28 @@ new GGConfigLocator(AppConfig)
 
 See [@grest-ts/config-aws](../config-aws/README.md).
 
+## Testing
+
+Config is automatically restored between tests — no manual cleanup needed. When a test modifies config via `t.config.update()`, the testkit records which keys were changed and reverts them after the test completes.
+
+```typescript
+describe("my tests", () => {
+    const t = GGTest.startWorker(MyRuntime);
+
+    test('modify config for this test', async () => {
+        await t.config.update(AppConfig.server.port, 9999);
+        // ... test with modified config
+    });
+
+    test('next test sees original config', async () => {
+        const port = await t.config.get(AppConfig.server.port);
+        expect(port).toBe(3000); // automatically restored
+    });
+});
+```
+
+Config set in `beforeAll` or by framework hooks (e.g. `GGTest.with().clone()`) is preserved — only changes made during individual tests are reverted. This also works with nested `describe` blocks: each scope's `beforeAll` overrides are reverted in its `afterAll`, so sibling describes don't see each other's config.
+
 ## Further Reading
 
 - [Extending](./README-extending.md) - How to add custom key types and stores

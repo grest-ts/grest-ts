@@ -84,6 +84,13 @@ export interface GGHttpCodec {
     readonly method: HttpMethod;
     readonly path: string;
 
+    /**
+     * Response header names that this codec sets on outgoing responses.
+     * Used for automatic CORS Access-Control-Expose-Headers configuration.
+     * Use [] if the codec does not set any custom response headers.
+     */
+    readonly responseHeaders: readonly string[];
+
     createForClient(config: ClientHttpRouteToRpcTransformClientConfig): ClientHttpRouteToRpcTransformClientCodec
 
     createForServer(config: ClientHttpRouteToRpcTransformServerConfig): ClientHttpRouteToRpcTransformServerCodec
@@ -104,6 +111,23 @@ export interface GGHttpCodec {
 // --------------------------------------------------------------------------------------------------------
 
 export interface GGHttpTransportMiddleware {
+    /**
+     * Request header names that this middleware reads from or writes to.
+     * Used for automatic CORS Access-Control-Allow-Headers configuration.
+     *
+     * Populated automatically by useHeader(). For custom middleware via use(),
+     * you must declare every custom header your middleware touches.
+     * Use [] if the middleware does not use any custom request headers.
+     */
+    readonly headers: readonly string[];
+
+    /**
+     * Response header names that this middleware sets on outgoing responses.
+     * Used for automatic CORS Access-Control-Expose-Headers configuration.
+     * Use [] if the middleware does not set any custom response headers.
+     */
+    readonly responseHeaders: readonly string[];
+
     /**
      * Client-side: modify outgoing request (add headers, etc.)
      */
