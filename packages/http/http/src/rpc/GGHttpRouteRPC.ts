@@ -2,6 +2,7 @@ import {HttpMethod} from "@grest-ts/common"
 import {ClientHttpRouteToRpcTransformClientCodec, ClientHttpRouteToRpcTransformClientConfig, ClientHttpRouteToRpcTransformServerCodec, ClientHttpRouteToRpcTransformServerConfig, GGHttpCodec, GGHttpCodecOpenApiConfig} from "../schema/GGHttpSchema"
 import {GGRpcRequestBuilder} from "./RpcRequest/GGRpcRequestBuilder";
 import {GGRpcResponseParser} from "./RpcResponse/GGRpcResponseParser";
+import {GGSchema} from "@grest-ts/schema";
 import type {OpenAPIV3_1} from "openapi-types";
 
 export type GGRpcServerCodecFactory = (method: HttpMethod, path: string, config: ClientHttpRouteToRpcTransformServerConfig) => ClientHttpRouteToRpcTransformServerCodec;
@@ -17,6 +18,45 @@ export const GGRpc = {
     DELETE: (path: string) => new GGHttpRpcCodec("DELETE", path),
     POST: (path: string) => new GGHttpRpcCodec("POST", path),
     PUT: (path: string) => new GGHttpRpcCodec("PUT", path),
+}
+
+/**
+ * Build OpenAPI parameter objects for a route.
+ *
+ * openapi-types@12 defines OpenAPIV3_1.ParameterObject as a direct alias of OpenAPIV3.ParameterObject,
+ * whose `schema` field uses V3 schema types that don't include `type:"null"` as a valid NonArraySchemaObjectType.
+ * The single cast below is the precise boundary of that typedef limitation — the runtime objects are valid
+ * OpenAPI 3.1 parameters with V3_1 schemas.
+ */
+function buildOpenApiParameters(
+    pathParams: string[],
+    hasBody: boolean,
+    inputSchema: GGSchema<unknown> | undefined
+): OpenAPIV3_1.ParameterObject[] {
+    const params: OpenAPIV3_1.ParameterObject[] = pathParams.map(name => ({
+        name,
+        in: 'path' as const,
+        required: true as const,
+        schema: {type: 'string'} as OpenAPIV3_1.ParameterObject["schema"]
+    }));
+
+    if (!hasBody && inputSchema) {
+        const objSchema = inputSchema.toJSONSchema() as OpenAPIV3_1.NonArraySchemaObject;
+        const shape = objSchema.properties;
+        const required = objSchema.required;
+        if (shape) {
+            for (const [name, fieldSchema] of Object.entries(shape)) {
+                if (pathParams.includes(name)) continue;
+                params.push({
+                    name,
+                    in: 'query' as const,
+                    required: required?.includes(name) ?? false,
+                    schema: fieldSchema as OpenAPIV3_1.ParameterObject["schema"]
+                });
+            }
+        }
+    }
+    return params;
 }
 
 class GGHttpRpcCodec implements GGHttpCodec {
@@ -46,31 +86,8 @@ class GGHttpRpcCodec implements GGHttpCodec {
         const hasBody = this.method === "POST" || this.method === "PUT" || this.method === "PATCH";
         const operationId = config.methodName;
 
-        const parameters: OpenAPIV3_1.ParameterObject[] = pathParams.map(name => ({
-            name,
-            in: 'path',
-            required: true,
-            schema: {type: 'string'}
-        }));
-
+        const parameters = buildOpenApiParameters(pathParams, hasBody, config.contract.input ?? undefined);
         const operation: Partial<OpenAPIV3_1.OperationObject> = {operationId, parameters};
-
-        if (!hasBody && config.contract.input) {
-            const inputSchema = config.contract.input.toJSONSchema() as any;
-            const shape = inputSchema?.properties as Record<string, OpenAPIV3_1.SchemaObject> | undefined;
-            const required = inputSchema?.required as string[] | undefined;
-            if (shape) {
-                for (const [name, schema] of Object.entries(shape)) {
-                    if (pathParams.includes(name)) continue;
-                    parameters.push({
-                        name,
-                        in: 'query',
-                        required: required?.includes(name) ?? false,
-                        schema: schema as any
-                    });
-                }
-            }
-        }
 
         if (hasBody && config.contract.input) {
             operation.requestBody = {

@@ -5,7 +5,7 @@ import {GGHttpServer} from "./GGHttpServer";
 
 export class GGHttp<TContext = undefined> {
 
-    private readonly httpServer: GGHttpServer
+    protected readonly httpServer: GGHttpServer
     private readonly middlewares: GGHttpServerMiddleware[] = [];
 
     constructor(httpServer: GGHttpServer) {

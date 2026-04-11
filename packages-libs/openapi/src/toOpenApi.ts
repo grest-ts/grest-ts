@@ -88,6 +88,12 @@ function buildOperation(
     return base;
 }
 
+/**
+ * openapi-types@12 defines OpenAPIV3_1.ParameterObject as a direct alias of OpenAPIV3.ParameterObject,
+ * whose `schema` field resolves to V3 schema types (missing `type:"null"` as a valid type).
+ * The casts to ParameterObject["schema"] below are the precise boundary of that typedef limitation —
+ * the runtime objects are fully valid OpenAPI 3.1 parameters carrying V3_1 schemas.
+ */
 function buildParametersFallback(
     codec: GGHttpSchema<any, any>["codec"][string],
     contract: NonNullable<GGHttpSchema<any, any>["contract"]>["methods"][string]
@@ -96,23 +102,23 @@ function buildParametersFallback(
     const pathParams = (codec.path.match(/:(\w+)/g) || []).map((m: string) => m.slice(1));
     const params: OpenAPIV3_1.ParameterObject[] = pathParams.map((name: string) => ({
         name,
-        in: "path",
-        required: true,
-        schema: {type: "string"}
+        in: "path" as const,
+        required: true as const,
+        schema: {type: "string"} as OpenAPIV3_1.ParameterObject["schema"]
     }));
 
     if (!hasBody && contract.input) {
-        const inputSchema = contract.input.toJSONSchema() as any;
-        const shape = inputSchema?.properties as Record<string, OpenAPIV3_1.SchemaObject> | undefined;
-        const required = inputSchema?.required as string[] | undefined;
+        const inputSchema = contract.input.toJSONSchema() as OpenAPIV3_1.NonArraySchemaObject;
+        const shape = inputSchema.properties;
+        const required = inputSchema.required;
         if (shape) {
-            for (const [name, schema] of Object.entries(shape)) {
+            for (const [name, fieldSchema] of Object.entries(shape)) {
                 if (pathParams.includes(name)) continue;
                 params.push({
                     name,
-                    in: "query",
+                    in: "query" as const,
                     required: required?.includes(name) ?? false,
-                    schema: schema as any
+                    schema: fieldSchema as OpenAPIV3_1.ParameterObject["schema"]
                 });
             }
         }
@@ -143,20 +149,19 @@ function buildResponses(
 
     // Success response
     if (contract.success) {
+        const successSchema: OpenAPIV3_1.NonArraySchemaObject = {
+            type: "object",
+            properties: {
+                success: {type: "boolean", enum: [true]},
+                type: {type: "string", enum: ["OK"]},
+                data: contract.success.toJSONSchema()
+            },
+            required: ["success", "type", "data"]
+        };
         responses["200"] = {
             description: "Success",
             content: {
-                "application/json": {
-                    schema: {
-                        type: "object",
-                        properties: {
-                            success: {type: "boolean", enum: [true]},
-                            type: {type: "string", enum: ["OK"]},
-                            data: contract.success.toJSONSchema() as any
-                        },
-                        required: ["success", "type", "data"]
-                    } as any
-                }
+                "application/json": {schema: successSchema}
             }
         };
     } else {
@@ -170,19 +175,20 @@ function buildResponses(
         for (const errCls of contract.errors as ANY_ERROR_CLS[]) {
             const statusCode = errCls.STATUS_CODE;
             const errType = errCls.TYPE;
-            const dataSchema = "schema" in errCls && errCls.schema
-                ? (errCls.schema as any).toJSONSchema()
-                : undefined;
+            const dataSchema: OpenAPIV3_1.SchemaObject | undefined =
+                errCls.schema != null ? errCls.schema.toJSONSchema() : undefined;
 
-            const errorBodySchema: OpenAPIV3_1.SchemaObject = {
+            const props: NonNullable<OpenAPIV3_1.BaseSchemaObject["properties"]> = {
+                success: {type: "boolean", enum: [false]},
+                type: {type: "string", enum: [errType]},
+            };
+            if (dataSchema !== undefined) props.data = dataSchema;
+
+            const errorBodySchema: OpenAPIV3_1.NonArraySchemaObject = {
                 type: "object",
-                properties: {
-                    success: {type: "boolean", enum: [false]},
-                    type: {type: "string", enum: [errType]},
-                    ...(dataSchema !== undefined ? {data: dataSchema as any} : {})
-                },
+                properties: props,
                 required: ["success", "type", ...(dataSchema !== undefined ? ["data"] : [])]
-            } as any;
+            };
 
             if (!byStatus.has(statusCode)) byStatus.set(statusCode, []);
             byStatus.get(statusCode)!.push(errorBodySchema);

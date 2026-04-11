@@ -38,22 +38,23 @@ class GGFileUploadCodec implements GGHttpCodec {
         const pathParams = (this.path.match(/:(\w+)/g) || []).map(m => m.slice(1));
         const parameters: OpenAPIV3_1.ParameterObject[] = pathParams.map(name => ({
             name,
-            in: 'path',
-            required: true,
-            schema: {type: 'string'}
+            in: 'path' as const,
+            required: true as const,
+            schema: {type: 'string'} as OpenAPIV3_1.ParameterObject["schema"]
         }));
 
-        const inputSchema = config.contract.input?.toJSONSchema();
-        const properties = inputSchema ? (inputSchema as any).properties as Record<string, OpenAPIV3_1.SchemaObject> | undefined : undefined;
+        const inputSchema = config.contract.input?.toJSONSchema() as OpenAPIV3_1.NonArraySchemaObject | undefined;
+        const shape = inputSchema?.properties;
+        const requiredFields = inputSchema?.required;
 
-        const schemaProperties: Record<string, OpenAPIV3_1.SchemaObject> = {};
+        const schemaProperties: Record<string, OpenAPIV3_1.SchemaObject | OpenAPIV3_1.ReferenceObject> = {};
         const required: string[] = [];
 
-        if (properties) {
-            for (const [name, schema] of Object.entries(properties)) {
+        if (shape) {
+            for (const [name, fieldSchema] of Object.entries(shape)) {
                 if (pathParams.includes(name)) continue;
-                schemaProperties[name] = schema;
-                if ((inputSchema as any).required?.includes(name)) {
+                schemaProperties[name] = fieldSchema;
+                if (requiredFields?.includes(name)) {
                     required.push(name);
                 }
             }
@@ -70,7 +71,7 @@ class GGFileUploadCodec implements GGHttpCodec {
                             type: 'object',
                             properties: schemaProperties,
                             ...(required.length > 0 ? {required} : {})
-                        }
+                        } as OpenAPIV3_1.NonArraySchemaObject
                     }
                 }
             }

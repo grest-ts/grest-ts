@@ -137,6 +137,6 @@ GGHttp.prototype.openApi = function (
     options: GGOpenApiServerOptions = {}
 ): typeof this {
     const openApiServer = new GGOpenApiServer(schemas, options);
-    openApiServer.registerWith((this as any).httpServer as GGHttpServer);
+    openApiServer.registerWith(this.httpServer);
     return this;
 };
