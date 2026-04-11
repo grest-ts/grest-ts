@@ -4,14 +4,9 @@ import {GGConfigIPC} from "./GGConfigCommands";
 export class GGConfigTestComponent implements GGTestComponent {
 
     private readonly runner: GGTestRunner;
-    private configModifiedInTest = false;
 
     constructor(runner: GGTestRunner) {
         this.runner = runner;
-    }
-
-    markConfigModified(): void {
-        this.configModifiedInTest = true;
     }
 
     async beforeEach(): Promise<void> {
@@ -19,9 +14,7 @@ export class GGConfigTestComponent implements GGTestComponent {
     }
 
     async afterEach(): Promise<void> {
-        if (!this.configModifiedInTest) return;
         await this.runner.sendCommand(GGConfigIPC.worker.resetAfterTest, undefined);
-        this.configModifiedInTest = false;
     }
 }
 
