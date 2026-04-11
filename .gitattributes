@@ -1,0 +1,24 @@
+# Normalize line endings to LF on commit for all text files.
+# This ensures consistent line endings across Windows, macOS, and Linux.
+# On checkout: Windows gets CRLF (default git config), Linux/macOS get LF.
+
+* text=auto eol=lf
+
+# Explicitly text files
+*.ts    text eol=lf
+*.tsx   text eol=lf
+*.js    text eol=lf
+*.mjs   text eol=lf
+*.cjs   text eol=lf
+*.json  text eol=lf
+*.md    text eol=lf
+*.yml   text eol=lf
+*.yaml  text eol=lf
+*.sql   text eol=lf
+*.html  text eol=lf
+*.css   text eol=lf
+*.txt   text eol=lf
+*.proto text eol=lf
+
+# Binary files — no line ending conversion
+*.png   binary
