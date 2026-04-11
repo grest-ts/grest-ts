@@ -29,7 +29,6 @@ export interface DependencyEdge {
 export interface DependencyGraph {
     nodes: DependencyNode[]
     edges: DependencyEdge[]
-    generated: string
 }
 
 // Category-based colors
@@ -226,7 +225,6 @@ export class GGDependencyJsonBuilder {
         return {
             nodes,
             edges,
-            generated: new Date().toISOString(),
         }
     }
 }
