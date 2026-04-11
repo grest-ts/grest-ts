@@ -8,20 +8,28 @@ import {IsLocale} from "../custom/IsLocale";
 
 const IsValidationIssue = IsObject({
     path: IsString.nonEmpty
-        .docs({description: "Dot-separated field path within the request body, e.g. \"user.address.zip\""}),
+        .docs({description: "Dot-separated field path within the request body", example: "user.address.zip"}),
     code: IsString.nonEmpty
-        .docs({description: "Dot-separated issue key identifying the rule that failed, e.g. \"invalid.string.type\""}),
+        .docs({description: "Dot-separated issue key identifying the rule that failed", example: "invalid.string.minLength"}),
     message: IsString.nonEmpty
-        .docs({description: "Human-readable error message, localised to the client locale if available"}),
+        .docs({description: "Human-readable error message, localised to the client locale if available", example: "Minimum 8 characters required"}),
     params: IsRecord(IsString, IsAny).orUndefined
-        .docs({description: "Template variables used in the message, e.g. {min: 8} for \"Minimum {min} characters\""}),
+        .docs({description: "Template variables substituted into the message template", example: {min: 8}}),
     usedLanguage: IsLocale.orUndefined
-        .docs({description: "Locale that was actually used to render the message (may differ from requested if translation is missing)"}),
+        .docs({description: "Locale actually used to render the message (may differ from requested if translation is missing)", example: "en"}),
     expectedLanguage: IsLocale.orUndefined
-        .docs({description: "Locale requested by the client via Accept-Language"}),
+        .docs({description: "Locale requested by the client via Accept-Language", example: "de"}),
 }).docs({
     title: "Validation issue",
-    description: "A single field-level validation failure. One request can produce multiple issues."
+    description: "A single field-level validation failure. One request can produce multiple issues.",
+    example: {
+        path: "password",
+        code: "invalid.string.minLength",
+        message: "Minimum 8 characters required",
+        params: {min: 8},
+        usedLanguage: "en",
+        expectedLanguage: "de"
+    }
 });
 
 export const VALIDATION_ERROR = ERROR.define("VALIDATION_ERROR", 422, IsArray(IsValidationIssue))
