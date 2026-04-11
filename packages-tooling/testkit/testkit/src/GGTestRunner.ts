@@ -248,6 +248,18 @@ export class GGTestRunner {
         });
     }
 
+    public async runBeforeAllHooks(): Promise<void> {
+        for (const [, component] of this.extensionInstances) {
+            await component.beforeAll?.();
+        }
+    }
+
+    public async runAfterAllHooks(): Promise<void> {
+        for (const [, component] of this.extensionInstances) {
+            await component.afterAll?.();
+        }
+    }
+
     public async runBeforeEachHooks(): Promise<void> {
         for (const [, component] of this.extensionInstances) {
             await component.beforeEach?.();

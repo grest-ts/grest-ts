@@ -6,6 +6,8 @@ import type {GGTestRunner} from "../GGTestRunner";
  */
 export interface GGTestComponent {
     start?(): Promise<void>;
+    beforeAll?(): Promise<void>;
+    afterAll?(): Promise<void>;
     beforeEach?(): Promise<void>;
     afterEach?(): Promise<void>;
     teardown?(): Promise<void>;

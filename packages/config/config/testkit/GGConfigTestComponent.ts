@@ -9,12 +9,20 @@ export class GGConfigTestComponent implements GGTestComponent {
         this.runner = runner;
     }
 
+    async beforeAll(): Promise<void> {
+        await this.runner.sendCommand(GGConfigIPC.worker.pushUndoFrame, undefined);
+    }
+
+    async afterAll(): Promise<void> {
+        await this.runner.sendCommand(GGConfigIPC.worker.popUndoFrame, undefined);
+    }
+
     async beforeEach(): Promise<void> {
-        await this.runner.sendCommand(GGConfigIPC.worker.beginTestTracking, undefined);
+        await this.runner.sendCommand(GGConfigIPC.worker.pushUndoFrame, undefined);
     }
 
     async afterEach(): Promise<void> {
-        await this.runner.sendCommand(GGConfigIPC.worker.resetAfterTest, undefined);
+        await this.runner.sendCommand(GGConfigIPC.worker.popUndoFrame, undefined);
     }
 }
 
