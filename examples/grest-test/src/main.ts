@@ -77,7 +77,7 @@ export class MainRuntime extends GGRuntime {
         BenchmarkApi.register(benchmarkService);
         ConfigTestSocketApi.register(configTestService.handleSocketConnection);
 
-        new GGOpenApiServer(httpServer, {title: "Grest Test API", version: "1.0.0"})
+        new GGOpenApiServer(httpServer, {title: "Grest Test API", version: "1.0.0", specPath: "/openapi.json", docsPath: "/docs"})
             .registerWith(httpServer);
 
         // new GGHttp()

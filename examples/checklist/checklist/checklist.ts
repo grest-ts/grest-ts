@@ -42,7 +42,7 @@ export class ChecklistRuntime extends MyRuntime {
                     return {status: true}
                 }
             })
-            .openApi({title: "Checklist Public API", version: "1.0.0"})
+            .openApi({title: "Checklist Public API", version: "1.0.0", specPath: "/openapi.json", docsPath: "/docs"})
 
         new GGHttp(new GGHttpServer({key: new GGLocatorKey("two")}))
             .use(new UserContextMiddleware(userService))
@@ -53,7 +53,7 @@ export class ChecklistRuntime extends MyRuntime {
                     await blockerClient.blockUser(request);
                 }
             })
-            .openApi({title: "Checklist Auth API", version: "1.0.0"})
+            .openApi({title: "Checklist Auth API", version: "1.0.0", specPath: "/openapi.json", docsPath: "/docs"})
 
         ChecklistNotificationApi.register(new NotificationService(checklistService).handleConnection, {
             middlewares: [new UserContextMiddleware(userService)]

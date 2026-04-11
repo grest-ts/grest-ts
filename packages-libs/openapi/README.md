@@ -42,7 +42,9 @@ new GGHttp(server)
     .openApi({
         title: "My API",
         version: "1.0.0",
-        description: "Item and order management"
+        description: "Item and order management",
+        specPath: "/openapi.json",
+        docsPath: "/docs"
     });
 // GET /openapi.json → OpenAPI 3.1 spec
 // GET /docs         → Swagger UI (served from bundled assets)
@@ -63,9 +65,9 @@ OrderApiSchema.register(orderImpl);
 new GGOpenApiServer(httpServer, {
     title: "My API",
     version: "1.0.0",
-    eager: true,        // build spec at construction time (default: lazy on first request)
-    specPath: "/spec",  // default: /openapi.json
-    docsPath: "/docs"   // default: /docs
+    specPath: "/openapi.json",
+    docsPath: "/docs",
+    eager: true   // build spec at construction time (default: lazy on first request)
 }).registerWith(httpServer);
 ```
 
@@ -92,6 +94,8 @@ new GGHttp(server)
     .http(ItemApiSchema, itemImpl)
     .openApi({
         title: "My API",
+        specPath: "/openapi.json",
+        docsPath: "/docs",
         customUi: (specUrl) => `<!DOCTYPE html>
 <html><head>
   <script src="https://cdn.jsdelivr.net/npm/redoc/bundles/redoc.standalone.js"></script>
@@ -106,6 +110,8 @@ Use `cdnUrl` to load Swagger UI from a CDN instead of the bundled assets:
 ```typescript
 .openApi({
     title: "My API",
+    specPath: "/openapi.json",
+    docsPath: "/docs",
     cdnUrl: "https://unpkg.com/swagger-ui-dist@5.32.2"
 })
 ```

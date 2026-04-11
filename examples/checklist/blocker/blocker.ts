@@ -36,7 +36,7 @@ export class BlockerRuntime extends MyRuntime {
         // startServer auto-processes the use class
         new GGHttp(new GGHttpServer())
             .http(BlockerApi, new BlockerService(blockerDb))
-            .openApi({title: "Blocker API", version: "1.0.0"})
+            .openApi({title: "Blocker API", version: "1.0.0", specPath: "/openapi.json", docsPath: "/docs"})
 
     }
 }

@@ -17,15 +17,15 @@ function readSwaggerAsset(filename: string): Buffer {
 export interface GGOpenApiServerOptions extends ToOpenApiOptions {
     /**
      * Path where the JSON spec is served.
-     * @default "/openapi.json"
+     * e.g. "/openapi.json" or "/api/spec"
      */
-    specPath?: string;
+    specPath: string;
 
     /**
-     * Path where the Swagger UI is served.
-     * @default "/docs"
+     * Path where the Swagger UI HTML page is served.
+     * e.g. "/docs" or "/api/docs"
      */
-    docsPath?: string;
+    docsPath: string;
 
     /**
      * If true, the OpenAPI spec is built immediately on construction rather
@@ -76,20 +76,20 @@ export interface GGOpenApiServerOptions extends ToOpenApiOptions {
  * const server = new GGHttpServer();
  * new GGHttp(server)
  *     .http(MyApiSchema, impl)
- *     .openApi({ title: "My API", version: "1.0.0" });
+ *     .openApi({ title: "My API", version: "1.0.0", specPath: "/openapi.json", docsPath: "/docs" });
  *
  * @example
  * // Standalone — also works when using schema.register() directly:
  * const httpServer = new GGHttpServer();
  * MyApi.register(impl);
- * new GGOpenApiServer(httpServer, { title: "My API" }).registerWith(httpServer);
+ * new GGOpenApiServer(httpServer, { title: "My API", specPath: "/openapi.json", docsPath: "/docs" }).registerWith(httpServer);
  */
 export class GGOpenApiServer {
     private readonly server: GGHttpServer;
     private readonly options: GGOpenApiServerOptions;
     private _spec: OpenAPIV3_1.Document | undefined;
 
-    constructor(server: GGHttpServer, options: GGOpenApiServerOptions = {}) {
+    constructor(server: GGHttpServer, options: GGOpenApiServerOptions) {
         this.server = server;
         this.options = options;
         if (options.eager) {
@@ -106,8 +106,8 @@ export class GGOpenApiServer {
     }
 
     public registerWith(server: GGHttpServer): this {
-        const specPath = this.options.specPath ?? "/openapi.json";
-        const docsPath = this.options.docsPath ?? "/docs";
+        const specPath = this.options.specPath;
+        const docsPath = this.options.docsPath;
 
         server.registerRoute("GET", specPath, async (_req, res) => {
             const spec = this.getSpec();
@@ -158,8 +158,7 @@ export class GGOpenApiServer {
         if (this.options.cdnUrl) {
             return buildCdnHtml(specUrl, this.options.cdnUrl);
         }
-        const docsPath = this.options.docsPath ?? "/docs";
-        return buildBundledHtml(specUrl, docsPath + "/assets");
+        return buildBundledHtml(specUrl, this.options.docsPath + "/assets");
     }
 }
 
@@ -234,15 +233,15 @@ declare module "@grest-ts/http" {
          * @example
          * new GGHttp(server)
          *   .http(MyApiSchema, impl)
-         *   .openApi({ title: "My API" });
+         *   .openApi({ title: "My API", specPath: "/openapi.json", docsPath: "/docs" });
          */
-        openApi(options?: GGOpenApiServerOptions): this;
+        openApi(options: GGOpenApiServerOptions): this;
     }
 }
 
 GGHttp.prototype.openApi = function (
     this: GGHttp,
-    options: GGOpenApiServerOptions = {}
+    options: GGOpenApiServerOptions
 ): typeof this {
     const openApiServer = new GGOpenApiServer(this.httpServer, options);
     openApiServer.registerWith(this.httpServer);
