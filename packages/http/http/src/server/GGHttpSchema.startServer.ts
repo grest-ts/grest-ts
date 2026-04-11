@@ -71,7 +71,7 @@ function setupRoutes<TContract extends GGContractApiDefinition>(
     const parentContext = GGContextStore.tryGetContext();
 
     for (const mw of apiMiddlewares) {
-        if (mw.headers?.length) server.registerCorsHeaders(mw.headers);
+        if (mw.headers.length) server.registerCorsHeaders(mw.headers);
     }
 
     server.onStart(() => {

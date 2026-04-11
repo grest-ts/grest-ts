@@ -430,7 +430,8 @@ httpSchema(Contract)
     .routes({ ... })
 ```
 
-For custom middleware, declare the `headers` property:
+For custom middleware, `headers` is required — TypeScript enforces this at compile time.
+Use `[]` if your middleware does not use any custom headers:
 
 ```typescript
 export const MyMiddleware: GGHttpTransportMiddleware = {

@@ -61,7 +61,7 @@ class GGHttpSchemaBuilder<TContract extends GGContractApiDefinition, TContext = 
         }
 
         const middleware: GGHttpTransportMiddleware = {
-            headers: codec.inputKeys,
+            headers: codec.inputKeys ?? [],
             updateRequest(req: GGHttpRequest) {
                 const contextValue = contextKey.get();
                 if (contextValue !== undefined) {

@@ -87,9 +87,12 @@ export interface GGHttpTransportMiddleware {
     /**
      * HTTP header names that this middleware reads from or writes to.
      * Used for automatic CORS Access-Control-Allow-Headers configuration.
-     * Populated automatically by useHeader(); should be declared manually for custom middleware.
+     *
+     * Populated automatically by useHeader(). For custom middleware via use(),
+     * you must declare every custom header your middleware touches.
+     * Use [] if the middleware does not use any custom headers.
      */
-    readonly headers?: readonly string[];
+    readonly headers: readonly string[];
 
     /**
      * Client-side: modify outgoing request (add headers, etc.)
