@@ -12,9 +12,6 @@
 * @TODO XXAsyncMethodIssue - find this. sync method "testable" is problematic, need to thing of options or not support sync methods.
 * There is an issue that callOn access kind of "finds the service where things live", but we should be able to hint it or soemthing. Linked with  @TODO XXAsyncMethodIssue
 
-* Before test take config snapshot, so that next test runs on "original" config instead. Meaning we don't have to "fix" config after each tests.
-  - Search for test 'MESSAGE_AGE_HIGH warning triggers when threshold is set to 0' as an example
-
 * Context is inherited from the test when running inline in testkit. This is not good, should isolate runtime context from testkit, as otherwise inline vs worker mode-s work differently.
 
 * Idea for @mockable to get tests run parallel also within a single describe block, though not sure if it is worth it. But could ID every "action" and @mockable can check the ID and use that to decide which spy/mock to use.

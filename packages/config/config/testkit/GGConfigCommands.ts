@@ -20,6 +20,7 @@ export const GGConfigIPC = {
         update: IPCClient.defineRequest<ConfigUpdatePayload, void>("config.update"),
         replace: IPCClient.defineRequest<ConfigUpdatePayload, void>("config.replace"),
         get: IPCClient.defineRequest<ConfigGetPayload, unknown>("config.get"),
+        beginTestTracking: IPCClient.defineRequest<void, void>("config.beginTestTracking"),
         resetAfterTest: IPCClient.defineRequest<void, void>("config.resetAfterTest"),
     }
 }
@@ -47,6 +48,13 @@ GGTestRuntimeWorker.onBeforeRuntimeStart(() => {
     worker.ipcClient.onFrameworkRequest(GGConfigIPC.worker.replace, async (payload) => {
         worker.runtime.scope.enter();
         await getStore(payload.storeName).replaceValueOverride(GGConfigKey.getKey(payload.keyName), payload.value);
+    });
+
+    worker.ipcClient.onFrameworkRequest(GGConfigIPC.worker.beginTestTracking, async () => {
+        worker.runtime.scope.enter();
+        for (const store of GG_CONFIG.get().getStores().values()) {
+            (store as GGConfigTestStore).enableTestTracking();
+        }
     });
 
     worker.ipcClient.onFrameworkRequest(GGConfigIPC.worker.resetAfterTest, async () => {

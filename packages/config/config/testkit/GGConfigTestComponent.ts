@@ -10,8 +10,10 @@ export class GGConfigTestComponent implements GGTestComponent {
         this.runner = runner;
     }
 
-    markConfigModified(): void {
+    async markConfigModified(): Promise<void> {
+        if (this.configModifiedInTest) return;
         this.configModifiedInTest = true;
+        await this.runner.sendCommand(GGConfigIPC.worker.beginTestTracking, undefined);
     }
 
     async afterEach(): Promise<void> {

@@ -4,15 +4,27 @@ import {GGConfigLocator} from "../src/GGConfigLocator";
 import {GG_TEST_RUNTIME_WORKER, GGTestCommand} from "@grest-ts/testkit";
 import {ConfigUpdatePayload, GGConfigIPC} from "./GGConfigCommands";
 
+const NOT_SET = Symbol('NOT_SET');
+
 /**
  * Test config store that wraps a parent store and allows overriding values.
  * Overrides validation to always throw (fail fast in tests).
+ *
+ * Uses a per-key undo journal for test isolation: before modifying a key for the first time
+ * during a test, the previous value (or absence) is recorded. On resetAfterTest(), only
+ * those keys are reverted — preserving any overrides set during beforeAll or other setup.
  */
 export class GGConfigTestStore<Key extends GGConfigKey = GGConfigKey> extends GGConfigStore<Key> {
 
     private readonly wrappedStore: GGConfigStore<Key>;
-    private readonly initialConfigOverridesMap: Map<GGConfigKey, unknown> = new Map();
     private readonly activeConfigOverridesMap: Map<GGConfigKey, unknown> = new Map();
+
+    /**
+     * Tracks pre-modification state for keys changed during the current test.
+     * null when tracking is not active; created by enableTestTracking().
+     * Values are either the previous override value or NOT_SET if the key had no override.
+     */
+    private testUndoLog: Map<GGConfigKey, unknown> | null = null;
 
     constructor(parent: GGConfigStore<Key>, initialOverrides: GGTestCommand<ConfigUpdatePayload>[]) {
         super();
@@ -21,7 +33,6 @@ export class GGConfigTestStore<Key extends GGConfigKey = GGConfigKey> extends GG
             if (GGConfigKey.hasKey(command.payload.keyName)) {
                 const key = GGConfigKey.getKey(command.payload.keyName);
                 const value = this.resolveValue(key, command.payload.value, true)
-                this.initialConfigOverridesMap.set(key, value)
                 this.activeConfigOverridesMap.set(key, value);
             } else {
                 // To throw here, we would need to let the test runner know what config keys each service uses so it can target config updates better.
@@ -38,6 +49,22 @@ export class GGConfigTestStore<Key extends GGConfigKey = GGConfigKey> extends GG
         return this.activeConfigOverridesMap.has(key) ? this.activeConfigOverridesMap.get(key) as T : this.wrappedStore.getValue(key)
     }
 
+    public enableTestTracking(): void {
+        if (this.testUndoLog === null) {
+            this.testUndoLog = new Map();
+        }
+    }
+
+    private trackForUndo(key: GGConfigKey): void {
+        if (this.testUndoLog === null) return;
+        if (!this.testUndoLog.has(key)) {
+            this.testUndoLog.set(key, this.activeConfigOverridesMap.has(key)
+                ? this.activeConfigOverridesMap.get(key)
+                : NOT_SET
+            );
+        }
+    }
+
     public async updateValueOverride(key: GGConfigKey, value: unknown): Promise<void> {
         if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
             const existingValue = this.activeConfigOverridesMap.get(key) ?? this.wrappedStore.getValue(key);
@@ -49,15 +76,21 @@ export class GGConfigTestStore<Key extends GGConfigKey = GGConfigKey> extends GG
     }
 
     public async replaceValueOverride(key: GGConfigKey, value: unknown): Promise<void> {
+        this.trackForUndo(key);
         this.activeConfigOverridesMap.set(key, this.resolveValue(key, value, false));
         await this.notify(key);
     }
 
     public async resetAfterTest(): Promise<void> {
-        this.activeConfigOverridesMap.clear();
-        for (const [key, value] of this.initialConfigOverridesMap) {
-            await this.replaceValueOverride(key, value);
+        if (!this.testUndoLog) return;
+        for (const [key, previousValue] of this.testUndoLog) {
+            if (previousValue === NOT_SET) {
+                this.activeConfigOverridesMap.delete(key);
+            } else {
+                this.activeConfigOverridesMap.set(key, previousValue);
+            }
         }
+        this.testUndoLog = null;
     }
 
     public override watch(key: GGConfigKey, callback: ConfigUpdateCallback): () => void {
