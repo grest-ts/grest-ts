@@ -9,12 +9,15 @@
 
 ## Features
 
-- **`toOpenApi()`** — pure function, no side effects; safe to use in CI/build scripts for static spec export
-- **`GGOpenApiServer`** — serves `GET /openapi.json` and `GET /docs` (CDN-based Swagger UI, zero bundle overhead)
-- **`GGHttp.openApi()`** — fluent builder integration via module augmentation
+- **`toOpenApi()`** — pure function, no side effects; safe in CI/build scripts for static spec export
+- **`GGOpenApiServer`** — serves `GET /openapi.json` and `GET /docs` (Swagger UI); schemas auto-collected from the server
+- **`GGHttp.openApi()`** — fluent builder integration via module augmentation; no schema list to maintain
+- **Bundled assets** — Swagger UI served from `swagger-ui-dist` (no CDN dependency, works offline)
 - **Full schema conversion** — all `GGSchema` types → OpenAPI 3.1 / JSON Schema 2020-12
-- **Codec-aware** — `GGRpc.*` operations auto-generate path params, query params, and request bodies; `GGFileUpload` produces `multipart/form-data`
+- **`.docs()` and `.default()` passthrough** — title, description, example, deprecated, default values flow into the spec automatically
+- **Codec-aware** — `GGRpc.*` auto-generates path/query params and request bodies; `GGFileUpload` → `multipart/form-data`; `GGFileDownload` → binary response
 - **Error responses** — each `ERROR` class maps to its `STATUS_CODE`; multiple errors at the same code merge as `oneOf`
+- **Unique operationIds** — format `ApiName_methodName` (e.g. `ItemApi_list`), globally unique across composed schemas
 
 ## Installation
 
@@ -24,21 +27,46 @@ npm install @grest-ts/openapi
 
 ## Usage
 
-### Serve docs alongside your API
+### Serve docs alongside your API (GGHttp builder)
+
+Import `@grest-ts/openapi` once — it augments `GGHttp` with `.openApi()`. All schemas registered via `.http()` are collected automatically; no list to keep in sync.
 
 ```typescript
-import "@grest-ts/openapi"; // side-effect import augments GGHttp
+import "@grest-ts/openapi";
+import {GGHttp, GGHttpServer} from "@grest-ts/http";
 
 const server = new GGHttpServer();
-const gg = new GGHttp(server)
+new GGHttp(server)
     .http(ItemApiSchema, itemImpl)
-    .openApi([ItemApiSchema], {
-        title: "Item API",
+    .http(OrderApiSchema, orderImpl)
+    .openApi({
+        title: "My API",
         version: "1.0.0",
-        description: "Manages items"
+        description: "Item and order management"
     });
 // GET /openapi.json → OpenAPI 3.1 spec
-// GET /docs         → Swagger UI
+// GET /docs         → Swagger UI (served from bundled assets)
+// GET /docs/assets/swagger-ui-bundle.js  ─┐ served locally,
+// GET /docs/assets/swagger-ui.css        ─┘ no CDN required
+```
+
+### Standalone (when using schema.register() directly)
+
+```typescript
+import {GGOpenApiServer} from "@grest-ts/openapi";
+import {GGHttpServer} from "@grest-ts/http";
+
+const httpServer = new GGHttpServer();
+ItemApiSchema.register(itemImpl);
+OrderApiSchema.register(orderImpl);
+
+new GGOpenApiServer(httpServer, {
+    title: "My API",
+    version: "1.0.0",
+    eager: true,        // build spec at construction time (default: lazy on first request)
+    specPath: "/spec",  // default: /openapi.json
+    docsPath: "/docs"   // default: /docs
+}).registerWith(httpServer);
 ```
 
 ### Export spec to a file (CI/scripts)
@@ -55,55 +83,83 @@ const spec = toOpenApi([ItemApiSchema, OrderApiSchema], {
 writeFileSync("openapi.json", JSON.stringify(spec, null, 2));
 ```
 
-### Standalone server
+### Custom or alternative UI
+
+Use `customUi` to serve Redoc, Scalar, or any other UI instead of Swagger UI:
 
 ```typescript
-import {GGOpenApiServer} from "@grest-ts/openapi";
+new GGHttp(server)
+    .http(ItemApiSchema, itemImpl)
+    .openApi({
+        title: "My API",
+        customUi: (specUrl) => `<!DOCTYPE html>
+<html><head>
+  <script src="https://cdn.jsdelivr.net/npm/redoc/bundles/redoc.standalone.js"></script>
+</head><body>
+  <redoc spec-url="${specUrl}"></redoc>
+</body></html>`
+    });
+```
 
-const openApiServer = new GGOpenApiServer([ItemApiSchema], {
-    title: "Item API",
-    eager: true,       // build spec at construction time instead of first request
-    specPath: "/spec", // default: /openapi.json
-    docsPath: "/docs"  // default: /docs
-});
-openApiServer.registerWith(httpServer);
+Use `cdnUrl` to load Swagger UI from a CDN instead of the bundled assets:
+
+```typescript
+.openApi({
+    title: "My API",
+    cdnUrl: "https://unpkg.com/swagger-ui-dist@5.32.2"
+})
 ```
 
 ## Schema → JSON Schema mapping
 
-| grest-ts type | JSON Schema output |
+| grest-ts | JSON Schema output |
 |---|---|
 | `IsString` | `{type:"string"}` + `minLength`, `maxLength`, `pattern` |
+| `IsString.nonEmpty` | `{type:"string", minLength:1}` |
 | `IsNumber` | `{type:"number"}` + `minimum`, `maximum`, `multipleOf` |
 | `IsInt` / `IsUint` / `IsInt8` … | `{type:"integer"}` + appropriate bounds |
 | `IsBoolean` | `{type:"boolean"}` |
 | `IsBit` | `{type:"integer", minimum:0, maximum:1}` |
+| `IsFile` | `{type:"string", format:"binary"}` |
 | `IsLiteral("a","b")` | `{enum:["a","b"]}` |
-| `IsArray(T)` | `{type:"array", items:T}` |
+| `IsArray(T)` | `{type:"array", items:T}` + `minItems`, `maxItems` |
 | `IsObject({…})` | `{type:"object", properties:{…}, required:[…]}` |
 | `IsRecord(K,V)` | `{type:"object", additionalProperties:V}` |
 | `IsUnion(A,B)` | `{oneOf:[A,B]}` |
 | `IsDiscriminated(…)` | `{oneOf:[…], discriminator:{propertyName:…}}` |
 | `IsTuple(A,B)` | `{type:"array", prefixItems:[A,B], minItems:2, maxItems:2}` |
 | `IsAny` / `IsUnknown` | `{}` |
-| `.orNull` | wraps in `{oneOf:[schema,{type:"null"}]}` |
-| `.docs({…})` | `title`, `description`, `example`, `deprecated` passthrough |
+| `.orNull` | wraps in `{oneOf:[schema, {type:"null"}]}` |
+| `.docs({title, description, example, examples, deprecated})` | applied as JSON Schema annotations |
+| `.default(value)` | emitted as `default` |
 
 ## Custom codec support
 
-Custom `GGHttpCodec` implementations can implement the optional `toOpenApiOperation?` method to override or extend the auto-generated OpenAPI operation:
+Every codec used in an OpenAPI schema **must** implement `toOpenApiOperation()`. The method must return `responses` — the codec owns its wire format and is responsible for declaring its success response shape. Use `buildRpcSuccessResponses(contract)` if your codec uses the standard `{success, type, data}` JSON envelope.
 
 ```typescript
+import {buildRpcSuccessResponses, buildOpenApiParameters} from "@grest-ts/http";
+import type {OpenAPIV3_1} from "openapi-types";
+
 class MyCodec implements GGHttpCodec {
-    // …
+    readonly method = "POST" as const;
+    readonly path: string;
+
     toOpenApiOperation(config: GGHttpCodecOpenApiConfig): Partial<OpenAPIV3_1.OperationObject> {
+        const hasBody = true;
         return {
-            security: [{bearerAuth: []}],
+            parameters: buildOpenApiParameters(this.path, hasBody, config.contract.input),
             requestBody: {
-                content: {"multipart/form-data": {schema: {type: "object"}}}
-            }
+                required: true,
+                content: {"application/json": {schema: config.contract.input!.toJSONSchema()}}
+            },
+            // Required — codec must declare its own success shape
+            responses: buildRpcSuccessResponses(config.contract)
         };
     }
+
+    // … createForClient / createForServer
 }
 ```
 
+If `toOpenApiOperation` is missing or returns no `responses`, `toOpenApi()` throws with a descriptive error.
