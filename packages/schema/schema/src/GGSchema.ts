@@ -278,10 +278,9 @@ export abstract class GGSchema<Type, TDef extends GGSchemaDefinition = GGSchemaD
     public toJSONSchema(): OpenAPIV3_1.SchemaObject {
         let schema = this._buildJsonSchema();
 
-        if (this.def.nullable) {
-            schema = {oneOf: [schema, {type: "null"}]};
-        }
-
+        // Apply docs annotations and default onto the base schema first, so they
+        // end up inside oneOf[0] (the actual type variant) rather than on the
+        // nullable wrapper — keeping annotations semantically tied to the type.
         const {docs, defaultValue} = this.def;
         if (docs || defaultValue !== undefined) {
             schema = {
@@ -293,6 +292,10 @@ export abstract class GGSchema<Type, TDef extends GGSchemaDefinition = GGSchemaD
                 ...(docs?.deprecated === true ? {deprecated: true} : {}),
                 ...(defaultValue !== undefined ? {default: defaultValue} : {}),
             };
+        }
+
+        if (this.def.nullable) {
+            schema = {oneOf: [schema, {type: "null"}]};
         }
 
         return schema;

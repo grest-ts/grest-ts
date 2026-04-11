@@ -240,17 +240,26 @@ testUtils('IsLiteral', () => {
 
     describe('toJSONSchema()', () => {
         it('single string value', () => {
-            expect(IsLiteral('admin').toJSONSchema()).toEqual({enum: ['admin']});
+            expect(IsLiteral('admin').toJSONSchema()).toEqual({type: 'string', enum: ['admin']});
         });
         it('multiple string values', () => {
-            expect(IsLiteral('a', 'b', 'c').toJSONSchema()).toEqual({enum: ['a', 'b', 'c']});
+            expect(IsLiteral('a', 'b', 'c').toJSONSchema()).toEqual({type: 'string', enum: ['a', 'b', 'c']});
         });
-        it('mixed string and number', () => {
+        it('integer values', () => {
+            expect(IsLiteral(1, 2, 3).toJSONSchema()).toEqual({type: 'integer', enum: [1, 2, 3]});
+        });
+        it('float number values', () => {
+            expect(IsLiteral(1.5, 2.5).toJSONSchema()).toEqual({type: 'number', enum: [1.5, 2.5]});
+        });
+        it('boolean values', () => {
+            expect(IsLiteral(true, false).toJSONSchema()).toEqual({type: 'boolean', enum: [true, false]});
+        });
+        it('mixed string and number omits type', () => {
             expect(IsLiteral(1, 2, 'three').toJSONSchema()).toEqual({enum: [1, 2, 'three']});
         });
-        it('nullable', () => {
+        it('nullable wraps in oneOf inside which type is present', () => {
             expect(IsLiteral('x').orNull.toJSONSchema())
-                .toEqual({oneOf: [{enum: ['x']}, {type: 'null'}]});
+                .toEqual({oneOf: [{type: 'string', enum: ['x']}, {type: 'null'}]});
         });
     });
 });

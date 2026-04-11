@@ -49,7 +49,7 @@ export class FileSchema<T extends GGFile | undefined | null = GGFile> extends GG
     public static readonly mimeTypeError = new GGIssueInvalid<{ accept: string }>("file.mimeType", "File type not accepted, expected: {accept}", {accept: "Accepted types"});
     public static readonly maxSizeError = new GGIssueInvalid<{ max: number }>("file.maxSize", "File exceeds maximum size of {max} bytes", {max: "Maximum size"});
 
-    constructor(def: { type: 'file', accept?: readonly string[], maxSize?: number, optional?: boolean, nullable?: boolean }) {
+    constructor(def: { type: 'file', accept?: readonly string[], maxSize?: number, optional?: boolean, nullable?: boolean, docs?: import("@grest-ts/schema").GGSchemaDocs }) {
         const {accept, maxSize} = def;
 
         const is = (value: unknown): value is GGFile => {
@@ -107,7 +107,8 @@ export class FileSchema<T extends GGFile | undefined | null = GGFile> extends GG
             accept: changes.accept ?? this.def.accept,
             maxSize: changes.maxSize ?? this.def.maxSize,
             optional: changes.optional ?? this.def.optional,
-            nullable: changes.nullable ?? this.def.nullable
+            nullable: changes.nullable ?? this.def.nullable,
+            docs: changes.docs ?? this.def.docs,
         });
     }
 

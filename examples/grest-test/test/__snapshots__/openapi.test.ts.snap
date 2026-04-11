@@ -56,6 +56,7 @@ exports[`OpenAPI spec — ShowcaseApi snapshot > matches snapshot 1`] = `
                               "enum": [
                                 "user.created",
                               ],
+                              "type": "string",
                             },
                           },
                           "required": [
@@ -103,6 +104,7 @@ exports[`OpenAPI spec — ShowcaseApi snapshot > matches snapshot 1`] = `
                               "enum": [
                                 "order.placed",
                               ],
+                              "type": "string",
                             },
                           },
                           "required": [
@@ -144,6 +146,7 @@ exports[`OpenAPI spec — ShowcaseApi snapshot > matches snapshot 1`] = `
                               "enum": [
                                 "order.cancelled",
                               ],
+                              "type": "string",
                             },
                           },
                           "required": [
@@ -370,34 +373,34 @@ exports[`OpenAPI spec — ShowcaseApi snapshot > matches snapshot 1`] = `
                           "description": "Unchecked partner-supplied payload",
                         },
                         "avgLatitude": {
-                          "description": "Decimal degrees (-90 to 90)",
-                          "example": 59.437,
                           "oneOf": [
                             {
+                              "description": "Decimal degrees (-90 to 90)",
+                              "example": 59.437,
                               "maximum": 90,
                               "minimum": -90,
+                              "title": "Latitude",
                               "type": "number",
                             },
                             {
                               "type": "null",
                             },
                           ],
-                          "title": "Latitude",
                         },
                         "avgLongitude": {
-                          "description": "Decimal degrees (-180 to 180)",
-                          "example": 24.754,
                           "oneOf": [
                             {
+                              "description": "Decimal degrees (-180 to 180)",
+                              "example": 24.754,
                               "maximum": 180,
                               "minimum": -180,
+                              "title": "Longitude",
                               "type": "number",
                             },
                             {
                               "type": "null",
                             },
                           ],
-                          "title": "Longitude",
                         },
                         "bitFlag": {
                           "description": "1 = healthy, 0 = degraded",
@@ -410,9 +413,9 @@ exports[`OpenAPI spec — ShowcaseApi snapshot > matches snapshot 1`] = `
                           "type": "integer",
                         },
                         "recentEvent": {
-                          "description": "Most recent domain event, if any",
                           "oneOf": [
                             {
+                              "description": "Most recent domain event, if any",
                               "discriminator": {
                                 "propertyName": "type",
                               },
@@ -448,6 +451,7 @@ exports[`OpenAPI spec — ShowcaseApi snapshot > matches snapshot 1`] = `
                                       "enum": [
                                         "user.created",
                                       ],
+                                      "type": "string",
                                     },
                                   },
                                   "required": [
@@ -495,6 +499,7 @@ exports[`OpenAPI spec — ShowcaseApi snapshot > matches snapshot 1`] = `
                                       "enum": [
                                         "order.placed",
                                       ],
+                                      "type": "string",
                                     },
                                   },
                                   "required": [
@@ -536,6 +541,7 @@ exports[`OpenAPI spec — ShowcaseApi snapshot > matches snapshot 1`] = `
                                       "enum": [
                                         "order.cancelled",
                                       ],
+                                      "type": "string",
                                     },
                                   },
                                   "required": [
@@ -548,12 +554,12 @@ exports[`OpenAPI spec — ShowcaseApi snapshot > matches snapshot 1`] = `
                                   "type": "object",
                                 },
                               ],
+                              "title": "Event",
                             },
                             {
                               "type": "null",
                             },
                           ],
-                          "title": "Event",
                         },
                         "serverDateTime": {
                           "description": "Format YYYY-MM-DD HH:mm:ss",
@@ -713,7 +719,6 @@ exports[`OpenAPI spec — ShowcaseApi snapshot > matches snapshot 1`] = `
             "name": "q",
             "required": true,
             "schema": {
-              "description": "Full-text search query",
               "example": "Jane",
               "minLength": 1,
               "type": "string",
@@ -725,7 +730,6 @@ exports[`OpenAPI spec — ShowcaseApi snapshot > matches snapshot 1`] = `
             "name": "country",
             "required": false,
             "schema": {
-              "description": "ISO 3166-1 alpha-2",
               "example": "US",
               "title": "Country code",
               "type": "string",
@@ -737,7 +741,6 @@ exports[`OpenAPI spec — ShowcaseApi snapshot > matches snapshot 1`] = `
             "name": "currency",
             "required": false,
             "schema": {
-              "description": "ISO 4217",
               "example": "USD",
               "title": "Currency code",
               "type": "string",
@@ -754,6 +757,7 @@ exports[`OpenAPI spec — ShowcaseApi snapshot > matches snapshot 1`] = `
                   "user",
                   "moderator",
                 ],
+                "type": "string",
               },
               "type": "array",
             },
@@ -764,7 +768,6 @@ exports[`OpenAPI spec — ShowcaseApi snapshot > matches snapshot 1`] = `
             "name": "minJoined",
             "required": false,
             "schema": {
-              "description": "Format YYYY-MM-DD",
               "example": "2024-01-15",
               "title": "Date",
               "type": "string",
@@ -774,10 +777,9 @@ exports[`OpenAPI spec — ShowcaseApi snapshot > matches snapshot 1`] = `
             "description": "Results per page",
             "in": "query",
             "name": "limit",
-            "required": true,
+            "required": false,
             "schema": {
               "default": 20,
-              "description": "Results per page",
               "example": 20,
               "minimum": 0,
               "type": "integer",
@@ -786,7 +788,7 @@ exports[`OpenAPI spec — ShowcaseApi snapshot > matches snapshot 1`] = `
           {
             "in": "query",
             "name": "offset",
-            "required": true,
+            "required": false,
             "schema": {
               "default": 0,
               "minimum": 0,
@@ -950,6 +952,7 @@ exports[`OpenAPI spec — ShowcaseApi snapshot > matches snapshot 1`] = `
                                   "user",
                                   "moderator",
                                 ],
+                                "type": "string",
                               },
                               "tags": {
                                 "default": [],
@@ -1344,6 +1347,7 @@ exports[`OpenAPI spec — ShowcaseApi snapshot > matches snapshot 1`] = `
                             "user",
                             "moderator",
                           ],
+                          "type": "string",
                         },
                         "tags": {
                           "default": [],
@@ -1643,7 +1647,6 @@ exports[`OpenAPI spec — ShowcaseApi snapshot > matches snapshot 1`] = `
             "name": "id",
             "required": true,
             "schema": {
-              "description": "User ID",
               "example": "usr_abc123",
               "minLength": 1,
               "type": "string",
@@ -1799,6 +1802,7 @@ exports[`OpenAPI spec — ShowcaseApi snapshot > matches snapshot 1`] = `
                             "user",
                             "moderator",
                           ],
+                          "type": "string",
                         },
                         "tags": {
                           "default": [],
@@ -1923,7 +1927,6 @@ exports[`OpenAPI spec — ShowcaseApi snapshot > matches snapshot 1`] = `
             "name": "id",
             "required": true,
             "schema": {
-              "description": "User ID to update",
               "minLength": 1,
               "type": "string",
             },
@@ -2169,6 +2172,7 @@ exports[`OpenAPI spec — ShowcaseApi snapshot > matches snapshot 1`] = `
                             "user",
                             "moderator",
                           ],
+                          "type": "string",
                         },
                         "tags": {
                           "default": [],
@@ -2395,7 +2399,7 @@ exports[`OpenAPI spec — ShowcaseApi snapshot > matches snapshot 1`] = `
           {
             "in": "query",
             "name": "format",
-            "required": true,
+            "required": false,
             "schema": {
               "default": "jpeg",
               "enum": [
@@ -2403,6 +2407,7 @@ exports[`OpenAPI spec — ShowcaseApi snapshot > matches snapshot 1`] = `
                 "png",
                 "webp",
               ],
+              "type": "string",
             },
           },
         ],
@@ -2506,7 +2511,7 @@ exports[`OpenAPI spec — ShowcaseApi snapshot > matches snapshot 1`] = `
               "schema": {
                 "properties": {
                   "avatar": {
-                    "description": "Accepted types: image/*",
+                    "description": "Profile image — JPEG, PNG, or WebP, max 2 MB",
                     "format": "binary",
                     "type": "string",
                   },

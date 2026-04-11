@@ -453,10 +453,12 @@ testUtils(`IsString`, () => {
         it('docs deprecated:false omitted', () => {
             expect((IsString.docs({deprecated: false}).toJSONSchema() as any).deprecated).toBeUndefined();
         });
-        it('docs on nullable schema applies on top of oneOf wrapper', () => {
+        it('docs on nullable schema: annotations are inside oneOf[0], not on wrapper', () => {
             const s = IsString.docs({title: 'X'}).orNull.toJSONSchema() as any;
             expect(s.oneOf).toHaveLength(2);
-            expect(s.title).toBe('X');
+            // annotations live inside the base type variant
+            expect(s.oneOf[0].title).toBe('X');
+            expect(s.title).toBeUndefined();
         });
         it('default value', () => {
             expect(IsString.default('hello').toJSONSchema()).toEqual({type: 'string', default: 'hello'});

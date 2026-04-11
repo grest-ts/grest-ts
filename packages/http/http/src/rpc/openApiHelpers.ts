@@ -28,28 +28,32 @@ export function buildOpenApiParameters(
 
     const params: OpenAPIV3_1.ParameterObject[] = pathParams.map(name => {
         const fieldSchema = shape?.[name] as OpenAPIV3_1.SchemaObject | undefined;
+        const {description, ...schemaWithoutDescription} = (fieldSchema ?? {type: 'string'}) as any;
         const param: OpenAPIV3_1.ParameterObject = {
             name,
             in: 'path' as const,
             required: true as const,
-            schema: (fieldSchema ?? {type: 'string'}) as OpenAPIV3_1.ParameterObject["schema"]
+            schema: schemaWithoutDescription as OpenAPIV3_1.ParameterObject["schema"]
         };
-        if (fieldSchema?.description) param.description = fieldSchema.description;
+        if (description) param.description = description;
         return param;
     });
 
     if (!hasBody && shape) {
         for (const [name, fieldSchema] of Object.entries(shape)) {
             if (pathParams.includes(name)) continue;
+            const fs = fieldSchema as OpenAPIV3_1.SchemaObject;
+            const {description, ...schemaWithoutDescription} = fs as any;
+            // A field with a default value is functionally optional: the server fills it in
+            // when the client omits it. Don't mark it required even if the object schema does.
+            const isRequired = (required?.includes(name) ?? false) && fs.default === undefined;
             const param: OpenAPIV3_1.ParameterObject = {
                 name,
                 in: 'query' as const,
-                required: required?.includes(name) ?? false,
-                schema: fieldSchema as OpenAPIV3_1.ParameterObject["schema"]
+                required: isRequired,
+                schema: schemaWithoutDescription as OpenAPIV3_1.ParameterObject["schema"]
             };
-            if ((fieldSchema as OpenAPIV3_1.SchemaObject).description) {
-                param.description = (fieldSchema as OpenAPIV3_1.SchemaObject).description;
-            }
+            if (description) param.description = description;
             params.push(param);
         }
     }

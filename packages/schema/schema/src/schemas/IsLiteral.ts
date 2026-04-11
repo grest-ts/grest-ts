@@ -29,7 +29,16 @@ export class LiteralSchema<T extends LiteralValue | undefined | null = LiteralVa
     }
 
     protected _buildJsonSchema(): OpenAPIV3_1.SchemaObject {
-        return {enum: [...this.def.values]};
+        const types = new Set(this.def.values.map(v => {
+            if (typeof v === 'boolean') return 'boolean';
+            if (typeof v === 'number') return Number.isInteger(v) ? 'integer' : 'number';
+            return 'string';
+        }));
+        // If all values share the same type, emit it. Mixed types → omit (enum alone suffices).
+        const type = types.size === 1 ? types.values().next().value as OpenAPIV3_1.NonArraySchemaObjectType : undefined;
+        const schema: OpenAPIV3_1.SchemaObject = {enum: [...this.def.values]};
+        if (type) (schema as OpenAPIV3_1.NonArraySchemaObject).type = type;
+        return schema;
     }
 }
 
