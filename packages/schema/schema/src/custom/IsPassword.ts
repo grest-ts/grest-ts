@@ -54,13 +54,11 @@ export class PasswordSchema<T extends tPassword | undefined | null = tPassword> 
     }
 
     protected _buildJsonSchema(): OpenAPIV3_1.SchemaObject {
-        const schema: OpenAPIV3_1.NonArraySchemaObject = {
+        return {
             type: 'string',
-            format: 'password',
             minLength: this.def.minLength,
             maxLength: this.def.maxLength,
         };
-        return schema;
     }
 }
 
@@ -149,7 +147,8 @@ export const IsPassword = (options?: PasswordOptions): PasswordSchema => {
         strength,
         is,
         isWithErrors,
-        clean
+        clean,
+        docs: {format: 'password'}
     } as PasswordDef);
 };
 

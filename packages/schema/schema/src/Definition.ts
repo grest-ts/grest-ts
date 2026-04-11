@@ -38,6 +38,11 @@ export interface GGSchemaDocs {
     readonly example?: unknown;
     readonly examples?: readonly unknown[];
     readonly deprecated?: boolean;
+    /**
+     * OpenAPI / JSON Schema format hint (e.g. "email", "date", "uri", "password", "binary").
+     * Purely informational — does not affect runtime validation.
+     */
+    readonly format?: string;
 }
 
 export interface GGSchemaRefinement<T = unknown> {

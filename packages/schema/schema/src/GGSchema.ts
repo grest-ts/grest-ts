@@ -287,6 +287,7 @@ export abstract class GGSchema<Type, TDef extends GGSchemaDefinition = GGSchemaD
                 ...schema,
                 ...(docs?.title !== undefined ? {title: docs.title} : {}),
                 ...(docs?.description !== undefined ? {description: docs.description} : {}),
+                ...(docs?.format !== undefined ? {format: docs.format} : {}),
                 ...(docs?.example !== undefined ? {example: docs.example} : {}),
                 ...(docs?.examples !== undefined ? {examples: [...docs.examples]} : {}),
                 ...(docs?.deprecated === true ? {deprecated: true} : {}),

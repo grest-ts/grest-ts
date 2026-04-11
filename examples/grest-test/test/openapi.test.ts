@@ -77,11 +77,18 @@ describe("OpenAPI spec — ShowcaseApi snapshot", () => {
         expect(schema.properties.data).toBeDefined();
     });
 
-    it("discriminated union in getLatestEvent success has oneOf + discriminator", () => {
+    it("discriminated union in getLatestEvent — data is $ref to Event component", () => {
         const op = (doc.paths as any)["/api/showcase/events/latest"]?.get;
-        const dataSchema = op.responses["200"].content["application/json"].schema.properties.data;
-        expect(dataSchema.discriminator?.propertyName).toBe("type");
-        expect(dataSchema.oneOf).toHaveLength(3);
+        const dataField = op.responses["200"].content["application/json"].schema.properties.data;
+        // IsEvent has title "Event" → extracted to components/schemas/Event
+        expect(dataField.$ref).toBe("#/components/schemas/Event");
+    });
+
+    it("Event component has oneOf + discriminator", () => {
+        const eventSchema = (doc as any).components?.schemas?.["Event"];
+        expect(eventSchema).toBeDefined();
+        expect(eventSchema.discriminator?.propertyName).toBe("type");
+        expect(eventSchema.oneOf).toHaveLength(3);
     });
 
     it("multiError 404 response merges two 404 errors as oneOf", () => {
@@ -100,17 +107,51 @@ describe("OpenAPI spec — ShowcaseApi snapshot", () => {
         expect(op.responses["204"]).toBeDefined();
     });
 
-    it("branded types carry docs title in schema", () => {
-        const op = (doc.paths as any)["/api/showcase/users"]?.post;
-        const emailSchema = op.requestBody.content["application/json"].schema.properties.email;
-        expect(emailSchema.title).toBe("Email address");
-        expect(emailSchema.example).toBe("user@example.com");
+    it("named schemas are extracted to components/schemas", () => {
+        const schemas = (doc as any).components?.schemas ?? {};
+        expect(schemas["UserProfile"]).toBeDefined();
+        expect(schemas["Event"]).toBeDefined();
+        // Branded custom types with titles are also extracted
+        expect(schemas["EmailAddress"]).toBeDefined();
+        expect(schemas["URL"]).toBeDefined();   // title is "URL" (all caps)
+        expect(schemas["Date"]).toBeDefined();
+        expect(schemas["IPAddress"]).toBeDefined(); // title is "IP address"
     });
 
-    it("password field uses format:password", () => {
-        const op = (doc.paths as any)["/api/showcase/users"]?.post;
-        const pwSchema = op.requestBody.content["application/json"].schema.properties.password;
-        expect(pwSchema.format).toBe("password");
-        expect(pwSchema.minLength).toBe(8);
+    it("EmailAddress component carries format:email", () => {
+        const emailSchema = (doc as any).components?.schemas?.["EmailAddress"];
+        expect(emailSchema?.format).toBe("email");
+        expect(emailSchema?.title).toBe("Email address");
+        expect(emailSchema?.example).toBe("user@example.com");
+    });
+
+    it("URL component carries format:uri", () => {
+        const urlSchema = (doc as any).components?.schemas?.["URL"];
+        expect(urlSchema?.format).toBe("uri");
+    });
+
+    it("Date component carries format:date", () => {
+        const dateSchema = (doc as any).components?.schemas?.["Date"];
+        expect(dateSchema?.format).toBe("date");
+    });
+
+    it("IPAddress component carries format:ip", () => {
+        const ipSchema = (doc as any).components?.schemas?.["IPAddress"];
+        expect(ipSchema?.format).toBe("ip");
+    });
+
+    it("password field uses format:password — resolved from CreateUserRequest component", () => {
+        const components = (doc as any).components?.schemas ?? {};
+        // IsCreateUserRequest has title → extracted
+        const createReq = components["CreateUserRequest"];
+        const pwSchema = createReq?.properties?.password;
+        expect(pwSchema?.format).toBe("password");
+        expect(pwSchema?.minLength).toBe(8);
+    });
+
+    it("UserProfile email field is a $ref to EmailAddress component", () => {
+        const userProfile = (doc as any).components?.schemas?.["UserProfile"];
+        const emailRef = userProfile?.properties?.email;
+        expect(emailRef?.$ref).toBe("#/components/schemas/EmailAddress");
     });
 });

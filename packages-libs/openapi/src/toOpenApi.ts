@@ -1,6 +1,7 @@
 import type {GGHttpSchema} from "@grest-ts/http";
-import type {ANY_ERROR_CLS} from "@grest-ts/schema";
+import type {ANY_ERROR_CLS, GGSchema} from "@grest-ts/schema";
 import type {OpenAPIV3_1} from "openapi-types";
+import {SchemaRegistry} from "./SchemaRegistry";
 
 export interface ToOpenApiOptions {
     title?: string;
@@ -12,11 +13,16 @@ export interface ToOpenApiOptions {
 /**
  * Convert a list of GGHttpSchema instances to an OpenAPI 3.1 document.
  * Pure function — no side effects, safe to call in CI/scripts.
+ *
+ * Named schemas (those with a .docs({title}) set) are extracted into
+ * components/schemas and referenced via $ref, eliminating duplication when
+ * the same schema object is used across multiple operations.
  */
 export function toOpenApi(
     schemas: GGHttpSchema<any, any>[],
     options: ToOpenApiOptions = {}
 ): OpenAPIV3_1.Document {
+    const registry = new SchemaRegistry();
     const paths: OpenAPIV3_1.PathsObject = {};
 
     for (const httpSchema of schemas) {
@@ -32,7 +38,7 @@ export function toOpenApi(
             const openApiPath = toOpenApiPathTemplate(rawPath);
             const httpMethod = codec.method.toLowerCase() as OpenAPIV3_1.HttpMethods;
 
-            const operation = buildOperation(httpSchema.name, methodName, codec, contract);
+            const operation = buildOperation(httpSchema.name, methodName, codec, contract, registry);
 
             if (!paths[openApiPath]) paths[openApiPath] = {};
             (paths[openApiPath] as Record<string, unknown>)[httpMethod] = operation;
@@ -49,6 +55,11 @@ export function toOpenApi(
         paths
     };
 
+    const components = registry.getComponents();
+    if (components) {
+        doc.components = {schemas: components};
+    }
+
     if (options.servers?.length) {
         doc.servers = options.servers;
     }
@@ -60,7 +71,8 @@ function buildOperation(
     apiName: string,
     methodName: string,
     codec: GGHttpSchema<any, any>["codec"][string],
-    contract: NonNullable<GGHttpSchema<any, any>["contract"]>["methods"][string]
+    contract: NonNullable<GGHttpSchema<any, any>["contract"]>["methods"][string],
+    registry: SchemaRegistry
 ): OpenAPIV3_1.OperationObject {
     if (!codec.toOpenApiOperation) {
         throw new Error(
@@ -81,20 +93,82 @@ function buildOperation(
         );
     }
 
+    // Re-build the codec result replacing inline schemas with $ref where applicable
+    const enrichedCodecResult = enrichWithRefs(codecResult, contract, registry);
+
     // Success response: always from the codec (it owns the wire format).
     // Error responses: always from the contract (codec has no say in error shapes).
-    const errorResponses = buildErrorResponses(contract);
+    const errorResponses = buildErrorResponses(contract, registry);
 
     return {
         parameters: [],
-        ...codecResult,
-        // operationId is always apiName_methodName — globally unique across all schemas
-        // in a composed document. Overrides whatever the codec set on operationId.
+        ...enrichedCodecResult,
         operationId: `${apiName}_${methodName}`,
         summary: camelToSummary(methodName),
         tags: [apiName],
-        responses: {...codecResult.responses, ...errorResponses}
+        responses: {...enrichedCodecResult.responses, ...errorResponses}
     };
+}
+
+/**
+ * Replace inline schema objects in a codec result with $ref where the schema
+ * has a title (and is thus extractable to components/schemas).
+ * Only touches the fields that contain GGSchema-derived content.
+ */
+function enrichWithRefs(
+    codecResult: Partial<OpenAPIV3_1.OperationObject>,
+    contract: NonNullable<GGHttpSchema<any, any>["contract"]>["methods"][string],
+    registry: SchemaRegistry
+): Partial<OpenAPIV3_1.OperationObject> {
+    const result: Partial<OpenAPIV3_1.OperationObject> = {...codecResult};
+
+    // Enrich requestBody — codec may have put the input schema inline
+    if (result.requestBody && contract.input) {
+        const rb = result.requestBody as OpenAPIV3_1.RequestBodyObject;
+        if (rb.content?.['application/json']?.schema) {
+            result.requestBody = {
+                ...rb,
+                content: {
+                    ...rb.content,
+                    'application/json': {
+                        ...rb.content['application/json'],
+                        schema: registry.schemaOrRef(contract.input)
+                    }
+                }
+            };
+        }
+    }
+
+    // Enrich success response — codec put the success schema inline
+    if (result.responses?.['200'] && contract.success) {
+        const resp200 = result.responses['200'] as OpenAPIV3_1.ResponseObject;
+        if (resp200.content?.['application/json']?.schema) {
+            const envelope = resp200.content['application/json'].schema as any;
+            // The envelope is {success, type, data: <success schema>}
+            // Replace just the data property with a $ref if applicable
+            if (envelope.properties?.data) {
+                const enrichedEnvelope: OpenAPIV3_1.NonArraySchemaObject = {
+                    ...envelope,
+                    properties: {
+                        ...envelope.properties,
+                        data: registry.schemaOrRef(contract.success)
+                    }
+                };
+                result.responses = {
+                    ...result.responses,
+                    '200': {
+                        ...resp200,
+                        content: {
+                            ...resp200.content,
+                            'application/json': {schema: enrichedEnvelope}
+                        }
+                    }
+                };
+            }
+        }
+    }
+
+    return result;
 }
 
 /**
@@ -113,7 +187,8 @@ function camelToSummary(name: string): string {
  * These are always merged on top of whatever responses the codec provides.
  */
 function buildErrorResponses(
-    contract: NonNullable<GGHttpSchema<any, any>["contract"]>["methods"][string]
+    contract: NonNullable<GGHttpSchema<any, any>["contract"]>["methods"][string],
+    registry: SchemaRegistry
 ): OpenAPIV3_1.ResponsesObject {
     const responses: OpenAPIV3_1.ResponsesObject = {};
     if (!contract.errors?.length) return responses;
@@ -127,19 +202,19 @@ function buildErrorResponses(
         if (!byStatusTypes.has(statusCode)) byStatusTypes.set(statusCode, []);
         byStatusTypes.get(statusCode)!.push(errType);
 
-        const dataSchema: OpenAPIV3_1.SchemaObject | undefined =
-            errCls.schema != null ? errCls.schema.toJSONSchema() : undefined;
+        const dataSchemaOrRef: OpenAPIV3_1.SchemaObject | OpenAPIV3_1.ReferenceObject | undefined =
+            errCls.schema != null ? registry.schemaOrRef(errCls.schema as GGSchema<any>) : undefined;
 
         const props: NonNullable<OpenAPIV3_1.BaseSchemaObject["properties"]> = {
             success: {type: "boolean", enum: [false]},
             type: {type: "string", enum: [errType]},
         };
-        if (dataSchema !== undefined) props.data = dataSchema;
+        if (dataSchemaOrRef !== undefined) props.data = dataSchemaOrRef;
 
         const errorBodySchema: OpenAPIV3_1.NonArraySchemaObject = {
             type: "object",
             properties: props,
-            required: ["success", "type", ...(dataSchema !== undefined ? ["data"] : [])]
+            required: ["success", "type", ...(dataSchemaOrRef !== undefined ? ["data"] : [])]
         };
 
         if (!byStatus.has(statusCode)) byStatus.set(statusCode, []);

@@ -30,6 +30,7 @@ export const IsEmail = Object.assign(
         .brand("email")
         .docs({
             title: "Email address",
+            format: "email",
             example: "user@example.com"
         }),
     {emailError}

@@ -1,6 +1,7 @@
 import {describe, it, expect} from "vitest";
 import {
     IsString, IsNumber, IsBoolean, IsArray, IsObject, IsLiteral,
+    IsEmail, IsDate, IsUrl,
     ERROR, GGContractClass
 } from "@grest-ts/schema";
 import {GGRpc, httpSchema} from "@grest-ts/http";
@@ -204,6 +205,86 @@ describe("toOpenApi", () => {
         it("optional query param has required:false", () => {
             const param = op.parameters.find((p: any) => p.name === "limit");
             expect(param?.required).toBe(false);
+        });
+    });
+
+    describe("$ref deduplication via components/schemas", () => {
+        const SharedType = IsObject({id: IsNumber, name: IsString})
+            .docs({title: "Shared item"});
+        const RefContract = new GGContractClass("RefApi", {
+            get:    {success: SharedType, errors: []},
+            list:   {success: IsArray(SharedType), errors: []},
+        });
+        const RefApi = httpSchema(RefContract).pathPrefix("ref").routes({
+            get:  GGRpc.GET(":id"),
+            list: GGRpc.GET(""),
+        });
+        const d = toOpenApi([RefApi]);
+
+        it("named schema extracted to components/schemas", () => {
+            const schemas = (d as any).components?.schemas ?? {};
+            expect(schemas["SharedItem"]).toBeDefined();
+            expect(schemas["SharedItem"].type).toBe("object");
+        });
+
+        it("get success data uses $ref not inline schema", () => {
+            const op = (d.paths as any)["/ref/{id}"]?.get;
+            const data = op.responses["200"].content["application/json"].schema.properties.data;
+            expect(data.$ref).toBe("#/components/schemas/SharedItem");
+        });
+
+        it("list success data items uses $ref not inline schema", () => {
+            const op = (d.paths as any)["/ref"]?.get;
+            const data = op.responses["200"].content["application/json"].schema.properties.data;
+            // data is an array — items should be the $ref
+            expect(data.type).toBe("array");
+            expect(data.items?.$ref).toBe("#/components/schemas/SharedItem");
+        });
+
+        it("schema without title stays inline (no $ref)", () => {
+            const InlineContract = new GGContractClass("InlineApi", {
+                get: {success: IsObject({x: IsNumber}), errors: []}
+            });
+            const InlineApi = httpSchema(InlineContract).pathPrefix("il").routes({
+                get: GGRpc.GET("")
+            });
+            const d2 = toOpenApi([InlineApi]);
+            const data = (d2.paths as any)?.["/il"]?.get?.responses?.["200"]
+                ?.content?.["application/json"]?.schema?.properties?.data;
+            expect(data?.$ref).toBeUndefined();
+            expect(data?.type).toBe("object");
+            expect((d2 as any).components).toBeUndefined();
+        });
+    });
+
+    describe("format hints on custom types", () => {
+        const FormatContract = new GGContractClass("FormatApi", {
+            get: {
+                success: IsObject({
+                    email: IsEmail,
+                    date: IsDate,
+                    url: IsUrl,
+                }),
+                errors: []
+            }
+        });
+        const FormatApi = httpSchema(FormatContract).pathPrefix("fmt").routes({
+            get: GGRpc.GET("")
+        });
+        const d = toOpenApi([FormatApi]);
+
+        it("IsEmail produces format:email component", () => {
+            const components = (d as any).components?.schemas ?? {};
+            const email = components["EmailAddress"];
+            expect(email?.format).toBe("email");
+        });
+        it("IsDate produces format:date component", () => {
+            const components = (d as any).components?.schemas ?? {};
+            expect(components["Date"]?.format).toBe("date");
+        });
+        it("IsUrl produces format:uri component", () => {
+            const components = (d as any).components?.schemas ?? {};
+            expect(components["URL"]?.format).toBe("uri");
         });
     });
 

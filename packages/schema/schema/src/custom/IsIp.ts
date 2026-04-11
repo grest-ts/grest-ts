@@ -16,8 +16,9 @@ const isValidIp = (v: string): boolean => {
     return IPV6_REGEX.test(v);
 };
 export const IsIp = Object.assign(
-    IsString.refine(isValidIp, ipError).brand("ip").docs({
+    IsString.refine(isValidIp, ipError).brand("ip")    .docs({
         title: "IP address",
+        format: "ip",
         description: "IPv4 or IPv6",
         examples: ["192.168.1.1", "::1"]
     }),

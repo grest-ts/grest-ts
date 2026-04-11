@@ -2,6 +2,571 @@
 
 exports[`OpenAPI spec — ShowcaseApi snapshot > matches snapshot 1`] = `
 {
+  "components": {
+    "schemas": {
+      "CountryCode": {
+        "description": "ISO 3166-1 alpha-2",
+        "example": "US",
+        "title": "Country code",
+        "type": "string",
+      },
+      "CreateUserRequest": {
+        "properties": {
+          "country": {
+            "$ref": "#/components/schemas/CountryCode",
+          },
+          "email": {
+            "$ref": "#/components/schemas/EmailAddress",
+          },
+          "inviteCode": {
+            "description": "Optional referral / invite code",
+            "type": "string",
+          },
+          "language": {
+            "$ref": "#/components/schemas/LanguageCode",
+          },
+          "name": {
+            "minLength": 1,
+            "type": "string",
+          },
+          "password": {
+            "format": "password",
+            "maxLength": 128,
+            "minLength": 8,
+            "type": "string",
+          },
+        },
+        "required": [
+          "email",
+          "name",
+          "password",
+          "country",
+          "language",
+        ],
+        "title": "Create user request",
+        "type": "object",
+      },
+      "CurrencyCode": {
+        "description": "ISO 4217",
+        "example": "USD",
+        "title": "Currency code",
+        "type": "string",
+      },
+      "Date": {
+        "description": "Registration date",
+        "example": "2024-01-15",
+        "format": "date",
+        "title": "Date",
+        "type": "string",
+      },
+      "DateTime": {
+        "description": "Format YYYY-MM-DD HH:mm:ss",
+        "example": "2024-01-15 14:30:00",
+        "title": "DateTime",
+        "type": "string",
+      },
+      "EmailAddress": {
+        "example": "user@example.com",
+        "format": "email",
+        "title": "Email address",
+        "type": "string",
+      },
+      "Event": {
+        "description": "Discriminated union of all domain events keyed by type",
+        "discriminator": {
+          "propertyName": "type",
+        },
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/UserCreatedEvent",
+          },
+          {
+            "$ref": "#/components/schemas/OrderPlacedEvent",
+          },
+          {
+            "$ref": "#/components/schemas/OrderCancelledEvent",
+          },
+        ],
+        "title": "Event",
+      },
+      "IPAddress": {
+        "description": "IPv4 or IPv6",
+        "examples": [
+          "192.168.1.1",
+          "::1",
+        ],
+        "format": "ip",
+        "title": "IP address",
+        "type": "string",
+      },
+      "LanguageCode": {
+        "default": "en",
+        "description": "ISO 639-1",
+        "example": "en",
+        "title": "Language code",
+        "type": "string",
+      },
+      "Latitude": {
+        "oneOf": [
+          {
+            "description": "Decimal degrees (-90 to 90)",
+            "example": 59.437,
+            "maximum": 90,
+            "minimum": -90,
+            "title": "Latitude",
+            "type": "number",
+          },
+          {
+            "type": "null",
+          },
+        ],
+      },
+      "LocaleCode": {
+        "description": "Locale requested by the client via Accept-Language",
+        "example": "de",
+        "pattern": "^[a-z]{2}(-[A-Z]{2})?$",
+        "title": "Locale code",
+        "type": "string",
+      },
+      "Longitude": {
+        "oneOf": [
+          {
+            "description": "Decimal degrees (-180 to 180)",
+            "example": 24.754,
+            "maximum": 180,
+            "minimum": -180,
+            "title": "Longitude",
+            "type": "number",
+          },
+          {
+            "type": "null",
+          },
+        ],
+      },
+      "OrderCancelledEvent": {
+        "properties": {
+          "id": {
+            "description": "Event ID",
+            "example": "evt_abc123",
+            "minLength": 1,
+            "type": "string",
+          },
+          "occurredAt": {
+            "$ref": "#/components/schemas/UnixTimestampInSeconds",
+          },
+          "orderId": {
+            "minLength": 1,
+            "type": "string",
+          },
+          "reason": {
+            "description": "Optional cancellation reason",
+            "type": "string",
+          },
+          "type": {
+            "enum": [
+              "order.cancelled",
+            ],
+            "type": "string",
+          },
+        },
+        "required": [
+          "id",
+          "occurredAt",
+          "type",
+          "orderId",
+        ],
+        "title": "Order cancelled event",
+        "type": "object",
+      },
+      "OrderPlacedEvent": {
+        "properties": {
+          "currency": {
+            "$ref": "#/components/schemas/CurrencyCode",
+          },
+          "id": {
+            "description": "Event ID",
+            "example": "evt_abc123",
+            "minLength": 1,
+            "type": "string",
+          },
+          "occurredAt": {
+            "$ref": "#/components/schemas/UnixTimestampInSeconds",
+          },
+          "orderId": {
+            "minLength": 1,
+            "type": "string",
+          },
+          "totalCents": {
+            "description": "Order total in cents",
+            "minimum": 0,
+            "type": "integer",
+          },
+          "type": {
+            "enum": [
+              "order.placed",
+            ],
+            "type": "string",
+          },
+        },
+        "required": [
+          "id",
+          "occurredAt",
+          "type",
+          "orderId",
+          "totalCents",
+          "currency",
+        ],
+        "title": "Order placed event",
+        "type": "object",
+      },
+      "PhoneNumber": {
+        "description": "International format with country code",
+        "example": "+12025551234",
+        "title": "Phone number",
+        "type": "string",
+      },
+      "PlatformStatistics": {
+        "properties": {
+          "anyData": {
+            "description": "Unchecked partner-supplied payload",
+          },
+          "avgLatitude": {
+            "$ref": "#/components/schemas/Latitude",
+          },
+          "avgLongitude": {
+            "$ref": "#/components/schemas/Longitude",
+          },
+          "bitFlag": {
+            "description": "1 = healthy, 0 = degraded",
+            "maximum": 1,
+            "minimum": 0,
+            "type": "integer",
+          },
+          "countriesRepresented": {
+            "minimum": 0,
+            "type": "integer",
+          },
+          "recentEvent": {
+            "$ref": "#/components/schemas/Event",
+          },
+          "serverDateTime": {
+            "$ref": "#/components/schemas/DateTime",
+          },
+          "serverTime": {
+            "$ref": "#/components/schemas/UnixTimestampInSeconds",
+          },
+          "topCountries": {
+            "items": {
+              "properties": {
+                "count": {
+                  "minimum": 0,
+                  "type": "integer",
+                },
+                "country": {
+                  "$ref": "#/components/schemas/CountryCode",
+                },
+              },
+              "required": [
+                "country",
+                "count",
+              ],
+              "type": "object",
+            },
+            "type": "array",
+          },
+          "topLanguages": {
+            "additionalProperties": {
+              "minimum": 0,
+              "type": "integer",
+            },
+            "description": "Language code → user count",
+            "type": "object",
+          },
+          "totalUsers": {
+            "minimum": 0,
+            "type": "integer",
+          },
+          "unionsExample": {
+            "description": "Mixed union field for demo purposes",
+            "oneOf": [
+              {
+                "type": "string",
+              },
+              {
+                "type": "number",
+              },
+              {
+                "type": "boolean",
+              },
+            ],
+          },
+          "unknownData": {
+            "description": "Passthrough field for extensions",
+          },
+          "verifiedUsers": {
+            "minimum": 0,
+            "type": "integer",
+          },
+        },
+        "required": [
+          "totalUsers",
+          "verifiedUsers",
+          "countriesRepresented",
+          "topCountries",
+          "topLanguages",
+          "serverTime",
+          "serverDateTime",
+          "avgLatitude",
+          "avgLongitude",
+          "bitFlag",
+          "unknownData",
+          "anyData",
+          "recentEvent",
+          "unionsExample",
+        ],
+        "title": "Platform statistics",
+        "type": "object",
+      },
+      "PostalAddress": {
+        "properties": {
+          "city": {
+            "example": "Tallinn",
+            "minLength": 1,
+            "type": "string",
+          },
+          "country": {
+            "$ref": "#/components/schemas/CountryCode",
+          },
+          "street": {
+            "description": "Street address",
+            "example": "123 Main St",
+            "minLength": 1,
+            "type": "string",
+          },
+          "zip": {
+            "description": "Postal code",
+            "example": "10001",
+            "type": "string",
+          },
+        },
+        "required": [
+          "street",
+          "city",
+          "country",
+        ],
+        "title": "Postal address",
+        "type": "object",
+      },
+      "URL": {
+        "description": "HTTP or HTTPS URL",
+        "example": "https://example.com",
+        "format": "uri",
+        "title": "URL",
+        "type": "string",
+      },
+      "UnixTimestampInSeconds": {
+        "description": "When the event occurred",
+        "example": 1700000000,
+        "maximum": 32503680000,
+        "minimum": 0,
+        "title": "Unix timestamp in seconds",
+        "type": "integer",
+      },
+      "UserCreatedEvent": {
+        "properties": {
+          "country": {
+            "$ref": "#/components/schemas/CountryCode",
+          },
+          "email": {
+            "$ref": "#/components/schemas/EmailAddress",
+          },
+          "id": {
+            "description": "Event ID",
+            "example": "evt_abc123",
+            "minLength": 1,
+            "type": "string",
+          },
+          "occurredAt": {
+            "$ref": "#/components/schemas/UnixTimestampInSeconds",
+          },
+          "type": {
+            "enum": [
+              "user.created",
+            ],
+            "type": "string",
+          },
+        },
+        "required": [
+          "id",
+          "occurredAt",
+          "type",
+          "email",
+          "country",
+        ],
+        "title": "User created event",
+        "type": "object",
+      },
+      "UserProfile": {
+        "description": "Complete user profile returned from GET /users/:id",
+        "properties": {
+          "address": {
+            "$ref": "#/components/schemas/PostalAddress",
+          },
+          "bio": {
+            "description": "Short biography",
+            "maxLength": 500,
+            "type": "string",
+          },
+          "coordinates": {
+            "description": "Location as [latitude, longitude]",
+            "items": false,
+            "maxItems": 2,
+            "minItems": 2,
+            "prefixItems": [
+              {
+                "$ref": "#/components/schemas/Latitude",
+              },
+              {
+                "$ref": "#/components/schemas/Longitude",
+              },
+            ],
+            "type": "array",
+          },
+          "deprecatedField": {
+            "deprecated": true,
+            "description": "Use email instead",
+            "type": "string",
+          },
+          "email": {
+            "$ref": "#/components/schemas/EmailAddress",
+          },
+          "id": {
+            "example": "usr_abc123",
+            "minLength": 1,
+            "type": "string",
+          },
+          "ipAddress": {
+            "$ref": "#/components/schemas/IPAddress",
+          },
+          "isVerified": {
+            "default": false,
+            "type": "boolean",
+          },
+          "joinedAt": {
+            "$ref": "#/components/schemas/Date",
+          },
+          "language": {
+            "$ref": "#/components/schemas/LanguageCode",
+          },
+          "lastActiveAt": {
+            "$ref": "#/components/schemas/UnixTimestampInSeconds",
+          },
+          "locale": {
+            "$ref": "#/components/schemas/LocaleCode",
+          },
+          "metadata": {
+            "additionalProperties": {},
+            "description": "Arbitrary key-value metadata",
+            "type": "object",
+          },
+          "name": {
+            "example": "Jane Doe",
+            "minLength": 1,
+            "type": "string",
+          },
+          "phone": {
+            "$ref": "#/components/schemas/PhoneNumber",
+          },
+          "role": {
+            "default": "user",
+            "enum": [
+              "admin",
+              "user",
+              "moderator",
+            ],
+            "type": "string",
+          },
+          "tags": {
+            "default": [],
+            "items": {
+              "minLength": 1,
+              "type": "string",
+            },
+            "type": "array",
+          },
+          "website": {
+            "$ref": "#/components/schemas/URL",
+          },
+        },
+        "required": [
+          "id",
+          "email",
+          "name",
+          "language",
+          "joinedAt",
+          "isVerified",
+          "role",
+          "tags",
+        ],
+        "title": "User profile",
+        "type": "object",
+      },
+      "ValidationIssue": {
+        "description": "A single field-level validation failure. One request can produce multiple issues.",
+        "example": {
+          "code": "invalid.string.minLength",
+          "expectedLanguage": "de",
+          "message": "Minimum 8 characters required",
+          "params": {
+            "min": 8,
+          },
+          "path": "password",
+          "usedLanguage": "en",
+        },
+        "properties": {
+          "code": {
+            "description": "Dot-separated issue key identifying the rule that failed",
+            "example": "invalid.string.minLength",
+            "minLength": 1,
+            "type": "string",
+          },
+          "expectedLanguage": {
+            "$ref": "#/components/schemas/LocaleCode",
+          },
+          "message": {
+            "description": "Human-readable error message, localised to the client locale if available",
+            "example": "Minimum 8 characters required",
+            "minLength": 1,
+            "type": "string",
+          },
+          "params": {
+            "additionalProperties": {},
+            "description": "Template variables substituted into the message template",
+            "example": {
+              "min": 8,
+            },
+            "type": "object",
+          },
+          "path": {
+            "description": "Dot-separated field path within the request body",
+            "example": "user.address.zip",
+            "minLength": 1,
+            "type": "string",
+          },
+          "usedLanguage": {
+            "$ref": "#/components/schemas/LocaleCode",
+          },
+        },
+        "required": [
+          "path",
+          "code",
+          "message",
+        ],
+        "title": "Validation issue",
+        "type": "object",
+      },
+    },
+  },
   "info": {
     "description": "Integration snapshot for @grest-ts/openapi spec generation",
     "title": "Showcase API",
@@ -20,146 +585,7 @@ exports[`OpenAPI spec — ShowcaseApi snapshot > matches snapshot 1`] = `
                 "schema": {
                   "properties": {
                     "data": {
-                      "description": "Discriminated union of all domain events keyed by type",
-                      "discriminator": {
-                        "propertyName": "type",
-                      },
-                      "oneOf": [
-                        {
-                          "properties": {
-                            "country": {
-                              "description": "ISO 3166-1 alpha-2",
-                              "example": "US",
-                              "title": "Country code",
-                              "type": "string",
-                            },
-                            "email": {
-                              "example": "user@example.com",
-                              "title": "Email address",
-                              "type": "string",
-                            },
-                            "id": {
-                              "description": "Event ID",
-                              "example": "evt_abc123",
-                              "minLength": 1,
-                              "type": "string",
-                            },
-                            "occurredAt": {
-                              "description": "When the event occurred",
-                              "example": 1700000000,
-                              "maximum": 32503680000,
-                              "minimum": 0,
-                              "title": "Unix timestamp in seconds",
-                              "type": "integer",
-                            },
-                            "type": {
-                              "enum": [
-                                "user.created",
-                              ],
-                              "type": "string",
-                            },
-                          },
-                          "required": [
-                            "id",
-                            "occurredAt",
-                            "type",
-                            "email",
-                            "country",
-                          ],
-                          "title": "User created event",
-                          "type": "object",
-                        },
-                        {
-                          "properties": {
-                            "currency": {
-                              "description": "ISO 4217",
-                              "example": "USD",
-                              "title": "Currency code",
-                              "type": "string",
-                            },
-                            "id": {
-                              "description": "Event ID",
-                              "example": "evt_abc123",
-                              "minLength": 1,
-                              "type": "string",
-                            },
-                            "occurredAt": {
-                              "description": "When the event occurred",
-                              "example": 1700000000,
-                              "maximum": 32503680000,
-                              "minimum": 0,
-                              "title": "Unix timestamp in seconds",
-                              "type": "integer",
-                            },
-                            "orderId": {
-                              "minLength": 1,
-                              "type": "string",
-                            },
-                            "totalCents": {
-                              "description": "Order total in cents",
-                              "minimum": 0,
-                              "type": "integer",
-                            },
-                            "type": {
-                              "enum": [
-                                "order.placed",
-                              ],
-                              "type": "string",
-                            },
-                          },
-                          "required": [
-                            "id",
-                            "occurredAt",
-                            "type",
-                            "orderId",
-                            "totalCents",
-                            "currency",
-                          ],
-                          "title": "Order placed event",
-                          "type": "object",
-                        },
-                        {
-                          "properties": {
-                            "id": {
-                              "description": "Event ID",
-                              "example": "evt_abc123",
-                              "minLength": 1,
-                              "type": "string",
-                            },
-                            "occurredAt": {
-                              "description": "When the event occurred",
-                              "example": 1700000000,
-                              "maximum": 32503680000,
-                              "minimum": 0,
-                              "title": "Unix timestamp in seconds",
-                              "type": "integer",
-                            },
-                            "orderId": {
-                              "minLength": 1,
-                              "type": "string",
-                            },
-                            "reason": {
-                              "description": "Optional cancellation reason",
-                              "type": "string",
-                            },
-                            "type": {
-                              "enum": [
-                                "order.cancelled",
-                              ],
-                              "type": "string",
-                            },
-                          },
-                          "required": [
-                            "id",
-                            "occurredAt",
-                            "type",
-                            "orderId",
-                          ],
-                          "title": "Order cancelled event",
-                          "type": "object",
-                        },
-                      ],
-                      "title": "Event",
+                      "$ref": "#/components/schemas/Event",
                     },
                     "success": {
                       "enum": [
@@ -368,287 +794,7 @@ exports[`OpenAPI spec — ShowcaseApi snapshot > matches snapshot 1`] = `
                 "schema": {
                   "properties": {
                     "data": {
-                      "properties": {
-                        "anyData": {
-                          "description": "Unchecked partner-supplied payload",
-                        },
-                        "avgLatitude": {
-                          "oneOf": [
-                            {
-                              "description": "Decimal degrees (-90 to 90)",
-                              "example": 59.437,
-                              "maximum": 90,
-                              "minimum": -90,
-                              "title": "Latitude",
-                              "type": "number",
-                            },
-                            {
-                              "type": "null",
-                            },
-                          ],
-                        },
-                        "avgLongitude": {
-                          "oneOf": [
-                            {
-                              "description": "Decimal degrees (-180 to 180)",
-                              "example": 24.754,
-                              "maximum": 180,
-                              "minimum": -180,
-                              "title": "Longitude",
-                              "type": "number",
-                            },
-                            {
-                              "type": "null",
-                            },
-                          ],
-                        },
-                        "bitFlag": {
-                          "description": "1 = healthy, 0 = degraded",
-                          "maximum": 1,
-                          "minimum": 0,
-                          "type": "integer",
-                        },
-                        "countriesRepresented": {
-                          "minimum": 0,
-                          "type": "integer",
-                        },
-                        "recentEvent": {
-                          "oneOf": [
-                            {
-                              "description": "Most recent domain event, if any",
-                              "discriminator": {
-                                "propertyName": "type",
-                              },
-                              "oneOf": [
-                                {
-                                  "properties": {
-                                    "country": {
-                                      "description": "ISO 3166-1 alpha-2",
-                                      "example": "US",
-                                      "title": "Country code",
-                                      "type": "string",
-                                    },
-                                    "email": {
-                                      "example": "user@example.com",
-                                      "title": "Email address",
-                                      "type": "string",
-                                    },
-                                    "id": {
-                                      "description": "Event ID",
-                                      "example": "evt_abc123",
-                                      "minLength": 1,
-                                      "type": "string",
-                                    },
-                                    "occurredAt": {
-                                      "description": "When the event occurred",
-                                      "example": 1700000000,
-                                      "maximum": 32503680000,
-                                      "minimum": 0,
-                                      "title": "Unix timestamp in seconds",
-                                      "type": "integer",
-                                    },
-                                    "type": {
-                                      "enum": [
-                                        "user.created",
-                                      ],
-                                      "type": "string",
-                                    },
-                                  },
-                                  "required": [
-                                    "id",
-                                    "occurredAt",
-                                    "type",
-                                    "email",
-                                    "country",
-                                  ],
-                                  "title": "User created event",
-                                  "type": "object",
-                                },
-                                {
-                                  "properties": {
-                                    "currency": {
-                                      "description": "ISO 4217",
-                                      "example": "USD",
-                                      "title": "Currency code",
-                                      "type": "string",
-                                    },
-                                    "id": {
-                                      "description": "Event ID",
-                                      "example": "evt_abc123",
-                                      "minLength": 1,
-                                      "type": "string",
-                                    },
-                                    "occurredAt": {
-                                      "description": "When the event occurred",
-                                      "example": 1700000000,
-                                      "maximum": 32503680000,
-                                      "minimum": 0,
-                                      "title": "Unix timestamp in seconds",
-                                      "type": "integer",
-                                    },
-                                    "orderId": {
-                                      "minLength": 1,
-                                      "type": "string",
-                                    },
-                                    "totalCents": {
-                                      "description": "Order total in cents",
-                                      "minimum": 0,
-                                      "type": "integer",
-                                    },
-                                    "type": {
-                                      "enum": [
-                                        "order.placed",
-                                      ],
-                                      "type": "string",
-                                    },
-                                  },
-                                  "required": [
-                                    "id",
-                                    "occurredAt",
-                                    "type",
-                                    "orderId",
-                                    "totalCents",
-                                    "currency",
-                                  ],
-                                  "title": "Order placed event",
-                                  "type": "object",
-                                },
-                                {
-                                  "properties": {
-                                    "id": {
-                                      "description": "Event ID",
-                                      "example": "evt_abc123",
-                                      "minLength": 1,
-                                      "type": "string",
-                                    },
-                                    "occurredAt": {
-                                      "description": "When the event occurred",
-                                      "example": 1700000000,
-                                      "maximum": 32503680000,
-                                      "minimum": 0,
-                                      "title": "Unix timestamp in seconds",
-                                      "type": "integer",
-                                    },
-                                    "orderId": {
-                                      "minLength": 1,
-                                      "type": "string",
-                                    },
-                                    "reason": {
-                                      "description": "Optional cancellation reason",
-                                      "type": "string",
-                                    },
-                                    "type": {
-                                      "enum": [
-                                        "order.cancelled",
-                                      ],
-                                      "type": "string",
-                                    },
-                                  },
-                                  "required": [
-                                    "id",
-                                    "occurredAt",
-                                    "type",
-                                    "orderId",
-                                  ],
-                                  "title": "Order cancelled event",
-                                  "type": "object",
-                                },
-                              ],
-                              "title": "Event",
-                            },
-                            {
-                              "type": "null",
-                            },
-                          ],
-                        },
-                        "serverDateTime": {
-                          "description": "Format YYYY-MM-DD HH:mm:ss",
-                          "example": "2024-01-15 14:30:00",
-                          "title": "DateTime",
-                          "type": "string",
-                        },
-                        "serverTime": {
-                          "description": "Seconds since Unix epoch (year 1970–3000)",
-                          "example": 1700000000,
-                          "maximum": 32503680000,
-                          "minimum": 0,
-                          "title": "Unix timestamp in seconds",
-                          "type": "integer",
-                        },
-                        "topCountries": {
-                          "items": {
-                            "properties": {
-                              "count": {
-                                "minimum": 0,
-                                "type": "integer",
-                              },
-                              "country": {
-                                "description": "ISO 3166-1 alpha-2",
-                                "example": "US",
-                                "title": "Country code",
-                                "type": "string",
-                              },
-                            },
-                            "required": [
-                              "country",
-                              "count",
-                            ],
-                            "type": "object",
-                          },
-                          "type": "array",
-                        },
-                        "topLanguages": {
-                          "additionalProperties": {
-                            "minimum": 0,
-                            "type": "integer",
-                          },
-                          "description": "Language code → user count",
-                          "type": "object",
-                        },
-                        "totalUsers": {
-                          "minimum": 0,
-                          "type": "integer",
-                        },
-                        "unionsExample": {
-                          "description": "Mixed union field for demo purposes",
-                          "oneOf": [
-                            {
-                              "type": "string",
-                            },
-                            {
-                              "type": "number",
-                            },
-                            {
-                              "type": "boolean",
-                            },
-                          ],
-                        },
-                        "unknownData": {
-                          "description": "Passthrough field for extensions",
-                        },
-                        "verifiedUsers": {
-                          "minimum": 0,
-                          "type": "integer",
-                        },
-                      },
-                      "required": [
-                        "totalUsers",
-                        "verifiedUsers",
-                        "countriesRepresented",
-                        "topCountries",
-                        "topLanguages",
-                        "serverTime",
-                        "serverDateTime",
-                        "avgLatitude",
-                        "avgLongitude",
-                        "bitFlag",
-                        "unknownData",
-                        "anyData",
-                        "recentEvent",
-                        "unionsExample",
-                      ],
-                      "title": "Platform statistics",
-                      "type": "object",
+                      "$ref": "#/components/schemas/PlatformStatistics",
                     },
                     "success": {
                       "enum": [
@@ -769,6 +915,7 @@ exports[`OpenAPI spec — ShowcaseApi snapshot > matches snapshot 1`] = `
             "required": false,
             "schema": {
               "example": "2024-01-15",
+              "format": "date",
               "title": "Date",
               "type": "string",
             },
@@ -810,177 +957,7 @@ exports[`OpenAPI spec — ShowcaseApi snapshot > matches snapshot 1`] = `
                         },
                         "users": {
                           "items": {
-                            "description": "Complete user profile returned from GET /users/:id",
-                            "properties": {
-                              "address": {
-                                "properties": {
-                                  "city": {
-                                    "example": "Tallinn",
-                                    "minLength": 1,
-                                    "type": "string",
-                                  },
-                                  "country": {
-                                    "description": "ISO 3166-1 alpha-2",
-                                    "example": "US",
-                                    "title": "Country code",
-                                    "type": "string",
-                                  },
-                                  "street": {
-                                    "description": "Street address",
-                                    "example": "123 Main St",
-                                    "minLength": 1,
-                                    "type": "string",
-                                  },
-                                  "zip": {
-                                    "description": "Postal code",
-                                    "example": "10001",
-                                    "type": "string",
-                                  },
-                                },
-                                "required": [
-                                  "street",
-                                  "city",
-                                  "country",
-                                ],
-                                "title": "Postal address",
-                                "type": "object",
-                              },
-                              "bio": {
-                                "description": "Short biography",
-                                "maxLength": 500,
-                                "type": "string",
-                              },
-                              "coordinates": {
-                                "description": "Location as [latitude, longitude]",
-                                "items": false,
-                                "maxItems": 2,
-                                "minItems": 2,
-                                "prefixItems": [
-                                  {
-                                    "description": "Decimal degrees (-90 to 90)",
-                                    "example": 59.437,
-                                    "maximum": 90,
-                                    "minimum": -90,
-                                    "title": "Latitude",
-                                    "type": "number",
-                                  },
-                                  {
-                                    "description": "Decimal degrees (-180 to 180)",
-                                    "example": 24.754,
-                                    "maximum": 180,
-                                    "minimum": -180,
-                                    "title": "Longitude",
-                                    "type": "number",
-                                  },
-                                ],
-                                "type": "array",
-                              },
-                              "deprecatedField": {
-                                "deprecated": true,
-                                "description": "Use email instead",
-                                "type": "string",
-                              },
-                              "email": {
-                                "example": "user@example.com",
-                                "title": "Email address",
-                                "type": "string",
-                              },
-                              "id": {
-                                "example": "usr_abc123",
-                                "minLength": 1,
-                                "type": "string",
-                              },
-                              "ipAddress": {
-                                "description": "IPv4 or IPv6",
-                                "examples": [
-                                  "192.168.1.1",
-                                  "::1",
-                                ],
-                                "title": "IP address",
-                                "type": "string",
-                              },
-                              "isVerified": {
-                                "default": false,
-                                "type": "boolean",
-                              },
-                              "joinedAt": {
-                                "description": "Registration date",
-                                "example": "2024-01-15",
-                                "title": "Date",
-                                "type": "string",
-                              },
-                              "language": {
-                                "description": "ISO 639-1",
-                                "example": "en",
-                                "title": "Language code",
-                                "type": "string",
-                              },
-                              "lastActiveAt": {
-                                "description": "Seconds since Unix epoch (year 1970–3000)",
-                                "example": 1700000000,
-                                "maximum": 32503680000,
-                                "minimum": 0,
-                                "title": "Unix timestamp in seconds",
-                                "type": "integer",
-                              },
-                              "locale": {
-                                "description": "BCP 47 language or language-region format",
-                                "example": "en-US",
-                                "title": "Locale code",
-                                "type": "string",
-                              },
-                              "metadata": {
-                                "additionalProperties": {},
-                                "description": "Arbitrary key-value metadata",
-                                "type": "object",
-                              },
-                              "name": {
-                                "example": "Jane Doe",
-                                "minLength": 1,
-                                "type": "string",
-                              },
-                              "phone": {
-                                "description": "International format with country code",
-                                "example": "+12025551234",
-                                "title": "Phone number",
-                                "type": "string",
-                              },
-                              "role": {
-                                "default": "user",
-                                "enum": [
-                                  "admin",
-                                  "user",
-                                  "moderator",
-                                ],
-                                "type": "string",
-                              },
-                              "tags": {
-                                "default": [],
-                                "items": {
-                                  "minLength": 1,
-                                  "type": "string",
-                                },
-                                "type": "array",
-                              },
-                              "website": {
-                                "description": "HTTP or HTTPS URL",
-                                "example": "https://example.com",
-                                "title": "URL",
-                                "type": "string",
-                              },
-                            },
-                            "required": [
-                              "id",
-                              "email",
-                              "name",
-                              "language",
-                              "joinedAt",
-                              "isVerified",
-                              "role",
-                              "tags",
-                            ],
-                            "title": "User profile",
-                            "type": "object",
+                            "$ref": "#/components/schemas/UserProfile",
                           },
                           "type": "array",
                         },
@@ -1022,66 +999,7 @@ exports[`OpenAPI spec — ShowcaseApi snapshot > matches snapshot 1`] = `
                   "properties": {
                     "data": {
                       "items": {
-                        "description": "A single field-level validation failure. One request can produce multiple issues.",
-                        "example": {
-                          "code": "invalid.string.minLength",
-                          "expectedLanguage": "de",
-                          "message": "Minimum 8 characters required",
-                          "params": {
-                            "min": 8,
-                          },
-                          "path": "password",
-                          "usedLanguage": "en",
-                        },
-                        "properties": {
-                          "code": {
-                            "description": "Dot-separated issue key identifying the rule that failed",
-                            "example": "invalid.string.minLength",
-                            "minLength": 1,
-                            "type": "string",
-                          },
-                          "expectedLanguage": {
-                            "description": "Locale requested by the client via Accept-Language",
-                            "example": "de",
-                            "pattern": "^[a-z]{2}(-[A-Z]{2})?$",
-                            "title": "Locale code",
-                            "type": "string",
-                          },
-                          "message": {
-                            "description": "Human-readable error message, localised to the client locale if available",
-                            "example": "Minimum 8 characters required",
-                            "minLength": 1,
-                            "type": "string",
-                          },
-                          "params": {
-                            "additionalProperties": {},
-                            "description": "Template variables substituted into the message template",
-                            "example": {
-                              "min": 8,
-                            },
-                            "type": "object",
-                          },
-                          "path": {
-                            "description": "Dot-separated field path within the request body",
-                            "example": "user.address.zip",
-                            "minLength": 1,
-                            "type": "string",
-                          },
-                          "usedLanguage": {
-                            "description": "Locale actually used to render the message (may differ from requested if translation is missing)",
-                            "example": "en",
-                            "pattern": "^[a-z]{2}(-[A-Z]{2})?$",
-                            "title": "Locale code",
-                            "type": "string",
-                          },
-                        },
-                        "required": [
-                          "path",
-                          "code",
-                          "message",
-                        ],
-                        "title": "Validation issue",
-                        "type": "object",
+                        "$ref": "#/components/schemas/ValidationIssue",
                       },
                       "type": "array",
                     },
@@ -1150,49 +1068,7 @@ exports[`OpenAPI spec — ShowcaseApi snapshot > matches snapshot 1`] = `
           "content": {
             "application/json": {
               "schema": {
-                "properties": {
-                  "country": {
-                    "description": "ISO 3166-1 alpha-2",
-                    "example": "US",
-                    "title": "Country code",
-                    "type": "string",
-                  },
-                  "email": {
-                    "example": "user@example.com",
-                    "title": "Email address",
-                    "type": "string",
-                  },
-                  "inviteCode": {
-                    "description": "Optional referral / invite code",
-                    "type": "string",
-                  },
-                  "language": {
-                    "default": "en",
-                    "description": "ISO 639-1",
-                    "example": "en",
-                    "title": "Language code",
-                    "type": "string",
-                  },
-                  "name": {
-                    "minLength": 1,
-                    "type": "string",
-                  },
-                  "password": {
-                    "format": "password",
-                    "maxLength": 128,
-                    "minLength": 8,
-                    "type": "string",
-                  },
-                },
-                "required": [
-                  "email",
-                  "name",
-                  "password",
-                  "country",
-                  "language",
-                ],
-                "title": "Create user request",
-                "type": "object",
+                "$ref": "#/components/schemas/CreateUserRequest",
               },
             },
           },
@@ -1205,177 +1081,7 @@ exports[`OpenAPI spec — ShowcaseApi snapshot > matches snapshot 1`] = `
                 "schema": {
                   "properties": {
                     "data": {
-                      "description": "Complete user profile returned from GET /users/:id",
-                      "properties": {
-                        "address": {
-                          "properties": {
-                            "city": {
-                              "example": "Tallinn",
-                              "minLength": 1,
-                              "type": "string",
-                            },
-                            "country": {
-                              "description": "ISO 3166-1 alpha-2",
-                              "example": "US",
-                              "title": "Country code",
-                              "type": "string",
-                            },
-                            "street": {
-                              "description": "Street address",
-                              "example": "123 Main St",
-                              "minLength": 1,
-                              "type": "string",
-                            },
-                            "zip": {
-                              "description": "Postal code",
-                              "example": "10001",
-                              "type": "string",
-                            },
-                          },
-                          "required": [
-                            "street",
-                            "city",
-                            "country",
-                          ],
-                          "title": "Postal address",
-                          "type": "object",
-                        },
-                        "bio": {
-                          "description": "Short biography",
-                          "maxLength": 500,
-                          "type": "string",
-                        },
-                        "coordinates": {
-                          "description": "Location as [latitude, longitude]",
-                          "items": false,
-                          "maxItems": 2,
-                          "minItems": 2,
-                          "prefixItems": [
-                            {
-                              "description": "Decimal degrees (-90 to 90)",
-                              "example": 59.437,
-                              "maximum": 90,
-                              "minimum": -90,
-                              "title": "Latitude",
-                              "type": "number",
-                            },
-                            {
-                              "description": "Decimal degrees (-180 to 180)",
-                              "example": 24.754,
-                              "maximum": 180,
-                              "minimum": -180,
-                              "title": "Longitude",
-                              "type": "number",
-                            },
-                          ],
-                          "type": "array",
-                        },
-                        "deprecatedField": {
-                          "deprecated": true,
-                          "description": "Use email instead",
-                          "type": "string",
-                        },
-                        "email": {
-                          "example": "user@example.com",
-                          "title": "Email address",
-                          "type": "string",
-                        },
-                        "id": {
-                          "example": "usr_abc123",
-                          "minLength": 1,
-                          "type": "string",
-                        },
-                        "ipAddress": {
-                          "description": "IPv4 or IPv6",
-                          "examples": [
-                            "192.168.1.1",
-                            "::1",
-                          ],
-                          "title": "IP address",
-                          "type": "string",
-                        },
-                        "isVerified": {
-                          "default": false,
-                          "type": "boolean",
-                        },
-                        "joinedAt": {
-                          "description": "Registration date",
-                          "example": "2024-01-15",
-                          "title": "Date",
-                          "type": "string",
-                        },
-                        "language": {
-                          "description": "ISO 639-1",
-                          "example": "en",
-                          "title": "Language code",
-                          "type": "string",
-                        },
-                        "lastActiveAt": {
-                          "description": "Seconds since Unix epoch (year 1970–3000)",
-                          "example": 1700000000,
-                          "maximum": 32503680000,
-                          "minimum": 0,
-                          "title": "Unix timestamp in seconds",
-                          "type": "integer",
-                        },
-                        "locale": {
-                          "description": "BCP 47 language or language-region format",
-                          "example": "en-US",
-                          "title": "Locale code",
-                          "type": "string",
-                        },
-                        "metadata": {
-                          "additionalProperties": {},
-                          "description": "Arbitrary key-value metadata",
-                          "type": "object",
-                        },
-                        "name": {
-                          "example": "Jane Doe",
-                          "minLength": 1,
-                          "type": "string",
-                        },
-                        "phone": {
-                          "description": "International format with country code",
-                          "example": "+12025551234",
-                          "title": "Phone number",
-                          "type": "string",
-                        },
-                        "role": {
-                          "default": "user",
-                          "enum": [
-                            "admin",
-                            "user",
-                            "moderator",
-                          ],
-                          "type": "string",
-                        },
-                        "tags": {
-                          "default": [],
-                          "items": {
-                            "minLength": 1,
-                            "type": "string",
-                          },
-                          "type": "array",
-                        },
-                        "website": {
-                          "description": "HTTP or HTTPS URL",
-                          "example": "https://example.com",
-                          "title": "URL",
-                          "type": "string",
-                        },
-                      },
-                      "required": [
-                        "id",
-                        "email",
-                        "name",
-                        "language",
-                        "joinedAt",
-                        "isVerified",
-                        "role",
-                        "tags",
-                      ],
-                      "title": "User profile",
-                      "type": "object",
+                      "$ref": "#/components/schemas/UserProfile",
                     },
                     "success": {
                       "enum": [
@@ -1436,66 +1142,7 @@ exports[`OpenAPI spec — ShowcaseApi snapshot > matches snapshot 1`] = `
                   "properties": {
                     "data": {
                       "items": {
-                        "description": "A single field-level validation failure. One request can produce multiple issues.",
-                        "example": {
-                          "code": "invalid.string.minLength",
-                          "expectedLanguage": "de",
-                          "message": "Minimum 8 characters required",
-                          "params": {
-                            "min": 8,
-                          },
-                          "path": "password",
-                          "usedLanguage": "en",
-                        },
-                        "properties": {
-                          "code": {
-                            "description": "Dot-separated issue key identifying the rule that failed",
-                            "example": "invalid.string.minLength",
-                            "minLength": 1,
-                            "type": "string",
-                          },
-                          "expectedLanguage": {
-                            "description": "Locale requested by the client via Accept-Language",
-                            "example": "de",
-                            "pattern": "^[a-z]{2}(-[A-Z]{2})?$",
-                            "title": "Locale code",
-                            "type": "string",
-                          },
-                          "message": {
-                            "description": "Human-readable error message, localised to the client locale if available",
-                            "example": "Minimum 8 characters required",
-                            "minLength": 1,
-                            "type": "string",
-                          },
-                          "params": {
-                            "additionalProperties": {},
-                            "description": "Template variables substituted into the message template",
-                            "example": {
-                              "min": 8,
-                            },
-                            "type": "object",
-                          },
-                          "path": {
-                            "description": "Dot-separated field path within the request body",
-                            "example": "user.address.zip",
-                            "minLength": 1,
-                            "type": "string",
-                          },
-                          "usedLanguage": {
-                            "description": "Locale actually used to render the message (may differ from requested if translation is missing)",
-                            "example": "en",
-                            "pattern": "^[a-z]{2}(-[A-Z]{2})?$",
-                            "title": "Locale code",
-                            "type": "string",
-                          },
-                        },
-                        "required": [
-                          "path",
-                          "code",
-                          "message",
-                        ],
-                        "title": "Validation issue",
-                        "type": "object",
+                        "$ref": "#/components/schemas/ValidationIssue",
                       },
                       "type": "array",
                     },
@@ -1660,177 +1307,7 @@ exports[`OpenAPI spec — ShowcaseApi snapshot > matches snapshot 1`] = `
                 "schema": {
                   "properties": {
                     "data": {
-                      "description": "Complete user profile returned from GET /users/:id",
-                      "properties": {
-                        "address": {
-                          "properties": {
-                            "city": {
-                              "example": "Tallinn",
-                              "minLength": 1,
-                              "type": "string",
-                            },
-                            "country": {
-                              "description": "ISO 3166-1 alpha-2",
-                              "example": "US",
-                              "title": "Country code",
-                              "type": "string",
-                            },
-                            "street": {
-                              "description": "Street address",
-                              "example": "123 Main St",
-                              "minLength": 1,
-                              "type": "string",
-                            },
-                            "zip": {
-                              "description": "Postal code",
-                              "example": "10001",
-                              "type": "string",
-                            },
-                          },
-                          "required": [
-                            "street",
-                            "city",
-                            "country",
-                          ],
-                          "title": "Postal address",
-                          "type": "object",
-                        },
-                        "bio": {
-                          "description": "Short biography",
-                          "maxLength": 500,
-                          "type": "string",
-                        },
-                        "coordinates": {
-                          "description": "Location as [latitude, longitude]",
-                          "items": false,
-                          "maxItems": 2,
-                          "minItems": 2,
-                          "prefixItems": [
-                            {
-                              "description": "Decimal degrees (-90 to 90)",
-                              "example": 59.437,
-                              "maximum": 90,
-                              "minimum": -90,
-                              "title": "Latitude",
-                              "type": "number",
-                            },
-                            {
-                              "description": "Decimal degrees (-180 to 180)",
-                              "example": 24.754,
-                              "maximum": 180,
-                              "minimum": -180,
-                              "title": "Longitude",
-                              "type": "number",
-                            },
-                          ],
-                          "type": "array",
-                        },
-                        "deprecatedField": {
-                          "deprecated": true,
-                          "description": "Use email instead",
-                          "type": "string",
-                        },
-                        "email": {
-                          "example": "user@example.com",
-                          "title": "Email address",
-                          "type": "string",
-                        },
-                        "id": {
-                          "example": "usr_abc123",
-                          "minLength": 1,
-                          "type": "string",
-                        },
-                        "ipAddress": {
-                          "description": "IPv4 or IPv6",
-                          "examples": [
-                            "192.168.1.1",
-                            "::1",
-                          ],
-                          "title": "IP address",
-                          "type": "string",
-                        },
-                        "isVerified": {
-                          "default": false,
-                          "type": "boolean",
-                        },
-                        "joinedAt": {
-                          "description": "Registration date",
-                          "example": "2024-01-15",
-                          "title": "Date",
-                          "type": "string",
-                        },
-                        "language": {
-                          "description": "ISO 639-1",
-                          "example": "en",
-                          "title": "Language code",
-                          "type": "string",
-                        },
-                        "lastActiveAt": {
-                          "description": "Seconds since Unix epoch (year 1970–3000)",
-                          "example": 1700000000,
-                          "maximum": 32503680000,
-                          "minimum": 0,
-                          "title": "Unix timestamp in seconds",
-                          "type": "integer",
-                        },
-                        "locale": {
-                          "description": "BCP 47 language or language-region format",
-                          "example": "en-US",
-                          "title": "Locale code",
-                          "type": "string",
-                        },
-                        "metadata": {
-                          "additionalProperties": {},
-                          "description": "Arbitrary key-value metadata",
-                          "type": "object",
-                        },
-                        "name": {
-                          "example": "Jane Doe",
-                          "minLength": 1,
-                          "type": "string",
-                        },
-                        "phone": {
-                          "description": "International format with country code",
-                          "example": "+12025551234",
-                          "title": "Phone number",
-                          "type": "string",
-                        },
-                        "role": {
-                          "default": "user",
-                          "enum": [
-                            "admin",
-                            "user",
-                            "moderator",
-                          ],
-                          "type": "string",
-                        },
-                        "tags": {
-                          "default": [],
-                          "items": {
-                            "minLength": 1,
-                            "type": "string",
-                          },
-                          "type": "array",
-                        },
-                        "website": {
-                          "description": "HTTP or HTTPS URL",
-                          "example": "https://example.com",
-                          "title": "URL",
-                          "type": "string",
-                        },
-                      },
-                      "required": [
-                        "id",
-                        "email",
-                        "name",
-                        "language",
-                        "joinedAt",
-                        "isVerified",
-                        "role",
-                        "tags",
-                      ],
-                      "title": "User profile",
-                      "type": "object",
+                      "$ref": "#/components/schemas/UserProfile",
                     },
                     "success": {
                       "enum": [
@@ -1938,37 +1415,7 @@ exports[`OpenAPI spec — ShowcaseApi snapshot > matches snapshot 1`] = `
               "schema": {
                 "properties": {
                   "address": {
-                    "properties": {
-                      "city": {
-                        "example": "Tallinn",
-                        "minLength": 1,
-                        "type": "string",
-                      },
-                      "country": {
-                        "description": "ISO 3166-1 alpha-2",
-                        "example": "US",
-                        "title": "Country code",
-                        "type": "string",
-                      },
-                      "street": {
-                        "description": "Street address",
-                        "example": "123 Main St",
-                        "minLength": 1,
-                        "type": "string",
-                      },
-                      "zip": {
-                        "description": "Postal code",
-                        "example": "10001",
-                        "type": "string",
-                      },
-                    },
-                    "required": [
-                      "street",
-                      "city",
-                      "country",
-                    ],
-                    "title": "Postal address",
-                    "type": "object",
+                    "$ref": "#/components/schemas/PostalAddress",
                   },
                   "bio": {
                     "maxLength": 500,
@@ -1980,20 +1427,10 @@ exports[`OpenAPI spec — ShowcaseApi snapshot > matches snapshot 1`] = `
                     "minItems": 2,
                     "prefixItems": [
                       {
-                        "description": "Decimal degrees (-90 to 90)",
-                        "example": 59.437,
-                        "maximum": 90,
-                        "minimum": -90,
-                        "title": "Latitude",
-                        "type": "number",
+                        "$ref": "#/components/schemas/Latitude",
                       },
                       {
-                        "description": "Decimal degrees (-180 to 180)",
-                        "example": 24.754,
-                        "maximum": 180,
-                        "minimum": -180,
-                        "title": "Longitude",
-                        "type": "number",
+                        "$ref": "#/components/schemas/Longitude",
                       },
                     ],
                     "type": "array",
@@ -2008,10 +1445,7 @@ exports[`OpenAPI spec — ShowcaseApi snapshot > matches snapshot 1`] = `
                     "type": "string",
                   },
                   "website": {
-                    "description": "HTTP or HTTPS URL",
-                    "example": "https://example.com",
-                    "title": "URL",
-                    "type": "string",
+                    "$ref": "#/components/schemas/URL",
                   },
                 },
                 "required": [
@@ -2030,177 +1464,7 @@ exports[`OpenAPI spec — ShowcaseApi snapshot > matches snapshot 1`] = `
                 "schema": {
                   "properties": {
                     "data": {
-                      "description": "Complete user profile returned from GET /users/:id",
-                      "properties": {
-                        "address": {
-                          "properties": {
-                            "city": {
-                              "example": "Tallinn",
-                              "minLength": 1,
-                              "type": "string",
-                            },
-                            "country": {
-                              "description": "ISO 3166-1 alpha-2",
-                              "example": "US",
-                              "title": "Country code",
-                              "type": "string",
-                            },
-                            "street": {
-                              "description": "Street address",
-                              "example": "123 Main St",
-                              "minLength": 1,
-                              "type": "string",
-                            },
-                            "zip": {
-                              "description": "Postal code",
-                              "example": "10001",
-                              "type": "string",
-                            },
-                          },
-                          "required": [
-                            "street",
-                            "city",
-                            "country",
-                          ],
-                          "title": "Postal address",
-                          "type": "object",
-                        },
-                        "bio": {
-                          "description": "Short biography",
-                          "maxLength": 500,
-                          "type": "string",
-                        },
-                        "coordinates": {
-                          "description": "Location as [latitude, longitude]",
-                          "items": false,
-                          "maxItems": 2,
-                          "minItems": 2,
-                          "prefixItems": [
-                            {
-                              "description": "Decimal degrees (-90 to 90)",
-                              "example": 59.437,
-                              "maximum": 90,
-                              "minimum": -90,
-                              "title": "Latitude",
-                              "type": "number",
-                            },
-                            {
-                              "description": "Decimal degrees (-180 to 180)",
-                              "example": 24.754,
-                              "maximum": 180,
-                              "minimum": -180,
-                              "title": "Longitude",
-                              "type": "number",
-                            },
-                          ],
-                          "type": "array",
-                        },
-                        "deprecatedField": {
-                          "deprecated": true,
-                          "description": "Use email instead",
-                          "type": "string",
-                        },
-                        "email": {
-                          "example": "user@example.com",
-                          "title": "Email address",
-                          "type": "string",
-                        },
-                        "id": {
-                          "example": "usr_abc123",
-                          "minLength": 1,
-                          "type": "string",
-                        },
-                        "ipAddress": {
-                          "description": "IPv4 or IPv6",
-                          "examples": [
-                            "192.168.1.1",
-                            "::1",
-                          ],
-                          "title": "IP address",
-                          "type": "string",
-                        },
-                        "isVerified": {
-                          "default": false,
-                          "type": "boolean",
-                        },
-                        "joinedAt": {
-                          "description": "Registration date",
-                          "example": "2024-01-15",
-                          "title": "Date",
-                          "type": "string",
-                        },
-                        "language": {
-                          "description": "ISO 639-1",
-                          "example": "en",
-                          "title": "Language code",
-                          "type": "string",
-                        },
-                        "lastActiveAt": {
-                          "description": "Seconds since Unix epoch (year 1970–3000)",
-                          "example": 1700000000,
-                          "maximum": 32503680000,
-                          "minimum": 0,
-                          "title": "Unix timestamp in seconds",
-                          "type": "integer",
-                        },
-                        "locale": {
-                          "description": "BCP 47 language or language-region format",
-                          "example": "en-US",
-                          "title": "Locale code",
-                          "type": "string",
-                        },
-                        "metadata": {
-                          "additionalProperties": {},
-                          "description": "Arbitrary key-value metadata",
-                          "type": "object",
-                        },
-                        "name": {
-                          "example": "Jane Doe",
-                          "minLength": 1,
-                          "type": "string",
-                        },
-                        "phone": {
-                          "description": "International format with country code",
-                          "example": "+12025551234",
-                          "title": "Phone number",
-                          "type": "string",
-                        },
-                        "role": {
-                          "default": "user",
-                          "enum": [
-                            "admin",
-                            "user",
-                            "moderator",
-                          ],
-                          "type": "string",
-                        },
-                        "tags": {
-                          "default": [],
-                          "items": {
-                            "minLength": 1,
-                            "type": "string",
-                          },
-                          "type": "array",
-                        },
-                        "website": {
-                          "description": "HTTP or HTTPS URL",
-                          "example": "https://example.com",
-                          "title": "URL",
-                          "type": "string",
-                        },
-                      },
-                      "required": [
-                        "id",
-                        "email",
-                        "name",
-                        "language",
-                        "joinedAt",
-                        "isVerified",
-                        "role",
-                        "tags",
-                      ],
-                      "title": "User profile",
-                      "type": "object",
+                      "$ref": "#/components/schemas/UserProfile",
                     },
                     "success": {
                       "enum": [
@@ -2261,66 +1525,7 @@ exports[`OpenAPI spec — ShowcaseApi snapshot > matches snapshot 1`] = `
                   "properties": {
                     "data": {
                       "items": {
-                        "description": "A single field-level validation failure. One request can produce multiple issues.",
-                        "example": {
-                          "code": "invalid.string.minLength",
-                          "expectedLanguage": "de",
-                          "message": "Minimum 8 characters required",
-                          "params": {
-                            "min": 8,
-                          },
-                          "path": "password",
-                          "usedLanguage": "en",
-                        },
-                        "properties": {
-                          "code": {
-                            "description": "Dot-separated issue key identifying the rule that failed",
-                            "example": "invalid.string.minLength",
-                            "minLength": 1,
-                            "type": "string",
-                          },
-                          "expectedLanguage": {
-                            "description": "Locale requested by the client via Accept-Language",
-                            "example": "de",
-                            "pattern": "^[a-z]{2}(-[A-Z]{2})?$",
-                            "title": "Locale code",
-                            "type": "string",
-                          },
-                          "message": {
-                            "description": "Human-readable error message, localised to the client locale if available",
-                            "example": "Minimum 8 characters required",
-                            "minLength": 1,
-                            "type": "string",
-                          },
-                          "params": {
-                            "additionalProperties": {},
-                            "description": "Template variables substituted into the message template",
-                            "example": {
-                              "min": 8,
-                            },
-                            "type": "object",
-                          },
-                          "path": {
-                            "description": "Dot-separated field path within the request body",
-                            "example": "user.address.zip",
-                            "minLength": 1,
-                            "type": "string",
-                          },
-                          "usedLanguage": {
-                            "description": "Locale actually used to render the message (may differ from requested if translation is missing)",
-                            "example": "en",
-                            "pattern": "^[a-z]{2}(-[A-Z]{2})?$",
-                            "title": "Locale code",
-                            "type": "string",
-                          },
-                        },
-                        "required": [
-                          "path",
-                          "code",
-                          "message",
-                        ],
-                        "title": "Validation issue",
-                        "type": "object",
+                        "$ref": "#/components/schemas/ValidationIssue",
                       },
                       "type": "array",
                     },
@@ -2542,10 +1747,7 @@ exports[`OpenAPI spec — ShowcaseApi snapshot > matches snapshot 1`] = `
                           "type": "integer",
                         },
                         "url": {
-                          "description": "HTTP or HTTPS URL",
-                          "example": "https://example.com",
-                          "title": "URL",
-                          "type": "string",
+                          "$ref": "#/components/schemas/URL",
                         },
                         "width": {
                           "minimum": 0,
@@ -2590,66 +1792,7 @@ exports[`OpenAPI spec — ShowcaseApi snapshot > matches snapshot 1`] = `
                   "properties": {
                     "data": {
                       "items": {
-                        "description": "A single field-level validation failure. One request can produce multiple issues.",
-                        "example": {
-                          "code": "invalid.string.minLength",
-                          "expectedLanguage": "de",
-                          "message": "Minimum 8 characters required",
-                          "params": {
-                            "min": 8,
-                          },
-                          "path": "password",
-                          "usedLanguage": "en",
-                        },
-                        "properties": {
-                          "code": {
-                            "description": "Dot-separated issue key identifying the rule that failed",
-                            "example": "invalid.string.minLength",
-                            "minLength": 1,
-                            "type": "string",
-                          },
-                          "expectedLanguage": {
-                            "description": "Locale requested by the client via Accept-Language",
-                            "example": "de",
-                            "pattern": "^[a-z]{2}(-[A-Z]{2})?$",
-                            "title": "Locale code",
-                            "type": "string",
-                          },
-                          "message": {
-                            "description": "Human-readable error message, localised to the client locale if available",
-                            "example": "Minimum 8 characters required",
-                            "minLength": 1,
-                            "type": "string",
-                          },
-                          "params": {
-                            "additionalProperties": {},
-                            "description": "Template variables substituted into the message template",
-                            "example": {
-                              "min": 8,
-                            },
-                            "type": "object",
-                          },
-                          "path": {
-                            "description": "Dot-separated field path within the request body",
-                            "example": "user.address.zip",
-                            "minLength": 1,
-                            "type": "string",
-                          },
-                          "usedLanguage": {
-                            "description": "Locale actually used to render the message (may differ from requested if translation is missing)",
-                            "example": "en",
-                            "pattern": "^[a-z]{2}(-[A-Z]{2})?$",
-                            "title": "Locale code",
-                            "type": "string",
-                          },
-                        },
-                        "required": [
-                          "path",
-                          "code",
-                          "message",
-                        ],
-                        "title": "Validation issue",
-                        "type": "object",
+                        "$ref": "#/components/schemas/ValidationIssue",
                       },
                       "type": "array",
                     },
