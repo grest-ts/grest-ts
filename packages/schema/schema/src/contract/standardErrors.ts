@@ -2,13 +2,14 @@ import {IsArray} from "../schemas/IsArray";
 import {IsObject} from "../schemas/IsObject";
 import {IsString} from "../schemas/IsString";
 import {IsAny} from "../schemas/IsAny";
+import {IsRecord} from "../schemas/IsRecord";
 import {ERROR} from "./ERROR";
 
 export const VALIDATION_ERROR = ERROR.define("VALIDATION_ERROR", 422, IsArray(IsObject({
     path: IsString.nonEmpty,
     code: IsString.nonEmpty,
     message: IsString.nonEmpty,
-    params: IsAny.orUndefined,
+    params: IsRecord(IsString, IsAny).orUndefined,
     usedLanguage: IsString.orUndefined,
     expectedLanguage: IsString.orUndefined
 })))
