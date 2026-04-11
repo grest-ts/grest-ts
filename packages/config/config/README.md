@@ -189,7 +189,7 @@ describe("my tests", () => {
 });
 ```
 
-Config set in `beforeAll` or by framework hooks (e.g. `GGTest.with().clone()`) is preserved — only changes made during individual tests are reverted.
+Config set in `beforeAll` or by framework hooks (e.g. `GGTest.with().clone()`) is preserved — only changes made during individual tests are reverted. This also works with nested `describe` blocks: each scope's `beforeAll` overrides are reverted in its `afterAll`, so sibling describes don't see each other's config.
 
 ## Further Reading
 
