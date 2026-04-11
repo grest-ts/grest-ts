@@ -1,5 +1,6 @@
-import {GGParseResult} from "./GGSchema";
+import {GGParseResult, GGSchema} from "./GGSchema";
 import {GGTransform} from "./GGTransform";
+import type {ObjectDef} from "./Definition";
 
 export interface GGCodecConfig<Input, Output> {
     encode: GGTransform<Input, Output>,
@@ -21,6 +22,19 @@ export class GGCodec<Input, Output> {
 
     public decode(data: Output): GGParseResult<Input> {
         return this.config.decode.encode(data);
+    }
+
+    /**
+     * Returns the keys of the encode transform's input schema, if it is an object schema.
+     * Useful for introspecting which fields a codec reads from its input (e.g. header names).
+     */
+    public get inputKeys(): readonly string[] | undefined {
+        const schema = this.config.encode.inputSchema;
+        if (schema instanceof GGSchema && schema.toCompilerDef().type === 'object') {
+            const shape = (schema.toCompilerDef() as ObjectDef).shape;
+            if (shape) return Object.keys(shape);
+        }
+        return undefined;
     }
 
     public codecTo<Third>(other: GGCodec<Output, Third>): GGCodec<Input, Third> {

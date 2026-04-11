@@ -24,6 +24,7 @@ export const GG_CLIENT_INFO = new GGContextKey<ClientInfo>('clientInfo', IsObjec
  * Effect that extracts client info from custom headers
  */
 export const ClientInfoEffect: GGHttpTransportMiddleware = {
+    headers: ['x-client-version', 'x-client-platform'],
     updateRequest(req: GGHttpRequest): void {
         const info = GG_CLIENT_INFO.get();
         if (info) {
@@ -56,6 +57,7 @@ export const GG_FEATURE_FLAGS = new GGContextKey<FeatureFlags>('features', IsObj
  * Effect that extracts feature flags from header
  */
 export const FeatureFlagsEffect: GGHttpTransportMiddleware = {
+    headers: ['x-feature-flags'],
     updateRequest(req: GGHttpRequest): void {
         const val = GG_FEATURE_FLAGS.get();
         req.headers['x-feature-flags'] = val ? JSON.stringify(val) : "";

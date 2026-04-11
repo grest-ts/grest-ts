@@ -25,6 +25,10 @@ export class GGHttpServer {
     private activeRequests = 0;
     private router = findMyWay<findMyWay.HTTPVersion.V1>();
 
+    private static readonly DEFAULT_CORS_HEADERS = ['Content-Type', 'Authorization'];
+    private readonly _corsHeaders = new Set<string>(GGHttpServer.DEFAULT_CORS_HEADERS);
+    private _corsHeadersCache: string = GGHttpServer.DEFAULT_CORS_HEADERS.join(', ');
+
     constructor(config?: GGHttpServerAdapterConfig) {
 
         this.runtimeName = GGLocator.getScope().serviceName;
@@ -48,7 +52,7 @@ export class GGHttpServer {
                 if (req.headers.origin) { // For browsers
                     res.setHeader('Access-Control-Allow-Origin', '*');
                     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
-                    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-org-token');
+                    res.setHeader('Access-Control-Allow-Headers', this._corsHeadersCache);
                     res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition');
                 }
                 if (req.method === 'OPTIONS') {
@@ -71,6 +75,23 @@ export class GGHttpServer {
                 this.activeRequests--;
             }
         });
+    }
+
+    /**
+     * Register custom header names for CORS Access-Control-Allow-Headers.
+     * Called automatically during schema registration based on middleware declarations.
+     */
+    public registerCorsHeaders(headers: readonly string[]): void {
+        let changed = false;
+        for (const h of headers) {
+            if (!this._corsHeaders.has(h)) {
+                this._corsHeaders.add(h);
+                changed = true;
+            }
+        }
+        if (changed) {
+            this._corsHeadersCache = Array.from(this._corsHeaders).join(', ');
+        }
     }
 
     /**

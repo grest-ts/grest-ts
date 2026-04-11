@@ -16,6 +16,8 @@ export const GG_INTERNAL_AUTH_TOKEN = new GGLocatorKey<tInternalAuthToken>('inte
  */
 export const InternalAuthUse: GGHttpTransportMiddleware = {
 
+    headers: ['authorization'],
+
     updateRequest(req: GGHttpRequest): void {
         const internal = GG_INTERNAL_AUTH_TOKEN.tryGet();
         if (internal) {

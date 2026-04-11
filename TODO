@@ -3,8 +3,6 @@
 * http/file-http -> http/http-file
 
 
-* res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-company-auth'); // @TODO Remove x-company-auth
-
 * symmetric codec for RPC was nice idea, but doesn't actually work. Code is filled with solutions for browser that would not "load server part". Need to fix the whole architecture.
 
 * If something internal throws VALIDATION_ERROR, it will pass through to the client. Most likely this is actually SERVER_ERROR, so we can't always safely pass VALIDATION_ERROR, only when actually handling input.

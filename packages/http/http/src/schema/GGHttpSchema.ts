@@ -85,6 +85,13 @@ export interface GGHttpCodec {
 
 export interface GGHttpTransportMiddleware {
     /**
+     * HTTP header names that this middleware reads from or writes to.
+     * Used for automatic CORS Access-Control-Allow-Headers configuration.
+     * Populated automatically by useHeader(); should be declared manually for custom middleware.
+     */
+    readonly headers?: readonly string[];
+
+    /**
      * Client-side: modify outgoing request (add headers, etc.)
      */
     updateRequest?(req: GGHttpRequest): void;

@@ -61,8 +61,8 @@ class GGHttpSchemaBuilder<TContract extends GGContractApiDefinition, TContext = 
         }
 
         const middleware: GGHttpTransportMiddleware = {
+            headers: codec.inputKeys,
             updateRequest(req: GGHttpRequest) {
-                // Client-side: context -> headers
                 const contextValue = contextKey.get();
                 if (contextValue !== undefined) {
                     const result = codec.decode(contextValue);
@@ -70,7 +70,6 @@ class GGHttpSchemaBuilder<TContract extends GGContractApiDefinition, TContext = 
                         Object.assign(req.headers, result.value);
                     }
                 } else {
-                    // Clear any default headers by decoding an empty context
                     const emptyResult = codec.decode({} as Input);
                     if (emptyResult.success) {
                         for (const key of Object.keys(emptyResult.value as object)) {
@@ -80,7 +79,6 @@ class GGHttpSchemaBuilder<TContract extends GGContractApiDefinition, TContext = 
                 }
             },
             parseRequest(req: http.IncomingMessage) {
-                // Server-side: headers -> context
                 const headers = req.headers as Record<string, string>;
                 const result = codec.encode(headers);
                 if (result.success) {

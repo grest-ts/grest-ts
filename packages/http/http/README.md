@@ -235,6 +235,7 @@ export const GG_CLIENT_INFO = new GGContextKey<ClientInfo>('clientInfo', IsObjec
 }))
 
 export const ClientInfoMiddleware: GGHttpTransportMiddleware = {
+    headers: ['x-client-version', 'x-client-platform'],
     updateRequest(req: GGHttpRequest): void {
         const info = GG_CLIENT_INFO.get()
         if (info) {
@@ -407,6 +408,41 @@ protected compose(): void {
     new GGHttp(internalServer)
         .http(InternalApi, internalService)
 }
+```
+
+### CORS Headers
+
+CORS `Access-Control-Allow-Headers` are auto-discovered from middleware and codecs.
+`Content-Type` and `Authorization` are included by default.
+
+When using `useHeader()`, header names are extracted from the codec's input schema automatically:
+
+```typescript
+const HeaderType = IsObject({
+    "x-org-token": IsString.orUndefined  // Auto-discovered as CORS header
+})
+GG_ORG_TOKEN.addCodec("http", HeaderType.codecTo(...))
+
+httpSchema(Contract)
+    .useHeader(GG_ORG_TOKEN)  // "x-org-token" added to CORS Allow-Headers
+    .routes({ ... })
+```
+
+For custom middleware, declare the `headers` property:
+
+```typescript
+export const MyMiddleware: GGHttpTransportMiddleware = {
+    headers: ['x-custom-header', 'x-request-id'],
+    updateRequest(req) { ... },
+    parseRequest(req) { ... }
+}
+```
+
+You can also register headers manually on the server:
+
+```typescript
+const httpServer = new GGHttpServer()
+httpServer.registerCorsHeaders(['x-custom-header'])
 ```
 
 ## HTTP Client
