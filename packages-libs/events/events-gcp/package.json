@@ -1,7 +1,7 @@
 {
   "//": "THIS FILE IS GENERATED - DO NOT EDIT",
   "name": "@grest-ts/events-gcp",
-  "version": "0.0.21",
+  "version": "0.0.22",
   "type": "module",
   "license": "MIT",
   "description": "Google Cloud Pub/Sub adapter for @grest-ts/events",
@@ -44,9 +44,9 @@
   },
   "dependencies": {
     "@google-cloud/pubsub": "^5.2.3",
-    "@grest-ts/config": "0.0.21",
-    "@grest-ts/events": "0.0.21",
-    "@grest-ts/logger": "0.0.21",
-    "@grest-ts/schema": "0.0.21"
+    "@grest-ts/config": "0.0.22",
+    "@grest-ts/events": "0.0.22",
+    "@grest-ts/logger": "0.0.22",
+    "@grest-ts/schema": "0.0.22"
   }
 }
