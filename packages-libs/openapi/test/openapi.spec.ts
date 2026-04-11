@@ -473,4 +473,27 @@ describe("toOpenApi", () => {
             expect(d.servers?.[0].url).toBe("https://api.example.com");
         });
     });
+
+    describe("codec contract enforcement", () => {
+        const C = new GGContractClass("ThirdParty", {do: {}});
+
+        it("throws when toOpenApiOperation is missing", () => {
+            const codecNoMethod = {
+                method: "POST" as const, path: "do",
+                createForClient: () => ({} as any), createForServer: () => ({} as any)
+            };
+            const S = httpSchema(C).pathPrefix("tp").routes({do: codecNoMethod as any});
+            expect(() => toOpenApi([S])).toThrowError(/ThirdParty\.do/);
+        });
+
+        it("throws when toOpenApiOperation returns no responses", () => {
+            const codecNoResponses = {
+                method: "POST" as const, path: "do",
+                createForClient: () => ({} as any), createForServer: () => ({} as any),
+                toOpenApiOperation: () => ({operationId: "do", parameters: []})
+            };
+            const S2 = httpSchema(C).pathPrefix("tp2").routes({do: codecNoResponses as any});
+            expect(() => toOpenApi([S2])).toThrowError(/no responses/);
+        });
+    });
 });

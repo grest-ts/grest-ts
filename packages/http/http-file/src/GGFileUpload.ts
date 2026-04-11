@@ -1,5 +1,5 @@
 import {HttpMethod} from "@grest-ts/common"
-import {ClientHttpRouteToRpcTransformClientCodec, ClientHttpRouteToRpcTransformClientConfig, ClientHttpRouteToRpcTransformServerCodec, ClientHttpRouteToRpcTransformServerConfig, GGHttpCodec, GGHttpCodecOpenApiConfig, GGRpcResponseParser, GGRpcResponseBuilder} from "@grest-ts/http"
+import {ClientHttpRouteToRpcTransformClientCodec, ClientHttpRouteToRpcTransformClientConfig, ClientHttpRouteToRpcTransformServerCodec, ClientHttpRouteToRpcTransformServerConfig, GGHttpCodec, GGHttpCodecOpenApiConfig, GGRpcResponseParser, GGRpcResponseBuilder, buildRpcSuccessResponses} from "@grest-ts/http"
 import {GGFileUploadRequestBuilder} from "./GGFileUploadRequestBuilder";
 import {GGFileUploadRequestParser} from "./GGFileUploadRequestParser";
 import type {OpenAPIV3_1} from "openapi-types";
@@ -74,7 +74,8 @@ class GGFileUploadCodec implements GGHttpCodec {
                         } as OpenAPIV3_1.NonArraySchemaObject
                     }
                 }
-            }
+            },
+            responses: buildRpcSuccessResponses(config.contract)
         };
     }
 

@@ -4,6 +4,7 @@ import {GGRpcRequestBuilder} from "./RpcRequest/GGRpcRequestBuilder";
 import {GGRpcResponseParser} from "./RpcResponse/GGRpcResponseParser";
 import {GGSchema} from "@grest-ts/schema";
 import type {OpenAPIV3_1} from "openapi-types";
+import {buildRpcSuccessResponses} from "./openApiSuccessResponse";
 
 export type GGRpcServerCodecFactory = (method: HttpMethod, path: string, config: ClientHttpRouteToRpcTransformServerConfig) => ClientHttpRouteToRpcTransformServerCodec;
 
@@ -97,7 +98,11 @@ class GGHttpRpcCodec implements GGHttpCodec {
         const operationId = config.methodName;
 
         const parameters = buildOpenApiParameters(pathParams, hasBody, config.contract.input ?? undefined);
-        const operation: Partial<OpenAPIV3_1.OperationObject> = {operationId, parameters};
+        const operation: Partial<OpenAPIV3_1.OperationObject> = {
+            operationId,
+            parameters,
+            responses: buildRpcSuccessResponses(config.contract)
+        };
 
         if (hasBody && config.contract.input) {
             operation.requestBody = {

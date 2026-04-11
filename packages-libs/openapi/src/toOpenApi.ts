@@ -62,31 +62,37 @@ function buildOperation(
     codec: GGHttpSchema<any, any>["codec"][string],
     contract: NonNullable<GGHttpSchema<any, any>["contract"]>["methods"][string]
 ): OpenAPIV3_1.OperationObject {
-    const codecHints = codec.toOpenApiOperation?.({
-        pathPrefix: "",
-        methodName,
-        contract
-    }) ?? {};
+    if (!codec.toOpenApiOperation) {
+        throw new Error(
+            `Codec for ${apiName}.${methodName} (${codec.method} ${codec.path}) does not implement toOpenApiOperation(). ` +
+            `All codecs used in an OpenAPI schema must implement this method. ` +
+            `Built-in GGRpc.*, GGFileUpload, and GGFileDownload codecs support it automatically. ` +
+            `Custom codec authors must implement toOpenApiOperation() to be usable with @grest-ts/openapi.`
+        );
+    }
 
-    const base: OpenAPIV3_1.OperationObject = {
+    const codecResult = codec.toOpenApiOperation({pathPrefix: "", methodName, contract});
+
+    if (!codecResult.responses) {
+        throw new Error(
+            `Codec for ${apiName}.${methodName} (${codec.method} ${codec.path}) returned no responses from toOpenApiOperation(). ` +
+            `Every codec must declare its own success response shape. ` +
+            `Use buildRpcSuccessResponses(contract) from @grest-ts/http if your codec uses the standard JSON envelope.`
+        );
+    }
+
+    // Success response: always from the codec (it owns the wire format).
+    // Error responses: always from the contract (codec has no say in error shapes).
+    const errorResponses = buildErrorResponses(contract);
+
+    return {
         operationId: methodName,
         summary: camelToSummary(methodName),
         tags: [apiName],
         parameters: [],
-        responses: buildResponses(contract),
-        ...codecHints
+        ...codecResult,
+        responses: {...codecResult.responses, ...errorResponses}
     };
-
-    if (!codecHints.parameters && !codec.toOpenApiOperation) {
-        base.parameters = buildParametersFallback(codec, contract);
-    }
-
-    if (!codecHints.requestBody && !codec.toOpenApiOperation) {
-        const reqBody = buildRequestBodyFallback(codec, contract);
-        if (reqBody) base.requestBody = reqBody;
-    }
-
-    return base;
 }
 
 /**
@@ -101,137 +107,53 @@ function camelToSummary(name: string): string {
 }
 
 /**
- * openapi-types@12 defines OpenAPIV3_1.ParameterObject as a direct alias of OpenAPIV3.ParameterObject,
- * whose `schema` field resolves to V3 schema types (missing `type:"null"` as a valid type).
- * The casts to ParameterObject["schema"] below are the precise boundary of that typedef limitation —
- * the runtime objects are fully valid OpenAPI 3.1 parameters carrying V3_1 schemas.
+ * Error responses derived from the contract's error classes.
+ * These are always merged on top of whatever responses the codec provides.
  */
-function buildParametersFallback(
-    codec: GGHttpSchema<any, any>["codec"][string],
-    contract: NonNullable<GGHttpSchema<any, any>["contract"]>["methods"][string]
-): OpenAPIV3_1.ParameterObject[] {
-    const hasBody = codec.method === "POST" || codec.method === "PUT" || codec.method === "PATCH";
-    const pathParams = (codec.path.match(/:(\w+)/g) || []).map((m: string) => m.slice(1));
-
-    const inputSchema = contract.input
-        ? contract.input.toJSONSchema() as OpenAPIV3_1.NonArraySchemaObject
-        : undefined;
-    const shape = inputSchema?.properties;
-    const required = inputSchema?.required;
-
-    const params: OpenAPIV3_1.ParameterObject[] = pathParams.map((name: string) => {
-        const fieldSchema = shape?.[name] as OpenAPIV3_1.SchemaObject | undefined;
-        const param: OpenAPIV3_1.ParameterObject = {
-            name,
-            in: "path" as const,
-            required: true as const,
-            schema: (fieldSchema ?? {type: "string"}) as OpenAPIV3_1.ParameterObject["schema"]
-        };
-        if (fieldSchema?.description) param.description = fieldSchema.description;
-        return param;
-    });
-
-    if (!hasBody && shape) {
-        for (const [name, fieldSchema] of Object.entries(shape)) {
-            if (pathParams.includes(name)) continue;
-            const param: OpenAPIV3_1.ParameterObject = {
-                name,
-                in: "query" as const,
-                required: required?.includes(name) ?? false,
-                schema: fieldSchema as OpenAPIV3_1.ParameterObject["schema"]
-            };
-            if ((fieldSchema as OpenAPIV3_1.SchemaObject).description) {
-                param.description = (fieldSchema as OpenAPIV3_1.SchemaObject).description;
-            }
-            params.push(param);
-        }
-    }
-    return params;
-}
-
-function buildRequestBodyFallback(
-    codec: GGHttpSchema<any, any>["codec"][string],
-    contract: NonNullable<GGHttpSchema<any, any>["contract"]>["methods"][string]
-): OpenAPIV3_1.RequestBodyObject | undefined {
-    const hasBody = codec.method === "POST" || codec.method === "PUT" || codec.method === "PATCH";
-    if (!hasBody || !contract.input) return undefined;
-    return {
-        required: true,
-        content: {
-            "application/json": {
-                schema: contract.input.toJSONSchema()
-            }
-        }
-    };
-}
-
-function buildResponses(
+function buildErrorResponses(
     contract: NonNullable<GGHttpSchema<any, any>["contract"]>["methods"][string]
 ): OpenAPIV3_1.ResponsesObject {
     const responses: OpenAPIV3_1.ResponsesObject = {};
+    if (!contract.errors?.length) return responses;
 
-    // Success response
-    if (contract.success) {
-        const successSchema: OpenAPIV3_1.NonArraySchemaObject = {
+    const byStatus = new Map<number, OpenAPIV3_1.SchemaObject[]>();
+    const byStatusTypes = new Map<number, string[]>();
+
+    for (const errCls of contract.errors as ANY_ERROR_CLS[]) {
+        const statusCode = errCls.STATUS_CODE;
+        const errType = errCls.TYPE;
+        if (!byStatusTypes.has(statusCode)) byStatusTypes.set(statusCode, []);
+        byStatusTypes.get(statusCode)!.push(errType);
+
+        const dataSchema: OpenAPIV3_1.SchemaObject | undefined =
+            errCls.schema != null ? errCls.schema.toJSONSchema() : undefined;
+
+        const props: NonNullable<OpenAPIV3_1.BaseSchemaObject["properties"]> = {
+            success: {type: "boolean", enum: [false]},
+            type: {type: "string", enum: [errType]},
+        };
+        if (dataSchema !== undefined) props.data = dataSchema;
+
+        const errorBodySchema: OpenAPIV3_1.NonArraySchemaObject = {
             type: "object",
-            properties: {
-                success: {type: "boolean", enum: [true]},
-                type: {type: "string", enum: ["OK"]},
-                data: contract.success.toJSONSchema()
-            },
-            required: ["success", "type", "data"]
+            properties: props,
+            required: ["success", "type", ...(dataSchema !== undefined ? ["data"] : [])]
         };
-        responses["200"] = {
-            description: "Success",
-            content: {
-                "application/json": {schema: successSchema}
-            }
-        };
-    } else {
-        responses["204"] = {description: "No content"};
+
+        if (!byStatus.has(statusCode)) byStatus.set(statusCode, []);
+        byStatus.get(statusCode)!.push(errorBodySchema);
     }
 
-    // Error responses — group by STATUS_CODE
-    if (contract.errors?.length) {
-        const byStatus = new Map<number, OpenAPIV3_1.SchemaObject[]>();
-        const byStatusTypes = new Map<number, string[]>();
-
-        for (const errCls of contract.errors as ANY_ERROR_CLS[]) {
-            const statusCode = errCls.STATUS_CODE;
-            const errType = errCls.TYPE;
-            if (!byStatusTypes.has(statusCode)) byStatusTypes.set(statusCode, []);
-            byStatusTypes.get(statusCode)!.push(errType);
-            const dataSchema: OpenAPIV3_1.SchemaObject | undefined =
-                errCls.schema != null ? errCls.schema.toJSONSchema() : undefined;
-
-            const props: NonNullable<OpenAPIV3_1.BaseSchemaObject["properties"]> = {
-                success: {type: "boolean", enum: [false]},
-                type: {type: "string", enum: [errType]},
-            };
-            if (dataSchema !== undefined) props.data = dataSchema;
-
-            const errorBodySchema: OpenAPIV3_1.NonArraySchemaObject = {
-                type: "object",
-                properties: props,
-                required: ["success", "type", ...(dataSchema !== undefined ? ["data"] : [])]
-            };
-
-            if (!byStatus.has(statusCode)) byStatus.set(statusCode, []);
-            byStatus.get(statusCode)!.push(errorBodySchema);
-        }
-
-        for (const [statusCode, schemas] of byStatus) {
-            const typeNames = byStatusTypes.get(statusCode)!;
-            const content: OpenAPIV3_1.MediaTypeObject = {
-                schema: schemas.length === 1
-                    ? schemas[0]
-                    : {oneOf: schemas}
-            };
-            responses[String(statusCode)] = {
-                description: typeNames.join(" | "),
-                content: {"application/json": content}
-            };
-        }
+    for (const [statusCode, schemas] of byStatus) {
+        const typeNames = byStatusTypes.get(statusCode)!;
+        responses[String(statusCode)] = {
+            description: typeNames.join(" | "),
+            content: {
+                "application/json": {
+                    schema: schemas.length === 1 ? schemas[0] : {oneOf: schemas}
+                }
+            }
+        };
     }
 
     return responses;
