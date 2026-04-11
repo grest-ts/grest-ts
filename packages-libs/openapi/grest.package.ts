@@ -8,6 +8,7 @@ definePackage({
     hasTests: true,
     publishToNpm: true,
     dependencies: {
-        "openapi-types": "^12.1.3"
+        "openapi-types": "^12.1.3",
+        "swagger-ui-dist": "^5.32.2"
     }
 })
