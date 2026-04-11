@@ -154,6 +154,30 @@ describe('GGCodec', () => {
         });
     });
 
+    describe('inputKeys', () => {
+
+        it('should return keys from object schema input', () => {
+            const HeaderSchema = IsObject({
+                'authorization': IsString,
+                'x-custom-token': IsString
+            });
+            const ContextSchema = IsObject({
+                token: IsString
+            });
+
+            const codec = HeaderSchema.codecTo(ContextSchema, {
+                encode: (headers) => ({token: headers['authorization']}),
+                decode: (ctx) => ({authorization: ctx.token, 'x-custom-token': ''})
+            });
+
+            expect(codec.inputKeys).toEqual(['authorization', 'x-custom-token']);
+        });
+
+        it('should return undefined for non-object schema input', () => {
+            expect(StringNumberCodec.inputKeys).toBeUndefined();
+        });
+    });
+
     describe('real-world example: header codec', () => {
 
         const AuthHeaderSchema = IsString;

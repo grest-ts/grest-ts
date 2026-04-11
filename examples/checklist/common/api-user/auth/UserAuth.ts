@@ -24,6 +24,9 @@ export type User = typeof IsUser.infer
  */
 export class UserAuth extends GGContextKey<tUserAuthToken> {
 
+    readonly headers = ['authorization'] as const;
+    readonly responseHeaders = [] as const;
+
     // =========================================================================
     // HTTP Middleware Interface (GGHttpTransportMiddleware)
     // =========================================================================
