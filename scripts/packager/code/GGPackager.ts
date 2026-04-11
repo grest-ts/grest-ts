@@ -10,6 +10,7 @@ import { GGImportFixer } from "./GGImportFixer"
 import { GGReadmeBannerBuilder } from "./GGReadmeBannerBuilder"
 import { GGCircularDependencyChecker } from "./GGCircularDependencyChecker"
 import { GGAllowedPackagesChecker } from "./GGAllowedPackagesChecker"
+import { GGAiRulesBuilder } from "./GGAiRulesBuilder"
 import { PackagerFile } from "./PackagerFile"
 import type {GGPackage, GGPackageRoot} from "../definePackage"
 
@@ -181,6 +182,10 @@ export class GGPackager {
             console.log("🧪 Generating vitest.config.ts...")
             files.push(this.buildVitestConfig(packages, rootConfig))
         }
+
+        // Generate AI assistant rule files from single source of truth
+        console.log("🤖 Generating AI rules files...")
+        files.push(...new GGAiRulesBuilder(rootDir).build())
 
         await writeFiles(files, dryRun)
         return { packages, files }
