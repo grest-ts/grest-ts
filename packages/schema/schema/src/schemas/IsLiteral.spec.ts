@@ -235,4 +235,22 @@ testUtils('IsLiteral', () => {
         {value: 'a', expected: 'a'},
         {value: null, expected: null},
     ]);
+
+    // ==================== toJSONSchema ====================
+
+    describe('toJSONSchema()', () => {
+        it('single string value', () => {
+            expect(IsLiteral('admin').toJSONSchema()).toEqual({enum: ['admin']});
+        });
+        it('multiple string values', () => {
+            expect(IsLiteral('a', 'b', 'c').toJSONSchema()).toEqual({enum: ['a', 'b', 'c']});
+        });
+        it('mixed string and number', () => {
+            expect(IsLiteral(1, 2, 'three').toJSONSchema()).toEqual({enum: [1, 2, 'three']});
+        });
+        it('nullable', () => {
+            expect(IsLiteral('x').orNull.toJSONSchema())
+                .toEqual({oneOf: [{enum: ['x']}, {type: 'null'}]});
+        });
+    });
 });

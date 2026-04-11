@@ -148,4 +148,22 @@ testUtils('IsUnion', () => {
         {value: 42, expected: 42},
         {value: null, expected: null},
     ]);
+
+    // ==================== toJSONSchema ====================
+
+    describe('toJSONSchema()', () => {
+        it('two variants', () => {
+            expect(IsUnion(IsString, IsNumber).toJSONSchema())
+                .toEqual({oneOf: [{type: 'string'}, {type: 'number'}]});
+        });
+        it('three variants', () => {
+            expect(IsUnion(IsString, IsNumber, IsBoolean).toJSONSchema())
+                .toEqual({oneOf: [{type: 'string'}, {type: 'number'}, {type: 'boolean'}]});
+        });
+        it('nullable adds null to oneOf wrapper', () => {
+            const s = IsUnion(IsString, IsNumber).orNull.toJSONSchema() as any;
+            expect(s.oneOf).toHaveLength(2);
+            expect(s.oneOf[1]).toEqual({type: 'null'});
+        });
+    });
 });

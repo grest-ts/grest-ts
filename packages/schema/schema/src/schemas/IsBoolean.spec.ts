@@ -91,4 +91,15 @@ testUtils('IsBoolean', () => {
         {value: null, expected: null},
     ]);
 
+    // ==================== toJSONSchema ====================
+
+    describe('toJSONSchema()', () => {
+        it('basic', () => {
+            expect(IsBoolean.toJSONSchema()).toEqual({type: 'boolean'});
+        });
+        it('nullable', () => {
+            expect(IsBoolean.orNull.toJSONSchema()).toEqual({oneOf: [{type: 'boolean'}, {type: 'null'}]});
+        });
+    });
+
 });

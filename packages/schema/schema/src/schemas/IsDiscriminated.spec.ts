@@ -4,6 +4,7 @@ import {IsObject} from './IsObject';
 import {IsString} from './IsString';
 import {IsNumber} from './IsNumber';
 import {IsArray} from './IsArray';
+import {IsLiteral} from './IsLiteral';
 import {GGIssueKey} from "../issue/GGIssueKey";
 import {GGIssuesList} from "../issue/GGIssuesList";
 import {GGIssueInvalid} from "../issue/issues/GGIssueInvalid";
@@ -1149,6 +1150,29 @@ testUtils('IsDiscriminated', () => {
                 expect(issues.length).toBe(0);
                 expect(Schema.is(result)).toBe(true);
             }
+        });
+    });
+
+    // ==================== toJSONSchema ====================
+
+    describe('toJSONSchema()', () => {
+        const Circle = IsObject({kind: IsLiteral('circle'), radius: IsNumber});
+        const Square = IsObject({kind: IsLiteral('square'), side: IsNumber});
+        const Shape = IsDiscriminated('kind', {circle: Circle, square: Square});
+
+        it('produces oneOf with discriminator', () => {
+            const s = Shape.toJSONSchema() as any;
+            expect(s.discriminator).toEqual({propertyName: 'kind'});
+            expect(s.oneOf).toHaveLength(2);
+        });
+        it('each variant is an object schema', () => {
+            const s = Shape.toJSONSchema() as any;
+            expect(s.oneOf[0].type).toBe('object');
+            expect(s.oneOf[1].type).toBe('object');
+        });
+        it('nullable wraps in oneOf', () => {
+            const s = Shape.orNull.toJSONSchema() as any;
+            expect(s.oneOf[1]).toEqual({type: 'null'});
         });
     });
 });

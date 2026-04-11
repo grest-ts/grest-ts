@@ -95,4 +95,16 @@ testUtils('IsBit', () => {
         {value: null, expected: null},
     ]);
 
+    // ==================== toJSONSchema ====================
+
+    describe('toJSONSchema()', () => {
+        it('basic', () => {
+            expect(IsBit.toJSONSchema()).toEqual({type: 'integer', minimum: 0, maximum: 1});
+        });
+        it('nullable', () => {
+            expect(IsBit.orNull.toJSONSchema())
+                .toEqual({oneOf: [{type: 'integer', minimum: 0, maximum: 1}, {type: 'null'}]});
+        });
+    });
+
 });

@@ -60,3 +60,8 @@ export {type tPassword, IsPassword} from "./custom/IsPassword";
 export {type tLanguage, IsLanguage} from "./custom/IsLanguage";
 export {type tCountry, IsCountry} from "./custom/IsCountry";
 export {type tLocale, IsLocale} from "./custom/IsLocale";
+export {type tUrl, IsUrl} from "./custom/IsUrl";
+export {type tPhone, IsPhone} from "./custom/IsPhone";
+export {IsTimestamp, type tTimestamp, IsTimestampMs, type tTimestampMs} from "./custom/IsTimestamp";
+export {type tCurrency, IsCurrency} from "./custom/IsCurrency";
+export {type tIp, IsIp} from "./custom/IsIp";

@@ -1565,4 +1565,40 @@ testUtils('IsObject', () => {
             expect(Strict.is(parsed)).toBe(true);
         });
     });
+
+    // ==================== toJSONSchema ====================
+
+    describe('toJSONSchema()', () => {
+        it('basic — all required', () => {
+            expect(IsObject({name: IsString, age: IsNumber}).toJSONSchema()).toEqual({
+                type: 'object',
+                properties: {name: {type: 'string'}, age: {type: 'number'}},
+                required: ['name', 'age']
+            });
+        });
+        it('optional field excluded from required', () => {
+            const s = IsObject({name: IsString, nick: IsString.orUndefined}).toJSONSchema() as any;
+            expect(s.required).toEqual(['name']);
+            expect(s.properties.nick).toEqual({type: 'string'});
+        });
+        it('no required array when all fields optional', () => {
+            const s = IsObject({a: IsString.orUndefined}).toJSONSchema() as any;
+            expect(s.required).toBeUndefined();
+        });
+        it('nullable wraps in oneOf', () => {
+            const s = IsObject({x: IsNumber}).orNull.toJSONSchema() as any;
+            expect(s.oneOf[0].type).toBe('object');
+            expect(s.oneOf[1].type).toBe('null');
+        });
+        it('nested object', () => {
+            const s = IsObject({inner: IsObject({val: IsBoolean})}).toJSONSchema() as any;
+            expect(s.properties.inner.type).toBe('object');
+            expect(s.properties.inner.properties.val).toEqual({type: 'boolean'});
+        });
+        it('docs on object', () => {
+            const s = IsObject({x: IsNumber}).docs({title: 'T', description: 'D'}).toJSONSchema() as any;
+            expect(s.title).toBe('T');
+            expect(s.description).toBe('D');
+        });
+    });
 });

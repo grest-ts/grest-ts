@@ -2,6 +2,7 @@ import {describe, expect, it} from 'vitest';
 import {IsRecord} from './IsRecord';
 import {IsString} from './IsString';
 import {IsNumber} from './IsNumber';
+import {IsBoolean} from './IsBoolean';
 import {IsObject} from './IsObject';
 import {GGIssueKey} from "../issue/GGIssueKey";
 import {GGIssuesList} from "../issue/GGIssuesList";
@@ -266,6 +267,24 @@ testUtils('IsRecord', () => {
             }, issues, 'test', true);
             expect(result).toBeUndefined();
             expect(issues.length).toBeGreaterThan(0);
+        });
+    });
+
+    // ==================== toJSONSchema ====================
+
+    describe('toJSONSchema()', () => {
+        it('basic', () => {
+            expect(IsRecord(IsString, IsNumber).toJSONSchema())
+                .toEqual({type: 'object', additionalProperties: {type: 'number'}});
+        });
+        it('value schema is a string', () => {
+            expect(IsRecord(IsString, IsString).toJSONSchema())
+                .toEqual({type: 'object', additionalProperties: {type: 'string'}});
+        });
+        it('nullable', () => {
+            const s = IsRecord(IsString, IsBoolean).orNull.toJSONSchema() as any;
+            expect(s.oneOf[0]).toEqual({type: 'object', additionalProperties: {type: 'boolean'}});
+            expect(s.oneOf[1]).toEqual({type: 'null'});
         });
     });
 });

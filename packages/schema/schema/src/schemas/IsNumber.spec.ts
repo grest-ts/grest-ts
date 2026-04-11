@@ -557,23 +557,30 @@ testUtils(`IsNumber`, () => {
         });
     });
 
-    describe('multipleOf toJSONSchema', () => {
-        it('includes multipleOf in JSON Schema', () => {
-            const schema = IsNumber.multipleOf(5);
-            expect(schema.toJSONSchema()).toEqual({
-                type: 'number',
-                multipleOf: 5
-            });
+    // ==================== toJSONSchema ====================
+
+    describe('toJSONSchema()', () => {
+        it('float number', () => {
+            expect(IsNumber.toJSONSchema()).toEqual({type: 'number'});
+        });
+        it('min/max', () => {
+            expect(IsNumber.min(0).max(100).toJSONSchema())
+                .toEqual({type: 'number', minimum: 0, maximum: 100});
+        });
+        it('multipleOf', () => {
+            expect(IsNumber.multipleOf(5).toJSONSchema()).toEqual({type: 'number', multipleOf: 5});
+        });
+        it('multipleOf with min/max', () => {
+            expect(IsNumber.min(0).max(100).multipleOf(5).toJSONSchema())
+                .toEqual({type: 'number', minimum: 0, maximum: 100, multipleOf: 5});
+        });
+        it('nullable', () => {
+            expect(IsNumber.orNull.toJSONSchema()).toEqual({oneOf: [{type: 'number'}, {type: 'null'}]});
         });
 
-        it('includes multipleOf with other constraints', () => {
-            const schema = IsNumber.min(0).max(100).multipleOf(5);
-            expect(schema.toJSONSchema()).toEqual({
-                type: 'number',
-                minimum: 0,
-                maximum: 100,
-                multipleOf: 5
-            });
+        it('integer flag produces type:integer', () => {
+            const intSchema = new NumberSchema({type: 'int', integer: true});
+            expect(intSchema.toJSONSchema()).toEqual({type: 'integer'});
         });
     });
 

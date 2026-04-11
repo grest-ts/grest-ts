@@ -408,6 +408,65 @@ testUtils(`IsString`, () => {
         });
     });
 
+    // ==================== toJSONSchema ====================
+
+    describe('toJSONSchema()', () => {
+        it('basic', () => {
+            expect(IsString.toJSONSchema()).toEqual({type: 'string'});
+        });
+        it('minLength', () => {
+            expect(IsString.minLength(2).toJSONSchema()).toEqual({type: 'string', minLength: 2});
+        });
+        it('maxLength', () => {
+            expect(IsString.maxLength(50).toJSONSchema()).toEqual({type: 'string', maxLength: 50});
+        });
+        it('nonEmpty implies minLength:1', () => {
+            expect(IsString.nonEmpty.toJSONSchema()).toEqual({type: 'string', minLength: 1});
+        });
+        it('nonEmpty + explicit minLength keeps explicit value', () => {
+            expect(IsString.nonEmpty.minLength(3).toJSONSchema()).toEqual({type: 'string', minLength: 3});
+        });
+        it('pattern', () => {
+            expect(IsString.regex(/^[a-z]+$/).toJSONSchema()).toMatchObject({pattern: '^[a-z]+$'});
+        });
+        it('orNull wraps in oneOf', () => {
+            expect(IsString.orNull.toJSONSchema()).toEqual({oneOf: [{type: 'string'}, {type: 'null'}]});
+        });
+        it('orUndefined does not affect schema (optional is structural)', () => {
+            expect(IsString.orUndefined.toJSONSchema()).toEqual({type: 'string'});
+        });
+
+        // ── .docs() and .default() — tested on IsString as the simplest carrier ──
+        it('docs title', () => {
+            expect(IsString.docs({title: 'My field'}).toJSONSchema()).toEqual({type: 'string', title: 'My field'});
+        });
+        it('docs description', () => {
+            expect(IsString.docs({description: 'A description'}).toJSONSchema())
+                .toMatchObject({description: 'A description'});
+        });
+        it('docs example', () => {
+            expect(IsString.docs({example: 'foo'}).toJSONSchema()).toMatchObject({example: 'foo'});
+        });
+        it('docs deprecated:true', () => {
+            expect(IsString.docs({deprecated: true}).toJSONSchema()).toMatchObject({deprecated: true});
+        });
+        it('docs deprecated:false omitted', () => {
+            expect((IsString.docs({deprecated: false}).toJSONSchema() as any).deprecated).toBeUndefined();
+        });
+        it('docs on nullable schema applies on top of oneOf wrapper', () => {
+            const s = IsString.docs({title: 'X'}).orNull.toJSONSchema() as any;
+            expect(s.oneOf).toHaveLength(2);
+            expect(s.title).toBe('X');
+        });
+        it('default value', () => {
+            expect(IsString.default('hello').toJSONSchema()).toEqual({type: 'string', default: 'hello'});
+        });
+        it('default combined with docs', () => {
+            expect(IsString.docs({description: 'D'}).default('x').toJSONSchema())
+                .toEqual({type: 'string', description: 'D', default: 'x'});
+        });
+    });
+
     // ==================== Stringify ====================
 
     testStringify('stringify', IsString, [

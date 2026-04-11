@@ -467,4 +467,28 @@ testUtils('IsTuple', () => {
             expect(result).toStrictEqual(["key", {label: "count", value: 42}]);
         });
     });
+
+    // ==================== toJSONSchema ====================
+
+    describe('toJSONSchema()', () => {
+        it('basic two-element tuple', () => {
+            const s = IsTuple(IsString, IsNumber).toJSONSchema() as any;
+            expect(s.type).toBe('array');
+            expect(s.prefixItems).toEqual([{type: 'string'}, {type: 'number'}]);
+            expect(s.minItems).toBe(2);
+            expect(s.maxItems).toBe(2);
+            expect(s.items).toBe(false); // no additional items
+        });
+        it('single-element tuple', () => {
+            const s = IsTuple(IsBoolean).toJSONSchema() as any;
+            expect(s.prefixItems).toHaveLength(1);
+            expect(s.minItems).toBe(1);
+            expect(s.maxItems).toBe(1);
+        });
+        it('nullable', () => {
+            const s = IsTuple(IsString, IsNumber).orNull.toJSONSchema() as any;
+            expect(s.oneOf[0].type).toBe('array');
+            expect(s.oneOf[1]).toEqual({type: 'null'});
+        });
+    });
 });

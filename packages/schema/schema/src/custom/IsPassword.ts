@@ -2,6 +2,7 @@ import {GGSchema, Opt} from "../GGSchema";
 import {GGIssuesList} from "../issue/GGIssuesList";
 import {GGIssueInvalid} from "../issue/issues/GGIssueInvalid";
 import {GGSchemaDefinition} from "../Definition";
+import type {OpenAPIV3_1} from "openapi-types";
 
 
 // Character class patterns
@@ -50,6 +51,16 @@ export class PasswordSchema<T extends tPassword | undefined | null = tPassword> 
 
     get orNull(): PasswordSchema<T | null> {
         return super.orNull as any
+    }
+
+    protected _buildJsonSchema(): OpenAPIV3_1.SchemaObject {
+        const schema: OpenAPIV3_1.NonArraySchemaObject = {
+            type: 'string',
+            format: 'password',
+            minLength: this.def.minLength,
+            maxLength: this.def.maxLength,
+        };
+        return schema;
     }
 }
 
