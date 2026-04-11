@@ -1,3 +1,9 @@
+---
+description: grest-ts project context
+globs: ["**/*.ts", "**/*.tsx"]
+alwaysApply: true
+---
+
 # Project context
 
 This is a **grest-ts** project (npm workspaces monorepo).

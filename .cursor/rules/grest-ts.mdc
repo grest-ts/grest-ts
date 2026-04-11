@@ -1,5 +1,5 @@
 ---
-description: grest-ts framework — contract-first TypeScript service development
+description: grest-ts project context
 globs: ["**/*.ts", "**/*.tsx"]
 alwaysApply: true
 ---
