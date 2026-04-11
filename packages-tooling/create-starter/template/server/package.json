@@ -17,6 +17,7 @@
     "@grest-ts/runtime": "*",
     "@grest-ts/schema": "*",
     "@grest-ts/testkit": "*",
+    "@grest-ts/testkit-runtime": "*",
     "@grest-ts/testkit-vitest": "*",
     "@newproject/api": "*"
   },
