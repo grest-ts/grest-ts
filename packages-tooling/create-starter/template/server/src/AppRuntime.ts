@@ -4,6 +4,7 @@ import {GG_LOG} from "@grest-ts/logger"
 import {GGLoggerConsole} from "@grest-ts/logger-console"
 import {HelloApi} from "@newproject/api/api/HelloApi"
 import {HelloApiImpl} from "./services/HelloApiImpl"
+import {GreetingService} from "./services/GreetingService"
 
 export class AppRuntime extends GGRuntime {
 
@@ -14,8 +15,10 @@ export class AppRuntime extends GGRuntime {
 
         const httpServer = new GGHttpServer()
 
+        const greetingService = new GreetingService()
+
         new GGHttp(httpServer)
-            .http(HelloApi, new HelloApiImpl())
+            .http(HelloApi, new HelloApiImpl(greetingService))
     }
 }
 
