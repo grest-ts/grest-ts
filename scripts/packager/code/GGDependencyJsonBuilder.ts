@@ -29,7 +29,6 @@ export interface DependencyEdge {
 export interface DependencyGraph {
     nodes: DependencyNode[]
     edges: DependencyEdge[]
-    generated: string
 }
 
 // Category-based colors
@@ -184,7 +183,7 @@ export class GGDependencyJsonBuilder {
             const readmePath = join(pkg.path, "README.md")
             if (existsSync(readmePath)) {
                 try {
-                    readme = readFileSync(readmePath, "utf-8")
+                    readme = readFileSync(readmePath, "utf-8").replace(/\r\n/g, "\n")
                 } catch {
                     // Silently ignore read errors
                 }
@@ -226,7 +225,6 @@ export class GGDependencyJsonBuilder {
         return {
             nodes,
             edges,
-            generated: new Date().toISOString(),
         }
     }
 }
