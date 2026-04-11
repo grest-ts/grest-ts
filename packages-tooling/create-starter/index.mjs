@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { cpSync, readdirSync, renameSync, readFileSync, writeFileSync, statSync, existsSync } from "fs"
+import { cpSync, readdirSync, renameSync, readFileSync, writeFileSync, mkdirSync, unlinkSync, statSync, existsSync } from "fs"
 import { join, dirname } from "path"
 import { fileURLToPath } from "url"
 import { createInterface } from "readline/promises"
@@ -77,6 +77,19 @@ async function main() {
         writeFileSync(file, content)
       }
     }
+  }
+
+  // 4. Fan out project-context.md to all AI tool locations, then remove the source file.
+  //    Single source in template → CLAUDE.md, AGENTS.md, .cursor/rules/project.mdc in new project.
+  const projectContextSrc = join(targetDir, "project-context.md")
+  if (existsSync(projectContextSrc)) {
+    const body = readFileSync(projectContextSrc, "utf-8")
+    const mdcFrontmatter = `---\ndescription: grest-ts project context\nglobs: ["**/*.ts", "**/*.tsx"]\nalwaysApply: true\n---\n\n`
+    writeFileSync(join(targetDir, "CLAUDE.md"), body)
+    writeFileSync(join(targetDir, "AGENTS.md"), body)
+    mkdirSync(join(targetDir, ".cursor", "rules"), { recursive: true })
+    writeFileSync(join(targetDir, ".cursor", "rules", "project.mdc"), mdcFrontmatter + body)
+    unlinkSync(projectContextSrc)
   }
 
   console.log(`  Done! Next steps:`)

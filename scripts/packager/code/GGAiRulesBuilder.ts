@@ -17,18 +17,17 @@ alwaysApply: true
  *   scripts/ai-rules/grest-ts.md        — full framework reference
  *   scripts/ai-rules/project-context.md — minimal project-layout stub for user projects
  *
- * Each source is copied to all its destinations. The .mdc (Cursor) variants
- * get MDC frontmatter prepended; everything else is a plain copy.
- *
- * Repo root (full framework reference — for framework contributors):
+ * Repo root outputs (full framework reference — for framework contributors):
  *   CLAUDE.md
  *   AGENTS.md
- *   .cursor/rules/grest-ts.mdc
+ *   .cursor/rules/grest-ts.mdc   (frontmatter + body)
  *
- * Starter template (project-layout stub — inherited by new user projects):
- *   packages-tooling/create-starter/template/CLAUDE.md
- *   packages-tooling/create-starter/template/AGENTS.md
- *   packages-tooling/create-starter/template/.cursor/rules/project.mdc
+ * Starter template output (single source file — fanned out by create-starter CLI at scaffold time):
+ *   packages-tooling/create-starter/template/project-context.md
+ *
+ * The create-starter CLI (index.mjs) copies project-context.md to CLAUDE.md, AGENTS.md,
+ * and .cursor/rules/project.mdc in the new project at scaffold time.
+ * This way only one file lives in the template, not three identical copies.
  */
 export class GGAiRulesBuilder {
     constructor(private readonly rootDir: string) {}
@@ -42,10 +41,10 @@ export class GGAiRulesBuilder {
         const starterDir = join(this.rootDir, "packages-tooling", "create-starter", "template")
 
         return [
-            // Repo root — full framework reference
-            ...this.destinations(join(this.rootDir), "grest-ts", frameworkBody),
-            // Starter template — project-layout stub
-            ...this.destinations(starterDir, "project", projectBody),
+            // Repo root — full framework reference, fanned out to all tool formats
+            ...this.destinations(this.rootDir, "grest-ts", frameworkBody),
+            // Starter template — single source file; create-starter CLI fans it out at scaffold time
+            PackagerFile.copy(join(starterDir, "project-context.md"), projectBody),
         ]
     }
 
