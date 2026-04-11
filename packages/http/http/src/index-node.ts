@@ -18,6 +18,7 @@ export * from "./schema/GGHttpSchema";
 export * from "./schema/httpSchema";
 export * from "./rpc/GGHttpRouteRPC";
 export * from "./rpc/openApiSuccessResponse";
+export * from "./rpc/openApiHelpers";
 export * from "./rpc/RpcRequest/GGRpcRequestBuilder";
 export * from "./rpc/RpcRequest/GGRpcRequestParser";
 export * from "./rpc/RpcResponse/GGRpcResponseBuilder";

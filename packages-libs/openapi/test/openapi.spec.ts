@@ -322,7 +322,7 @@ describe("toOpenApi", () => {
         const op = (doc.paths as any)?.["/api/items"]?.get;
 
         it("exists", () => expect(op).toBeDefined());
-        it("has operationId", () => expect(op.operationId).toBe("list"));
+        it("has operationId namespaced as apiName_methodName", () => expect(op.operationId).toBe("ItemApi_list"));
         it("has summary derived from operationId", () => expect(op.summary).toBe("List"));
         it("has tag", () => expect(op.tags).toContain("ItemApi"));
         it("has 200 response with array schema", () => {
@@ -429,10 +429,10 @@ describe("toOpenApi", () => {
                 const paths = d2.paths as any;
                 const op = paths["/x/list"]?.get ?? paths["/x/gw"]?.get
                     ?? paths["/x/create"]?.post ?? paths["/x/delete"]?.delete;
-                // Find the operation with matching operationId
+                // Find the operation with matching operationId (X_methodName format)
                 const allOps = Object.values(paths as Record<string, any>)
                     .flatMap(p => Object.values(p as Record<string, any>))
-                    .find((o: any) => o?.operationId === method) as any;
+                    .find((o: any) => o?.operationId === `X_${method}`) as any;
                 expect(allOps?.summary).toBe(expected);
             });
         }

@@ -5,6 +5,11 @@ import {GGHttpServer} from "./GGHttpServer";
 
 export class GGHttp<TContext = undefined> {
 
+    /**
+     * Protected (not private) so that plugin modules can access the underlying server
+     * via module augmentation (e.g. @grest-ts/openapi adds .openApi() to the builder).
+     * Do not tighten back to private.
+     */
     protected readonly httpServer: GGHttpServer
     private readonly middlewares: GGHttpServerMiddleware[] = [];
 

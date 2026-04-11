@@ -4,7 +4,11 @@ import {IsString} from "../schemas/IsString";
 import {IsAny} from "../schemas/IsAny";
 import {IsRecord} from "../schemas/IsRecord";
 import {ERROR} from "./ERROR";
-import {IsLocale} from "../custom/IsLocale";
+// IsLocaleString matches IsLocale's pattern/docs without the brand — these are output — usedLanguage/expectedLanguage are output fields
+// produced by runtime code, so we document the format without enforcing the brand.
+const IsLocaleString = IsString
+    .regex(/^[a-z]{2}(-[A-Z]{2})?$/)
+    .docs({title: "Locale code", description: "BCP 47 language or language-region format", example: "en-US"});
 
 const IsValidationIssue = IsObject({
     path: IsString.nonEmpty
@@ -15,9 +19,9 @@ const IsValidationIssue = IsObject({
         .docs({description: "Human-readable error message, localised to the client locale if available", example: "Minimum 8 characters required"}),
     params: IsRecord(IsString, IsAny).orUndefined
         .docs({description: "Template variables substituted into the message template", example: {min: 8}}),
-    usedLanguage: IsLocale.orUndefined
+    usedLanguage: IsLocaleString.orUndefined
         .docs({description: "Locale actually used to render the message (may differ from requested if translation is missing)", example: "en"}),
-    expectedLanguage: IsLocale.orUndefined
+    expectedLanguage: IsLocaleString.orUndefined
         .docs({description: "Locale requested by the client via Accept-Language", example: "de"}),
 }).docs({
     title: "Validation issue",

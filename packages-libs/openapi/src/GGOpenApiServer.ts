@@ -1,7 +1,18 @@
+import {readFileSync} from "fs";
+import {dirname, join} from "path";
+import {createRequire} from "module";
 import type {GGHttpSchema} from "@grest-ts/http";
 import {GGHttp, GGHttpServer} from "@grest-ts/http";
 import type {OpenAPIV3_1} from "openapi-types";
 import {toOpenApi, ToOpenApiOptions} from "./toOpenApi";
+
+// Resolve swagger-ui-dist via require.resolve so workspace hoisting is handled correctly.
+const _require = createRequire(import.meta.url);
+const SWAGGER_UI_DIST = dirname(_require.resolve("swagger-ui-dist/swagger-ui-bundle.js"));
+
+function readSwaggerAsset(filename: string): Buffer {
+    return readFileSync(join(SWAGGER_UI_DIST, filename));
+}
 
 export interface GGOpenApiServerOptions extends ToOpenApiOptions {
     /**
@@ -24,6 +35,26 @@ export interface GGOpenApiServerOptions extends ToOpenApiOptions {
      * @default false
      */
     eager?: boolean;
+
+    /**
+     * Serve Swagger UI assets from a CDN instead of the bundled swagger-ui-dist package.
+     * Useful for environments where you want minimal payload or already have a CDN.
+     *
+     * When set, the /docs page loads JS/CSS from this base URL (no trailing slash).
+     * @example "https://unpkg.com/swagger-ui-dist@5.32.2"
+     */
+    cdnUrl?: string;
+
+    /**
+     * Completely replace the Swagger UI HTML page with your own.
+     * Receives the spec URL and must return a complete HTML string.
+     * Use this for custom branding, alternative UIs (Redoc, Scalar, etc.), or
+     * environments where serving from node_modules is not possible.
+     *
+     * @example
+     * customUi: (specUrl) => `<!DOCTYPE html>...your HTML using specUrl...`
+     */
+    customUi?: (specUrl: string) => string;
 }
 
 /**
@@ -34,6 +65,9 @@ export interface GGOpenApiServerOptions extends ToOpenApiOptions {
  * call during compose() is tracked on the server. The spec is built lazily
  * on first request (or eagerly if { eager: true }) so it always reflects the
  * full set of registered schemas.
+ *
+ * Swagger UI assets are served from the bundled swagger-ui-dist package —
+ * no CDN dependency, works offline and in air-gapped environments.
  *
  * @example
  * // Fluent builder — openApi() reads all .http() schemas automatically:
@@ -64,7 +98,7 @@ export class GGOpenApiServer {
     }
 
     private buildSpec(): OpenAPIV3_1.Document {
-        return toOpenApi(this.server.registeredSchemas, this.options);
+        return toOpenApi(this.server.registeredSchemas as GGHttpSchema<any, any>[], this.options);
     }
 
     public getSpec(): OpenAPIV3_1.Document {
@@ -86,7 +120,7 @@ export class GGOpenApiServer {
         });
 
         server.registerRoute("GET", docsPath, async (_req, res) => {
-            const html = buildSwaggerUiHtml(specPath);
+            const html = this.buildDocsHtml(specPath);
             res.writeHead(200, {
                 "Content-Type": "text/html; charset=utf-8",
                 "Content-Length": Buffer.byteLength(html)
@@ -94,22 +128,78 @@ export class GGOpenApiServer {
             res.end(html);
         });
 
+        // Serve bundled Swagger UI assets (only when not using CDN or custom UI)
+        if (!this.options.cdnUrl && !this.options.customUi) {
+            const uiBase = docsPath + "/assets";
+
+            const serveAsset = (filename: string, contentType: string) => {
+                const asset = readSwaggerAsset(filename);
+                server.registerRoute("GET", `${uiBase}/${filename}`, async (_req, res) => {
+                    res.writeHead(200, {
+                        "Content-Type": contentType,
+                        "Content-Length": asset.length,
+                        "Cache-Control": "public, max-age=86400"
+                    });
+                    res.end(asset);
+                });
+            };
+
+            serveAsset("swagger-ui-bundle.js", "application/javascript");
+            serveAsset("swagger-ui.css", "text/css");
+        }
+
         return this;
+    }
+
+    private buildDocsHtml(specUrl: string): string {
+        if (this.options.customUi) {
+            return this.options.customUi(specUrl);
+        }
+        if (this.options.cdnUrl) {
+            return buildCdnHtml(specUrl, this.options.cdnUrl);
+        }
+        const docsPath = this.options.docsPath ?? "/docs";
+        return buildBundledHtml(specUrl, docsPath + "/assets");
     }
 }
 
-function buildSwaggerUiHtml(specUrl: string): string {
+function buildBundledHtml(specUrl: string, assetsBase: string): string {
     return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <title>API Docs</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5/swagger-ui.css" />
+  <link rel="stylesheet" href="${assetsBase}/swagger-ui.css" />
 </head>
 <body>
 <div id="swagger-ui"></div>
-<script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
+<script src="${assetsBase}/swagger-ui-bundle.js"></script>
+<script>
+  SwaggerUIBundle({
+    url: ${JSON.stringify(specUrl)},
+    dom_id: '#swagger-ui',
+    presets: [SwaggerUIBundle.presets.apis, SwaggerUIBundle.SwaggerUIStandalonePreset],
+    layout: 'BaseLayout',
+    deepLinking: true
+  });
+</script>
+</body>
+</html>`;
+}
+
+function buildCdnHtml(specUrl: string, cdnUrl: string): string {
+    return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>API Docs</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="${cdnUrl}/swagger-ui.css" />
+</head>
+<body>
+<div id="swagger-ui"></div>
+<script src="${cdnUrl}/swagger-ui-bundle.js"></script>
 <script>
   SwaggerUIBundle({
     url: ${JSON.stringify(specUrl)},
@@ -136,6 +226,10 @@ declare module "@grest-ts/http" {
          * Schemas are collected automatically — no need to list them again.
          * The spec is built lazily on the first request so it captures every
          * schema registered before the server starts.
+         *
+         * Swagger UI assets are served from the bundled swagger-ui-dist package.
+         * Use { cdnUrl: "..." } to load from a CDN, or { customUi: fn } for a
+         * completely custom UI.
          *
          * @example
          * new GGHttp(server)

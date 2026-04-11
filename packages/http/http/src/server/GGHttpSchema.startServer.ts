@@ -65,7 +65,7 @@ function setupRoutes<TContract extends GGContractApiDefinition>(
     const server = config.http ?? GGLocator.getScope().get(GG_HTTP_SERVER);
     if (!server) throw new Error(`No HTTP server found. Make sure to register GGHttpServerAdapter in the scope or pass handler via config`)
 
-    server.registeredSchemas.push(httpSchema as GGHttpSchema<any, any>);
+    server._registerSchema(httpSchema as GGHttpSchema<any, any>);
 
     const pathPrefix = "/" + httpSchema.pathPrefix + "/"
     const apiMiddlewares = httpSchema.apiMiddlewares;

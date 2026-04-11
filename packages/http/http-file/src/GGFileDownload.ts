@@ -1,6 +1,6 @@
 import {HttpMethod} from "@grest-ts/common"
 import {GGContractMethod, isNonJsonDef} from "@grest-ts/schema"
-import {ClientHttpRouteToRpcTransformClientCodec, ClientHttpRouteToRpcTransformClientConfig, ClientHttpRouteToRpcTransformServerCodec, ClientHttpRouteToRpcTransformServerConfig, GGHttpCodec, GGHttpCodecOpenApiConfig, GGRpcRequestBuilder, GGRpcRequestParser} from "@grest-ts/http"
+import {ClientHttpRouteToRpcTransformClientCodec, ClientHttpRouteToRpcTransformClientConfig, ClientHttpRouteToRpcTransformServerCodec, ClientHttpRouteToRpcTransformServerConfig, GGHttpCodec, GGHttpCodecOpenApiConfig, GGRpcRequestBuilder, GGRpcRequestParser, buildOpenApiParameters} from "@grest-ts/http"
 import {GGFileDownloadResponseBuilder} from "./GGFileDownloadResponseBuilder";
 import {GGFileDownloadResponseParser} from "./GGFileDownloadResponseParser";
 import type {OpenAPIV3_1} from "openapi-types";
@@ -39,31 +39,13 @@ class GGFileDownloadCodec implements GGHttpCodec {
     }
 
     public toOpenApiOperation(config: GGHttpCodecOpenApiConfig): Partial<OpenAPIV3_1.OperationObject> {
-        const pathParams = (this.path.match(/:(\w+)/g) || []).map(m => m.slice(1));
         const hasBody = this.method === "POST" || this.method === "PUT" || this.method === "PATCH";
-
-        const inputSchema = config.contract.input
-            ? config.contract.input.toJSONSchema() as OpenAPIV3_1.NonArraySchemaObject
-            : undefined;
-        const shape = inputSchema?.properties;
-        const required = inputSchema?.required;
-
-        const parameters: OpenAPIV3_1.ParameterObject[] = pathParams.map(name => {
-            const fieldSchema = shape?.[name] as OpenAPIV3_1.SchemaObject | undefined;
-            const param: OpenAPIV3_1.ParameterObject = {
-                name,
-                in: 'path' as const,
-                required: true as const,
-                schema: (fieldSchema ?? {type: 'string'}) as OpenAPIV3_1.ParameterObject["schema"]
-            };
-            if (fieldSchema?.description) param.description = fieldSchema.description;
-            return param;
-        });
+        const parameters = buildOpenApiParameters(this.path, hasBody, config.contract.input ?? undefined);
 
         const operation: Partial<OpenAPIV3_1.OperationObject> = {
             operationId: config.methodName,
             parameters,
-            // Success: raw binary file response — not a JSON envelope
+            // Success: raw binary file response — not the JSON {success,type,data} envelope
             responses: {
                 "200": {
                     description: "File download",
@@ -81,22 +63,6 @@ class GGFileDownloadCodec implements GGHttpCodec {
                 } as OpenAPIV3_1.ResponseObject
             }
         };
-
-        if (!hasBody && shape) {
-            for (const [name, fieldSchema] of Object.entries(shape)) {
-                if (pathParams.includes(name)) continue;
-                const param: OpenAPIV3_1.ParameterObject = {
-                    name,
-                    in: 'query' as const,
-                    required: required?.includes(name) ?? false,
-                    schema: fieldSchema as OpenAPIV3_1.ParameterObject["schema"]
-                };
-                if ((fieldSchema as OpenAPIV3_1.SchemaObject).description) {
-                    param.description = (fieldSchema as OpenAPIV3_1.SchemaObject).description;
-                }
-                parameters.push(param);
-            }
-        }
 
         if (hasBody && config.contract.input) {
             operation.requestBody = {

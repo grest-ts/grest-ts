@@ -86,11 +86,13 @@ function buildOperation(
     const errorResponses = buildErrorResponses(contract);
 
     return {
-        operationId: methodName,
-        summary: camelToSummary(methodName),
-        tags: [apiName],
         parameters: [],
         ...codecResult,
+        // operationId is always apiName_methodName — globally unique across all schemas
+        // in a composed document. Overrides whatever the codec set on operationId.
+        operationId: `${apiName}_${methodName}`,
+        summary: camelToSummary(methodName),
+        tags: [apiName],
         responses: {...codecResult.responses, ...errorResponses}
     };
 }

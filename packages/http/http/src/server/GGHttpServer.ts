@@ -23,11 +23,18 @@ export class GGHttpServer {
     private readonly _onTeardown: Array<() => void> = [];
 
     /**
-     * All GGHttpSchema instances registered on this server, in order of registration.
-     * Populated automatically by schema.register() / GGHttp.http() during compose().
-     * Useful for tools like @grest-ts/openapi that need the full set of registered schemas.
+     * Mutable during compose(); frozen and exposed as ReadonlyArray once the server starts.
+     * Framework-internal — only setupRoutes() (in GGHttpSchema.startServer.ts) should push here.
      */
-    public readonly registeredSchemas: GGHttpSchema<any, any>[] = [];
+    private readonly _registeredSchemas: GGHttpSchema<any, any>[] = [];
+
+    /**
+     * All GGHttpSchema instances registered on this server, in registration order.
+     * Available from the moment compose() begins; frozen (no further push allowed) once start() is called.
+     */
+    get registeredSchemas(): ReadonlyArray<GGHttpSchema<any, any>> {
+        return this._registeredSchemas;
+    }
 
     public readonly httpServer: http.Server;
     private activeRequests = 0;
@@ -93,11 +100,17 @@ export class GGHttpServer {
     // Common implementation
     // =========================================================================
 
+    /** @internal Called by setupRoutes() during compose(). Do not call directly. */
+    public _registerSchema(schema: GGHttpSchema<any, any>): void {
+        this._registeredSchemas.push(schema);
+    }
+
     public registerRoute(method: HttpMethod, path: string, handler: GGHttpRequestCallback): void {
         this.router.on(method as HTTPMethod, path, handler as unknown as findMyWay.Handler<findMyWay.HTTPVersion.V1>);
     }
 
     public async start(): Promise<void> {
+        Object.freeze(this._registeredSchemas);
         this._port = await new Promise((resolve) => {
             this.httpServer.listen(this.configuredPort, '0.0.0.0', () => {
                 const port = (this.httpServer.address() as any).port;
