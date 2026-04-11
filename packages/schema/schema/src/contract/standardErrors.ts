@@ -6,14 +6,25 @@ import {IsRecord} from "../schemas/IsRecord";
 import {ERROR} from "./ERROR";
 import {IsLocale} from "../custom/IsLocale";
 
-export const VALIDATION_ERROR = ERROR.define("VALIDATION_ERROR", 422, IsArray(IsObject({
-    path: IsString.nonEmpty,
-    code: IsString.nonEmpty,     // dot-separated issue key e.g. "invalid.string.type"
-    message: IsString.nonEmpty,
-    params: IsRecord(IsString, IsAny).orUndefined,
-    usedLanguage: IsLocale.orUndefined,      // language actually used for translation
-    expectedLanguage: IsLocale.orUndefined   // language/locale requested by client
-})))
+const IsValidationIssue = IsObject({
+    path: IsString.nonEmpty
+        .docs({description: "Dot-separated field path within the request body, e.g. \"user.address.zip\""}),
+    code: IsString.nonEmpty
+        .docs({description: "Dot-separated issue key identifying the rule that failed, e.g. \"invalid.string.type\""}),
+    message: IsString.nonEmpty
+        .docs({description: "Human-readable error message, localised to the client locale if available"}),
+    params: IsRecord(IsString, IsAny).orUndefined
+        .docs({description: "Template variables used in the message, e.g. {min: 8} for \"Minimum {min} characters\""}),
+    usedLanguage: IsLocale.orUndefined
+        .docs({description: "Locale that was actually used to render the message (may differ from requested if translation is missing)"}),
+    expectedLanguage: IsLocale.orUndefined
+        .docs({description: "Locale requested by the client via Accept-Language"}),
+}).docs({
+    title: "Validation issue",
+    description: "A single field-level validation failure. One request can produce multiple issues."
+});
+
+export const VALIDATION_ERROR = ERROR.define("VALIDATION_ERROR", 422, IsArray(IsValidationIssue))
 
 export const NOT_AUTHORIZED = ERROR.define("NOT_AUTHORIZED", 401)
 
