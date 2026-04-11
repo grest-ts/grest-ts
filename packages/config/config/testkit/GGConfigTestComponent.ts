@@ -4,20 +4,25 @@ import {GGConfigIPC} from "./GGConfigCommands";
 export class GGConfigTestComponent implements GGTestComponent {
 
     private readonly runner: GGTestRunner;
-    private configModifiedInTest = false;
 
     constructor(runner: GGTestRunner) {
         this.runner = runner;
     }
 
-    markConfigModified(): void {
-        this.configModifiedInTest = true;
+    async beforeAll(): Promise<void> {
+        await this.runner.sendCommand(GGConfigIPC.worker.pushUndoFrame, undefined);
+    }
+
+    async afterAll(): Promise<void> {
+        await this.runner.sendCommand(GGConfigIPC.worker.popUndoFrame, undefined);
+    }
+
+    async beforeEach(): Promise<void> {
+        await this.runner.sendCommand(GGConfigIPC.worker.pushUndoFrame, undefined);
     }
 
     async afterEach(): Promise<void> {
-        if (!this.configModifiedInTest) return;
-        await this.runner.sendCommand(GGConfigIPC.worker.resetAfterTest, undefined);
-        this.configModifiedInTest = false;
+        await this.runner.sendCommand(GGConfigIPC.worker.popUndoFrame, undefined);
     }
 }
 

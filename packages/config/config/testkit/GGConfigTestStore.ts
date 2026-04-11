@@ -4,15 +4,28 @@ import {GGConfigLocator} from "../src/GGConfigLocator";
 import {GG_TEST_RUNTIME_WORKER, GGTestCommand} from "@grest-ts/testkit";
 import {ConfigUpdatePayload, GGConfigIPC} from "./GGConfigCommands";
 
+const NOT_SET = Symbol('NOT_SET');
+
 /**
  * Test config store that wraps a parent store and allows overriding values.
  * Overrides validation to always throw (fail fast in tests).
+ *
+ * Uses a stack of undo frames for test isolation. Each frame records pre-modification
+ * state for keys changed at that scope level. Frames are pushed/popped at describe
+ * boundaries (beforeAll/afterAll) and test boundaries (beforeEach/afterEach), so config
+ * overrides from any scope are properly reverted without affecting parent scopes.
  */
 export class GGConfigTestStore<Key extends GGConfigKey = GGConfigKey> extends GGConfigStore<Key> {
 
     private readonly wrappedStore: GGConfigStore<Key>;
-    private readonly initialConfigOverridesMap: Map<GGConfigKey, unknown> = new Map();
     private readonly activeConfigOverridesMap: Map<GGConfigKey, unknown> = new Map();
+
+    /**
+     * Stack of undo frames. Each frame records pre-modification values for keys changed
+     * at that scope level. The top frame captures changes; popping a frame reverts them.
+     * Values are either the previous override value or NOT_SET if the key had no override.
+     */
+    private readonly undoStack: Map<GGConfigKey, unknown>[] = [];
 
     constructor(parent: GGConfigStore<Key>, initialOverrides: GGTestCommand<ConfigUpdatePayload>[]) {
         super();
@@ -21,7 +34,6 @@ export class GGConfigTestStore<Key extends GGConfigKey = GGConfigKey> extends GG
             if (GGConfigKey.hasKey(command.payload.keyName)) {
                 const key = GGConfigKey.getKey(command.payload.keyName);
                 const value = this.resolveValue(key, command.payload.value, true)
-                this.initialConfigOverridesMap.set(key, value)
                 this.activeConfigOverridesMap.set(key, value);
             } else {
                 // To throw here, we would need to let the test runner know what config keys each service uses so it can target config updates better.
@@ -38,6 +50,33 @@ export class GGConfigTestStore<Key extends GGConfigKey = GGConfigKey> extends GG
         return this.activeConfigOverridesMap.has(key) ? this.activeConfigOverridesMap.get(key) as T : this.wrappedStore.getValue(key)
     }
 
+    public pushUndoFrame(): void {
+        this.undoStack.push(new Map());
+    }
+
+    public popUndoFrame(): void {
+        const frame = this.undoStack.pop();
+        if (!frame) return;
+        for (const [key, previousValue] of frame) {
+            if (previousValue === NOT_SET) {
+                this.activeConfigOverridesMap.delete(key);
+            } else {
+                this.activeConfigOverridesMap.set(key, previousValue);
+            }
+        }
+    }
+
+    private trackForUndo(key: GGConfigKey): void {
+        const frame = this.undoStack[this.undoStack.length - 1];
+        if (!frame) return;
+        if (!frame.has(key)) {
+            frame.set(key, this.activeConfigOverridesMap.has(key)
+                ? this.activeConfigOverridesMap.get(key)
+                : NOT_SET
+            );
+        }
+    }
+
     public async updateValueOverride(key: GGConfigKey, value: unknown): Promise<void> {
         if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
             const existingValue = this.activeConfigOverridesMap.get(key) ?? this.wrappedStore.getValue(key);
@@ -49,15 +88,9 @@ export class GGConfigTestStore<Key extends GGConfigKey = GGConfigKey> extends GG
     }
 
     public async replaceValueOverride(key: GGConfigKey, value: unknown): Promise<void> {
+        this.trackForUndo(key);
         this.activeConfigOverridesMap.set(key, this.resolveValue(key, value, false));
         await this.notify(key);
-    }
-
-    public async resetAfterTest(): Promise<void> {
-        this.activeConfigOverridesMap.clear();
-        for (const [key, value] of this.initialConfigOverridesMap) {
-            await this.replaceValueOverride(key, value);
-        }
     }
 
     public override watch(key: GGConfigKey, callback: ConfigUpdateCallback): () => void {
