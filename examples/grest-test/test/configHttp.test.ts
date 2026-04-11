@@ -71,7 +71,6 @@ describe("dynamic config", () => {
         })
 
         test('socket can read config value', async () => {
-            // Reset to known default value first - expect configChanged notification
             await t.config.update(MainConfigApi.settings.timeout, 5000)
                 .with(socketClient.mock.configChanged.toMatchObject({watchedTimeout: 5000}));
 

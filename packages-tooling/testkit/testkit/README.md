@@ -51,6 +51,7 @@ describe("my test", () => {
         const logs = await cursor.retrieve();
 
         // t.myRuntime.config - from @grest-ts/config/testkit
+        // Config changes are automatically reverted after each test
         await t.myRuntime.config.update(MY_CONFIG_KEY, newValue);
 
         // t.all() selects all runtimes

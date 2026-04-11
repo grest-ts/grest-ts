@@ -364,8 +364,6 @@ describe("config auto-restore with initial override", () => {
 
     const t = GGTest.startWorker({main: MainRuntime});
     beforeEach(async () => {
-        // Set initial config BEFORE worker starts (queued as initialCommand)
-        // This overrides the default value of 5000 to 7777
         await t.main.config.update(MainConfigApi.settings.timeout, 7777);
     })
 
