@@ -236,6 +236,7 @@ export const GG_CLIENT_INFO = new GGContextKey<ClientInfo>('clientInfo', IsObjec
 
 export const ClientInfoMiddleware: GGHttpTransportMiddleware = {
     headers: ['x-client-version', 'x-client-platform'],
+    responseHeaders: [],
     updateRequest(req: GGHttpRequest): void {
         const info = GG_CLIENT_INFO.get()
         if (info) {
@@ -430,22 +431,27 @@ httpSchema(Contract)
     .routes({ ... })
 ```
 
-For custom middleware, `headers` is required — TypeScript enforces this at compile time.
-Use `[]` if your middleware does not use any custom headers:
+Both `headers` (request) and `responseHeaders` (response) are required on middleware and codecs —
+TypeScript enforces this at compile time. Use `[]` when not applicable:
 
 ```typescript
 export const MyMiddleware: GGHttpTransportMiddleware = {
-    headers: ['x-custom-header', 'x-request-id'],
+    headers: ['x-custom-header'],
+    responseHeaders: [],
     updateRequest(req) { ... },
     parseRequest(req) { ... }
 }
 ```
+
+Codecs also declare `responseHeaders`. For example, `GGFileDownload` declares
+`['Content-Disposition']` which is automatically added to `Access-Control-Expose-Headers`.
 
 You can also register headers manually on the server:
 
 ```typescript
 const httpServer = new GGHttpServer()
 httpServer.registerCorsHeaders(['x-custom-header'])
+httpServer.registerCorsExposeHeaders(['x-custom-response-header'])
 ```
 
 ## HTTP Client

@@ -14,6 +14,7 @@ const HEADER_ROOT_START_TS = "x-root-start-ts"    // Timestamp when root context
 export const GGTracingMiddleware: GGHttpTransportMiddleware = {
 
     headers: [HEADER_TRACE_ID, HEADER_SPAN_ID, HEADER_PARENT_SPAN_ID, HEADER_ROOT_START_TS],
+    responseHeaders: [],
 
     updateRequest(req: GGHttpRequest): void {
         const trace = GG_TRACE.get()

@@ -29,6 +29,9 @@ export class GGHttpServer {
     private readonly _corsHeaders = new Set<string>(GGHttpServer.DEFAULT_CORS_HEADERS);
     private _corsHeadersCache: string = GGHttpServer.DEFAULT_CORS_HEADERS.join(', ');
 
+    private readonly _corsExposeHeaders = new Set<string>();
+    private _corsExposeHeadersCache: string = '';
+
     constructor(config?: GGHttpServerAdapterConfig) {
 
         this.runtimeName = GGLocator.getScope().serviceName;
@@ -53,7 +56,9 @@ export class GGHttpServer {
                     res.setHeader('Access-Control-Allow-Origin', '*');
                     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
                     res.setHeader('Access-Control-Allow-Headers', this._corsHeadersCache);
-                    res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition');
+                    if (this._corsExposeHeadersCache) {
+                        res.setHeader('Access-Control-Expose-Headers', this._corsExposeHeadersCache);
+                    }
                 }
                 if (req.method === 'OPTIONS') {
                     res.writeHead(204);
@@ -91,6 +96,23 @@ export class GGHttpServer {
         }
         if (changed) {
             this._corsHeadersCache = Array.from(this._corsHeaders).join(', ');
+        }
+    }
+
+    /**
+     * Register custom header names for CORS Access-Control-Expose-Headers.
+     * Called automatically during schema registration based on codec and middleware declarations.
+     */
+    public registerCorsExposeHeaders(headers: readonly string[]): void {
+        let changed = false;
+        for (const h of headers) {
+            if (!this._corsExposeHeaders.has(h)) {
+                this._corsExposeHeaders.add(h);
+                changed = true;
+            }
+        }
+        if (changed) {
+            this._corsExposeHeadersCache = Array.from(this._corsExposeHeaders).join(', ');
         }
     }
 
