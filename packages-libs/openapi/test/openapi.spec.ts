@@ -198,6 +198,65 @@ describe("toJSONSchema", () => {
             expect(IsUnknown.toJSONSchema()).toEqual({});
         });
     });
+
+    describe(".docs() annotations", () => {
+        it("title on string", () => {
+            const s = IsString.docs({title: "Full name"});
+            expect(s.toJSONSchema()).toEqual({type: "string", title: "Full name"});
+        });
+        it("description on number", () => {
+            const s = IsNumber.docs({description: "Price in cents"});
+            expect(s.toJSONSchema()).toEqual({type: "number", description: "Price in cents"});
+        });
+        it("example on object", () => {
+            const s = IsObject({x: IsNumber}).docs({example: {x: 42}});
+            const json = s.toJSONSchema() as any;
+            expect(json.example).toEqual({x: 42});
+        });
+        it("examples array", () => {
+            const s = IsString.docs({examples: ["foo", "bar"]});
+            expect((s.toJSONSchema() as any).examples).toEqual(["foo", "bar"]);
+        });
+        it("deprecated:true", () => {
+            const s = IsString.docs({deprecated: true});
+            expect((s.toJSONSchema() as any).deprecated).toBe(true);
+        });
+        it("deprecated:false is omitted", () => {
+            const s = IsString.docs({deprecated: false});
+            expect((s.toJSONSchema() as any).deprecated).toBeUndefined();
+        });
+        it("docs on nullable schema", () => {
+            const s = IsString.docs({title: "X"}).orNull;
+            const json = s.toJSONSchema() as any;
+            expect(json.oneOf).toHaveLength(2);
+            expect(json.title).toBe("X");
+        });
+        it("all annotations together", () => {
+            const s = IsString.docs({title: "T", description: "D", example: "E", deprecated: true});
+            expect(s.toJSONSchema()).toEqual({
+                type: "string", title: "T", description: "D", example: "E", deprecated: true
+            });
+        });
+    });
+
+    describe(".default() value", () => {
+        it("string default", () => {
+            const s = IsString.default("hello");
+            expect(s.toJSONSchema()).toEqual({type: "string", default: "hello"});
+        });
+        it("number default", () => {
+            const s = IsNumber.default(0);
+            expect(s.toJSONSchema()).toEqual({type: "number", default: 0});
+        });
+        it("boolean default", () => {
+            const s = IsBoolean.default(false);
+            expect(s.toJSONSchema()).toEqual({type: "boolean", default: false});
+        });
+        it("default combined with docs", () => {
+            const s = IsString.docs({description: "D"}).default("x");
+            expect(s.toJSONSchema()).toEqual({type: "string", description: "D", default: "x"});
+        });
+    });
 });
 
 // ---------------------------------------------------------------------------
@@ -264,6 +323,7 @@ describe("toOpenApi", () => {
 
         it("exists", () => expect(op).toBeDefined());
         it("has operationId", () => expect(op.operationId).toBe("list"));
+        it("has summary derived from operationId", () => expect(op.summary).toBe("List"));
         it("has tag", () => expect(op.tags).toContain("ItemApi"));
         it("has 200 response with array schema", () => {
             const schema200 = op.responses["200"].content["application/json"].schema;
@@ -286,6 +346,11 @@ describe("toOpenApi", () => {
             expect(pathParam).toBeDefined();
             expect(pathParam.required).toBe(true);
         });
+        it("path param uses actual type from input schema (IsNumber → integer)", () => {
+            const pathParam = op.parameters.find((p: any) => p.name === "id" && p.in === "path");
+            expect(pathParam.schema.type).toBe("number");
+        });
+        it("has summary 'Get'", () => expect(op.summary).toBe("Get"));
     });
 
     describe("POST create", () => {
@@ -336,6 +401,64 @@ describe("toOpenApi", () => {
         it("merges into oneOf at 400", () => {
             const resp400 = op.responses["400"].content["application/json"].schema;
             expect(resp400.oneOf).toHaveLength(2);
+        });
+        it("error response description lists type names", () => {
+            expect(op.responses["400"].description).toBe("ERR_A | ERR_B");
+        });
+    });
+
+    describe("summary derivation", () => {
+        const cases: [string, string][] = [
+            ["list", "List"],
+            ["getWatchedValue", "Get Watched Value"],
+            ["createItem", "Create Item"],
+            ["deleteItem", "Delete Item"],
+        ];
+        const C2 = new GGContractClass("X", {
+            list: {}, getWatchedValue: {}, createItem: {}, deleteItem: {}
+        });
+        const S2 = httpSchema(C2).pathPrefix("x").routes({
+            list: GGRpc.GET("list"),
+            getWatchedValue: GGRpc.GET("gw"),
+            createItem: GGRpc.POST("create"),
+            deleteItem: GGRpc.DELETE("delete")
+        });
+        const d2 = toOpenApi([S2]);
+        for (const [method, expected] of cases) {
+            it(`${method} → "${expected}"`, () => {
+                const paths = d2.paths as any;
+                const op = paths["/x/list"]?.get ?? paths["/x/gw"]?.get
+                    ?? paths["/x/create"]?.post ?? paths["/x/delete"]?.delete;
+                // Find the operation with matching operationId
+                const allOps = Object.values(paths as Record<string, any>)
+                    .flatMap(p => Object.values(p as Record<string, any>))
+                    .find((o: any) => o?.operationId === method) as any;
+                expect(allOps?.summary).toBe(expected);
+            });
+        }
+    });
+
+    describe(".docs() enrichment in query params", () => {
+        const DescribedInput = IsObject({
+            query: IsString.docs({description: "Search term", example: "test"}),
+            limit: IsNumber.orUndefined
+        });
+        const SearchContract = new GGContractClass("SearchApi", {
+            search: {input: DescribedInput, success: IsArray(IsString)}
+        });
+        const SearchApi = httpSchema(SearchContract).pathPrefix("search").routes({
+            search: GGRpc.GET("items")
+        });
+        const d = toOpenApi([SearchApi]);
+        const op = (d.paths as any)?.["/search/items"]?.get;
+
+        it("query param carries description from docs", () => {
+            const param = op.parameters.find((p: any) => p.name === "query");
+            expect(param?.description).toBe("Search term");
+        });
+        it("optional query param has required:false", () => {
+            const param = op.parameters.find((p: any) => p.name === "limit");
+            expect(param?.required).toBe(false);
         });
     });
 

@@ -47,7 +47,7 @@ export class ArraySchema<T extends any[] = any[]> extends GGSchema<T, ArrayDef> 
 
     // --------------------------------------------------------------------------------------
 
-    toJSONSchema(): OpenAPIV3_1.SchemaObject {
+    protected _buildJsonSchema(): OpenAPIV3_1.SchemaObject {
         const def = this.toCompilerDef();
         const schema: OpenAPIV3_1.ArraySchemaObject = {
             type: 'array',
@@ -55,7 +55,6 @@ export class ArraySchema<T extends any[] = any[]> extends GGSchema<T, ArrayDef> 
         };
         if (def.minLength !== undefined) schema.minItems = def.minLength;
         if (def.maxLength !== undefined) schema.maxItems = def.maxLength;
-        if (def.nullable) return {oneOf: [schema, {type: 'null'}]};
         return schema;
     }
 

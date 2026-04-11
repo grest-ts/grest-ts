@@ -18,11 +18,8 @@ export class UnionSchema<T = unknown> extends GGSchema<T, UnionDef> {
         return super.orNull as any
     }
 
-    toJSONSchema(): OpenAPIV3_1.SchemaObject {
-        const variants = this.def.variants.map(v => v.toJSONSchema());
-        const schema: OpenAPIV3_1.SchemaObject = {oneOf: variants};
-        if (this.def.nullable) return {oneOf: [schema, {type: 'null'}]};
-        return schema;
+    protected _buildJsonSchema(): OpenAPIV3_1.SchemaObject {
+        return {oneOf: this.def.variants.map(v => v.toJSONSchema())};
     }
 }
 

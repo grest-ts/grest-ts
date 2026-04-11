@@ -20,10 +20,8 @@ export class BooleanSchema<T extends boolean | undefined | null = boolean> exten
 
     // --------------------------------------------------------------------------------------
 
-    toJSONSchema(): OpenAPIV3_1.SchemaObject {
-        const schema: OpenAPIV3_1.NonArraySchemaObject = {type: 'boolean'};
-        if (this.def.nullable) return {oneOf: [schema, {type: 'null'}]};
-        return schema;
+    protected _buildJsonSchema(): OpenAPIV3_1.SchemaObject {
+        return {type: 'boolean'};
     }
 }
 

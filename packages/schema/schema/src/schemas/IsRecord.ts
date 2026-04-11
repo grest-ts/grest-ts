@@ -16,13 +16,11 @@ export class RecordSchema<T extends Record<string, unknown> | undefined | null =
         return super.orNull as any
     }
 
-    toJSONSchema(): OpenAPIV3_1.SchemaObject {
-        const schema: OpenAPIV3_1.NonArraySchemaObject = {
+    protected _buildJsonSchema(): OpenAPIV3_1.SchemaObject {
+        return {
             type: 'object',
             additionalProperties: this.def.value.toJSONSchema()
         };
-        if (this.def.nullable) return {oneOf: [schema, {type: 'null'}]};
-        return schema;
     }
 }
 

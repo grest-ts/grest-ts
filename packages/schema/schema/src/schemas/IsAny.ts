@@ -16,7 +16,7 @@ export class AnySchema<T = any> extends GGSchema<T, AnyDef> {
         return super.orNull as any
     }
 
-    toJSONSchema(): OpenAPIV3_1.SchemaObject {
+    protected _buildJsonSchema(): OpenAPIV3_1.SchemaObject {
         return {};
     }
 }

@@ -28,10 +28,8 @@ export class LiteralSchema<T extends LiteralValue | undefined | null = LiteralVa
         return new LiteralSchema<NewT>({...this.def, ...changes});
     }
 
-    toJSONSchema(): OpenAPIV3_1.SchemaObject {
-        const schema: OpenAPIV3_1.SchemaObject = {enum: [...this.def.values]};
-        if (this.def.nullable) return {oneOf: [schema, {type: 'null'}]};
-        return schema;
+    protected _buildJsonSchema(): OpenAPIV3_1.SchemaObject {
+        return {enum: [...this.def.values]};
     }
 }
 

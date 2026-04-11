@@ -110,7 +110,7 @@ export class ObjectSchema<T extends object | undefined | null = object> extends 
 
     // --------------------------------------------------------------------------------------
 
-    toJSONSchema(): OpenAPIV3_1.SchemaObject {
+    protected _buildJsonSchema(): OpenAPIV3_1.SchemaObject {
         const shape = this.toCompilerDef().shape! as Shape;
         const keys = Object.keys(shape);
 
@@ -132,10 +132,6 @@ export class ObjectSchema<T extends object | undefined | null = object> extends 
 
         if (required.length > 0) {
             result.required = required;
-        }
-
-        if (this.def.nullable) {
-            return {oneOf: [result, {type: 'null'}]};
         }
 
         return result;

@@ -16,10 +16,8 @@ export class BitSchema<T extends 0 | 1 | undefined | null = 0 | 1> extends GGSch
         return super.orNull as any
     }
 
-    toJSONSchema(): OpenAPIV3_1.SchemaObject {
-        const schema: OpenAPIV3_1.NonArraySchemaObject = {type: 'integer', minimum: 0, maximum: 1};
-        if (this.def.nullable) return {oneOf: [schema, {type: 'null'}]};
-        return schema;
+    protected _buildJsonSchema(): OpenAPIV3_1.SchemaObject {
+        return {type: 'integer', minimum: 0, maximum: 1};
     }
 }
 

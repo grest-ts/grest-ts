@@ -31,20 +31,18 @@ export class TupleSchema<T extends readonly unknown[] = readonly unknown[]> exte
         return super.orNull as any
     }
 
-    toJSONSchema(): OpenAPIV3_1.SchemaObject {
+    protected _buildJsonSchema(): OpenAPIV3_1.SchemaObject {
         const def = this.toCompilerDef();
         const elements = def.elements!;
         const prefixItems = elements.map(e => e.toJSONSchema());
         // prefixItems is JSON Schema 2020-12 / OpenAPI 3.1 — not yet in openapi-types typedefs
-        const schema = {
+        return {
             type: 'array',
             prefixItems,
             minItems: elements.length,
             maxItems: elements.length,
             items: false,
         } as unknown as OpenAPIV3_1.ArraySchemaObject;
-        if (this.def.nullable) return {oneOf: [schema, {type: 'null'}]};
-        return schema;
     }
 
     protected _toCompilerDef(): TupleDefImpl {

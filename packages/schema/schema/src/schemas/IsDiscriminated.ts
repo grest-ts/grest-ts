@@ -33,16 +33,14 @@ export class DiscriminatedSchema<T = unknown> extends GGSchema<T, DiscriminatedD
         return super.orNull as any
     }
 
-    toJSONSchema(): OpenAPIV3_1.SchemaObject {
+    protected _buildJsonSchema(): OpenAPIV3_1.SchemaObject {
         const def = this.toCompilerDef();
         const variantMap = def.variantMap!;
         const variants = Array.from(variantMap.values()).map(v => v.toJSONSchema());
-        const schema: OpenAPIV3_1.SchemaObject = {
+        return {
             oneOf: variants,
             discriminator: {propertyName: def.discriminator}
         };
-        if (this.def.nullable) return {oneOf: [schema, {type: 'null'}]};
-        return schema;
     }
 
     protected _toCompilerDef(): DiscriminatedDef & { variantArray: GGSchema<any>[] } {

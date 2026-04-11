@@ -72,13 +72,12 @@ export class StringSchema<T extends string | undefined | null = string> extends 
 
     // --------------------------------------------------------------------------------------
 
-    toJSONSchema(): OpenAPIV3_1.SchemaObject {
+    protected _buildJsonSchema(): OpenAPIV3_1.SchemaObject {
         const schema: OpenAPIV3_1.NonArraySchemaObject = {type: 'string'};
         const minLength = this.def.nonEmpty && this.def.minLength === undefined ? 1 : this.def.minLength;
         if (minLength !== undefined) schema.minLength = minLength;
         if (this.def.maxLength !== undefined) schema.maxLength = this.def.maxLength;
         if (this.def.pattern) schema.pattern = this.def.pattern.source;
-        if (this.def.nullable) return {oneOf: [schema, {type: 'null'}]};
         return schema;
     }
 }

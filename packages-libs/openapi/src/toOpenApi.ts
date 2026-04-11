@@ -70,6 +70,7 @@ function buildOperation(
 
     const base: OpenAPIV3_1.OperationObject = {
         operationId: methodName,
+        summary: camelToSummary(methodName),
         tags: [apiName],
         parameters: [],
         responses: buildResponses(contract),
@@ -89,6 +90,17 @@ function buildOperation(
 }
 
 /**
+ * Convert camelCase method name to a human-readable summary string.
+ * e.g. "getWatchedValue" → "Get Watched Value"
+ */
+function camelToSummary(name: string): string {
+    return name
+        .replace(/([A-Z])/g, " $1")
+        .replace(/^./, s => s.toUpperCase())
+        .trim();
+}
+
+/**
  * openapi-types@12 defines OpenAPIV3_1.ParameterObject as a direct alias of OpenAPIV3.ParameterObject,
  * whose `schema` field resolves to V3 schema types (missing `type:"null"` as a valid type).
  * The casts to ParameterObject["schema"] below are the precise boundary of that typedef limitation —
@@ -100,27 +112,38 @@ function buildParametersFallback(
 ): OpenAPIV3_1.ParameterObject[] {
     const hasBody = codec.method === "POST" || codec.method === "PUT" || codec.method === "PATCH";
     const pathParams = (codec.path.match(/:(\w+)/g) || []).map((m: string) => m.slice(1));
-    const params: OpenAPIV3_1.ParameterObject[] = pathParams.map((name: string) => ({
-        name,
-        in: "path" as const,
-        required: true as const,
-        schema: {type: "string"} as OpenAPIV3_1.ParameterObject["schema"]
-    }));
 
-    if (!hasBody && contract.input) {
-        const inputSchema = contract.input.toJSONSchema() as OpenAPIV3_1.NonArraySchemaObject;
-        const shape = inputSchema.properties;
-        const required = inputSchema.required;
-        if (shape) {
-            for (const [name, fieldSchema] of Object.entries(shape)) {
-                if (pathParams.includes(name)) continue;
-                params.push({
-                    name,
-                    in: "query" as const,
-                    required: required?.includes(name) ?? false,
-                    schema: fieldSchema as OpenAPIV3_1.ParameterObject["schema"]
-                });
+    const inputSchema = contract.input
+        ? contract.input.toJSONSchema() as OpenAPIV3_1.NonArraySchemaObject
+        : undefined;
+    const shape = inputSchema?.properties;
+    const required = inputSchema?.required;
+
+    const params: OpenAPIV3_1.ParameterObject[] = pathParams.map((name: string) => {
+        const fieldSchema = shape?.[name] as OpenAPIV3_1.SchemaObject | undefined;
+        const param: OpenAPIV3_1.ParameterObject = {
+            name,
+            in: "path" as const,
+            required: true as const,
+            schema: (fieldSchema ?? {type: "string"}) as OpenAPIV3_1.ParameterObject["schema"]
+        };
+        if (fieldSchema?.description) param.description = fieldSchema.description;
+        return param;
+    });
+
+    if (!hasBody && shape) {
+        for (const [name, fieldSchema] of Object.entries(shape)) {
+            if (pathParams.includes(name)) continue;
+            const param: OpenAPIV3_1.ParameterObject = {
+                name,
+                in: "query" as const,
+                required: required?.includes(name) ?? false,
+                schema: fieldSchema as OpenAPIV3_1.ParameterObject["schema"]
+            };
+            if ((fieldSchema as OpenAPIV3_1.SchemaObject).description) {
+                param.description = (fieldSchema as OpenAPIV3_1.SchemaObject).description;
             }
+            params.push(param);
         }
     }
     return params;
@@ -171,10 +194,13 @@ function buildResponses(
     // Error responses — group by STATUS_CODE
     if (contract.errors?.length) {
         const byStatus = new Map<number, OpenAPIV3_1.SchemaObject[]>();
+        const byStatusTypes = new Map<number, string[]>();
 
         for (const errCls of contract.errors as ANY_ERROR_CLS[]) {
             const statusCode = errCls.STATUS_CODE;
             const errType = errCls.TYPE;
+            if (!byStatusTypes.has(statusCode)) byStatusTypes.set(statusCode, []);
+            byStatusTypes.get(statusCode)!.push(errType);
             const dataSchema: OpenAPIV3_1.SchemaObject | undefined =
                 errCls.schema != null ? errCls.schema.toJSONSchema() : undefined;
 
@@ -195,13 +221,14 @@ function buildResponses(
         }
 
         for (const [statusCode, schemas] of byStatus) {
+            const typeNames = byStatusTypes.get(statusCode)!;
             const content: OpenAPIV3_1.MediaTypeObject = {
                 schema: schemas.length === 1
                     ? schemas[0]
                     : {oneOf: schemas}
             };
             responses[String(statusCode)] = {
-                description: `Error ${statusCode}`,
+                description: typeNames.join(" | "),
                 content: {"application/json": content}
             };
         }

@@ -52,12 +52,11 @@ export class NumberSchema<T extends Number | number | undefined | null = number>
 
     // --------------------------------------------------------------------------------------
 
-    toJSONSchema(): OpenAPIV3_1.SchemaObject {
+    protected _buildJsonSchema(): OpenAPIV3_1.SchemaObject {
         const schema: OpenAPIV3_1.NonArraySchemaObject = {type: this.def.integer ? 'integer' : 'number'};
         if (this.def.min !== undefined) schema.minimum = this.def.min;
         if (this.def.max !== undefined) schema.maximum = this.def.max;
         if (this.def.multipleOf !== undefined) schema.multipleOf = this.def.multipleOf;
-        if (this.def.nullable) return {oneOf: [schema, {type: 'null'}]};
         return schema;
     }
 }

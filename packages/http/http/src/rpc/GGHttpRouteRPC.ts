@@ -33,27 +33,37 @@ function buildOpenApiParameters(
     hasBody: boolean,
     inputSchema: GGSchema<unknown> | undefined
 ): OpenAPIV3_1.ParameterObject[] {
-    const params: OpenAPIV3_1.ParameterObject[] = pathParams.map(name => ({
-        name,
-        in: 'path' as const,
-        required: true as const,
-        schema: {type: 'string'} as OpenAPIV3_1.ParameterObject["schema"]
-    }));
+    const objSchema = inputSchema
+        ? inputSchema.toJSONSchema() as OpenAPIV3_1.NonArraySchemaObject
+        : undefined;
+    const shape = objSchema?.properties;
+    const required = objSchema?.required;
 
-    if (!hasBody && inputSchema) {
-        const objSchema = inputSchema.toJSONSchema() as OpenAPIV3_1.NonArraySchemaObject;
-        const shape = objSchema.properties;
-        const required = objSchema.required;
-        if (shape) {
-            for (const [name, fieldSchema] of Object.entries(shape)) {
-                if (pathParams.includes(name)) continue;
-                params.push({
-                    name,
-                    in: 'query' as const,
-                    required: required?.includes(name) ?? false,
-                    schema: fieldSchema as OpenAPIV3_1.ParameterObject["schema"]
-                });
+    const params: OpenAPIV3_1.ParameterObject[] = pathParams.map(name => {
+        const fieldSchema = shape?.[name] as OpenAPIV3_1.SchemaObject | undefined;
+        const param: OpenAPIV3_1.ParameterObject = {
+            name,
+            in: 'path' as const,
+            required: true as const,
+            schema: (fieldSchema ?? {type: 'string'}) as OpenAPIV3_1.ParameterObject["schema"]
+        };
+        if (fieldSchema?.description) param.description = fieldSchema.description;
+        return param;
+    });
+
+    if (!hasBody && shape) {
+        for (const [name, fieldSchema] of Object.entries(shape)) {
+            if (pathParams.includes(name)) continue;
+            const param: OpenAPIV3_1.ParameterObject = {
+                name,
+                in: 'query' as const,
+                required: required?.includes(name) ?? false,
+                schema: fieldSchema as OpenAPIV3_1.ParameterObject["schema"]
+            };
+            if ((fieldSchema as OpenAPIV3_1.SchemaObject).description) {
+                param.description = (fieldSchema as OpenAPIV3_1.SchemaObject).description;
             }
+            params.push(param);
         }
     }
     return params;

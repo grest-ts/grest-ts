@@ -269,8 +269,40 @@ export abstract class GGSchema<Type, TDef extends GGSchemaDefinition = GGSchemaD
 
     // ---------------------------------------------------------------------------------------------------------
 
+    /**
+     * Returns a JSON Schema / OpenAPI 3.1 representation of this schema.
+     *
+     * Subclasses implement _buildJsonSchema() with their type-specific output.
+     * This method wraps it with nullable (oneOf null), docs annotations, and defaultValue.
+     */
     public toJSONSchema(): OpenAPIV3_1.SchemaObject {
-        // Default implementation — subclasses override for accurate output
+        let schema = this._buildJsonSchema();
+
+        if (this.def.nullable) {
+            schema = {oneOf: [schema, {type: "null"}]};
+        }
+
+        const {docs, defaultValue} = this.def;
+        if (docs || defaultValue !== undefined) {
+            schema = {
+                ...schema,
+                ...(docs?.title !== undefined ? {title: docs.title} : {}),
+                ...(docs?.description !== undefined ? {description: docs.description} : {}),
+                ...(docs?.example !== undefined ? {example: docs.example} : {}),
+                ...(docs?.examples !== undefined ? {examples: [...docs.examples]} : {}),
+                ...(docs?.deprecated === true ? {deprecated: true} : {}),
+                ...(defaultValue !== undefined ? {default: defaultValue} : {}),
+            };
+        }
+
+        return schema;
+    }
+
+    /**
+     * Override in subclasses to return the type-specific JSON Schema object.
+     * Do NOT apply nullable, docs, or defaultValue here — toJSONSchema() does that.
+     */
+    protected _buildJsonSchema(): OpenAPIV3_1.SchemaObject {
         return {};
     }
 
