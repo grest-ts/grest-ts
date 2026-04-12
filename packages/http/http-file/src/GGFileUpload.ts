@@ -38,11 +38,13 @@ class GGFileUploadCodec implements GGHttpCodec {
 
     public toOpenApiOperation(config: GGHttpCodecOpenApiConfig): Partial<OpenAPIV3_1.OperationObject> {
         const pathParams = (this.path.match(/:(\w+)/g) || []).map(m => m.slice(1));
+        // Path params not in the input schema default to non-empty strings —
+        // an empty path segment cannot be routed.
         const parameters: OpenAPIV3_1.ParameterObject[] = pathParams.map(name => ({
             name,
             in: 'path' as const,
             required: true as const,
-            schema: {type: 'string'} as OpenAPIV3_1.ParameterObject["schema"]
+            schema: {type: 'string', minLength: 1} as OpenAPIV3_1.ParameterObject["schema"]
         }));
 
         // Use toCompilerDef().shape to get GGSchema instances so schemaResolver can

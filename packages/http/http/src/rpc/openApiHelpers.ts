@@ -68,8 +68,9 @@ function buildPathParam(
     schemaResolver?: GGOpenApiSchemaResolver
 ): OpenAPIV3_1.ParameterObject {
     if (!fieldSchema) {
+        // Path params are always non-empty — an empty segment cannot be routed.
         return {name, in: 'path' as const, required: true as const,
-            schema: {type: 'string'} as OpenAPIV3_1.ParameterObject["schema"]};
+            schema: {type: 'string', minLength: 1} as OpenAPIV3_1.ParameterObject["schema"]};
     }
     const resolved = schemaResolver ? schemaResolver(fieldSchema) : fieldSchema.toJSONSchema();
     const {description, ...schemaWithoutDescription} = resolved as any;
