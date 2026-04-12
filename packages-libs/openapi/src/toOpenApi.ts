@@ -25,12 +25,16 @@ export function toOpenApi(
     const registry = new SchemaRegistry();
     const paths: OpenAPIV3_1.PathsObject = {};
 
+    const securitySchemes = new Map<string, OpenAPIV3_1.SecuritySchemeObject>();
+
     for (const httpSchema of schemas) {
         if (!httpSchema.contract) continue;
         const pathPrefix = "/" + httpSchema.pathPrefix;
 
-        // Collect header parameters from all middlewares — applied to every operation in this schema
-        const schemaHeaderParams = buildHeaderParameters(httpSchema.apiMiddlewares, registry);
+        // Split middlewares into security schemes and plain header params
+        const {headerParams, operationSecurity} = buildMiddlewareOpenApi(
+            httpSchema.apiMiddlewares, registry, securitySchemes
+        );
 
         for (const methodName of Object.keys(httpSchema.codec)) {
             const codec = httpSchema.codec[methodName];
@@ -43,10 +47,12 @@ export function toOpenApi(
 
             const operation = buildOperation(httpSchema.name, methodName, codec, contract, registry);
 
-            // Merge schema-level header parameters (from middlewares) into the operation
-            if (schemaHeaderParams.length > 0) {
+            if (headerParams.length > 0) {
                 const existing = (operation.parameters ?? []) as OpenAPIV3_1.ParameterObject[];
-                operation.parameters = [...schemaHeaderParams, ...existing];
+                operation.parameters = [...headerParams, ...existing];
+            }
+            if (operationSecurity.length > 0) {
+                operation.security = operationSecurity;
             }
 
             if (!paths[openApiPath]) paths[openApiPath] = {};
@@ -64,9 +70,16 @@ export function toOpenApi(
         paths
     };
 
-    const components = registry.getComponents();
-    if (components) {
-        doc.components = {schemas: components};
+    const schemaComponents = registry.getComponents();
+    const securityComponents = securitySchemes.size > 0
+        ? Object.fromEntries(securitySchemes)
+        : undefined;
+
+    if (schemaComponents || securityComponents) {
+        doc.components = {
+            ...(schemaComponents ? {schemas: schemaComponents} : {}),
+            ...(securityComponents ? {securitySchemes: securityComponents} : {}),
+        };
     }
 
     if (options.servers?.length) {
@@ -77,31 +90,81 @@ export function toOpenApi(
 }
 
 /**
- * Build OpenAPI header parameters from the schema's middleware stack.
- * Each middleware that declares a `headers` map contributes a parameter
- * per header key — these apply to every operation in the schema.
+ * Process middleware headers, splitting them into:
+ * - Plain header parameters (format unset or unknown)
+ * - Security scheme references (format: "bearer" → BearerAuth, format: "api-key" → ApiKeyAuth)
+ *
+ * Security headers are registered in `securitySchemes` and returned as `security` requirements
+ * on the operation so Swagger UI shows the padlock "Authorize" button.
  */
-function buildHeaderParameters(
+function buildMiddlewareOpenApi(
     middlewares: readonly GGHttpTransportMiddleware[],
-    registry: SchemaRegistry
-): OpenAPIV3_1.ParameterObject[] {
-    const params: OpenAPIV3_1.ParameterObject[] = [];
+    registry: SchemaRegistry,
+    securitySchemes: Map<string, OpenAPIV3_1.SecuritySchemeObject>
+): { headerParams: OpenAPIV3_1.ParameterObject[]; operationSecurity: OpenAPIV3_1.SecurityRequirementObject[] } {
+    const headerParams: OpenAPIV3_1.ParameterObject[] = [];
+    const operationSecurity: OpenAPIV3_1.SecurityRequirementObject[] = [];
+
     for (const mw of middlewares) {
         for (const [name, schema] of Object.entries(mw.headers)) {
             const desc = schema.toSchemaDescription();
-            const resolved = registry.descOrRef(desc);
-            const {description, ...schemaWithoutDescription} = resolved as any;
-            const param: OpenAPIV3_1.ParameterObject = {
-                name,
-                in: 'header' as const,
-                required: !desc.optional,
-                schema: schemaWithoutDescription as OpenAPIV3_1.ParameterObject["schema"]
-            };
-            if (description) param.description = description;
-            params.push(param);
+            const format = desc.docs?.format;
+
+            if (format === 'bearer') {
+                // HTTP Bearer auth → securitySchemes + security requirement on operation
+                const schemeName = desc.docs?.title
+                    ? toSecuritySchemeName(desc.docs.title)
+                    : 'BearerAuth';
+                if (!securitySchemes.has(schemeName)) {
+                    securitySchemes.set(schemeName, {
+                        type: 'http',
+                        scheme: 'bearer',
+                        ...(desc.docs?.description ? {description: desc.docs.description} : {}),
+                    });
+                }
+                operationSecurity.push({[schemeName]: []});
+
+            } else if (format === 'api-key') {
+                // API key in header → securitySchemes + security requirement on operation
+                const schemeName = desc.docs?.title
+                    ? toSecuritySchemeName(desc.docs.title)
+                    : 'ApiKeyAuth';
+                if (!securitySchemes.has(schemeName)) {
+                    securitySchemes.set(schemeName, {
+                        type: 'apiKey',
+                        in: 'header',
+                        name,
+                        ...(desc.docs?.description ? {description: desc.docs.description} : {}),
+                    });
+                }
+                operationSecurity.push({[schemeName]: []});
+
+            } else {
+                // Plain header parameter
+                const resolved = registry.descOrRef(desc);
+                const {description, ...schemaWithoutDescription} = resolved as any;
+                const param: OpenAPIV3_1.ParameterObject = {
+                    name,
+                    in: 'header' as const,
+                    required: !desc.optional,
+                    schema: schemaWithoutDescription as OpenAPIV3_1.ParameterObject["schema"]
+                };
+                if (description) param.description = description;
+                headerParams.push(param);
+            }
         }
     }
-    return params;
+    return {headerParams, operationSecurity};
+}
+
+/** Convert a human-readable title to a valid security scheme name. e.g. "Bearer token" → "BearerToken" */
+function toSecuritySchemeName(title: string): string {
+    return title
+        .replace(/[^a-zA-Z0-9\s]/g, '')
+        .split(/\s+/)
+        .filter(Boolean)
+        .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+        .join('');
 }
 
 function buildOperation(

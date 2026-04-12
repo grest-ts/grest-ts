@@ -724,6 +724,13 @@ exports[`OpenAPI spec — ShowcaseApi snapshot > matches snapshot 1`] = `
         "type": "object",
       },
     },
+    "securitySchemes": {
+      "BearerToken": {
+        "description": "JWT access token. Use the Authorize button to set.",
+        "scheme": "bearer",
+        "type": "http",
+      },
+    },
   },
   "info": {
     "description": "Integration snapshot for @grest-ts/openapi spec generation",
@@ -780,6 +787,11 @@ exports[`OpenAPI spec — ShowcaseApi snapshot > matches snapshot 1`] = `
             "description": "SERVER_ERROR",
           },
         },
+        "security": [
+          {
+            "BearerToken": [],
+          },
+        ],
         "summary": "Get Latest Event",
         "tags": [
           "ShowcaseApi",
@@ -832,6 +844,11 @@ exports[`OpenAPI spec — ShowcaseApi snapshot > matches snapshot 1`] = `
             "description": "SERVER_ERROR",
           },
         },
+        "security": [
+          {
+            "BearerToken": [],
+          },
+        ],
         "summary": "Multi Error",
         "tags": [
           "ShowcaseApi",
@@ -886,6 +903,11 @@ exports[`OpenAPI spec — ShowcaseApi snapshot > matches snapshot 1`] = `
             "description": "SERVER_ERROR",
           },
         },
+        "security": [
+          {
+            "BearerToken": [],
+          },
+        ],
         "summary": "Get Stats",
         "tags": [
           "ShowcaseApi",
@@ -1040,6 +1062,11 @@ exports[`OpenAPI spec — ShowcaseApi snapshot > matches snapshot 1`] = `
             "description": "SERVER_ERROR",
           },
         },
+        "security": [
+          {
+            "BearerToken": [],
+          },
+        ],
         "summary": "List Users",
         "tags": [
           "ShowcaseApi",
@@ -1122,6 +1149,11 @@ exports[`OpenAPI spec — ShowcaseApi snapshot > matches snapshot 1`] = `
             "description": "SERVER_ERROR",
           },
         },
+        "security": [
+          {
+            "BearerToken": [],
+          },
+        ],
         "summary": "Create User",
         "tags": [
           "ShowcaseApi",
@@ -1167,6 +1199,11 @@ exports[`OpenAPI spec — ShowcaseApi snapshot > matches snapshot 1`] = `
             "description": "SERVER_ERROR",
           },
         },
+        "security": [
+          {
+            "BearerToken": [],
+          },
+        ],
         "summary": "Delete User",
         "tags": [
           "ShowcaseApi",
@@ -1241,6 +1278,11 @@ exports[`OpenAPI spec — ShowcaseApi snapshot > matches snapshot 1`] = `
             "description": "SERVER_ERROR",
           },
         },
+        "security": [
+          {
+            "BearerToken": [],
+          },
+        ],
         "summary": "Get User",
         "tags": [
           "ShowcaseApi",
@@ -1372,6 +1414,11 @@ exports[`OpenAPI spec — ShowcaseApi snapshot > matches snapshot 1`] = `
             "description": "SERVER_ERROR",
           },
         },
+        "security": [
+          {
+            "BearerToken": [],
+          },
+        ],
         "summary": "Update Profile",
         "tags": [
           "ShowcaseApi",
@@ -1447,6 +1494,11 @@ exports[`OpenAPI spec — ShowcaseApi snapshot > matches snapshot 1`] = `
             "description": "SERVER_ERROR",
           },
         },
+        "security": [
+          {
+            "BearerToken": [],
+          },
+        ],
         "summary": "Download Avatar",
         "tags": [
           "ShowcaseApi",
@@ -1561,6 +1613,11 @@ exports[`OpenAPI spec — ShowcaseApi snapshot > matches snapshot 1`] = `
             "description": "SERVER_ERROR",
           },
         },
+        "security": [
+          {
+            "BearerToken": [],
+          },
+        ],
         "summary": "Upload Avatar",
         "tags": [
           "ShowcaseApi",

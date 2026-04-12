@@ -36,6 +36,18 @@ import {IsPassword} from "@grest-ts/schema";
 export const RESOURCE_NOT_FOUND = ERROR.define("RESOURCE_NOT_FOUND", 404);
 export const PROFILE_NOT_FOUND = ERROR.define("PROFILE_NOT_FOUND", 404);
 export const CONFLICT = ERROR.define("CONFLICT", 409);
+
+// Showcase auth middleware — demonstrates bearer security scheme generation
+export const ShowcaseBearerAuth = {
+    headers: {
+        "authorization": IsString.nonEmpty.docs({
+            title: "Bearer token",
+            format: "bearer",
+            description: "JWT access token. Use the Authorize button to set."
+        })
+    },
+    responseHeaders: {}
+} as const;
 export const RATE_LIMITED = ERROR.define("RATE_LIMITED", 429, IsObject({
     retryAfterSeconds: IsInt.docs({description: "Number of seconds to wait before retrying"})
 }));
@@ -247,6 +259,7 @@ export const ShowcaseApiContract = new GGContractClass("ShowcaseApi", {
 
 export const ShowcaseApi = httpSchema(ShowcaseApiContract)
     .pathPrefix("api/showcase")
+    .use(ShowcaseBearerAuth)
     .routes({
         listUsers: GGRpc.GET("users"),
         getUser: GGRpc.GET("users/:id"),

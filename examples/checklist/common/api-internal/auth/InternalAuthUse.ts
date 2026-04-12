@@ -19,6 +19,7 @@ export const InternalAuthUse: GGHttpTransportMiddleware = {
     headers: {
         "authorization": IsString.nonEmpty.docs({
             title: "Internal service token",
+            format: "bearer",
             description: "Bearer token for service-to-service authentication",
             example: "Bearer internal_auth_token"
         })

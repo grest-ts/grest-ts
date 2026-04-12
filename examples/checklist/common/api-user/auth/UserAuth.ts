@@ -26,6 +26,7 @@ export class UserAuth extends GGContextKey<tUserAuthToken> {
     readonly headers: Record<string, GGSchema<string | undefined>> = {
         "authorization": IsString.nonEmpty.docs({
             title: "Bearer token",
+            format: "bearer",
             description: "JWT bearer token for user authentication",
             example: "Bearer eyJhbGciOiJIUzI1NiJ9..."
         })
