@@ -73,12 +73,15 @@ function setupRoutes<TContract extends GGContractApiDefinition>(
     const parentContext = GGContextStore.tryGetContext();
 
     for (const mw of apiMiddlewares) {
-        if (mw.headers.length) server.registerCorsHeaders(mw.headers);
-        if (mw.responseHeaders.length) server.registerCorsExposeHeaders(mw.responseHeaders);
+        const hKeys = Object.keys(mw.headers);
+        const rhKeys = Object.keys(mw.responseHeaders);
+        if (hKeys.length) server.registerCorsHeaders(hKeys);
+        if (rhKeys.length) server.registerCorsExposeHeaders(rhKeys);
     }
     for (const methodName in httpSchema.codec) {
         const codec: GGHttpCodec = httpSchema.codec[methodName];
-        if (codec?.responseHeaders.length) server.registerCorsExposeHeaders(codec.responseHeaders);
+        const rhKeys = Object.keys(codec?.responseHeaders ?? {});
+        if (rhKeys.length) server.registerCorsExposeHeaders(rhKeys);
     }
 
     server.onStart(() => {

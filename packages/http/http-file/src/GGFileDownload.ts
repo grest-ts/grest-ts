@@ -1,5 +1,5 @@
 import {HttpMethod} from "@grest-ts/common"
-import {GGContractMethod, isNonJsonDef} from "@grest-ts/schema"
+import {GGContractMethod, GGSchema, IsString, isNonJsonDef} from "@grest-ts/schema"
 import {ClientHttpRouteToRpcTransformClientCodec, ClientHttpRouteToRpcTransformClientConfig, ClientHttpRouteToRpcTransformServerCodec, ClientHttpRouteToRpcTransformServerConfig, GGHttpCodec, GGHttpCodecOpenApiConfig, GGRpcRequestBuilder, GGRpcRequestParser, buildOpenApiParameters} from "@grest-ts/http"
 import {GGFileDownloadResponseBuilder} from "./GGFileDownloadResponseBuilder";
 import {GGFileDownloadResponseParser} from "./GGFileDownloadResponseParser";
@@ -14,7 +14,12 @@ class GGFileDownloadCodec implements GGHttpCodec {
 
     public readonly method: HttpMethod
     public readonly path: string
-    public readonly responseHeaders = ['Content-Disposition'] as const
+    public readonly responseHeaders: Record<string, GGSchema<string | undefined>> = {
+        "Content-Disposition": IsString.nonEmpty.docs({
+            description: "attachment; filename=<name>",
+            example: "attachment; filename=document.pdf"
+        })
+    }
 
     constructor(method: HttpMethod, path: string) {
         this.method = method

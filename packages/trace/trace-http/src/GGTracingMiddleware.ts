@@ -1,5 +1,6 @@
 import type http from "http";
 import type {GGHttpRequest, GGHttpTransportMiddleware} from "@grest-ts/http";
+import {IsString} from "@grest-ts/schema";
 import {GG_TRACE, GGContextTraceKey} from "@grest-ts/trace";
 
 const HEADER_TRACE_ID = "x-b3-traceid"       // Root trace ID for the entire request chain
@@ -13,8 +14,13 @@ const HEADER_ROOT_START_TS = "x-root-start-ts"    // Timestamp when root context
  */
 export const GGTracingMiddleware: GGHttpTransportMiddleware = {
 
-    headers: [HEADER_TRACE_ID, HEADER_SPAN_ID, HEADER_PARENT_SPAN_ID, HEADER_ROOT_START_TS],
-    responseHeaders: [],
+    headers: {
+        [HEADER_TRACE_ID]:       IsString.orUndefined.docs({description: "Root trace ID for the entire request chain"}),
+        [HEADER_SPAN_ID]:        IsString.orUndefined.docs({description: "Current span ID (becomes parent for children)"}),
+        [HEADER_PARENT_SPAN_ID]: IsString.orUndefined.docs({description: "Parent span ID"}),
+        [HEADER_ROOT_START_TS]:  IsString.orUndefined.docs({description: "Timestamp (ms) when the root context was created"}),
+    },
+    responseHeaders: {},
 
     updateRequest(req: GGHttpRequest): void {
         const trace = GG_TRACE.get()

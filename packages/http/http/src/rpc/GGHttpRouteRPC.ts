@@ -3,6 +3,7 @@ import {ClientHttpRouteToRpcTransformClientCodec, ClientHttpRouteToRpcTransformC
 import {GGRpcRequestBuilder} from "./RpcRequest/GGRpcRequestBuilder";
 import {GGRpcResponseParser} from "./RpcResponse/GGRpcResponseParser";
 import type {OpenAPIV3_1} from "openapi-types";
+import {GGSchema} from "@grest-ts/schema";
 import {buildRpcSuccessResponses} from "./openApiSuccessResponse";
 import {buildOpenApiParameters} from "./openApiHelpers";
 
@@ -25,7 +26,7 @@ class GGHttpRpcCodec implements GGHttpCodec {
 
     public readonly method: HttpMethod
     public readonly path: string
-    public readonly responseHeaders: readonly string[] = []
+    public readonly responseHeaders: Record<string, GGSchema<string | undefined>> = {}
 
     constructor(method: HttpMethod, path: string) {
         this.method = method

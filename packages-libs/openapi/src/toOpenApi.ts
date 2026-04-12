@@ -1,4 +1,4 @@
-import type {GGHttpSchema} from "@grest-ts/http";
+import type {GGHttpSchema, GGHttpTransportMiddleware} from "@grest-ts/http";
 import type {ANY_ERROR_CLS} from "@grest-ts/schema";
 import type {OpenAPIV3_1} from "openapi-types";
 import {SchemaRegistry} from "./SchemaRegistry";
@@ -29,6 +29,9 @@ export function toOpenApi(
         if (!httpSchema.contract) continue;
         const pathPrefix = "/" + httpSchema.pathPrefix;
 
+        // Collect header parameters from all middlewares — applied to every operation in this schema
+        const schemaHeaderParams = buildHeaderParameters(httpSchema.apiMiddlewares, registry);
+
         for (const methodName of Object.keys(httpSchema.codec)) {
             const codec = httpSchema.codec[methodName];
             const contract = httpSchema.contract.methods[methodName];
@@ -39,6 +42,12 @@ export function toOpenApi(
             const httpMethod = codec.method.toLowerCase() as OpenAPIV3_1.HttpMethods;
 
             const operation = buildOperation(httpSchema.name, methodName, codec, contract, registry);
+
+            // Merge schema-level header parameters (from middlewares) into the operation
+            if (schemaHeaderParams.length > 0) {
+                const existing = (operation.parameters ?? []) as OpenAPIV3_1.ParameterObject[];
+                operation.parameters = [...schemaHeaderParams, ...existing];
+            }
 
             if (!paths[openApiPath]) paths[openApiPath] = {};
             (paths[openApiPath] as Record<string, unknown>)[httpMethod] = operation;
@@ -65,6 +74,34 @@ export function toOpenApi(
     }
 
     return doc;
+}
+
+/**
+ * Build OpenAPI header parameters from the schema's middleware stack.
+ * Each middleware that declares a `headers` map contributes a parameter
+ * per header key — these apply to every operation in the schema.
+ */
+function buildHeaderParameters(
+    middlewares: readonly GGHttpTransportMiddleware[],
+    registry: SchemaRegistry
+): OpenAPIV3_1.ParameterObject[] {
+    const params: OpenAPIV3_1.ParameterObject[] = [];
+    for (const mw of middlewares) {
+        for (const [name, schema] of Object.entries(mw.headers)) {
+            const desc = schema.toSchemaDescription();
+            const resolved = registry.descOrRef(desc);
+            const {description, ...schemaWithoutDescription} = resolved as any;
+            const param: OpenAPIV3_1.ParameterObject = {
+                name,
+                in: 'header' as const,
+                required: !desc.optional,
+                schema: schemaWithoutDescription as OpenAPIV3_1.ParameterObject["schema"]
+            };
+            if (description) param.description = description;
+            params.push(param);
+        }
+    }
+    return params;
 }
 
 function buildOperation(

@@ -1,7 +1,7 @@
 import type http from "http";
 import {GGHttpCodec, GGHttpSchema} from "./GGHttpSchema";
 import {GGHttpRequest, GGHttpTransportMiddleware} from "./GGHttpSchema";
-import {GGContractApiDefinition, GGContractClass} from "@grest-ts/schema";
+import {GGContractApiDefinition, GGContractClass, GGSchema} from "@grest-ts/schema";
 import {GGContextKey} from "@grest-ts/context";
 
 /**
@@ -60,9 +60,21 @@ class GGHttpSchemaBuilder<TContract extends GGContractApiDefinition, TContext = 
             throw new Error(`Context key '${contextKey.name}' does not have an 'http-header' codec registered.`);
         }
 
+        // Build the typed header schema from the codec's input schema (an IsObject describing headers).
+        // GGCodec wraps a GGTransform; the raw transform's inputSchema is the IsObject({headerName: schema}).
+        const rawCodec = codec as any;
+        const inputSchema: unknown = rawCodec?.config?.encode?.inputSchema ?? rawCodec?.encode?.inputSchema;
+        const headers: Record<string, GGSchema<string | undefined>> =
+            inputSchema instanceof GGSchema && inputSchema.toSchemaDescription().node.kind === 'object'
+                ? Object.fromEntries(
+                    Object.entries(
+                        (inputSchema.toSchemaDescription().node as { kind: 'object'; properties: Record<string, import('@grest-ts/schema').GGSchemaDescription>; required: string[] }).properties
+                    ).map(([k, desc]) => [k, desc.schema as GGSchema<string | undefined>])
+                ) : {};
+
         const middleware: GGHttpTransportMiddleware = {
-            headers: codec.inputKeys ?? [],
-            responseHeaders: [],
+            headers,
+            responseHeaders: {},
             updateRequest(req: GGHttpRequest) {
                 const contextValue = contextKey.get();
                 if (contextValue !== undefined) {

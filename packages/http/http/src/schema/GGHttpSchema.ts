@@ -1,4 +1,4 @@
-import {ERROR, ERROR_JSON, GGContractApiDefinition, GGContractClass, GGContractMethod, GGSchemaDescription, OK} from "@grest-ts/schema";
+import {ERROR, ERROR_JSON, GGContractApiDefinition, GGContractClass, GGContractMethod, GGSchema, GGSchemaDescription, OK} from "@grest-ts/schema";
 import type {HttpMethod} from "@grest-ts/common";
 import type http from "http";
 import type {GGHttpServerMiddleware} from "../server/GGHttpSchema.startServer";
@@ -100,11 +100,12 @@ export interface GGHttpCodec {
     readonly path: string;
 
     /**
-     * Response header names that this codec sets on outgoing responses.
-     * Used for automatic CORS Access-Control-Expose-Headers configuration.
-     * Use [] if the codec does not set any custom response headers.
+     * Response headers this codec sets, mapped to their value schemas.
+     * Keys are header names; values describe the header value format.
+     * Used for CORS Access-Control-Expose-Headers and OpenAPI response header docs.
+     * Use {} if the codec sets no custom response headers.
      */
-    readonly responseHeaders: readonly string[];
+    readonly responseHeaders: Record<string, GGSchema<string | undefined>>;
 
     createForClient(config: ClientHttpRouteToRpcTransformClientConfig): ClientHttpRouteToRpcTransformClientCodec
 
@@ -127,21 +128,26 @@ export interface GGHttpCodec {
 
 export interface GGHttpTransportMiddleware {
     /**
-     * Request header names that this middleware reads from or writes to.
-     * Used for automatic CORS Access-Control-Allow-Headers configuration.
+     * Request headers this middleware reads or writes, mapped to their value schemas.
+     * Keys are header names; values describe the header value format for validation and docs.
+     * Used for CORS Access-Control-Allow-Headers and OpenAPI parameter docs.
+     * Use {} if the middleware touches no custom request headers.
      *
-     * Populated automatically by useHeader(). For custom middleware via use(),
-     * you must declare every custom header your middleware touches.
-     * Use [] if the middleware does not use any custom request headers.
+     * @example
+     * headers: {
+     *   "authorization": IsString.nonEmpty.docs({title: "Bearer token", example: "Bearer ..."}),
+     *   "accept-language": IsLocale.orUndefined
+     * }
      */
-    readonly headers: readonly string[];
+    readonly headers: Record<string, GGSchema<string | undefined>>;
 
     /**
-     * Response header names that this middleware sets on outgoing responses.
-     * Used for automatic CORS Access-Control-Expose-Headers configuration.
-     * Use [] if the middleware does not set any custom response headers.
+     * Response headers this middleware sets, mapped to their value schemas.
+     * Keys are header names; values describe the header value format for validation and docs.
+     * Used for CORS Access-Control-Expose-Headers and OpenAPI response header docs.
+     * Use {} if the middleware sets no custom response headers.
      */
-    readonly responseHeaders: readonly string[];
+    readonly responseHeaders: Record<string, GGSchema<string | undefined>>;
 
     /**
      * Client-side: modify outgoing request (add headers, etc.)
