@@ -37,6 +37,19 @@ export interface GGOpenApiServerOptions extends ToOpenApiOptions {
     eager?: boolean;
 
     /**
+     * Explicit schema list to generate the spec from.
+     * When provided, overrides server.registeredSchemas — useful for schemas
+     * that have no registered implementation (e.g. a showcase or documentation server).
+     *
+     * @example
+     * new GGOpenApiServer(server, {
+     *     schemas: [MyApi, OtherApi],
+     *     title: "My API", specPath: "/openapi.json", docsPath: "/docs"
+     * }).registerWith(server);
+     */
+    schemas?: GGHttpSchema<any, any>[];
+
+    /**
      * Serve Swagger UI assets from a CDN instead of the bundled swagger-ui-dist package.
      * Useful for environments where you want minimal payload or already have a CDN.
      *
@@ -98,7 +111,8 @@ export class GGOpenApiServer {
     }
 
     private buildSpec(): OpenAPIV3_1.Document {
-        return toOpenApi(this.server.registeredSchemas as GGHttpSchema<any, any>[], this.options);
+        const schemas = this.options.schemas ?? (this.server.registeredSchemas as GGHttpSchema<any, any>[]);
+        return toOpenApi(schemas, this.options);
     }
 
     public getSpec(): OpenAPIV3_1.Document {
