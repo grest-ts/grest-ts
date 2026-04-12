@@ -557,30 +557,39 @@ testUtils(`IsNumber`, () => {
         });
     });
 
-    // ==================== toJSONSchema ====================
+    // ==================== toSchemaDescription ====================
 
-    describe('toJSONSchema()', () => {
+    describe('toSchemaDescription()', () => {
         it('float number', () => {
-            expect(IsNumber.toJSONSchema()).toEqual({type: 'number'});
+            const desc = IsNumber.toSchemaDescription();
+            expect(desc.node).toEqual({kind: 'number', integer: false});
+            expect(desc.nullable).toBe(false);
         });
         it('min/max', () => {
-            expect(IsNumber.min(0).max(100).toJSONSchema())
-                .toEqual({type: 'number', minimum: 0, maximum: 100});
+            const desc = IsNumber.min(0).max(100).toSchemaDescription();
+            expect((desc.node as any).min).toBe(0);
+            expect((desc.node as any).max).toBe(100);
+            expect((desc.node as any).integer).toBe(false);
         });
         it('multipleOf', () => {
-            expect(IsNumber.multipleOf(5).toJSONSchema()).toEqual({type: 'number', multipleOf: 5});
+            const desc = IsNumber.multipleOf(5).toSchemaDescription();
+            expect((desc.node as any).multipleOf).toBe(5);
         });
         it('multipleOf with min/max', () => {
-            expect(IsNumber.min(0).max(100).multipleOf(5).toJSONSchema())
-                .toEqual({type: 'number', minimum: 0, maximum: 100, multipleOf: 5});
+            const desc = IsNumber.min(0).max(100).multipleOf(5).toSchemaDescription();
+            expect((desc.node as any).min).toBe(0);
+            expect((desc.node as any).max).toBe(100);
+            expect((desc.node as any).multipleOf).toBe(5);
         });
         it('nullable', () => {
-            expect(IsNumber.orNull.toJSONSchema()).toEqual({oneOf: [{type: 'number'}, {type: 'null'}]});
+            const desc = IsNumber.orNull.toSchemaDescription();
+            expect(desc.node).toEqual({kind: 'number', integer: false});
+            expect(desc.nullable).toBe(true);
         });
-
-        it('integer flag produces type:integer', () => {
+        it('integer flag', () => {
             const intSchema = new NumberSchema({type: 'int', integer: true});
-            expect(intSchema.toJSONSchema()).toEqual({type: 'integer'});
+            const desc = intSchema.toSchemaDescription();
+            expect(desc.node).toEqual({kind: 'number', integer: true});
         });
     });
 

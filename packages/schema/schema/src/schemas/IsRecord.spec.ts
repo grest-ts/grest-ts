@@ -270,21 +270,25 @@ testUtils('IsRecord', () => {
         });
     });
 
-    // ==================== toJSONSchema ====================
+    // ==================== toSchemaDescription ====================
 
-    describe('toJSONSchema()', () => {
-        it('basic', () => {
-            expect(IsRecord(IsString, IsNumber).toJSONSchema())
-                .toEqual({type: 'object', additionalProperties: {type: 'number'}});
+    describe('toSchemaDescription()', () => {
+        it('basic — number value', () => {
+            const desc = IsRecord(IsString, IsNumber).toSchemaDescription();
+            expect(desc.node.kind).toBe('record');
+            expect((desc.node as any).value.node).toEqual({kind: 'number', integer: false});
+            expect(desc.nullable).toBe(false);
         });
         it('value schema is a string', () => {
-            expect(IsRecord(IsString, IsString).toJSONSchema())
-                .toEqual({type: 'object', additionalProperties: {type: 'string'}});
+            const desc = IsRecord(IsString, IsString).toSchemaDescription();
+            expect(desc.node.kind).toBe('record');
+            expect((desc.node as any).value.node).toEqual({kind: 'string'});
         });
         it('nullable', () => {
-            const s = IsRecord(IsString, IsBoolean).orNull.toJSONSchema() as any;
-            expect(s.oneOf[0]).toEqual({type: 'object', additionalProperties: {type: 'boolean'}});
-            expect(s.oneOf[1]).toEqual({type: 'null'});
+            const desc = IsRecord(IsString, IsBoolean).orNull.toSchemaDescription();
+            expect(desc.node.kind).toBe('record');
+            expect((desc.node as any).value.node).toEqual({kind: 'boolean'});
+            expect(desc.nullable).toBe(true);
         });
     });
 });

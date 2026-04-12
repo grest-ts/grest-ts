@@ -91,14 +91,18 @@ testUtils('IsBoolean', () => {
         {value: null, expected: null},
     ]);
 
-    // ==================== toJSONSchema ====================
+    // ==================== toSchemaDescription ====================
 
-    describe('toJSONSchema()', () => {
+    describe('toSchemaDescription()', () => {
         it('basic', () => {
-            expect(IsBoolean.toJSONSchema()).toEqual({type: 'boolean'});
+            const desc = IsBoolean.toSchemaDescription();
+            expect(desc.node).toEqual({kind: 'boolean'});
+            expect(desc.nullable).toBe(false);
         });
         it('nullable', () => {
-            expect(IsBoolean.orNull.toJSONSchema()).toEqual({oneOf: [{type: 'boolean'}, {type: 'null'}]});
+            const desc = IsBoolean.orNull.toSchemaDescription();
+            expect(desc.node).toEqual({kind: 'boolean'});
+            expect(desc.nullable).toBe(true);
         });
     });
 

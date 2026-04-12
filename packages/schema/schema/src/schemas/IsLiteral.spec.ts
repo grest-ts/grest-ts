@@ -236,30 +236,45 @@ testUtils('IsLiteral', () => {
         {value: null, expected: null},
     ]);
 
-    // ==================== toJSONSchema ====================
+    // ==================== toSchemaDescription ====================
 
-    describe('toJSONSchema()', () => {
+    describe('toSchemaDescription()', () => {
         it('single string value', () => {
-            expect(IsLiteral('admin').toJSONSchema()).toEqual({type: 'string', enum: ['admin']});
+            const desc = IsLiteral('admin').toSchemaDescription();
+            expect(desc.node.kind).toBe('literal');
+            expect((desc.node as any).values).toEqual(['admin']);
+            expect(desc.nullable).toBe(false);
         });
         it('multiple string values', () => {
-            expect(IsLiteral('a', 'b', 'c').toJSONSchema()).toEqual({type: 'string', enum: ['a', 'b', 'c']});
+            const desc = IsLiteral('a', 'b', 'c').toSchemaDescription();
+            expect(desc.node.kind).toBe('literal');
+            expect((desc.node as any).values).toEqual(['a', 'b', 'c']);
         });
         it('integer values', () => {
-            expect(IsLiteral(1, 2, 3).toJSONSchema()).toEqual({type: 'integer', enum: [1, 2, 3]});
+            const desc = IsLiteral(1, 2, 3).toSchemaDescription();
+            expect(desc.node.kind).toBe('literal');
+            expect((desc.node as any).values).toEqual([1, 2, 3]);
         });
         it('float number values', () => {
-            expect(IsLiteral(1.5, 2.5).toJSONSchema()).toEqual({type: 'number', enum: [1.5, 2.5]});
+            const desc = IsLiteral(1.5, 2.5).toSchemaDescription();
+            expect(desc.node.kind).toBe('literal');
+            expect((desc.node as any).values).toEqual([1.5, 2.5]);
         });
         it('boolean values', () => {
-            expect(IsLiteral(true, false).toJSONSchema()).toEqual({type: 'boolean', enum: [true, false]});
+            const desc = IsLiteral(true, false).toSchemaDescription();
+            expect(desc.node.kind).toBe('literal');
+            expect((desc.node as any).values).toEqual([true, false]);
         });
-        it('mixed string and number omits type', () => {
-            expect(IsLiteral(1, 2, 'three').toJSONSchema()).toEqual({enum: [1, 2, 'three']});
+        it('mixed string and number', () => {
+            const desc = IsLiteral(1, 2, 'three').toSchemaDescription();
+            expect(desc.node.kind).toBe('literal');
+            expect((desc.node as any).values).toEqual([1, 2, 'three']);
         });
-        it('nullable wraps in oneOf inside which type is present', () => {
-            expect(IsLiteral('x').orNull.toJSONSchema())
-                .toEqual({oneOf: [{type: 'string', enum: ['x']}, {type: 'null'}]});
+        it('nullable sets nullable:true, node stays literal', () => {
+            const desc = IsLiteral('x').orNull.toSchemaDescription();
+            expect(desc.node.kind).toBe('literal');
+            expect((desc.node as any).values).toEqual(['x']);
+            expect(desc.nullable).toBe(true);
         });
     });
 });

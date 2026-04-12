@@ -408,64 +408,82 @@ testUtils(`IsString`, () => {
         });
     });
 
-    // ==================== toJSONSchema ====================
+    // ==================== toSchemaDescription ====================
 
-    describe('toJSONSchema()', () => {
+    describe('toSchemaDescription()', () => {
         it('basic', () => {
-            expect(IsString.toJSONSchema()).toEqual({type: 'string'});
+            const desc = IsString.toSchemaDescription();
+            expect(desc.node).toEqual({kind: 'string'});
+            expect(desc.nullable).toBe(false);
         });
         it('minLength', () => {
-            expect(IsString.minLength(2).toJSONSchema()).toEqual({type: 'string', minLength: 2});
+            const desc = IsString.minLength(2).toSchemaDescription();
+            expect(desc.node).toEqual({kind: 'string', minLength: 2});
         });
         it('maxLength', () => {
-            expect(IsString.maxLength(50).toJSONSchema()).toEqual({type: 'string', maxLength: 50});
+            const desc = IsString.maxLength(50).toSchemaDescription();
+            expect(desc.node).toEqual({kind: 'string', maxLength: 50});
         });
         it('nonEmpty implies minLength:1', () => {
-            expect(IsString.nonEmpty.toJSONSchema()).toEqual({type: 'string', minLength: 1});
+            const desc = IsString.nonEmpty.toSchemaDescription();
+            expect((desc.node as any).minLength).toBe(1);
         });
         it('nonEmpty + explicit minLength keeps explicit value', () => {
-            expect(IsString.nonEmpty.minLength(3).toJSONSchema()).toEqual({type: 'string', minLength: 3});
+            const desc = IsString.nonEmpty.minLength(3).toSchemaDescription();
+            expect((desc.node as any).minLength).toBe(3);
         });
         it('pattern', () => {
-            expect(IsString.regex(/^[a-z]+$/).toJSONSchema()).toMatchObject({pattern: '^[a-z]+$'});
+            const desc = IsString.regex(/^[a-z]+$/).toSchemaDescription();
+            expect((desc.node as any).pattern).toBe('^[a-z]+$');
         });
-        it('orNull wraps in oneOf', () => {
-            expect(IsString.orNull.toJSONSchema()).toEqual({oneOf: [{type: 'string'}, {type: 'null'}]});
+        it('orNull sets nullable:true, node stays string', () => {
+            const desc = IsString.orNull.toSchemaDescription();
+            expect(desc.node).toEqual({kind: 'string'});
+            expect(desc.nullable).toBe(true);
         });
-        it('orUndefined does not affect schema (optional is structural)', () => {
-            expect(IsString.orUndefined.toJSONSchema()).toEqual({type: 'string'});
+        it('orUndefined sets optional:true, node stays string', () => {
+            const desc = IsString.orUndefined.toSchemaDescription();
+            expect(desc.node).toEqual({kind: 'string'});
+            expect(desc.optional).toBe(true);
+            expect(desc.nullable).toBe(false);
         });
 
         // ── .docs() and .default() — tested on IsString as the simplest carrier ──
         it('docs title', () => {
-            expect(IsString.docs({title: 'My field'}).toJSONSchema()).toEqual({type: 'string', title: 'My field'});
+            const desc = IsString.docs({title: 'My field'}).toSchemaDescription();
+            expect(desc.node).toEqual({kind: 'string'});
+            expect(desc.docs?.title).toBe('My field');
         });
         it('docs description', () => {
-            expect(IsString.docs({description: 'A description'}).toJSONSchema())
-                .toMatchObject({description: 'A description'});
+            const desc = IsString.docs({description: 'A description'}).toSchemaDescription();
+            expect(desc.docs?.description).toBe('A description');
         });
         it('docs example', () => {
-            expect(IsString.docs({example: 'foo'}).toJSONSchema()).toMatchObject({example: 'foo'});
+            const desc = IsString.docs({example: 'foo'}).toSchemaDescription();
+            expect(desc.docs?.example).toBe('foo');
         });
         it('docs deprecated:true', () => {
-            expect(IsString.docs({deprecated: true}).toJSONSchema()).toMatchObject({deprecated: true});
+            const desc = IsString.docs({deprecated: true}).toSchemaDescription();
+            expect(desc.docs?.deprecated).toBe(true);
         });
-        it('docs deprecated:false omitted', () => {
-            expect((IsString.docs({deprecated: false}).toJSONSchema() as any).deprecated).toBeUndefined();
+        it('docs deprecated:false', () => {
+            const desc = IsString.docs({deprecated: false}).toSchemaDescription();
+            expect(desc.docs?.deprecated).toBe(false);
         });
-        it('docs on nullable schema: annotations are inside oneOf[0], not on wrapper', () => {
-            const s = IsString.docs({title: 'X'}).orNull.toJSONSchema() as any;
-            expect(s.oneOf).toHaveLength(2);
-            // annotations live inside the base type variant
-            expect(s.oneOf[0].title).toBe('X');
-            expect(s.title).toBeUndefined();
+        it('docs on nullable schema: docs in desc, nullable is true', () => {
+            const desc = IsString.docs({title: 'X'}).orNull.toSchemaDescription();
+            expect(desc.nullable).toBe(true);
+            expect(desc.docs?.title).toBe('X');
+            expect(desc.node).toEqual({kind: 'string'});
         });
         it('default value', () => {
-            expect(IsString.default('hello').toJSONSchema()).toEqual({type: 'string', default: 'hello'});
+            const desc = IsString.default('hello').toSchemaDescription();
+            expect(desc.defaultValue).toBe('hello');
         });
         it('default combined with docs', () => {
-            expect(IsString.docs({description: 'D'}).default('x').toJSONSchema())
-                .toEqual({type: 'string', description: 'D', default: 'x'});
+            const desc = IsString.docs({description: 'D'}).default('x').toSchemaDescription();
+            expect(desc.docs?.description).toBe('D');
+            expect(desc.defaultValue).toBe('x');
         });
     });
 

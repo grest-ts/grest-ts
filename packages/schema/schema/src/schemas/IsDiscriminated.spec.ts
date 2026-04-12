@@ -1153,26 +1153,34 @@ testUtils('IsDiscriminated', () => {
         });
     });
 
-    // ==================== toJSONSchema ====================
+    // ==================== toSchemaDescription ====================
 
-    describe('toJSONSchema()', () => {
+    describe('toSchemaDescription()', () => {
         const Circle = IsObject({kind: IsLiteral('circle'), radius: IsNumber});
         const Square = IsObject({kind: IsLiteral('square'), side: IsNumber});
         const Shape = IsDiscriminated('kind', {circle: Circle, square: Square});
 
-        it('produces oneOf with discriminator', () => {
-            const s = Shape.toJSONSchema() as any;
-            expect(s.discriminator).toEqual({propertyName: 'kind'});
-            expect(s.oneOf).toHaveLength(2);
+        it('produces discriminated node with discriminator', () => {
+            const desc = Shape.toSchemaDescription();
+            expect(desc.node.kind).toBe('discriminated');
+            expect((desc.node as any).discriminator).toBe('kind');
+            expect(desc.nullable).toBe(false);
         });
-        it('each variant is an object schema', () => {
-            const s = Shape.toJSONSchema() as any;
-            expect(s.oneOf[0].type).toBe('object');
-            expect(s.oneOf[1].type).toBe('object');
+        it('has two variant descriptions', () => {
+            const desc = Shape.toSchemaDescription();
+            const variants = (desc.node as any).variants as any[];
+            expect(variants).toHaveLength(2);
         });
-        it('nullable wraps in oneOf', () => {
-            const s = Shape.orNull.toJSONSchema() as any;
-            expect(s.oneOf[1]).toEqual({type: 'null'});
+        it('each variant node is object kind', () => {
+            const desc = Shape.toSchemaDescription();
+            const variants = (desc.node as any).variants as any[];
+            expect(variants[0].node.kind).toBe('object');
+            expect(variants[1].node.kind).toBe('object');
+        });
+        it('nullable sets nullable:true, node stays discriminated', () => {
+            const desc = Shape.orNull.toSchemaDescription();
+            expect(desc.node.kind).toBe('discriminated');
+            expect(desc.nullable).toBe(true);
         });
     });
 });

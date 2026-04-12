@@ -149,21 +149,32 @@ testUtils('IsUnion', () => {
         {value: null, expected: null},
     ]);
 
-    // ==================== toJSONSchema ====================
+    // ==================== toSchemaDescription ====================
 
-    describe('toJSONSchema()', () => {
+    describe('toSchemaDescription()', () => {
         it('two variants', () => {
-            expect(IsUnion(IsString, IsNumber).toJSONSchema())
-                .toEqual({oneOf: [{type: 'string'}, {type: 'number'}]});
+            const desc = IsUnion(IsString, IsNumber).toSchemaDescription();
+            expect(desc.node.kind).toBe('union');
+            const variants = (desc.node as any).variants as any[];
+            expect(variants).toHaveLength(2);
+            expect(variants[0].node).toEqual({kind: 'string'});
+            expect(variants[1].node).toEqual({kind: 'number', integer: false});
         });
         it('three variants', () => {
-            expect(IsUnion(IsString, IsNumber, IsBoolean).toJSONSchema())
-                .toEqual({oneOf: [{type: 'string'}, {type: 'number'}, {type: 'boolean'}]});
+            const desc = IsUnion(IsString, IsNumber, IsBoolean).toSchemaDescription();
+            expect(desc.node.kind).toBe('union');
+            const variants = (desc.node as any).variants as any[];
+            expect(variants).toHaveLength(3);
+            expect(variants[0].node).toEqual({kind: 'string'});
+            expect(variants[1].node).toEqual({kind: 'number', integer: false});
+            expect(variants[2].node).toEqual({kind: 'boolean'});
         });
-        it('nullable adds null to oneOf wrapper', () => {
-            const s = IsUnion(IsString, IsNumber).orNull.toJSONSchema() as any;
-            expect(s.oneOf).toHaveLength(2);
-            expect(s.oneOf[1]).toEqual({type: 'null'});
+        it('nullable sets nullable:true, node stays union', () => {
+            const desc = IsUnion(IsString, IsNumber).orNull.toSchemaDescription();
+            expect(desc.node.kind).toBe('union');
+            expect(desc.nullable).toBe(true);
+            const variants = (desc.node as any).variants as any[];
+            expect(variants).toHaveLength(2);
         });
     });
 });

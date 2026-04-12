@@ -219,38 +219,49 @@ testUtils('IsArray', () => {
         });
     });
 
-    // toJSONSchema() tests
-    describe('toJSONSchema()', () => {
+    // toSchemaDescription() tests
+    describe('toSchemaDescription()', () => {
         it('should generate basic array schema with element', () => {
-            expect(IsArray(IsAny).toJSONSchema()).toEqual({type: 'array', items: {}});
+            const desc = IsArray(IsAny).toSchemaDescription();
+            expect(desc.node.kind).toBe('array');
+            expect((desc.node as any).element.node.kind).toBe('any');
+            expect(desc.nullable).toBe(false);
         });
 
-        it('should include element schema as items', () => {
-            expect(IsArray(IsString).toJSONSchema()).toEqual({
-                type: 'array',
-                items: {type: 'string'}
-            });
+        it('should include element schema', () => {
+            const desc = IsArray(IsString).toSchemaDescription();
+            expect(desc.node.kind).toBe('array');
+            expect((desc.node as any).element.node).toEqual({kind: 'string'});
         });
 
-        it('should include constraints', () => {
-            expect(IsArray(IsAny).minLength(2).toJSONSchema()).toEqual({type: 'array', items: {}, minItems: 2});
-            expect(IsArray(IsAny).maxLength(10).toJSONSchema()).toEqual({type: 'array', items: {}, maxItems: 10});
-            expect(IsArray(IsAny).range(1, 5).toJSONSchema()).toEqual({type: 'array', items: {}, minItems: 1, maxItems: 5});
+        it('should include minItems constraint', () => {
+            const desc = IsArray(IsAny).minLength(2).toSchemaDescription();
+            expect((desc.node as any).minItems).toBe(2);
+        });
+
+        it('should include maxItems constraint', () => {
+            const desc = IsArray(IsAny).maxLength(10).toSchemaDescription();
+            expect((desc.node as any).maxItems).toBe(10);
+        });
+
+        it('should include both minItems and maxItems for range', () => {
+            const desc = IsArray(IsAny).range(1, 5).toSchemaDescription();
+            expect((desc.node as any).minItems).toBe(1);
+            expect((desc.node as any).maxItems).toBe(5);
         });
 
         it('should handle nullable', () => {
-            expect(IsArray(IsAny).orNull.toJSONSchema()).toEqual({
-                oneOf: [{type: 'array', items: {}}, {type: 'null'}]
-            });
+            const desc = IsArray(IsAny).orNull.toSchemaDescription();
+            expect(desc.node.kind).toBe('array');
+            expect(desc.nullable).toBe(true);
         });
 
         it('should combine element schema with constraints', () => {
-            expect(IsArray(IsNumber).minLength(1).maxLength(100).toJSONSchema()).toEqual({
-                type: 'array',
-                items: {type: 'number'},
-                minItems: 1,
-                maxItems: 100
-            });
+            const desc = IsArray(IsNumber).minLength(1).maxLength(100).toSchemaDescription();
+            expect(desc.node.kind).toBe('array');
+            expect((desc.node as any).element.node).toEqual({kind: 'number', integer: false});
+            expect((desc.node as any).minItems).toBe(1);
+            expect((desc.node as any).maxItems).toBe(100);
         });
     });
 
