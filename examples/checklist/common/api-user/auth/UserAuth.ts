@@ -1,7 +1,7 @@
 import type http from "http";
 import {GGHttpRequest} from "@grest-ts/http"
 import {GGWebSocketHandshakeContext} from "@grest-ts/websocket"
-import {GGSchema, IsString, NOT_AUTHORIZED} from "@grest-ts/schema";
+import {GGSchema, IsBearerToken, NOT_AUTHORIZED} from "@grest-ts/schema";
 import {GGContextKey} from "@grest-ts/context";
 
 export const IsUserAuthToken = IsString.brand("UserAuthToken");
@@ -24,9 +24,7 @@ export type User = typeof IsUser.infer
 export class UserAuth extends GGContextKey<tUserAuthToken> {
 
     readonly headers: Record<string, GGSchema<string | undefined>> = {
-        "authorization": IsString.nonEmpty.docs({
-            title: "Bearer token",
-            format: "bearer",
+        "authorization": IsBearerToken.docs({
             description: "JWT bearer token for user authentication",
             example: "Bearer eyJhbGciOiJIUzI1NiJ9..."
         })

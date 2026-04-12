@@ -64,6 +64,7 @@ export {type tCountry, IsCountry} from "./custom/IsCountry";
 export {type tLocale, IsLocale} from "./custom/IsLocale";
 export {type tUrl, IsUrl} from "./custom/IsUrl";
 export {type tPhone, IsPhone} from "./custom/IsPhone";
+export {type tBearerToken, IsBearerToken} from "./custom/IsBearerToken";
 export {IsTimestamp, type tTimestamp, IsTimestampMs, type tTimestampMs} from "./custom/IsTimestamp";
 export {type tCurrency, IsCurrency} from "./custom/IsCurrency";
 export {type tIp, IsIp} from "./custom/IsIp";
