@@ -1,6 +1,6 @@
 import {GGSchema, Opt} from "../GGSchema";
 import {ArrayDef} from "../Definition";
-import type {OpenAPIV3_1} from "openapi-types";
+import type {GGSchemaNodeKind} from "../GGSchemaDescription";
 
 export class ArraySchema<T extends any[] = any[]> extends GGSchema<T, ArrayDef> {
 
@@ -47,15 +47,14 @@ export class ArraySchema<T extends any[] = any[]> extends GGSchema<T, ArrayDef> 
 
     // --------------------------------------------------------------------------------------
 
-    protected _buildJsonSchema(): OpenAPIV3_1.SchemaObject {
+    protected _buildSchemaNode(): GGSchemaNodeKind {
         const def = this.toCompilerDef();
-        const schema: OpenAPIV3_1.ArraySchemaObject = {
-            type: 'array',
-            items: def.element!.toJSONSchema()
+        return {
+            kind: 'array',
+            element: def.element!.toSchemaDescription(),
+            ...(def.minLength !== undefined ? {minItems: def.minLength} : {}),
+            ...(def.maxLength !== undefined ? {maxItems: def.maxLength} : {}),
         };
-        if (def.minLength !== undefined) schema.minItems = def.minLength;
-        if (def.maxLength !== undefined) schema.maxItems = def.maxLength;
-        return schema;
     }
 
     protected _toCompilerDef(): ArrayDef {

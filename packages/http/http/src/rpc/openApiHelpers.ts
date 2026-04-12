@@ -1,4 +1,4 @@
-import type {GGSchema} from "@grest-ts/schema";
+import type {GGSchema, GGSchemaDescription} from "@grest-ts/schema";
 import type {GGOpenApiSchemaResolver} from "../schema/GGHttpSchema";
 import type {OpenAPIV3_1} from "openapi-types";
 
@@ -29,26 +29,25 @@ export function buildOpenApiParameters(
     const pathParams = (pathTemplate.match(/:(\w+)/g) || []).map(m => m.slice(1));
     if (!inputSchema) return pathParams.map(name => buildPathParam(name, undefined, schemaResolver));
 
-    // Use toCompilerDef() to get the actual shape with GGSchema instances per field.
-    // This is needed so schemaResolver can inspect _base for $ref eligibility.
-    const def = inputSchema.toCompilerDef() as any;
-    const shape = def.shape as Record<string, GGSchema<any>> | undefined;
-    const required = def.shape
-        ? Object.keys(def.shape).filter(k => !(def.shape[k] as GGSchema<any>).def.optional)
-        : undefined;
+    // Use toSchemaDescription() to get GGSchemaDescription instances per field.
+    // This gives us the format-agnostic tree without coupling to internal def structure.
+    const desc = inputSchema.toSchemaDescription();
+    if (desc.node.kind !== 'object') return pathParams.map(name => buildPathParam(name, undefined, schemaResolver));
+
+    const properties = desc.node.properties;
 
     const params: OpenAPIV3_1.ParameterObject[] = pathParams.map(name =>
-        buildPathParam(name, shape?.[name], schemaResolver)
+        buildPathParam(name, properties[name], schemaResolver)
     );
 
-    if (!hasBody && shape) {
-        for (const [name, fieldSchema] of Object.entries(shape)) {
+    if (!hasBody) {
+        for (const [name, fieldDesc] of Object.entries(properties)) {
             if (pathParams.includes(name)) continue;
             const resolved = schemaResolver
-                ? schemaResolver(fieldSchema)
-                : fieldSchema.toJSONSchema();
+                ? schemaResolver(fieldDesc.schema)
+                : fieldDesc.schema.toJSONSchema();
             const {description, ...schemaWithoutDescription} = resolved as any;
-            const isRequired = (required?.includes(name) ?? false) && (resolved as any).default === undefined;
+            const isRequired = !fieldDesc.optional && (resolved as any).default === undefined;
             const param: OpenAPIV3_1.ParameterObject = {
                 name,
                 in: 'query' as const,
@@ -64,15 +63,15 @@ export function buildOpenApiParameters(
 
 function buildPathParam(
     name: string,
-    fieldSchema: GGSchema<any> | undefined,
+    fieldDesc: GGSchemaDescription | undefined,
     schemaResolver?: GGOpenApiSchemaResolver
 ): OpenAPIV3_1.ParameterObject {
-    if (!fieldSchema) {
+    if (!fieldDesc) {
         // Path params are always non-empty — an empty segment cannot be routed.
         return {name, in: 'path' as const, required: true as const,
             schema: {type: 'string', minLength: 1} as OpenAPIV3_1.ParameterObject["schema"]};
     }
-    const resolved = schemaResolver ? schemaResolver(fieldSchema) : fieldSchema.toJSONSchema();
+    const resolved = schemaResolver ? schemaResolver(fieldDesc.schema) : fieldDesc.schema.toJSONSchema();
     const {description, ...schemaWithoutDescription} = resolved as any;
     const param: OpenAPIV3_1.ParameterObject = {
         name,

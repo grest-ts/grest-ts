@@ -1,6 +1,6 @@
 import {GGSchema, Opt} from "../GGSchema";
 import {TupleDef} from "../Definition";
-import type {OpenAPIV3_1} from "openapi-types";
+import type {GGSchemaNodeKind} from "../GGSchemaDescription";
 
 type InferTuple<T extends readonly GGSchema<any>[]> = {
     -readonly [K in keyof T]: T[K] extends GGSchema<infer U> ? U : never
@@ -31,18 +31,12 @@ export class TupleSchema<T extends readonly unknown[] = readonly unknown[]> exte
         return super.orNull as any
     }
 
-    protected _buildJsonSchema(): OpenAPIV3_1.SchemaObject {
+    protected _buildSchemaNode(): GGSchemaNodeKind {
         const def = this.toCompilerDef();
-        const elements = def.elements!;
-        const prefixItems = elements.map(e => e.toJSONSchema());
-        // prefixItems is JSON Schema 2020-12 / OpenAPI 3.1 — not yet in openapi-types typedefs
         return {
-            type: 'array',
-            prefixItems,
-            minItems: elements.length,
-            maxItems: elements.length,
-            items: false,
-        } as unknown as OpenAPIV3_1.ArraySchemaObject;
+            kind: 'tuple',
+            elements: def.elements!.map(e => e.toSchemaDescription()),
+        };
     }
 
     protected _toCompilerDef(): TupleDefImpl {

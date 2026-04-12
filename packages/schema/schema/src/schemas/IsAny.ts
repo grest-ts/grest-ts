@@ -1,6 +1,6 @@
 import {GGSchema, Opt} from "../GGSchema";
 import {AnyDef} from "../Definition";
-import type {OpenAPIV3_1} from "openapi-types";
+import type {GGSchemaNodeKind} from "../GGSchemaDescription";
 
 export class AnySchema<T = any> extends GGSchema<T, AnyDef> {
 
@@ -16,8 +16,8 @@ export class AnySchema<T = any> extends GGSchema<T, AnyDef> {
         return super.orNull as any
     }
 
-    protected _buildJsonSchema(): OpenAPIV3_1.SchemaObject {
-        return {};
+    protected _buildSchemaNode(): GGSchemaNodeKind {
+        return {kind: 'any'};
     }
 }
 

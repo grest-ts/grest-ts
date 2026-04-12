@@ -19,6 +19,7 @@ export * from "./contract/OK";
 
 // Common
 export * from "./GGSchema";
+export * from "./GGSchemaDescription";
 export * from "./GGCodec";
 export * from "./GGTransform";
 export * from "./Definition";

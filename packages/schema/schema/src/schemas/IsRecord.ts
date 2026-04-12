@@ -1,6 +1,6 @@
 import {GGSchema, Opt} from "../GGSchema";
 import {RecordDef} from "../Definition";
-import type {OpenAPIV3_1} from "openapi-types";
+import type {GGSchemaNodeKind} from "../GGSchemaDescription";
 
 export class RecordSchema<T extends Record<string, unknown> | undefined | null = Record<string, unknown>> extends GGSchema<T, RecordDef> {
 
@@ -16,11 +16,8 @@ export class RecordSchema<T extends Record<string, unknown> | undefined | null =
         return super.orNull as any
     }
 
-    protected _buildJsonSchema(): OpenAPIV3_1.SchemaObject {
-        return {
-            type: 'object',
-            additionalProperties: this.def.value.toJSONSchema()
-        };
+    protected _buildSchemaNode(): GGSchemaNodeKind {
+        return {kind: 'record', value: this.def.value.toSchemaDescription()};
     }
 }
 

@@ -1,47 +1,32 @@
-import type {ANY_ERROR_CLS, GGSchema} from "@grest-ts/schema";
+import type {ANY_ERROR_CLS, GGSchema, GGSchemaDescription} from "@grest-ts/schema";
 import type {OpenAPIV3_1} from "openapi-types";
 
 /**
- * Registry that extracts named schemas from the spec, replacing repeated schema
- * objects with $ref references to #/components/schemas/<Name>.
+ * Registry that extracts named schemas into components/schemas and returns
+ * $ref references to them.
  *
- * A schema is extracted when:
- *   1. Its docs.title is set — that becomes the component name.
- *   2. It is encountered more than once (same === object identity).
+ * Uses GGSchemaDescription (the format-agnostic intermediate representation
+ * produced by schema.toSchemaDescription()) to walk the schema tree without
+ * any knowledge of the schema library's internal def structure.
  *
- * Single-use schemas with no title stay inline.
- * Single-use schemas WITH a title are extracted anyway (avoids duplication if
- * the same schema is added to the document later, and gives cleaner specs).
- *
- * The walker recurses into composite schemas (object, array, union, discriminated,
- * tuple, record) using toCompilerDef() to get GGSchema instances back, so nested
- * reusable schemas are found at any depth.
- *
- * Recursive schemas (self-referencing) are handled by registering the $ref before
- * recursing into the schema body, breaking infinite loops.
+ * Extraction rules:
+ *  - desc.canonical (the structural base schema) has a docs.title → extract
+ *    to components/schemas, return $ref
+ *  - nullable → wrap $ref in {oneOf: [$ref, {type:"null"}]}
+ *  - field-level description that differs from base type → sibling alongside $ref
+ *  - no title on canonical → build inline, recurse into children
  */
 export class SchemaRegistry {
-    /** name → resolved SchemaObject (the component definition, always from the base schema) */
     private readonly components = new Map<string, OpenAPIV3_1.SchemaObject>();
-    /** base GGSchema identity → component name */
     private readonly baseToName = new Map<GGSchema<any>, string>();
-    /** schemas currently being built (cycle guard) */
     private readonly building = new Set<GGSchema<any>>();
 
-    /**
-     * Return a SchemaObject or ReferenceObject for the given GGSchema.
-     *
-     * Uses schema._base (set by GGSchema for presentational derives) to find
-     * the canonical type. The component is defined by and keyed to the base
-     * schema, so decorated variants (.orUndefined, .docs(), etc.) correctly
-     * resolve to the same component as their undecorated base.
-     *
-     * Nullable: wrapped as {oneOf: [$ref, {type:"null"}]}.
-     * Field-level description differing from the base: emitted as a sibling
-     * alongside the $ref (valid in OpenAPI 3.1).
-     */
     schemaOrRef(schema: GGSchema<any>): OpenAPIV3_1.SchemaObject | OpenAPIV3_1.ReferenceObject {
-        const base: GGSchema<any> = schema._base ?? schema;
+        return this.descOrRef(schema.toSchemaDescription());
+    }
+
+    descOrRef(desc: GGSchemaDescription): OpenAPIV3_1.SchemaObject | OpenAPIV3_1.ReferenceObject {
+        const base = desc.canonical ?? desc.schema;
         const title = base.def.docs?.title;
 
         if (title) {
@@ -51,21 +36,20 @@ export class SchemaRegistry {
                 this.baseToName.set(base, name);
                 if (!this.building.has(base)) {
                     this.building.add(base);
-                    const resolved = this.buildSchemaObject(base);
-                    this.components.set(name, resolved);
+                    const basDesc = base.toSchemaDescription();
+                    this.components.set(name, this.buildFromDesc(basDesc));
                     this.building.delete(base);
                 }
             }
 
             const ref: OpenAPIV3_1.ReferenceObject = {$ref: `#/components/schemas/${name}`};
 
-            // Nullable — wrap in oneOf [$ref, null]
-            if (schema.def.nullable) {
+            if (desc.nullable) {
                 return {oneOf: [ref, {type: 'null'}]};
             }
 
             // Field-level description sibling (OpenAPI 3.1 allows keywords alongside $ref)
-            const fieldDesc = schema.def.docs?.description;
+            const fieldDesc = desc.docs?.description;
             const baseDesc = base.def.docs?.description;
             if (fieldDesc && fieldDesc !== baseDesc) {
                 return {...ref, description: fieldDesc} as OpenAPIV3_1.SchemaObject;
@@ -74,120 +58,96 @@ export class SchemaRegistry {
             return ref;
         }
 
-        // No title on base — inline, recurse into composites to find named children
-        return this.buildSchemaObject(schema);
+        return this.buildFromDesc(desc);
     }
 
     /**
-     * Build the resolved SchemaObject for a schema, recursing into composites.
-     * Uses toJSONSchema() as the base and replaces nested schema references
-     * with $ref where applicable.
+     * Build an OpenAPIV3_1.SchemaObject from a GGSchemaDescription,
+     * recursing into composite children via descOrRef().
+     * Called only for schemas with no extractable component (no title on canonical).
      */
-    private buildSchemaObject(schema: GGSchema<any>): OpenAPIV3_1.SchemaObject {
-        const def = schema.toCompilerDef() as any;
+    private buildFromDesc(desc: GGSchemaDescription): OpenAPIV3_1.SchemaObject {
+        const node = desc.node;
+        let schema: OpenAPIV3_1.SchemaObject;
 
-        switch (def.type) {
+        switch (node.kind) {
             case 'object': {
-                if (!def.shape) return schema.toJSONSchema();
                 const properties: Record<string, OpenAPIV3_1.SchemaObject | OpenAPIV3_1.ReferenceObject> = {};
                 const required: string[] = [];
-                for (const [key, child] of Object.entries(def.shape as Record<string, GGSchema<any>>)) {
-                    properties[key] = this.schemaOrRef(child);
-                    if (!child.def.optional) required.push(key);
+                for (const [key, child] of Object.entries(node.properties)) {
+                    properties[key] = this.descOrRef(child);
+                    if (!child.optional) required.push(key);
                 }
-                const base: OpenAPIV3_1.NonArraySchemaObject = {type: 'object', properties};
-                if (required.length) base.required = required;
-                return this.applyDocsAndNullable(base, schema);
+                const s: OpenAPIV3_1.NonArraySchemaObject = {type: 'object', properties};
+                if (required.length) s.required = required;
+                schema = s;
+                break;
             }
-
             case 'array': {
-                if (!def.element) return schema.toJSONSchema();
-                const items = this.schemaOrRef(def.element as GGSchema<any>);
-                const base: OpenAPIV3_1.ArraySchemaObject = {type: 'array', items};
-                if (def.minLength !== undefined) base.minItems = def.minLength;
-                if (def.maxLength !== undefined) base.maxItems = def.maxLength;
-                return this.applyDocsAndNullable(base, schema);
+                const items = this.descOrRef(node.element);
+                const s: OpenAPIV3_1.ArraySchemaObject = {type: 'array', items};
+                if (node.minItems !== undefined) s.minItems = node.minItems;
+                if (node.maxItems !== undefined) s.maxItems = node.maxItems;
+                schema = s;
+                break;
             }
-
-            case 'union': {
-                const variants: (OpenAPIV3_1.SchemaObject | OpenAPIV3_1.ReferenceObject)[] =
-                    (def.variants as GGSchema<any>[]).map(v => this.schemaOrRef(v));
-                const base: OpenAPIV3_1.SchemaObject = {oneOf: variants};
-                return this.applyDocsAndNullable(base, schema);
-            }
-
-            case 'discriminated': {
-                const variantMap = def.variantMap as ReadonlyMap<string | number | boolean, GGSchema<any>>;
-                const variants = Array.from(variantMap.values()).map(v => this.schemaOrRef(v));
-                const base: OpenAPIV3_1.SchemaObject = {
-                    oneOf: variants,
-                    discriminator: {propertyName: def.discriminator}
+            case 'union':
+                schema = {oneOf: node.variants.map(v => this.descOrRef(v))};
+                break;
+            case 'discriminated':
+                schema = {
+                    oneOf: node.variants.map(v => this.descOrRef(v)),
+                    discriminator: {propertyName: node.discriminator}
                 };
-                return this.applyDocsAndNullable(base, schema);
-            }
-
+                break;
             case 'tuple': {
-                const elements = def.elements as GGSchema<any>[];
-                const prefixItems = elements.map(e => this.schemaOrRef(e));
-                const base = {
+                const prefixItems = node.elements.map(e => this.descOrRef(e));
+                schema = {
                     type: 'array',
                     prefixItems,
-                    minItems: elements.length,
-                    maxItems: elements.length,
+                    minItems: node.elements.length,
+                    maxItems: node.elements.length,
                     items: false,
                 } as unknown as OpenAPIV3_1.ArraySchemaObject;
-                return this.applyDocsAndNullable(base, schema);
+                break;
             }
-
             case 'record': {
-                const additionalProperties = this.schemaOrRef(def.value as GGSchema<any>);
-                const base: OpenAPIV3_1.NonArraySchemaObject = {type: 'object', additionalProperties};
-                return this.applyDocsAndNullable(base, schema);
+                const additionalProperties = this.descOrRef(node.value);
+                schema = {type: 'object', additionalProperties};
+                break;
             }
-
             default:
-                // Leaf type (string, number, boolean, literal, bit, any, unknown, file, password…)
-                // toJSONSchema() already handles all docs/format/default/nullable.
-                return schema.toJSONSchema();
+                // Leaf types (string, number, boolean, literal, bit, any, unknown, file, password)
+                // toJSONSchema() handles these correctly via the schema library's own converter.
+                return desc.schema.toJSONSchema();
         }
+
+        return this.applyDocs(schema, desc);
     }
 
-    /**
-     * Apply docs, format, and default onto an already-built composite schema.
-     * Called only for base schemas (no presentational modifiers) — nullable is
-     * handled upstream in schemaOrRef(), not here.
-     */
-    private applyDocsAndNullable(
-        built: OpenAPIV3_1.SchemaObject,
-        schema: GGSchema<any>
-    ): OpenAPIV3_1.SchemaObject {
-        const {docs, defaultValue} = schema.def;
-        if (!docs && defaultValue === undefined) return built;
-        return {
-            ...built,
-            ...(docs?.title !== undefined ? {title: docs.title} : {}),
-            ...(docs?.description !== undefined ? {description: docs.description} : {}),
-            ...(docs?.format !== undefined ? {format: docs.format} : {}),
-            ...(docs?.example !== undefined ? {example: docs.example} : {}),
-            ...(docs?.examples !== undefined ? {examples: [...docs.examples]} : {}),
-            ...(docs?.deprecated === true ? {deprecated: true} : {}),
-            ...(defaultValue !== undefined ? {default: defaultValue} : {}),
-        };
+    private applyDocs(built: OpenAPIV3_1.SchemaObject, desc: GGSchemaDescription): OpenAPIV3_1.SchemaObject {
+        const {docs, defaultValue, nullable} = desc;
+        if (docs || defaultValue !== undefined) {
+            built = {
+                ...built,
+                ...(docs?.title !== undefined ? {title: docs.title} : {}),
+                ...(docs?.description !== undefined ? {description: docs.description} : {}),
+                ...(docs?.format !== undefined ? {format: docs.format} : {}),
+                ...(docs?.example !== undefined ? {example: docs.example} : {}),
+                ...(docs?.examples !== undefined ? {examples: [...docs.examples]} : {}),
+                ...(docs?.deprecated === true ? {deprecated: true} : {}),
+                ...(defaultValue !== undefined ? {default: defaultValue} : {}),
+            };
+        }
+        if (nullable) {
+            built = {oneOf: [built, {type: 'null'}]};
+        }
+        return built;
     }
 
     /** Cache of error class identity → component name for full error body schemas. */
     private readonly errClsToName = new Map<ANY_ERROR_CLS, string>();
 
-    /**
-     * Return a $ref to the full error body schema for the given error class, registering
-     * it in components/schemas on first encounter.
-     *
-     * The wire shape is always: { success: false, type: "<TYPE>", data?: <data schema> }
-     * Component name is derived from the TYPE string:
-     *   "VALIDATION_ERROR" → "Error_ValidationError"
-     *   "SERVER_ERROR"     → "Error_ServerError"
-     *   "NOT_FOUND"        → "Error_NotFound"
-     */
     errorBodyRef(errCls: ANY_ERROR_CLS): OpenAPIV3_1.ReferenceObject {
         if (!this.errClsToName.has(errCls)) {
             const name = errorComponentName(errCls.TYPE);
@@ -212,7 +172,6 @@ export class SchemaRegistry {
         return {$ref: `#/components/schemas/${this.errClsToName.get(errCls)!}`};
     }
 
-    /** Returns the collected components/schemas map (empty if no named schemas found). */
     getComponents(): Record<string, OpenAPIV3_1.SchemaObject> | undefined {
         if (this.components.size === 0) return undefined;
         return Object.fromEntries(this.components);
@@ -235,11 +194,6 @@ export function toComponentName(title: string): string {
 /**
  * Convert an ERROR TYPE string to an OpenAPI component name.
  * e.g. "VALIDATION_ERROR" → "Error_ValidationError"
- *      "NOT_FOUND"        → "Error_NotFound"
- *      "SERVER_ERROR"     → "Error_ServerError"
- *
- * The "Error_" prefix makes these immediately recognisable in the components list
- * and avoids collisions with schema component names.
  */
 export function errorComponentName(type: string): string {
     const pascal = type

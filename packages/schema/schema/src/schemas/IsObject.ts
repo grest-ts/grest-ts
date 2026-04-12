@@ -1,7 +1,7 @@
 import {GGSchema, Opt} from "../GGSchema";
 import {IsLiteral} from "./IsLiteral";
 import {ObjectDef, ShapeInput} from "../Definition";
-import type {OpenAPIV3_1} from "openapi-types";
+import type {GGSchemaNodeKind} from "../GGSchemaDescription";
 
 type Shape = Record<string, GGSchema<any>>;
 
@@ -110,31 +110,16 @@ export class ObjectSchema<T extends object | undefined | null = object> extends 
 
     // --------------------------------------------------------------------------------------
 
-    protected _buildJsonSchema(): OpenAPIV3_1.SchemaObject {
+    protected _buildSchemaNode(): GGSchemaNodeKind {
         const shape = this.toCompilerDef().shape! as Shape;
-        const keys = Object.keys(shape);
-
-        const properties: Record<string, OpenAPIV3_1.SchemaObject> = {};
+        const properties: Record<string, import('../GGSchemaDescription').GGSchemaDescription> = {};
         const required: string[] = [];
-
-        for (const k of keys) {
-            const schema = shape[k];
-            properties[k] = schema.toJSONSchema();
-            if (!schema.def.optional) {
-                required.push(k);
-            }
+        for (const k of Object.keys(shape)) {
+            const child = shape[k];
+            properties[k] = child.toSchemaDescription();
+            if (!child.def.optional) required.push(k);
         }
-
-        const result: OpenAPIV3_1.NonArraySchemaObject = {
-            type: 'object',
-            properties,
-        };
-
-        if (required.length > 0) {
-            result.required = required;
-        }
-
-        return result;
+        return {kind: 'object', properties, required};
     }
 
     protected _toCompilerDef(): ObjectDefImpl {

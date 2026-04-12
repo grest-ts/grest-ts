@@ -8,6 +8,7 @@ import {GGCodec} from "./GGCodec";
 import {GGTransform} from "./GGTransform";
 import {Raw} from "./issue/types";
 import type {OpenAPIV3_1} from "openapi-types";
+import type {GGSchemaDescription, GGSchemaNodeKind} from "./GGSchemaDescription";
 
 export type GGParseResult<T> =
     | { success: true; value: T }
@@ -315,44 +316,43 @@ export abstract class GGSchema<Type, TDef extends GGSchemaDefinition = GGSchemaD
     // ---------------------------------------------------------------------------------------------------------
 
     /**
-     * Returns a JSON Schema / OpenAPI 3.1 representation of this schema.
+     * Returns a complete, format-agnostic description of this schema.
      *
-     * Subclasses implement _buildJsonSchema() with their type-specific output.
-     * This method wraps it with nullable (oneOf null), docs annotations, and defaultValue.
+     * Subclasses implement _buildSchemaNode() with their structural content.
+     * This method wraps it with the full usage-site metadata:
+     *   - canonical: the base schema (set by presentational derives)
+     *   - docs, defaultValue, nullable, optional
+     *
+     * Consumers (OpenAPI, Protobuf, JSON Schema, etc.) use this to build
+     * their own output format without coupling to schema internals.
      */
-    public toJSONSchema(): OpenAPIV3_1.SchemaObject {
-        let schema = this._buildJsonSchema();
-
-        // Apply docs annotations and default onto the base schema first, so they
-        // end up inside oneOf[0] (the actual type variant) rather than on the
-        // nullable wrapper — keeping annotations semantically tied to the type.
-        const {docs, defaultValue} = this.def;
-        if (docs || defaultValue !== undefined) {
-            schema = {
-                ...schema,
-                ...(docs?.title !== undefined ? {title: docs.title} : {}),
-                ...(docs?.description !== undefined ? {description: docs.description} : {}),
-                ...(docs?.format !== undefined ? {format: docs.format} : {}),
-                ...(docs?.example !== undefined ? {example: docs.example} : {}),
-                ...(docs?.examples !== undefined ? {examples: [...docs.examples]} : {}),
-                ...(docs?.deprecated === true ? {deprecated: true} : {}),
-                ...(defaultValue !== undefined ? {default: defaultValue} : {}),
-            };
-        }
-
-        if (this.def.nullable) {
-            schema = {oneOf: [schema, {type: "null"}]};
-        }
-
-        return schema;
+    public toSchemaDescription(): GGSchemaDescription {
+        return {
+            schema: this,
+            canonical: this._base,
+            node: this._buildSchemaNode(),
+            docs: this.def.docs,
+            defaultValue: this.def.defaultValue,
+            nullable: this.def.nullable ?? false,
+            optional: this.def.optional ?? false,
+        };
     }
 
     /**
-     * Override in subclasses to return the type-specific JSON Schema object.
-     * Do NOT apply nullable, docs, or defaultValue here — toJSONSchema() does that.
+     * Override in subclasses to return the structural content of this schema.
+     * Do NOT include nullable, docs, or defaultValue here — toSchemaDescription() does that.
      */
-    protected _buildJsonSchema(): OpenAPIV3_1.SchemaObject {
-        return {};
+    protected _buildSchemaNode(): GGSchemaNodeKind {
+        return {kind: 'any'};
+    }
+
+    /**
+     * Returns a JSON Schema / OpenAPI 3.1 representation of this schema.
+     * Convenience wrapper over toSchemaDescription() for direct OpenAPI use.
+     * @see toSchemaDescription() for the format-agnostic alternative.
+     */
+    public toJSONSchema(): OpenAPIV3_1.SchemaObject {
+        return schemaDescriptionToJsonSchema(this.toSchemaDescription());
     }
 
     private static _compiling = new Set<GGSchema<any>>();
@@ -381,6 +381,119 @@ export abstract class GGSchema<Type, TDef extends GGSchemaDefinition = GGSchemaD
     protected _toCompilerDef(): TDef {
         return this.def;
     }
+}
+
+/**
+ * Convert a GGSchemaDescription to an OpenAPIV3_1.SchemaObject.
+ * This is the schema library's own JSON Schema converter — used by toJSONSchema()
+ * so that the convenience method continues to work without changes to any call sites.
+ */
+function schemaDescriptionToJsonSchema(desc: GGSchemaDescription): OpenAPIV3_1.SchemaObject {
+    const node = desc.node;
+    let schema: OpenAPIV3_1.SchemaObject;
+
+    switch (node.kind) {
+        case 'string': {
+            const s: OpenAPIV3_1.NonArraySchemaObject = {type: 'string'};
+            if (node.minLength !== undefined) s.minLength = node.minLength;
+            if (node.maxLength !== undefined) s.maxLength = node.maxLength;
+            if (node.pattern) s.pattern = node.pattern;
+            schema = s;
+            break;
+        }
+        case 'number': {
+            const s: OpenAPIV3_1.NonArraySchemaObject = {type: node.integer ? 'integer' : 'number'};
+            if (node.min !== undefined) s.minimum = node.min;
+            if (node.max !== undefined) s.maximum = node.max;
+            if (node.multipleOf !== undefined) s.multipleOf = node.multipleOf;
+            schema = s;
+            break;
+        }
+        case 'boolean': schema = {type: 'boolean'}; break;
+        case 'bit':     schema = {type: 'integer', minimum: 0, maximum: 1}; break;
+        case 'any':
+        case 'unknown': schema = {}; break;
+        case 'literal': {
+            const types = new Set(node.values.map(v => {
+                if (typeof v === 'boolean') return 'boolean';
+                if (typeof v === 'number') return Number.isInteger(v) ? 'integer' : 'number';
+                return 'string';
+            }));
+            const type = types.size === 1 ? types.values().next().value as OpenAPIV3_1.NonArraySchemaObjectType : undefined;
+            schema = {enum: [...node.values]};
+            if (type) (schema as OpenAPIV3_1.NonArraySchemaObject).type = type;
+            break;
+        }
+        case 'array': {
+            const s: OpenAPIV3_1.ArraySchemaObject = {type: 'array', items: schemaDescriptionToJsonSchema(node.element)};
+            if (node.minItems !== undefined) s.minItems = node.minItems;
+            if (node.maxItems !== undefined) s.maxItems = node.maxItems;
+            schema = s;
+            break;
+        }
+        case 'object': {
+            const properties: Record<string, OpenAPIV3_1.SchemaObject> = {};
+            for (const [k, child] of Object.entries(node.properties)) {
+                properties[k] = schemaDescriptionToJsonSchema(child);
+            }
+            const s: OpenAPIV3_1.NonArraySchemaObject = {type: 'object', properties};
+            if (node.required.length) s.required = node.required;
+            schema = s;
+            break;
+        }
+        case 'record':
+            schema = {type: 'object', additionalProperties: schemaDescriptionToJsonSchema(node.value)};
+            break;
+        case 'union':
+            schema = {oneOf: node.variants.map(schemaDescriptionToJsonSchema)};
+            break;
+        case 'discriminated':
+            schema = {
+                oneOf: node.variants.map(schemaDescriptionToJsonSchema),
+                discriminator: {propertyName: node.discriminator}
+            };
+            break;
+        case 'tuple':
+            schema = {
+                type: 'array',
+                prefixItems: node.elements.map(schemaDescriptionToJsonSchema),
+                minItems: node.elements.length,
+                maxItems: node.elements.length,
+                items: false,
+            } as unknown as OpenAPIV3_1.ArraySchemaObject;
+            break;
+        case 'file': {
+            const s: OpenAPIV3_1.NonArraySchemaObject = {type: 'string', format: 'binary'};
+            if (node.accept?.length) s.description = `Accepted types: ${node.accept.join(', ')}`;
+            schema = s;
+            break;
+        }
+        case 'password':
+            schema = {type: 'string', format: 'password', minLength: node.minLength, maxLength: node.maxLength};
+            break;
+        default:
+            schema = {};
+    }
+
+    const {docs, defaultValue} = desc;
+    if (docs || defaultValue !== undefined) {
+        schema = {
+            ...schema,
+            ...(docs?.title !== undefined ? {title: docs.title} : {}),
+            ...(docs?.description !== undefined ? {description: docs.description} : {}),
+            ...(docs?.format !== undefined ? {format: docs.format} : {}),
+            ...(docs?.example !== undefined ? {example: docs.example} : {}),
+            ...(docs?.examples !== undefined ? {examples: [...docs.examples]} : {}),
+            ...(docs?.deprecated === true ? {deprecated: true} : {}),
+            ...(defaultValue !== undefined ? {default: defaultValue} : {}),
+        };
+    }
+
+    if (desc.nullable) {
+        schema = {oneOf: [schema, {type: 'null'}]};
+    }
+
+    return schema;
 }
 
 type NonJsonDecoder = (raw: GGSchemaBinaryData) => Promise<unknown>;

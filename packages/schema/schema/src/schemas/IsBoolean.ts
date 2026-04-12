@@ -1,6 +1,6 @@
 import {GGSchema, Opt} from "../GGSchema";
 import {BooleanDef} from "../Definition";
-import type {OpenAPIV3_1} from "openapi-types";
+import type {GGSchemaNodeKind} from "../GGSchemaDescription";
 
 export class BooleanSchema<T extends boolean | undefined | null = boolean> extends GGSchema<T, BooleanDef> {
 
@@ -20,8 +20,8 @@ export class BooleanSchema<T extends boolean | undefined | null = boolean> exten
 
     // --------------------------------------------------------------------------------------
 
-    protected _buildJsonSchema(): OpenAPIV3_1.SchemaObject {
-        return {type: 'boolean'};
+    protected _buildSchemaNode(): GGSchemaNodeKind {
+        return {kind: 'boolean'};
     }
 }
 

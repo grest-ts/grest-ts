@@ -1,7 +1,7 @@
 import {GGIssueInvalid} from "../issue/issues/GGIssueInvalid";
 import {GGSchema, Opt} from "../GGSchema";
 import {StringDef} from "../Definition";
-import type {OpenAPIV3_1} from "openapi-types";
+import type {GGSchemaNodeKind} from "../GGSchemaDescription";
 
 export class StringSchema<T extends string | undefined | null = string> extends GGSchema<T, StringDef> {
 
@@ -72,13 +72,14 @@ export class StringSchema<T extends string | undefined | null = string> extends 
 
     // --------------------------------------------------------------------------------------
 
-    protected _buildJsonSchema(): OpenAPIV3_1.SchemaObject {
-        const schema: OpenAPIV3_1.NonArraySchemaObject = {type: 'string'};
+    protected _buildSchemaNode(): GGSchemaNodeKind {
         const minLength = this.def.nonEmpty && this.def.minLength === undefined ? 1 : this.def.minLength;
-        if (minLength !== undefined) schema.minLength = minLength;
-        if (this.def.maxLength !== undefined) schema.maxLength = this.def.maxLength;
-        if (this.def.pattern) schema.pattern = this.def.pattern.source;
-        return schema;
+        return {
+            kind: 'string',
+            ...(minLength !== undefined ? {minLength} : {}),
+            ...(this.def.maxLength !== undefined ? {maxLength: this.def.maxLength} : {}),
+            ...(this.def.pattern ? {pattern: this.def.pattern.source} : {}),
+        };
     }
 }
 

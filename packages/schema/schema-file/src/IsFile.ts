@@ -1,6 +1,5 @@
 import {GGSchema, GGSchemaNonJsonDefinition, GGSchemaBinaryData, GGIssueInvalid, Opt} from "@grest-ts/schema";
-import type {GGIssuesList} from "@grest-ts/schema";
-import type {OpenAPIV3_1} from "openapi-types";
+import type {GGIssuesList, GGSchemaNodeKind} from "@grest-ts/schema";
 import {BufferGGFile, GGFile} from "./GGFile";
 
 /**
@@ -114,10 +113,8 @@ export class FileSchema<T extends GGFile | undefined | null = GGFile> extends GG
 
     // ==================== File Constraints ====================
 
-    protected _buildJsonSchema(): OpenAPIV3_1.SchemaObject {
-        const schema: OpenAPIV3_1.NonArraySchemaObject = {type: 'string', format: 'binary'};
-        if (this.def.accept?.length) schema.description = `Accepted types: ${this.def.accept.join(', ')}`;
-        return schema;
+    protected _buildSchemaNode(): GGSchemaNodeKind {
+        return {kind: 'file', accept: this.def.accept, maxSize: this.def.maxSize};
     }
 
     accept(...types: string[]): FileSchema<T> {

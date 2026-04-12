@@ -1,6 +1,6 @@
 import {GGSchema, Opt} from "../GGSchema";
 import {BitDef} from "../Definition";
-import type {OpenAPIV3_1} from "openapi-types";
+import type {GGSchemaNodeKind} from "../GGSchemaDescription";
 
 export class BitSchema<T extends 0 | 1 | undefined | null = 0 | 1> extends GGSchema<T, BitDef> {
 
@@ -16,8 +16,8 @@ export class BitSchema<T extends 0 | 1 | undefined | null = 0 | 1> extends GGSch
         return super.orNull as any
     }
 
-    protected _buildJsonSchema(): OpenAPIV3_1.SchemaObject {
-        return {type: 'integer', minimum: 0, maximum: 1};
+    protected _buildSchemaNode(): GGSchemaNodeKind {
+        return {kind: 'bit'};
     }
 }
 

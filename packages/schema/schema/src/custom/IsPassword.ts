@@ -2,7 +2,7 @@ import {GGSchema, Opt} from "../GGSchema";
 import {GGIssuesList} from "../issue/GGIssuesList";
 import {GGIssueInvalid} from "../issue/issues/GGIssueInvalid";
 import {GGSchemaDefinition} from "../Definition";
-import type {OpenAPIV3_1} from "openapi-types";
+import type {GGSchemaNodeKind} from "../GGSchemaDescription";
 
 
 // Character class patterns
@@ -53,12 +53,8 @@ export class PasswordSchema<T extends tPassword | undefined | null = tPassword> 
         return super.orNull as any
     }
 
-    protected _buildJsonSchema(): OpenAPIV3_1.SchemaObject {
-        return {
-            type: 'string',
-            minLength: this.def.minLength,
-            maxLength: this.def.maxLength,
-        };
+    protected _buildSchemaNode(): GGSchemaNodeKind {
+        return {kind: 'password', minLength: this.def.minLength, maxLength: this.def.maxLength};
     }
 }
 
