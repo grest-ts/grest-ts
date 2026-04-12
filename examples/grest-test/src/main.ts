@@ -82,19 +82,16 @@ export class MainRuntime extends GGRuntime {
         new GGOpenApiServer(httpServer, {title: "Grest Test API", version: "1.0.0", specPath: "/openapi.json", docsPath: "/docs"})
             .registerWith(httpServer);
 
-        // Showcase API — only active when PORT env is explicitly set (real server run, not tests)
-        if (process.env.PORT) {
-            const showcasePort = Number(process.env.PORT) + 1;
-            const showcaseServer = new GGHttpServer({port: showcasePort, key: new GGLocatorKey('showcase-server')});
-            new GGOpenApiServer(showcaseServer, {
-                schemas: [ShowcaseApi],
-                title: "Showcase API",
-                version: "1.0.0",
-                description: "Rich demo: discriminated unions, file upload/download, bearer auth, branded types, docs, defaults, tuples, and more.",
-                specPath: "/openapi.json",
-                docsPath: "/docs",
-            }).registerWith(showcaseServer);
-        }
+        // Showcase API — rich demo spec on a separate server (port 0 = random available port)
+        const showcaseServer = new GGHttpServer({port: 0, key: new GGLocatorKey('showcase-server')});
+        new GGOpenApiServer(showcaseServer, {
+            schemas: [ShowcaseApi],
+            title: "Showcase API",
+            version: "1.0.0",
+            description: "Rich demo: discriminated unions, file upload/download, bearer auth, branded types, docs, defaults, tuples, and more.",
+            specPath: "/openapi.json",
+            docsPath: "/docs",
+        }).registerWith(showcaseServer);
 
         // new GGHttp()
         //     .http(ConfigTestApi, configTestService)
