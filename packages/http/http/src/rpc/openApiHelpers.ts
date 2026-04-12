@@ -5,14 +5,12 @@ import type {OpenAPIV3_1} from "openapi-types";
 /**
  * Build OpenAPI parameter objects for a route from the contract's input schema.
  *
- * Path parameters are taken from the path template (:id → {id}).
+ * Path parameters are extracted from the path template (:id → {id}).
  * For GET/DELETE (no body), remaining input fields become query parameters.
  *
- * Uses schemaResolver (when provided) to emit $ref for named schemas instead
- * of always inlining. Falls back to schema.toJSONSchema() when absent.
- *
- * Operates on toCompilerDef().shape to get actual GGSchema instances per field,
- * so the resolver can determine $ref eligibility correctly via schema._base.
+ * Uses toSchemaDescription() to walk the input object's fields as
+ * GGSchemaDescription instances, then passes each to schemaResolver so named
+ * schemas are emitted as $ref where applicable.
  *
  * Type-cast note: openapi-types@12 defines OpenAPIV3_1.ParameterObject as a
  * direct alias of OpenAPIV3.ParameterObject, whose `schema` field resolves to
@@ -32,7 +30,14 @@ export function buildOpenApiParameters(
     // Use toSchemaDescription() to get GGSchemaDescription instances per field.
     // This gives us the format-agnostic tree without coupling to internal def structure.
     const desc = inputSchema.toSchemaDescription();
-    if (desc.node.kind !== 'object') return pathParams.map(name => buildPathParam(name, undefined, schemaResolver));
+    if (desc.node.kind !== 'object') {
+        // Input schemas must be object schemas so their fields can be mapped to
+        // path/query parameters. Any other kind is a contract definition error.
+        throw new Error(
+            `buildOpenApiParameters: input schema must be an object schema (kind='object'), ` +
+            `got kind='${desc.node.kind}'. Contract input schemas must use IsObject({...}).`
+        );
+    }
 
     const properties = desc.node.properties;
 

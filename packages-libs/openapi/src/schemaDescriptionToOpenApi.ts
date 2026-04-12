@@ -110,7 +110,10 @@ export function schemaDescriptionToOpenApi(
             schema = {type: 'string', format: 'password', minLength: node.minLength, maxLength: node.maxLength};
             break;
         default:
-            schema = {};
+            throw new Error(
+                `schemaDescriptionToOpenApi: unhandled schema kind "${(node as any).kind}". ` +
+                `Update @grest-ts/openapi to handle this new GGSchemaNodeKind variant.`
+            );
     }
 
     const {docs, defaultValue} = desc;
@@ -138,21 +141,14 @@ export function schemaDescriptionToOpenApi(
  * A schema resolver that always inlines — every schema is converted to its full
  * OpenAPI SchemaObject with no $ref extraction.
  *
- * Use this when you need a schema converted to OpenAPI format without a registry
- * (e.g. in unit tests for custom codecs, or when calling toOpenApiOperation()
- * outside of toOpenApi()).
+ * Use this when calling toOpenApiOperation() outside of toOpenApi(), e.g. in
+ * unit tests for custom codecs.
  *
  * @example
  * codec.toOpenApiOperation({
  *     pathPrefix: "", methodName: "test", contract,
  *     schemaResolver: inlineSchemaResolver
  * })
- */
-/**
- * A schema resolver that always inlines — every schema is converted to its full
- * OpenAPI SchemaObject with no $ref extraction.
- *
- * Use when calling toOpenApiOperation() outside of toOpenApi() (e.g. in tests).
  */
 export const inlineSchemaResolver: GGOpenApiSchemaResolver =
     (desc: GGSchemaDescription) => schemaDescriptionToOpenApi(desc);
