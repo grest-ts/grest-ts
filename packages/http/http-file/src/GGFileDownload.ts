@@ -51,16 +51,11 @@ class GGFileDownloadCodec implements GGHttpCodec {
         const operation: Partial<OpenAPIV3_1.OperationObject> = {
             operationId: config.methodName,
             parameters,
-            // Success: raw binary file response — not the JSON {success,type,data} envelope
+            // Success: raw binary file response — not the JSON {success,type,data} envelope.
+            // Content-Disposition is declared in responseHeaders and merged automatically.
             responses: {
                 "200": {
                     description: "File download",
-                    headers: {
-                        "Content-Disposition": {
-                            description: "attachment; filename=<name>",
-                            schema: {type: "string"}
-                        }
-                    },
                     content: {
                         "*/*": {
                             schema: {type: "string", format: "binary"} as OpenAPIV3_1.ParameterObject["schema"]

@@ -202,13 +202,21 @@ function buildOperation(
     // Error responses: always from the contract (codec has no say in error shapes).
     const errorResponses = buildErrorResponses(contract, registry);
 
+    // Response headers from codec.responseHeaders — merged into every response entry
+    const codecResponseHeaders = buildResponseHeaders(codec.responseHeaders, registry);
+
+    const allResponses = {...codecResult.responses, ...errorResponses};
+    const responsesWithHeaders = codecResponseHeaders
+        ? enrichResponsesWithHeaders(allResponses, codecResponseHeaders)
+        : allResponses;
+
     return {
         parameters: [],
         ...codecResult,
         operationId: `${apiName}_${methodName}`,
         summary: camelToSummary(methodName),
         tags: [apiName],
-        responses: {...codecResult.responses, ...errorResponses}
+        responses: responsesWithHeaders
     };
 }
 
@@ -221,6 +229,49 @@ function camelToSummary(name: string): string {
         .replace(/([A-Z])/g, " $1")
         .replace(/^./, s => s.toUpperCase())
         .trim();
+}
+
+/**
+ * Build a headers object from a codec's responseHeaders map.
+ * Returns undefined if the map is empty — no headers to add.
+ */
+function buildResponseHeaders(
+    responseHeaders: Record<string, import("@grest-ts/schema").GGSchema<string | undefined>>,
+    registry: SchemaRegistry
+): Record<string, OpenAPIV3_1.HeaderObject> | undefined {
+    const entries = Object.entries(responseHeaders);
+    if (entries.length === 0) return undefined;
+    const headers: Record<string, OpenAPIV3_1.HeaderObject> = {};
+    for (const [name, schema] of entries) {
+        const desc = schema.toSchemaDescription();
+        const resolved = registry.descOrRef(desc);
+        const {description, ...schemaWithoutDescription} = resolved as any;
+        const header: OpenAPIV3_1.HeaderObject = {
+            schema: schemaWithoutDescription as OpenAPIV3_1.HeaderObject["schema"]
+        };
+        if (description) header.description = description;
+        headers[name] = header;
+    }
+    return headers;
+}
+
+/**
+ * Merge response headers into every response entry in a responses object.
+ * Only adds to responses that contain content (not 204 No content etc.).
+ */
+function enrichResponsesWithHeaders(
+    responses: OpenAPIV3_1.ResponsesObject,
+    headers: Record<string, OpenAPIV3_1.HeaderObject>
+): OpenAPIV3_1.ResponsesObject {
+    const result: OpenAPIV3_1.ResponsesObject = {};
+    for (const [code, resp] of Object.entries(responses)) {
+        const r = resp as OpenAPIV3_1.ResponseObject;
+        result[code] = {
+            ...r,
+            headers: {...(r.headers ?? {}), ...headers}
+        };
+    }
+    return result;
 }
 
 /**

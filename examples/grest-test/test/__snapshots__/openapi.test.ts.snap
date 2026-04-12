@@ -1468,6 +1468,8 @@ exports[`OpenAPI spec — ShowcaseApi snapshot > matches snapshot 1`] = `
               "Content-Disposition": {
                 "description": "attachment; filename=<name>",
                 "schema": {
+                  "example": "attachment; filename=document.pdf",
+                  "minLength": 1,
                   "type": "string",
                 },
               },
@@ -1482,6 +1484,16 @@ exports[`OpenAPI spec — ShowcaseApi snapshot > matches snapshot 1`] = `
               },
             },
             "description": "RESOURCE_NOT_FOUND",
+            "headers": {
+              "Content-Disposition": {
+                "description": "attachment; filename=<name>",
+                "schema": {
+                  "example": "attachment; filename=document.pdf",
+                  "minLength": 1,
+                  "type": "string",
+                },
+              },
+            },
           },
           "500": {
             "content": {
@@ -1492,6 +1504,16 @@ exports[`OpenAPI spec — ShowcaseApi snapshot > matches snapshot 1`] = `
               },
             },
             "description": "SERVER_ERROR",
+            "headers": {
+              "Content-Disposition": {
+                "description": "attachment; filename=<name>",
+                "schema": {
+                  "example": "attachment; filename=document.pdf",
+                  "minLength": 1,
+                  "type": "string",
+                },
+              },
+            },
           },
         },
         "security": [

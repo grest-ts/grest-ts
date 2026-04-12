@@ -1,7 +1,7 @@
 import type http from "http";
 import {GGHttpRequest} from "@grest-ts/http"
 import {GGWebSocketHandshakeContext} from "@grest-ts/websocket"
-import {GGSchema, IsBearerToken, NOT_AUTHORIZED} from "@grest-ts/schema";
+import {GGSchema, IsBearerToken, IsObject, IsString, NOT_AUTHORIZED} from "@grest-ts/schema";
 import {GGContextKey} from "@grest-ts/context";
 
 export const IsUserAuthToken = IsString.brand("UserAuthToken");
