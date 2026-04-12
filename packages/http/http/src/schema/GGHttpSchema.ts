@@ -86,13 +86,13 @@ export interface GGHttpCodecOpenApiConfig {
     readonly methodName: string;
     readonly contract: GGContractMethod;
     /**
-     * Optional schema resolver from the OpenAPI document builder.
-     * Use this instead of schema.toJSONSchema() when building parameters or
-     * request/response schemas — it extracts named schemas to $ref components.
-     * Falls back to schema.toJSONSchema() when absent (e.g. in tests).
+     * Resolves a GGSchema to an OpenAPI SchemaObject or ReferenceObject.
+     * Provided by the document builder (toOpenApi) as registry.schemaOrRef.
+     * For standalone codec use or tests, pass inlineSchemaResolver from @grest-ts/openapi.
      */
-    readonly schemaResolver?: GGOpenApiSchemaResolver;
+    readonly schemaResolver: GGOpenApiSchemaResolver;
 }
+
 
 export interface GGHttpCodec {
     readonly method: HttpMethod;

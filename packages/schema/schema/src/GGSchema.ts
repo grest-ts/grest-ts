@@ -345,14 +345,6 @@ export abstract class GGSchema<Type, TDef extends GGSchemaDefinition = GGSchemaD
         return {kind: 'any'};
     }
 
-    /**
-     * Returns a JSON Schema / OpenAPI 3.1 representation of this schema.
-     * Convenience wrapper over toSchemaDescription() for direct use.
-     * @see toSchemaDescription() for the format-agnostic alternative.
-     */
-    public toJSONSchema(): Record<string, unknown> {
-        return schemaDescriptionToJsonSchema(this.toSchemaDescription());
-    }
 
     private static _compiling = new Set<GGSchema<any>>();
 
@@ -380,115 +372,6 @@ export abstract class GGSchema<Type, TDef extends GGSchemaDefinition = GGSchemaD
     protected _toCompilerDef(): TDef {
         return this.def;
     }
-}
-
-/**
- * Convert a GGSchemaDescription to a plain JSON Schema object.
- * This is the schema library's own JSON Schema converter — used by toJSONSchema()
- * so that the convenience method continues to work without any external dependencies.
- * Returns Record<string, unknown> — callers that need typed output (e.g. @grest-ts/openapi)
- * cast to their format-specific type.
- */
-function schemaDescriptionToJsonSchema(desc: GGSchemaDescription): Record<string, unknown> {
-    const node = desc.node;
-    let schema: Record<string, unknown>;
-
-    switch (node.kind) {
-        case 'string': {
-            schema = {type: 'string'};
-            if (node.minLength !== undefined) schema.minLength = node.minLength;
-            if (node.maxLength !== undefined) schema.maxLength = node.maxLength;
-            if (node.pattern) schema.pattern = node.pattern;
-            break;
-        }
-        case 'number': {
-            schema = {type: node.integer ? 'integer' : 'number'};
-            if (node.min !== undefined) schema.minimum = node.min;
-            if (node.max !== undefined) schema.maximum = node.max;
-            if (node.multipleOf !== undefined) schema.multipleOf = node.multipleOf;
-            break;
-        }
-        case 'boolean': schema = {type: 'boolean'}; break;
-        case 'bit':     schema = {type: 'integer', minimum: 0, maximum: 1}; break;
-        case 'any':
-        case 'unknown': schema = {}; break;
-        case 'literal': {
-            const types = new Set(node.values.map(v => {
-                if (typeof v === 'boolean') return 'boolean';
-                if (typeof v === 'number') return Number.isInteger(v) ? 'integer' : 'number';
-                return 'string';
-            }));
-            schema = {enum: [...node.values]};
-            if (types.size === 1) schema.type = types.values().next().value;
-            break;
-        }
-        case 'array': {
-            schema = {type: 'array', items: schemaDescriptionToJsonSchema(node.element)};
-            if (node.minItems !== undefined) schema.minItems = node.minItems;
-            if (node.maxItems !== undefined) schema.maxItems = node.maxItems;
-            break;
-        }
-        case 'object': {
-            const properties: Record<string, unknown> = {};
-            for (const [k, child] of Object.entries(node.properties)) {
-                properties[k] = schemaDescriptionToJsonSchema(child);
-            }
-            schema = {type: 'object', properties};
-            if (node.required.length) schema.required = node.required;
-            break;
-        }
-        case 'record':
-            schema = {type: 'object', additionalProperties: schemaDescriptionToJsonSchema(node.value)};
-            break;
-        case 'union':
-            schema = {oneOf: node.variants.map(schemaDescriptionToJsonSchema)};
-            break;
-        case 'discriminated':
-            schema = {
-                oneOf: node.variants.map(schemaDescriptionToJsonSchema),
-                discriminator: {propertyName: node.discriminator}
-            };
-            break;
-        case 'tuple':
-            schema = {
-                type: 'array',
-                prefixItems: node.elements.map(schemaDescriptionToJsonSchema),
-                minItems: node.elements.length,
-                maxItems: node.elements.length,
-                items: false,
-            };
-            break;
-        case 'file': {
-            schema = {type: 'string', format: 'binary'};
-            if (node.accept?.length) schema.description = `Accepted types: ${node.accept.join(', ')}`;
-            break;
-        }
-        case 'password':
-            schema = {type: 'string', format: 'password', minLength: node.minLength, maxLength: node.maxLength};
-            break;
-        default:
-            schema = {};
-    }
-
-    const {docs, defaultValue} = desc;
-    if (docs || defaultValue !== undefined) {
-        schema = {
-            ...schema,
-            ...(docs?.title !== undefined ? {title: docs.title} : {}),
-            ...(docs?.description !== undefined ? {description: docs.description} : {}),
-            ...(docs?.format !== undefined ? {format: docs.format} : {}),
-            ...(docs?.example !== undefined ? {example: docs.example} : {}),
-            ...(docs?.examples !== undefined ? {examples: [...docs.examples]} : {}),
-            ...(docs?.deprecated === true ? {deprecated: true} : {}),
-            ...(defaultValue !== undefined ? {default: defaultValue} : {}),
-        };
-    }
-
-    if (desc.nullable) {
-        schema = {oneOf: [schema, {type: 'null'}]};
-    }
-
-    return schema;
 }
 
 type NonJsonDecoder = (raw: GGSchemaBinaryData) => Promise<unknown>;

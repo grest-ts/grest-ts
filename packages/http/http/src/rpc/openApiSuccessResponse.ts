@@ -1,5 +1,6 @@
 import type {GGContractMethod} from "@grest-ts/schema";
 import type {OpenAPIV3_1} from "openapi-types";
+import type {GGOpenApiSchemaResolver} from "../schema/GGHttpSchema";
 
 /**
  * Builds the standard GGRpc JSON-envelope success response for OpenAPI.
@@ -8,18 +9,21 @@ import type {OpenAPIV3_1} from "openapi-types";
  *   { success: true, type: "OK", data: <success schema> }   (200)
  *   or no body                                               (204 when no success schema)
  *
- * Used by GGRpc.* and GGFileUpload codecs — both share the same JSON wire format
- * for their success response. Call this explicitly from toOpenApiOperation() so
- * the response shape is always declared, never silently assumed.
+ * The resolver is used to emit $ref for named success schemas rather than
+ * inlining them. Pass config.schemaResolver from toOpenApiOperation().
  */
-export function buildRpcSuccessResponses(contract: GGContractMethod): OpenAPIV3_1.ResponsesObject {
+export function buildRpcSuccessResponses(
+    contract: GGContractMethod,
+    resolver: GGOpenApiSchemaResolver
+): OpenAPIV3_1.ResponsesObject {
     if (contract.success) {
+        const dataSchema = resolver(contract.success);
         const successSchema: OpenAPIV3_1.NonArraySchemaObject = {
             type: "object",
             properties: {
                 success: {type: "boolean", enum: [true]},
                 type: {type: "string", enum: ["OK"]},
-                data: contract.success.toJSONSchema()
+                data: dataSchema
             },
             required: ["success", "type", "data"]
         };

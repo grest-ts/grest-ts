@@ -24,7 +24,7 @@ export function buildOpenApiParameters(
     pathTemplate: string,
     hasBody: boolean,
     inputSchema: GGSchema<unknown> | undefined,
-    schemaResolver?: GGOpenApiSchemaResolver
+    schemaResolver: GGOpenApiSchemaResolver
 ): OpenAPIV3_1.ParameterObject[] {
     const pathParams = (pathTemplate.match(/:(\w+)/g) || []).map(m => m.slice(1));
     if (!inputSchema) return pathParams.map(name => buildPathParam(name, undefined, schemaResolver));
@@ -43,9 +43,7 @@ export function buildOpenApiParameters(
     if (!hasBody) {
         for (const [name, fieldDesc] of Object.entries(properties)) {
             if (pathParams.includes(name)) continue;
-            const resolved = schemaResolver
-                ? schemaResolver(fieldDesc.schema)
-                : fieldDesc.schema.toJSONSchema();
+            const resolved = schemaResolver(fieldDesc.schema);
             const {description, ...schemaWithoutDescription} = resolved as any;
             const isRequired = !fieldDesc.optional && (resolved as any).default === undefined;
             const param: OpenAPIV3_1.ParameterObject = {
@@ -64,14 +62,14 @@ export function buildOpenApiParameters(
 function buildPathParam(
     name: string,
     fieldDesc: GGSchemaDescription | undefined,
-    schemaResolver?: GGOpenApiSchemaResolver
+    schemaResolver: GGOpenApiSchemaResolver
 ): OpenAPIV3_1.ParameterObject {
     if (!fieldDesc) {
         // Path params are always non-empty — an empty segment cannot be routed.
         return {name, in: 'path' as const, required: true as const,
             schema: {type: 'string', minLength: 1} as OpenAPIV3_1.ParameterObject["schema"]};
     }
-    const resolved = schemaResolver ? schemaResolver(fieldDesc.schema) : fieldDesc.schema.toJSONSchema();
+    const resolved = schemaResolver(fieldDesc.schema);
     const {description, ...schemaWithoutDescription} = resolved as any;
     const param: OpenAPIV3_1.ParameterObject = {
         name,

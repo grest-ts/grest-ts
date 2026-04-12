@@ -94,86 +94,22 @@ function buildOperation(
         throw new Error(
             `Codec for ${apiName}.${methodName} (${codec.method} ${codec.path}) returned no responses from toOpenApiOperation(). ` +
             `Every codec must declare its own success response shape. ` +
-            `Use buildRpcSuccessResponses(contract) from @grest-ts/http if your codec uses the standard JSON envelope.`
+            `Use buildRpcSuccessResponses(contract, config.schemaResolver) from @grest-ts/http if your codec uses the standard JSON envelope.`
         );
     }
 
-    // Re-build the codec result replacing inline schemas with $ref where applicable
-    const enrichedCodecResult = enrichWithRefs(codecResult, contract, registry);
-
-    // Success response: always from the codec (it owns the wire format).
+    // Success response: always from the codec (it owns the wire format, including $ref).
     // Error responses: always from the contract (codec has no say in error shapes).
     const errorResponses = buildErrorResponses(contract, registry);
 
     return {
         parameters: [],
-        ...enrichedCodecResult,
+        ...codecResult,
         operationId: `${apiName}_${methodName}`,
         summary: camelToSummary(methodName),
         tags: [apiName],
-        responses: {...enrichedCodecResult.responses, ...errorResponses}
+        responses: {...codecResult.responses, ...errorResponses}
     };
-}
-
-/**
- * Replace inline schema objects in a codec result with $ref where the schema
- * has a title (and is thus extractable to components/schemas).
- * Only touches the fields that contain GGSchema-derived content.
- */
-function enrichWithRefs(
-    codecResult: Partial<OpenAPIV3_1.OperationObject>,
-    contract: NonNullable<GGHttpSchema<any, any>["contract"]>["methods"][string],
-    registry: SchemaRegistry
-): Partial<OpenAPIV3_1.OperationObject> {
-    const result: Partial<OpenAPIV3_1.OperationObject> = {...codecResult};
-
-    // Enrich requestBody — codec may have put the input schema inline
-    if (result.requestBody && contract.input) {
-        const rb = result.requestBody as OpenAPIV3_1.RequestBodyObject;
-        if (rb.content?.['application/json']?.schema) {
-            result.requestBody = {
-                ...rb,
-                content: {
-                    ...rb.content,
-                    'application/json': {
-                        ...rb.content['application/json'],
-                        schema: registry.schemaOrRef(contract.input)
-                    }
-                }
-            };
-        }
-    }
-
-    // Enrich success response — codec put the success schema inline
-    if (result.responses?.['200'] && contract.success) {
-        const resp200 = result.responses['200'] as OpenAPIV3_1.ResponseObject;
-        if (resp200.content?.['application/json']?.schema) {
-            const envelope = resp200.content['application/json'].schema as any;
-            // The envelope is {success, type, data: <success schema>}
-            // Replace just the data property with a $ref if applicable
-            if (envelope.properties?.data) {
-                const enrichedEnvelope: OpenAPIV3_1.NonArraySchemaObject = {
-                    ...envelope,
-                    properties: {
-                        ...envelope.properties,
-                        data: registry.schemaOrRef(contract.success)
-                    }
-                };
-                result.responses = {
-                    ...result.responses,
-                    '200': {
-                        ...resp200,
-                        content: {
-                            ...resp200.content,
-                            'application/json': {schema: enrichedEnvelope}
-                        }
-                    }
-                };
-            }
-        }
-    }
-
-    return result;
 }
 
 /**

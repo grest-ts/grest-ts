@@ -1,5 +1,6 @@
 import type {ANY_ERROR_CLS, GGSchema, GGSchemaDescription} from "@grest-ts/schema";
 import type {OpenAPIV3_1} from "openapi-types";
+import {schemaDescriptionToOpenApi} from "./schemaDescriptionToOpenApi";
 
 /**
  * Registry that extracts named schemas into components/schemas and returns
@@ -118,8 +119,7 @@ export class SchemaRegistry {
             }
             default:
                 // Leaf types (string, number, boolean, literal, bit, any, unknown, file, password)
-                // toJSONSchema() handles these correctly via the schema library's own converter.
-                return desc.schema.toJSONSchema();
+                return schemaDescriptionToOpenApi(desc);
         }
 
         return this.applyDocs(schema, desc);

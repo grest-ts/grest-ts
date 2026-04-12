@@ -66,12 +66,9 @@ class GGFileDownloadCodec implements GGHttpCodec {
         };
 
         if (hasBody && config.contract.input) {
-            const bodySchema = config.schemaResolver
-                ? config.schemaResolver(config.contract.input)
-                : config.contract.input.toJSONSchema();
             operation.requestBody = {
                 required: true,
-                content: {'application/json': {schema: bodySchema}}
+                content: {'application/json': {schema: config.schemaResolver(config.contract.input)}}
             };
         }
 

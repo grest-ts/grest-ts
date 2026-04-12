@@ -55,9 +55,7 @@ class GGFileUploadCodec implements GGHttpCodec {
         if (inputProps) {
             for (const [name, fieldDesc] of Object.entries(inputProps)) {
                 if (pathParams.includes(name)) continue;
-                schemaProperties[name] = config.schemaResolver
-                    ? config.schemaResolver(fieldDesc.schema)
-                    : fieldDesc.schema.toJSONSchema();
+                schemaProperties[name] = config.schemaResolver(fieldDesc.schema);
                 if (!fieldDesc.optional) {
                     required.push(name);
                 }
@@ -79,7 +77,7 @@ class GGFileUploadCodec implements GGHttpCodec {
                     }
                 }
             },
-            responses: buildRpcSuccessResponses(config.contract)
+            responses: buildRpcSuccessResponses(config.contract, config.schemaResolver)
         };
     }
 

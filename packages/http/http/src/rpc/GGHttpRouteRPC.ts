@@ -52,16 +52,13 @@ class GGHttpRpcCodec implements GGHttpCodec {
         const operation: Partial<OpenAPIV3_1.OperationObject> = {
             operationId,
             parameters,
-            responses: buildRpcSuccessResponses(config.contract)
+            responses: buildRpcSuccessResponses(config.contract, config.schemaResolver)
         };
 
         if (hasBody && config.contract.input) {
-            const bodySchema = config.schemaResolver
-                ? config.schemaResolver(config.contract.input)
-                : config.contract.input.toJSONSchema();
             operation.requestBody = {
                 required: true,
-                content: {'application/json': {schema: bodySchema}}
+                content: {'application/json': {schema: config.schemaResolver(config.contract.input)}}
             };
         }
 
