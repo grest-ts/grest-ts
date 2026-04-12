@@ -1,6 +1,7 @@
-import type {GGSchema, GGSchemaDescription} from "@grest-ts/schema";
+import type {GGSchemaDescription} from "@grest-ts/schema";
 import type {OpenAPIV3_1} from "openapi-types";
 import type {GGOpenApiSchemaResolver} from "@grest-ts/http";
+
 
 /**
  * Convert a GGSchemaDescription to an OpenAPIV3_1.SchemaObject.
@@ -18,7 +19,7 @@ export function schemaDescriptionToOpenApi(
     desc: GGSchemaDescription,
     resolver?: GGOpenApiSchemaResolver
 ): OpenAPIV3_1.SchemaObject {
-    const resolve = resolver ?? ((s: GGSchema<any>) => schemaDescriptionToOpenApi(s.toSchemaDescription()));
+    const resolve: GGOpenApiSchemaResolver = resolver ?? ((d: GGSchemaDescription) => schemaDescriptionToOpenApi(d));
 
     const node = desc.node;
     let schema: OpenAPIV3_1.SchemaObject;
@@ -57,7 +58,7 @@ export function schemaDescriptionToOpenApi(
             break;
         }
         case 'array': {
-            const items = resolve(node.element.schema);
+            const items = resolve(node.element);
             const s: OpenAPIV3_1.ArraySchemaObject = {type: 'array', items};
             if (node.minItems !== undefined) s.minItems = node.minItems;
             if (node.maxItems !== undefined) s.maxItems = node.maxItems;
@@ -68,7 +69,7 @@ export function schemaDescriptionToOpenApi(
             const properties: Record<string, OpenAPIV3_1.SchemaObject | OpenAPIV3_1.ReferenceObject> = {};
             const required: string[] = [];
             for (const [k, child] of Object.entries(node.properties)) {
-                properties[k] = resolve(child.schema);
+                properties[k] = resolve(child);
                 if (!child.optional) required.push(k);
             }
             const s: OpenAPIV3_1.NonArraySchemaObject = {type: 'object', properties};
@@ -77,19 +78,19 @@ export function schemaDescriptionToOpenApi(
             break;
         }
         case 'record':
-            schema = {type: 'object', additionalProperties: resolve(node.value.schema)};
+            schema = {type: 'object', additionalProperties: resolve(node.value)};
             break;
         case 'union':
-            schema = {oneOf: node.variants.map(v => resolve(v.schema))};
+            schema = {oneOf: node.variants.map(v => resolve(v))};
             break;
         case 'discriminated':
             schema = {
-                oneOf: node.variants.map(v => resolve(v.schema)),
+                oneOf: node.variants.map(v => resolve(v)),
                 discriminator: {propertyName: node.discriminator}
             };
             break;
         case 'tuple': {
-            const prefixItems = node.elements.map(e => resolve(e.schema));
+            const prefixItems = node.elements.map(e => resolve(e));
             schema = {
                 type: 'array',
                 prefixItems,
@@ -147,5 +148,11 @@ export function schemaDescriptionToOpenApi(
  *     schemaResolver: inlineSchemaResolver
  * })
  */
+/**
+ * A schema resolver that always inlines — every schema is converted to its full
+ * OpenAPI SchemaObject with no $ref extraction.
+ *
+ * Use when calling toOpenApiOperation() outside of toOpenApi() (e.g. in tests).
+ */
 export const inlineSchemaResolver: GGOpenApiSchemaResolver =
-    (schema: GGSchema<any>) => schemaDescriptionToOpenApi(schema.toSchemaDescription());
+    (desc: GGSchemaDescription) => schemaDescriptionToOpenApi(desc);

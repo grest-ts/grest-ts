@@ -87,7 +87,7 @@ function buildOperation(
         pathPrefix: "",
         methodName,
         contract,
-        schemaResolver: (schema) => registry.schemaOrRef(schema)
+        schemaResolver: (desc) => registry.descOrRef(desc)
     });
 
     if (!codecResult.responses) {

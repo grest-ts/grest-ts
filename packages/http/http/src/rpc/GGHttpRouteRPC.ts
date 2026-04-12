@@ -58,7 +58,7 @@ class GGHttpRpcCodec implements GGHttpCodec {
         if (hasBody && config.contract.input) {
             operation.requestBody = {
                 required: true,
-                content: {'application/json': {schema: config.schemaResolver(config.contract.input)}}
+                content: {'application/json': {schema: config.schemaResolver(config.contract.input.toSchemaDescription())}}
             };
         }
 

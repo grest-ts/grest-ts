@@ -22,10 +22,10 @@ export class SchemaRegistry {
     private readonly baseToName = new Map<GGSchema<any>, string>();
     private readonly building = new Set<GGSchema<any>>();
 
-    schemaOrRef(schema: GGSchema<any>): OpenAPIV3_1.SchemaObject | OpenAPIV3_1.ReferenceObject {
-        return this.descOrRef(schema.toSchemaDescription());
-    }
-
+    /**
+     * Main entry point: resolve a GGSchemaDescription to a SchemaObject or ReferenceObject.
+     * Named schemas (those whose canonical has a docs.title) are extracted to components/schemas.
+     */
     descOrRef(desc: GGSchemaDescription): OpenAPIV3_1.SchemaObject | OpenAPIV3_1.ReferenceObject {
         const base = desc.canonical ?? desc.schema;
         const title = base.def.docs?.title;
@@ -64,85 +64,12 @@ export class SchemaRegistry {
 
     /**
      * Build an OpenAPIV3_1.SchemaObject from a GGSchemaDescription,
-     * recursing into composite children via descOrRef().
-     * Called only for schemas with no extractable component (no title on canonical).
+     * using schemaDescriptionToOpenApi with this registry's descOrRef as the resolver.
+     * This eliminates duplicate switch logic — schemaDescriptionToOpenApi owns the conversion,
+     * the registry owns only the $ref extraction decision.
      */
     private buildFromDesc(desc: GGSchemaDescription): OpenAPIV3_1.SchemaObject {
-        const node = desc.node;
-        let schema: OpenAPIV3_1.SchemaObject;
-
-        switch (node.kind) {
-            case 'object': {
-                const properties: Record<string, OpenAPIV3_1.SchemaObject | OpenAPIV3_1.ReferenceObject> = {};
-                const required: string[] = [];
-                for (const [key, child] of Object.entries(node.properties)) {
-                    properties[key] = this.descOrRef(child);
-                    if (!child.optional) required.push(key);
-                }
-                const s: OpenAPIV3_1.NonArraySchemaObject = {type: 'object', properties};
-                if (required.length) s.required = required;
-                schema = s;
-                break;
-            }
-            case 'array': {
-                const items = this.descOrRef(node.element);
-                const s: OpenAPIV3_1.ArraySchemaObject = {type: 'array', items};
-                if (node.minItems !== undefined) s.minItems = node.minItems;
-                if (node.maxItems !== undefined) s.maxItems = node.maxItems;
-                schema = s;
-                break;
-            }
-            case 'union':
-                schema = {oneOf: node.variants.map(v => this.descOrRef(v))};
-                break;
-            case 'discriminated':
-                schema = {
-                    oneOf: node.variants.map(v => this.descOrRef(v)),
-                    discriminator: {propertyName: node.discriminator}
-                };
-                break;
-            case 'tuple': {
-                const prefixItems = node.elements.map(e => this.descOrRef(e));
-                schema = {
-                    type: 'array',
-                    prefixItems,
-                    minItems: node.elements.length,
-                    maxItems: node.elements.length,
-                    items: false,
-                } as unknown as OpenAPIV3_1.ArraySchemaObject;
-                break;
-            }
-            case 'record': {
-                const additionalProperties = this.descOrRef(node.value);
-                schema = {type: 'object', additionalProperties};
-                break;
-            }
-            default:
-                // Leaf types (string, number, boolean, literal, bit, any, unknown, file, password)
-                return schemaDescriptionToOpenApi(desc);
-        }
-
-        return this.applyDocs(schema, desc);
-    }
-
-    private applyDocs(built: OpenAPIV3_1.SchemaObject, desc: GGSchemaDescription): OpenAPIV3_1.SchemaObject {
-        const {docs, defaultValue, nullable} = desc;
-        if (docs || defaultValue !== undefined) {
-            built = {
-                ...built,
-                ...(docs?.title !== undefined ? {title: docs.title} : {}),
-                ...(docs?.description !== undefined ? {description: docs.description} : {}),
-                ...(docs?.format !== undefined ? {format: docs.format} : {}),
-                ...(docs?.example !== undefined ? {example: docs.example} : {}),
-                ...(docs?.examples !== undefined ? {examples: [...docs.examples]} : {}),
-                ...(docs?.deprecated === true ? {deprecated: true} : {}),
-                ...(defaultValue !== undefined ? {default: defaultValue} : {}),
-            };
-        }
-        if (nullable) {
-            built = {oneOf: [built, {type: 'null'}]};
-        }
-        return built;
+        return schemaDescriptionToOpenApi(desc, child => this.descOrRef(child));
     }
 
     /** Cache of error class identity → component name for full error body schemas. */
@@ -154,7 +81,7 @@ export class SchemaRegistry {
             this.errClsToName.set(errCls, name);
 
             const dataSchemaOrRef: OpenAPIV3_1.SchemaObject | OpenAPIV3_1.ReferenceObject | undefined =
-                errCls.schema != null ? this.schemaOrRef(errCls.schema as GGSchema<any>) : undefined;
+                errCls.schema != null ? this.descOrRef((errCls.schema as GGSchema<any>).toSchemaDescription()) : undefined;
 
             const props: NonNullable<OpenAPIV3_1.BaseSchemaObject["properties"]> = {
                 success: {type: "boolean", enum: [false]},

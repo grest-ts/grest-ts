@@ -1,4 +1,4 @@
-import {ERROR, ERROR_JSON, GGContractApiDefinition, GGContractClass, GGContractMethod, GGSchema, OK} from "@grest-ts/schema";
+import {ERROR, ERROR_JSON, GGContractApiDefinition, GGContractClass, GGContractMethod, GGSchemaDescription, OK} from "@grest-ts/schema";
 import type {HttpMethod} from "@grest-ts/common";
 import type http from "http";
 import type {GGHttpServerMiddleware} from "../server/GGHttpSchema.startServer";
@@ -75,11 +75,12 @@ export interface ClientHttpRouteToRpcTransformServerCodec {
  * so it can produce accurate OpenAPI operation metadata.
  */
 /**
- * Resolves a GGSchema to an OpenAPI SchemaObject or ReferenceObject.
- * When provided via GGHttpCodecOpenApiConfig, codecs should use this instead of
- * calling schema.toJSONSchema() directly — it enables $ref extraction for named schemas.
+ * Resolves a GGSchemaDescription to an OpenAPI SchemaObject or ReferenceObject.
+ * When provided via GGHttpCodecOpenApiConfig, codecs should use this for all schema
+ * conversions — it enables $ref extraction for named schemas.
+ * For standalone use (tests, custom tools), use inlineSchemaResolver from @grest-ts/openapi.
  */
-export type GGOpenApiSchemaResolver = (schema: GGSchema<any>) => OpenAPIV3_1.SchemaObject | OpenAPIV3_1.ReferenceObject;
+export type GGOpenApiSchemaResolver = (desc: GGSchemaDescription) => OpenAPIV3_1.SchemaObject | OpenAPIV3_1.ReferenceObject;
 
 export interface GGHttpCodecOpenApiConfig {
     readonly pathPrefix: string;

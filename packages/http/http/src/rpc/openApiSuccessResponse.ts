@@ -17,7 +17,7 @@ export function buildRpcSuccessResponses(
     resolver: GGOpenApiSchemaResolver
 ): OpenAPIV3_1.ResponsesObject {
     if (contract.success) {
-        const dataSchema = resolver(contract.success);
+        const dataSchema = resolver(contract.success.toSchemaDescription());
         const successSchema: OpenAPIV3_1.NonArraySchemaObject = {
             type: "object",
             properties: {

@@ -1,7 +1,7 @@
 import {GGSchema, Opt} from "../GGSchema";
 import {IsLiteral} from "./IsLiteral";
 import {ObjectDef, ShapeInput} from "../Definition";
-import type {GGSchemaNodeKind} from "../GGSchemaDescription";
+import type {GGSchemaDescription, GGSchemaNodeKind} from "../GGSchemaDescription";
 
 type Shape = Record<string, GGSchema<any>>;
 
@@ -112,7 +112,7 @@ export class ObjectSchema<T extends object | undefined | null = object> extends 
 
     protected _buildSchemaNode(): GGSchemaNodeKind {
         const shape = this.toCompilerDef().shape! as Shape;
-        const properties: Record<string, import('../GGSchemaDescription').GGSchemaDescription> = {};
+        const properties: Record<string, GGSchemaDescription> = {};
         const required: string[] = [];
         for (const k of Object.keys(shape)) {
             const child = shape[k];

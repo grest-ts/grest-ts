@@ -40,12 +40,8 @@ export abstract class GGSchema<Type, TDef extends GGSchemaDefinition = GGSchemaD
 
     /**
      * Points to the nearest ancestor schema that introduced a structural (non-presentational) change.
-     * Set automatically by presentational derive calls: .docs(), .default(), .orUndefined,
-     * .orNull, .refine(), .coerce(). Structural calls (.minLength(), .regex(), .extend(), etc.)
-     * do NOT set this, making the new schema its own base.
-     *
-     * Useful for tools like @grest-ts/openapi that need the canonical type identity
-     * independently of presentational decorations applied at the usage site.
+     * Set once by derive() for presentational variants; never mutated after construction.
+     * Consumed via GGSchemaDescription.canonical — do not access directly from outside the class.
      *
      * @example
      * IsEmail._base                                    // undefined — IsEmail is its own base
@@ -54,7 +50,7 @@ export abstract class GGSchema<Type, TDef extends GGSchemaDefinition = GGSchemaD
      * IsEmail.regex(/extra/)._base                     // undefined — new structural type
      * IsEmail.regex(/extra/).docs({...})._base         // IsEmail.regex(/extra/)
      */
-    public _base: GGSchema<any> | undefined = undefined;
+    readonly _base: GGSchema<any> | undefined = undefined;
 
     /**
      * The executor strategy to use for schema operations.
@@ -136,7 +132,8 @@ export abstract class GGSchema<Type, TDef extends GGSchemaDefinition = GGSchemaD
     ): GGSchema<NewT, TDef> {
         const result = this._buildDerived<NewT>(changes);
         if (presentational) {
-            result._base = this._base ?? this;
+            // _base is readonly — set once here via Object.assign (the only write point).
+            Object.assign(result, {_base: this._base ?? this});
         }
         return result;
     }

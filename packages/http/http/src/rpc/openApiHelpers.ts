@@ -43,7 +43,7 @@ export function buildOpenApiParameters(
     if (!hasBody) {
         for (const [name, fieldDesc] of Object.entries(properties)) {
             if (pathParams.includes(name)) continue;
-            const resolved = schemaResolver(fieldDesc.schema);
+            const resolved = schemaResolver(fieldDesc);
             const {description, ...schemaWithoutDescription} = resolved as any;
             const isRequired = !fieldDesc.optional && (resolved as any).default === undefined;
             const param: OpenAPIV3_1.ParameterObject = {
@@ -69,7 +69,7 @@ function buildPathParam(
         return {name, in: 'path' as const, required: true as const,
             schema: {type: 'string', minLength: 1} as OpenAPIV3_1.ParameterObject["schema"]};
     }
-    const resolved = schemaResolver(fieldDesc.schema);
+    const resolved = schemaResolver(fieldDesc);
     const {description, ...schemaWithoutDescription} = resolved as any;
     const param: OpenAPIV3_1.ParameterObject = {
         name,
