@@ -83,7 +83,12 @@ function buildOperation(
         );
     }
 
-    const codecResult = codec.toOpenApiOperation({pathPrefix: "", methodName, contract});
+    const codecResult = codec.toOpenApiOperation({
+        pathPrefix: "",
+        methodName,
+        contract,
+        schemaResolver: (schema) => registry.schemaOrRef(schema)
+    });
 
     if (!codecResult.responses) {
         throw new Error(

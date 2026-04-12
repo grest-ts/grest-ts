@@ -48,7 +48,7 @@ class GGHttpRpcCodec implements GGHttpCodec {
         const hasBody = this.method === "POST" || this.method === "PUT" || this.method === "PATCH";
         const operationId = config.methodName;
 
-        const parameters = buildOpenApiParameters(this.path, hasBody, config.contract.input ?? undefined);
+        const parameters = buildOpenApiParameters(this.path, hasBody, config.contract.input ?? undefined, config.schemaResolver);
         const operation: Partial<OpenAPIV3_1.OperationObject> = {
             operationId,
             parameters,
@@ -56,13 +56,12 @@ class GGHttpRpcCodec implements GGHttpCodec {
         };
 
         if (hasBody && config.contract.input) {
+            const bodySchema = config.schemaResolver
+                ? config.schemaResolver(config.contract.input)
+                : config.contract.input.toJSONSchema();
             operation.requestBody = {
                 required: true,
-                content: {
-                    'application/json': {
-                        schema: config.contract.input.toJSONSchema()
-                    }
-                }
+                content: {'application/json': {schema: bodySchema}}
             };
         }
 

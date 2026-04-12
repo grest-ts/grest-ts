@@ -908,25 +908,19 @@ exports[`OpenAPI spec — ShowcaseApi snapshot > matches snapshot 1`] = `
             },
           },
           {
-            "description": "ISO 3166-1 alpha-2",
             "in": "query",
             "name": "country",
             "required": false,
             "schema": {
-              "example": "US",
-              "title": "Country code",
-              "type": "string",
+              "$ref": "#/components/schemas/CountryCode",
             },
           },
           {
-            "description": "ISO 4217",
             "in": "query",
             "name": "currency",
             "required": false,
             "schema": {
-              "example": "USD",
-              "title": "Currency code",
-              "type": "string",
+              "$ref": "#/components/schemas/CurrencyCode",
             },
           },
           {
@@ -946,15 +940,11 @@ exports[`OpenAPI spec — ShowcaseApi snapshot > matches snapshot 1`] = `
             },
           },
           {
-            "description": "Format YYYY-MM-DD",
             "in": "query",
             "name": "minJoined",
             "required": false,
             "schema": {
-              "example": "2024-01-15",
-              "format": "date",
-              "title": "Date",
-              "type": "string",
+              "$ref": "#/components/schemas/Date",
             },
           },
           {
