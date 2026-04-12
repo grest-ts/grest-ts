@@ -4,7 +4,7 @@ import type {OpenAPIV3_1} from "openapi-types";
 
 export class UnknownSchema<T = unknown> extends GGSchema<T, UnknownDef> {
 
-    protected derive<NewT = T>(changes: Partial<UnknownDef>): UnknownSchema<NewT> {
+    protected _buildDerived<NewT = T>(changes: Partial<UnknownDef>): UnknownSchema<NewT> {
         return new UnknownSchema<NewT>({...this.def, ...changes});
     }
 

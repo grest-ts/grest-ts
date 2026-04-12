@@ -41,7 +41,7 @@ export class PasswordSchema<T extends tPassword | undefined | null = tPassword> 
     public static readonly needsUppercaseError = new GGIssueInvalid("password.needsUppercase", "Password must contain at least one uppercase letter");
     public static readonly needsSpecialError = new GGIssueInvalid("password.needsSpecial", "Password must contain at least one special character");
 
-    protected derive<NewT extends tPassword | undefined | null = T>(changes: Partial<PasswordDef>): PasswordSchema<NewT> {
+    protected _buildDerived<NewT extends tPassword | undefined | null = T>(changes: Partial<PasswordDef>): PasswordSchema<NewT> {
         return new PasswordSchema<NewT>({...this.def, ...changes});
     }
 

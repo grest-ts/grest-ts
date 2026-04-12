@@ -15,23 +15,23 @@ export class NumberSchema<T extends Number | number | undefined | null = number>
     // --------------------------------------------------------------------------------------
 
     min(n: number): NumberSchema<T> {
-        return this.derive({min: n});
+        return this.derive({min: n}) as this;
     }
 
     max(n: number): NumberSchema<T> {
-        return this.derive({max: n});
+        return this.derive({max: n}) as this;
     }
 
     range(min: number, max: number): NumberSchema<T> {
-        return this.derive({min, max});
+        return this.derive({min, max}) as this;
     }
 
     multipleOf(n: number): NumberSchema<T> {
         if (n <= 0) throw new Error(`multipleOf must be positive, got ${n}`);
-        return this.derive({multipleOf: n});
+        return this.derive({multipleOf: n}) as this;
     }
 
-    protected derive<NewT extends Number | number | undefined | null = T>(changes: Partial<NumberDef>): NumberSchema<NewT> {
+    protected _buildDerived<NewT extends Number | number | undefined | null = T>(changes: Partial<NumberDef>): NumberSchema<NewT> {
         const newDef: NumberDef = {...this.def, ...changes};
 
         if (this.def.min !== undefined && newDef.min !== undefined && newDef.min < this.def.min) {

@@ -53,7 +53,7 @@ exports[`OpenAPI spec — ShowcaseApi snapshot > matches snapshot 1`] = `
         "type": "string",
       },
       "Date": {
-        "description": "Registration date",
+        "description": "Format YYYY-MM-DD",
         "example": "2024-01-15",
         "format": "date",
         "title": "Date",
@@ -246,48 +246,33 @@ exports[`OpenAPI spec — ShowcaseApi snapshot > matches snapshot 1`] = `
         "type": "string",
       },
       "LanguageCode": {
-        "default": "en",
         "description": "ISO 639-1",
         "example": "en",
         "title": "Language code",
         "type": "string",
       },
       "Latitude": {
-        "oneOf": [
-          {
-            "description": "Decimal degrees (-90 to 90)",
-            "example": 59.437,
-            "maximum": 90,
-            "minimum": -90,
-            "title": "Latitude",
-            "type": "number",
-          },
-          {
-            "type": "null",
-          },
-        ],
+        "description": "Decimal degrees (-90 to 90)",
+        "example": 59.437,
+        "maximum": 90,
+        "minimum": -90,
+        "title": "Latitude",
+        "type": "number",
       },
       "LocaleCode": {
-        "description": "Locale requested by the client via Accept-Language",
-        "example": "de",
+        "description": "BCP 47 language or language-region format",
+        "example": "en-US",
         "pattern": "^[a-z]{2}(-[A-Z]{2})?$",
         "title": "Locale code",
         "type": "string",
       },
       "Longitude": {
-        "oneOf": [
-          {
-            "description": "Decimal degrees (-180 to 180)",
-            "example": 24.754,
-            "maximum": 180,
-            "minimum": -180,
-            "title": "Longitude",
-            "type": "number",
-          },
-          {
-            "type": "null",
-          },
-        ],
+        "description": "Decimal degrees (-180 to 180)",
+        "example": 24.754,
+        "maximum": 180,
+        "minimum": -180,
+        "title": "Longitude",
+        "type": "number",
       },
       "OrderCancelledEvent": {
         "properties": {
@@ -299,6 +284,7 @@ exports[`OpenAPI spec — ShowcaseApi snapshot > matches snapshot 1`] = `
           },
           "occurredAt": {
             "$ref": "#/components/schemas/UnixTimestampInSeconds",
+            "description": "When the event occurred",
           },
           "orderId": {
             "minLength": 1,
@@ -337,6 +323,7 @@ exports[`OpenAPI spec — ShowcaseApi snapshot > matches snapshot 1`] = `
           },
           "occurredAt": {
             "$ref": "#/components/schemas/UnixTimestampInSeconds",
+            "description": "When the event occurred",
           },
           "orderId": {
             "minLength": 1,
@@ -377,10 +364,24 @@ exports[`OpenAPI spec — ShowcaseApi snapshot > matches snapshot 1`] = `
             "description": "Unchecked partner-supplied payload",
           },
           "avgLatitude": {
-            "$ref": "#/components/schemas/Latitude",
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/Latitude",
+              },
+              {
+                "type": "null",
+              },
+            ],
           },
           "avgLongitude": {
-            "$ref": "#/components/schemas/Longitude",
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/Longitude",
+              },
+              {
+                "type": "null",
+              },
+            ],
           },
           "bitFlag": {
             "description": "1 = healthy, 0 = degraded",
@@ -393,7 +394,14 @@ exports[`OpenAPI spec — ShowcaseApi snapshot > matches snapshot 1`] = `
             "type": "integer",
           },
           "recentEvent": {
-            "$ref": "#/components/schemas/Event",
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/Event",
+              },
+              {
+                "type": "null",
+              },
+            ],
           },
           "serverDateTime": {
             "$ref": "#/components/schemas/DateTime",
@@ -511,7 +519,7 @@ exports[`OpenAPI spec — ShowcaseApi snapshot > matches snapshot 1`] = `
         "type": "string",
       },
       "UnixTimestampInSeconds": {
-        "description": "When the event occurred",
+        "description": "Seconds since Unix epoch (year 1970–3000)",
         "example": 1700000000,
         "maximum": 32503680000,
         "minimum": 0,
@@ -534,6 +542,7 @@ exports[`OpenAPI spec — ShowcaseApi snapshot > matches snapshot 1`] = `
           },
           "occurredAt": {
             "$ref": "#/components/schemas/UnixTimestampInSeconds",
+            "description": "When the event occurred",
           },
           "type": {
             "enum": [
@@ -600,6 +609,7 @@ exports[`OpenAPI spec — ShowcaseApi snapshot > matches snapshot 1`] = `
           },
           "joinedAt": {
             "$ref": "#/components/schemas/Date",
+            "description": "Registration date",
           },
           "language": {
             "$ref": "#/components/schemas/LanguageCode",
@@ -678,6 +688,7 @@ exports[`OpenAPI spec — ShowcaseApi snapshot > matches snapshot 1`] = `
           },
           "expectedLanguage": {
             "$ref": "#/components/schemas/LocaleCode",
+            "description": "Locale requested by the client via Accept-Language",
           },
           "message": {
             "description": "Human-readable error message, localised to the client locale if available",
@@ -701,6 +712,7 @@ exports[`OpenAPI spec — ShowcaseApi snapshot > matches snapshot 1`] = `
           },
           "usedLanguage": {
             "$ref": "#/components/schemas/LocaleCode",
+            "description": "Locale actually used to render the message (may differ from requested if translation is missing)",
           },
         },
         "required": [

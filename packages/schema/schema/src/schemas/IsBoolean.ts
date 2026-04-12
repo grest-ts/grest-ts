@@ -14,7 +14,7 @@ export class BooleanSchema<T extends boolean | undefined | null = boolean> exten
 
     // --------------------------------------------------------------------------------------
 
-    protected derive<NewT extends boolean | undefined | null = T>(changes: Partial<BooleanDef>): BooleanSchema<NewT> {
+    protected _buildDerived<NewT extends boolean | undefined | null = T>(changes: Partial<BooleanDef>): BooleanSchema<NewT> {
         return new BooleanSchema<NewT>({...this.def, ...changes});
     }
 

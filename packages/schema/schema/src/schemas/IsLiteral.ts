@@ -24,7 +24,7 @@ export class LiteralSchema<T extends LiteralValue | undefined | null = LiteralVa
         return super.orNull as any
     }
 
-    protected derive<NewT extends LiteralValue | undefined | null = T>(changes: Partial<LiteralDef>): LiteralSchema<NewT> {
+    protected _buildDerived<NewT extends LiteralValue | undefined | null = T>(changes: Partial<LiteralDef>): LiteralSchema<NewT> {
         return new LiteralSchema<NewT>({...this.def, ...changes});
     }
 

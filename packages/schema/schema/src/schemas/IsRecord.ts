@@ -4,7 +4,7 @@ import type {OpenAPIV3_1} from "openapi-types";
 
 export class RecordSchema<T extends Record<string, unknown> | undefined | null = Record<string, unknown>> extends GGSchema<T, RecordDef> {
 
-    protected derive<NewT extends Record<string, unknown> | undefined | null = T>(changes: Partial<RecordDef>): RecordSchema<NewT> {
+    protected _buildDerived<NewT extends Record<string, unknown> | undefined | null = T>(changes: Partial<RecordDef>): RecordSchema<NewT> {
         return new RecordSchema<NewT>({...this.def, ...changes});
     }
 

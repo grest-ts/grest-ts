@@ -98,7 +98,7 @@ export class FileSchema<T extends GGFile | undefined | null = GGFile> extends GG
         return super.orNull as any;
     }
 
-    protected derive<NewT extends GGFile | undefined | null = T>(changes: Partial<FileDef>): FileSchema<NewT> {
+    protected _buildDerived<NewT extends GGFile | undefined | null = T>(changes: Partial<FileDef>): FileSchema<NewT> {
         if (this.def.maxSize !== undefined && changes.maxSize !== undefined && changes.maxSize > this.def.maxSize) {
             throw new Error(`Cannot raise maxSize from ${this.def.maxSize} to ${changes.maxSize}`);
         }
@@ -122,11 +122,11 @@ export class FileSchema<T extends GGFile | undefined | null = GGFile> extends GG
 
     accept(...types: string[]): FileSchema<T> {
         const combined = this.def.accept ? [...this.def.accept, ...types] : types;
-        return this.derive({accept: combined});
+        return this.derive({accept: combined}) as this;
     }
 
     maxSize(bytes: number): FileSchema<T> {
-        return this.derive({maxSize: bytes});
+        return this.derive({maxSize: bytes}) as this;
     }
 
     // ==================== Static Shortcuts ====================

@@ -21,41 +21,60 @@ import type {OpenAPIV3_1} from "openapi-types";
  * recursing into the schema body, breaking infinite loops.
  */
 export class SchemaRegistry {
-    /** name → resolved SchemaObject (the component definition) */
+    /** name → resolved SchemaObject (the component definition, always from the base schema) */
     private readonly components = new Map<string, OpenAPIV3_1.SchemaObject>();
-    /** GGSchema identity → component name */
-    private readonly schemaToName = new Map<GGSchema<any>, string>();
-    /** GGSchema identity → seen count (to detect reuse) */
-    private readonly seen = new Map<GGSchema<any>, number>();
+    /** base GGSchema identity → component name */
+    private readonly baseToName = new Map<GGSchema<any>, string>();
     /** schemas currently being built (cycle guard) */
     private readonly building = new Set<GGSchema<any>>();
 
     /**
      * Return a SchemaObject or ReferenceObject for the given GGSchema.
-     * Recursively walks composite types to extract their named sub-schemas.
+     *
+     * Uses schema._base (set by GGSchema for presentational derives) to find
+     * the canonical type. The component is defined by and keyed to the base
+     * schema, so decorated variants (.orUndefined, .docs(), etc.) correctly
+     * resolve to the same component as their undecorated base.
+     *
+     * Nullable: wrapped as {oneOf: [$ref, {type:"null"}]}.
+     * Field-level description differing from the base: emitted as a sibling
+     * alongside the $ref (valid in OpenAPI 3.1).
      */
     schemaOrRef(schema: GGSchema<any>): OpenAPIV3_1.SchemaObject | OpenAPIV3_1.ReferenceObject {
-        const title = schema.def.docs?.title;
-        const count = (this.seen.get(schema) ?? 0) + 1;
-        this.seen.set(schema, count);
+        const base: GGSchema<any> = schema._base ?? schema;
+        const title = base.def.docs?.title;
 
-        // Extract to components if it has a title (regardless of reuse count)
         if (title) {
             const name = toComponentName(title);
-            if (!this.schemaToName.has(schema)) {
-                this.schemaToName.set(schema, name);
-                // Register before recursing to break cycles
-                if (!this.building.has(schema)) {
-                    this.building.add(schema);
-                    const resolved = this.buildSchemaObject(schema);
+
+            if (!this.baseToName.has(base)) {
+                this.baseToName.set(base, name);
+                if (!this.building.has(base)) {
+                    this.building.add(base);
+                    const resolved = this.buildSchemaObject(base);
                     this.components.set(name, resolved);
-                    this.building.delete(schema);
+                    this.building.delete(base);
                 }
             }
-            return {$ref: `#/components/schemas/${name}`};
+
+            const ref: OpenAPIV3_1.ReferenceObject = {$ref: `#/components/schemas/${name}`};
+
+            // Nullable — wrap in oneOf [$ref, null]
+            if (schema.def.nullable) {
+                return {oneOf: [ref, {type: 'null'}]};
+            }
+
+            // Field-level description sibling (OpenAPI 3.1 allows keywords alongside $ref)
+            const fieldDesc = schema.def.docs?.description;
+            const baseDesc = base.def.docs?.description;
+            if (fieldDesc && fieldDesc !== baseDesc) {
+                return {...ref, description: fieldDesc} as OpenAPIV3_1.SchemaObject;
+            }
+
+            return ref;
         }
 
-        // No title — inline, but still recurse into composites to find named children
+        // No title on base — inline, recurse into composites to find named children
         return this.buildSchemaObject(schema);
     }
 
@@ -134,30 +153,26 @@ export class SchemaRegistry {
     }
 
     /**
-     * Apply docs, format, default, and nullable wrapping onto an already-built base schema.
-     * Mirrors the logic in GGSchema.toJSONSchema() for composite types we built ourselves.
+     * Apply docs, format, and default onto an already-built composite schema.
+     * Called only for base schemas (no presentational modifiers) — nullable is
+     * handled upstream in schemaOrRef(), not here.
      */
     private applyDocsAndNullable(
-        base: OpenAPIV3_1.SchemaObject,
+        built: OpenAPIV3_1.SchemaObject,
         schema: GGSchema<any>
     ): OpenAPIV3_1.SchemaObject {
         const {docs, defaultValue} = schema.def;
-        if (docs || defaultValue !== undefined) {
-            base = {
-                ...base,
-                ...(docs?.title !== undefined ? {title: docs.title} : {}),
-                ...(docs?.description !== undefined ? {description: docs.description} : {}),
-                ...(docs?.format !== undefined ? {format: docs.format} : {}),
-                ...(docs?.example !== undefined ? {example: docs.example} : {}),
-                ...(docs?.examples !== undefined ? {examples: [...docs.examples]} : {}),
-                ...(docs?.deprecated === true ? {deprecated: true} : {}),
-                ...(defaultValue !== undefined ? {default: defaultValue} : {}),
-            };
-        }
-        if (schema.def.nullable) {
-            base = {oneOf: [base, {type: 'null'}]};
-        }
-        return base;
+        if (!docs && defaultValue === undefined) return built;
+        return {
+            ...built,
+            ...(docs?.title !== undefined ? {title: docs.title} : {}),
+            ...(docs?.description !== undefined ? {description: docs.description} : {}),
+            ...(docs?.format !== undefined ? {format: docs.format} : {}),
+            ...(docs?.example !== undefined ? {example: docs.example} : {}),
+            ...(docs?.examples !== undefined ? {examples: [...docs.examples]} : {}),
+            ...(docs?.deprecated === true ? {deprecated: true} : {}),
+            ...(defaultValue !== undefined ? {default: defaultValue} : {}),
+        };
     }
 
     /** Cache of error class identity → component name for full error body schemas. */

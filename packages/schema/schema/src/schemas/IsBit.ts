@@ -4,7 +4,7 @@ import type {OpenAPIV3_1} from "openapi-types";
 
 export class BitSchema<T extends 0 | 1 | undefined | null = 0 | 1> extends GGSchema<T, BitDef> {
 
-    protected derive<NewT extends 0 | 1 | undefined | null = T>(changes: Partial<BitDef>): BitSchema<NewT> {
+    protected _buildDerived<NewT extends 0 | 1 | undefined | null = T>(changes: Partial<BitDef>): BitSchema<NewT> {
         return new BitSchema<NewT>({...this.def, ...changes});
     }
 

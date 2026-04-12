@@ -39,6 +39,24 @@ export abstract class GGSchema<Type, TDef extends GGSchemaDefinition = GGSchemaD
     private _orNull?: GGSchema<Type | null, TDef>;
 
     /**
+     * Points to the nearest ancestor schema that introduced a structural (non-presentational) change.
+     * Set automatically by presentational derive calls: .docs(), .default(), .orUndefined,
+     * .orNull, .refine(), .coerce(). Structural calls (.minLength(), .regex(), .extend(), etc.)
+     * do NOT set this, making the new schema its own base.
+     *
+     * Useful for tools like @grest-ts/openapi that need the canonical type identity
+     * independently of presentational decorations applied at the usage site.
+     *
+     * @example
+     * IsEmail._base                                    // undefined — IsEmail is its own base
+     * IsEmail.orUndefined._base                        // IsEmail
+     * IsEmail.orUndefined.docs({description: "..."})._base  // IsEmail
+     * IsEmail.regex(/extra/)._base                     // undefined — new structural type
+     * IsEmail.regex(/extra/).docs({...})._base         // IsEmail.regex(/extra/)
+     */
+    public _base: GGSchema<any> | undefined = undefined;
+
+    /**
      * The executor strategy to use for schema operations.
      * Set to AotExecutor for AOT compilation (default), or InterpreterExecutor for interpreter mode.
      */
@@ -58,13 +76,13 @@ export abstract class GGSchema<Type, TDef extends GGSchemaDefinition = GGSchemaD
     // ---------------------------------------------------------------------------------------------------------
 
     public default(value: Exclude<Type, undefined>): GGSchema<Exclude<Type, undefined>, TDef> {
-        return this.derive({defaultValue: value} as Partial<TDef>) as GGSchema<Exclude<Type, undefined>, TDef>;
+        return this.derive({defaultValue: value} as Partial<TDef>, true) as GGSchema<Exclude<Type, undefined>, TDef>;
     }
 
     public get orUndefined(): GGSchema<Type | undefined, TDef> & Opt {
         if (this.def.optional) return this as any;
         if (!this._orUndefined) {
-            this._orUndefined = this.derive<Type | undefined>({optional: true} as Partial<TDef>)
+            this._orUndefined = this.derive<Type | undefined>({optional: true} as Partial<TDef>, true)
         }
         return this._orUndefined as GGSchema<Type | undefined, TDef> & Opt;
     }
@@ -72,7 +90,7 @@ export abstract class GGSchema<Type, TDef extends GGSchemaDefinition = GGSchemaD
     public get orNull(): GGSchema<Type | null, TDef> {
         if (this.def.nullable) return this as any;
         if (!this._orNull) {
-            this._orNull = this.derive<Type | null>({nullable: true} as Partial<TDef>)
+            this._orNull = this.derive<Type | null>({nullable: true} as Partial<TDef>, true)
         }
         return this._orNull;
     }
@@ -82,22 +100,49 @@ export abstract class GGSchema<Type, TDef extends GGSchemaDefinition = GGSchemaD
     }
 
     public docs(docs: GGSchemaDocs): this {
-        return this.derive({docs: this.def.docs ? {...this.def.docs, ...docs} : docs} as Partial<TDef>) as this;
+        const mergedDocs = this.def.docs ? {...this.def.docs, ...docs} : docs;
+        // Adding or changing a title is a structural change — it names this schema as a new type.
+        // All other doc fields (description, example, deprecated, format) are presentational.
+        const titleChanged = docs.title !== undefined && docs.title !== this.def.docs?.title;
+        return this.derive({docs: mergedDocs} as Partial<TDef>, !titleChanged) as this;
     }
 
     public refine(check: (value: Type) => boolean, error: GGIssueKey): GGSchema<Type, TDef> {
-        return this.derive({refinements: [...(this.def.refinements ?? []), {check, error}]} as any);
+        return this.derive({refinements: [...(this.def.refinements ?? []), {check, error}]} as any, true);
     }
 
     public coerce(fn: (value: Type) => Type): this {
-        return this.derive({coercions: [...(this.def.coercions ?? []), fn]} as any) as this;
+        return this.derive({coercions: [...(this.def.coercions ?? []), fn]} as any, true) as this;
     }
 
     public brand<B extends string>(_name: B): GGSchema<Type & Brand<B>, TDef> {
         return this as any;
     }
 
-    protected abstract derive<NewT extends Type | undefined | null = Type>(changes: Partial<TDef>): GGSchema<NewT, TDef>;
+    /**
+     * Create a derived schema with the given changes.
+     *
+     * @param changes - Fields to override in the schema definition.
+     * @param presentational - When true, the derived schema is a presentational variant
+     *   (docs, optional, nullable, default, refine, coerce) — its _base pointer is set
+     *   to this schema's _base (or this schema itself), so the canonical type identity
+     *   is preserved across decoration chains.
+     *   Structural changes (constraints, shape, pattern, etc.) leave presentational=false
+     *   (the default), making the new schema its own base.
+     */
+    protected derive<NewT extends Type | undefined | null = Type>(
+        changes: Partial<TDef>,
+        presentational = false
+    ): GGSchema<NewT, TDef> {
+        const result = this._buildDerived<NewT>(changes);
+        if (presentational) {
+            result._base = this._base ?? this;
+        }
+        return result;
+    }
+
+    /** Subclasses implement this to construct the new schema instance. */
+    protected abstract _buildDerived<NewT extends Type | undefined | null = Type>(changes: Partial<TDef>): GGSchema<NewT, TDef>;
 
     // ----------------------------------
 

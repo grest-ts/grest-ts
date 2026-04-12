@@ -56,7 +56,7 @@ export class ObjectSchema<T extends object | undefined | null = object> extends 
         return super.orNull as any
     }
 
-    protected derive<NewT extends T | undefined | null = T>(changes: Partial<ObjectDefImpl>): ObjectSchema<NewT> {
+    protected _buildDerived<NewT extends T | undefined | null = T>(changes: Partial<ObjectDefImpl>): ObjectSchema<NewT> {
         return new ObjectSchema<NewT>({...this.def, ...changes});
     }
 

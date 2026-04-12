@@ -19,7 +19,7 @@ export class TupleSchema<T extends readonly unknown[] = readonly unknown[]> exte
         }
     }
 
-    protected derive<NewT extends readonly unknown[] | undefined | null = T>(changes: Partial<TupleDefImpl>): TupleSchema<NewT> {
+    protected _buildDerived<NewT extends readonly unknown[] | undefined | null = T>(changes: Partial<TupleDefImpl>): TupleSchema<NewT> {
         return new TupleSchema<NewT>({...this.def, ...changes});
     }
 

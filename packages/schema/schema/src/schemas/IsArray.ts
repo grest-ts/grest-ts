@@ -20,18 +20,18 @@ export class ArraySchema<T extends any[] = any[]> extends GGSchema<T, ArrayDef> 
     }
 
     minLength(n: number): ArraySchema<T> {
-        return this.derive({minLength: n});
+        return this.derive({minLength: n}) as this;
     }
 
     maxLength(n: number): ArraySchema<T> {
-        return this.derive({maxLength: n});
+        return this.derive({maxLength: n}) as this;
     }
 
     range(min: number, max: number): ArraySchema<T> {
-        return this.derive({minLength: min, maxLength: max});
+        return this.derive({minLength: min, maxLength: max}) as this;
     }
 
-    protected derive<NewT extends T | undefined | null = T>(changes: Partial<ArrayDef>): ArraySchema<NewT> {
+    protected _buildDerived<NewT extends T | undefined | null = T>(changes: Partial<ArrayDef>): ArraySchema<NewT> {
         const newDef: ArrayDef = {...this.def, ...changes};
         if (this.def.minLength !== undefined && newDef.minLength !== undefined && newDef.minLength < this.def.minLength) {
             throw new Error(`Cannot lower minLength from ${this.def.minLength} to ${newDef.minLength}`);

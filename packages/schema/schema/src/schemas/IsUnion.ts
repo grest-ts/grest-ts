@@ -6,7 +6,7 @@ type InferUnion<T extends GGSchema<any>[]> = T[number] extends GGSchema<infer U>
 
 export class UnionSchema<T = unknown> extends GGSchema<T, UnionDef> {
 
-    protected derive<NewT = T>(changes: Partial<UnionDef>): UnionSchema<NewT> {
+    protected _buildDerived<NewT = T>(changes: Partial<UnionDef>): UnionSchema<NewT> {
         return new UnionSchema<NewT>({...this.def, ...changes});
     }
 

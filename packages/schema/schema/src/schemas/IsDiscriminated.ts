@@ -21,7 +21,7 @@ export class DiscriminatedSchema<T = unknown> extends GGSchema<T, DiscriminatedD
         }
     }
 
-    protected derive<NewT = T>(changes: Partial<DiscriminatedDefImpl>): DiscriminatedSchema<NewT> {
+    protected _buildDerived<NewT = T>(changes: Partial<DiscriminatedDefImpl>): DiscriminatedSchema<NewT> {
         return new DiscriminatedSchema<NewT>({...this.def, ...changes});
     }
 

@@ -4,7 +4,7 @@ import type {OpenAPIV3_1} from "openapi-types";
 
 export class AnySchema<T = any> extends GGSchema<T, AnyDef> {
 
-    protected derive<NewT = T>(changes: Partial<AnyDef>): AnySchema<NewT> {
+    protected _buildDerived<NewT = T>(changes: Partial<AnyDef>): AnySchema<NewT> {
         return new AnySchema<NewT>({...this.def, ...changes});
     }
 
