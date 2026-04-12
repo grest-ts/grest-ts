@@ -71,6 +71,152 @@ exports[`OpenAPI spec — ShowcaseApi snapshot > matches snapshot 1`] = `
         "title": "Email address",
         "type": "string",
       },
+      "Error_Conflict": {
+        "properties": {
+          "success": {
+            "enum": [
+              false,
+            ],
+            "type": "boolean",
+          },
+          "type": {
+            "enum": [
+              "CONFLICT",
+            ],
+            "type": "string",
+          },
+        },
+        "required": [
+          "success",
+          "type",
+        ],
+        "type": "object",
+      },
+      "Error_ProfileNotFound": {
+        "properties": {
+          "success": {
+            "enum": [
+              false,
+            ],
+            "type": "boolean",
+          },
+          "type": {
+            "enum": [
+              "PROFILE_NOT_FOUND",
+            ],
+            "type": "string",
+          },
+        },
+        "required": [
+          "success",
+          "type",
+        ],
+        "type": "object",
+      },
+      "Error_RateLimited": {
+        "properties": {
+          "data": {
+            "properties": {
+              "retryAfterSeconds": {
+                "description": "Number of seconds to wait before retrying",
+                "type": "integer",
+              },
+            },
+            "required": [
+              "retryAfterSeconds",
+            ],
+            "type": "object",
+          },
+          "success": {
+            "enum": [
+              false,
+            ],
+            "type": "boolean",
+          },
+          "type": {
+            "enum": [
+              "RATE_LIMITED",
+            ],
+            "type": "string",
+          },
+        },
+        "required": [
+          "success",
+          "type",
+          "data",
+        ],
+        "type": "object",
+      },
+      "Error_ResourceNotFound": {
+        "properties": {
+          "success": {
+            "enum": [
+              false,
+            ],
+            "type": "boolean",
+          },
+          "type": {
+            "enum": [
+              "RESOURCE_NOT_FOUND",
+            ],
+            "type": "string",
+          },
+        },
+        "required": [
+          "success",
+          "type",
+        ],
+        "type": "object",
+      },
+      "Error_ServerError": {
+        "properties": {
+          "success": {
+            "enum": [
+              false,
+            ],
+            "type": "boolean",
+          },
+          "type": {
+            "enum": [
+              "SERVER_ERROR",
+            ],
+            "type": "string",
+          },
+        },
+        "required": [
+          "success",
+          "type",
+        ],
+        "type": "object",
+      },
+      "Error_ValidationError": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationIssue",
+            },
+            "type": "array",
+          },
+          "success": {
+            "enum": [
+              false,
+            ],
+            "type": "boolean",
+          },
+          "type": {
+            "enum": [
+              "VALIDATION_ERROR",
+            ],
+            "type": "string",
+          },
+        },
+        "required": [
+          "success",
+          "type",
+          "data",
+        ],
+        "type": "object",
+      },
       "Event": {
         "description": "Discriminated union of all domain events keyed by type",
         "discriminator": {
@@ -615,25 +761,7 @@ exports[`OpenAPI spec — ShowcaseApi snapshot > matches snapshot 1`] = `
             "content": {
               "application/json": {
                 "schema": {
-                  "properties": {
-                    "success": {
-                      "enum": [
-                        false,
-                      ],
-                      "type": "boolean",
-                    },
-                    "type": {
-                      "enum": [
-                        "SERVER_ERROR",
-                      ],
-                      "type": "string",
-                    },
-                  },
-                  "required": [
-                    "success",
-                    "type",
-                  ],
-                  "type": "object",
+                  "$ref": "#/components/schemas/Error_ServerError",
                 },
               },
             },
@@ -660,46 +788,10 @@ exports[`OpenAPI spec — ShowcaseApi snapshot > matches snapshot 1`] = `
                 "schema": {
                   "oneOf": [
                     {
-                      "properties": {
-                        "success": {
-                          "enum": [
-                            false,
-                          ],
-                          "type": "boolean",
-                        },
-                        "type": {
-                          "enum": [
-                            "RESOURCE_NOT_FOUND",
-                          ],
-                          "type": "string",
-                        },
-                      },
-                      "required": [
-                        "success",
-                        "type",
-                      ],
-                      "type": "object",
+                      "$ref": "#/components/schemas/Error_ResourceNotFound",
                     },
                     {
-                      "properties": {
-                        "success": {
-                          "enum": [
-                            false,
-                          ],
-                          "type": "boolean",
-                        },
-                        "type": {
-                          "enum": [
-                            "PROFILE_NOT_FOUND",
-                          ],
-                          "type": "string",
-                        },
-                      },
-                      "required": [
-                        "success",
-                        "type",
-                      ],
-                      "type": "object",
+                      "$ref": "#/components/schemas/Error_ProfileNotFound",
                     },
                   ],
                 },
@@ -711,38 +803,7 @@ exports[`OpenAPI spec — ShowcaseApi snapshot > matches snapshot 1`] = `
             "content": {
               "application/json": {
                 "schema": {
-                  "properties": {
-                    "data": {
-                      "properties": {
-                        "retryAfterSeconds": {
-                          "description": "Number of seconds to wait before retrying",
-                          "type": "integer",
-                        },
-                      },
-                      "required": [
-                        "retryAfterSeconds",
-                      ],
-                      "type": "object",
-                    },
-                    "success": {
-                      "enum": [
-                        false,
-                      ],
-                      "type": "boolean",
-                    },
-                    "type": {
-                      "enum": [
-                        "RATE_LIMITED",
-                      ],
-                      "type": "string",
-                    },
-                  },
-                  "required": [
-                    "success",
-                    "type",
-                    "data",
-                  ],
-                  "type": "object",
+                  "$ref": "#/components/schemas/Error_RateLimited",
                 },
               },
             },
@@ -752,25 +813,7 @@ exports[`OpenAPI spec — ShowcaseApi snapshot > matches snapshot 1`] = `
             "content": {
               "application/json": {
                 "schema": {
-                  "properties": {
-                    "success": {
-                      "enum": [
-                        false,
-                      ],
-                      "type": "boolean",
-                    },
-                    "type": {
-                      "enum": [
-                        "SERVER_ERROR",
-                      ],
-                      "type": "string",
-                    },
-                  },
-                  "required": [
-                    "success",
-                    "type",
-                  ],
-                  "type": "object",
+                  "$ref": "#/components/schemas/Error_ServerError",
                 },
               },
             },
@@ -824,25 +867,7 @@ exports[`OpenAPI spec — ShowcaseApi snapshot > matches snapshot 1`] = `
             "content": {
               "application/json": {
                 "schema": {
-                  "properties": {
-                    "success": {
-                      "enum": [
-                        false,
-                      ],
-                      "type": "boolean",
-                    },
-                    "type": {
-                      "enum": [
-                        "SERVER_ERROR",
-                      ],
-                      "type": "string",
-                    },
-                  },
-                  "required": [
-                    "success",
-                    "type",
-                  ],
-                  "type": "object",
+                  "$ref": "#/components/schemas/Error_ServerError",
                 },
               },
             },
@@ -996,32 +1021,7 @@ exports[`OpenAPI spec — ShowcaseApi snapshot > matches snapshot 1`] = `
             "content": {
               "application/json": {
                 "schema": {
-                  "properties": {
-                    "data": {
-                      "items": {
-                        "$ref": "#/components/schemas/ValidationIssue",
-                      },
-                      "type": "array",
-                    },
-                    "success": {
-                      "enum": [
-                        false,
-                      ],
-                      "type": "boolean",
-                    },
-                    "type": {
-                      "enum": [
-                        "VALIDATION_ERROR",
-                      ],
-                      "type": "string",
-                    },
-                  },
-                  "required": [
-                    "success",
-                    "type",
-                    "data",
-                  ],
-                  "type": "object",
+                  "$ref": "#/components/schemas/Error_ValidationError",
                 },
               },
             },
@@ -1031,25 +1031,7 @@ exports[`OpenAPI spec — ShowcaseApi snapshot > matches snapshot 1`] = `
             "content": {
               "application/json": {
                 "schema": {
-                  "properties": {
-                    "success": {
-                      "enum": [
-                        false,
-                      ],
-                      "type": "boolean",
-                    },
-                    "type": {
-                      "enum": [
-                        "SERVER_ERROR",
-                      ],
-                      "type": "string",
-                    },
-                  },
-                  "required": [
-                    "success",
-                    "type",
-                  ],
-                  "type": "object",
+                  "$ref": "#/components/schemas/Error_ServerError",
                 },
               },
             },
@@ -1111,25 +1093,7 @@ exports[`OpenAPI spec — ShowcaseApi snapshot > matches snapshot 1`] = `
             "content": {
               "application/json": {
                 "schema": {
-                  "properties": {
-                    "success": {
-                      "enum": [
-                        false,
-                      ],
-                      "type": "boolean",
-                    },
-                    "type": {
-                      "enum": [
-                        "CONFLICT",
-                      ],
-                      "type": "string",
-                    },
-                  },
-                  "required": [
-                    "success",
-                    "type",
-                  ],
-                  "type": "object",
+                  "$ref": "#/components/schemas/Error_Conflict",
                 },
               },
             },
@@ -1139,32 +1103,7 @@ exports[`OpenAPI spec — ShowcaseApi snapshot > matches snapshot 1`] = `
             "content": {
               "application/json": {
                 "schema": {
-                  "properties": {
-                    "data": {
-                      "items": {
-                        "$ref": "#/components/schemas/ValidationIssue",
-                      },
-                      "type": "array",
-                    },
-                    "success": {
-                      "enum": [
-                        false,
-                      ],
-                      "type": "boolean",
-                    },
-                    "type": {
-                      "enum": [
-                        "VALIDATION_ERROR",
-                      ],
-                      "type": "string",
-                    },
-                  },
-                  "required": [
-                    "success",
-                    "type",
-                    "data",
-                  ],
-                  "type": "object",
+                  "$ref": "#/components/schemas/Error_ValidationError",
                 },
               },
             },
@@ -1174,25 +1113,7 @@ exports[`OpenAPI spec — ShowcaseApi snapshot > matches snapshot 1`] = `
             "content": {
               "application/json": {
                 "schema": {
-                  "properties": {
-                    "success": {
-                      "enum": [
-                        false,
-                      ],
-                      "type": "boolean",
-                    },
-                    "type": {
-                      "enum": [
-                        "SERVER_ERROR",
-                      ],
-                      "type": "string",
-                    },
-                  },
-                  "required": [
-                    "success",
-                    "type",
-                  ],
-                  "type": "object",
+                  "$ref": "#/components/schemas/Error_ServerError",
                 },
               },
             },
@@ -1227,25 +1148,7 @@ exports[`OpenAPI spec — ShowcaseApi snapshot > matches snapshot 1`] = `
             "content": {
               "application/json": {
                 "schema": {
-                  "properties": {
-                    "success": {
-                      "enum": [
-                        false,
-                      ],
-                      "type": "boolean",
-                    },
-                    "type": {
-                      "enum": [
-                        "RESOURCE_NOT_FOUND",
-                      ],
-                      "type": "string",
-                    },
-                  },
-                  "required": [
-                    "success",
-                    "type",
-                  ],
-                  "type": "object",
+                  "$ref": "#/components/schemas/Error_ResourceNotFound",
                 },
               },
             },
@@ -1255,25 +1158,7 @@ exports[`OpenAPI spec — ShowcaseApi snapshot > matches snapshot 1`] = `
             "content": {
               "application/json": {
                 "schema": {
-                  "properties": {
-                    "success": {
-                      "enum": [
-                        false,
-                      ],
-                      "type": "boolean",
-                    },
-                    "type": {
-                      "enum": [
-                        "SERVER_ERROR",
-                      ],
-                      "type": "string",
-                    },
-                  },
-                  "required": [
-                    "success",
-                    "type",
-                  ],
-                  "type": "object",
+                  "$ref": "#/components/schemas/Error_ServerError",
                 },
               },
             },
@@ -1337,25 +1222,7 @@ exports[`OpenAPI spec — ShowcaseApi snapshot > matches snapshot 1`] = `
             "content": {
               "application/json": {
                 "schema": {
-                  "properties": {
-                    "success": {
-                      "enum": [
-                        false,
-                      ],
-                      "type": "boolean",
-                    },
-                    "type": {
-                      "enum": [
-                        "RESOURCE_NOT_FOUND",
-                      ],
-                      "type": "string",
-                    },
-                  },
-                  "required": [
-                    "success",
-                    "type",
-                  ],
-                  "type": "object",
+                  "$ref": "#/components/schemas/Error_ResourceNotFound",
                 },
               },
             },
@@ -1365,25 +1232,7 @@ exports[`OpenAPI spec — ShowcaseApi snapshot > matches snapshot 1`] = `
             "content": {
               "application/json": {
                 "schema": {
-                  "properties": {
-                    "success": {
-                      "enum": [
-                        false,
-                      ],
-                      "type": "boolean",
-                    },
-                    "type": {
-                      "enum": [
-                        "SERVER_ERROR",
-                      ],
-                      "type": "string",
-                    },
-                  },
-                  "required": [
-                    "success",
-                    "type",
-                  ],
-                  "type": "object",
+                  "$ref": "#/components/schemas/Error_ServerError",
                 },
               },
             },
@@ -1494,25 +1343,7 @@ exports[`OpenAPI spec — ShowcaseApi snapshot > matches snapshot 1`] = `
             "content": {
               "application/json": {
                 "schema": {
-                  "properties": {
-                    "success": {
-                      "enum": [
-                        false,
-                      ],
-                      "type": "boolean",
-                    },
-                    "type": {
-                      "enum": [
-                        "RESOURCE_NOT_FOUND",
-                      ],
-                      "type": "string",
-                    },
-                  },
-                  "required": [
-                    "success",
-                    "type",
-                  ],
-                  "type": "object",
+                  "$ref": "#/components/schemas/Error_ResourceNotFound",
                 },
               },
             },
@@ -1522,32 +1353,7 @@ exports[`OpenAPI spec — ShowcaseApi snapshot > matches snapshot 1`] = `
             "content": {
               "application/json": {
                 "schema": {
-                  "properties": {
-                    "data": {
-                      "items": {
-                        "$ref": "#/components/schemas/ValidationIssue",
-                      },
-                      "type": "array",
-                    },
-                    "success": {
-                      "enum": [
-                        false,
-                      ],
-                      "type": "boolean",
-                    },
-                    "type": {
-                      "enum": [
-                        "VALIDATION_ERROR",
-                      ],
-                      "type": "string",
-                    },
-                  },
-                  "required": [
-                    "success",
-                    "type",
-                    "data",
-                  ],
-                  "type": "object",
+                  "$ref": "#/components/schemas/Error_ValidationError",
                 },
               },
             },
@@ -1557,25 +1363,7 @@ exports[`OpenAPI spec — ShowcaseApi snapshot > matches snapshot 1`] = `
             "content": {
               "application/json": {
                 "schema": {
-                  "properties": {
-                    "success": {
-                      "enum": [
-                        false,
-                      ],
-                      "type": "boolean",
-                    },
-                    "type": {
-                      "enum": [
-                        "SERVER_ERROR",
-                      ],
-                      "type": "string",
-                    },
-                  },
-                  "required": [
-                    "success",
-                    "type",
-                  ],
-                  "type": "object",
+                  "$ref": "#/components/schemas/Error_ServerError",
                 },
               },
             },
@@ -1640,25 +1428,7 @@ exports[`OpenAPI spec — ShowcaseApi snapshot > matches snapshot 1`] = `
             "content": {
               "application/json": {
                 "schema": {
-                  "properties": {
-                    "success": {
-                      "enum": [
-                        false,
-                      ],
-                      "type": "boolean",
-                    },
-                    "type": {
-                      "enum": [
-                        "RESOURCE_NOT_FOUND",
-                      ],
-                      "type": "string",
-                    },
-                  },
-                  "required": [
-                    "success",
-                    "type",
-                  ],
-                  "type": "object",
+                  "$ref": "#/components/schemas/Error_ResourceNotFound",
                 },
               },
             },
@@ -1668,25 +1438,7 @@ exports[`OpenAPI spec — ShowcaseApi snapshot > matches snapshot 1`] = `
             "content": {
               "application/json": {
                 "schema": {
-                  "properties": {
-                    "success": {
-                      "enum": [
-                        false,
-                      ],
-                      "type": "boolean",
-                    },
-                    "type": {
-                      "enum": [
-                        "SERVER_ERROR",
-                      ],
-                      "type": "string",
-                    },
-                  },
-                  "required": [
-                    "success",
-                    "type",
-                  ],
-                  "type": "object",
+                  "$ref": "#/components/schemas/Error_ServerError",
                 },
               },
             },
@@ -1789,32 +1541,7 @@ exports[`OpenAPI spec — ShowcaseApi snapshot > matches snapshot 1`] = `
             "content": {
               "application/json": {
                 "schema": {
-                  "properties": {
-                    "data": {
-                      "items": {
-                        "$ref": "#/components/schemas/ValidationIssue",
-                      },
-                      "type": "array",
-                    },
-                    "success": {
-                      "enum": [
-                        false,
-                      ],
-                      "type": "boolean",
-                    },
-                    "type": {
-                      "enum": [
-                        "VALIDATION_ERROR",
-                      ],
-                      "type": "string",
-                    },
-                  },
-                  "required": [
-                    "success",
-                    "type",
-                    "data",
-                  ],
-                  "type": "object",
+                  "$ref": "#/components/schemas/Error_ValidationError",
                 },
               },
             },
@@ -1824,25 +1551,7 @@ exports[`OpenAPI spec — ShowcaseApi snapshot > matches snapshot 1`] = `
             "content": {
               "application/json": {
                 "schema": {
-                  "properties": {
-                    "success": {
-                      "enum": [
-                        false,
-                      ],
-                      "type": "boolean",
-                    },
-                    "type": {
-                      "enum": [
-                        "SERVER_ERROR",
-                      ],
-                      "type": "string",
-                    },
-                  },
-                  "required": [
-                    "success",
-                    "type",
-                  ],
-                  "type": "object",
+                  "$ref": "#/components/schemas/Error_ServerError",
                 },
               },
             },

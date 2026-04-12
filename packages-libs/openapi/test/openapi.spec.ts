@@ -114,10 +114,10 @@ describe("toOpenApi", () => {
             expect(schema.properties.name).toEqual({type: "string"});
             expect(schema.properties.price).toEqual({type: "number"});
         });
-        it("has 422 error with data schema", () => {
+        it("has 422 error as $ref to Error_ValidationError component", () => {
             const err422 = op.responses["422"].content["application/json"].schema;
-            expect(err422.properties.type.enum).toContain("VALIDATION_ERROR");
-            expect(err422.properties.data).toBeDefined();
+            // Error body is now extracted to components/schemas
+            expect(err422.$ref).toBe("#/components/schemas/Error_ValidationError");
         });
         it("has 401 error", () => {
             expect(op.responses["401"]).toBeDefined();

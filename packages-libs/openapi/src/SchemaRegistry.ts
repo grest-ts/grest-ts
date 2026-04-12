@@ -1,4 +1,4 @@
-import type {GGSchema} from "@grest-ts/schema";
+import type {ANY_ERROR_CLS, GGSchema} from "@grest-ts/schema";
 import type {OpenAPIV3_1} from "openapi-types";
 
 /**
@@ -160,6 +160,43 @@ export class SchemaRegistry {
         return base;
     }
 
+    /** Cache of error class identity → component name for full error body schemas. */
+    private readonly errClsToName = new Map<ANY_ERROR_CLS, string>();
+
+    /**
+     * Return a $ref to the full error body schema for the given error class, registering
+     * it in components/schemas on first encounter.
+     *
+     * The wire shape is always: { success: false, type: "<TYPE>", data?: <data schema> }
+     * Component name is derived from the TYPE string:
+     *   "VALIDATION_ERROR" → "Error_ValidationError"
+     *   "SERVER_ERROR"     → "Error_ServerError"
+     *   "NOT_FOUND"        → "Error_NotFound"
+     */
+    errorBodyRef(errCls: ANY_ERROR_CLS): OpenAPIV3_1.ReferenceObject {
+        if (!this.errClsToName.has(errCls)) {
+            const name = errorComponentName(errCls.TYPE);
+            this.errClsToName.set(errCls, name);
+
+            const dataSchemaOrRef: OpenAPIV3_1.SchemaObject | OpenAPIV3_1.ReferenceObject | undefined =
+                errCls.schema != null ? this.schemaOrRef(errCls.schema as GGSchema<any>) : undefined;
+
+            const props: NonNullable<OpenAPIV3_1.BaseSchemaObject["properties"]> = {
+                success: {type: "boolean", enum: [false]},
+                type: {type: "string", enum: [errCls.TYPE]},
+            };
+            if (dataSchemaOrRef !== undefined) props.data = dataSchemaOrRef;
+
+            const body: OpenAPIV3_1.NonArraySchemaObject = {
+                type: "object",
+                properties: props,
+                required: ["success", "type", ...(dataSchemaOrRef !== undefined ? ["data"] : [])],
+            };
+            this.components.set(name, body);
+        }
+        return {$ref: `#/components/schemas/${this.errClsToName.get(errCls)!}`};
+    }
+
     /** Returns the collected components/schemas map (empty if no named schemas found). */
     getComponents(): Record<string, OpenAPIV3_1.SchemaObject> | undefined {
         if (this.components.size === 0) return undefined;
@@ -178,4 +215,21 @@ export function toComponentName(title: string): string {
         .filter(Boolean)
         .map(w => w.charAt(0).toUpperCase() + w.slice(1))
         .join('');
+}
+
+/**
+ * Convert an ERROR TYPE string to an OpenAPI component name.
+ * e.g. "VALIDATION_ERROR" → "Error_ValidationError"
+ *      "NOT_FOUND"        → "Error_NotFound"
+ *      "SERVER_ERROR"     → "Error_ServerError"
+ *
+ * The "Error_" prefix makes these immediately recognisable in the components list
+ * and avoids collisions with schema component names.
+ */
+export function errorComponentName(type: string): string {
+    const pascal = type
+        .split('_')
+        .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+        .join('');
+    return `Error_${pascal}`;
 }

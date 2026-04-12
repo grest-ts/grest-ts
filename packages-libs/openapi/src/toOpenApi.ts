@@ -1,5 +1,5 @@
 import type {GGHttpSchema} from "@grest-ts/http";
-import type {ANY_ERROR_CLS, GGSchema} from "@grest-ts/schema";
+import type {ANY_ERROR_CLS} from "@grest-ts/schema";
 import type {OpenAPIV3_1} from "openapi-types";
 import {SchemaRegistry} from "./SchemaRegistry";
 
@@ -193,41 +193,26 @@ function buildErrorResponses(
     const responses: OpenAPIV3_1.ResponsesObject = {};
     if (!contract.errors?.length) return responses;
 
-    const byStatus = new Map<number, OpenAPIV3_1.SchemaObject[]>();
+    // Group by STATUS_CODE. Each error class becomes a $ref to its component.
+    const byStatus = new Map<number, OpenAPIV3_1.ReferenceObject[]>();
     const byStatusTypes = new Map<number, string[]>();
 
     for (const errCls of contract.errors as ANY_ERROR_CLS[]) {
         const statusCode = errCls.STATUS_CODE;
-        const errType = errCls.TYPE;
         if (!byStatusTypes.has(statusCode)) byStatusTypes.set(statusCode, []);
-        byStatusTypes.get(statusCode)!.push(errType);
-
-        const dataSchemaOrRef: OpenAPIV3_1.SchemaObject | OpenAPIV3_1.ReferenceObject | undefined =
-            errCls.schema != null ? registry.schemaOrRef(errCls.schema as GGSchema<any>) : undefined;
-
-        const props: NonNullable<OpenAPIV3_1.BaseSchemaObject["properties"]> = {
-            success: {type: "boolean", enum: [false]},
-            type: {type: "string", enum: [errType]},
-        };
-        if (dataSchemaOrRef !== undefined) props.data = dataSchemaOrRef;
-
-        const errorBodySchema: OpenAPIV3_1.NonArraySchemaObject = {
-            type: "object",
-            properties: props,
-            required: ["success", "type", ...(dataSchemaOrRef !== undefined ? ["data"] : [])]
-        };
+        byStatusTypes.get(statusCode)!.push(errCls.TYPE);
 
         if (!byStatus.has(statusCode)) byStatus.set(statusCode, []);
-        byStatus.get(statusCode)!.push(errorBodySchema);
+        byStatus.get(statusCode)!.push(registry.errorBodyRef(errCls));
     }
 
-    for (const [statusCode, schemas] of byStatus) {
+    for (const [statusCode, refs] of byStatus) {
         const typeNames = byStatusTypes.get(statusCode)!;
         responses[String(statusCode)] = {
             description: typeNames.join(" | "),
             content: {
                 "application/json": {
-                    schema: schemas.length === 1 ? schemas[0] : {oneOf: schemas}
+                    schema: refs.length === 1 ? refs[0] : {oneOf: refs}
                 }
             }
         };
