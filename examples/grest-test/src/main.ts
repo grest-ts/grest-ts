@@ -93,8 +93,9 @@ export class MainRuntime extends GGRuntime {
             docsPath: "/asyncapi-docs"
         }).registerWith(httpServer);
 
-        // HTTP Showcase API — rich OpenAPI demo
-        const showcaseServer = new GGHttpServer({port: 0, key: new GGLocatorKey('showcase-server')});
+        // HTTP Showcase API — rich OpenAPI demo on PORT+1
+        const showcasePort = process.env.PORT ? Number(process.env.PORT) + 1 : 0;
+        const showcaseServer = new GGHttpServer({port: showcasePort, key: new GGLocatorKey('showcase-server')});
         new GGOpenApiServer(showcaseServer, {
             schemas: [ShowcaseApi],
             title: "Showcase API",
@@ -104,8 +105,9 @@ export class MainRuntime extends GGRuntime {
             docsPath: "/docs",
         }).registerWith(showcaseServer);
 
-        // AsyncAPI Showcase — rich WebSocket demo on its own server
-        const asyncShowcaseServer = new GGHttpServer({port: 0, key: new GGLocatorKey('asyncapi-showcase-server')});
+        // AsyncAPI Showcase — rich WebSocket demo on PORT+2
+        const asyncShowcasePort = process.env.PORT ? Number(process.env.PORT) + 2 : 0;
+        const asyncShowcaseServer = new GGHttpServer({port: asyncShowcasePort, key: new GGLocatorKey('asyncapi-showcase-server')});
         new GGAsyncApiServer(asyncShowcaseServer, {
             schemas: [ChatApiSchema, NotificationApiSchema],
             title: "WebSocket Showcase",
