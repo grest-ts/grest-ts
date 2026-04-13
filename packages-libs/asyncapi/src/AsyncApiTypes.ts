@@ -116,6 +116,5 @@ export interface SecuritySchemeObject {
     in?: "user" | "password" | "query" | "header" | "cookie";
 }
 
-export interface SecurityRequirementObject {
-    [name: string]: string[];
-}
+/** AsyncAPI 3.0 security: [{$ref: "#/components/securitySchemes/Name"}] */
+export type SecurityRequirementObject = ReferenceObject | {[name: string]: string[]};

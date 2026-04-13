@@ -245,7 +245,7 @@ exports[`toAsyncApi > matches snapshot 1`] = `
       ],
       "security": [
         {
-          "BearerToken": [],
+          "$ref": "#/components/securitySchemes/BearerToken",
         },
       ],
       "summary": "On Message",
@@ -263,7 +263,7 @@ exports[`toAsyncApi > matches snapshot 1`] = `
       ],
       "security": [
         {
-          "BearerToken": [],
+          "$ref": "#/components/securitySchemes/BearerToken",
         },
       ],
       "summary": "On User Joined",
@@ -281,7 +281,7 @@ exports[`toAsyncApi > matches snapshot 1`] = `
       ],
       "security": [
         {
-          "BearerToken": [],
+          "$ref": "#/components/securitySchemes/BearerToken",
         },
       ],
       "summary": "Join Room (fire-and-forget)",
@@ -309,7 +309,7 @@ exports[`toAsyncApi > matches snapshot 1`] = `
       },
       "security": [
         {
-          "BearerToken": [],
+          "$ref": "#/components/securitySchemes/BearerToken",
         },
       ],
       "summary": "Send Message (request/response)",

@@ -138,14 +138,20 @@ export function toAsyncApi(
         doc.servers = options.servers;
     }
 
-    const schemaComponents = registry.getComponents();
+    const rawSchemaComponents = registry.getComponents();
+    // Fix discriminator format for all extracted components
+    const schemaComponents = rawSchemaComponents
+        ? Object.fromEntries(
+            Object.entries(rawSchemaComponents).map(([k, v]) => [k, fixSchemaForAsyncApi(v)])
+          ) as Record<string, SchemaObject>
+        : undefined;
     const securityComponents = securitySchemes.size > 0
         ? Object.fromEntries(securitySchemes)
         : undefined;
 
     if (schemaComponents || securityComponents) {
         doc.components = {
-            ...(schemaComponents ? {schemas: schemaComponents as Record<string, SchemaObject>} : {}),
+            ...(schemaComponents ? {schemas: schemaComponents} : {}),
             ...(securityComponents ? {securitySchemes: securityComponents} : {}),
         };
     }
@@ -167,7 +173,8 @@ function buildMessage(
         title: camelToTitle(name),
     };
     if (inputSchema) {
-        msg.payload = registry.descOrRef(inputSchema.toSchemaDescription()) as SchemaObject;
+        const schema = registry.descOrRef(inputSchema.toSchemaDescription());
+        msg.payload = fixSchemaForAsyncApi(schema) as SchemaObject;
     }
     return msg;
 }
@@ -222,7 +229,8 @@ function buildHandshakeOpenApi(
                         ...(desc.docs?.description ? {description: desc.docs.description} : {}),
                     });
                 }
-                channelSecurity.push({[schemeName]: []});
+                // AsyncAPI 3.0 security: [{$ref: "#/components/securitySchemes/Name"}]
+                channelSecurity.push({$ref: `#/components/securitySchemes/${schemeName}`} as any);
             } else {
                 const s = schemaDescriptionToOpenApi(desc) as SchemaObject;
                 const {description, ...rest} = s as any;
@@ -236,6 +244,33 @@ function buildHandshakeOpenApi(
         : undefined;
 
     return {handshakeHeaders, channelSecurity};
+}
+
+/**
+ * Convert OpenAPI-format schema properties to AsyncAPI 3.0 format.
+ * Key difference: discriminator is a plain string in AsyncAPI, not {propertyName:...}.
+ */
+function fixSchemaForAsyncApi(schema: unknown): unknown {
+    if (!schema || typeof schema !== 'object') return schema;
+    const s = schema as Record<string, unknown>;
+
+    // Handle $ref — pass through as-is
+    if ('$ref' in s) return s;
+
+    const result: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(s)) {
+        if (k === 'discriminator' && v && typeof v === 'object' && 'propertyName' in (v as object)) {
+            // AsyncAPI 3.0: discriminator is a plain string
+            result[k] = (v as {propertyName: string}).propertyName;
+        } else if (Array.isArray(v)) {
+            result[k] = v.map(fixSchemaForAsyncApi);
+        } else if (v && typeof v === 'object' && !('$ref' in v)) {
+            result[k] = fixSchemaForAsyncApi(v);
+        } else {
+            result[k] = v;
+        }
+    }
+    return result;
 }
 
 function sanitizeId(name: string): string {
