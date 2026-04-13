@@ -16,7 +16,7 @@ export type GGSchemaNodeKind =
     | { kind: 'bit' }
     | { kind: 'literal'; values: readonly (string | number | boolean)[] }
     | { kind: 'array'; element: GGSchemaDescription; minItems?: number; maxItems?: number }
-    | { kind: 'object'; properties: Record<string, GGSchemaDescription>; required: string[] }
+    | { kind: 'object'; properties: Record<string, GGSchemaDescription>; required: string[]; additionalProperties: false }
     | { kind: 'record'; value: GGSchemaDescription }
     | { kind: 'union'; variants: GGSchemaDescription[] }
     | { kind: 'discriminated'; discriminator: string; variants: GGSchemaDescription[] }

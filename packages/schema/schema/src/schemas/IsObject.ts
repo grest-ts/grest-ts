@@ -119,7 +119,7 @@ export class ObjectSchema<T extends object | undefined | null = object> extends 
             properties[k] = child.toSchemaDescription();
             if (!child.def.optional) required.push(k);
         }
-        return {kind: 'object', properties, required};
+        return {kind: 'object', properties, required, additionalProperties: false};
     }
 
     protected _toCompilerDef(): ObjectDefImpl {

@@ -72,7 +72,11 @@ export function schemaDescriptionToOpenApi(
                 properties[k] = resolve(child);
                 if (!child.optional) required.push(k);
             }
-            const s: OpenAPIV3_1.NonArraySchemaObject = {type: 'object', properties};
+            const s: OpenAPIV3_1.NonArraySchemaObject = {
+                type: 'object',
+                properties,
+                additionalProperties: false
+            };
             if (required.length) s.required = required;
             schema = s;
             break;

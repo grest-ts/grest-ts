@@ -100,6 +100,13 @@ export interface GGHttpCodec {
     readonly path: string;
 
     /**
+     * Mark this operation as deprecated in the OpenAPI spec.
+     * Swagger UI renders deprecated operations with a strikethrough.
+     * @default false
+     */
+    readonly deprecated?: boolean;
+
+    /**
      * Response headers this codec sets, mapped to their value schemas.
      * Keys are header names; values describe the header value format.
      * Used for CORS Access-Control-Expose-Headers and OpenAPI response header docs.

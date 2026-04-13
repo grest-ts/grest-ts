@@ -16,21 +16,23 @@ export function _registerRpcServerCodecFactory(factory: GGRpcServerCodecFactory)
 }
 
 export const GGRpc = {
-    GET: (path: string) => new GGHttpRpcCodec("GET", path),
-    DELETE: (path: string) => new GGHttpRpcCodec("DELETE", path),
-    POST: (path: string) => new GGHttpRpcCodec("POST", path),
-    PUT: (path: string) => new GGHttpRpcCodec("PUT", path),
+    GET:    (path: string, opts?: {deprecated?: boolean}) => new GGHttpRpcCodec("GET",    path, opts?.deprecated),
+    DELETE: (path: string, opts?: {deprecated?: boolean}) => new GGHttpRpcCodec("DELETE", path, opts?.deprecated),
+    POST:   (path: string, opts?: {deprecated?: boolean}) => new GGHttpRpcCodec("POST",   path, opts?.deprecated),
+    PUT:    (path: string, opts?: {deprecated?: boolean}) => new GGHttpRpcCodec("PUT",    path, opts?.deprecated),
 }
 
 class GGHttpRpcCodec implements GGHttpCodec {
 
     public readonly method: HttpMethod
     public readonly path: string
+    public readonly deprecated: boolean | undefined
     public readonly responseHeaders: Record<string, GGSchema<string | undefined>> = {}
 
-    constructor(method: HttpMethod, path: string) {
+    constructor(method: HttpMethod, path: string, deprecated?: boolean) {
         this.method = method
         this.path = path
+        this.deprecated = deprecated
     }
 
     public createForClient(config: ClientHttpRouteToRpcTransformClientConfig): ClientHttpRouteToRpcTransformClientCodec {

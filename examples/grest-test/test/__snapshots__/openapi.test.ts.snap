@@ -11,6 +11,7 @@ exports[`OpenAPI spec — ShowcaseApi snapshot > matches snapshot 1`] = `
         "type": "string",
       },
       "CreateUserRequest": {
+        "additionalProperties": false,
         "properties": {
           "country": {
             "$ref": "#/components/schemas/CountryCode",
@@ -116,6 +117,7 @@ exports[`OpenAPI spec — ShowcaseApi snapshot > matches snapshot 1`] = `
       "Error_RateLimited": {
         "properties": {
           "data": {
+            "additionalProperties": false,
             "properties": {
               "retryAfterSeconds": {
                 "description": "Number of seconds to wait before retrying",
@@ -275,6 +277,7 @@ exports[`OpenAPI spec — ShowcaseApi snapshot > matches snapshot 1`] = `
         "type": "number",
       },
       "OrderCancelledEvent": {
+        "additionalProperties": false,
         "properties": {
           "id": {
             "description": "Event ID",
@@ -311,6 +314,7 @@ exports[`OpenAPI spec — ShowcaseApi snapshot > matches snapshot 1`] = `
         "type": "object",
       },
       "OrderPlacedEvent": {
+        "additionalProperties": false,
         "properties": {
           "currency": {
             "$ref": "#/components/schemas/CurrencyCode",
@@ -359,6 +363,7 @@ exports[`OpenAPI spec — ShowcaseApi snapshot > matches snapshot 1`] = `
         "type": "string",
       },
       "PlatformStatistics": {
+        "additionalProperties": false,
         "properties": {
           "anyData": {
             "description": "Unchecked partner-supplied payload",
@@ -411,6 +416,7 @@ exports[`OpenAPI spec — ShowcaseApi snapshot > matches snapshot 1`] = `
           },
           "topCountries": {
             "items": {
+              "additionalProperties": false,
               "properties": {
                 "count": {
                   "minimum": 0,
@@ -482,6 +488,7 @@ exports[`OpenAPI spec — ShowcaseApi snapshot > matches snapshot 1`] = `
         "type": "object",
       },
       "PostalAddress": {
+        "additionalProperties": false,
         "properties": {
           "city": {
             "example": "Tallinn",
@@ -527,6 +534,7 @@ exports[`OpenAPI spec — ShowcaseApi snapshot > matches snapshot 1`] = `
         "type": "integer",
       },
       "UserCreatedEvent": {
+        "additionalProperties": false,
         "properties": {
           "country": {
             "$ref": "#/components/schemas/CountryCode",
@@ -562,6 +570,7 @@ exports[`OpenAPI spec — ShowcaseApi snapshot > matches snapshot 1`] = `
         "type": "object",
       },
       "UserProfile": {
+        "additionalProperties": false,
         "description": "Complete user profile returned from GET /users/:id",
         "properties": {
           "address": {
@@ -668,6 +677,7 @@ exports[`OpenAPI spec — ShowcaseApi snapshot > matches snapshot 1`] = `
         "type": "object",
       },
       "ValidationIssue": {
+        "additionalProperties": false,
         "description": "A single field-level validation failure. One request can produce multiple issues.",
         "example": {
           "code": "invalid.string.minLength",
@@ -999,6 +1009,7 @@ exports[`OpenAPI spec — ShowcaseApi snapshot > matches snapshot 1`] = `
                 "schema": {
                   "properties": {
                     "data": {
+                      "additionalProperties": false,
                       "properties": {
                         "total": {
                           "minimum": 0,
@@ -1306,6 +1317,7 @@ exports[`OpenAPI spec — ShowcaseApi snapshot > matches snapshot 1`] = `
           "content": {
             "application/json": {
               "schema": {
+                "additionalProperties": false,
                 "properties": {
                   "address": {
                     "$ref": "#/components/schemas/PostalAddress",
@@ -1570,6 +1582,7 @@ exports[`OpenAPI spec — ShowcaseApi snapshot > matches snapshot 1`] = `
                 "schema": {
                   "properties": {
                     "data": {
+                      "additionalProperties": false,
                       "properties": {
                         "height": {
                           "minimum": 0,

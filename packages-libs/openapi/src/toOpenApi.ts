@@ -216,7 +216,8 @@ function buildOperation(
         operationId: `${apiName}_${methodName}`,
         summary: camelToSummary(methodName),
         tags: [apiName],
-        responses: responsesWithHeaders
+        responses: responsesWithHeaders,
+        ...(codec.deprecated ? {deprecated: true} : {}),
     };
 }
 
