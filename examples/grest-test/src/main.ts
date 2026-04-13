@@ -2,6 +2,7 @@ import {GGRuntime} from "@grest-ts/runtime"
 import {GGHttpServer} from "@grest-ts/http"
 import {GGOpenApiServer} from "@grest-ts/openapi"
 import {GGAsyncApiServer} from "@grest-ts/asyncapi"
+import {ChatApiSchema, NotificationApiSchema} from "./api/AsyncApiShowcaseApi"
 import {ShowcaseApi} from "./api/OpenApiShowcaseApi"
 import {GGLocatorKey} from "@grest-ts/locator"
 import {ConfigTestApi} from "./api/ConfigTestApi"
@@ -83,10 +84,16 @@ export class MainRuntime extends GGRuntime {
         new GGOpenApiServer(httpServer, {title: "Grest Test API", version: "1.0.0", specPath: "/openapi.json", docsPath: "/docs"})
             .registerWith(httpServer);
 
-        new GGAsyncApiServer(httpServer, {title: "Grest Test Events", version: "1.0.0", specPath: "/asyncapi.json", docsPath: "/asyncapi-docs"})
-            .registerWith(httpServer);
+        // AsyncAPI for real registered WebSocket schemas (ConfigTestSocketApi)
+        new GGAsyncApiServer(httpServer, {
+            title: "Grest Test Events",
+            version: "1.0.0",
+            description: "WebSocket APIs in the grest-test service",
+            specPath: "/asyncapi.json",
+            docsPath: "/asyncapi-docs"
+        }).registerWith(httpServer);
 
-        // Showcase API — rich demo spec on a separate server (port 0 = random available port)
+        // HTTP Showcase API — rich OpenAPI demo
         const showcaseServer = new GGHttpServer({port: 0, key: new GGLocatorKey('showcase-server')});
         new GGOpenApiServer(showcaseServer, {
             schemas: [ShowcaseApi],
@@ -96,6 +103,17 @@ export class MainRuntime extends GGRuntime {
             specPath: "/openapi.json",
             docsPath: "/docs",
         }).registerWith(showcaseServer);
+
+        // AsyncAPI Showcase — rich WebSocket demo on its own server
+        const asyncShowcaseServer = new GGHttpServer({port: 0, key: new GGLocatorKey('asyncapi-showcase-server')});
+        new GGAsyncApiServer(asyncShowcaseServer, {
+            schemas: [ChatApiSchema, NotificationApiSchema],
+            title: "WebSocket Showcase",
+            version: "1.0.0",
+            description: "Rich WebSocket demo: chat (request/response + fire-and-forget + server push), notifications, bearer auth, named schemas, discriminated unions.",
+            specPath: "/asyncapi.json",
+            docsPath: "/asyncapi-docs",
+        }).registerWith(asyncShowcaseServer);
 
         // new GGHttp()
         //     .http(ConfigTestApi, configTestService)

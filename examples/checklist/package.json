@@ -12,7 +12,8 @@
   },
   "dependencies": {
     "@grest-ts/db-mysql": "file:../../packages/db-mysql",
-    "@grest-ts/openapi": "*"
+    "@grest-ts/openapi": "*",
+    "@grest-ts/asyncapi": "*"
   },
   "devDependencies": {
     "@types/node": "^22.15.0",
