@@ -1,6 +1,7 @@
 import {GGRuntime} from "@grest-ts/runtime"
 import {GGHttpServer} from "@grest-ts/http"
 import {GGOpenApiServer} from "@grest-ts/openapi"
+import {GGAsyncApiServer} from "@grest-ts/asyncapi"
 import {ShowcaseApi} from "./api/OpenApiShowcaseApi"
 import {GGLocatorKey} from "@grest-ts/locator"
 import {ConfigTestApi} from "./api/ConfigTestApi"
@@ -80,6 +81,9 @@ export class MainRuntime extends GGRuntime {
         ConfigTestSocketApi.register(configTestService.handleSocketConnection);
 
         new GGOpenApiServer(httpServer, {title: "Grest Test API", version: "1.0.0", specPath: "/openapi.json", docsPath: "/docs"})
+            .registerWith(httpServer);
+
+        new GGAsyncApiServer(httpServer, {title: "Grest Test Events", version: "1.0.0", specPath: "/asyncapi.json", docsPath: "/asyncapi-docs"})
             .registerWith(httpServer);
 
         // Showcase API — rich demo spec on a separate server (port 0 = random available port)

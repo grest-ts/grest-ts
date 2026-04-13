@@ -5,6 +5,9 @@ import {GG_HTTP_SERVER} from "./GG_HTTP_SERVER";
 import {GGLog} from "@grest-ts/logger";
 import findMyWay, {HTTPMethod} from "find-my-way";
 import type {GGHttpSchema} from "../schema/GGHttpSchema";
+// Forward declaration — actual type lives in @grest-ts/websocket to avoid circular dep.
+// GGHttpServer only stores the array; callers cast as needed.
+type AnyWebSocketSchema = {name: string; path: string; contract: unknown; middlewares: readonly unknown[]};
 
 export interface GGHttpServerAdapterConfig {
     key?: GGLocatorKey<GGHttpServer>;
@@ -146,6 +149,21 @@ export class GGHttpServer {
     /** @internal Called by setupRoutes() during compose(). Do not call directly. */
     public _registerSchema(schema: GGHttpSchema<any, any>): void {
         this._registeredSchemas.push(schema);
+    }
+
+    private readonly _registeredWebSocketSchemas: AnyWebSocketSchema[] = [];
+
+    /**
+     * All GGWebSocketSchema instances registered on this server, in registration order.
+     * Populated automatically by GGWebSocketSchema.startServer() / .register().
+     */
+    get registeredWebSocketSchemas(): ReadonlyArray<AnyWebSocketSchema> {
+        return this._registeredWebSocketSchemas;
+    }
+
+    /** @internal Called by GGWebSocketSchema.startServer(). Do not call directly. */
+    public _registerWebSocketSchema(schema: AnyWebSocketSchema): void {
+        this._registeredWebSocketSchemas.push(schema);
     }
 
     public registerRoute(method: HttpMethod, path: string, handler: GGHttpRequestCallback): void {

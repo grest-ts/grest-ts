@@ -1,0 +1,356 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`toAsyncApi > matches snapshot 1`] = `
+{
+  "asyncapi": "3.0.0",
+  "channels": {
+    "ChatApi": {
+      "address": "/ws/chat",
+      "messages": {
+        "ChatApi_joinRoom": {
+          "name": "joinRoom",
+          "payload": {
+            "additionalProperties": false,
+            "properties": {
+              "roomId": {
+                "minLength": 1,
+                "type": "string",
+              },
+            },
+            "required": [
+              "roomId",
+            ],
+            "type": "object",
+          },
+          "title": "Join Room",
+        },
+        "ChatApi_onMessage": {
+          "name": "onMessage",
+          "payload": {
+            "$ref": "#/components/schemas/ChatMessage",
+          },
+          "title": "On Message",
+        },
+        "ChatApi_onUserJoined": {
+          "name": "onUserJoined",
+          "payload": {
+            "additionalProperties": false,
+            "properties": {
+              "roomId": {
+                "minLength": 1,
+                "type": "string",
+              },
+              "userId": {
+                "minLength": 1,
+                "type": "string",
+              },
+            },
+            "required": [
+              "userId",
+              "roomId",
+            ],
+            "type": "object",
+          },
+          "title": "On User Joined",
+        },
+        "ChatApi_sendMessage_request": {
+          "name": "sendMessage request",
+          "payload": {
+            "additionalProperties": false,
+            "properties": {
+              "roomId": {
+                "minLength": 1,
+                "type": "string",
+              },
+              "text": {
+                "description": "Message text",
+                "minLength": 1,
+                "type": "string",
+              },
+            },
+            "required": [
+              "text",
+              "roomId",
+            ],
+            "type": "object",
+          },
+          "title": "Send Message request",
+        },
+        "ChatApi_sendMessage_response": {
+          "name": "sendMessage_response",
+          "payload": {
+            "properties": {
+              "data": {
+                "additionalProperties": false,
+                "properties": {
+                  "messageId": {
+                    "minLength": 1,
+                    "type": "string",
+                  },
+                  "timestamp": {
+                    "type": "number",
+                  },
+                },
+                "required": [
+                  "messageId",
+                  "timestamp",
+                ],
+                "type": "object",
+              },
+              "success": {
+                "enum": [
+                  true,
+                ],
+                "type": "boolean",
+              },
+              "type": {
+                "enum": [
+                  "OK",
+                ],
+                "type": "string",
+              },
+            },
+            "required": [
+              "success",
+              "type",
+              "data",
+            ],
+            "type": "object",
+          },
+          "title": "Send Message response",
+        },
+      },
+      "title": "ChatApi",
+    },
+    "ConfigTestSocketApi": {
+      "address": "/ws/config-test",
+      "messages": {
+        "ConfigTestSocketApi_configChanged": {
+          "name": "configChanged",
+          "payload": {
+            "additionalProperties": false,
+            "properties": {
+              "watchedTimeout": {
+                "type": "number",
+              },
+            },
+            "required": [
+              "watchedTimeout",
+            ],
+            "type": "object",
+          },
+          "title": "Config Changed",
+        },
+        "ConfigTestSocketApi_getWatchedValue_request": {
+          "name": "getWatchedValue request",
+          "title": "Get Watched Value request",
+        },
+        "ConfigTestSocketApi_getWatchedValue_response": {
+          "name": "getWatchedValue_response",
+          "payload": {
+            "properties": {
+              "data": {
+                "additionalProperties": false,
+                "properties": {
+                  "watchedTimeout": {
+                    "type": "number",
+                  },
+                },
+                "required": [
+                  "watchedTimeout",
+                ],
+                "type": "object",
+              },
+              "success": {
+                "enum": [
+                  true,
+                ],
+                "type": "boolean",
+              },
+              "type": {
+                "enum": [
+                  "OK",
+                ],
+                "type": "string",
+              },
+            },
+            "required": [
+              "success",
+              "type",
+              "data",
+            ],
+            "type": "object",
+          },
+          "title": "Get Watched Value response",
+        },
+      },
+      "title": "ConfigTestSocketApi",
+    },
+  },
+  "components": {
+    "schemas": {
+      "ChatMessage": {
+        "additionalProperties": false,
+        "description": "A message pushed to the client",
+        "properties": {
+          "messageId": {
+            "minLength": 1,
+            "type": "string",
+          },
+          "text": {
+            "minLength": 1,
+            "type": "string",
+          },
+          "timestamp": {
+            "type": "number",
+          },
+          "userId": {
+            "minLength": 1,
+            "type": "string",
+          },
+        },
+        "required": [
+          "messageId",
+          "text",
+          "userId",
+          "timestamp",
+        ],
+        "title": "Chat message",
+        "type": "object",
+      },
+    },
+    "securitySchemes": {
+      "BearerToken": {
+        "description": "JWT access token for chat auth",
+        "scheme": "bearer",
+        "type": "http",
+      },
+    },
+  },
+  "info": {
+    "description": "WebSocket API documentation",
+    "title": "Showcase AsyncAPI",
+    "version": "1.0.0",
+  },
+  "operations": {
+    "ChatApi_receive_onMessage": {
+      "action": "receive",
+      "channel": {
+        "$ref": "#/channels/ChatApi",
+      },
+      "messages": [
+        {
+          "$ref": "#/channels/ChatApi/messages/ChatApi_onMessage",
+        },
+      ],
+      "security": [
+        {
+          "BearerToken": [],
+        },
+      ],
+      "summary": "On Message",
+      "title": "On Message",
+    },
+    "ChatApi_receive_onUserJoined": {
+      "action": "receive",
+      "channel": {
+        "$ref": "#/channels/ChatApi",
+      },
+      "messages": [
+        {
+          "$ref": "#/channels/ChatApi/messages/ChatApi_onUserJoined",
+        },
+      ],
+      "security": [
+        {
+          "BearerToken": [],
+        },
+      ],
+      "summary": "On User Joined",
+      "title": "On User Joined",
+    },
+    "ChatApi_send_joinRoom": {
+      "action": "send",
+      "channel": {
+        "$ref": "#/channels/ChatApi",
+      },
+      "messages": [
+        {
+          "$ref": "#/channels/ChatApi/messages/ChatApi_joinRoom",
+        },
+      ],
+      "security": [
+        {
+          "BearerToken": [],
+        },
+      ],
+      "summary": "Join Room (fire-and-forget)",
+      "title": "Join Room",
+    },
+    "ChatApi_send_sendMessage": {
+      "action": "send",
+      "channel": {
+        "$ref": "#/channels/ChatApi",
+      },
+      "messages": [
+        {
+          "$ref": "#/channels/ChatApi/messages/ChatApi_sendMessage_request",
+        },
+      ],
+      "reply": {
+        "channel": {
+          "$ref": "#/channels/ChatApi",
+        },
+        "messages": [
+          {
+            "$ref": "#/channels/ChatApi/messages/ChatApi_sendMessage_response",
+          },
+        ],
+      },
+      "security": [
+        {
+          "BearerToken": [],
+        },
+      ],
+      "summary": "Send Message (request/response)",
+      "title": "Send Message",
+    },
+    "ConfigTestSocketApi_receive_configChanged": {
+      "action": "receive",
+      "channel": {
+        "$ref": "#/channels/ConfigTestSocketApi",
+      },
+      "messages": [
+        {
+          "$ref": "#/channels/ConfigTestSocketApi/messages/ConfigTestSocketApi_configChanged",
+        },
+      ],
+      "summary": "Config Changed",
+      "title": "Config Changed",
+    },
+    "ConfigTestSocketApi_send_getWatchedValue": {
+      "action": "send",
+      "channel": {
+        "$ref": "#/channels/ConfigTestSocketApi",
+      },
+      "messages": [
+        {
+          "$ref": "#/channels/ConfigTestSocketApi/messages/ConfigTestSocketApi_getWatchedValue_request",
+        },
+      ],
+      "reply": {
+        "channel": {
+          "$ref": "#/channels/ConfigTestSocketApi",
+        },
+        "messages": [
+          {
+            "$ref": "#/channels/ConfigTestSocketApi/messages/ConfigTestSocketApi_getWatchedValue_response",
+          },
+        ],
+      },
+      "summary": "Get Watched Value (request/response)",
+      "title": "Get Watched Value",
+    },
+  },
+}
+`;

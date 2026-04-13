@@ -57,6 +57,7 @@ GGWebSocketSchema.prototype.startServer = function (
     const normalizedPath = this.path.startsWith('/') ? this.path : '/' + this.path
     const schemaName = this.name
     const http = config.http ?? GGLocator.getScope().get(GG_HTTP_SERVER);
+    http._registerWebSocketSchema(this as any);
 
     // @TODO We might want some lookup here based on path/middlewares etc. If I use same socket for multiple paths, we need to reuse also same GGSocketServer.
     const socketServer = new GGSocketServer(http, {
