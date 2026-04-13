@@ -80,21 +80,34 @@ export class GGAsyncApiServer {
             res.end(body);
         });
 
-        // AsyncAPI Studio — served via CDN (no npm package available)
-        const studioHtml = buildAsyncApiStudioHtml(specPath);
-        server.registerRoute("GET", docsPath, async (_req, res) => {
+        // AsyncAPI Studio HTML — served for docsPath and all sub-paths so that
+        // sidebar deep-links (e.g. /asyncapi-docs/ChatApi_send_foo) stay on the
+        // same page instead of opening a new tab or returning 404.
+        const serveStudio = async (_req: any, res: any) => {
+            const spec = this.getSpec();
+            const html = buildAsyncApiStudioHtml(spec);
             res.writeHead(200, {
                 "Content-Type": "text/html; charset=utf-8",
-                "Content-Length": Buffer.byteLength(studioHtml)
+                "Content-Length": Buffer.byteLength(html)
             });
-            res.end(studioHtml);
-        });
+            res.end(html);
+        };
+        server.registerRoute("GET", docsPath, serveStudio);
+        // Wildcard for deep-link navigation within the studio
+        server.registerRoute("GET", docsPath + "/*", serveStudio);
 
         return this;
     }
 }
 
-function buildAsyncApiStudioHtml(specUrl: string): string {
+/**
+ * Build the AsyncAPI Studio HTML page with the spec embedded as inline JSON.
+ * Embedding avoids the component fetching the spec by URL on each navigation,
+ * which was causing the sidebar links to open new tabs.
+ */
+function buildAsyncApiStudioHtml(spec: AsyncAPIDocument): string {
+    // Embed the spec as a JSON literal so the studio renders without any fetch
+    const specJson = JSON.stringify(spec);
     return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -102,14 +115,14 @@ function buildAsyncApiStudioHtml(specUrl: string): string {
   <title>AsyncAPI Docs</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <link rel="icon" href="https://www.asyncapi.com/favicon.ico" />
+  <link rel="stylesheet" href="https://unpkg.com/@asyncapi/react-component@latest/styles/default.min.css">
 </head>
 <body>
-<script src="https://unpkg.com/@asyncapi/react-component@latest/browser/standalone/index.js"></script>
-<link rel="stylesheet" href="https://unpkg.com/@asyncapi/react-component@latest/styles/default.min.css">
 <div id="asyncapi"></div>
+<script src="https://unpkg.com/@asyncapi/react-component@latest/browser/standalone/index.js"></script>
 <script>
   AsyncApiStandalone.render(
-    {schema: {url: ${JSON.stringify(specUrl)}, options: {resolve: true}}, config: {show: {sidebar: true}}},
+    {schema: {source: ${specJson}}, config: {show: {sidebar: true}}},
     document.getElementById('asyncapi')
   );
 </script>
