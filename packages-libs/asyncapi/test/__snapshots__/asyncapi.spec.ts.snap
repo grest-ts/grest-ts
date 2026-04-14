@@ -10,7 +10,6 @@ exports[`toAsyncApi > matches snapshot 1`] = `
         "ChatApi_joinRoom": {
           "name": "joinRoom",
           "payload": {
-            "additionalProperties": false,
             "properties": {
               "roomId": {
                 "minLength": 1,
@@ -34,7 +33,6 @@ exports[`toAsyncApi > matches snapshot 1`] = `
         "ChatApi_onUserJoined": {
           "name": "onUserJoined",
           "payload": {
-            "additionalProperties": false,
             "properties": {
               "roomId": {
                 "minLength": 1,
@@ -53,10 +51,68 @@ exports[`toAsyncApi > matches snapshot 1`] = `
           },
           "title": "On User Joined",
         },
+        "ChatApi_sendMessage_error_SERVER_ERROR": {
+          "description": "HTTP equivalent status: 500",
+          "name": "sendMessage error SERVER_ERROR",
+          "payload": {
+            "properties": {
+              "success": {
+                "enum": [
+                  false,
+                ],
+                "type": "boolean",
+              },
+              "type": {
+                "enum": [
+                  "SERVER_ERROR",
+                ],
+                "type": "string",
+              },
+            },
+            "required": [
+              "success",
+              "type",
+            ],
+            "type": "object",
+          },
+          "title": "Send Message error — SERVER_ERROR",
+        },
+        "ChatApi_sendMessage_error_VALIDATION_ERROR": {
+          "description": "HTTP equivalent status: 422",
+          "name": "sendMessage error VALIDATION_ERROR",
+          "payload": {
+            "properties": {
+              "data": {
+                "items": {
+                  "$ref": "#/components/schemas/ValidationIssue",
+                },
+                "type": "array",
+              },
+              "success": {
+                "enum": [
+                  false,
+                ],
+                "type": "boolean",
+              },
+              "type": {
+                "enum": [
+                  "VALIDATION_ERROR",
+                ],
+                "type": "string",
+              },
+            },
+            "required": [
+              "success",
+              "type",
+              "data",
+            ],
+            "type": "object",
+          },
+          "title": "Send Message error — VALIDATION_ERROR",
+        },
         "ChatApi_sendMessage_request": {
           "name": "sendMessage request",
           "payload": {
-            "additionalProperties": false,
             "properties": {
               "roomId": {
                 "minLength": 1,
@@ -77,11 +133,10 @@ exports[`toAsyncApi > matches snapshot 1`] = `
           "title": "Send Message request",
         },
         "ChatApi_sendMessage_response": {
-          "name": "sendMessage_response",
+          "name": "sendMessage response",
           "payload": {
             "properties": {
               "data": {
-                "additionalProperties": false,
                 "properties": {
                   "messageId": {
                     "minLength": 1,
@@ -120,7 +175,7 @@ exports[`toAsyncApi > matches snapshot 1`] = `
           "title": "Send Message response",
         },
       },
-      "title": "ChatApi",
+      "title": "Chat Api",
     },
     "ConfigTestSocketApi": {
       "address": "/ws/config-test",
@@ -128,7 +183,6 @@ exports[`toAsyncApi > matches snapshot 1`] = `
         "ConfigTestSocketApi_configChanged": {
           "name": "configChanged",
           "payload": {
-            "additionalProperties": false,
             "properties": {
               "watchedTimeout": {
                 "type": "number",
@@ -141,16 +195,41 @@ exports[`toAsyncApi > matches snapshot 1`] = `
           },
           "title": "Config Changed",
         },
+        "ConfigTestSocketApi_getWatchedValue_error_SERVER_ERROR": {
+          "description": "HTTP equivalent status: 500",
+          "name": "getWatchedValue error SERVER_ERROR",
+          "payload": {
+            "properties": {
+              "success": {
+                "enum": [
+                  false,
+                ],
+                "type": "boolean",
+              },
+              "type": {
+                "enum": [
+                  "SERVER_ERROR",
+                ],
+                "type": "string",
+              },
+            },
+            "required": [
+              "success",
+              "type",
+            ],
+            "type": "object",
+          },
+          "title": "Get Watched Value error — SERVER_ERROR",
+        },
         "ConfigTestSocketApi_getWatchedValue_request": {
           "name": "getWatchedValue request",
           "title": "Get Watched Value request",
         },
         "ConfigTestSocketApi_getWatchedValue_response": {
-          "name": "getWatchedValue_response",
+          "name": "getWatchedValue response",
           "payload": {
             "properties": {
               "data": {
-                "additionalProperties": false,
                 "properties": {
                   "watchedTimeout": {
                     "type": "number",
@@ -184,13 +263,12 @@ exports[`toAsyncApi > matches snapshot 1`] = `
           "title": "Get Watched Value response",
         },
       },
-      "title": "ConfigTestSocketApi",
+      "title": "Config Test Socket Api",
     },
   },
   "components": {
     "schemas": {
       "ChatMessage": {
-        "additionalProperties": false,
         "description": "A message pushed to the client",
         "properties": {
           "messageId": {
@@ -218,6 +296,69 @@ exports[`toAsyncApi > matches snapshot 1`] = `
         "title": "Chat message",
         "type": "object",
       },
+      "LocaleCode": {
+        "description": "BCP 47 language or language-region format",
+        "example": "en-US",
+        "pattern": "^[a-z]{2}(-[A-Z]{2})?$",
+        "title": "Locale code",
+        "type": "string",
+      },
+      "ValidationIssue": {
+        "description": "A single field-level validation failure. One request can produce multiple issues.",
+        "example": {
+          "code": "invalid.string.minLength",
+          "expectedLanguage": "de",
+          "message": "Minimum 8 characters required",
+          "params": {
+            "min": 8,
+          },
+          "path": "password",
+          "usedLanguage": "en",
+        },
+        "properties": {
+          "code": {
+            "description": "Dot-separated issue key identifying the rule that failed",
+            "example": "invalid.string.minLength",
+            "minLength": 1,
+            "type": "string",
+          },
+          "expectedLanguage": {
+            "$ref": "#/components/schemas/LocaleCode",
+            "description": "Locale requested by the client via Accept-Language",
+          },
+          "message": {
+            "description": "Human-readable error message, localised to the client locale if available",
+            "example": "Minimum 8 characters required",
+            "minLength": 1,
+            "type": "string",
+          },
+          "params": {
+            "additionalProperties": {},
+            "description": "Template variables substituted into the message template",
+            "example": {
+              "min": 8,
+            },
+            "type": "object",
+          },
+          "path": {
+            "description": "Dot-separated field path within the request body",
+            "example": "user.address.zip",
+            "minLength": 1,
+            "type": "string",
+          },
+          "usedLanguage": {
+            "$ref": "#/components/schemas/LocaleCode",
+            "description": "Locale actually used to render the message (may differ from requested if translation is missing)",
+          },
+        },
+        "required": [
+          "path",
+          "code",
+          "message",
+        ],
+        "title": "Validation issue",
+        "type": "object",
+      },
     },
     "securitySchemes": {
       "BearerToken": {
@@ -238,6 +379,7 @@ exports[`toAsyncApi > matches snapshot 1`] = `
       "channel": {
         "$ref": "#/channels/ChatApi",
       },
+      "description": "On Message — server push",
       "messages": [
         {
           "$ref": "#/channels/ChatApi/messages/ChatApi_onMessage",
@@ -248,7 +390,6 @@ exports[`toAsyncApi > matches snapshot 1`] = `
           "$ref": "#/components/securitySchemes/BearerToken",
         },
       ],
-      "summary": "On Message",
       "title": "On Message",
     },
     "ChatApi_receive_onUserJoined": {
@@ -256,6 +397,7 @@ exports[`toAsyncApi > matches snapshot 1`] = `
       "channel": {
         "$ref": "#/channels/ChatApi",
       },
+      "description": "On User Joined — server push",
       "messages": [
         {
           "$ref": "#/channels/ChatApi/messages/ChatApi_onUserJoined",
@@ -266,7 +408,6 @@ exports[`toAsyncApi > matches snapshot 1`] = `
           "$ref": "#/components/securitySchemes/BearerToken",
         },
       ],
-      "summary": "On User Joined",
       "title": "On User Joined",
     },
     "ChatApi_send_joinRoom": {
@@ -274,6 +415,7 @@ exports[`toAsyncApi > matches snapshot 1`] = `
       "channel": {
         "$ref": "#/channels/ChatApi",
       },
+      "description": "Join Room — fire-and-forget",
       "messages": [
         {
           "$ref": "#/channels/ChatApi/messages/ChatApi_joinRoom",
@@ -284,7 +426,6 @@ exports[`toAsyncApi > matches snapshot 1`] = `
           "$ref": "#/components/securitySchemes/BearerToken",
         },
       ],
-      "summary": "Join Room (fire-and-forget)",
       "title": "Join Room",
     },
     "ChatApi_send_sendMessage": {
@@ -292,6 +433,7 @@ exports[`toAsyncApi > matches snapshot 1`] = `
       "channel": {
         "$ref": "#/channels/ChatApi",
       },
+      "description": "Send Message — request/response",
       "messages": [
         {
           "$ref": "#/channels/ChatApi/messages/ChatApi_sendMessage_request",
@@ -305,6 +447,12 @@ exports[`toAsyncApi > matches snapshot 1`] = `
           {
             "$ref": "#/channels/ChatApi/messages/ChatApi_sendMessage_response",
           },
+          {
+            "$ref": "#/channels/ChatApi/messages/ChatApi_sendMessage_error_VALIDATION_ERROR",
+          },
+          {
+            "$ref": "#/channels/ChatApi/messages/ChatApi_sendMessage_error_SERVER_ERROR",
+          },
         ],
       },
       "security": [
@@ -312,7 +460,6 @@ exports[`toAsyncApi > matches snapshot 1`] = `
           "$ref": "#/components/securitySchemes/BearerToken",
         },
       ],
-      "summary": "Send Message (request/response)",
       "title": "Send Message",
     },
     "ConfigTestSocketApi_receive_configChanged": {
@@ -320,12 +467,12 @@ exports[`toAsyncApi > matches snapshot 1`] = `
       "channel": {
         "$ref": "#/channels/ConfigTestSocketApi",
       },
+      "description": "Config Changed — server push",
       "messages": [
         {
           "$ref": "#/channels/ConfigTestSocketApi/messages/ConfigTestSocketApi_configChanged",
         },
       ],
-      "summary": "Config Changed",
       "title": "Config Changed",
     },
     "ConfigTestSocketApi_send_getWatchedValue": {
@@ -333,6 +480,7 @@ exports[`toAsyncApi > matches snapshot 1`] = `
       "channel": {
         "$ref": "#/channels/ConfigTestSocketApi",
       },
+      "description": "Get Watched Value — request/response",
       "messages": [
         {
           "$ref": "#/channels/ConfigTestSocketApi/messages/ConfigTestSocketApi_getWatchedValue_request",
@@ -346,9 +494,11 @@ exports[`toAsyncApi > matches snapshot 1`] = `
           {
             "$ref": "#/channels/ConfigTestSocketApi/messages/ConfigTestSocketApi_getWatchedValue_response",
           },
+          {
+            "$ref": "#/channels/ConfigTestSocketApi/messages/ConfigTestSocketApi_getWatchedValue_error_SERVER_ERROR",
+          },
         ],
       },
-      "summary": "Get Watched Value (request/response)",
       "title": "Get Watched Value",
     },
   },
