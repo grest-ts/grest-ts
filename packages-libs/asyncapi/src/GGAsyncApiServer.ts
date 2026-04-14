@@ -102,11 +102,16 @@ export class GGAsyncApiServer {
 
 /**
  * Build the AsyncAPI Studio HTML page with the spec embedded as inline JSON.
- * Embedding avoids the component fetching the spec by URL on each navigation,
- * which was causing the sidebar links to open new tabs.
+ *
+ * The spec is passed directly as the schema object (not wrapped in {url:...} or
+ * {source:...}) — this is the correct API for inline document rendering and
+ * avoids both external fetches and internal $ref resolution failures.
+ *
+ * The wildcard route (docsPath/*) is registered alongside docsPath so that
+ * sidebar deep-links stay on the same page instead of opening a new tab.
  */
 function buildAsyncApiStudioHtml(spec: AsyncAPIDocument): string {
-    // Embed the spec as a JSON literal so the studio renders without any fetch
+    // Pass the document directly as schema — AsyncApiStandalone accepts the plain object
     const specJson = JSON.stringify(spec);
     return `<!DOCTYPE html>
 <html lang="en">
@@ -122,7 +127,7 @@ function buildAsyncApiStudioHtml(spec: AsyncAPIDocument): string {
 <script src="https://unpkg.com/@asyncapi/react-component@latest/browser/standalone/index.js"></script>
 <script>
   AsyncApiStandalone.render(
-    {schema: {source: ${specJson}}, config: {show: {sidebar: true}}},
+    {schema: ${specJson}, config: {show: {sidebar: true}}},
     document.getElementById('asyncapi')
   );
 </script>
