@@ -14,7 +14,7 @@ function readSwaggerAsset(filename: string): Buffer {
     return readFileSync(join(SWAGGER_UI_DIST, filename));
 }
 
-export interface GGOpenApiServerOptions extends ToOpenApiOptions {
+export interface GGOpenApiDocsOptions extends ToOpenApiOptions {
     /**
      * Path where the JSON spec is served.
      * e.g. "/openapi.json" or "/api/spec"
@@ -42,10 +42,10 @@ export interface GGOpenApiServerOptions extends ToOpenApiOptions {
      * that have no registered implementation (e.g. a showcase or documentation server).
      *
      * @example
-     * new GGOpenApiServer(server, {
+     * new GGOpenApiDocs(server, {
      *     schemas: [MyApi, OtherApi],
      *     title: "My API", specPath: "/openapi.json", docsPath: "/docs"
-     * }).registerWith(server);
+     * }); // routes registered automatically in constructor
      */
     schemas?: GGHttpSchema<any, any>[];
 
@@ -95,19 +95,20 @@ export interface GGOpenApiServerOptions extends ToOpenApiOptions {
  * // Standalone — also works when using schema.register() directly:
  * const httpServer = new GGHttpServer();
  * MyApi.register(impl);
- * new GGOpenApiServer(httpServer, { title: "My API", specPath: "/openapi.json", docsPath: "/docs" }).registerWith(httpServer);
+ * new GGOpenApiDocs(httpServer, { title: "My API", specPath: "/openapi.json", docsPath: "/docs" });
  */
-export class GGOpenApiServer {
+export class GGOpenApiDocs {
     private readonly server: GGHttpServer;
-    private readonly options: GGOpenApiServerOptions;
+    private readonly options: GGOpenApiDocsOptions;
     private _spec: OpenAPIV3_1.Document | undefined;
 
-    constructor(server: GGHttpServer, options: GGOpenApiServerOptions) {
+    constructor(server: GGHttpServer, options: GGOpenApiDocsOptions) {
         this.server = server;
         this.options = options;
         if (options.eager) {
             this._spec = this.buildSpec();
         }
+        this.registerWith(server);
     }
 
     private buildSpec(): OpenAPIV3_1.Document {
@@ -249,19 +250,18 @@ declare module "@grest-ts/http" {
          *   .http(MyApiSchema, impl)
          *   .openApi({ title: "My API", specPath: "/openapi.json", docsPath: "/docs" });
          */
-        openApi(options: GGOpenApiServerOptions): this;
+        openApi(options: GGOpenApiDocsOptions): this;
     }
 }
 
 GGHttp.prototype.openApi = function (
     this: GGHttp,
-    options: GGOpenApiServerOptions
+    options: GGOpenApiDocsOptions
 ): typeof this {
-    const openApiServer = new GGOpenApiServer(this.httpServer, options);
-    openApiServer.registerWith(this.httpServer);
+    new GGOpenApiDocs(this.httpServer, options); // auto-registers in constructor
     return this;
 };
 
 // Keep backward-compatible overload that still accepts an explicit schema list.
-// This is useful for toOpenApi() in CI scripts and standalone GGOpenApiServer usage.
+// This is useful for toOpenApi() in CI scripts and standalone GGOpenApiDocs usage.
 export type {GGHttpSchema};

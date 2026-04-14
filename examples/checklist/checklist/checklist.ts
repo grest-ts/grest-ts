@@ -1,6 +1,6 @@
 import {GGHttp, GGHttpServer} from "@grest-ts/http"
 import "@grest-ts/openapi"
-import {GGAsyncApiServer} from "@grest-ts/asyncapi"
+import {GGAsyncApiDocs} from "@grest-ts/asyncapi"
 import {UserService} from "./services/UserService"
 import {ChecklistService} from "./services/ChecklistService"
 import {BlockerApi, BlockUserRequest} from "../common/api-internal/BlockerApi";
@@ -62,14 +62,14 @@ export class ChecklistRuntime extends MyRuntime {
 
         // AsyncAPI docs — dedicated server for WebSocket API documentation
         const asyncApiDocsServer = new GGHttpServer({key: new GGLocatorKey("asyncapi-docs")});
-        new GGAsyncApiServer(asyncApiDocsServer, {
+        new GGAsyncApiDocs(asyncApiDocsServer, {
             schemas: [ChecklistNotificationApi],
             title: "Checklist Events",
             version: "1.0.0",
             description: "Real-time checklist item notifications over WebSocket",
             specPath: "/asyncapi.json",
             docsPath: "/asyncapi-docs",
-        }).registerWith(asyncApiDocsServer);
+        });
     }
 }
 

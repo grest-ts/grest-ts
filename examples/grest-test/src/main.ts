@@ -1,7 +1,7 @@
 import {GGRuntime} from "@grest-ts/runtime"
 import {GGHttpServer} from "@grest-ts/http"
-import {GGOpenApiServer} from "@grest-ts/openapi"
-import {GGAsyncApiServer} from "@grest-ts/asyncapi"
+import {GGOpenApiDocs} from "@grest-ts/openapi"
+import {GGAsyncApiDocs} from "@grest-ts/asyncapi"
 import {ChatApiSchema, NotificationApiSchema} from "./api/AsyncApiShowcaseApi"
 import {ShowcaseApi} from "./api/OpenApiShowcaseApi"
 import {GGLocatorKey} from "@grest-ts/locator"
@@ -81,41 +81,40 @@ export class MainRuntime extends GGRuntime {
         BenchmarkApi.register(benchmarkService);
         ConfigTestSocketApi.register(configTestService.handleSocketConnection);
 
-        new GGOpenApiServer(httpServer, {title: "Grest Test API", version: "1.0.0", specPath: "/openapi.json", docsPath: "/docs"})
-            .registerWith(httpServer);
+        new GGOpenApiDocs(httpServer, {title: "Grest Test API", version: "1.0.0", specPath: "/openapi.json", docsPath: "/docs"});
 
         // AsyncAPI for real registered WebSocket schemas (ConfigTestSocketApi)
-        new GGAsyncApiServer(httpServer, {
+        new GGAsyncApiDocs(httpServer, {
             title: "Grest Test Events",
             version: "1.0.0",
             description: "WebSocket APIs in the grest-test service",
             specPath: "/asyncapi.json",
             docsPath: "/asyncapi-docs"
-        }).registerWith(httpServer);
+        });
 
         // HTTP Showcase API — rich OpenAPI demo on PORT+1
         const showcasePort = process.env.PORT ? Number(process.env.PORT) + 1 : 0;
         const showcaseServer = new GGHttpServer({port: showcasePort, key: new GGLocatorKey('showcase-server')});
-        new GGOpenApiServer(showcaseServer, {
+        new GGOpenApiDocs(showcaseServer, {
             schemas: [ShowcaseApi],
             title: "Showcase API",
             version: "1.0.0",
             description: "Rich demo: discriminated unions, file upload/download, bearer auth, branded types, docs, defaults, tuples, and more.",
             specPath: "/openapi.json",
             docsPath: "/docs",
-        }).registerWith(showcaseServer);
+        });
 
         // AsyncAPI Showcase — rich WebSocket demo on PORT+2
         const asyncShowcasePort = process.env.PORT ? Number(process.env.PORT) + 2 : 0;
         const asyncShowcaseServer = new GGHttpServer({port: asyncShowcasePort, key: new GGLocatorKey('asyncapi-showcase-server')});
-        new GGAsyncApiServer(asyncShowcaseServer, {
+        new GGAsyncApiDocs(asyncShowcaseServer, {
             schemas: [ChatApiSchema, NotificationApiSchema],
             title: "WebSocket Showcase",
             version: "1.0.0",
             description: "Rich WebSocket demo: chat (request/response + fire-and-forget + server push), notifications, bearer auth, named schemas, discriminated unions.",
             specPath: "/asyncapi.json",
             docsPath: "/asyncapi-docs",
-        }).registerWith(asyncShowcaseServer);
+        });
 
         // new GGHttp()
         //     .http(ConfigTestApi, configTestService)

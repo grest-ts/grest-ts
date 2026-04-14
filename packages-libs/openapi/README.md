@@ -10,7 +10,7 @@
 ## Features
 
 - **`toOpenApi()`** — pure function, no side effects; safe in CI/build scripts for static spec export
-- **`GGOpenApiServer`** — serves `GET /openapi.json` and `GET /docs` (Swagger UI); schemas auto-collected from the server
+- **`GGOpenApiDocs`** — serves `GET /openapi.json` and `GET /docs` (Swagger UI); schemas auto-collected from the server
 - **`GGHttp.openApi()`** — fluent builder integration via module augmentation; no schema list to maintain
 - **Bundled assets** — Swagger UI served from `swagger-ui-dist` (no CDN dependency, works offline)
 - **Full schema conversion** — all `GGSchema` types → OpenAPI 3.1 / JSON Schema 2020-12
@@ -55,20 +55,20 @@ new GGHttp(server)
 ### Standalone (when using schema.register() directly)
 
 ```typescript
-import {GGOpenApiServer} from "@grest-ts/openapi";
+import {GGOpenApiDocs} from "@grest-ts/openapi";
 import {GGHttpServer} from "@grest-ts/http";
 
 const httpServer = new GGHttpServer();
 ItemApiSchema.register(itemImpl);
 OrderApiSchema.register(orderImpl);
 
-new GGOpenApiServer(httpServer, {
+new GGOpenApiDocs(httpServer, {
     title: "My API",
     version: "1.0.0",
     specPath: "/openapi.json",
     docsPath: "/docs",
     eager: true   // build spec at construction time (default: lazy on first request)
-}).registerWith(httpServer);
+})
 ```
 
 ### Export spec to a file (CI/scripts)

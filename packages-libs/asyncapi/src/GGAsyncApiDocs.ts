@@ -3,7 +3,7 @@ import {GGHttpServer} from "@grest-ts/http";
 import type {AsyncAPIDocument} from "./AsyncApiTypes";
 import {toAsyncApi, ToAsyncApiOptions} from "./toAsyncApi";
 
-export interface GGAsyncApiServerOptions extends ToAsyncApiOptions {
+export interface GGAsyncApiDocsOptions extends ToAsyncApiOptions {
     /**
      * Path where the JSON spec is served.
      * e.g. "/asyncapi.json"
@@ -36,24 +36,25 @@ export interface GGAsyncApiServerOptions extends ToAsyncApiOptions {
  * or can be provided explicitly via options.schemas.
  *
  * @example
- * new GGAsyncApiServer(httpServer, {
+ * new GGAsyncApiDocs(httpServer, {
  *     title: "My Service Events",
  *     version: "1.0.0",
  *     specPath: "/asyncapi.json",
  *     docsPath: "/asyncapi-docs"
- * }).registerWith(httpServer);
+ * 
  */
-export class GGAsyncApiServer {
+export class GGAsyncApiDocs {
     private readonly server: GGHttpServer;
-    private readonly options: GGAsyncApiServerOptions;
+    private readonly options: GGAsyncApiDocsOptions;
     private _spec: AsyncAPIDocument | undefined;
 
-    constructor(server: GGHttpServer, options: GGAsyncApiServerOptions) {
+    constructor(server: GGHttpServer, options: GGAsyncApiDocsOptions) {
         this.server = server;
         this.options = options;
         if (options.eager) {
             this._spec = this.buildSpec();
         }
+        this.registerWith(server);
     }
 
     private buildSpec(): AsyncAPIDocument {
