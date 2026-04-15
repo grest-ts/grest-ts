@@ -81,10 +81,11 @@ export class MainRuntime extends GGRuntime {
         BenchmarkApi.register(benchmarkService);
         ConfigTestSocketApi.register(configTestService.handleSocketConnection);
 
-        new GGOpenApiDocs(httpServer, {title: "Grest Test API", version: "1.0.0", specPath: "/openapi.json", docsPath: "/docs"});
+        GGOpenApiDocs.register({http: httpServer, title: "Grest Test API", version: "1.0.0", specPath: "/openapi.json", docsPath: "/docs"});
 
         // AsyncAPI for real registered WebSocket schemas (ConfigTestSocketApi)
-        new GGAsyncApiDocs(httpServer, {
+        GGAsyncApiDocs.register({
+            http: httpServer,
             title: "Grest Test Events",
             version: "1.0.0",
             description: "WebSocket APIs in the grest-test service",
@@ -95,7 +96,8 @@ export class MainRuntime extends GGRuntime {
         // HTTP Showcase API — rich OpenAPI demo on PORT+1
         const showcasePort = process.env.PORT ? Number(process.env.PORT) + 1 : 0;
         const showcaseServer = new GGHttpServer({port: showcasePort, key: new GGLocatorKey('showcase-server')});
-        new GGOpenApiDocs(showcaseServer, {
+        GGOpenApiDocs.register({
+            http: showcaseServer,
             schemas: [ShowcaseApi],
             title: "Showcase API",
             version: "1.0.0",
@@ -107,7 +109,8 @@ export class MainRuntime extends GGRuntime {
         // AsyncAPI Showcase — rich WebSocket demo on PORT+2
         const asyncShowcasePort = process.env.PORT ? Number(process.env.PORT) + 2 : 0;
         const asyncShowcaseServer = new GGHttpServer({port: asyncShowcasePort, key: new GGLocatorKey('asyncapi-showcase-server')});
-        new GGAsyncApiDocs(asyncShowcaseServer, {
+        GGAsyncApiDocs.register({
+            http: asyncShowcaseServer,
             schemas: [ChatApiSchema, NotificationApiSchema],
             title: "WebSocket Showcase",
             version: "1.0.0",

@@ -62,7 +62,8 @@ export class ChecklistRuntime extends MyRuntime {
 
         // AsyncAPI docs — dedicated server for WebSocket API documentation
         const asyncApiDocsServer = new GGHttpServer({key: new GGLocatorKey("asyncapi-docs")});
-        new GGAsyncApiDocs(asyncApiDocsServer, {
+        GGAsyncApiDocs.register({
+            http: asyncApiDocsServer,
             schemas: [ChecklistNotificationApi],
             title: "Checklist Events",
             version: "1.0.0",

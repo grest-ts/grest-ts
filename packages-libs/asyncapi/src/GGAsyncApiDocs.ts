@@ -1,5 +1,6 @@
 import type {GGWebSocketSchema} from "@grest-ts/websocket";
-import {GGHttpServer} from "@grest-ts/http";
+import {GGHttpServer, GG_HTTP_SERVER} from "@grest-ts/http";
+import {GGLocator} from "@grest-ts/locator";
 import type {AsyncAPIDocument} from "./AsyncApiTypes";
 import {toAsyncApi, ToAsyncApiOptions} from "./toAsyncApi";
 
@@ -26,6 +27,13 @@ export interface GGAsyncApiDocsOptions extends ToAsyncApiOptions {
      * Explicit schema list. When provided, overrides server.registeredWebSocketSchemas.
      */
     schemas?: GGWebSocketSchema<any, any, any, any, any>[];
+
+    /**
+     * The HTTP server to register the docs routes on.
+     * When omitted, uses the default GGHttpServer from the locator — the same
+     * fallback as MyApi.register().
+     */
+    http?: GGHttpServer;
 }
 
 /**
@@ -36,17 +44,39 @@ export interface GGAsyncApiDocsOptions extends ToAsyncApiOptions {
  * or can be provided explicitly via options.schemas.
  *
  * @example
- * new GGAsyncApiDocs(httpServer, {
+ * // Mirrors MyApi.register() exactly — uses locator default when http is omitted:
+ * GGAsyncApiDocs.register({
  *     title: "My Service Events",
  *     version: "1.0.0",
  *     specPath: "/asyncapi.json",
  *     docsPath: "/asyncapi-docs"
- * 
+ * });
+ *
+ * @example
+ * // With explicit server (same as MyApi.register(impl, {http: server})):
+ * GGAsyncApiDocs.register({
+ *     title: "My Service Events",
+ *     specPath: "/asyncapi.json",
+ *     docsPath: "/asyncapi-docs",
+ *     http: server
+ * });
  */
 export class GGAsyncApiDocs {
     private readonly server: GGHttpServer;
     private readonly options: GGAsyncApiDocsOptions;
     private _spec: AsyncAPIDocument | undefined;
+
+    /**
+     * Register AsyncAPI docs routes on an HTTP server.
+     * Mirrors the MyApi.register() pattern exactly:
+     *   - options.http — explicit server (optional)
+     *   - when absent, uses the default GGHttpServer from the locator
+     */
+    static register(options: GGAsyncApiDocsOptions): void {
+        const server = options.http ?? GGLocator.getScope().get(GG_HTTP_SERVER);
+        if (!server) throw new Error("GGAsyncApiDocs.register: no HTTP server found. Pass options.http or create a GGHttpServer first.");
+        new GGAsyncApiDocs(server, options);
+    }
 
     constructor(server: GGHttpServer, options: GGAsyncApiDocsOptions) {
         this.server = server;

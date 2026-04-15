@@ -2,7 +2,8 @@ import {readFileSync} from "fs";
 import {dirname, join} from "path";
 import {createRequire} from "module";
 import type {GGHttpSchema} from "@grest-ts/http";
-import {GGHttp, GGHttpServer} from "@grest-ts/http";
+import {GGHttp, GGHttpServer, GG_HTTP_SERVER} from "@grest-ts/http";
+import {GGLocator} from "@grest-ts/locator";
 import type {OpenAPIV3_1} from "openapi-types";
 import {toOpenApi, ToOpenApiOptions} from "./toOpenApi";
 
@@ -42,10 +43,11 @@ export interface GGOpenApiDocsOptions extends ToOpenApiOptions {
      * that have no registered implementation (e.g. a showcase or documentation server).
      *
      * @example
-     * new GGOpenApiDocs(server, {
+     * GGOpenApiDocs.register({
+     *     http: dedicatedServer,
      *     schemas: [MyApi, OtherApi],
      *     title: "My API", specPath: "/openapi.json", docsPath: "/docs"
-     * }); // routes registered automatically in constructor
+     * });
      */
     schemas?: GGHttpSchema<any, any>[];
 
@@ -68,6 +70,13 @@ export interface GGOpenApiDocsOptions extends ToOpenApiOptions {
      * customUi: (specUrl) => `<!DOCTYPE html>...your HTML using specUrl...`
      */
     customUi?: (specUrl: string) => string;
+
+    /**
+     * The HTTP server to register the docs routes on.
+     * When omitted, uses the default GGHttpServer from the locator — the same
+     * fallback as MyApi.register().
+     */
+    http?: GGHttpServer;
 }
 
 /**
@@ -92,15 +101,30 @@ export interface GGOpenApiDocsOptions extends ToOpenApiOptions {
  *     .openApi({ title: "My API", version: "1.0.0", specPath: "/openapi.json", docsPath: "/docs" });
  *
  * @example
- * // Standalone — also works when using schema.register() directly:
- * const httpServer = new GGHttpServer();
+ * // Standalone — mirrors MyApi.register() exactly:
  * MyApi.register(impl);
- * new GGOpenApiDocs(httpServer, { title: "My API", specPath: "/openapi.json", docsPath: "/docs" });
+ * GGOpenApiDocs.register({ title: "My API", specPath: "/openapi.json", docsPath: "/docs" });
+ *
+ * @example
+ * // With explicit server (same pattern as MyApi.register(impl, {http: server})):
+ * GGOpenApiDocs.register({ title: "My API", specPath: "/openapi.json", docsPath: "/docs", http: server });
  */
 export class GGOpenApiDocs {
     private readonly server: GGHttpServer;
     private readonly options: GGOpenApiDocsOptions;
     private _spec: OpenAPIV3_1.Document | undefined;
+
+    /**
+     * Register OpenAPI docs routes on an HTTP server.
+     * Mirrors the MyApi.register() pattern exactly:
+     *   - options.http — explicit server (optional)
+     *   - when absent, uses the default GGHttpServer from the locator
+     */
+    static register(options: GGOpenApiDocsOptions): void {
+        const server = options.http ?? GGLocator.getScope().get(GG_HTTP_SERVER);
+        if (!server) throw new Error("GGOpenApiDocs.register: no HTTP server found. Pass options.http or create a GGHttpServer first.");
+        new GGOpenApiDocs(server, options);
+    }
 
     constructor(server: GGHttpServer, options: GGOpenApiDocsOptions) {
         this.server = server;
