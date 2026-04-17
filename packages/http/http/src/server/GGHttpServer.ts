@@ -1,4 +1,5 @@
 import http from "http";
+import https from "https";
 import {HttpMethod, HttpStatusCode} from "@grest-ts/common";
 import {GGLocator, GGLocatorKey, GGLocatorScope, GGLocatorServiceType} from "@grest-ts/locator";
 import {GG_HTTP_SERVER} from "./GG_HTTP_SERVER";
@@ -8,6 +9,18 @@ import findMyWay, {HTTPMethod} from "find-my-way";
 export interface GGHttpServerAdapterConfig {
     key?: GGLocatorKey<GGHttpServer>;
     port?: number;
+    /**
+     * If provided, the server listens over HTTPS using this cert+key. Both
+     * must be PEM-encoded strings or Buffers. Leaving undefined keeps the
+     * default plain-HTTP listener. Useful for self-signed TLS on internal
+     * endpoints where the caller pins the fingerprint; public-facing
+     * services should typically still terminate TLS at a real edge (ALB,
+     * Caddy, etc.) rather than provide certs here.
+     */
+    tls?: {
+        cert: string | Buffer;
+        key: string | Buffer;
+    };
 }
 
 export class GGHttpServer {
@@ -37,7 +50,7 @@ export class GGHttpServer {
             teardown: this.teardown.bind(this)
         });
 
-        this.httpServer = http.createServer(async (req, res) => {
+        const handler = async (req: http.IncomingMessage, res: http.ServerResponse) => {
             if (this.teardownPromise) {
                 res.statusCode = HttpStatusCode.ServerTemporarilyNotAvailable503;
                 res.end();
@@ -70,7 +83,11 @@ export class GGHttpServer {
             } finally {
                 this.activeRequests--;
             }
-        });
+        };
+
+        this.httpServer = config?.tls
+            ? https.createServer({cert: config.tls.cert, key: config.tls.key}, handler)
+            : http.createServer(handler);
     }
 
     /**
