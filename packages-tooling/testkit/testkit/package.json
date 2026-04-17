@@ -1,7 +1,7 @@
 {
   "//": "THIS FILE IS GENERATED - DO NOT EDIT",
   "name": "@grest-ts/testkit",
-  "version": "0.0.22",
+  "version": "0.0.23",
   "type": "module",
   "license": "MIT",
   "description": "Component testing library for @grest-ts",
@@ -46,16 +46,16 @@
     "node": ">=25"
   },
   "dependencies": {
-    "@grest-ts/common": "0.0.22",
-    "@grest-ts/context": "0.0.22",
-    "@grest-ts/ipc": "0.0.22",
-    "@grest-ts/locator": "0.0.22",
-    "@grest-ts/logger": "0.0.22",
-    "@grest-ts/logger-console": "0.0.22",
-    "@grest-ts/runtime": "0.0.22",
-    "@grest-ts/schema": "0.0.22",
-    "@grest-ts/testkit-runtime": "0.0.22",
-    "@grest-ts/trace": "0.0.22"
+    "@grest-ts/common": "0.0.23",
+    "@grest-ts/context": "0.0.23",
+    "@grest-ts/ipc": "0.0.23",
+    "@grest-ts/locator": "0.0.23",
+    "@grest-ts/logger": "0.0.23",
+    "@grest-ts/logger-console": "0.0.23",
+    "@grest-ts/runtime": "0.0.23",
+    "@grest-ts/schema": "0.0.23",
+    "@grest-ts/testkit-runtime": "0.0.23",
+    "@grest-ts/trace": "0.0.23"
   },
   "peerDependencies": {
     "esbuild": ">=0.27.0"
