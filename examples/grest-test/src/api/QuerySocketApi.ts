@@ -1,9 +1,9 @@
 import {defineSocketContract, webSocketSchema} from "@grest-ts/websocket"
-import {IsInt, IsObject, IsString, SERVER_ERROR} from "@grest-ts/schema"
+import {IsNumber, IsObject, IsString, SERVER_ERROR} from "@grest-ts/schema"
 
 export const IsQueryArgs = IsObject({
     room: IsString.nonEmpty,
-    version: IsInt,
+    version: IsNumber,
 })
 export type QueryArgs = typeof IsQueryArgs.infer
 

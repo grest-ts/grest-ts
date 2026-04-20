@@ -52,7 +52,7 @@ describe("WebSocket createClient (production client)", () => {
         const events: number[] = []
         await client.connect(({incoming}) => {
             incoming.on({
-                counterChanged: ({value}) => {
+                counterChanged: async ({value}) => {
                     events.push(value)
                 },
             })
@@ -93,7 +93,7 @@ describe("WebSocket createClient (production client)", () => {
         const events: number[] = []
         await client.connect(({incoming}) => {
             incoming.on({
-                counterChanged: ({value}) => {
+                counterChanged: async ({value}) => {
                     events.push(value)
                 },
                 // needsConfirmation intentionally omitted

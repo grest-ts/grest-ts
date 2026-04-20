@@ -3,7 +3,7 @@ import {
     GGContractClient,
     GGContractImplementation,
     IsBoolean,
-    IsInt,
+    IsNumber,
     IsObject,
     IsString,
     SERVER_ERROR
@@ -25,7 +25,7 @@ export const IsEchoResponse = IsObject({
 export type EchoResponse = typeof IsEchoResponse.infer
 
 export const IsCounterValue = IsObject({
-    value: IsInt,
+    value: IsNumber,
 })
 export type CounterValue = typeof IsCounterValue.infer
 
