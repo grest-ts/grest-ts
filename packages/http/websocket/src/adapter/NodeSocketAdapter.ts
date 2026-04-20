@@ -64,4 +64,12 @@ export class NodeSocketAdapter implements SocketAdapter {
     offError(handler: (error: Error) => void): void {
         this.ws.off('error', handler);
     }
+
+    ping(): void {
+        this.ws.ping();
+    }
+
+    onPong(handler: () => void): void {
+        this.ws.on('pong', handler);
+    }
 }

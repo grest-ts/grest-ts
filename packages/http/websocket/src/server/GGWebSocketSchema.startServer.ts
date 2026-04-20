@@ -27,9 +27,11 @@ declare module "../schema/GGWebSocketSchema" {
     interface GGWebSocketSchema<TClientToServer, TServerToClient, TContext = {}, TQuery = undefined, TClientToServerImpl = TClientToServer, TServerToClientImpl = TServerToClient> {
         /**
          * Start the WebSocket server for this API.
+         * The onConnection handler receives validated query parameters as its 3rd argument
+         * (only populated when the schema declares `queryOnConnect(validator)`).
          */
         startServer(
-            onConnection: (incoming: WebSocketIncoming<TClientToServerImpl>, outgoing: WebSocketOutgoing<TServerToClient>) => void,
+            onConnection: (incoming: WebSocketIncoming<TClientToServerImpl>, outgoing: WebSocketOutgoing<TServerToClient>, query: TQuery) => void,
             config: WebSocketSchemaConfig
         ): GGSocketServer<TContext, TQuery>
 
@@ -38,7 +40,7 @@ declare module "../schema/GGWebSocketSchema" {
          * Uses GGHttpServerAdapter from locator if not explicitly provided.
          */
         register(
-            onConnection: (incoming: WebSocketIncoming<TClientToServerImpl>, outgoing: WebSocketOutgoing<TServerToClient>) => void,
+            onConnection: (incoming: WebSocketIncoming<TClientToServerImpl>, outgoing: WebSocketOutgoing<TServerToClient>, query: TQuery) => void,
             config?: WebSocketSchemaConfig
         ): void
     }
@@ -62,10 +64,11 @@ GGWebSocketSchema.prototype.startServer = function (
     const socketServer = new GGSocketServer(http, {
         apiName: schemaName,
         path: normalizedPath,
-        middlewares: [...this.middlewares, ...(config?.middlewares ?? [])]
+        middlewares: [...this.middlewares, ...(config?.middlewares ?? [])],
+        queryValidator: this.queryValidator,
     });
 
-    socketServer.onConnection((socket: GGSocket) => {
+    socketServer.onConnection((socket: GGSocket, queryArgs: any) => {
         const clientToServerContract = contract.clientToServer
         const serverToClientContract = contract.serverToClient
 
@@ -86,7 +89,7 @@ GGWebSocketSchema.prototype.startServer = function (
                     };
                 }
 
-                const incomingInstance = clientToServerContract.implement(impl);
+                const incomingInstance = clientToServerContract.implement(impl, {skipLocatorRegistration: true});
 
                 for (const methodName of Object.keys(clientToServerContract.methods)) {
                     socket.registerHandler({
@@ -106,11 +109,11 @@ GGWebSocketSchema.prototype.startServer = function (
             };
         }
 
-        const outgoingInstance = serverToClientContract.implement(impl);
+        const outgoingInstance = serverToClientContract.implement(impl, {skipLocatorRegistration: true});
         (outgoingInstance as any).onClose = (callback: () => void) => {
             socket.onClose(callback)
         }
-        onConnection(incoming, outgoingInstance)
+        onConnection(incoming, outgoingInstance, queryArgs)
     });
 
     return socketServer;

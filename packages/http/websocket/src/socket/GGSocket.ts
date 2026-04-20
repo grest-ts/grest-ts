@@ -232,11 +232,13 @@ export class GGSocket {
      * @param path - The message path/route
      * @param body - The message data (already validated)
      * @param expectsResponse - Whether to wait for a response
+     * @param timeoutMs - Timeout for req/res in ms. Ignored for fire-and-forget. Defaults to 30_000.
      */
     public async send(
         path: string,
         body: any,
-        expectsResponse: boolean
+        expectsResponse: boolean,
+        timeoutMs: number = 30000
     ): Promise<any> {
         const labels: MetricLabels = {api: this.apiName, path: this.socketPath, method: path};
         const startTime = performance.now();
@@ -247,7 +249,7 @@ export class GGSocket {
         }
 
         if (expectsResponse) {
-            return this.pendingRequests.create(path, 30000, async (id, waitForResponse) => {
+            return this.pendingRequests.create(path, timeoutMs, async (id, waitForResponse) => {
                 this.socket.send(Message.create(MessageType.REQ, path, id, body));
                 const result = await waitForResponse;
                 const resultType = result?.success === true ? 'OK' : (result?.type ?? 'SERVER_ERROR');
@@ -305,6 +307,58 @@ export class GGSocket {
     public onClose(onClose: () => void): this {
         this.onCloseCallbacks.push(onClose);
         return this;
+    }
+
+    // --------------------------------------------------------------------------------------
+    // Heartbeat (PING/PONG) — dead-connection detection
+    // --------------------------------------------------------------------------------------
+
+    /**
+     * Start a heartbeat loop that sends protocol-level PINGs and closes the socket
+     * if no PONG comes back within `intervalMs + timeoutMs`. Returns a stop function.
+     *
+     * No-op (returns an empty stop fn) if the underlying adapter does not support
+     * ping/pong — e.g. the browser WebSocket API cannot initiate pings.
+     */
+    public startHeartbeat(config: {intervalMs: number; timeoutMs: number}): () => void {
+        // Adapter doesn't support ping/pong (e.g. browser WebSocket) — no-op.
+        if (!this.socket.ping || !this.socket.onPong) {
+            return () => {};
+        }
+        // Socket is already closed — starting heartbeat would leak intervals
+        // because the onCloseCallbacks push below won't fire (isCleanedUp guard).
+        if (!this.isActive) {
+            return () => {};
+        }
+        let lastActivity = Date.now();
+        const onPong = () => { lastActivity = Date.now(); };
+        this.socket.onPong(onPong);
+
+        const sender = setInterval(() => {
+            if (!this.isActive) return;
+            try {
+                this.socket.ping!();
+            } catch (_) { /* adapter may throw if socket already closing */ }
+        }, config.intervalMs);
+
+        const watchdog = setInterval(() => {
+            if (!this.isActive) return;
+            if (Date.now() - lastActivity > config.intervalMs + config.timeoutMs) {
+                this.log.warn(this, 'Heartbeat timeout — no PONG received; closing socket');
+                clearInterval(sender);
+                clearInterval(watchdog);
+                this.close();
+            }
+        }, config.timeoutMs);
+
+        // Auto-cleanup on close
+        const cleanup = () => {
+            clearInterval(sender);
+            clearInterval(watchdog);
+        };
+        this.onCloseCallbacks.push(cleanup);
+
+        return cleanup;
     }
 
     // --------------------------------------------------------------------------------------

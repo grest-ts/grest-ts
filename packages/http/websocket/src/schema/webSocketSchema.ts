@@ -1,6 +1,6 @@
 import {GGWebSocketSchema, GGWebSocketContractRuntime} from "./GGWebSocketSchema";
 import {GGWebSocketMiddleware} from "./GGWebSocketMiddleware";
-import {GGContractClass, GGContractClient, GGContractImplementation, GGContractMethod} from "@grest-ts/schema";
+import {GGContractClass, GGContractClient, GGContractImplementation, GGContractMethod, GGValidator} from "@grest-ts/schema";
 
 /**
  * Bidirectional websocket contract methods
@@ -69,6 +69,7 @@ class GGWebSocketSchemaBuilder<
 > {
     private _path: string = ""
     private _middlewares: GGWebSocketMiddleware[] = []
+    private _queryValidator?: GGValidator<any>
 
     constructor(
         private readonly _contract: GGSocketContract
@@ -85,7 +86,13 @@ class GGWebSocketSchemaBuilder<
         return this as any
     }
 
-    queryOnConnect<TNewQuery>(): GGWebSocketSchemaBuilder<TClientToServer, TServerToClient, TContext, TNewQuery, TClientToServerImpl, TServerToClientImpl> {
+    /**
+     * Declare the query-parameter shape and validator for connections.
+     * The validator runs on the server (connections with invalid query are rejected
+     * before handshake) and on the client (invalid query throws before connecting).
+     */
+    queryOnConnect<TNewQuery>(validator: GGValidator<TNewQuery>): GGWebSocketSchemaBuilder<TClientToServer, TServerToClient, TContext, TNewQuery, TClientToServerImpl, TServerToClientImpl> {
+        this._queryValidator = validator
         return this as any
     }
 
@@ -105,7 +112,8 @@ class GGWebSocketSchemaBuilder<
             contract.name,
             this._path,
             contractFactory,
-            this._middlewares
+            this._middlewares,
+            this._queryValidator
         )
     }
 }

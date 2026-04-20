@@ -1,5 +1,5 @@
 import {GGWebSocketMiddleware} from "./GGWebSocketMiddleware";
-import {GGContractApiDefinition, GGContractClass} from "@grest-ts/schema";
+import {GGContractApiDefinition, GGContractClass, GGValidator} from "@grest-ts/schema";
 
 /**
  * WebSocket API Schema - pure data definition with typed context
@@ -22,6 +22,7 @@ export class GGWebSocketSchema<
     public readonly name: string
     public readonly path: string
     public readonly middlewares: readonly GGWebSocketMiddleware[]
+    public readonly queryValidator?: GGValidator<TQuery>
     private readonly contractFactory: () => GGWebSocketContractRuntime
     private contractCache: GGWebSocketContractRuntime | null = null
 
@@ -29,11 +30,13 @@ export class GGWebSocketSchema<
         name: string,
         path: string,
         contractFactory: () => GGWebSocketContractRuntime,
-        middlewares: readonly GGWebSocketMiddleware[] = []
+        middlewares: readonly GGWebSocketMiddleware[] = [],
+        queryValidator?: GGValidator<TQuery>
     ) {
         this.name = name
         this.path = path
         this.middlewares = middlewares
+        this.queryValidator = queryValidator
         this.contractFactory = contractFactory
         Object.freeze(this.middlewares)
     }

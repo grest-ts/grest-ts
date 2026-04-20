@@ -209,6 +209,88 @@ export const ChatApi = webSocketSchema(ChatApiContract)
 
 Middlewares run in order during connection establishment.
 
+### Sharing middleware with HTTP APIs (one class, two transports)
+
+Most apps are HTTP-first and add WebSockets later. You'll often want the *same* auth logic on both — same bearer-token shape, same verification, same user context key. The two middleware interfaces are deliberately separate (HTTP runs per-request; WS runs once at handshake — see the note below), but TypeScript structural typing lets **one class implement both interfaces** so you write the logic once and attach it to both schemas.
+
+```typescript
+import { GGHttpTransportMiddleware, GGHttpRequest } from "@grest-ts/http"
+import { GGWebSocketMiddleware, GGWebSocketHandshakeContext } from "@grest-ts/websocket"
+import { GGContextKey } from "@grest-ts/context"
+import { IsObject, IsString, NOT_AUTHORIZED } from "@grest-ts/schema"
+
+export const IsAuthUser = IsObject({ id: IsString, role: IsString })
+export type AuthUser = typeof IsAuthUser.infer
+export const GG_AUTH_USER = new GGContextKey<AuthUser>("authUser", IsAuthUser)
+
+/**
+ * Implements both middleware interfaces. Use the same instance on HTTP and
+ * WebSocket schemas — single source of truth for auth wiring.
+ */
+export class BearerAuthMiddleware
+    implements GGHttpTransportMiddleware, GGWebSocketMiddleware {
+
+    constructor(private opts: {
+        /** Client-side: return the current token. Called on every HTTP request AND on every WS handshake. */
+        getToken: () => string | undefined
+        /** Server-side: verify the token and return the user. Throw/return undefined to reject. */
+        verify:   (token: string) => AuthUser | undefined
+    }) {}
+
+    // ---- Client-side: attach the bearer header ----
+    updateRequest   = (req: GGHttpRequest) =>
+        this.setHeader(req.headers as Record<string, string>)
+    updateHandshake = (ctx: GGWebSocketHandshakeContext) =>
+        this.setHeader(ctx.headers)
+
+    // ---- Server-side: extract + verify, populate context ----
+    parseRequest    = (req: GGHttpRequest) =>
+        this.extract(req.headers as Record<string, string | string[]>)
+    parseHandshake  = (ctx: GGWebSocketHandshakeContext) =>
+        this.extract(ctx.headers)
+
+    private setHeader(headers: Record<string, string>) {
+        const t = this.opts.getToken()
+        if (t) headers["authorization"] = "Bearer " + t
+    }
+    private extract(headers: Record<string, string | string[]>) {
+        const header = headers["authorization"]
+        if (typeof header !== "string" || !header.startsWith("Bearer ")) {
+            throw new NOT_AUTHORIZED({ displayMessage: "Missing bearer token" })
+        }
+        const user = this.opts.verify(header.substring(7))
+        if (!user) throw new NOT_AUTHORIZED({ displayMessage: "Invalid token" })
+        GG_AUTH_USER.set(user)
+    }
+}
+
+// One instance, used on both kinds of schema:
+const auth = new BearerAuthMiddleware({
+    getToken: () => GG_AUTH_USER.get()?.id,
+    verify:   (token) => validateTokenSync(token),
+})
+
+export const ItemApi = httpSchema(ItemContract).pathPrefix("api/items")
+    .use(auth)           // acts as GGHttpTransportMiddleware
+    .routes({ ... })
+
+export const ChatApi = webSocketSchema(ChatContract).path("ws/chat")
+    .use(auth)           // acts as GGWebSocketMiddleware
+    .done()
+```
+
+**Important — the rhythms are different:**
+
+| | HTTP | WebSocket |
+|---|---|---|
+| When middleware runs | Per request | Once, at handshake |
+| What it can do        | Modify each request/response    | Set connection-scoped context |
+| Token refresh         | Naturally handled: next request reads the new token | Not automatic — token is captured at connect time. If the token rotates mid-session, the old connection keeps its old identity until it's dropped and a fresh handshake runs |
+
+This is why the interfaces aren't merged: forcing a single interface would make WS middleware silently not re-run on messages (a foot-gun). Keep the rhythms distinct and share *logic*, not *lifecycle*.
+
+The server-side extraction logic here is identical for both transports — that's the common case and the reason this pattern pays off. If your HTTP flow needs per-request behavior that doesn't map to WS (say, modifying the HTTP response body), put those hooks on a separate HTTP-only middleware and apply both.
+
 ## Server Setup
 
 ### Connection Handler
