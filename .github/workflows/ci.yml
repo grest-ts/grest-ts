@@ -3,17 +3,21 @@ name: CI
 on:
   push:
     branches: [master]
+  pull_request:
+    branches: [master, dev]
 
 permissions:
   contents: write
 
 concurrency:
-  group: ci
+  group: ci-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   ci:
-    if: "!startsWith(github.event.head_commit.message, 'v')"
+    # Skip only the bot's own version-bump commits (avoids infinite loop).
+    # Anything else — including human commits that happen to start with "v" — runs.
+    if: ${{ github.event.head_commit.author.email != 'github-actions[bot]@users.noreply.github.com' }}
     runs-on: ubuntu-latest
 
     services:
@@ -61,13 +65,16 @@ jobs:
         run: npx tsx grest.2.vitest.ts
 
       - name: Version bump
+        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
         run: npx tsx grest.3.ver.patch.ts
 
       - name: Read version
+        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
         id: version
         run: echo "version=$(node -p "require('./package.json').version")" >> $GITHUB_OUTPUT
 
       - name: Commit & tag
+        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"

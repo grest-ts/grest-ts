@@ -10,7 +10,12 @@ permissions:
 
 jobs:
   publish:
-    if: github.event.workflow_run.conclusion == 'success'
+    # Only publish when CI succeeded on a push to master. PR runs of CI
+    # also complete successfully but must never trigger a publish.
+    if: >-
+      github.event.workflow_run.conclusion == 'success'
+      && github.event.workflow_run.event == 'push'
+      && github.event.workflow_run.head_branch == 'master'
     runs-on: ubuntu-latest
 
     steps:
