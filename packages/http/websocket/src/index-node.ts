@@ -21,8 +21,9 @@ export * from "./server/GGSocketServer";
 export * from "./server/GGWebSocketSchema.startServer";
 
 // Client
-export * from "./client/GGSocketClient";
 export * from "./client/GGSocketPool";
+export * from "./client/GGWebSocketSchema.createClient";
 
 // Extensions
 import "./server/GGWebSocketSchema.startServer";
+import "./client/GGWebSocketSchema.createClient";

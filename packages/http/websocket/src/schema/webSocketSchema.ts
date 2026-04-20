@@ -1,6 +1,6 @@
 import {GGWebSocketSchema, GGWebSocketContractRuntime} from "./GGWebSocketSchema";
 import {GGWebSocketMiddleware} from "./GGWebSocketMiddleware";
-import {GGContractClass, GGContractClient, GGContractImplementation, GGContractMethod} from "@grest-ts/schema";
+import {GGContractClass, GGContractClient, GGContractImplementation, GGContractMethod, GGValidator} from "@grest-ts/schema";
 
 /**
  * Bidirectional websocket contract methods
@@ -53,7 +53,8 @@ export function webSocketSchema<TDef extends GGSocketContractMethods>(
     GGContractClient<TDef["serverToClient"]>,
     undefined,
     undefined,
-    GGContractImplementation<TDef["clientToServer"]>
+    GGContractImplementation<TDef["clientToServer"]>,
+    GGContractImplementation<TDef["serverToClient"]>
 > {
     return new GGWebSocketSchemaBuilder(contract)
 }
@@ -63,10 +64,12 @@ class GGWebSocketSchemaBuilder<
     TServerToClient,
     TContext = undefined,
     TQuery = undefined,
-    TClientToServerImpl = TClientToServer
+    TClientToServerImpl = TClientToServer,
+    TServerToClientImpl = TServerToClient
 > {
     private _path: string = ""
     private _middlewares: GGWebSocketMiddleware[] = []
+    private _queryValidator?: GGValidator<any>
 
     constructor(
         private readonly _contract: GGSocketContract
@@ -78,16 +81,22 @@ class GGWebSocketSchemaBuilder<
         return this
     }
 
-    use<M extends GGWebSocketMiddleware>(middleware: M): GGWebSocketSchemaBuilder<TClientToServer, TServerToClient, TContext | M, TQuery, TClientToServerImpl> {
+    use<M extends GGWebSocketMiddleware>(middleware: M): GGWebSocketSchemaBuilder<TClientToServer, TServerToClient, TContext | M, TQuery, TClientToServerImpl, TServerToClientImpl> {
         this._middlewares.push(middleware)
         return this as any
     }
 
-    queryOnConnect<TNewQuery>(): GGWebSocketSchemaBuilder<TClientToServer, TServerToClient, TContext, TNewQuery, TClientToServerImpl> {
+    /**
+     * Declare the query-parameter shape and validator for connections.
+     * The validator runs on the server (connections with invalid query are rejected
+     * before handshake) and on the client (invalid query throws before connecting).
+     */
+    queryOnConnect<TNewQuery>(validator: GGValidator<TNewQuery>): GGWebSocketSchemaBuilder<TClientToServer, TServerToClient, TContext, TNewQuery, TClientToServerImpl, TServerToClientImpl> {
+        this._queryValidator = validator
         return this as any
     }
 
-    done(): GGWebSocketSchema<TClientToServer, TServerToClient, TContext, TQuery, TClientToServerImpl> {
+    done(): GGWebSocketSchema<TClientToServer, TServerToClient, TContext, TQuery, TClientToServerImpl, TServerToClientImpl> {
         const contract = this._contract;
         const contractFactory = (): GGWebSocketContractRuntime => {
             const methods = contract.methods;
@@ -99,11 +108,12 @@ class GGWebSocketSchemaBuilder<
             };
         };
 
-        return new GGWebSocketSchema<TClientToServer, TServerToClient, TContext, TQuery, TClientToServerImpl>(
+        return new GGWebSocketSchema<TClientToServer, TServerToClient, TContext, TQuery, TClientToServerImpl, TServerToClientImpl>(
             contract.name,
             this._path,
             contractFactory,
-            this._middlewares
+            this._middlewares,
+            this._queryValidator
         )
     }
 }

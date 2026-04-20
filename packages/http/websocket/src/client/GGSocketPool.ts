@@ -3,7 +3,7 @@ import {GGWebSocketHandshakeContext, GGWebSocketMiddleware} from "../schema/GGWe
 import {SocketAdapter} from "../socket/SocketAdapter";
 import {GG_WS_CONNECTION} from "../server/GG_WS_CONNECTION";
 import {Message, MessageType} from "../socket/SocketMessage";
-import {GGValidator, SERVER_ERROR} from "@grest-ts/schema";
+import {GGContractExecutor, GGValidator, SERVER_ERROR} from "@grest-ts/schema";
 import {withTimeout} from "@grest-ts/common";
 import {GGContext} from "@grest-ts/context";
 import {GG_TRACE} from "@grest-ts/trace";
@@ -141,21 +141,13 @@ export class GGSocketPool {
     static async getOrConnect<Query>(
         config: GGSocketPoolConfig<Query>
     ): Promise<GGSocket> {
-        // Build headers from middlewares
         const headers = this.buildHeaders(config);
-
-        // Build full URL with query string if provided
-        let fullUrl = config.domain + config.path;
-        if (config.query) {
-            const queryEntries: [string, string][] = Object.entries(config.query).map(([key, value]) => [key, String(value)]);
-            fullUrl += '?' + new URLSearchParams(queryEntries).toString();
-        }
+        const fullUrl = this.buildUrl(config);
 
         // Create connection key based on URL + headers
         const headerKey = Object.entries(headers).sort().map(([k, v]) => `${k}=${v}`).join('&');
         const key = fullUrl + "::" + headerKey;
 
-        // Check for existing connection first
         if (this.sockets.has(key)) {
             return this.sockets.get(key);
         }
@@ -163,82 +155,107 @@ export class GGSocketPool {
             return this.pendingSockets.get(key);
         }
 
-        // Create the connection promise BEFORE any async operations to prevent race conditions
-        // This ensures that concurrent calls will see the pending promise
-        const connectionPromise = (async () => {
-            // Ensure adapter is loaded (this is async but safely inside the promise)
-            const adapterClass = await this.ensureAdapter();
-
-            return new Promise<GGSocket>((resolve, reject) => {
-                const adapter = new adapterClass(fullUrl);
-                adapter.onOpen(async () => {
-                    try {
-                        const context = new GGContext("ws-client-connection");
-                        await context.run(async () => {
-                            GG_TRACE.init();
-                            GG_WS_CONNECTION.set({
-                                port: undefined,
-                                path: config.domain
-                            });
-
-                            // Send handshake with headers
-                            adapter.send(Message.create(MessageType.HANDSHAKE, "", "", headers));
-
-                            // Wait for handshake response
-                            await withTimeout(
-                                new Promise<void>((handshakeResolve, handshakeReject) => {
-                                    const onMessage = (data: string) => {
-                                        const msg = Message.parse(data);
-                                        if (!msg) return;
-
-                                        if (msg.type === MessageType.HANDSHAKE_OK) {
-                                            adapter.offMessage(onMessage);
-                                            handshakeResolve();
-                                        } else if (msg.type === MessageType.HANDSHAKE_ERR) {
-                                            adapter.offMessage(onMessage);
-                                            handshakeReject(new SERVER_ERROR({
-                                                displayMessage: 'WebSocket handshake failed',
-                                                originalError: msg.data
-                                            }));
-                                        }
-                                    };
-                                    adapter.onMessage(onMessage);
-                                }),
-                                5000,
-                                'Handshake timeout'
-                            );
-                            resolve(new GGSocket(adapter, {connectionContext: context}));
-                        });
-                    } catch (error) {
-                        reject(error);
-                    }
-                });
-                adapter.onError((error: Error) => {
-                    reject(error);
-                });
-            });
-        })();
-
-        // Store the pending promise IMMEDIATELY (before awaiting)
+        const connectionPromise = this.openSocket(fullUrl, headers, config.domain);
         this.pendingSockets.set(key, connectionPromise);
 
         try {
             const socket = await connectionPromise;
-
-            // Store the connection
             this.sockets.set(key, socket);
             this.pendingSockets.delete(key);
-
-            // Clean up on close
             socket.onClose(() => {
                 this.sockets.delete(key);
             });
-
             return socket;
         } catch (error) {
-            // Clean up failed connection attempt
             this.pendingSockets.delete(key);
             throw error;
         }
+    }
+
+    /**
+     * Establish a fresh, un-pooled WebSocket connection.
+     *
+     * Unlike `getOrConnect`, this never reuses or caches connections — every
+     * call produces a dedicated socket with its own close lifecycle. Use this
+     * when you want each logical client to own its connection (the common
+     * case for `createClient()` users).
+     */
+    static async connect<Query>(
+        config: GGSocketPoolConfig<Query>
+    ): Promise<GGSocket> {
+        return this.openSocket(this.buildUrl(config), this.buildHeaders(config), config.domain);
+    }
+
+    /**
+     * Reconstruct the typed error the server threw during handshake.
+     *
+     * The server sends `error.toJSON()` which has `{success:false, type, data?, context?}`.
+     * System errors (NOT_AUTHORIZED, FORBIDDEN, VALIDATION_ERROR, etc.) are reconstructed
+     * as real instances so callers can `.toBeError(NOT_AUTHORIZED)`. Anything we can't
+     * identify (non-ERROR throw, custom error class the client doesn't know) falls back
+     * to SERVER_ERROR carrying the original payload for inspection.
+     */
+    private static handshakeErrorFrom(payload: any): Error {
+        if (payload && typeof payload === 'object' && typeof payload.type === 'string') {
+            return GGContractExecutor.createErrorObj(payload) as unknown as Error;
+        }
+        return new SERVER_ERROR({
+            displayMessage: 'WebSocket handshake failed',
+            originalError: payload,
+        });
+    }
+
+    private static buildUrl(config: GGSocketPoolConfig<any>): string {
+        let fullUrl = config.domain + config.path;
+        if (config.query) {
+            const queryEntries: [string, string][] = Object.entries(config.query).map(([key, value]) => [key, String(value)]);
+            fullUrl += '?' + new URLSearchParams(queryEntries).toString();
+        }
+        return fullUrl;
+    }
+
+    private static async openSocket(fullUrl: string, headers: Record<string, string>, domain: string): Promise<GGSocket> {
+        const adapterClass = await this.ensureAdapter();
+        return new Promise<GGSocket>((resolve, reject) => {
+            const adapter = new adapterClass(fullUrl);
+            adapter.onOpen(async () => {
+                try {
+                    const context = new GGContext("ws-client-connection");
+                    await context.run(async () => {
+                        GG_TRACE.init();
+                        GG_WS_CONNECTION.set({
+                            port: undefined,
+                            path: domain
+                        });
+                        adapter.send(Message.create(MessageType.HANDSHAKE, "", "", headers));
+                        await withTimeout(
+                            new Promise<void>((handshakeResolve, handshakeReject) => {
+                                const onMessage = (data: string) => {
+                                    const msg = Message.parse(data);
+                                    if (!msg) return;
+
+                                    if (msg.type === MessageType.HANDSHAKE_OK) {
+                                        adapter.offMessage(onMessage);
+                                        handshakeResolve();
+                                    } else if (msg.type === MessageType.HANDSHAKE_ERR) {
+                                        adapter.offMessage(onMessage);
+                                        handshakeReject(this.handshakeErrorFrom(msg.data));
+                                    }
+                                };
+                                adapter.onMessage(onMessage);
+                            }),
+                            5000,
+                            'Handshake timeout'
+                        );
+                        resolve(new GGSocket(adapter, {connectionContext: context}));
+                    });
+                } catch (error) {
+                    reject(error);
+                }
+            });
+            adapter.onError((error: Error) => {
+                reject(error);
+            });
+        });
     }
 }

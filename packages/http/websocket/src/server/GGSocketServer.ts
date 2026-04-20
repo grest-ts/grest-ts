@@ -29,6 +29,53 @@ export interface GGSocketServerConfig<TContext, Query> {
     middlewares: readonly GGWebSocketMiddleware[];
 }
 
+/**
+ * Shared path-dispatching upgrade registry per http.Server.
+ *
+ * The `ws` library's `{server, path}` mode aborts the HTTP handshake with 400
+ * whenever the upgrade path doesn't match — so attaching two WebSocketServer
+ * instances to the same http.Server causes whichever one fires first to reject
+ * requests meant for the other. We install a single shared 'upgrade' listener
+ * on each http.Server and dispatch by path instead.
+ */
+interface WsRegistry {
+    readonly wssByPath: Map<string, WebSocketServer>
+}
+
+const wsRegistryByHttpServer = new WeakMap<http.Server, WsRegistry>();
+
+function attachUpgradeDispatch(httpServer: http.Server, path: string, wss: WebSocketServer): void {
+    let registry = wsRegistryByHttpServer.get(httpServer);
+    if (!registry) {
+        registry = {wssByPath: new Map()};
+        wsRegistryByHttpServer.set(httpServer, registry);
+        const captured = registry;
+        httpServer.on('upgrade', (req, socket, head) => {
+            const pathname = (req.url ?? '').split('?')[0];
+            const matched = captured.wssByPath.get(pathname);
+            if (matched) {
+                matched.handleUpgrade(req, socket, head, (ws) => {
+                    matched.emit('connection', ws, req);
+                });
+            } else {
+                socket.write('HTTP/1.1 404 Not Found\r\nConnection: close\r\n\r\n');
+                socket.destroy();
+            }
+        });
+    }
+    if (registry.wssByPath.has(path)) {
+        throw new Error(`WebSocket path "${path}" is already registered on this HTTP server.`);
+    }
+    registry.wssByPath.set(path, wss);
+}
+
+function detachUpgradeDispatch(httpServer: http.Server, path: string): void {
+    const registry = wsRegistryByHttpServer.get(httpServer);
+    if (registry) {
+        registry.wssByPath.delete(path);
+    }
+}
+
 export class GGSocketServer<TContext, Query> {
 
     private readonly wss: WebSocketServer;
@@ -50,8 +97,9 @@ export class GGSocketServer<TContext, Query> {
         this.apiName = config.apiName;
         this.middlewares = config.middlewares;
         this.queryValidator = config.queryValidator;
-        this.wss = new WebSocketServer({server: http.httpServer, path: this.path});
+        this.wss = new WebSocketServer({noServer: true});
         this.wss.on('connection', this.scope.wrapWithEnter(this._onConnection));
+        attachUpgradeDispatch(http.httpServer, this.path, this.wss);
         this.http = http
             .onStart(() => {
                 GGLog.info(this, "WebSocket server started", {api: config.apiName, path: config.path});
@@ -68,7 +116,8 @@ export class GGSocketServer<TContext, Query> {
             .onTeardown(async () => {
                 GGLog.info(this, "WebSocket server closing");
                 try {
-                    this.wss.close(); // We use external http, so this does not close existing connections.
+                    detachUpgradeDispatch(http.httpServer, this.path);
+                    this.wss.close();
                 } catch (error) {
                     GGLog.error(this, error);
                 }

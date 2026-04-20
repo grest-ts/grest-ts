@@ -15,6 +15,11 @@ export const LOCATOR_KEY_PREFIX_FOR_CONTRACT = "@contract:"
 
 /**
  * Patched implement() that registers the returned client in GGLocator.
+ *
+ * Strict by default: registering the same contract name twice is an error.
+ * Transports that produce per-connection or per-client impls (WebSocket's
+ * startServer, HTTP's createClient) pass `{skipLocatorRegistration: true}`
+ * in options to opt out — those impls have no business in the callOn registry.
  */
 GGContractClass.prototype.implement = function (
     this: GGContractClass<any>,
@@ -26,14 +31,19 @@ GGContractClass.prototype.implement = function (
     // Get the client from original implement
     const client = originalImplement.call(this, instance, options);
 
-    // Register in GGLocator for callOn(Contract) access
+    if (options?.skipLocatorRegistration) {
+        return client;
+    }
+
+    // Register in GGLocator for callOn(Contract) access — strict, throws on duplicate
     const scope = GGLocator.tryGetScope();
     if (scope) {
         const key = new GGLocatorKey<typeof client>(LOCATOR_KEY_PREFIX_FOR_CONTRACT + contractName);
         if (scope.has(key)) {
             throw new Error(
                 `Contract '${contractName}' is already registered in this scope. ` +
-                `If you need multiple instances, use different contract names.`
+                `If this is an internal per-connection implement (e.g. WebSocket server handler) ` +
+                `pass {skipLocatorRegistration: true}. Otherwise, use different contract names.`
             );
         }
         scope.set(key, client);

@@ -70,7 +70,7 @@ export type GGSocketCallMap<TClientToServer, TServerToClient> =
 // ============================================================================
 
 declare module "../../src/schema/GGWebSocketSchema" {
-    interface GGWebSocketSchema<TClientToServer, TServerToClient, TContext, TQuery, TClientToServerImpl> extends GGCallOnFactory {
+    interface GGWebSocketSchema<TClientToServer, TServerToClient, TContext, TQuery, TClientToServerImpl, TServerToClientImpl> extends GGCallOnFactory {
         [CALL_ON_FACTORY](ctx: GGContext): GGSocketCallMap<TClientToServer, TServerToClient>;
     }
 }
@@ -80,7 +80,7 @@ declare module "../../src/schema/GGWebSocketSchema" {
 // ============================================================================
 
 GGWebSocketSchema.prototype[CALL_ON_FACTORY] = function <TClientToServer extends Record<string, GGContractMethod>, TServerToClient extends Record<string, GGContractMethod>>(
-    this: GGWebSocketSchema<TClientToServer, TServerToClient, any, any>,
+    this: GGWebSocketSchema<TClientToServer, TServerToClient, any, any, any, any>,
     ctx: GGContext
 ): GGSocketCallMap<TClientToServer, TServerToClient> {
     const contract = this.contract;

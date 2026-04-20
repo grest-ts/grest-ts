@@ -207,5 +207,13 @@ export interface GGContractExecutorOptions {
      * Can also be useful if you want to disable validation in clients. Never use this on server side!
      */
     noValidation?: boolean
+
+    /**
+     * When true, implement() skips auto-registering the client in GGLocator for callOn lookup.
+     * Used by transports that produce per-connection or per-client impls which have no business
+     * in the shared registry (e.g. WebSocket server's per-connection handlers, or client stubs
+     * in createClient).
+     */
+    skipLocatorRegistration?: boolean
 }
 

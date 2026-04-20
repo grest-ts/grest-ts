@@ -9,6 +9,9 @@ import {ConfigTestApi} from "./api/ConfigTestApi"
 import {MetricsTestApi} from "./api/MetricsTestApi"
 import {HttpMetricsTestApi} from "./api/HttpMetricsTestApi"
 import {ConfigTestSocketApi} from "./api/ConfigTestSocketApi"
+import {ClientTestSocketApi} from "./api/ClientTestSocketApi"
+import {AuthedSocketApi} from "./api/AuthedSocketApi"
+import {QuerySocketApi} from "./api/QuerySocketApi"
 import {EventsTestApi} from "./api/EventsTestApi"
 import {LanguageTestApi} from "./api/LanguageTestApi"
 import {MiddlewareTestApi} from "./api/MiddlewareTestApi"
@@ -22,6 +25,9 @@ import {LanguageTestService} from "./services/LanguageTestService"
 import {MiddlewareTestService} from "./services/MiddlewareTestService"
 import {FileUploadTestService} from "./services/FileUploadTestService"
 import {BenchmarkService} from "./services/BenchmarkService"
+import {ClientTestSocketService} from "./services/ClientTestSocketService"
+import {AuthedSocketService} from "./services/AuthedSocketService"
+import {QuerySocketService} from "./services/QuerySocketService"
 import {GGConfigLocator, GGConfigStoreFile, GGConfigStoreLocal, GGResource, GGSecret, GGSetting} from "@grest-ts/config";
 import {GGMetricsLoader} from "@grest-ts/metrics";
 import {MainConfigApi} from "./MainConfig.api";
@@ -69,6 +75,9 @@ export class MainRuntime extends GGRuntime {
         const middlewareTestService = new MiddlewareTestService();
         const fileUploadTestService = new FileUploadTestService();
         const benchmarkService = new BenchmarkService();
+        const clientTestSocketService = new ClientTestSocketService();
+        const authedSocketService = new AuthedSocketService();
+        const querySocketService = new QuerySocketService();
 
         const httpServer = new GGHttpServer();
         ConfigTestApi.register(configTestService);
@@ -80,6 +89,9 @@ export class MainRuntime extends GGRuntime {
         FileUploadTestApi.register(fileUploadTestService);
         BenchmarkApi.register(benchmarkService);
         ConfigTestSocketApi.register(configTestService.handleSocketConnection);
+        ClientTestSocketApi.register(clientTestSocketService.handleConnection);
+        AuthedSocketApi.register(authedSocketService.handleConnection);
+        QuerySocketApi.register(querySocketService.handleConnection);
 
         GGOpenApiDocs.register({http: httpServer, title: "Grest Test API", version: "1.0.0", specPath: "/openapi.json", docsPath: "/docs"});
 

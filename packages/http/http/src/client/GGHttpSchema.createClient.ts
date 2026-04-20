@@ -101,7 +101,7 @@ export function createClient<TContract extends GGContractApiDefinition, TContext
         }
 
     }
-    // @TODO Next line is just so test would register it correctly.
-    httpSchema.contract.implement(transportImplementation as GGContractImplementation<TContract>)
+    // Per-client stub — doesn't belong in the callOn registry (server's impl does).
+    httpSchema.contract.implement(transportImplementation as GGContractImplementation<TContract>, {skipLocatorRegistration: true})
     return transportImplementation;
 }

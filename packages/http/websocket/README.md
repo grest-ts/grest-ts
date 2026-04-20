@@ -209,6 +209,88 @@ export const ChatApi = webSocketSchema(ChatApiContract)
 
 Middlewares run in order during connection establishment.
 
+### Sharing middleware with HTTP APIs (one class, two transports)
+
+Most apps are HTTP-first and add WebSockets later. You'll often want the *same* auth logic on both — same bearer-token shape, same verification, same user context key. The two middleware interfaces are deliberately separate (HTTP runs per-request; WS runs once at handshake — see the note below), but TypeScript structural typing lets **one class implement both interfaces** so you write the logic once and attach it to both schemas.
+
+```typescript
+import { GGHttpTransportMiddleware, GGHttpRequest } from "@grest-ts/http"
+import { GGWebSocketMiddleware, GGWebSocketHandshakeContext } from "@grest-ts/websocket"
+import { GGContextKey } from "@grest-ts/context"
+import { IsObject, IsString, NOT_AUTHORIZED } from "@grest-ts/schema"
+
+export const IsAuthUser = IsObject({ id: IsString, role: IsString })
+export type AuthUser = typeof IsAuthUser.infer
+export const GG_AUTH_USER = new GGContextKey<AuthUser>("authUser", IsAuthUser)
+
+/**
+ * Implements both middleware interfaces. Use the same instance on HTTP and
+ * WebSocket schemas — single source of truth for auth wiring.
+ */
+export class BearerAuthMiddleware
+    implements GGHttpTransportMiddleware, GGWebSocketMiddleware {
+
+    constructor(private opts: {
+        /** Client-side: return the current token. Called on every HTTP request AND on every WS handshake. */
+        getToken: () => string | undefined
+        /** Server-side: verify the token and return the user. Throw/return undefined to reject. */
+        verify:   (token: string) => AuthUser | undefined
+    }) {}
+
+    // ---- Client-side: attach the bearer header ----
+    updateRequest   = (req: GGHttpRequest) =>
+        this.setHeader(req.headers as Record<string, string>)
+    updateHandshake = (ctx: GGWebSocketHandshakeContext) =>
+        this.setHeader(ctx.headers)
+
+    // ---- Server-side: extract + verify, populate context ----
+    parseRequest    = (req: GGHttpRequest) =>
+        this.extract(req.headers as Record<string, string | string[]>)
+    parseHandshake  = (ctx: GGWebSocketHandshakeContext) =>
+        this.extract(ctx.headers)
+
+    private setHeader(headers: Record<string, string>) {
+        const t = this.opts.getToken()
+        if (t) headers["authorization"] = "Bearer " + t
+    }
+    private extract(headers: Record<string, string | string[]>) {
+        const header = headers["authorization"]
+        if (typeof header !== "string" || !header.startsWith("Bearer ")) {
+            throw new NOT_AUTHORIZED({ displayMessage: "Missing bearer token" })
+        }
+        const user = this.opts.verify(header.substring(7))
+        if (!user) throw new NOT_AUTHORIZED({ displayMessage: "Invalid token" })
+        GG_AUTH_USER.set(user)
+    }
+}
+
+// One instance, used on both kinds of schema:
+const auth = new BearerAuthMiddleware({
+    getToken: () => GG_AUTH_USER.get()?.id,
+    verify:   (token) => validateTokenSync(token),
+})
+
+export const ItemApi = httpSchema(ItemContract).pathPrefix("api/items")
+    .use(auth)           // acts as GGHttpTransportMiddleware
+    .routes({ ... })
+
+export const ChatApi = webSocketSchema(ChatContract).path("ws/chat")
+    .use(auth)           // acts as GGWebSocketMiddleware
+    .done()
+```
+
+**Important — the rhythms are different:**
+
+| | HTTP | WebSocket |
+|---|---|---|
+| When middleware runs | Per request | Once, at handshake |
+| What it can do        | Modify each request/response    | Set connection-scoped context |
+| Token refresh         | Naturally handled: next request reads the new token | Not automatic — token is captured at connect time. If the token rotates mid-session, the old connection keeps its old identity until it's dropped and a fresh handshake runs |
+
+This is why the interfaces aren't merged: forcing a single interface would make WS middleware silently not re-run on messages (a foot-gun). Keep the rhythms distinct and share *logic*, not *lifecycle*.
+
+The server-side extraction logic here is identical for both transports — that's the common case and the reason this pattern pays off. If your HTTP flow needs per-request behavior that doesn't map to WS (say, modifying the HTTP response body), put those hooks on a separate HTTP-only middleware and apply both.
+
 ## Server Setup
 
 ### Connection Handler
@@ -314,65 +396,93 @@ protected compose(): void {
 
 ## Client
 
-### Connecting via GGSocketPool
+### Typed Client via `createClient()`
 
-`GGSocketPool` manages WebSocket connections with automatic pooling — connections are reused when the same URL + headers combination is requested.
+`ChatApi.createClient()` returns a typed, contract-validated client. It mirrors the server's connection handler: `incoming.on(handlers)` for `serverToClient` messages, `outgoing.method(data)` for `clientToServer` methods.
+
+```typescript
+import { ChatApi } from "./ChatApi"
+
+// Create the client (disconnected)
+const client = ChatApi.createClient({ url: "ws://localhost:3000" })
+
+// Register handlers for serverToClient messages — Partial, only what you need
+client.incoming.on({
+    newMessage: (message) => {
+        console.log("New message:", message)
+    },
+    typing: (event) => {
+        console.log(event.userId, "is typing")
+    },
+    // Server-requests-client RPC (has `success` in contract) — return a value
+    areYouThere: async () => true
+})
+
+// Lifecycle callbacks can be registered before connect
+client.onClose(() => console.log("Disconnected"))
+client.onError((err) => console.error("Socket error:", err))
+
+// Establish the connection (runs handshake + applies pending handlers)
+await client.connect()
+
+// Call clientToServer methods — returns GGPromise like the HTTP client
+const response = await client.outgoing.sendMessage({
+    text: "Hello!",
+    channelId: "general"
+})
+// response is typed: { success: true, messageId: "msg-456" }
+
+// Fire-and-forget methods (no `success` in contract) — returns Promise<void>
+await client.outgoing.markAsRead({ messageId: "msg-123" })
+await client.outgoing.ping()
+
+// Error handling — same GGPromise API as the HTTP client
+const result = await client.outgoing.sendMessage({ text: "", channelId: "general" }).asResult()
+if (result.success) {
+    console.log(result.data.messageId)
+} else if (result.type === "VALIDATION_ERROR") {
+    showValidationErrors(result.data)
+}
+
+// Gracefully close (waits for pending requests), or close() for immediate termination
+await client.disconnect()
+```
+
+### Client Config
+
+```typescript
+interface GGWebSocketClientConfig<TQuery> {
+    url?: string       // "ws://host:port". If omitted, uses @grest-ts/discovery.
+    query?: TQuery     // Query params on connect, typed from `.queryOnConnect<T>()`.
+}
+```
+
+Omitting `url` triggers service discovery via `@grest-ts/discovery` (Node only). In browsers, pass an explicit URL (use `""` for same-origin).
+
+### Sending Modes (automatic from the contract)
+
+- **Request-response** — methods with `success` defined return `GGPromise<Success, Errors>`. The client sends a `REQ` and waits up to 30s for a reply.
+- **Fire-and-forget** — methods without `success` return `GGPromise<void, SERVER_ERROR>`. The client sends a `MSG` and resolves as soon as the message is handed to the socket.
+
+Both apply symmetrically: the server can also send request-response messages via `serverToClient` methods that define `success`.
+
+### Direct socket access via `GGSocketPool`
+
+If you need to bypass contract validation (e.g. writing a generic proxy, debugging the wire protocol), `GGSocketPool` is still available. Prefer `createClient()` in application code.
 
 ```typescript
 import { GGSocketPool } from "@grest-ts/websocket"
 
-// Connect to the WebSocket server
 const socket = await GGSocketPool.getOrConnect({
     domain: "ws://localhost:3000",
     path: "/ws/chat",
-    middlewares: ChatApi.middlewares  // Runs updateHandshake for auth headers
+    middlewares: ChatApi.middlewares
 })
 
-// Send messages (see "Sending Messages" below)
-const response = await socket.send("ChatApi.sendMessage", {
-    text: "Hello!",
-    channelId: "general"
-}, true)
-
-// Register handler for server-to-client messages
-socket.registerHandler({
-    path: "ChatApi.newMessage",
-    handler: (message) => {
-        console.log("New message:", message)
-    }
-})
-
-// Lifecycle
-socket.onClose(() => console.log("Disconnected"))
-socket.onError((error) => console.error("Socket error:", error))
-
-// Close single connection
+const result = await socket.send("ChatApi.sendMessage", { text: "Hello!", channelId: "general" }, true)
+socket.registerHandler({ path: "ChatApi.newMessage", handler: (msg) => { ... } })
 socket.close()
-
-// Or graceful teardown (waits for pending requests)
-await socket.teardown()
 ```
-
-### Sending Messages
-
-The third argument to `socket.send()` controls the sending mode:
-
-```typescript
-// Request-response: expectsResponse = true
-// Sends a REQ message, waits for the server to reply (30s timeout)
-const result = await socket.send("ChatApi.sendMessage", {
-    text: "Hello!",
-    channelId: "general"
-}, true)
-// result is the typed response: { success: true, messageId: "msg-456" }
-
-// Fire-and-forget: expectsResponse = false
-// Sends a MSG message, returns immediately
-socket.send("ChatApi.markAsRead", { messageId: "msg-123" }, false)
-socket.send("ChatApi.ping", undefined, false)
-```
-
-Which mode is used is determined by the contract — methods with `success` defined are request-response, methods without are fire-and-forget. This applies in both directions: the server can also send request-response messages to the client via `serverToClient` methods that define `success`.
 
 ### Connection Pool Management
 
