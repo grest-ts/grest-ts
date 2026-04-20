@@ -1,6 +1,6 @@
 import {describe, it, expect} from "vitest";
 import {
-    IsString, IsNumber, IsBoolean, IsArray, IsObject, IsLiteral,
+    IsString, IsNumber, IsArray, IsObject,
     IsEmail, IsDate, IsUrl,
     ERROR, GGContractClass
 } from "@grest-ts/schema";
@@ -316,7 +316,7 @@ describe("toOpenApi", () => {
             const codecNoResponses = {
                 method: "POST" as const, path: "do",
                 createForClient: () => ({} as any), createForServer: () => ({} as any),
-                toOpenApiOperation: () => ({operationId: "do", parameters: []})
+                toOpenApiOperation: () => ({operationId: "do", parameters: [] as any[]})
             };
             const S2 = httpSchema(C).pathPrefix("tp2").routes({do: codecNoResponses as any});
             expect(() => toOpenApi([S2])).toThrowError(/no responses/);

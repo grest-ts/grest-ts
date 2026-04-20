@@ -3,10 +3,7 @@ import {toAsyncApi} from "../src/toAsyncApi";
 
 // Import the grest-test WebSocket APIs as real test fixtures
 import {ConfigTestSocketApi} from "../../../examples/grest-test/src/api/ConfigTestSocketApi";
-import {FileUploadTestApi} from "../../../examples/grest-test/src/api/FileUploadTestApi";
 
-// We also import ShowcaseApi bearer auth middleware for security scheme testing
-import {ShowcaseBearerAuth, ShowcaseApi} from "../../../examples/grest-test/src/api/OpenApiShowcaseApi";
 import {webSocketSchema, defineSocketContract} from "@grest-ts/websocket";
 import {IsString, IsObject, IsNumber, SERVER_ERROR, VALIDATION_ERROR, IsBearerToken} from "@grest-ts/schema";
 

@@ -8,7 +8,9 @@ export default defineConfig({
   test: {
     globals: true,
     projects: [
+      'packages-libs/asyncapi',
       'packages-libs/lock/lock',
+      'packages-libs/openapi',
       'packages-libs/poller',
       'packages-libs/struct',
       'packages-tooling/code-generator',

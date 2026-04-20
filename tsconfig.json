@@ -13,6 +13,8 @@
   },
   "include": [
     "grest.package.ts",
+    "packages-libs/asyncapi/src/**/*",
+    "packages-libs/asyncapi/test/**/*",
     "packages-libs/db/db-mysql/src/**/*",
     "packages-libs/db/db-mysql/testkit/**/*",
     "packages-libs/db/db-postgre/src/**/*",
@@ -24,6 +26,8 @@
     "packages-libs/events/events/testkit/**/*",
     "packages-libs/intl/intl/src/**/*",
     "packages-libs/lock/lock/src/**/*",
+    "packages-libs/openapi/src/**/*",
+    "packages-libs/openapi/test/**/*",
     "packages-libs/poller/src/**/*",
     "packages-libs/poller/test/**/*",
     "packages-libs/poller/testkit/**/*",
