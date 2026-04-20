@@ -1,7 +1,7 @@
 {
   "//": "THIS FILE IS GENERATED - DO NOT EDIT",
   "name": "@grest-ts/config-aws",
-  "version": "0.0.22",
+  "version": "0.0.24",
   "type": "module",
   "license": "MIT",
   "description": "AWS Secrets Manager adapter for @grest-ts/config",
@@ -45,6 +45,6 @@
   },
   "dependencies": {
     "@aws-sdk/client-secrets-manager": "^3.991.0",
-    "@grest-ts/config": "0.0.22"
+    "@grest-ts/config": "0.0.24"
   }
 }
