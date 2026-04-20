@@ -2,6 +2,7 @@
 * schema/file -> schema/schema-file
 * http/file-http -> http/http-file
 
+* Websocket browser API is missing and docs are wrong, using string keys etc..
 
 * res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-company-auth'); // @TODO Remove x-company-auth
 
