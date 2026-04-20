@@ -408,6 +408,85 @@ testUtils(`IsString`, () => {
         });
     });
 
+    // ==================== toSchemaDescription ====================
+
+    describe('toSchemaDescription()', () => {
+        it('basic', () => {
+            const desc = IsString.toSchemaDescription();
+            expect(desc.node).toEqual({kind: 'string'});
+            expect(desc.nullable).toBe(false);
+        });
+        it('minLength', () => {
+            const desc = IsString.minLength(2).toSchemaDescription();
+            expect(desc.node).toEqual({kind: 'string', minLength: 2});
+        });
+        it('maxLength', () => {
+            const desc = IsString.maxLength(50).toSchemaDescription();
+            expect(desc.node).toEqual({kind: 'string', maxLength: 50});
+        });
+        it('nonEmpty implies minLength:1', () => {
+            const desc = IsString.nonEmpty.toSchemaDescription();
+            expect((desc.node as any).minLength).toBe(1);
+        });
+        it('nonEmpty + explicit minLength keeps explicit value', () => {
+            const desc = IsString.nonEmpty.minLength(3).toSchemaDescription();
+            expect((desc.node as any).minLength).toBe(3);
+        });
+        it('pattern', () => {
+            const desc = IsString.regex(/^[a-z]+$/).toSchemaDescription();
+            expect((desc.node as any).pattern).toBe('^[a-z]+$');
+        });
+        it('orNull sets nullable:true, node stays string', () => {
+            const desc = IsString.orNull.toSchemaDescription();
+            expect(desc.node).toEqual({kind: 'string'});
+            expect(desc.nullable).toBe(true);
+        });
+        it('orUndefined sets optional:true, node stays string', () => {
+            const desc = IsString.orUndefined.toSchemaDescription();
+            expect(desc.node).toEqual({kind: 'string'});
+            expect(desc.optional).toBe(true);
+            expect(desc.nullable).toBe(false);
+        });
+
+        // ── .docs() and .default() — tested on IsString as the simplest carrier ──
+        it('docs title', () => {
+            const desc = IsString.docs({title: 'My field'}).toSchemaDescription();
+            expect(desc.node).toEqual({kind: 'string'});
+            expect(desc.docs?.title).toBe('My field');
+        });
+        it('docs description', () => {
+            const desc = IsString.docs({description: 'A description'}).toSchemaDescription();
+            expect(desc.docs?.description).toBe('A description');
+        });
+        it('docs example', () => {
+            const desc = IsString.docs({example: 'foo'}).toSchemaDescription();
+            expect(desc.docs?.example).toBe('foo');
+        });
+        it('docs deprecated:true', () => {
+            const desc = IsString.docs({deprecated: true}).toSchemaDescription();
+            expect(desc.docs?.deprecated).toBe(true);
+        });
+        it('docs deprecated:false', () => {
+            const desc = IsString.docs({deprecated: false}).toSchemaDescription();
+            expect(desc.docs?.deprecated).toBe(false);
+        });
+        it('docs on nullable schema: docs in desc, nullable is true', () => {
+            const desc = IsString.docs({title: 'X'}).orNull.toSchemaDescription();
+            expect(desc.nullable).toBe(true);
+            expect(desc.docs?.title).toBe('X');
+            expect(desc.node).toEqual({kind: 'string'});
+        });
+        it('default value', () => {
+            const desc = IsString.default('hello').toSchemaDescription();
+            expect(desc.defaultValue).toBe('hello');
+        });
+        it('default combined with docs', () => {
+            const desc = IsString.docs({description: 'D'}).default('x').toSchemaDescription();
+            expect(desc.docs?.description).toBe('D');
+            expect(desc.defaultValue).toBe('x');
+        });
+    });
+
     // ==================== Stringify ====================
 
     testStringify('stringify', IsString, [

@@ -2,6 +2,7 @@ import {describe, expect, it} from 'vitest';
 import {IsRecord} from './IsRecord';
 import {IsString} from './IsString';
 import {IsNumber} from './IsNumber';
+import {IsBoolean} from './IsBoolean';
 import {IsObject} from './IsObject';
 import {GGIssueKey} from "../issue/GGIssueKey";
 import {GGIssuesList} from "../issue/GGIssuesList";
@@ -266,6 +267,28 @@ testUtils('IsRecord', () => {
             }, issues, 'test', true);
             expect(result).toBeUndefined();
             expect(issues.length).toBeGreaterThan(0);
+        });
+    });
+
+    // ==================== toSchemaDescription ====================
+
+    describe('toSchemaDescription()', () => {
+        it('basic — number value', () => {
+            const desc = IsRecord(IsString, IsNumber).toSchemaDescription();
+            expect(desc.node.kind).toBe('record');
+            expect((desc.node as any).value.node).toEqual({kind: 'number', integer: false});
+            expect(desc.nullable).toBe(false);
+        });
+        it('value schema is a string', () => {
+            const desc = IsRecord(IsString, IsString).toSchemaDescription();
+            expect(desc.node.kind).toBe('record');
+            expect((desc.node as any).value.node).toEqual({kind: 'string'});
+        });
+        it('nullable', () => {
+            const desc = IsRecord(IsString, IsBoolean).orNull.toSchemaDescription();
+            expect(desc.node.kind).toBe('record');
+            expect((desc.node as any).value.node).toEqual({kind: 'boolean'});
+            expect(desc.nullable).toBe(true);
         });
     });
 });

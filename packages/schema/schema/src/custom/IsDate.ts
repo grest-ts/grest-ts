@@ -25,6 +25,7 @@ export const IsDate = Object.assign(
         .brand("date")
         .docs({
             title: "Date",
+            format: "date",
             description: "Format YYYY-MM-DD",
             example: "2024-01-15"
         }),

@@ -1,11 +1,12 @@
 import {GGSchema, Opt} from "../GGSchema";
 import {UnionDef} from "../Definition";
+import type {GGSchemaNodeKind} from "../GGSchemaDescription";
 
 type InferUnion<T extends GGSchema<any>[]> = T[number] extends GGSchema<infer U> ? U : never;
 
 export class UnionSchema<T = unknown> extends GGSchema<T, UnionDef> {
 
-    protected derive<NewT = T>(changes: Partial<UnionDef>): UnionSchema<NewT> {
+    protected _buildDerived<NewT = T>(changes: Partial<UnionDef>): UnionSchema<NewT> {
         return new UnionSchema<NewT>({...this.def, ...changes});
     }
 
@@ -15,6 +16,10 @@ export class UnionSchema<T = unknown> extends GGSchema<T, UnionDef> {
 
     get orNull(): UnionSchema<T | null> {
         return super.orNull as any
+    }
+
+    protected _buildSchemaNode(): GGSchemaNodeKind {
+        return {kind: 'union', variants: this.def.variants.map(v => v.toSchemaDescription())};
     }
 }
 

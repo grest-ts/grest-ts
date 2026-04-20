@@ -1,9 +1,10 @@
 import {GGSchema, Opt} from "../GGSchema";
 import {RecordDef} from "../Definition";
+import type {GGSchemaNodeKind} from "../GGSchemaDescription";
 
 export class RecordSchema<T extends Record<string, unknown> | undefined | null = Record<string, unknown>> extends GGSchema<T, RecordDef> {
 
-    protected derive<NewT extends Record<string, unknown> | undefined | null = T>(changes: Partial<RecordDef>): RecordSchema<NewT> {
+    protected _buildDerived<NewT extends Record<string, unknown> | undefined | null = T>(changes: Partial<RecordDef>): RecordSchema<NewT> {
         return new RecordSchema<NewT>({...this.def, ...changes});
     }
 
@@ -13,6 +14,10 @@ export class RecordSchema<T extends Record<string, unknown> | undefined | null =
 
     get orNull(): RecordSchema<T | null> {
         return super.orNull as any
+    }
+
+    protected _buildSchemaNode(): GGSchemaNodeKind {
+        return {kind: 'record', value: this.def.value.toSchemaDescription()};
     }
 }
 

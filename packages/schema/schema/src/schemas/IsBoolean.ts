@@ -1,5 +1,6 @@
 import {GGSchema, Opt} from "../GGSchema";
 import {BooleanDef} from "../Definition";
+import type {GGSchemaNodeKind} from "../GGSchemaDescription";
 
 export class BooleanSchema<T extends boolean | undefined | null = boolean> extends GGSchema<T, BooleanDef> {
 
@@ -13,16 +14,14 @@ export class BooleanSchema<T extends boolean | undefined | null = boolean> exten
 
     // --------------------------------------------------------------------------------------
 
-    protected derive<NewT extends boolean | undefined | null = T>(changes: Partial<BooleanDef>): BooleanSchema<NewT> {
+    protected _buildDerived<NewT extends boolean | undefined | null = T>(changes: Partial<BooleanDef>): BooleanSchema<NewT> {
         return new BooleanSchema<NewT>({...this.def, ...changes});
     }
 
     // --------------------------------------------------------------------------------------
 
-    toJSONSchema(): object {
-        const schema = {type: 'boolean'};
-        if (this.def.nullable) return {anyOf: [schema, {type: 'null'}]};
-        return schema;
+    protected _buildSchemaNode(): GGSchemaNodeKind {
+        return {kind: 'boolean'};
     }
 }
 

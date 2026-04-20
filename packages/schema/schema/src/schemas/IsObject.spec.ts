@@ -1565,4 +1565,47 @@ testUtils('IsObject', () => {
             expect(Strict.is(parsed)).toBe(true);
         });
     });
+
+    // ==================== toSchemaDescription ====================
+
+    describe('toSchemaDescription()', () => {
+        it('basic — all required', () => {
+            const desc = IsObject({name: IsString, age: IsNumber}).toSchemaDescription();
+            expect(desc.node.kind).toBe('object');
+            const node = desc.node as any;
+            expect(node.properties.name.node).toEqual({kind: 'string'});
+            expect(node.properties.age.node).toEqual({kind: 'number', integer: false});
+            expect(node.required).toContain('name');
+            expect(node.required).toContain('age');
+        });
+        it('optional field excluded from required', () => {
+            const desc = IsObject({name: IsString, nick: IsString.orUndefined}).toSchemaDescription();
+            const node = desc.node as any;
+            expect(node.required).toContain('name');
+            expect(node.required).not.toContain('nick');
+            expect(node.properties.nick.node).toEqual({kind: 'string'});
+            expect(node.properties.nick.optional).toBe(true);
+        });
+        it('no required entries when all fields optional', () => {
+            const desc = IsObject({a: IsString.orUndefined}).toSchemaDescription();
+            const node = desc.node as any;
+            expect(node.required).toHaveLength(0);
+        });
+        it('nullable sets nullable:true, node stays object', () => {
+            const desc = IsObject({x: IsNumber}).orNull.toSchemaDescription();
+            expect(desc.node.kind).toBe('object');
+            expect(desc.nullable).toBe(true);
+        });
+        it('nested object', () => {
+            const desc = IsObject({inner: IsObject({val: IsBoolean})}).toSchemaDescription();
+            const node = desc.node as any;
+            expect(node.properties.inner.node.kind).toBe('object');
+            expect(node.properties.inner.node.properties.val.node).toEqual({kind: 'boolean'});
+        });
+        it('docs on object', () => {
+            const desc = IsObject({x: IsNumber}).docs({title: 'T', description: 'D'}).toSchemaDescription();
+            expect(desc.docs?.title).toBe('T');
+            expect(desc.docs?.description).toBe('D');
+        });
+    });
 });

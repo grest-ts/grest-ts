@@ -95,4 +95,19 @@ testUtils('IsBit', () => {
         {value: null, expected: null},
     ]);
 
+    // ==================== toSchemaDescription ====================
+
+    describe('toSchemaDescription()', () => {
+        it('basic', () => {
+            const desc = IsBit.toSchemaDescription();
+            expect(desc.node).toEqual({kind: 'bit'});
+            expect(desc.nullable).toBe(false);
+        });
+        it('nullable', () => {
+            const desc = IsBit.orNull.toSchemaDescription();
+            expect(desc.node).toEqual({kind: 'bit'});
+            expect(desc.nullable).toBe(true);
+        });
+    });
+
 });

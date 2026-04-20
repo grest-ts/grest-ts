@@ -21,6 +21,7 @@ export const IsUrl = Object.assign(
         .brand("url")
         .docs({
             title: "URL",
+            format: "uri",
             description: "HTTP or HTTPS URL",
             example: "https://example.com"
         }),

@@ -2,6 +2,7 @@ import {GGSchema, Opt} from "../GGSchema";
 import {GGIssuesList} from "../issue/GGIssuesList";
 import {GGIssueInvalid} from "../issue/issues/GGIssueInvalid";
 import {GGSchemaDefinition} from "../Definition";
+import type {GGSchemaNodeKind} from "../GGSchemaDescription";
 
 
 // Character class patterns
@@ -40,7 +41,7 @@ export class PasswordSchema<T extends tPassword | undefined | null = tPassword> 
     public static readonly needsUppercaseError = new GGIssueInvalid("password.needsUppercase", "Password must contain at least one uppercase letter");
     public static readonly needsSpecialError = new GGIssueInvalid("password.needsSpecial", "Password must contain at least one special character");
 
-    protected derive<NewT extends tPassword | undefined | null = T>(changes: Partial<PasswordDef>): PasswordSchema<NewT> {
+    protected _buildDerived<NewT extends tPassword | undefined | null = T>(changes: Partial<PasswordDef>): PasswordSchema<NewT> {
         return new PasswordSchema<NewT>({...this.def, ...changes});
     }
 
@@ -50,6 +51,10 @@ export class PasswordSchema<T extends tPassword | undefined | null = tPassword> 
 
     get orNull(): PasswordSchema<T | null> {
         return super.orNull as any
+    }
+
+    protected _buildSchemaNode(): GGSchemaNodeKind {
+        return {kind: 'password', minLength: this.def.minLength, maxLength: this.def.maxLength};
     }
 }
 
@@ -138,7 +143,8 @@ export const IsPassword = (options?: PasswordOptions): PasswordSchema => {
         strength,
         is,
         isWithErrors,
-        clean
+        clean,
+        docs: {format: 'password'}
     } as PasswordDef);
 };
 

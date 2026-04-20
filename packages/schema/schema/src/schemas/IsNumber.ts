@@ -1,5 +1,6 @@
 import {GGSchema, Opt} from "../GGSchema";
 import {NumberDef} from "../Definition";
+import type {GGSchemaNodeKind} from "../GGSchemaDescription";
 
 export class NumberSchema<T extends Number | number | undefined | null = number> extends GGSchema<T, NumberDef> {
 
@@ -14,23 +15,23 @@ export class NumberSchema<T extends Number | number | undefined | null = number>
     // --------------------------------------------------------------------------------------
 
     min(n: number): NumberSchema<T> {
-        return this.derive({min: n});
+        return this.derive({min: n}) as this;
     }
 
     max(n: number): NumberSchema<T> {
-        return this.derive({max: n});
+        return this.derive({max: n}) as this;
     }
 
     range(min: number, max: number): NumberSchema<T> {
-        return this.derive({min, max});
+        return this.derive({min, max}) as this;
     }
 
     multipleOf(n: number): NumberSchema<T> {
         if (n <= 0) throw new Error(`multipleOf must be positive, got ${n}`);
-        return this.derive({multipleOf: n});
+        return this.derive({multipleOf: n}) as this;
     }
 
-    protected derive<NewT extends Number | number | undefined | null = T>(changes: Partial<NumberDef>): NumberSchema<NewT> {
+    protected _buildDerived<NewT extends Number | number | undefined | null = T>(changes: Partial<NumberDef>): NumberSchema<NewT> {
         const newDef: NumberDef = {...this.def, ...changes};
 
         if (this.def.min !== undefined && newDef.min !== undefined && newDef.min < this.def.min) {
@@ -51,13 +52,14 @@ export class NumberSchema<T extends Number | number | undefined | null = number>
 
     // --------------------------------------------------------------------------------------
 
-    toJSONSchema(): object {
-        const schema: Record<string, unknown> = this.def.integer ? {type: 'integer'} : {type: 'number'};
-        if (this.def.min !== undefined) schema.minimum = this.def.min;
-        if (this.def.max !== undefined) schema.maximum = this.def.max;
-        if (this.def.multipleOf !== undefined) schema.multipleOf = this.def.multipleOf;
-        if (this.def.nullable) return {anyOf: [schema, {type: 'null'}]};
-        return schema;
+    protected _buildSchemaNode(): GGSchemaNodeKind {
+        return {
+            kind: 'number',
+            integer: !!this.def.integer,
+            ...(this.def.min !== undefined ? {min: this.def.min} : {}),
+            ...(this.def.max !== undefined ? {max: this.def.max} : {}),
+            ...(this.def.multipleOf !== undefined ? {multipleOf: this.def.multipleOf} : {}),
+        };
     }
 }
 

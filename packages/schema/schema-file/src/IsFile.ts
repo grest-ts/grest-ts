@@ -1,5 +1,5 @@
 import {GGSchema, GGSchemaNonJsonDefinition, GGSchemaBinaryData, GGIssueInvalid, Opt} from "@grest-ts/schema";
-import type {GGIssuesList} from "@grest-ts/schema";
+import type {GGIssuesList, GGSchemaNodeKind} from "@grest-ts/schema";
 import {BufferGGFile, GGFile} from "./GGFile";
 
 /**
@@ -48,7 +48,7 @@ export class FileSchema<T extends GGFile | undefined | null = GGFile> extends GG
     public static readonly mimeTypeError = new GGIssueInvalid<{ accept: string }>("file.mimeType", "File type not accepted, expected: {accept}", {accept: "Accepted types"});
     public static readonly maxSizeError = new GGIssueInvalid<{ max: number }>("file.maxSize", "File exceeds maximum size of {max} bytes", {max: "Maximum size"});
 
-    constructor(def: { type: 'file', accept?: readonly string[], maxSize?: number, optional?: boolean, nullable?: boolean }) {
+    constructor(def: { type: 'file', accept?: readonly string[], maxSize?: number, optional?: boolean, nullable?: boolean, docs?: import("@grest-ts/schema").GGSchemaDocs }) {
         const {accept, maxSize} = def;
 
         const is = (value: unknown): value is GGFile => {
@@ -97,7 +97,7 @@ export class FileSchema<T extends GGFile | undefined | null = GGFile> extends GG
         return super.orNull as any;
     }
 
-    protected derive<NewT extends GGFile | undefined | null = T>(changes: Partial<FileDef>): FileSchema<NewT> {
+    protected _buildDerived<NewT extends GGFile | undefined | null = T>(changes: Partial<FileDef>): FileSchema<NewT> {
         if (this.def.maxSize !== undefined && changes.maxSize !== undefined && changes.maxSize > this.def.maxSize) {
             throw new Error(`Cannot raise maxSize from ${this.def.maxSize} to ${changes.maxSize}`);
         }
@@ -106,19 +106,24 @@ export class FileSchema<T extends GGFile | undefined | null = GGFile> extends GG
             accept: changes.accept ?? this.def.accept,
             maxSize: changes.maxSize ?? this.def.maxSize,
             optional: changes.optional ?? this.def.optional,
-            nullable: changes.nullable ?? this.def.nullable
+            nullable: changes.nullable ?? this.def.nullable,
+            docs: changes.docs ?? this.def.docs,
         });
     }
 
     // ==================== File Constraints ====================
 
+    protected _buildSchemaNode(): GGSchemaNodeKind {
+        return {kind: 'file', accept: this.def.accept, maxSize: this.def.maxSize};
+    }
+
     accept(...types: string[]): FileSchema<T> {
         const combined = this.def.accept ? [...this.def.accept, ...types] : types;
-        return this.derive({accept: combined});
+        return this.derive({accept: combined}) as this;
     }
 
     maxSize(bytes: number): FileSchema<T> {
-        return this.derive({maxSize: bytes});
+        return this.derive({maxSize: bytes}) as this;
     }
 
     // ==================== Static Shortcuts ====================

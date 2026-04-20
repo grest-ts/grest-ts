@@ -1,6 +1,7 @@
 import {GGSchema, Opt} from "../GGSchema";
 import {IsLiteral} from "./IsLiteral";
 import {ObjectDef, ShapeInput} from "../Definition";
+import type {GGSchemaDescription, GGSchemaNodeKind} from "../GGSchemaDescription";
 
 type Shape = Record<string, GGSchema<any>>;
 
@@ -55,7 +56,7 @@ export class ObjectSchema<T extends object | undefined | null = object> extends 
         return super.orNull as any
     }
 
-    protected derive<NewT extends T | undefined | null = T>(changes: Partial<ObjectDefImpl>): ObjectSchema<NewT> {
+    protected _buildDerived<NewT extends T | undefined | null = T>(changes: Partial<ObjectDefImpl>): ObjectSchema<NewT> {
         return new ObjectSchema<NewT>({...this.def, ...changes});
     }
 
@@ -109,35 +110,16 @@ export class ObjectSchema<T extends object | undefined | null = object> extends 
 
     // --------------------------------------------------------------------------------------
 
-    toJSONSchema(): object {
+    protected _buildSchemaNode(): GGSchemaNodeKind {
         const shape = this.toCompilerDef().shape! as Shape;
-        const keys = Object.keys(shape);
-
-        const properties: Record<string, object> = {};
+        const properties: Record<string, GGSchemaDescription> = {};
         const required: string[] = [];
-
-        for (const k of keys) {
-            const schema = shape[k];
-            properties[k] = schema.toJSONSchema();
-            if (!schema.def.optional) {
-                required.push(k);
-            }
+        for (const k of Object.keys(shape)) {
+            const child = shape[k];
+            properties[k] = child.toSchemaDescription();
+            if (!child.def.optional) required.push(k);
         }
-
-        const result: Record<string, unknown> = {
-            type: 'object',
-            properties,
-        };
-
-        if (required.length > 0) {
-            result.required = required;
-        }
-
-        if (this.def.nullable) {
-            return {anyOf: [result, {type: 'null'}]};
-        }
-
-        return result;
+        return {kind: 'object', properties, required, additionalProperties: false};
     }
 
     protected _toCompilerDef(): ObjectDefImpl {

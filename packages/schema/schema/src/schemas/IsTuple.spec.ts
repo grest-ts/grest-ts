@@ -467,4 +467,32 @@ testUtils('IsTuple', () => {
             expect(result).toStrictEqual(["key", {label: "count", value: 42}]);
         });
     });
+
+    // ==================== toSchemaDescription ====================
+
+    describe('toSchemaDescription()', () => {
+        it('basic two-element tuple', () => {
+            const desc = IsTuple(IsString, IsNumber).toSchemaDescription();
+            expect(desc.node.kind).toBe('tuple');
+            const elements = (desc.node as any).elements as any[];
+            expect(elements).toHaveLength(2);
+            expect(elements[0].node).toEqual({kind: 'string'});
+            expect(elements[1].node).toEqual({kind: 'number', integer: false});
+            expect(desc.nullable).toBe(false);
+        });
+        it('single-element tuple', () => {
+            const desc = IsTuple(IsBoolean).toSchemaDescription();
+            expect(desc.node.kind).toBe('tuple');
+            const elements = (desc.node as any).elements as any[];
+            expect(elements).toHaveLength(1);
+            expect(elements[0].node).toEqual({kind: 'boolean'});
+        });
+        it('nullable sets nullable:true, node stays tuple', () => {
+            const desc = IsTuple(IsString, IsNumber).orNull.toSchemaDescription();
+            expect(desc.node.kind).toBe('tuple');
+            expect(desc.nullable).toBe(true);
+            const elements = (desc.node as any).elements as any[];
+            expect(elements).toHaveLength(2);
+        });
+    });
 });

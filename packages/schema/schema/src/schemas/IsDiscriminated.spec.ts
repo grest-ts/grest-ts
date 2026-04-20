@@ -4,6 +4,7 @@ import {IsObject} from './IsObject';
 import {IsString} from './IsString';
 import {IsNumber} from './IsNumber';
 import {IsArray} from './IsArray';
+import {IsLiteral} from './IsLiteral';
 import {GGIssueKey} from "../issue/GGIssueKey";
 import {GGIssuesList} from "../issue/GGIssuesList";
 import {GGIssueInvalid} from "../issue/issues/GGIssueInvalid";
@@ -1149,6 +1150,37 @@ testUtils('IsDiscriminated', () => {
                 expect(issues.length).toBe(0);
                 expect(Schema.is(result)).toBe(true);
             }
+        });
+    });
+
+    // ==================== toSchemaDescription ====================
+
+    describe('toSchemaDescription()', () => {
+        const Circle = IsObject({kind: IsLiteral('circle'), radius: IsNumber});
+        const Square = IsObject({kind: IsLiteral('square'), side: IsNumber});
+        const Shape = IsDiscriminated('kind', {circle: Circle, square: Square});
+
+        it('produces discriminated node with discriminator', () => {
+            const desc = Shape.toSchemaDescription();
+            expect(desc.node.kind).toBe('discriminated');
+            expect((desc.node as any).discriminator).toBe('kind');
+            expect(desc.nullable).toBe(false);
+        });
+        it('has two variant descriptions', () => {
+            const desc = Shape.toSchemaDescription();
+            const variants = (desc.node as any).variants as any[];
+            expect(variants).toHaveLength(2);
+        });
+        it('each variant node is object kind', () => {
+            const desc = Shape.toSchemaDescription();
+            const variants = (desc.node as any).variants as any[];
+            expect(variants[0].node.kind).toBe('object');
+            expect(variants[1].node.kind).toBe('object');
+        });
+        it('nullable sets nullable:true, node stays discriminated', () => {
+            const desc = Shape.orNull.toSchemaDescription();
+            expect(desc.node.kind).toBe('discriminated');
+            expect(desc.nullable).toBe(true);
         });
     });
 });

@@ -7,6 +7,7 @@ import {AOTExecutor} from "./executor/aot/AOTExecutor";
 import {GGCodec} from "./GGCodec";
 import {GGTransform} from "./GGTransform";
 import {Raw} from "./issue/types";
+import type {GGSchemaDescription, GGSchemaNodeKind} from "./GGSchemaDescription";
 
 export type GGParseResult<T> =
     | { success: true; value: T }
@@ -38,6 +39,20 @@ export abstract class GGSchema<Type, TDef extends GGSchemaDefinition = GGSchemaD
     private _orNull?: GGSchema<Type | null, TDef>;
 
     /**
+     * Points to the nearest ancestor schema that introduced a structural (non-presentational) change.
+     * Set once by derive() for presentational variants; never mutated after construction.
+     * Consumed via GGSchemaDescription.canonical — do not access directly from outside the class.
+     *
+     * @example
+     * IsEmail._base                                    // undefined — IsEmail is its own base
+     * IsEmail.orUndefined._base                        // IsEmail
+     * IsEmail.orUndefined.docs({description: "..."})._base  // IsEmail
+     * IsEmail.regex(/extra/)._base                     // undefined — new structural type
+     * IsEmail.regex(/extra/).docs({...})._base         // IsEmail.regex(/extra/)
+     */
+    readonly _base: GGSchema<any> | undefined = undefined;
+
+    /**
      * The executor strategy to use for schema operations.
      * Set to AotExecutor for AOT compilation (default), or InterpreterExecutor for interpreter mode.
      */
@@ -57,13 +72,13 @@ export abstract class GGSchema<Type, TDef extends GGSchemaDefinition = GGSchemaD
     // ---------------------------------------------------------------------------------------------------------
 
     public default(value: Exclude<Type, undefined>): GGSchema<Exclude<Type, undefined>, TDef> {
-        return this.derive({defaultValue: value} as Partial<TDef>) as GGSchema<Exclude<Type, undefined>, TDef>;
+        return this.derive({defaultValue: value} as Partial<TDef>, true) as GGSchema<Exclude<Type, undefined>, TDef>;
     }
 
     public get orUndefined(): GGSchema<Type | undefined, TDef> & Opt {
         if (this.def.optional) return this as any;
         if (!this._orUndefined) {
-            this._orUndefined = this.derive<Type | undefined>({optional: true} as Partial<TDef>)
+            this._orUndefined = this.derive<Type | undefined>({optional: true} as Partial<TDef>, true)
         }
         return this._orUndefined as GGSchema<Type | undefined, TDef> & Opt;
     }
@@ -71,7 +86,7 @@ export abstract class GGSchema<Type, TDef extends GGSchemaDefinition = GGSchemaD
     public get orNull(): GGSchema<Type | null, TDef> {
         if (this.def.nullable) return this as any;
         if (!this._orNull) {
-            this._orNull = this.derive<Type | null>({nullable: true} as Partial<TDef>)
+            this._orNull = this.derive<Type | null>({nullable: true} as Partial<TDef>, true)
         }
         return this._orNull;
     }
@@ -81,22 +96,50 @@ export abstract class GGSchema<Type, TDef extends GGSchemaDefinition = GGSchemaD
     }
 
     public docs(docs: GGSchemaDocs): this {
-        return this.derive({docs: this.def.docs ? {...this.def.docs, ...docs} : docs} as Partial<TDef>) as this;
+        const mergedDocs = this.def.docs ? {...this.def.docs, ...docs} : docs;
+        // Adding or changing a title is a structural change — it names this schema as a new type.
+        // All other doc fields (description, example, deprecated, format) are presentational.
+        const titleChanged = docs.title !== undefined && docs.title !== this.def.docs?.title;
+        return this.derive({docs: mergedDocs} as Partial<TDef>, !titleChanged) as this;
     }
 
     public refine(check: (value: Type) => boolean, error: GGIssueKey): GGSchema<Type, TDef> {
-        return this.derive({refinements: [...(this.def.refinements ?? []), {check, error}]} as any);
+        return this.derive({refinements: [...(this.def.refinements ?? []), {check, error}]} as any, true);
     }
 
     public coerce(fn: (value: Type) => Type): this {
-        return this.derive({coercions: [...(this.def.coercions ?? []), fn]} as any) as this;
+        return this.derive({coercions: [...(this.def.coercions ?? []), fn]} as any, true) as this;
     }
 
     public brand<B extends string>(_name: B): GGSchema<Type & Brand<B>, TDef> {
         return this as any;
     }
 
-    protected abstract derive<NewT extends Type | undefined | null = Type>(changes: Partial<TDef>): GGSchema<NewT, TDef>;
+    /**
+     * Create a derived schema with the given changes.
+     *
+     * @param changes - Fields to override in the schema definition.
+     * @param presentational - When true, the derived schema is a presentational variant
+     *   (docs, optional, nullable, default, refine, coerce) — its _base pointer is set
+     *   to this schema's _base (or this schema itself), so the canonical type identity
+     *   is preserved across decoration chains.
+     *   Structural changes (constraints, shape, pattern, etc.) leave presentational=false
+     *   (the default), making the new schema its own base.
+     */
+    protected derive<NewT extends Type | undefined | null = Type>(
+        changes: Partial<TDef>,
+        presentational = false
+    ): GGSchema<NewT, TDef> {
+        const result = this._buildDerived<NewT>(changes);
+        if (presentational) {
+            // _base is readonly — set once here via Object.assign (the only write point).
+            Object.assign(result, {_base: this._base ?? this});
+        }
+        return result;
+    }
+
+    /** Subclasses implement this to construct the new schema instance. */
+    protected abstract _buildDerived<NewT extends Type | undefined | null = Type>(changes: Partial<TDef>): GGSchema<NewT, TDef>;
 
     // ----------------------------------
 
@@ -268,10 +311,37 @@ export abstract class GGSchema<Type, TDef extends GGSchemaDefinition = GGSchemaD
 
     // ---------------------------------------------------------------------------------------------------------
 
-    public toJSONSchema(): object {
-        // Default implementation - subclasses should override
-        return {};
+    /**
+     * Returns a complete, format-agnostic description of this schema.
+     *
+     * Subclasses implement _buildSchemaNode() with their structural content.
+     * This method wraps it with the full usage-site metadata:
+     *   - canonical: the base schema (set by presentational derives)
+     *   - docs, defaultValue, nullable, optional
+     *
+     * Consumers (OpenAPI, Protobuf, JSON Schema, etc.) use this to build
+     * their own output format without coupling to schema internals.
+     */
+    public toSchemaDescription(): GGSchemaDescription {
+        return {
+            schema: this,
+            canonical: this._base,
+            node: this._buildSchemaNode(),
+            docs: this.def.docs,
+            defaultValue: this.def.defaultValue,
+            nullable: this.def.nullable ?? false,
+            optional: this.def.optional ?? false,
+        };
     }
+
+    /**
+     * Override in subclasses to return the structural content of this schema.
+     * Do NOT include nullable, docs, or defaultValue here — toSchemaDescription() does that.
+     */
+    protected _buildSchemaNode(): GGSchemaNodeKind {
+        return {kind: 'any'};
+    }
+
 
     private static _compiling = new Set<GGSchema<any>>();
 

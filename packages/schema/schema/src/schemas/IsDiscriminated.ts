@@ -1,5 +1,6 @@
 import {GGSchema, Opt} from "../GGSchema";
 import {DiscriminatedDef} from "../Definition";
+import type {GGSchemaNodeKind} from "../GGSchemaDescription";
 
 type InferDiscriminated<V extends GGSchema<any>> = V extends GGSchema<infer U> ? U : never;
 
@@ -20,7 +21,7 @@ export class DiscriminatedSchema<T = unknown> extends GGSchema<T, DiscriminatedD
         }
     }
 
-    protected derive<NewT = T>(changes: Partial<DiscriminatedDefImpl>): DiscriminatedSchema<NewT> {
+    protected _buildDerived<NewT = T>(changes: Partial<DiscriminatedDefImpl>): DiscriminatedSchema<NewT> {
         return new DiscriminatedSchema<NewT>({...this.def, ...changes});
     }
 
@@ -30,6 +31,16 @@ export class DiscriminatedSchema<T = unknown> extends GGSchema<T, DiscriminatedD
 
     get orNull(): DiscriminatedSchema<T | null> {
         return super.orNull as any
+    }
+
+    protected _buildSchemaNode(): GGSchemaNodeKind {
+        const def = this.toCompilerDef();
+        const variantMap = def.variantMap!;
+        return {
+            kind: 'discriminated',
+            discriminator: def.discriminator,
+            variants: Array.from(variantMap.values()).map(v => v.toSchemaDescription()),
+        };
     }
 
     protected _toCompilerDef(): DiscriminatedDef & { variantArray: GGSchema<any>[] } {

@@ -91,4 +91,19 @@ testUtils('IsBoolean', () => {
         {value: null, expected: null},
     ]);
 
+    // ==================== toSchemaDescription ====================
+
+    describe('toSchemaDescription()', () => {
+        it('basic', () => {
+            const desc = IsBoolean.toSchemaDescription();
+            expect(desc.node).toEqual({kind: 'boolean'});
+            expect(desc.nullable).toBe(false);
+        });
+        it('nullable', () => {
+            const desc = IsBoolean.orNull.toSchemaDescription();
+            expect(desc.node).toEqual({kind: 'boolean'});
+            expect(desc.nullable).toBe(true);
+        });
+    });
+
 });

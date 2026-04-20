@@ -1,5 +1,6 @@
 import {GGSchema, Opt} from "../GGSchema";
 import {TupleDef} from "../Definition";
+import type {GGSchemaNodeKind} from "../GGSchemaDescription";
 
 type InferTuple<T extends readonly GGSchema<any>[]> = {
     -readonly [K in keyof T]: T[K] extends GGSchema<infer U> ? U : never
@@ -18,7 +19,7 @@ export class TupleSchema<T extends readonly unknown[] = readonly unknown[]> exte
         }
     }
 
-    protected derive<NewT extends readonly unknown[] | undefined | null = T>(changes: Partial<TupleDefImpl>): TupleSchema<NewT> {
+    protected _buildDerived<NewT extends readonly unknown[] | undefined | null = T>(changes: Partial<TupleDefImpl>): TupleSchema<NewT> {
         return new TupleSchema<NewT>({...this.def, ...changes});
     }
 
@@ -28,6 +29,14 @@ export class TupleSchema<T extends readonly unknown[] = readonly unknown[]> exte
 
     get orNull(): TupleSchema<T | null> {
         return super.orNull as any
+    }
+
+    protected _buildSchemaNode(): GGSchemaNodeKind {
+        const def = this.toCompilerDef();
+        return {
+            kind: 'tuple',
+            elements: def.elements!.map(e => e.toSchemaDescription()),
+        };
     }
 
     protected _toCompilerDef(): TupleDefImpl {

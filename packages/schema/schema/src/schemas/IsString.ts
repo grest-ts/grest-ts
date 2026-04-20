@@ -1,6 +1,7 @@
 import {GGIssueInvalid} from "../issue/issues/GGIssueInvalid";
 import {GGSchema, Opt} from "../GGSchema";
 import {StringDef} from "../Definition";
+import type {GGSchemaNodeKind} from "../GGSchemaDescription";
 
 export class StringSchema<T extends string | undefined | null = string> extends GGSchema<T, StringDef> {
 
@@ -15,23 +16,23 @@ export class StringSchema<T extends string | undefined | null = string> extends 
     // --------------------------------------------------------------------------------------
 
     get nonEmpty(): StringSchema<T> {
-        return this.derive({nonEmpty: true});
+        return this.derive({nonEmpty: true}) as this;
     }
 
     get trim(): StringSchema<T> {
-        return this.derive({trim: true});
+        return this.derive({trim: true}) as this;
     }
 
     minLength(n: number): StringSchema<T> {
-        return this.derive({minLength: n});
+        return this.derive({minLength: n}) as this;
     }
 
     maxLength(n: number): StringSchema<T> {
-        return this.derive({maxLength: n});
+        return this.derive({maxLength: n}) as this;
     }
 
     range(min: number, max: number): StringSchema<T> {
-        return this.derive({minLength: min, maxLength: max});
+        return this.derive({minLength: min, maxLength: max}) as this;
     }
 
     regex(pattern: RegExp, error?: GGIssueInvalid): StringSchema<T> {
@@ -44,10 +45,10 @@ export class StringSchema<T extends string | undefined | null = string> extends 
             // Don't store pattern in def when custom error provided - only use refinement
             return this.refine(v => safePattern.test(v), error) as unknown as StringSchema<T>;
         }
-        return this.derive({pattern: safePattern});
+        return this.derive({pattern: safePattern}) as this;
     }
 
-    protected derive<NewT extends string | undefined | null = T>(changes: Partial<StringDef>): StringSchema<NewT> {
+    protected _buildDerived<NewT extends string | undefined | null = T>(changes: Partial<StringDef>): StringSchema<NewT> {
         const newDef: StringDef = {...this.def, ...changes};
 
         if (this.def.minLength !== undefined && newDef.minLength !== undefined && newDef.minLength < this.def.minLength) {
@@ -71,13 +72,14 @@ export class StringSchema<T extends string | undefined | null = string> extends 
 
     // --------------------------------------------------------------------------------------
 
-    toJSONSchema(): object {
-        const schema: Record<string, unknown> = {type: 'string'};
-        if (this.def.minLength !== undefined) schema.minLength = this.def.minLength;
-        if (this.def.maxLength !== undefined) schema.maxLength = this.def.maxLength;
-        if (this.def.pattern) schema.pattern = this.def.pattern.source;
-        if (this.def.nullable) return {anyOf: [schema, {type: 'null'}]};
-        return schema;
+    protected _buildSchemaNode(): GGSchemaNodeKind {
+        const minLength = this.def.nonEmpty && this.def.minLength === undefined ? 1 : this.def.minLength;
+        return {
+            kind: 'string',
+            ...(minLength !== undefined ? {minLength} : {}),
+            ...(this.def.maxLength !== undefined ? {maxLength: this.def.maxLength} : {}),
+            ...(this.def.pattern ? {pattern: this.def.pattern.source} : {}),
+        };
     }
 }
 

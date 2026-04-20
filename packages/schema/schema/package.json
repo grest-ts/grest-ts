@@ -52,5 +52,6 @@
   ],
   "engines": {
     "node": ">=25"
-  }
+  },
+  "dependencies": {}
 }

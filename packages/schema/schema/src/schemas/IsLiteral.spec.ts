@@ -235,4 +235,46 @@ testUtils('IsLiteral', () => {
         {value: 'a', expected: 'a'},
         {value: null, expected: null},
     ]);
+
+    // ==================== toSchemaDescription ====================
+
+    describe('toSchemaDescription()', () => {
+        it('single string value', () => {
+            const desc = IsLiteral('admin').toSchemaDescription();
+            expect(desc.node.kind).toBe('literal');
+            expect((desc.node as any).values).toEqual(['admin']);
+            expect(desc.nullable).toBe(false);
+        });
+        it('multiple string values', () => {
+            const desc = IsLiteral('a', 'b', 'c').toSchemaDescription();
+            expect(desc.node.kind).toBe('literal');
+            expect((desc.node as any).values).toEqual(['a', 'b', 'c']);
+        });
+        it('integer values', () => {
+            const desc = IsLiteral(1, 2, 3).toSchemaDescription();
+            expect(desc.node.kind).toBe('literal');
+            expect((desc.node as any).values).toEqual([1, 2, 3]);
+        });
+        it('float number values', () => {
+            const desc = IsLiteral(1.5, 2.5).toSchemaDescription();
+            expect(desc.node.kind).toBe('literal');
+            expect((desc.node as any).values).toEqual([1.5, 2.5]);
+        });
+        it('boolean values', () => {
+            const desc = IsLiteral(true, false).toSchemaDescription();
+            expect(desc.node.kind).toBe('literal');
+            expect((desc.node as any).values).toEqual([true, false]);
+        });
+        it('mixed string and number', () => {
+            const desc = IsLiteral(1, 2, 'three').toSchemaDescription();
+            expect(desc.node.kind).toBe('literal');
+            expect((desc.node as any).values).toEqual([1, 2, 'three']);
+        });
+        it('nullable sets nullable:true, node stays literal', () => {
+            const desc = IsLiteral('x').orNull.toSchemaDescription();
+            expect(desc.node.kind).toBe('literal');
+            expect((desc.node as any).values).toEqual(['x']);
+            expect(desc.nullable).toBe(true);
+        });
+    });
 });

@@ -1,9 +1,10 @@
 import {GGSchema, Opt} from "../GGSchema";
 import {UnknownDef} from "../Definition";
+import type {GGSchemaNodeKind} from "../GGSchemaDescription";
 
 export class UnknownSchema<T = unknown> extends GGSchema<T, UnknownDef> {
 
-    protected derive<NewT = T>(changes: Partial<UnknownDef>): UnknownSchema<NewT> {
+    protected _buildDerived<NewT = T>(changes: Partial<UnknownDef>): UnknownSchema<NewT> {
         return new UnknownSchema<NewT>({...this.def, ...changes});
     }
 
@@ -13,6 +14,10 @@ export class UnknownSchema<T = unknown> extends GGSchema<T, UnknownDef> {
 
     get orNull(): UnknownSchema<T | null> {
         return super.orNull as any
+    }
+
+    protected _buildSchemaNode(): GGSchemaNodeKind {
+        return {kind: 'unknown'};
     }
 }
 

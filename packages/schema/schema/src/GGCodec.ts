@@ -17,6 +17,16 @@ export class GGCodec<Input, Output> {
      */
     public readonly inputKeys: readonly string[] | undefined
 
+    /**
+     * The encode transform's input schema — describes what this codec reads FROM.
+     * For HTTP header codecs this is an IsObject with header names as keys.
+     * Returns undefined if the input schema is not a GGSchema instance.
+     */
+    get inputSchema(): GGSchema<Input> | undefined {
+        const s = this.config.encode.inputSchema;
+        return s instanceof GGSchema ? s as GGSchema<Input> : undefined;
+    }
+
     constructor(config: GGCodecConfig<Input, Output>) {
         this.config = config;
         this.inputKeys = GGCodec.extractInputKeys(config.encode.inputSchema);

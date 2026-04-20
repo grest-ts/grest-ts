@@ -609,8 +609,6 @@ import {mockOf} from "@grest-ts/testkit-runtime"
 import {mockOf} from "@grest-ts/testkit"
 ```
 
----
-
 ## Cursor Cloud specific instructions
 
 ### Overview

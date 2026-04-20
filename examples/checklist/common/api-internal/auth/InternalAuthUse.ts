@@ -1,6 +1,6 @@
 import {GGHttpRequest, GGHttpTransportMiddleware} from "@grest-ts/http"
 import {GGLocatorKey} from "@grest-ts/locator";
-import {Brand} from "@grest-ts/schema";
+import {Brand, IsBearerToken} from "@grest-ts/schema";
 
 /**
  * Internal service auth token type
@@ -16,8 +16,13 @@ export const GG_INTERNAL_AUTH_TOKEN = new GGLocatorKey<tInternalAuthToken>('inte
  */
 export const InternalAuthUse: GGHttpTransportMiddleware = {
 
-    headers: ['authorization'],
-    responseHeaders: [],
+    headers: {
+        "authorization": IsBearerToken.docs({
+            description: "Bearer token for service-to-service authentication",
+            example: "Bearer internal_auth_token"
+        })
+    },
+    responseHeaders: {},
 
     updateRequest(req: GGHttpRequest): void {
         const internal = GG_INTERNAL_AUTH_TOKEN.tryGet();

@@ -5,6 +5,10 @@ import {GGLocator, GGLocatorKey, GGLocatorScope, GGLocatorServiceType} from "@gr
 import {GG_HTTP_SERVER} from "./GG_HTTP_SERVER";
 import {GGLog} from "@grest-ts/logger";
 import findMyWay, {HTTPMethod} from "find-my-way";
+import type {GGHttpSchema} from "../schema/GGHttpSchema";
+// Forward declaration — actual type lives in @grest-ts/websocket to avoid circular dep.
+// GGHttpServer only stores the array; callers cast as needed.
+type AnyWebSocketSchema = {name: string; path: string; contract: unknown; middlewares: readonly unknown[]};
 
 export interface GGHttpServerAdapterConfig {
     key?: GGLocatorKey<GGHttpServer>;
@@ -33,6 +37,20 @@ export class GGHttpServer {
 
     private readonly _onStart: Array<() => void> = [];
     private readonly _onTeardown: Array<() => void> = [];
+
+    /**
+     * Mutable during compose(); frozen and exposed as ReadonlyArray once the server starts.
+     * Framework-internal — only setupRoutes() (in GGHttpSchema.startServer.ts) should push here.
+     */
+    private readonly _registeredSchemas: GGHttpSchema<any, any>[] = [];
+
+    /**
+     * All GGHttpSchema instances registered on this server, in registration order.
+     * Available from the moment compose() begins; frozen (no further push allowed) once start() is called.
+     */
+    get registeredSchemas(): ReadonlyArray<GGHttpSchema<any, any>> {
+        return this._registeredSchemas;
+    }
 
     public readonly httpServer: http.Server;
     private activeRequests = 0;
@@ -145,11 +163,32 @@ export class GGHttpServer {
     // Common implementation
     // =========================================================================
 
+    /** @internal Called by setupRoutes() during compose(). Do not call directly. */
+    public _registerSchema(schema: GGHttpSchema<any, any>): void {
+        this._registeredSchemas.push(schema);
+    }
+
+    private readonly _registeredWebSocketSchemas: AnyWebSocketSchema[] = [];
+
+    /**
+     * All GGWebSocketSchema instances registered on this server, in registration order.
+     * Populated automatically by GGWebSocketSchema.startServer() / .register().
+     */
+    get registeredWebSocketSchemas(): ReadonlyArray<AnyWebSocketSchema> {
+        return this._registeredWebSocketSchemas;
+    }
+
+    /** @internal Called by GGWebSocketSchema.startServer(). Do not call directly. */
+    public _registerWebSocketSchema(schema: AnyWebSocketSchema): void {
+        this._registeredWebSocketSchemas.push(schema);
+    }
+
     public registerRoute(method: HttpMethod, path: string, handler: GGHttpRequestCallback): void {
         this.router.on(method as HTTPMethod, path, handler as unknown as findMyWay.Handler<findMyWay.HTTPVersion.V1>);
     }
 
     public async start(): Promise<void> {
+        Object.freeze(this._registeredSchemas);
         this._port = await new Promise((resolve) => {
             this.httpServer.listen(this.configuredPort, '0.0.0.0', () => {
                 const port = (this.httpServer.address() as any).port;

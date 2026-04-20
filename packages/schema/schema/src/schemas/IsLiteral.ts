@@ -1,5 +1,6 @@
 import {GGSchema, Opt} from "../GGSchema";
 import {LiteralDef, LiteralValue} from "../Definition";
+import type {GGSchemaNodeKind} from "../GGSchemaDescription";
 
 export class LiteralSchema<T extends LiteralValue | undefined | null = LiteralValue> extends GGSchema<T, LiteralDef> {
 
@@ -23,8 +24,12 @@ export class LiteralSchema<T extends LiteralValue | undefined | null = LiteralVa
         return super.orNull as any
     }
 
-    protected derive<NewT extends LiteralValue | undefined | null = T>(changes: Partial<LiteralDef>): LiteralSchema<NewT> {
+    protected _buildDerived<NewT extends LiteralValue | undefined | null = T>(changes: Partial<LiteralDef>): LiteralSchema<NewT> {
         return new LiteralSchema<NewT>({...this.def, ...changes});
+    }
+
+    protected _buildSchemaNode(): GGSchemaNodeKind {
+        return {kind: 'literal', values: this.def.values};
     }
 }
 
