@@ -213,7 +213,8 @@ GGWebSocketSchema.prototype.createClient = function (
         async connect(): Promise<void> {
             if (socket) return
             const domain = await resolveDomain()
-            socket = await GGSocketPool.getOrConnect({
+            // Use non-pooled connect: each client owns its socket + close lifecycle.
+            socket = await GGSocketPool.connect({
                 domain,
                 path: normalizedPath,
                 query: config?.query,
