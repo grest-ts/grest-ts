@@ -314,65 +314,93 @@ protected compose(): void {
 
 ## Client
 
-### Connecting via GGSocketPool
+### Typed Client via `createClient()`
 
-`GGSocketPool` manages WebSocket connections with automatic pooling — connections are reused when the same URL + headers combination is requested.
+`ChatApi.createClient()` returns a typed, contract-validated client. It mirrors the server's connection handler: `incoming.on(handlers)` for `serverToClient` messages, `outgoing.method(data)` for `clientToServer` methods.
+
+```typescript
+import { ChatApi } from "./ChatApi"
+
+// Create the client (disconnected)
+const client = ChatApi.createClient({ url: "ws://localhost:3000" })
+
+// Register handlers for serverToClient messages — Partial, only what you need
+client.incoming.on({
+    newMessage: (message) => {
+        console.log("New message:", message)
+    },
+    typing: (event) => {
+        console.log(event.userId, "is typing")
+    },
+    // Server-requests-client RPC (has `success` in contract) — return a value
+    areYouThere: async () => true
+})
+
+// Lifecycle callbacks can be registered before connect
+client.onClose(() => console.log("Disconnected"))
+client.onError((err) => console.error("Socket error:", err))
+
+// Establish the connection (runs handshake + applies pending handlers)
+await client.connect()
+
+// Call clientToServer methods — returns GGPromise like the HTTP client
+const response = await client.outgoing.sendMessage({
+    text: "Hello!",
+    channelId: "general"
+})
+// response is typed: { success: true, messageId: "msg-456" }
+
+// Fire-and-forget methods (no `success` in contract) — returns Promise<void>
+await client.outgoing.markAsRead({ messageId: "msg-123" })
+await client.outgoing.ping()
+
+// Error handling — same GGPromise API as the HTTP client
+const result = await client.outgoing.sendMessage({ text: "", channelId: "general" }).asResult()
+if (result.success) {
+    console.log(result.data.messageId)
+} else if (result.type === "VALIDATION_ERROR") {
+    showValidationErrors(result.data)
+}
+
+// Gracefully close (waits for pending requests), or close() for immediate termination
+await client.disconnect()
+```
+
+### Client Config
+
+```typescript
+interface GGWebSocketClientConfig<TQuery> {
+    url?: string       // "ws://host:port". If omitted, uses @grest-ts/discovery.
+    query?: TQuery     // Query params on connect, typed from `.queryOnConnect<T>()`.
+}
+```
+
+Omitting `url` triggers service discovery via `@grest-ts/discovery` (Node only). In browsers, pass an explicit URL (use `""` for same-origin).
+
+### Sending Modes (automatic from the contract)
+
+- **Request-response** — methods with `success` defined return `GGPromise<Success, Errors>`. The client sends a `REQ` and waits up to 30s for a reply.
+- **Fire-and-forget** — methods without `success` return `GGPromise<void, SERVER_ERROR>`. The client sends a `MSG` and resolves as soon as the message is handed to the socket.
+
+Both apply symmetrically: the server can also send request-response messages via `serverToClient` methods that define `success`.
+
+### Direct socket access via `GGSocketPool`
+
+If you need to bypass contract validation (e.g. writing a generic proxy, debugging the wire protocol), `GGSocketPool` is still available. Prefer `createClient()` in application code.
 
 ```typescript
 import { GGSocketPool } from "@grest-ts/websocket"
 
-// Connect to the WebSocket server
 const socket = await GGSocketPool.getOrConnect({
     domain: "ws://localhost:3000",
     path: "/ws/chat",
-    middlewares: ChatApi.middlewares  // Runs updateHandshake for auth headers
+    middlewares: ChatApi.middlewares
 })
 
-// Send messages (see "Sending Messages" below)
-const response = await socket.send("ChatApi.sendMessage", {
-    text: "Hello!",
-    channelId: "general"
-}, true)
-
-// Register handler for server-to-client messages
-socket.registerHandler({
-    path: "ChatApi.newMessage",
-    handler: (message) => {
-        console.log("New message:", message)
-    }
-})
-
-// Lifecycle
-socket.onClose(() => console.log("Disconnected"))
-socket.onError((error) => console.error("Socket error:", error))
-
-// Close single connection
+const result = await socket.send("ChatApi.sendMessage", { text: "Hello!", channelId: "general" }, true)
+socket.registerHandler({ path: "ChatApi.newMessage", handler: (msg) => { ... } })
 socket.close()
-
-// Or graceful teardown (waits for pending requests)
-await socket.teardown()
 ```
-
-### Sending Messages
-
-The third argument to `socket.send()` controls the sending mode:
-
-```typescript
-// Request-response: expectsResponse = true
-// Sends a REQ message, waits for the server to reply (30s timeout)
-const result = await socket.send("ChatApi.sendMessage", {
-    text: "Hello!",
-    channelId: "general"
-}, true)
-// result is the typed response: { success: true, messageId: "msg-456" }
-
-// Fire-and-forget: expectsResponse = false
-// Sends a MSG message, returns immediately
-socket.send("ChatApi.markAsRead", { messageId: "msg-123" }, false)
-socket.send("ChatApi.ping", undefined, false)
-```
-
-Which mode is used is determined by the contract — methods with `success` defined are request-response, methods without are fire-and-forget. This applies in both directions: the server can also send request-response messages to the client via `serverToClient` methods that define `success`.
 
 ### Connection Pool Management
 

@@ -1,4 +1,4 @@
-import {callOn, GGTest} from "@grest-ts/testkit";
+import {callOn, GG_TEST_RUNNER, GGTest} from "@grest-ts/testkit";
 import {MainRuntime} from "../src/main";
 import {MainConfigApi} from "../src/MainConfig.api";
 import {ConfigTestApi} from "../src/api/ConfigTestApi";
@@ -98,6 +98,36 @@ describe("dynamic config", () => {
             response = await socketClient.getWatchedValue();
             expect(response.watchedTimeout).toBe(2222);
         })
+    })
+
+    describe("WebSocket createClient (production)", () => {
+
+        test('production client can call outgoing and receive incoming', async () => {
+            const url = GG_TEST_RUNNER.get().discoveryServer.getRoutingUrl("ConfigTestSocketApi");
+            const client = ConfigTestSocketApi.createClient({url});
+
+            let receivedValue: number | undefined;
+            client.incoming.on({
+                configChanged: (msg) => {
+                    receivedValue = msg.watchedTimeout;
+                }
+            });
+
+            try {
+                await client.connect();
+
+                await t.config.update(MainConfigApi.settings.timeout, 4242);
+
+                const response = await client.outgoing.getWatchedValue();
+                expect(response.watchedTimeout).toBe(4242);
+
+                // Wait briefly for the server-pushed configChanged event
+                await new Promise(resolve => setTimeout(resolve, 50));
+                expect(receivedValue).toBe(4242);
+            } finally {
+                await client.disconnect();
+            }
+        });
     })
 
 })

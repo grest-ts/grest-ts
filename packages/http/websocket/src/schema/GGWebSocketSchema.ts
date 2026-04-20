@@ -16,7 +16,8 @@ export class GGWebSocketSchema<
     TServerToClient,
     TContext = {},
     TQuery = undefined,
-    TClientToServerImpl = TClientToServer
+    TClientToServerImpl = TClientToServer,
+    TServerToClientImpl = TServerToClient
 > {
     public readonly name: string
     public readonly path: string

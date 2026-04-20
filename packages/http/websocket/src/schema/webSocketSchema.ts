@@ -53,7 +53,8 @@ export function webSocketSchema<TDef extends GGSocketContractMethods>(
     GGContractClient<TDef["serverToClient"]>,
     undefined,
     undefined,
-    GGContractImplementation<TDef["clientToServer"]>
+    GGContractImplementation<TDef["clientToServer"]>,
+    GGContractImplementation<TDef["serverToClient"]>
 > {
     return new GGWebSocketSchemaBuilder(contract)
 }
@@ -63,7 +64,8 @@ class GGWebSocketSchemaBuilder<
     TServerToClient,
     TContext = undefined,
     TQuery = undefined,
-    TClientToServerImpl = TClientToServer
+    TClientToServerImpl = TClientToServer,
+    TServerToClientImpl = TServerToClient
 > {
     private _path: string = ""
     private _middlewares: GGWebSocketMiddleware[] = []
@@ -78,16 +80,16 @@ class GGWebSocketSchemaBuilder<
         return this
     }
 
-    use<M extends GGWebSocketMiddleware>(middleware: M): GGWebSocketSchemaBuilder<TClientToServer, TServerToClient, TContext | M, TQuery, TClientToServerImpl> {
+    use<M extends GGWebSocketMiddleware>(middleware: M): GGWebSocketSchemaBuilder<TClientToServer, TServerToClient, TContext | M, TQuery, TClientToServerImpl, TServerToClientImpl> {
         this._middlewares.push(middleware)
         return this as any
     }
 
-    queryOnConnect<TNewQuery>(): GGWebSocketSchemaBuilder<TClientToServer, TServerToClient, TContext, TNewQuery, TClientToServerImpl> {
+    queryOnConnect<TNewQuery>(): GGWebSocketSchemaBuilder<TClientToServer, TServerToClient, TContext, TNewQuery, TClientToServerImpl, TServerToClientImpl> {
         return this as any
     }
 
-    done(): GGWebSocketSchema<TClientToServer, TServerToClient, TContext, TQuery, TClientToServerImpl> {
+    done(): GGWebSocketSchema<TClientToServer, TServerToClient, TContext, TQuery, TClientToServerImpl, TServerToClientImpl> {
         const contract = this._contract;
         const contractFactory = (): GGWebSocketContractRuntime => {
             const methods = contract.methods;
@@ -99,7 +101,7 @@ class GGWebSocketSchemaBuilder<
             };
         };
 
-        return new GGWebSocketSchema<TClientToServer, TServerToClient, TContext, TQuery, TClientToServerImpl>(
+        return new GGWebSocketSchema<TClientToServer, TServerToClient, TContext, TQuery, TClientToServerImpl, TServerToClientImpl>(
             contract.name,
             this._path,
             contractFactory,

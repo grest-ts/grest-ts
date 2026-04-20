@@ -24,7 +24,7 @@ export interface WebSocketSchemaConfig {
 }
 
 declare module "../schema/GGWebSocketSchema" {
-    interface GGWebSocketSchema<TClientToServer, TServerToClient, TContext = {}, TQuery = undefined, TClientToServerImpl = TClientToServer> {
+    interface GGWebSocketSchema<TClientToServer, TServerToClient, TContext = {}, TQuery = undefined, TClientToServerImpl = TClientToServer, TServerToClientImpl = TServerToClient> {
         /**
          * Start the WebSocket server for this API.
          */
@@ -45,7 +45,7 @@ declare module "../schema/GGWebSocketSchema" {
 }
 
 GGWebSocketSchema.prototype.startServer = function (
-    this: GGWebSocketSchema<any, any, any, any>,
+    this: GGWebSocketSchema<any, any, any, any, any, any>,
     onConnection: any,
     config: WebSocketSchemaConfig
 ): GGSocketServer<any, any> {
@@ -117,7 +117,7 @@ GGWebSocketSchema.prototype.startServer = function (
 }
 
 GGWebSocketSchema.prototype.register = function (
-    this: GGWebSocketSchema<any, any, any, any>,
+    this: GGWebSocketSchema<any, any, any, any, any, any>,
     onConnection: any,
     config?: WebSocketSchemaConfig
 ): void {
