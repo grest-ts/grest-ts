@@ -14,7 +14,8 @@ interface Props {
 
 export function Sidebar({doc, selection, onNavigate}: Props) {
     const [filter, setFilter] = useState("");
-    const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+    /** Per-group manual expand override. Undefined = follow defaults. */
+    const [override, setOverride] = useState<Record<string, boolean>>({});
 
     const filtered = useMemo(() => {
         const f = filter.trim().toLowerCase();
@@ -37,6 +38,14 @@ export function Sidebar({doc, selection, onNavigate}: Props) {
             .filter(g => g.contracts.length > 0);
     }, [filter, doc.groups]);
 
+    /** Default behavior: collapsed unless filtering, or unless this group contains the current selection. */
+    const isExpanded = (slug: string): boolean => {
+        if (override[slug] !== undefined) return override[slug];
+        if (filter.trim()) return true;
+        if (selection && doc.groups.find(g => g.slug === slug)?.contracts.some(c => c.name === selection.contract.name)) return true;
+        return false;
+    };
+
     return (
         <aside className="w-80 shrink-0 bg-white border-r border-gray-200 overflow-y-auto">
             <div className="p-3 border-b border-gray-200 sticky top-0 bg-white z-10">
@@ -53,8 +62,8 @@ export function Sidebar({doc, selection, onNavigate}: Props) {
                     <GroupItem
                         key={group.slug}
                         group={group}
-                        collapsed={!!collapsed[group.slug]}
-                        toggle={() => setCollapsed(c => ({...c, [group.slug]: !c[group.slug]}))}
+                        expanded={isExpanded(group.slug)}
+                        toggle={() => setOverride(o => ({...o, [group.slug]: !isExpanded(group.slug)}))}
                         onNavigate={onNavigate}
                         selection={selection}
                     />
@@ -71,27 +80,31 @@ export function Sidebar({doc, selection, onNavigate}: Props) {
 
 function GroupItem({
     group,
-    collapsed,
+    expanded,
     toggle,
     onNavigate,
     selection,
 }: {
     group: ApiDocsDocument["groups"][number];
-    collapsed: boolean;
+    expanded: boolean;
     toggle: () => void;
     onNavigate: (path: string) => void;
     selection: Selection | null;
 }) {
+    const methodCount = group.contracts.reduce((s, c) => s + c.methods.length, 0);
     return (
         <div className="mb-1">
             <button
                 onClick={toggle}
                 className="w-full px-4 py-1.5 text-left text-xs uppercase tracking-wider text-gray-500 font-semibold flex items-center justify-between hover:text-gray-900 transition"
             >
-                <span>{group.name}</span>
-                <span className="text-gray-300 text-base font-normal">{collapsed ? "▸" : "▾"}</span>
+                <span className="flex items-center gap-2">
+                    <span className="text-gray-300 text-[10px] font-normal w-2">{expanded ? "▾" : "▸"}</span>
+                    <span>{group.name}</span>
+                    <span className="text-gray-400 text-[10px] font-normal normal-case tracking-normal">{methodCount}</span>
+                </span>
             </button>
-            {!collapsed && group.contracts.map(contract => (
+            {expanded && group.contracts.map(contract => (
                 <ContractItem
                     key={contract.name}
                     contract={contract}

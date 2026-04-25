@@ -1,5 +1,9 @@
 @import "tailwindcss";
 
+/* Explicitly tell Tailwind 4 where to scan for utility class usage.
+   Paths are relative to the CSS file. */
+@source "../**/*.{ts,tsx,html}";
+
 @theme {
     --color-primary: #3b82f6;
     --color-method-get: #3b82f6;
