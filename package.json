@@ -31,6 +31,7 @@
     "docs-web",
     "packages-libs/*",
     "packages-libs/db/*",
+    "packages-libs/docs/*",
     "packages-libs/events/*",
     "packages-libs/intl/intl",
     "packages-libs/lock/lock",

@@ -644,6 +644,16 @@ Many packages provide testkit utilities making testing easier. These are
 |----------------------------------------------|-------------------------------------------------|
 | [`@grest-ts/struct`](./packages-libs/struct) | Binary struct serialization and code generation |
 
+### API Documentation (All optional)
+
+Generate standard OpenAPI / AsyncAPI specs from your contracts — for Swagger UI, SDK generation, Postman, or any tool in the OpenAPI ecosystem. See the [API Docs guide](./README-api-docs.md) for usage and multi-service patterns.
+
+| Package                                                  | Purpose                                                                                                                |
+|----------------------------------------------------------|------------------------------------------------------------------------------------------------------------------------|
+| [`@grest-ts/api-docs`](./packages-libs/docs/api-docs)    | Unified HTTP + WebSocket documentation UI (recommended for typical grest-ts services that have both protocols)         |
+| [`@grest-ts/openapi`](./packages-libs/docs/openapi)      | OpenAPI 3.1 spec generation + Swagger UI for HTTP-only APIs (also used internally by `@grest-ts/api-docs`)             |
+| [`@grest-ts/asyncapi`](./packages-libs/docs/asyncapi)    | AsyncAPI 3.0 spec generation + AsyncAPI Studio for WebSocket-only APIs (also used internally by `@grest-ts/api-docs`)  |
+
 ---
 
 ## Design Principles

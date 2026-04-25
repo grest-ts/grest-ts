@@ -1,0 +1,57 @@
+{
+  "//": "THIS FILE IS GENERATED - DO NOT EDIT",
+  "name": "@grest-ts/asyncapi",
+  "version": "0.0.25",
+  "type": "module",
+  "license": "MIT",
+  "description": "AsyncAPI 3.0 spec generation for grest-ts WebSocket APIs",
+  "exports": {
+    ".": {
+      "types": "./src/index-node.ts",
+      "import": "./src/index-node.ts"
+    }
+  },
+  "files": [
+    "src"
+  ],
+  "scripts": {
+    "typecheck": "tsc --noEmit -p src && tsc --noEmit -p test",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "test:coverage:html": "vitest run --coverage --reporter=html"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/grest-ts/grest-ts.git",
+    "directory": "packages-libs/docs/asyncapi"
+  },
+  "homepage": "https://grest-ts.com/packages/asyncapi",
+  "bugs": {
+    "url": "https://github.com/grest-ts/grest-ts/issues"
+  },
+  "keywords": [
+    "typescript",
+    "framework",
+    "contract",
+    "api",
+    "microservices",
+    "testing",
+    "asyncapi",
+    "websocket",
+    "api-docs",
+    "asyncapi3"
+  ],
+  "engines": {
+    "node": ">=25"
+  },
+  "dependencies": {
+    "@grest-ts/http": "0.0.25",
+    "@grest-ts/locator": "0.0.25",
+    "@grest-ts/openapi": "0.0.25",
+    "@grest-ts/schema": "0.0.25",
+    "@grest-ts/websocket": "0.0.25"
+  }
+}

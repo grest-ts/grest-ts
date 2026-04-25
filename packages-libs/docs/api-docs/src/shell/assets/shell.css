@@ -1,0 +1,63 @@
+/* @grest-ts/api-docs shell — minimal layout & sidebar styling. */
+
+* { box-sizing: border-box; }
+body { margin: 0; font-family: system-ui, -apple-system, Segoe UI, sans-serif; color: #111827; background: #fff; }
+
+.gg-shell { display: flex; height: 100vh; }
+
+.gg-sidebar {
+  width: 280px;
+  flex-shrink: 0;
+  border-right: 1px solid #e5e7eb;
+  background: #f9fafb;
+  overflow-y: auto;
+}
+.gg-header {
+  padding: 18px 20px 14px;
+  border-bottom: 1px solid #e5e7eb;
+  background: #fff;
+}
+.gg-logo { height: 32px; display: block; margin-bottom: 8px; }
+.gg-title { font-weight: 700; font-size: 17px; line-height: 1.2; }
+.gg-version { font-size: 12px; color: #6b7280; margin-top: 4px; }
+
+.gg-nav { padding: 12px 0; }
+
+.gg-group { margin-bottom: 4px; }
+.gg-group-name {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 20px;
+  font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em;
+  color: #6b7280; font-weight: 600;
+}
+.gg-group-desc { padding: 0 20px 6px; font-size: 12px; color: #6b7280; }
+
+.gg-spec-link {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 20px;
+  cursor: pointer;
+  font-size: 14px; color: #1f2937;
+  border-left: 3px solid transparent;
+  user-select: none;
+}
+.gg-spec-link:hover { background: #f3f4f6; }
+.gg-spec-link.active {
+  background: #fff;
+  border-left-color: var(--gg-primary, #3b82f6);
+  color: var(--gg-primary, #3b82f6);
+  font-weight: 600;
+}
+.gg-badge {
+  font-size: 10px; font-weight: 700;
+  padding: 2px 6px; border-radius: 3px;
+  background: #e5e7eb; color: #4b5563;
+}
+.gg-badge.gg-badge-openapi { background: #dbeafe; color: #1d4ed8; }
+.gg-badge.gg-badge-asyncapi { background: #ede9fe; color: #6d28d9; }
+
+.gg-main { flex: 1; overflow: hidden; display: flex; flex-direction: column; }
+.gg-pane { flex: 1; overflow: auto; }
+
+/* Hide AsyncAPI's own sidebar — our shell already provides one */
+.gg-pane .aui-root .aui-sidebar { display: none !important; }
+.gg-pane .aui-root .aui-sidebar + div { margin-left: 0 !important; }

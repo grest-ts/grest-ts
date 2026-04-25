@@ -1,0 +1,59 @@
+{
+  "//": "THIS FILE IS GENERATED - DO NOT EDIT",
+  "name": "@grest-ts/api-docs",
+  "version": "0.0.25",
+  "type": "module",
+  "license": "MIT",
+  "description": "Unified HTTP + WebSocket API documentation UI for grest-ts",
+  "exports": {
+    ".": {
+      "types": "./src/index-node.ts",
+      "import": "./src/index-node.ts"
+    }
+  },
+  "files": [
+    "src"
+  ],
+  "scripts": {
+    "typecheck": "tsc --noEmit -p src && tsc --noEmit -p test",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "test:coverage:html": "vitest run --coverage --reporter=html"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/grest-ts/grest-ts.git",
+    "directory": "packages-libs/docs/api-docs"
+  },
+  "homepage": "https://grest-ts.com/packages/api-docs",
+  "bugs": {
+    "url": "https://github.com/grest-ts/grest-ts/issues"
+  },
+  "keywords": [
+    "typescript",
+    "framework",
+    "contract",
+    "api",
+    "microservices",
+    "testing",
+    "api-docs",
+    "openapi",
+    "asyncapi",
+    "swagger",
+    "documentation"
+  ],
+  "engines": {
+    "node": ">=25"
+  },
+  "dependencies": {
+    "@asyncapi/react-component": "^2.5.0",
+    "@grest-ts/asyncapi": "0.0.25",
+    "@grest-ts/http": "0.0.25",
+    "@grest-ts/locator": "0.0.25",
+    "@grest-ts/openapi": "0.0.25",
+    "@grest-ts/websocket": "0.0.25"
+  }
+}

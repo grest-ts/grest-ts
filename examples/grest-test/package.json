@@ -9,7 +9,9 @@
   },
   "dependencies": {
     "busboy": "^1.6.0",
-    "@grest-ts/openapi": "*"
+    "@grest-ts/openapi": "*",
+    "@grest-ts/asyncapi": "*",
+    "@grest-ts/api-docs": "*"
   },
   "devDependencies": {
     "@types/node": "^22.15.0",

@@ -2,6 +2,7 @@ import {GGRuntime} from "@grest-ts/runtime"
 import {GGHttpServer} from "@grest-ts/http"
 import {GGOpenApiDocs} from "@grest-ts/openapi"
 import {GGAsyncApiDocs} from "@grest-ts/asyncapi"
+import {GGApiDocs} from "@grest-ts/api-docs"
 import {ChatApiSchema, NotificationApiSchema} from "./api/AsyncApiShowcaseApi"
 import {ShowcaseApi} from "./api/OpenApiShowcaseApi"
 import {GGLocatorKey} from "@grest-ts/locator"
@@ -129,6 +130,21 @@ export class MainRuntime extends GGRuntime {
             description: "Rich WebSocket demo: chat (request/response + fire-and-forget + server push), notifications, bearer auth, named schemas, discriminated unions.",
             specPath: "/asyncapi.json",
             docsPath: "/asyncapi-docs",
+        });
+
+        // Unified Showcase — both protocols in one page on PORT+3
+        const unifiedShowcasePort = process.env.PORT ? Number(process.env.PORT) + 3 : 0;
+        const unifiedShowcaseServer = new GGHttpServer({port: unifiedShowcasePort, key: new GGLocatorKey('unified-showcase-server')});
+        GGApiDocs.register({
+            httpServer: unifiedShowcaseServer,
+            title: "Unified Showcase",
+            version: "1.0.0",
+            description: "Mixed HTTP + WebSocket APIs in one unified shell — Swagger UI for HTTP panes, AsyncAPI react-component for WS panes.",
+            docsPath: "/docs",
+            groups: {
+                "HTTP":      {http: [ShowcaseApi]},
+                "Realtime":  {ws:   [ChatApiSchema, NotificationApiSchema]},
+            },
         });
 
         // new GGHttp()
