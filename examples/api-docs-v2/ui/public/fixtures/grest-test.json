@@ -1,0 +1,3524 @@
+{
+  "version": "1.0",
+  "service": {
+    "name": "Grest Test Showcase",
+    "version": "1.0.0",
+    "description": "A deliberately rich showcase API used as a snapshot anchor — exercises every structurally interesting schema type, plus a WebSocket showcase."
+  },
+  "groups": [
+    {
+      "name": "HTTP Showcase",
+      "slug": "http-showcase",
+      "contracts": [
+        {
+          "name": "ShowcaseApi",
+          "kind": "http",
+          "pathPrefix": "/api/showcase",
+          "auth": [
+            {
+              "scheme": "bearer",
+              "headerName": "authorization",
+              "description": "JWT access token. Use the Authorize button to set."
+            }
+          ],
+          "methods": [
+            {
+              "name": "listUsers",
+              "summary": "List Users",
+              "httpMethod": "GET",
+              "httpPath": "/users",
+              "errors": [
+                "VALIDATION_ERROR",
+                "SERVER_ERROR"
+              ],
+              "queryParams": [
+                {
+                  "name": "q",
+                  "schema": {
+                    "inline": {
+                      "canonicalId": "s8",
+                      "node": {
+                        "kind": "string",
+                        "minLength": 1
+                      },
+                      "docs": {
+                        "description": "Full-text search query",
+                        "example": "Jane"
+                      },
+                      "nullable": false,
+                      "optional": false
+                    }
+                  },
+                  "required": true
+                },
+                {
+                  "name": "country",
+                  "schema": {
+                    "ref": "Country code"
+                  },
+                  "required": false
+                },
+                {
+                  "name": "currency",
+                  "schema": {
+                    "ref": "Currency code"
+                  },
+                  "required": false
+                },
+                {
+                  "name": "roles",
+                  "schema": {
+                    "inline": {
+                      "canonicalId": "s11",
+                      "node": {
+                        "kind": "array",
+                        "element": {
+                          "canonicalId": "s12",
+                          "node": {
+                            "kind": "literal",
+                            "values": [
+                              "admin",
+                              "user",
+                              "moderator"
+                            ]
+                          },
+                          "nullable": false,
+                          "optional": false
+                        }
+                      },
+                      "nullable": false,
+                      "optional": true
+                    }
+                  },
+                  "required": false
+                },
+                {
+                  "name": "minJoined",
+                  "schema": {
+                    "ref": "Date"
+                  },
+                  "required": false
+                },
+                {
+                  "name": "limit",
+                  "schema": {
+                    "inline": {
+                      "canonicalId": "s14",
+                      "node": {
+                        "kind": "number",
+                        "integer": true,
+                        "min": 0
+                      },
+                      "docs": {
+                        "description": "Results per page",
+                        "example": 20
+                      },
+                      "defaultValue": 20,
+                      "nullable": false,
+                      "optional": false
+                    }
+                  },
+                  "required": true
+                },
+                {
+                  "name": "offset",
+                  "schema": {
+                    "inline": {
+                      "canonicalId": "s14",
+                      "node": {
+                        "kind": "number",
+                        "integer": true,
+                        "min": 0
+                      },
+                      "defaultValue": 0,
+                      "nullable": false,
+                      "optional": false
+                    }
+                  },
+                  "required": true
+                }
+              ],
+              "successResponse": {
+                "inline": {
+                  "canonicalId": "s15",
+                  "node": {
+                    "kind": "object",
+                    "properties": {
+                      "users": {
+                        "canonicalId": "s16",
+                        "node": {
+                          "kind": "array",
+                          "element": {
+                            "canonicalId": "s17",
+                            "node": {
+                              "kind": "object",
+                              "properties": {
+                                "id": {
+                                  "canonicalId": "s18",
+                                  "node": {
+                                    "kind": "string",
+                                    "minLength": 1
+                                  },
+                                  "docs": {
+                                    "example": "usr_abc123"
+                                  },
+                                  "nullable": false,
+                                  "optional": false
+                                },
+                                "email": {
+                                  "canonicalId": "s19",
+                                  "node": {
+                                    "kind": "string"
+                                  },
+                                  "docs": {
+                                    "title": "Email address",
+                                    "format": "email",
+                                    "example": "user@example.com"
+                                  },
+                                  "nullable": false,
+                                  "optional": false
+                                },
+                                "name": {
+                                  "canonicalId": "s20",
+                                  "node": {
+                                    "kind": "string",
+                                    "minLength": 1
+                                  },
+                                  "docs": {
+                                    "example": "Jane Doe"
+                                  },
+                                  "nullable": false,
+                                  "optional": false
+                                },
+                                "phone": {
+                                  "canonicalId": "s21",
+                                  "node": {
+                                    "kind": "string"
+                                  },
+                                  "docs": {
+                                    "title": "Phone number",
+                                    "description": "International format with country code",
+                                    "example": "+12025551234"
+                                  },
+                                  "nullable": false,
+                                  "optional": true
+                                },
+                                "language": {
+                                  "canonicalId": "s22",
+                                  "node": {
+                                    "kind": "string"
+                                  },
+                                  "docs": {
+                                    "title": "Language code",
+                                    "description": "ISO 639-1",
+                                    "example": "en"
+                                  },
+                                  "nullable": false,
+                                  "optional": false
+                                },
+                                "locale": {
+                                  "canonicalId": "s23",
+                                  "node": {
+                                    "kind": "string"
+                                  },
+                                  "docs": {
+                                    "title": "Locale code",
+                                    "description": "BCP 47 language or language-region format",
+                                    "example": "en-US"
+                                  },
+                                  "nullable": false,
+                                  "optional": true
+                                },
+                                "website": {
+                                  "canonicalId": "s24",
+                                  "node": {
+                                    "kind": "string"
+                                  },
+                                  "docs": {
+                                    "title": "URL",
+                                    "format": "uri",
+                                    "description": "HTTP or HTTPS URL",
+                                    "example": "https://example.com"
+                                  },
+                                  "nullable": false,
+                                  "optional": true
+                                },
+                                "bio": {
+                                  "canonicalId": "s25",
+                                  "node": {
+                                    "kind": "string",
+                                    "maxLength": 500
+                                  },
+                                  "docs": {
+                                    "description": "Short biography"
+                                  },
+                                  "nullable": false,
+                                  "optional": true
+                                },
+                                "address": {
+                                  "canonicalId": "s26",
+                                  "node": {
+                                    "kind": "object",
+                                    "properties": {
+                                      "street": {
+                                        "canonicalId": "s27",
+                                        "node": {
+                                          "kind": "string",
+                                          "minLength": 1
+                                        },
+                                        "docs": {
+                                          "description": "Street address",
+                                          "example": "123 Main St"
+                                        },
+                                        "nullable": false,
+                                        "optional": false
+                                      },
+                                      "city": {
+                                        "canonicalId": "s28",
+                                        "node": {
+                                          "kind": "string",
+                                          "minLength": 1
+                                        },
+                                        "docs": {
+                                          "example": "Tallinn"
+                                        },
+                                        "nullable": false,
+                                        "optional": false
+                                      },
+                                      "country": {
+                                        "canonicalId": "s9",
+                                        "node": {
+                                          "kind": "string"
+                                        },
+                                        "docs": {
+                                          "title": "Country code",
+                                          "description": "ISO 3166-1 alpha-2",
+                                          "example": "US"
+                                        },
+                                        "nullable": false,
+                                        "optional": false
+                                      },
+                                      "zip": {
+                                        "canonicalId": "s29",
+                                        "node": {
+                                          "kind": "string"
+                                        },
+                                        "docs": {
+                                          "description": "Postal code",
+                                          "example": "10001"
+                                        },
+                                        "nullable": false,
+                                        "optional": true
+                                      }
+                                    },
+                                    "required": [
+                                      "street",
+                                      "city",
+                                      "country"
+                                    ],
+                                    "additionalProperties": false
+                                  },
+                                  "docs": {
+                                    "title": "Postal address"
+                                  },
+                                  "nullable": false,
+                                  "optional": true
+                                },
+                                "joinedAt": {
+                                  "canonicalId": "s13",
+                                  "node": {
+                                    "kind": "string"
+                                  },
+                                  "docs": {
+                                    "title": "Date",
+                                    "format": "date",
+                                    "description": "Registration date",
+                                    "example": "2024-01-15"
+                                  },
+                                  "nullable": false,
+                                  "optional": false
+                                },
+                                "lastActiveAt": {
+                                  "canonicalId": "s30",
+                                  "node": {
+                                    "kind": "number",
+                                    "integer": true,
+                                    "min": 0,
+                                    "max": 32503680000
+                                  },
+                                  "docs": {
+                                    "title": "Unix timestamp in seconds",
+                                    "description": "Seconds since Unix epoch (year 1970–3000)",
+                                    "example": 1700000000
+                                  },
+                                  "nullable": false,
+                                  "optional": true
+                                },
+                                "isVerified": {
+                                  "canonicalId": "s31",
+                                  "node": {
+                                    "kind": "boolean"
+                                  },
+                                  "defaultValue": false,
+                                  "nullable": false,
+                                  "optional": false
+                                },
+                                "role": {
+                                  "canonicalId": "s32",
+                                  "node": {
+                                    "kind": "literal",
+                                    "values": [
+                                      "admin",
+                                      "user",
+                                      "moderator"
+                                    ]
+                                  },
+                                  "defaultValue": "user",
+                                  "nullable": false,
+                                  "optional": false
+                                },
+                                "tags": {
+                                  "canonicalId": "s33",
+                                  "node": {
+                                    "kind": "array",
+                                    "element": {
+                                      "canonicalId": "s34",
+                                      "node": {
+                                        "kind": "string",
+                                        "minLength": 1
+                                      },
+                                      "nullable": false,
+                                      "optional": false
+                                    }
+                                  },
+                                  "defaultValue": [],
+                                  "nullable": false,
+                                  "optional": false
+                                },
+                                "coordinates": {
+                                  "canonicalId": "s35",
+                                  "node": {
+                                    "kind": "tuple",
+                                    "elements": [
+                                      {
+                                        "canonicalId": "s36",
+                                        "node": {
+                                          "kind": "number",
+                                          "integer": false,
+                                          "min": -90,
+                                          "max": 90
+                                        },
+                                        "docs": {
+                                          "title": "Latitude",
+                                          "description": "Decimal degrees (-90 to 90)",
+                                          "example": 59.437
+                                        },
+                                        "nullable": false,
+                                        "optional": false
+                                      },
+                                      {
+                                        "canonicalId": "s37",
+                                        "node": {
+                                          "kind": "number",
+                                          "integer": false,
+                                          "min": -180,
+                                          "max": 180
+                                        },
+                                        "docs": {
+                                          "title": "Longitude",
+                                          "description": "Decimal degrees (-180 to 180)",
+                                          "example": 24.754
+                                        },
+                                        "nullable": false,
+                                        "optional": false
+                                      }
+                                    ]
+                                  },
+                                  "docs": {
+                                    "description": "Location as [latitude, longitude]"
+                                  },
+                                  "nullable": false,
+                                  "optional": true
+                                },
+                                "metadata": {
+                                  "canonicalId": "s38",
+                                  "node": {
+                                    "kind": "record",
+                                    "value": {
+                                      "canonicalId": "s6",
+                                      "node": {
+                                        "kind": "any"
+                                      },
+                                      "nullable": false,
+                                      "optional": false
+                                    }
+                                  },
+                                  "docs": {
+                                    "description": "Arbitrary key-value metadata"
+                                  },
+                                  "nullable": false,
+                                  "optional": true
+                                },
+                                "ipAddress": {
+                                  "canonicalId": "s39",
+                                  "node": {
+                                    "kind": "string"
+                                  },
+                                  "docs": {
+                                    "title": "IP address",
+                                    "format": "ip",
+                                    "description": "IPv4 or IPv6",
+                                    "examples": [
+                                      "192.168.1.1",
+                                      "::1"
+                                    ]
+                                  },
+                                  "nullable": false,
+                                  "optional": true
+                                },
+                                "deprecatedField": {
+                                  "canonicalId": "s29",
+                                  "node": {
+                                    "kind": "string"
+                                  },
+                                  "docs": {
+                                    "deprecated": true,
+                                    "description": "Use email instead"
+                                  },
+                                  "nullable": false,
+                                  "optional": true
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "email",
+                                "name",
+                                "language",
+                                "joinedAt",
+                                "isVerified",
+                                "role",
+                                "tags"
+                              ],
+                              "additionalProperties": false
+                            },
+                            "docs": {
+                              "title": "User profile",
+                              "description": "Complete user profile returned from GET /users/:id"
+                            },
+                            "nullable": false,
+                            "optional": false
+                          }
+                        },
+                        "nullable": false,
+                        "optional": false
+                      },
+                      "total": {
+                        "canonicalId": "s14",
+                        "node": {
+                          "kind": "number",
+                          "integer": true,
+                          "min": 0
+                        },
+                        "nullable": false,
+                        "optional": false
+                      }
+                    },
+                    "required": [
+                      "users",
+                      "total"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "nullable": false,
+                  "optional": false
+                }
+              }
+            },
+            {
+              "name": "getUser",
+              "summary": "Get User",
+              "httpMethod": "GET",
+              "httpPath": "/users/:id",
+              "errors": [
+                "RESOURCE_NOT_FOUND",
+                "SERVER_ERROR"
+              ],
+              "pathParams": [
+                {
+                  "name": "id",
+                  "schema": {
+                    "inline": {
+                      "canonicalId": "s40",
+                      "node": {
+                        "kind": "string",
+                        "minLength": 1
+                      },
+                      "docs": {
+                        "description": "User ID",
+                        "example": "usr_abc123"
+                      },
+                      "nullable": false,
+                      "optional": false
+                    }
+                  },
+                  "required": true
+                }
+              ],
+              "successResponse": {
+                "ref": "User profile"
+              }
+            },
+            {
+              "name": "createUser",
+              "summary": "Create User",
+              "httpMethod": "POST",
+              "httpPath": "/users",
+              "errors": [
+                "VALIDATION_ERROR",
+                "CONFLICT",
+                "SERVER_ERROR"
+              ],
+              "requestBody": {
+                "ref": "Create user request"
+              },
+              "successResponse": {
+                "ref": "User profile"
+              }
+            },
+            {
+              "name": "updateProfile",
+              "summary": "Update Profile",
+              "httpMethod": "PUT",
+              "httpPath": "/users/:id",
+              "errors": [
+                "VALIDATION_ERROR",
+                "RESOURCE_NOT_FOUND",
+                "SERVER_ERROR"
+              ],
+              "pathParams": [
+                {
+                  "name": "id",
+                  "schema": {
+                    "inline": {
+                      "canonicalId": "s44",
+                      "node": {
+                        "kind": "string",
+                        "minLength": 1
+                      },
+                      "docs": {
+                        "description": "User ID to update"
+                      },
+                      "nullable": false,
+                      "optional": false
+                    }
+                  },
+                  "required": true
+                }
+              ],
+              "requestBody": {
+                "inline": {
+                  "canonicalId": "s-inline-ShowcaseApi-updateProfile",
+                  "node": {
+                    "kind": "object",
+                    "properties": {
+                      "name": {
+                        "canonicalId": "s45",
+                        "node": {
+                          "kind": "string",
+                          "minLength": 1
+                        },
+                        "nullable": false,
+                        "optional": true
+                      },
+                      "bio": {
+                        "canonicalId": "s46",
+                        "node": {
+                          "kind": "string",
+                          "maxLength": 500
+                        },
+                        "nullable": false,
+                        "optional": true
+                      },
+                      "website": {
+                        "canonicalId": "s24",
+                        "node": {
+                          "kind": "string"
+                        },
+                        "docs": {
+                          "title": "URL",
+                          "format": "uri",
+                          "description": "HTTP or HTTPS URL",
+                          "example": "https://example.com"
+                        },
+                        "nullable": false,
+                        "optional": true
+                      },
+                      "address": {
+                        "canonicalId": "s26",
+                        "node": {
+                          "kind": "object",
+                          "properties": {
+                            "street": {
+                              "canonicalId": "s27",
+                              "node": {
+                                "kind": "string",
+                                "minLength": 1
+                              },
+                              "docs": {
+                                "description": "Street address",
+                                "example": "123 Main St"
+                              },
+                              "nullable": false,
+                              "optional": false
+                            },
+                            "city": {
+                              "canonicalId": "s28",
+                              "node": {
+                                "kind": "string",
+                                "minLength": 1
+                              },
+                              "docs": {
+                                "example": "Tallinn"
+                              },
+                              "nullable": false,
+                              "optional": false
+                            },
+                            "country": {
+                              "canonicalId": "s9",
+                              "node": {
+                                "kind": "string"
+                              },
+                              "docs": {
+                                "title": "Country code",
+                                "description": "ISO 3166-1 alpha-2",
+                                "example": "US"
+                              },
+                              "nullable": false,
+                              "optional": false
+                            },
+                            "zip": {
+                              "canonicalId": "s29",
+                              "node": {
+                                "kind": "string"
+                              },
+                              "docs": {
+                                "description": "Postal code",
+                                "example": "10001"
+                              },
+                              "nullable": false,
+                              "optional": true
+                            }
+                          },
+                          "required": [
+                            "street",
+                            "city",
+                            "country"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "docs": {
+                          "title": "Postal address"
+                        },
+                        "nullable": false,
+                        "optional": true
+                      },
+                      "coordinates": {
+                        "canonicalId": "s47",
+                        "node": {
+                          "kind": "tuple",
+                          "elements": [
+                            {
+                              "canonicalId": "s36",
+                              "node": {
+                                "kind": "number",
+                                "integer": false,
+                                "min": -90,
+                                "max": 90
+                              },
+                              "docs": {
+                                "title": "Latitude",
+                                "description": "Decimal degrees (-90 to 90)",
+                                "example": 59.437
+                              },
+                              "nullable": false,
+                              "optional": false
+                            },
+                            {
+                              "canonicalId": "s37",
+                              "node": {
+                                "kind": "number",
+                                "integer": false,
+                                "min": -180,
+                                "max": 180
+                              },
+                              "docs": {
+                                "title": "Longitude",
+                                "description": "Decimal degrees (-180 to 180)",
+                                "example": 24.754
+                              },
+                              "nullable": false,
+                              "optional": false
+                            }
+                          ]
+                        },
+                        "nullable": false,
+                        "optional": true
+                      }
+                    },
+                    "required": [],
+                    "additionalProperties": false
+                  },
+                  "nullable": false,
+                  "optional": false
+                }
+              },
+              "successResponse": {
+                "ref": "User profile"
+              }
+            },
+            {
+              "name": "deleteUser",
+              "summary": "Delete User",
+              "httpMethod": "DELETE",
+              "httpPath": "/users/:id",
+              "errors": [
+                "RESOURCE_NOT_FOUND",
+                "SERVER_ERROR"
+              ],
+              "pathParams": [
+                {
+                  "name": "id",
+                  "schema": {
+                    "inline": {
+                      "canonicalId": "s48",
+                      "node": {
+                        "kind": "string",
+                        "minLength": 1
+                      },
+                      "nullable": false,
+                      "optional": false
+                    }
+                  },
+                  "required": true
+                }
+              ]
+            },
+            {
+              "name": "getStats",
+              "summary": "Get Stats",
+              "httpMethod": "GET",
+              "httpPath": "/stats",
+              "errors": [
+                "SERVER_ERROR"
+              ],
+              "successResponse": {
+                "ref": "Platform statistics"
+              }
+            },
+            {
+              "name": "multiError",
+              "summary": "Multi Error",
+              "httpMethod": "GET",
+              "httpPath": "/multi-error",
+              "errors": [
+                "RESOURCE_NOT_FOUND",
+                "PROFILE_NOT_FOUND",
+                "RATE_LIMITED",
+                "SERVER_ERROR"
+              ]
+            },
+            {
+              "name": "uploadAvatar",
+              "summary": "Upload Avatar",
+              "httpMethod": "POST",
+              "httpPath": "/users/:id/avatar",
+              "errors": [
+                "VALIDATION_ERROR",
+                "SERVER_ERROR"
+              ],
+              "requestBody": {
+                "inline": {
+                  "canonicalId": "s-inline-ShowcaseApi-uploadAvatar",
+                  "node": {
+                    "kind": "object",
+                    "properties": {
+                      "avatar": {
+                        "canonicalId": "s70",
+                        "node": {
+                          "kind": "file",
+                          "accept": [
+                            "image/*"
+                          ],
+                          "maxSize": 2097152
+                        },
+                        "docs": {
+                          "description": "Profile image — JPEG, PNG, or WebP, max 2 MB"
+                        },
+                        "nullable": false,
+                        "optional": false
+                      },
+                      "crop": {
+                        "canonicalId": "s29",
+                        "node": {
+                          "kind": "string"
+                        },
+                        "docs": {
+                          "description": "JSON-serialised crop rectangle: {x,y,w,h}"
+                        },
+                        "nullable": false,
+                        "optional": true
+                      }
+                    },
+                    "required": [
+                      "avatar"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "nullable": false,
+                  "optional": false
+                }
+              },
+              "successResponse": {
+                "inline": {
+                  "canonicalId": "s71",
+                  "node": {
+                    "kind": "object",
+                    "properties": {
+                      "url": {
+                        "canonicalId": "s24",
+                        "node": {
+                          "kind": "string"
+                        },
+                        "docs": {
+                          "title": "URL",
+                          "format": "uri",
+                          "description": "HTTP or HTTPS URL",
+                          "example": "https://example.com"
+                        },
+                        "nullable": false,
+                        "optional": false
+                      },
+                      "width": {
+                        "canonicalId": "s14",
+                        "node": {
+                          "kind": "number",
+                          "integer": true,
+                          "min": 0
+                        },
+                        "nullable": false,
+                        "optional": false
+                      },
+                      "height": {
+                        "canonicalId": "s14",
+                        "node": {
+                          "kind": "number",
+                          "integer": true,
+                          "min": 0
+                        },
+                        "nullable": false,
+                        "optional": false
+                      }
+                    },
+                    "required": [
+                      "url",
+                      "width",
+                      "height"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "nullable": false,
+                  "optional": false
+                }
+              }
+            },
+            {
+              "name": "downloadAvatar",
+              "summary": "Download Avatar",
+              "httpMethod": "GET",
+              "httpPath": "/users/:id/avatar",
+              "errors": [
+                "RESOURCE_NOT_FOUND",
+                "SERVER_ERROR"
+              ],
+              "pathParams": [
+                {
+                  "name": "id",
+                  "schema": {
+                    "inline": {
+                      "canonicalId": "s72",
+                      "node": {
+                        "kind": "string",
+                        "minLength": 1
+                      },
+                      "nullable": false,
+                      "optional": false
+                    }
+                  },
+                  "required": true
+                }
+              ],
+              "queryParams": [
+                {
+                  "name": "format",
+                  "schema": {
+                    "inline": {
+                      "canonicalId": "s73",
+                      "node": {
+                        "kind": "literal",
+                        "values": [
+                          "jpeg",
+                          "png",
+                          "webp"
+                        ]
+                      },
+                      "defaultValue": "jpeg",
+                      "nullable": false,
+                      "optional": false
+                    }
+                  },
+                  "required": true
+                }
+              ],
+              "successResponse": {
+                "inline": {
+                  "canonicalId": "s74",
+                  "node": {
+                    "kind": "file"
+                  },
+                  "nullable": false,
+                  "optional": false
+                }
+              }
+            },
+            {
+              "name": "getLatestEvent",
+              "summary": "Get Latest Event",
+              "httpMethod": "GET",
+              "httpPath": "/events/latest",
+              "errors": [
+                "SERVER_ERROR"
+              ],
+              "successResponse": {
+                "ref": "Event"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "WebSocket Showcase",
+      "slug": "web-socket-showcase",
+      "contracts": [
+        {
+          "name": "ChatApi",
+          "kind": "ws",
+          "path": "/ws/chat",
+          "auth": [
+            {
+              "scheme": "bearer",
+              "headerName": "authorization",
+              "description": "JWT access token for WebSocket auth"
+            }
+          ],
+          "methods": [
+            {
+              "name": "sendMessage",
+              "summary": "Send Message",
+              "wsDirection": "client-to-server",
+              "wsPattern": "request-response",
+              "errors": [
+                "VALIDATION_ERROR",
+                "ROOM_NOT_FOUND",
+                "MESSAGE_TOO_LONG",
+                "SERVER_ERROR"
+              ],
+              "wsInput": {
+                "ref": "Send message request"
+              },
+              "successResponse": {
+                "ref": "Chat message"
+              }
+            },
+            {
+              "name": "getRooms",
+              "summary": "Get Rooms",
+              "wsDirection": "client-to-server",
+              "wsPattern": "request-response",
+              "errors": [
+                "SERVER_ERROR"
+              ],
+              "successResponse": {
+                "inline": {
+                  "canonicalId": "s83",
+                  "node": {
+                    "kind": "array",
+                    "element": {
+                      "canonicalId": "s84",
+                      "node": {
+                        "kind": "object",
+                        "properties": {
+                          "roomId": {
+                            "canonicalId": "s85",
+                            "node": {
+                              "kind": "string",
+                              "minLength": 1
+                            },
+                            "docs": {
+                              "example": "room_general"
+                            },
+                            "nullable": false,
+                            "optional": false
+                          },
+                          "name": {
+                            "canonicalId": "s86",
+                            "node": {
+                              "kind": "string",
+                              "minLength": 1
+                            },
+                            "docs": {
+                              "example": "general"
+                            },
+                            "nullable": false,
+                            "optional": false
+                          },
+                          "participantCount": {
+                            "canonicalId": "s67",
+                            "node": {
+                              "kind": "number",
+                              "integer": false
+                            },
+                            "docs": {
+                              "description": "Number of active participants"
+                            },
+                            "nullable": false,
+                            "optional": false
+                          }
+                        },
+                        "required": [
+                          "roomId",
+                          "name",
+                          "participantCount"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "docs": {
+                        "title": "Chat room"
+                      },
+                      "nullable": false,
+                      "optional": false
+                    }
+                  },
+                  "nullable": false,
+                  "optional": false
+                }
+              }
+            },
+            {
+              "name": "setTyping",
+              "summary": "Set Typing",
+              "wsDirection": "client-to-server",
+              "wsPattern": "fire-and-forget",
+              "errors": [],
+              "wsInput": {
+                "inline": {
+                  "canonicalId": "s87",
+                  "node": {
+                    "kind": "object",
+                    "properties": {
+                      "roomId": {
+                        "canonicalId": "s88",
+                        "node": {
+                          "kind": "string",
+                          "minLength": 1
+                        },
+                        "nullable": false,
+                        "optional": false
+                      },
+                      "typing": {
+                        "canonicalId": "s31",
+                        "node": {
+                          "kind": "boolean"
+                        },
+                        "nullable": false,
+                        "optional": false
+                      }
+                    },
+                    "required": [
+                      "roomId",
+                      "typing"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "docs": {
+                    "description": "Notify the server the user started/stopped typing"
+                  },
+                  "nullable": false,
+                  "optional": false
+                }
+              }
+            },
+            {
+              "name": "ping",
+              "summary": "Ping",
+              "wsDirection": "client-to-server",
+              "wsPattern": "fire-and-forget",
+              "errors": []
+            },
+            {
+              "name": "onMessage",
+              "summary": "On Message",
+              "wsDirection": "server-to-client",
+              "wsPattern": "server-push",
+              "errors": [],
+              "wsInput": {
+                "ref": "Chat message"
+              }
+            },
+            {
+              "name": "onPresence",
+              "summary": "On Presence",
+              "wsDirection": "server-to-client",
+              "wsPattern": "server-push",
+              "errors": [],
+              "wsInput": {
+                "ref": "Presence update"
+              }
+            },
+            {
+              "name": "onRoomUpdated",
+              "summary": "On Room Updated",
+              "wsDirection": "server-to-client",
+              "wsPattern": "server-push",
+              "errors": [],
+              "wsInput": {
+                "ref": "Chat room"
+              }
+            }
+          ]
+        },
+        {
+          "name": "NotificationApi",
+          "kind": "ws",
+          "path": "/ws/notifications",
+          "auth": [
+            {
+              "scheme": "bearer",
+              "headerName": "authorization",
+              "description": "JWT access token for WebSocket auth"
+            }
+          ],
+          "methods": [
+            {
+              "name": "subscribe",
+              "summary": "Subscribe",
+              "wsDirection": "client-to-server",
+              "wsPattern": "request-response",
+              "errors": [
+                "VALIDATION_ERROR",
+                "SERVER_ERROR"
+              ],
+              "wsInput": {
+                "inline": {
+                  "canonicalId": "s102",
+                  "node": {
+                    "kind": "object",
+                    "properties": {
+                      "topics": {
+                        "canonicalId": "s103",
+                        "node": {
+                          "kind": "array",
+                          "element": {
+                            "canonicalId": "s104",
+                            "node": {
+                              "kind": "string",
+                              "minLength": 1
+                            },
+                            "nullable": false,
+                            "optional": false
+                          }
+                        },
+                        "docs": {
+                          "description": "Topic names to subscribe to",
+                          "example": [
+                            "orders",
+                            "inventory"
+                          ]
+                        },
+                        "nullable": false,
+                        "optional": false
+                      }
+                    },
+                    "required": [
+                      "topics"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "docs": {
+                    "description": "Subscribe to notification topics"
+                  },
+                  "nullable": false,
+                  "optional": false
+                }
+              },
+              "successResponse": {
+                "inline": {
+                  "canonicalId": "s105",
+                  "node": {
+                    "kind": "object",
+                    "properties": {
+                      "subscribed": {
+                        "canonicalId": "s106",
+                        "node": {
+                          "kind": "array",
+                          "element": {
+                            "canonicalId": "s107",
+                            "node": {
+                              "kind": "string",
+                              "minLength": 1
+                            },
+                            "nullable": false,
+                            "optional": false
+                          }
+                        },
+                        "nullable": false,
+                        "optional": false
+                      }
+                    },
+                    "required": [
+                      "subscribed"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "docs": {
+                    "description": "Confirmed subscriptions"
+                  },
+                  "nullable": false,
+                  "optional": false
+                }
+              }
+            },
+            {
+              "name": "unsubscribe",
+              "summary": "Unsubscribe",
+              "wsDirection": "client-to-server",
+              "wsPattern": "fire-and-forget",
+              "errors": [],
+              "wsInput": {
+                "inline": {
+                  "canonicalId": "s108",
+                  "node": {
+                    "kind": "object",
+                    "properties": {
+                      "topics": {
+                        "canonicalId": "s109",
+                        "node": {
+                          "kind": "array",
+                          "element": {
+                            "canonicalId": "s110",
+                            "node": {
+                              "kind": "string",
+                              "minLength": 1
+                            },
+                            "nullable": false,
+                            "optional": false
+                          }
+                        },
+                        "nullable": false,
+                        "optional": false
+                      }
+                    },
+                    "required": [
+                      "topics"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "nullable": false,
+                  "optional": false
+                }
+              }
+            },
+            {
+              "name": "onNotification",
+              "summary": "On Notification",
+              "wsDirection": "server-to-client",
+              "wsPattern": "server-push",
+              "errors": [],
+              "wsInput": {
+                "ref": "Notification"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "schemas": {
+    "Country code": {
+      "title": "Country code",
+      "description": "ISO 3166-1 alpha-2",
+      "schema": {
+        "canonicalId": "s9",
+        "node": {
+          "kind": "string"
+        },
+        "docs": {
+          "title": "Country code",
+          "description": "ISO 3166-1 alpha-2",
+          "example": "US"
+        },
+        "nullable": false,
+        "optional": false
+      },
+      "usedIn": [
+        {
+          "contract": "ShowcaseApi",
+          "method": "listUsers",
+          "location": "input"
+        }
+      ]
+    },
+    "Currency code": {
+      "title": "Currency code",
+      "description": "ISO 4217",
+      "schema": {
+        "canonicalId": "s10",
+        "node": {
+          "kind": "string"
+        },
+        "docs": {
+          "title": "Currency code",
+          "description": "ISO 4217",
+          "example": "USD"
+        },
+        "nullable": false,
+        "optional": false
+      },
+      "usedIn": [
+        {
+          "contract": "ShowcaseApi",
+          "method": "listUsers",
+          "location": "input"
+        }
+      ]
+    },
+    "Date": {
+      "title": "Date",
+      "description": "Format YYYY-MM-DD",
+      "schema": {
+        "canonicalId": "s13",
+        "node": {
+          "kind": "string"
+        },
+        "docs": {
+          "title": "Date",
+          "format": "date",
+          "description": "Format YYYY-MM-DD",
+          "example": "2024-01-15"
+        },
+        "nullable": false,
+        "optional": false
+      },
+      "usedIn": [
+        {
+          "contract": "ShowcaseApi",
+          "method": "listUsers",
+          "location": "input"
+        }
+      ]
+    },
+    "User profile": {
+      "title": "User profile",
+      "description": "Complete user profile returned from GET /users/:id",
+      "schema": {
+        "canonicalId": "s17",
+        "node": {
+          "kind": "object",
+          "properties": {
+            "id": {
+              "canonicalId": "s18",
+              "node": {
+                "kind": "string",
+                "minLength": 1
+              },
+              "docs": {
+                "example": "usr_abc123"
+              },
+              "nullable": false,
+              "optional": false
+            },
+            "email": {
+              "canonicalId": "s19",
+              "node": {
+                "kind": "string"
+              },
+              "docs": {
+                "title": "Email address",
+                "format": "email",
+                "example": "user@example.com"
+              },
+              "nullable": false,
+              "optional": false
+            },
+            "name": {
+              "canonicalId": "s20",
+              "node": {
+                "kind": "string",
+                "minLength": 1
+              },
+              "docs": {
+                "example": "Jane Doe"
+              },
+              "nullable": false,
+              "optional": false
+            },
+            "phone": {
+              "canonicalId": "s21",
+              "node": {
+                "kind": "string"
+              },
+              "docs": {
+                "title": "Phone number",
+                "description": "International format with country code",
+                "example": "+12025551234"
+              },
+              "nullable": false,
+              "optional": true
+            },
+            "language": {
+              "canonicalId": "s22",
+              "node": {
+                "kind": "string"
+              },
+              "docs": {
+                "title": "Language code",
+                "description": "ISO 639-1",
+                "example": "en"
+              },
+              "nullable": false,
+              "optional": false
+            },
+            "locale": {
+              "canonicalId": "s23",
+              "node": {
+                "kind": "string"
+              },
+              "docs": {
+                "title": "Locale code",
+                "description": "BCP 47 language or language-region format",
+                "example": "en-US"
+              },
+              "nullable": false,
+              "optional": true
+            },
+            "website": {
+              "canonicalId": "s24",
+              "node": {
+                "kind": "string"
+              },
+              "docs": {
+                "title": "URL",
+                "format": "uri",
+                "description": "HTTP or HTTPS URL",
+                "example": "https://example.com"
+              },
+              "nullable": false,
+              "optional": true
+            },
+            "bio": {
+              "canonicalId": "s25",
+              "node": {
+                "kind": "string",
+                "maxLength": 500
+              },
+              "docs": {
+                "description": "Short biography"
+              },
+              "nullable": false,
+              "optional": true
+            },
+            "address": {
+              "canonicalId": "s26",
+              "node": {
+                "kind": "object",
+                "properties": {
+                  "street": {
+                    "canonicalId": "s27",
+                    "node": {
+                      "kind": "string",
+                      "minLength": 1
+                    },
+                    "docs": {
+                      "description": "Street address",
+                      "example": "123 Main St"
+                    },
+                    "nullable": false,
+                    "optional": false
+                  },
+                  "city": {
+                    "canonicalId": "s28",
+                    "node": {
+                      "kind": "string",
+                      "minLength": 1
+                    },
+                    "docs": {
+                      "example": "Tallinn"
+                    },
+                    "nullable": false,
+                    "optional": false
+                  },
+                  "country": {
+                    "canonicalId": "s9",
+                    "node": {
+                      "kind": "string"
+                    },
+                    "docs": {
+                      "title": "Country code",
+                      "description": "ISO 3166-1 alpha-2",
+                      "example": "US"
+                    },
+                    "nullable": false,
+                    "optional": false
+                  },
+                  "zip": {
+                    "canonicalId": "s29",
+                    "node": {
+                      "kind": "string"
+                    },
+                    "docs": {
+                      "description": "Postal code",
+                      "example": "10001"
+                    },
+                    "nullable": false,
+                    "optional": true
+                  }
+                },
+                "required": [
+                  "street",
+                  "city",
+                  "country"
+                ],
+                "additionalProperties": false
+              },
+              "docs": {
+                "title": "Postal address"
+              },
+              "nullable": false,
+              "optional": true
+            },
+            "joinedAt": {
+              "canonicalId": "s13",
+              "node": {
+                "kind": "string"
+              },
+              "docs": {
+                "title": "Date",
+                "format": "date",
+                "description": "Registration date",
+                "example": "2024-01-15"
+              },
+              "nullable": false,
+              "optional": false
+            },
+            "lastActiveAt": {
+              "canonicalId": "s30",
+              "node": {
+                "kind": "number",
+                "integer": true,
+                "min": 0,
+                "max": 32503680000
+              },
+              "docs": {
+                "title": "Unix timestamp in seconds",
+                "description": "Seconds since Unix epoch (year 1970–3000)",
+                "example": 1700000000
+              },
+              "nullable": false,
+              "optional": true
+            },
+            "isVerified": {
+              "canonicalId": "s31",
+              "node": {
+                "kind": "boolean"
+              },
+              "defaultValue": false,
+              "nullable": false,
+              "optional": false
+            },
+            "role": {
+              "canonicalId": "s32",
+              "node": {
+                "kind": "literal",
+                "values": [
+                  "admin",
+                  "user",
+                  "moderator"
+                ]
+              },
+              "defaultValue": "user",
+              "nullable": false,
+              "optional": false
+            },
+            "tags": {
+              "canonicalId": "s33",
+              "node": {
+                "kind": "array",
+                "element": {
+                  "canonicalId": "s34",
+                  "node": {
+                    "kind": "string",
+                    "minLength": 1
+                  },
+                  "nullable": false,
+                  "optional": false
+                }
+              },
+              "defaultValue": [],
+              "nullable": false,
+              "optional": false
+            },
+            "coordinates": {
+              "canonicalId": "s35",
+              "node": {
+                "kind": "tuple",
+                "elements": [
+                  {
+                    "canonicalId": "s36",
+                    "node": {
+                      "kind": "number",
+                      "integer": false,
+                      "min": -90,
+                      "max": 90
+                    },
+                    "docs": {
+                      "title": "Latitude",
+                      "description": "Decimal degrees (-90 to 90)",
+                      "example": 59.437
+                    },
+                    "nullable": false,
+                    "optional": false
+                  },
+                  {
+                    "canonicalId": "s37",
+                    "node": {
+                      "kind": "number",
+                      "integer": false,
+                      "min": -180,
+                      "max": 180
+                    },
+                    "docs": {
+                      "title": "Longitude",
+                      "description": "Decimal degrees (-180 to 180)",
+                      "example": 24.754
+                    },
+                    "nullable": false,
+                    "optional": false
+                  }
+                ]
+              },
+              "docs": {
+                "description": "Location as [latitude, longitude]"
+              },
+              "nullable": false,
+              "optional": true
+            },
+            "metadata": {
+              "canonicalId": "s38",
+              "node": {
+                "kind": "record",
+                "value": {
+                  "canonicalId": "s6",
+                  "node": {
+                    "kind": "any"
+                  },
+                  "nullable": false,
+                  "optional": false
+                }
+              },
+              "docs": {
+                "description": "Arbitrary key-value metadata"
+              },
+              "nullable": false,
+              "optional": true
+            },
+            "ipAddress": {
+              "canonicalId": "s39",
+              "node": {
+                "kind": "string"
+              },
+              "docs": {
+                "title": "IP address",
+                "format": "ip",
+                "description": "IPv4 or IPv6",
+                "examples": [
+                  "192.168.1.1",
+                  "::1"
+                ]
+              },
+              "nullable": false,
+              "optional": true
+            },
+            "deprecatedField": {
+              "canonicalId": "s29",
+              "node": {
+                "kind": "string"
+              },
+              "docs": {
+                "deprecated": true,
+                "description": "Use email instead"
+              },
+              "nullable": false,
+              "optional": true
+            }
+          },
+          "required": [
+            "id",
+            "email",
+            "name",
+            "language",
+            "joinedAt",
+            "isVerified",
+            "role",
+            "tags"
+          ],
+          "additionalProperties": false
+        },
+        "docs": {
+          "title": "User profile",
+          "description": "Complete user profile returned from GET /users/:id"
+        },
+        "nullable": false,
+        "optional": false
+      },
+      "usedIn": [
+        {
+          "contract": "ShowcaseApi",
+          "method": "getUser",
+          "location": "success"
+        },
+        {
+          "contract": "ShowcaseApi",
+          "method": "createUser",
+          "location": "success"
+        },
+        {
+          "contract": "ShowcaseApi",
+          "method": "updateProfile",
+          "location": "success"
+        }
+      ]
+    },
+    "Create user request": {
+      "title": "Create user request",
+      "schema": {
+        "canonicalId": "s41",
+        "node": {
+          "kind": "object",
+          "properties": {
+            "email": {
+              "canonicalId": "s19",
+              "node": {
+                "kind": "string"
+              },
+              "docs": {
+                "title": "Email address",
+                "format": "email",
+                "example": "user@example.com"
+              },
+              "nullable": false,
+              "optional": false
+            },
+            "name": {
+              "canonicalId": "s42",
+              "node": {
+                "kind": "string",
+                "minLength": 1
+              },
+              "nullable": false,
+              "optional": false
+            },
+            "password": {
+              "canonicalId": "s43",
+              "node": {
+                "kind": "password",
+                "minLength": 8,
+                "maxLength": 128
+              },
+              "docs": {
+                "format": "password"
+              },
+              "nullable": false,
+              "optional": false
+            },
+            "country": {
+              "canonicalId": "s9",
+              "node": {
+                "kind": "string"
+              },
+              "docs": {
+                "title": "Country code",
+                "description": "ISO 3166-1 alpha-2",
+                "example": "US"
+              },
+              "nullable": false,
+              "optional": false
+            },
+            "language": {
+              "canonicalId": "s22",
+              "node": {
+                "kind": "string"
+              },
+              "docs": {
+                "title": "Language code",
+                "description": "ISO 639-1",
+                "example": "en"
+              },
+              "defaultValue": "en",
+              "nullable": false,
+              "optional": false
+            },
+            "inviteCode": {
+              "canonicalId": "s29",
+              "node": {
+                "kind": "string"
+              },
+              "docs": {
+                "description": "Optional referral / invite code"
+              },
+              "nullable": false,
+              "optional": true
+            }
+          },
+          "required": [
+            "email",
+            "name",
+            "password",
+            "country",
+            "language"
+          ],
+          "additionalProperties": false
+        },
+        "docs": {
+          "title": "Create user request"
+        },
+        "nullable": false,
+        "optional": false
+      },
+      "usedIn": [
+        {
+          "contract": "ShowcaseApi",
+          "method": "createUser",
+          "location": "input"
+        }
+      ]
+    },
+    "Platform statistics": {
+      "title": "Platform statistics",
+      "schema": {
+        "canonicalId": "s49",
+        "node": {
+          "kind": "object",
+          "properties": {
+            "totalUsers": {
+              "canonicalId": "s14",
+              "node": {
+                "kind": "number",
+                "integer": true,
+                "min": 0
+              },
+              "nullable": false,
+              "optional": false
+            },
+            "verifiedUsers": {
+              "canonicalId": "s14",
+              "node": {
+                "kind": "number",
+                "integer": true,
+                "min": 0
+              },
+              "nullable": false,
+              "optional": false
+            },
+            "countriesRepresented": {
+              "canonicalId": "s14",
+              "node": {
+                "kind": "number",
+                "integer": true,
+                "min": 0
+              },
+              "nullable": false,
+              "optional": false
+            },
+            "topCountries": {
+              "canonicalId": "s50",
+              "node": {
+                "kind": "array",
+                "element": {
+                  "canonicalId": "s51",
+                  "node": {
+                    "kind": "object",
+                    "properties": {
+                      "country": {
+                        "canonicalId": "s9",
+                        "node": {
+                          "kind": "string"
+                        },
+                        "docs": {
+                          "title": "Country code",
+                          "description": "ISO 3166-1 alpha-2",
+                          "example": "US"
+                        },
+                        "nullable": false,
+                        "optional": false
+                      },
+                      "count": {
+                        "canonicalId": "s14",
+                        "node": {
+                          "kind": "number",
+                          "integer": true,
+                          "min": 0
+                        },
+                        "nullable": false,
+                        "optional": false
+                      }
+                    },
+                    "required": [
+                      "country",
+                      "count"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "nullable": false,
+                  "optional": false
+                }
+              },
+              "nullable": false,
+              "optional": false
+            },
+            "topLanguages": {
+              "canonicalId": "s52",
+              "node": {
+                "kind": "record",
+                "value": {
+                  "canonicalId": "s14",
+                  "node": {
+                    "kind": "number",
+                    "integer": true,
+                    "min": 0
+                  },
+                  "nullable": false,
+                  "optional": false
+                }
+              },
+              "docs": {
+                "description": "Language code → user count"
+              },
+              "nullable": false,
+              "optional": false
+            },
+            "serverTime": {
+              "canonicalId": "s30",
+              "node": {
+                "kind": "number",
+                "integer": true,
+                "min": 0,
+                "max": 32503680000
+              },
+              "docs": {
+                "title": "Unix timestamp in seconds",
+                "description": "Seconds since Unix epoch (year 1970–3000)",
+                "example": 1700000000
+              },
+              "nullable": false,
+              "optional": false
+            },
+            "serverDateTime": {
+              "canonicalId": "s53",
+              "node": {
+                "kind": "string"
+              },
+              "docs": {
+                "title": "DateTime",
+                "description": "Format YYYY-MM-DD HH:mm:ss",
+                "example": "2024-01-15 14:30:00"
+              },
+              "nullable": false,
+              "optional": false
+            },
+            "avgLatitude": {
+              "canonicalId": "s36",
+              "node": {
+                "kind": "number",
+                "integer": false,
+                "min": -90,
+                "max": 90
+              },
+              "docs": {
+                "title": "Latitude",
+                "description": "Decimal degrees (-90 to 90)",
+                "example": 59.437
+              },
+              "nullable": true,
+              "optional": false
+            },
+            "avgLongitude": {
+              "canonicalId": "s37",
+              "node": {
+                "kind": "number",
+                "integer": false,
+                "min": -180,
+                "max": 180
+              },
+              "docs": {
+                "title": "Longitude",
+                "description": "Decimal degrees (-180 to 180)",
+                "example": 24.754
+              },
+              "nullable": true,
+              "optional": false
+            },
+            "bitFlag": {
+              "canonicalId": "s54",
+              "node": {
+                "kind": "bit"
+              },
+              "docs": {
+                "description": "1 = healthy, 0 = degraded"
+              },
+              "nullable": false,
+              "optional": false
+            },
+            "unknownData": {
+              "canonicalId": "s55",
+              "node": {
+                "kind": "unknown"
+              },
+              "docs": {
+                "description": "Passthrough field for extensions"
+              },
+              "nullable": false,
+              "optional": false
+            },
+            "anyData": {
+              "canonicalId": "s6",
+              "node": {
+                "kind": "any"
+              },
+              "docs": {
+                "description": "Unchecked partner-supplied payload"
+              },
+              "nullable": false,
+              "optional": false
+            },
+            "recentEvent": {
+              "canonicalId": "s56",
+              "node": {
+                "kind": "discriminated",
+                "discriminator": "type",
+                "variants": [
+                  {
+                    "canonicalId": "s57",
+                    "node": {
+                      "kind": "object",
+                      "properties": {
+                        "id": {
+                          "canonicalId": "s58",
+                          "node": {
+                            "kind": "string",
+                            "minLength": 1
+                          },
+                          "docs": {
+                            "description": "Event ID",
+                            "example": "evt_abc123"
+                          },
+                          "nullable": false,
+                          "optional": false
+                        },
+                        "occurredAt": {
+                          "canonicalId": "s30",
+                          "node": {
+                            "kind": "number",
+                            "integer": true,
+                            "min": 0,
+                            "max": 32503680000
+                          },
+                          "docs": {
+                            "title": "Unix timestamp in seconds",
+                            "description": "When the event occurred",
+                            "example": 1700000000
+                          },
+                          "nullable": false,
+                          "optional": false
+                        },
+                        "type": {
+                          "canonicalId": "s59",
+                          "node": {
+                            "kind": "literal",
+                            "values": [
+                              "user.created"
+                            ]
+                          },
+                          "nullable": false,
+                          "optional": false
+                        },
+                        "email": {
+                          "canonicalId": "s19",
+                          "node": {
+                            "kind": "string"
+                          },
+                          "docs": {
+                            "title": "Email address",
+                            "format": "email",
+                            "example": "user@example.com"
+                          },
+                          "nullable": false,
+                          "optional": false
+                        },
+                        "country": {
+                          "canonicalId": "s9",
+                          "node": {
+                            "kind": "string"
+                          },
+                          "docs": {
+                            "title": "Country code",
+                            "description": "ISO 3166-1 alpha-2",
+                            "example": "US"
+                          },
+                          "nullable": false,
+                          "optional": false
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "occurredAt",
+                        "type",
+                        "email",
+                        "country"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "docs": {
+                      "title": "User created event"
+                    },
+                    "nullable": false,
+                    "optional": false
+                  },
+                  {
+                    "canonicalId": "s60",
+                    "node": {
+                      "kind": "object",
+                      "properties": {
+                        "id": {
+                          "canonicalId": "s58",
+                          "node": {
+                            "kind": "string",
+                            "minLength": 1
+                          },
+                          "docs": {
+                            "description": "Event ID",
+                            "example": "evt_abc123"
+                          },
+                          "nullable": false,
+                          "optional": false
+                        },
+                        "occurredAt": {
+                          "canonicalId": "s30",
+                          "node": {
+                            "kind": "number",
+                            "integer": true,
+                            "min": 0,
+                            "max": 32503680000
+                          },
+                          "docs": {
+                            "title": "Unix timestamp in seconds",
+                            "description": "When the event occurred",
+                            "example": 1700000000
+                          },
+                          "nullable": false,
+                          "optional": false
+                        },
+                        "type": {
+                          "canonicalId": "s61",
+                          "node": {
+                            "kind": "literal",
+                            "values": [
+                              "order.placed"
+                            ]
+                          },
+                          "nullable": false,
+                          "optional": false
+                        },
+                        "orderId": {
+                          "canonicalId": "s62",
+                          "node": {
+                            "kind": "string",
+                            "minLength": 1
+                          },
+                          "nullable": false,
+                          "optional": false
+                        },
+                        "totalCents": {
+                          "canonicalId": "s14",
+                          "node": {
+                            "kind": "number",
+                            "integer": true,
+                            "min": 0
+                          },
+                          "docs": {
+                            "description": "Order total in cents"
+                          },
+                          "nullable": false,
+                          "optional": false
+                        },
+                        "currency": {
+                          "canonicalId": "s10",
+                          "node": {
+                            "kind": "string"
+                          },
+                          "docs": {
+                            "title": "Currency code",
+                            "description": "ISO 4217",
+                            "example": "USD"
+                          },
+                          "nullable": false,
+                          "optional": false
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "occurredAt",
+                        "type",
+                        "orderId",
+                        "totalCents",
+                        "currency"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "docs": {
+                      "title": "Order placed event"
+                    },
+                    "nullable": false,
+                    "optional": false
+                  },
+                  {
+                    "canonicalId": "s63",
+                    "node": {
+                      "kind": "object",
+                      "properties": {
+                        "id": {
+                          "canonicalId": "s58",
+                          "node": {
+                            "kind": "string",
+                            "minLength": 1
+                          },
+                          "docs": {
+                            "description": "Event ID",
+                            "example": "evt_abc123"
+                          },
+                          "nullable": false,
+                          "optional": false
+                        },
+                        "occurredAt": {
+                          "canonicalId": "s30",
+                          "node": {
+                            "kind": "number",
+                            "integer": true,
+                            "min": 0,
+                            "max": 32503680000
+                          },
+                          "docs": {
+                            "title": "Unix timestamp in seconds",
+                            "description": "When the event occurred",
+                            "example": 1700000000
+                          },
+                          "nullable": false,
+                          "optional": false
+                        },
+                        "type": {
+                          "canonicalId": "s64",
+                          "node": {
+                            "kind": "literal",
+                            "values": [
+                              "order.cancelled"
+                            ]
+                          },
+                          "nullable": false,
+                          "optional": false
+                        },
+                        "orderId": {
+                          "canonicalId": "s65",
+                          "node": {
+                            "kind": "string",
+                            "minLength": 1
+                          },
+                          "nullable": false,
+                          "optional": false
+                        },
+                        "reason": {
+                          "canonicalId": "s29",
+                          "node": {
+                            "kind": "string"
+                          },
+                          "docs": {
+                            "description": "Optional cancellation reason"
+                          },
+                          "nullable": false,
+                          "optional": true
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "occurredAt",
+                        "type",
+                        "orderId"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "docs": {
+                      "title": "Order cancelled event"
+                    },
+                    "nullable": false,
+                    "optional": false
+                  }
+                ]
+              },
+              "docs": {
+                "title": "Event",
+                "description": "Most recent domain event, if any"
+              },
+              "nullable": true,
+              "optional": false
+            },
+            "unionsExample": {
+              "canonicalId": "s66",
+              "node": {
+                "kind": "union",
+                "variants": [
+                  {
+                    "canonicalId": "s29",
+                    "node": {
+                      "kind": "string"
+                    },
+                    "nullable": false,
+                    "optional": false
+                  },
+                  {
+                    "canonicalId": "s67",
+                    "node": {
+                      "kind": "number",
+                      "integer": false
+                    },
+                    "nullable": false,
+                    "optional": false
+                  },
+                  {
+                    "canonicalId": "s31",
+                    "node": {
+                      "kind": "boolean"
+                    },
+                    "nullable": false,
+                    "optional": false
+                  }
+                ]
+              },
+              "docs": {
+                "description": "Mixed union field for demo purposes"
+              },
+              "nullable": false,
+              "optional": false
+            }
+          },
+          "required": [
+            "totalUsers",
+            "verifiedUsers",
+            "countriesRepresented",
+            "topCountries",
+            "topLanguages",
+            "serverTime",
+            "serverDateTime",
+            "avgLatitude",
+            "avgLongitude",
+            "bitFlag",
+            "unknownData",
+            "anyData",
+            "recentEvent",
+            "unionsExample"
+          ],
+          "additionalProperties": false
+        },
+        "docs": {
+          "title": "Platform statistics"
+        },
+        "nullable": false,
+        "optional": false
+      },
+      "usedIn": [
+        {
+          "contract": "ShowcaseApi",
+          "method": "getStats",
+          "location": "success"
+        }
+      ]
+    },
+    "Event": {
+      "title": "Event",
+      "description": "Discriminated union of all domain events keyed by type",
+      "schema": {
+        "canonicalId": "s56",
+        "node": {
+          "kind": "discriminated",
+          "discriminator": "type",
+          "variants": [
+            {
+              "canonicalId": "s57",
+              "node": {
+                "kind": "object",
+                "properties": {
+                  "id": {
+                    "canonicalId": "s58",
+                    "node": {
+                      "kind": "string",
+                      "minLength": 1
+                    },
+                    "docs": {
+                      "description": "Event ID",
+                      "example": "evt_abc123"
+                    },
+                    "nullable": false,
+                    "optional": false
+                  },
+                  "occurredAt": {
+                    "canonicalId": "s30",
+                    "node": {
+                      "kind": "number",
+                      "integer": true,
+                      "min": 0,
+                      "max": 32503680000
+                    },
+                    "docs": {
+                      "title": "Unix timestamp in seconds",
+                      "description": "When the event occurred",
+                      "example": 1700000000
+                    },
+                    "nullable": false,
+                    "optional": false
+                  },
+                  "type": {
+                    "canonicalId": "s59",
+                    "node": {
+                      "kind": "literal",
+                      "values": [
+                        "user.created"
+                      ]
+                    },
+                    "nullable": false,
+                    "optional": false
+                  },
+                  "email": {
+                    "canonicalId": "s19",
+                    "node": {
+                      "kind": "string"
+                    },
+                    "docs": {
+                      "title": "Email address",
+                      "format": "email",
+                      "example": "user@example.com"
+                    },
+                    "nullable": false,
+                    "optional": false
+                  },
+                  "country": {
+                    "canonicalId": "s9",
+                    "node": {
+                      "kind": "string"
+                    },
+                    "docs": {
+                      "title": "Country code",
+                      "description": "ISO 3166-1 alpha-2",
+                      "example": "US"
+                    },
+                    "nullable": false,
+                    "optional": false
+                  }
+                },
+                "required": [
+                  "id",
+                  "occurredAt",
+                  "type",
+                  "email",
+                  "country"
+                ],
+                "additionalProperties": false
+              },
+              "docs": {
+                "title": "User created event"
+              },
+              "nullable": false,
+              "optional": false
+            },
+            {
+              "canonicalId": "s60",
+              "node": {
+                "kind": "object",
+                "properties": {
+                  "id": {
+                    "canonicalId": "s58",
+                    "node": {
+                      "kind": "string",
+                      "minLength": 1
+                    },
+                    "docs": {
+                      "description": "Event ID",
+                      "example": "evt_abc123"
+                    },
+                    "nullable": false,
+                    "optional": false
+                  },
+                  "occurredAt": {
+                    "canonicalId": "s30",
+                    "node": {
+                      "kind": "number",
+                      "integer": true,
+                      "min": 0,
+                      "max": 32503680000
+                    },
+                    "docs": {
+                      "title": "Unix timestamp in seconds",
+                      "description": "When the event occurred",
+                      "example": 1700000000
+                    },
+                    "nullable": false,
+                    "optional": false
+                  },
+                  "type": {
+                    "canonicalId": "s61",
+                    "node": {
+                      "kind": "literal",
+                      "values": [
+                        "order.placed"
+                      ]
+                    },
+                    "nullable": false,
+                    "optional": false
+                  },
+                  "orderId": {
+                    "canonicalId": "s62",
+                    "node": {
+                      "kind": "string",
+                      "minLength": 1
+                    },
+                    "nullable": false,
+                    "optional": false
+                  },
+                  "totalCents": {
+                    "canonicalId": "s14",
+                    "node": {
+                      "kind": "number",
+                      "integer": true,
+                      "min": 0
+                    },
+                    "docs": {
+                      "description": "Order total in cents"
+                    },
+                    "nullable": false,
+                    "optional": false
+                  },
+                  "currency": {
+                    "canonicalId": "s10",
+                    "node": {
+                      "kind": "string"
+                    },
+                    "docs": {
+                      "title": "Currency code",
+                      "description": "ISO 4217",
+                      "example": "USD"
+                    },
+                    "nullable": false,
+                    "optional": false
+                  }
+                },
+                "required": [
+                  "id",
+                  "occurredAt",
+                  "type",
+                  "orderId",
+                  "totalCents",
+                  "currency"
+                ],
+                "additionalProperties": false
+              },
+              "docs": {
+                "title": "Order placed event"
+              },
+              "nullable": false,
+              "optional": false
+            },
+            {
+              "canonicalId": "s63",
+              "node": {
+                "kind": "object",
+                "properties": {
+                  "id": {
+                    "canonicalId": "s58",
+                    "node": {
+                      "kind": "string",
+                      "minLength": 1
+                    },
+                    "docs": {
+                      "description": "Event ID",
+                      "example": "evt_abc123"
+                    },
+                    "nullable": false,
+                    "optional": false
+                  },
+                  "occurredAt": {
+                    "canonicalId": "s30",
+                    "node": {
+                      "kind": "number",
+                      "integer": true,
+                      "min": 0,
+                      "max": 32503680000
+                    },
+                    "docs": {
+                      "title": "Unix timestamp in seconds",
+                      "description": "When the event occurred",
+                      "example": 1700000000
+                    },
+                    "nullable": false,
+                    "optional": false
+                  },
+                  "type": {
+                    "canonicalId": "s64",
+                    "node": {
+                      "kind": "literal",
+                      "values": [
+                        "order.cancelled"
+                      ]
+                    },
+                    "nullable": false,
+                    "optional": false
+                  },
+                  "orderId": {
+                    "canonicalId": "s65",
+                    "node": {
+                      "kind": "string",
+                      "minLength": 1
+                    },
+                    "nullable": false,
+                    "optional": false
+                  },
+                  "reason": {
+                    "canonicalId": "s29",
+                    "node": {
+                      "kind": "string"
+                    },
+                    "docs": {
+                      "description": "Optional cancellation reason"
+                    },
+                    "nullable": false,
+                    "optional": true
+                  }
+                },
+                "required": [
+                  "id",
+                  "occurredAt",
+                  "type",
+                  "orderId"
+                ],
+                "additionalProperties": false
+              },
+              "docs": {
+                "title": "Order cancelled event"
+              },
+              "nullable": false,
+              "optional": false
+            }
+          ]
+        },
+        "docs": {
+          "title": "Event",
+          "description": "Discriminated union of all domain events keyed by type"
+        },
+        "nullable": false,
+        "optional": false
+      },
+      "usedIn": [
+        {
+          "contract": "ShowcaseApi",
+          "method": "getLatestEvent",
+          "location": "success"
+        }
+      ]
+    },
+    "Send message request": {
+      "title": "Send message request",
+      "schema": {
+        "canonicalId": "s75",
+        "node": {
+          "kind": "object",
+          "properties": {
+            "roomId": {
+              "canonicalId": "s76",
+              "node": {
+                "kind": "string",
+                "minLength": 1
+              },
+              "nullable": false,
+              "optional": false
+            },
+            "text": {
+              "canonicalId": "s77",
+              "node": {
+                "kind": "string",
+                "minLength": 1,
+                "maxLength": 2000
+              },
+              "docs": {
+                "description": "Message text to send"
+              },
+              "nullable": false,
+              "optional": false
+            }
+          },
+          "required": [
+            "roomId",
+            "text"
+          ],
+          "additionalProperties": false
+        },
+        "docs": {
+          "title": "Send message request"
+        },
+        "nullable": false,
+        "optional": false
+      },
+      "usedIn": [
+        {
+          "contract": "ChatApi",
+          "method": "sendMessage",
+          "location": "input"
+        }
+      ]
+    },
+    "Chat message": {
+      "title": "Chat message",
+      "description": "A message in a chat room",
+      "schema": {
+        "canonicalId": "s78",
+        "node": {
+          "kind": "object",
+          "properties": {
+            "messageId": {
+              "canonicalId": "s79",
+              "node": {
+                "kind": "string",
+                "minLength": 1
+              },
+              "docs": {
+                "example": "msg_abc123"
+              },
+              "nullable": false,
+              "optional": false
+            },
+            "roomId": {
+              "canonicalId": "s80",
+              "node": {
+                "kind": "string",
+                "minLength": 1
+              },
+              "nullable": false,
+              "optional": false
+            },
+            "userId": {
+              "canonicalId": "s81",
+              "node": {
+                "kind": "string",
+                "minLength": 1
+              },
+              "docs": {
+                "example": "usr_abc123"
+              },
+              "nullable": false,
+              "optional": false
+            },
+            "text": {
+              "canonicalId": "s82",
+              "node": {
+                "kind": "string",
+                "minLength": 1,
+                "maxLength": 2000
+              },
+              "docs": {
+                "description": "Message content"
+              },
+              "nullable": false,
+              "optional": false
+            },
+            "timestamp": {
+              "canonicalId": "s67",
+              "node": {
+                "kind": "number",
+                "integer": false
+              },
+              "docs": {
+                "description": "Unix timestamp (ms)",
+                "example": 1700000000000
+              },
+              "nullable": false,
+              "optional": false
+            }
+          },
+          "required": [
+            "messageId",
+            "roomId",
+            "userId",
+            "text",
+            "timestamp"
+          ],
+          "additionalProperties": false
+        },
+        "docs": {
+          "title": "Chat message",
+          "description": "A message in a chat room"
+        },
+        "nullable": false,
+        "optional": false
+      },
+      "usedIn": [
+        {
+          "contract": "ChatApi",
+          "method": "sendMessage",
+          "location": "success"
+        },
+        {
+          "contract": "ChatApi",
+          "method": "onMessage",
+          "location": "input"
+        }
+      ]
+    },
+    "Presence update": {
+      "title": "Presence update",
+      "description": "User presence status change in a room",
+      "schema": {
+        "canonicalId": "s89",
+        "node": {
+          "kind": "discriminated",
+          "discriminator": "status",
+          "variants": [
+            {
+              "canonicalId": "s90",
+              "node": {
+                "kind": "object",
+                "properties": {
+                  "status": {
+                    "canonicalId": "s91",
+                    "node": {
+                      "kind": "literal",
+                      "values": [
+                        "online"
+                      ]
+                    },
+                    "nullable": false,
+                    "optional": false
+                  },
+                  "userId": {
+                    "canonicalId": "s92",
+                    "node": {
+                      "kind": "string",
+                      "minLength": 1
+                    },
+                    "nullable": false,
+                    "optional": false
+                  },
+                  "roomId": {
+                    "canonicalId": "s93",
+                    "node": {
+                      "kind": "string",
+                      "minLength": 1
+                    },
+                    "nullable": false,
+                    "optional": false
+                  }
+                },
+                "required": [
+                  "status",
+                  "userId",
+                  "roomId"
+                ],
+                "additionalProperties": false
+              },
+              "nullable": false,
+              "optional": false
+            },
+            {
+              "canonicalId": "s94",
+              "node": {
+                "kind": "object",
+                "properties": {
+                  "status": {
+                    "canonicalId": "s95",
+                    "node": {
+                      "kind": "literal",
+                      "values": [
+                        "offline"
+                      ]
+                    },
+                    "nullable": false,
+                    "optional": false
+                  },
+                  "userId": {
+                    "canonicalId": "s96",
+                    "node": {
+                      "kind": "string",
+                      "minLength": 1
+                    },
+                    "nullable": false,
+                    "optional": false
+                  },
+                  "roomId": {
+                    "canonicalId": "s97",
+                    "node": {
+                      "kind": "string",
+                      "minLength": 1
+                    },
+                    "nullable": false,
+                    "optional": false
+                  }
+                },
+                "required": [
+                  "status",
+                  "userId",
+                  "roomId"
+                ],
+                "additionalProperties": false
+              },
+              "nullable": false,
+              "optional": false
+            },
+            {
+              "canonicalId": "s98",
+              "node": {
+                "kind": "object",
+                "properties": {
+                  "status": {
+                    "canonicalId": "s99",
+                    "node": {
+                      "kind": "literal",
+                      "values": [
+                        "typing"
+                      ]
+                    },
+                    "nullable": false,
+                    "optional": false
+                  },
+                  "userId": {
+                    "canonicalId": "s100",
+                    "node": {
+                      "kind": "string",
+                      "minLength": 1
+                    },
+                    "nullable": false,
+                    "optional": false
+                  },
+                  "roomId": {
+                    "canonicalId": "s101",
+                    "node": {
+                      "kind": "string",
+                      "minLength": 1
+                    },
+                    "nullable": false,
+                    "optional": false
+                  }
+                },
+                "required": [
+                  "status",
+                  "userId",
+                  "roomId"
+                ],
+                "additionalProperties": false
+              },
+              "nullable": false,
+              "optional": false
+            }
+          ]
+        },
+        "docs": {
+          "title": "Presence update",
+          "description": "User presence status change in a room"
+        },
+        "nullable": false,
+        "optional": false
+      },
+      "usedIn": [
+        {
+          "contract": "ChatApi",
+          "method": "onPresence",
+          "location": "input"
+        }
+      ]
+    },
+    "Chat room": {
+      "title": "Chat room",
+      "schema": {
+        "canonicalId": "s84",
+        "node": {
+          "kind": "object",
+          "properties": {
+            "roomId": {
+              "canonicalId": "s85",
+              "node": {
+                "kind": "string",
+                "minLength": 1
+              },
+              "docs": {
+                "example": "room_general"
+              },
+              "nullable": false,
+              "optional": false
+            },
+            "name": {
+              "canonicalId": "s86",
+              "node": {
+                "kind": "string",
+                "minLength": 1
+              },
+              "docs": {
+                "example": "general"
+              },
+              "nullable": false,
+              "optional": false
+            },
+            "participantCount": {
+              "canonicalId": "s67",
+              "node": {
+                "kind": "number",
+                "integer": false
+              },
+              "docs": {
+                "description": "Number of active participants"
+              },
+              "nullable": false,
+              "optional": false
+            }
+          },
+          "required": [
+            "roomId",
+            "name",
+            "participantCount"
+          ],
+          "additionalProperties": false
+        },
+        "docs": {
+          "title": "Chat room"
+        },
+        "nullable": false,
+        "optional": false
+      },
+      "usedIn": [
+        {
+          "contract": "ChatApi",
+          "method": "onRoomUpdated",
+          "location": "input"
+        }
+      ]
+    },
+    "Notification": {
+      "title": "Notification",
+      "description": "A notification event for a subscribed topic",
+      "schema": {
+        "canonicalId": "s111",
+        "node": {
+          "kind": "object",
+          "properties": {
+            "topic": {
+              "canonicalId": "s112",
+              "node": {
+                "kind": "string",
+                "minLength": 1
+              },
+              "nullable": false,
+              "optional": false
+            },
+            "title": {
+              "canonicalId": "s113",
+              "node": {
+                "kind": "string",
+                "minLength": 1
+              },
+              "docs": {
+                "example": "Order shipped"
+              },
+              "nullable": false,
+              "optional": false
+            },
+            "body": {
+              "canonicalId": "s114",
+              "node": {
+                "kind": "string",
+                "minLength": 1
+              },
+              "docs": {
+                "example": "Your order #1234 has been shipped"
+              },
+              "nullable": false,
+              "optional": false
+            },
+            "timestamp": {
+              "canonicalId": "s67",
+              "node": {
+                "kind": "number",
+                "integer": false
+              },
+              "nullable": false,
+              "optional": false
+            }
+          },
+          "required": [
+            "topic",
+            "title",
+            "body",
+            "timestamp"
+          ],
+          "additionalProperties": false
+        },
+        "docs": {
+          "title": "Notification",
+          "description": "A notification event for a subscribed topic"
+        },
+        "nullable": false,
+        "optional": false
+      },
+      "usedIn": [
+        {
+          "contract": "NotificationApi",
+          "method": "onNotification",
+          "location": "input"
+        }
+      ]
+    }
+  },
+  "errors": {
+    "VALIDATION_ERROR": {
+      "type": "VALIDATION_ERROR",
+      "statusCode": 422,
+      "data": {
+        "inline": {
+          "canonicalId": "s0",
+          "node": {
+            "kind": "array",
+            "element": {
+              "canonicalId": "s1",
+              "node": {
+                "kind": "object",
+                "properties": {
+                  "path": {
+                    "canonicalId": "s2",
+                    "node": {
+                      "kind": "string",
+                      "minLength": 1
+                    },
+                    "docs": {
+                      "description": "Dot-separated field path within the request body",
+                      "example": "user.address.zip"
+                    },
+                    "nullable": false,
+                    "optional": false
+                  },
+                  "code": {
+                    "canonicalId": "s3",
+                    "node": {
+                      "kind": "string",
+                      "minLength": 1
+                    },
+                    "docs": {
+                      "description": "Dot-separated issue key identifying the rule that failed",
+                      "example": "invalid.string.minLength"
+                    },
+                    "nullable": false,
+                    "optional": false
+                  },
+                  "message": {
+                    "canonicalId": "s4",
+                    "node": {
+                      "kind": "string",
+                      "minLength": 1
+                    },
+                    "docs": {
+                      "description": "Human-readable error message, localised to the client locale if available",
+                      "example": "Minimum 8 characters required"
+                    },
+                    "nullable": false,
+                    "optional": false
+                  },
+                  "params": {
+                    "canonicalId": "s5",
+                    "node": {
+                      "kind": "record",
+                      "value": {
+                        "canonicalId": "s6",
+                        "node": {
+                          "kind": "any"
+                        },
+                        "nullable": false,
+                        "optional": false
+                      }
+                    },
+                    "docs": {
+                      "description": "Template variables substituted into the message template",
+                      "example": {
+                        "min": 8
+                      }
+                    },
+                    "nullable": false,
+                    "optional": true
+                  },
+                  "usedLanguage": {
+                    "canonicalId": "s7",
+                    "node": {
+                      "kind": "string",
+                      "pattern": "^[a-z]{2}(-[A-Z]{2})?$"
+                    },
+                    "docs": {
+                      "title": "Locale code",
+                      "description": "Locale actually used to render the message (may differ from requested if translation is missing)",
+                      "example": "en"
+                    },
+                    "nullable": false,
+                    "optional": true
+                  },
+                  "expectedLanguage": {
+                    "canonicalId": "s7",
+                    "node": {
+                      "kind": "string",
+                      "pattern": "^[a-z]{2}(-[A-Z]{2})?$"
+                    },
+                    "docs": {
+                      "title": "Locale code",
+                      "description": "Locale requested by the client via Accept-Language",
+                      "example": "de"
+                    },
+                    "nullable": false,
+                    "optional": true
+                  }
+                },
+                "required": [
+                  "path",
+                  "code",
+                  "message"
+                ],
+                "additionalProperties": false
+              },
+              "docs": {
+                "title": "Validation issue",
+                "description": "A single field-level validation failure. One request can produce multiple issues.",
+                "example": {
+                  "path": "password",
+                  "code": "invalid.string.minLength",
+                  "message": "Minimum 8 characters required",
+                  "params": {
+                    "min": 8
+                  },
+                  "usedLanguage": "en",
+                  "expectedLanguage": "de"
+                }
+              },
+              "nullable": false,
+              "optional": false
+            }
+          },
+          "nullable": false,
+          "optional": false
+        }
+      },
+      "usedIn": [
+        {
+          "contract": "ShowcaseApi",
+          "method": "listUsers"
+        },
+        {
+          "contract": "ShowcaseApi",
+          "method": "createUser"
+        },
+        {
+          "contract": "ShowcaseApi",
+          "method": "updateProfile"
+        },
+        {
+          "contract": "ShowcaseApi",
+          "method": "uploadAvatar"
+        },
+        {
+          "contract": "ChatApi",
+          "method": "sendMessage"
+        },
+        {
+          "contract": "NotificationApi",
+          "method": "subscribe"
+        }
+      ]
+    },
+    "SERVER_ERROR": {
+      "type": "SERVER_ERROR",
+      "statusCode": 500,
+      "usedIn": [
+        {
+          "contract": "ShowcaseApi",
+          "method": "listUsers"
+        },
+        {
+          "contract": "ShowcaseApi",
+          "method": "getUser"
+        },
+        {
+          "contract": "ShowcaseApi",
+          "method": "createUser"
+        },
+        {
+          "contract": "ShowcaseApi",
+          "method": "updateProfile"
+        },
+        {
+          "contract": "ShowcaseApi",
+          "method": "deleteUser"
+        },
+        {
+          "contract": "ShowcaseApi",
+          "method": "getStats"
+        },
+        {
+          "contract": "ShowcaseApi",
+          "method": "multiError"
+        },
+        {
+          "contract": "ShowcaseApi",
+          "method": "uploadAvatar"
+        },
+        {
+          "contract": "ShowcaseApi",
+          "method": "downloadAvatar"
+        },
+        {
+          "contract": "ShowcaseApi",
+          "method": "getLatestEvent"
+        },
+        {
+          "contract": "ChatApi",
+          "method": "sendMessage"
+        },
+        {
+          "contract": "ChatApi",
+          "method": "getRooms"
+        },
+        {
+          "contract": "NotificationApi",
+          "method": "subscribe"
+        }
+      ]
+    },
+    "RESOURCE_NOT_FOUND": {
+      "type": "RESOURCE_NOT_FOUND",
+      "statusCode": 404,
+      "usedIn": [
+        {
+          "contract": "ShowcaseApi",
+          "method": "getUser"
+        },
+        {
+          "contract": "ShowcaseApi",
+          "method": "updateProfile"
+        },
+        {
+          "contract": "ShowcaseApi",
+          "method": "deleteUser"
+        },
+        {
+          "contract": "ShowcaseApi",
+          "method": "multiError"
+        },
+        {
+          "contract": "ShowcaseApi",
+          "method": "downloadAvatar"
+        }
+      ]
+    },
+    "CONFLICT": {
+      "type": "CONFLICT",
+      "statusCode": 409,
+      "usedIn": [
+        {
+          "contract": "ShowcaseApi",
+          "method": "createUser"
+        }
+      ]
+    },
+    "PROFILE_NOT_FOUND": {
+      "type": "PROFILE_NOT_FOUND",
+      "statusCode": 404,
+      "usedIn": [
+        {
+          "contract": "ShowcaseApi",
+          "method": "multiError"
+        }
+      ]
+    },
+    "RATE_LIMITED": {
+      "type": "RATE_LIMITED",
+      "statusCode": 429,
+      "data": {
+        "inline": {
+          "canonicalId": "s68",
+          "node": {
+            "kind": "object",
+            "properties": {
+              "retryAfterSeconds": {
+                "canonicalId": "s69",
+                "node": {
+                  "kind": "number",
+                  "integer": true
+                },
+                "docs": {
+                  "description": "Number of seconds to wait before retrying"
+                },
+                "nullable": false,
+                "optional": false
+              }
+            },
+            "required": [
+              "retryAfterSeconds"
+            ],
+            "additionalProperties": false
+          },
+          "nullable": false,
+          "optional": false
+        }
+      },
+      "usedIn": [
+        {
+          "contract": "ShowcaseApi",
+          "method": "multiError"
+        }
+      ]
+    },
+    "ROOM_NOT_FOUND": {
+      "type": "ROOM_NOT_FOUND",
+      "statusCode": 404,
+      "usedIn": [
+        {
+          "contract": "ChatApi",
+          "method": "sendMessage"
+        }
+      ]
+    },
+    "MESSAGE_TOO_LONG": {
+      "type": "MESSAGE_TOO_LONG",
+      "statusCode": 422,
+      "usedIn": [
+        {
+          "contract": "ChatApi",
+          "method": "sendMessage"
+        }
+      ]
+    }
+  }
+}

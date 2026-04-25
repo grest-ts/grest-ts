@@ -14,6 +14,8 @@ definePackage({
         'docs-web',
         'packages-tooling/create-starter/template/api',
         'packages-tooling/create-starter/template/server',
-        'packages-tooling/create-starter/template/client'
+        'packages-tooling/create-starter/template/client',
+        'examples/api-docs-v2',
+        'examples/api-docs-v2/ui'
     ]
 })

@@ -1,0 +1,22 @@
+@import "tailwindcss";
+
+@theme {
+    --color-primary: #3b82f6;
+    --color-method-get: #3b82f6;
+    --color-method-post: #10b981;
+    --color-method-put: #f59e0b;
+    --color-method-patch: #f59e0b;
+    --color-method-delete: #ef4444;
+}
+
+html, body, #root {
+    height: 100%;
+    margin: 0;
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    color: #111827;
+    background: #ffffff;
+}
+
+code, pre, .font-mono {
+    font-family: ui-monospace, "SF Mono", Menlo, Monaco, Consolas, monospace;
+}

@@ -141,62 +141,61 @@ interface ParamDoc {
     description?: string;
 }
 
-/** Reference into the shared schema dictionary, OR an inline schema. */
+/**
+ * Reference into the shared schema dictionary, OR an inline schema.
+ *
+ * The `inline` form embeds a `JsonSchemaDescription` — a JSON-safe adapter
+ * over `GGSchemaDescription` (see below) that swaps the non-JSON `schema`
+ * and `canonical` GGSchema instance references for opaque string IDs.
+ */
 type SchemaRef =
     | { ref: string }                        // → document.schemas[ref]
-    | { inline: SchemaDoc };
+    | { inline: JsonSchemaDescription };
 
-/** Recursive schema description — richer than JSON Schema, captures grest-ts semantics. */
-interface SchemaDoc {
-    /** Discriminator for renderer dispatch. */
-    type:
-        | "string" | "number" | "integer" | "boolean" | "bit"
-        | "array" | "object" | "record" | "tuple"
-        | "union" | "discriminated"
-        | "literal" | "enum"
-        | "any" | "unknown" | "null"
-        | "file";
-
-    /** Brand info — first-class, not just "format". */
-    brand?: {
-        name: string;                        // "Email", "UserId", "Timestamp"
-        format?: string;                     // OpenAPI-style hint when applicable
-    };
-
-    // Type-specific constraints
-    minLength?: number; maxLength?: number; pattern?: string;
-    minimum?: number; maximum?: number; exclusiveMinimum?: number; exclusiveMaximum?: number;
-    multipleOf?: number;
-    minItems?: number; maxItems?: number;
-    items?: SchemaRef;
-    properties?: Record<string, SchemaRef>;
-    required?: string[];
-    additionalProperties?: SchemaRef | false;
-    keys?: SchemaRef;                        // for "record"
-    values?: SchemaRef;                      // for "record"
-    prefixItems?: SchemaRef[];               // for "tuple"
-    oneOf?: SchemaRef[];                     // for "union" / "discriminated"
-    discriminator?: string;                  // for "discriminated"
-    literalValues?: unknown[];               // for "literal" / "enum"
-
-    // Modifiers
-    nullable?: boolean;
-    optional?: boolean;
-    default?: unknown;
-
-    // Annotations from .docs()
-    title?: string;
-    description?: string;
-    example?: unknown;
-    examples?: unknown[];
-    deprecated?: boolean;
-}
+/**
+ * JSON-safe view of `GGSchemaDescription`.
+ *
+ * grest-ts already has a format-agnostic schema description (defined in
+ * `packages/schema/schema/src/GGSchemaDescription.ts`) — the openapi
+ * package consumes it via `schemaDescriptionToOpenApi`. We reuse the
+ * exact same shape here, with two adjustments to make it serializable:
+ *
+ *   1. The `schema` and `canonical` fields (which are `GGSchema<any>`
+ *      instances) are replaced with stable string IDs derived from the
+ *      canonical identity. Two descriptions sharing the same canonical
+ *      get the same `canonicalId` — same dedup logic SchemaRegistry uses.
+ *
+ *   2. The `node` discriminated union and `docs` annotation block are
+ *      preserved verbatim — all the same fields (`kind: "string"|"number"|
+ *      "boolean"|"bit"|"literal"|"array"|"object"|"record"|"union"|
+ *      "discriminated"|"tuple"|"any"|"unknown"|"file"|"password"`,
+ *      plus `nullable`, `optional`, `defaultValue`).
+ *
+ * The schema renderer in the React UI dispatches on `node.kind`, the same
+ * union grest-ts already exposes. No bespoke schema type to maintain.
+ *
+ * Brand-typed schemas surface via `docs.title` and `docs.format` on a
+ * primitive `node` — that's how brand identity is already represented in
+ * grest-ts at runtime (since `.brand()` is a type-level operation only).
+ *
+ * Full type:
+ *   interface JsonSchemaDescription {
+ *       schemaId: string;          // replaces `schema` GGSchema reference
+ *       canonicalId?: string;      // replaces `canonical` reference
+ *       node: GGSchemaNodeKind;    // verbatim, with nested descriptions
+ *                                  // also converted to JsonSchemaDescription
+ *       docs?: GGSchemaDocs;       // verbatim
+ *       defaultValue?: unknown;
+ *       nullable: boolean;
+ *       optional: boolean;
+ *   }
+ */
 
 interface NamedSchemaDoc {
     /** Canonical title used as the dictionary key (PascalCase). */
     title: string;
     description?: string;
-    schema: SchemaDoc;                       // full, never a $ref to itself
+    schema: JsonSchemaDescription;           // full, never a $ref to itself
     /** Where this schema is used — back-references for the schema detail page. */
     usedIn?: Array<{ contract: string; method: string; location: "input"|"success"|"error"|"property" }>;
 }
@@ -229,8 +228,15 @@ interface BrandingDoc {
 }
 ```
 
+**What we reuse vs invent.** The schema portion of the document is **`GGSchemaDescription`**, the format-agnostic intermediate representation grest-ts already exposes (`packages/schema/schema/src/GGSchemaDescription.ts`). The openapi package already consumes it via `schemaDescriptionToOpenApi`. Reusing it here means:
+
+- Schema renderer dispatches on the same `GGSchemaNodeKind` union grest-ts already defines — anyone who knows grest-ts schemas can read the doc format
+- Brand-type rendering uses the same `docs.title` + `docs.format` convention the openapi package already uses, so visual consistency between our UI and exported OpenAPI specs is automatic
+- The day a new `GGSchemaNodeKind` variant lands in grest-ts (e.g. `bigint`), the docs UI gains it without us touching anything
+
+The only additions on top are the **wrapping document** (`service`, `groups`, `contracts`, `methods`, `errors` dictionary) and a thin JSON adapter that swaps `GGSchema` instance references for stable string IDs (the same canonical-identity dedup `SchemaRegistry` already does in `@grest-ts/openapi`).
+
 **Why not just use OpenAPI's JSON Schema dialect?**
-- Brand types as first-class fields (`brand: {name, format}`) instead of fighting `format` overloading
 - WS patterns as first-class enum on `MethodDoc` instead of inferred from operation+reply structure
 - Errors as a top-level dictionary with typed data, not buried in response codes
 - Path/query parameters separated from request body explicitly
@@ -247,17 +253,18 @@ Internals:
 1. Walk every contract. Build `ContractDoc` skeleton.
 2. For each method, classify: HTTP verb + path / WS direction + pattern.
 3. Walk each method's input/success/errors. For each schema, call `toSchemaDoc(schema)`.
-4. `toSchemaDoc` recurses; when it encounters a schema with a `.docs({title})`, it extracts the schema into `document.schemas[title]` and returns `{ref: title}`. Otherwise inline.
+4. For each input/success/error schema, call `schema.toSchemaDescription()` (existing grest-ts API) and walk it via the JSON adapter. When a node has `docs.title`, extract its canonical into `document.schemas[title]` and return `{ref: title}`. Otherwise inline. Same dedup logic SchemaRegistry already uses, just a different output shape.
 5. Each error class encountered goes into `document.errors[ERROR.TYPE]` once; methods reference by key.
 6. Middleware headers with `format: "bearer"` / `"api-key"` populate `contract.auth`.
 7. After full pass: walk `document.schemas` and `document.errors`, fill in `usedIn` back-references.
 
 Tests:
 - Round-trip a contract → doc → assert structure (no UI)
-- Brand types appear as `brand` not `format`
-- WS patterns are correctly classified
-- Named schemas extract once, get back-references
+- JSON adapter is sound — `JSON.stringify(doc)` and reparse without loss
+- WS patterns are correctly classified (request-response / fire-and-forget / server-push / server-initiated)
+- Named schemas extract once via canonical identity, get back-references
 - Errors deduplicate
+- Brand-typed schemas surface their `docs.title` and `docs.format` correctly
 
 ---
 
@@ -432,17 +439,21 @@ WS methods get a different header:
 
 ### Schema rendering details
 
-`<SchemaView />` dispatches on `SchemaDoc.type`:
-- **Primitive** — type label + brand badge + constraint pill row + example
-- **Object** — collapsible property tree, required/optional indicator, descriptions inline
-- **Array** — `[ T ]` notation, item schema rendered recursively
-- **Union** — `A | B | C` with each branch expandable
-- **Discriminated** — tabs per variant, discriminator highlighted
-- **Tuple** — `[ A, B, C ]` with positional labels
-- **Literal/Enum** — chip list of values
+`<SchemaView />` takes a `JsonSchemaDescription` (or a `SchemaRef` it resolves) and dispatches on `desc.node.kind` — the same `GGSchemaNodeKind` discriminated union grest-ts already exposes:
+
+- **`string` / `number` / `integer` / `boolean` / `bit` / `password`** — type label + brand badge (when `docs.title` set) + constraint pill row + example
+- **`object`** — collapsible property tree, required/optional indicator from `node.required[]`, descriptions inline
+- **`array`** — `[ T ]` notation, `node.element` rendered recursively
+- **`record`** — `Record<string, V>` notation, `node.value` recursive
+- **`union`** — `A | B | C` with each `node.variants[]` branch expandable
+- **`discriminated`** — tabs per variant from `node.variants[]`, `node.discriminator` field highlighted
+- **`tuple`** — `[ A, B, C ]` with positional labels from `node.elements[]`
+- **`literal`** — chip list of `node.values[]`
+- **`file`** — file shape with `node.accept` / `node.maxSize` if present
+- **`any` / `unknown`** — a small "any value" placeholder
 - **$ref** — link to schema dictionary entry; clickable; renders inline preview on hover
 
-Brand types render with a subtle badge: `IsEmail` shows as `string` with a `[Email]` badge and a small "RFC 5322" hover tooltip. The user sees the truth of "this is a string with this branded shape" instead of "format: email".
+Brand types render with a subtle badge built from `desc.docs.title` (e.g. `[Email Address]`) on a primitive node, with `desc.docs.format` (e.g. `email`, `uri`, `date`) shown as a small format hint. This is exactly how brand identity is represented at runtime in grest-ts (`.brand()` is a type-level operation only — runtime identity is the user-given `.docs({title})`), so what we render is what the framework actually has.
 
 ### Error display
 
@@ -636,8 +647,8 @@ OpenAPI/AsyncAPI routes are served only if any HTTP/WS schemas exist respectivel
 | Three peer packages — api-docs, openapi, asyncapi | api-docs renders contracts directly; openapi/asyncapi are exports for external tooling |
 | api-docs depends on openapi/asyncapi only for export buttons | Decouple rendering from spec generation |
 | React 19 + Vite + Tailwind + Radix + Shiki + cmdk | Stable, small, accessible, modern; no vendor lock-in |
-| Internal `ApiDocsDocument` JSON format | Lossless serialization of grest-ts contracts; richer than OpenAPI/AsyncAPI |
-| Brand types as first-class field | Surfaces the semantic identity, not just `format` strings |
+| `ApiDocsDocument` wrapper format wraps the existing `GGSchemaDescription` | No bespoke schema type — schema portion is JSON-adapted `GGSchemaDescription` from `packages/schema/schema/src/GGSchemaDescription.ts`. Anyone who knows grest-ts schemas can read it; new node kinds added to grest-ts surface in the docs UI for free |
+| Brand identity surfaced via `docs.title` + `docs.format` on primitive nodes | Matches how brand identity exists at runtime in grest-ts (`.brand()` is type-level only); same convention `@grest-ts/openapi` already uses — visual consistency between our UI and exported OpenAPI specs is automatic |
 | WS interaction patterns as first-class enum | Renders honestly; doesn't flatten through send/receive/reply |
 | Try It Out for both HTTP and WS | WS try-it-out is uniquely useful — no industry tool does it |
 | Pre-built UI shipped in dist-ui/ | Users do not rebuild; dist-ui/ committed and published |
@@ -683,11 +694,11 @@ Phases 1–4 are the riskiest; phases 6–10 are mostly "more of the same" once 
 | Concern | Reality |
 |---|---|
 | Significantly more code than v1 | ~3000–5000 lines target, vs ~500 in v1 shell. Worth it because this is one of the framework's primary public surfaces. |
-| Maintenance burden | Real. Mitigated by: bounded scope (read from one well-defined doc format), no dependency on external viewers' upgrade cycles, smaller dep surface than Swagger UI's React 16 internals. |
+| Maintenance burden | Real. Mitigated by: bounded scope (read from one well-defined doc format), no dependency on external viewers' upgrade cycles, smaller dep surface than Swagger UI's React 16 internals. The schema portion of the format is `GGSchemaDescription`, owned and evolved by `@grest-ts/schema` — we don't maintain a parallel type system. |
 | "Users expect Swagger UI" | They get it via `GGOpenApiDocs.register()`. The brand recognition argument doesn't disappear, it just stops being the default. |
 | React adds runtime weight | ~50 KB gzipped for React 19 + ReactDOM. Tailwind adds maybe 10 KB. Total target ~250–400 KB still beats Swagger UI's ~500 KB and AsyncAPI react-component's ~1 MB. |
 | Try It Out complexity | True. We have schemas (form gen), validators (client-side validation), and a known transport — more primitives than Swagger UI has, not fewer. |
-| Reinvention risk | We are inventing rendering for grest-ts-specific concepts; for everything else (schema rendering, syntax highlighting) we lean on solved libraries. |
+| Reinvention risk | Mitigated by reusing `GGSchemaDescription` for the schema portion (same structure the openapi package already walks) — we invent the wrapper and rendering, not the schema data model. For everything else (syntax highlighting, accessibility primitives, search) we lean on solved libraries. |
 | Scalar/Stoplight/etc. would be 80% there | True. But the 20% — typed errors, brand types, WS patterns, test recipes, typed client snippets, WS try-it-out — is the part that makes grest-ts docs *grest-ts*. |
 
 ---
@@ -700,7 +711,7 @@ Phases 1–4 are the riskiest; phases 6–10 are mostly "more of the same" once 
 | `packages-libs/docs/api-docs/src/GGApiDocs.ts` | Rewrite — serve dist-ui assets + api-docs.json + lazy openapi.json/asyncapi.json |
 | `packages-libs/docs/api-docs/src/buildApiDocs.ts` | Rewrite — write dist-ui copy + api-docs.json + optional openapi.json/asyncapi.json |
 | `packages-libs/docs/api-docs/src/manifest.ts` | Replaced by `buildContractDoc.ts` |
-| `packages-libs/docs/api-docs/src/types.ts` | Replaced by `docTypes.ts` (richer schema) |
+| `packages-libs/docs/api-docs/src/types.ts` | Replaced by `docTypes.ts` — wrapper-only types; schema portion reuses `GGSchemaDescription` from `@grest-ts/schema` |
 | `examples/grest-test/src/main.ts` | Update unified-showcase block to v2 API |
 | `README-api-docs.md` | Major rewrite — lead with api-docs as the "service portal", openapi/asyncapi as exports |
 | `packages-libs/docs/openapi/README.md` | Reframe as "OpenAPI export for HTTP — for users who want OpenAPI tooling" |
@@ -719,13 +730,14 @@ Phases 1–4 are the riskiest; phases 6–10 are mostly "more of the same" once 
 
 A lot — see the `ui/` directory layout under Phase 2 and the codegen/render structure under Phases 3–5. Roughly:
 
-- `src/buildContractDoc.ts` (~400 lines)
-- `src/docTypes.ts` (~200 lines, mostly types)
+- `src/buildContractDoc.ts` (~350 lines — thinner than originally estimated since the schema walker reuses `toSchemaDescription()` and the JSON adapter is a small recursive function)
+- `src/docTypes.ts` (~80 lines — wrapper-only types; the schema portion is just `JsonSchemaDescription` plus the wrapping `ContractDoc`/`MethodDoc`/`ErrorDoc`/`AuthDoc`/etc.)
+- `src/jsonSchemaAdapter.ts` (~50 lines — converts `GGSchemaDescription` ↔ `JsonSchemaDescription` by swapping schema/canonical references for stable IDs)
 - `src/exporters.ts` (~50 lines)
 - `ui/src/main.tsx`, `App.tsx` (~100 lines combined)
 - `ui/src/components/*` (~600 lines)
 - `ui/src/method/*` (~800 lines, includes tabs and try-it-out)
-- `ui/src/schema/*` (~700 lines, recursive renderer)
+- `ui/src/schema/*` (~700 lines, recursive renderer dispatching on `node.kind`)
 - `ui/src/codegen/*` (~400 lines, snippet generators)
 - `ui/src/tryout/*` (~600 lines, form gen + WS connection)
 - `ui/src/theme/*`, `hooks/*`, `styles.css` (~200 lines)
