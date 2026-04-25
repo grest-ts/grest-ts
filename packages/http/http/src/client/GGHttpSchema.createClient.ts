@@ -9,10 +9,40 @@ declare module "../schema/GGHttpSchema" {
     }
 }
 
+/**
+ * HTTP transport function. The signature mirrors `fetch` (URL string + init bag),
+ * which lets the default implementation just be `fetch`. Pass a custom transport
+ * to plug in pinned-TLS dialing, custom dispatchers, signed-request proxies,
+ * or any other wire-layer concern that `fetch` can't accommodate.
+ *
+ * The `url` arg is `(config.url ?? "") + path-built-from-schema`, so when you
+ * pass `url: ""` (or rely on transport-implies-empty), your transport receives
+ * just the request path and decides the host itself.
+ *
+ * The init bag is a fetch-compatible subset: only the fields createClient
+ * actually populates. Extending it later is a non-breaking change.
+ */
+export type GGHttpTransport = (
+    url: string,
+    init: {
+        method: string
+        headers: Record<string, string>
+        body: string | FormData | undefined
+        signal: AbortSignal
+    }
+) => Promise<Response>
+
 export interface GGHttpClientConfig {
     url?: string;
     timeout?: number;
     noValidation?: boolean
+    /**
+     * Override the wire-layer call. Defaults to `fetch`. When provided,
+     * service discovery is skipped (the transport is presumed to know how
+     * to reach the target) and `url` defaults to `""` so the transport sees
+     * just the schema-built path.
+     */
+    transport?: GGHttpTransport
 }
 
 GGHttpSchema.prototype.createClient = function <TContract extends GGContractApiDefinition, TContext>(
@@ -28,6 +58,14 @@ export function createClient<TContract extends GGContractApiDefinition, TContext
 ): GGContractClient<TContract> {
     config ??= {};
     config.timeout ??= 15000;
+
+    // A custom transport implies "I take over the wire layer" — discovery is
+    // off the table (the transport knows how to find the target), and the
+    // default base URL becomes "" so the transport sees just the request path.
+    const transport: GGHttpTransport = config.transport ?? defaultFetchTransport;
+    if (config.transport && config.url === undefined) {
+        config.url = "";
+    }
 
     if (config.url === undefined && isBrowser()) {
         throw new Error("Must define URL for GGHttpClient when running in browser! Use empty string for same-origin requests.");
@@ -69,7 +107,7 @@ export function createClient<TContract extends GGContractApiDefinition, TContext
                 const fetchRequest = await wireFormat.createRequest(validatedInput);
                 const controller = new AbortController();
                 const timeoutId = setTimeout(() => controller.abort(), config.timeout);
-                const wireResponse = await fetch(baseUrl + fetchRequest.url, {
+                const wireResponse = await transport(baseUrl + fetchRequest.url, {
                     method: fetchRequest.method,
                     signal: controller.signal,
                     headers: fetchRequest.headers,
@@ -105,3 +143,6 @@ export function createClient<TContract extends GGContractApiDefinition, TContext
     httpSchema.contract.implement(transportImplementation as GGContractImplementation<TContract>, {skipLocatorRegistration: true})
     return transportImplementation;
 }
+
+const defaultFetchTransport: GGHttpTransport = (url, init) =>
+    fetch(url, init as RequestInit)
