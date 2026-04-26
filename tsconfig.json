@@ -15,6 +15,7 @@
     "grest.package.ts",
     "packages-libs/asyncapi/src/**/*",
     "packages-libs/asyncapi/test/**/*",
+    "packages-libs/db/db-dynamodb/src/**/*",
     "packages-libs/db/db-mysql/src/**/*",
     "packages-libs/db/db-mysql/testkit/**/*",
     "packages-libs/db/db-postgre/src/**/*",

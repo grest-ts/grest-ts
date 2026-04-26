@@ -1,0 +1,55 @@
+{
+  "//": "THIS FILE IS GENERATED - DO NOT EDIT",
+  "name": "@grest-ts/db-dynamodb",
+  "version": "0.0.25",
+  "type": "module",
+  "license": "MIT",
+  "description": "DynamoDB database utilities for Grest Framework",
+  "exports": {
+    ".": {
+      "types": "./src/index-node.ts",
+      "import": "./src/index-node.ts"
+    }
+  },
+  "files": [
+    "src"
+  ],
+  "scripts": {
+    "typecheck": "tsc --noEmit -p src"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/grest-ts/grest-ts.git",
+    "directory": "packages-libs/db/db-dynamodb"
+  },
+  "homepage": "https://grest-ts.com/packages/db-dynamodb",
+  "bugs": {
+    "url": "https://github.com/grest-ts/grest-ts/issues"
+  },
+  "keywords": [
+    "typescript",
+    "framework",
+    "contract",
+    "api",
+    "microservices",
+    "testing",
+    "database",
+    "dynamodb",
+    "aws",
+    "nosql"
+  ],
+  "engines": {
+    "node": ">=25"
+  },
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.750.0",
+    "@aws-sdk/lib-dynamodb": "^3.750.0",
+    "@grest-ts/config": "0.0.25",
+    "@grest-ts/locator": "0.0.25",
+    "@grest-ts/logger": "0.0.25",
+    "@grest-ts/schema": "0.0.25"
+  }
+}
