@@ -2,7 +2,8 @@ import {useState} from "react";
 import type {ApiDocsDocument, ContractDoc, ErrorDoc, MethodDoc, SchemaRef} from "../docTypes";
 import {CompactSchema} from "./CompactSchema";
 import {ExampleSchema} from "./ExampleSchema";
-import {Tabs, PillToggle, type TabDef} from "./Tabs";
+import {PillToggle} from "./Tabs";
+import {PatternBadge} from "./Badges";
 
 interface Props {
     contract: ContractDoc;
@@ -12,7 +13,7 @@ interface Props {
 
 export function MethodView({contract, method, doc}: Props) {
     return (
-        <div className="max-w-4xl mx-auto px-8 py-8">
+        <div className="max-w-[1800px] px-8 py-8">
             <MethodHeader contract={contract} method={method} />
 
             {method.description && (
@@ -44,15 +45,17 @@ export function MethodView({contract, method, doc}: Props) {
 
             {/* Request — params and body */}
             {(method.pathParams?.length || method.queryParams?.length || method.requestBody || method.wsInput) ? (
-                <Section title={method.wsDirection ? (method.wsDirection === "client-to-server" ? "Outgoing message" : "Incoming message") : "Request"}>
+                <Section title={requestSectionTitle(method)}>
                     <RequestPane method={method} doc={doc} />
                 </Section>
             ) : null}
 
-            {/* Responses — success + errors as tabs */}
-            <Section title="Responses">
-                <ResponsesTabs method={method} doc={doc} />
-            </Section>
+            {/* Success and error responses live in separate sections so the
+                visual split between "what you get on success" and "what can go
+                wrong" is unmistakable. Both sections skipped entirely for WS
+                fire-and-forget / server-push (no reply by definition). */}
+            {!isNoReplyWs(method) && <SuccessResponseSection method={method} doc={doc} />}
+            {!isNoReplyWs(method) && <ErrorResponsesSection method={method} doc={doc} />}
         </div>
     );
 }
@@ -82,22 +85,22 @@ function RequestPane({method, doc}: {method: MethodDoc; doc: ApiDocsDocument}) {
     );
 }
 
-/** Schema pane with Example/Schema toggle. Default = Example. */
+/** Schema pane with Schema/Example toggle. Default = Schema. */
 function SchemaPane({label, schemaRef, doc}: {label: string; schemaRef: SchemaRef; doc: ApiDocsDocument}) {
-    const [view, setView] = useState<"example" | "schema">("example");
+    const [view, setView] = useState<"schema" | "example">("schema");
     return (
         <div>
             <div className="flex items-center justify-between mb-1.5">
                 <Label>{label}</Label>
                 <PillToggle
-                    options={[{id: "example", label: "Example"}, {id: "schema", label: "Schema"}]}
+                    options={[{id: "schema", label: "Schema"}, {id: "example", label: "Example"}]}
                     value={view}
                     onChange={setView}
                 />
             </div>
-            {view === "example"
-                ? <ExampleSchema schemaRef={schemaRef} doc={doc} />
-                : <CompactSchema schemaRef={schemaRef} doc={doc} />}
+            {view === "schema"
+                ? <CompactSchema schemaRef={schemaRef} doc={doc} />
+                : <ExampleSchema schemaRef={schemaRef} doc={doc} />}
         </div>
     );
 }
@@ -146,99 +149,121 @@ function isPrimitiveKind(k: string): boolean {
 
 // ── Responses (tabbed) ─────────────────────────────────────────────────
 
-function ResponsesTabs({method, doc}: {method: MethodDoc; doc: ApiDocsDocument}) {
-    const tabs: TabDef[] = [];
-    let defaultId = "200";
+function isNoReplyWs(method: MethodDoc): boolean {
+    return method.wsPattern === "fire-and-forget" || method.wsPattern === "server-push";
+}
 
-    // Success tab — only HTTP/WS request-response patterns have one
-    if (method.successResponse) {
-        const ref = method.successResponse;
-        tabs.push({
-            id: "200",
-            label: <StatusTab code={200} type="OK" />,
-            content: <ResponseBody schemaRef={ref} doc={doc} />,
-        });
-    } else if (method.wsPattern === "fire-and-forget" || method.wsPattern === "server-push") {
-        tabs.push({
-            id: "void",
-            label: <span className="text-xs px-1">No reply</span>,
-            content: <div className="text-sm text-gray-500 italic px-1">No response — this method is {method.wsPattern.replace(/-/g, " ")}.</div>,
-        });
-        defaultId = "void";
-    } else if (method.httpMethod) {
-        tabs.push({
-            id: "204",
-            label: <StatusTab code={204} type="No Content" />,
-            content: <div className="text-sm text-gray-500 italic px-1">No response body.</div>,
-        });
-        defaultId = "204";
+function requestSectionTitle(method: MethodDoc): React.ReactNode {
+    if (method.wsDirection === "client-to-server") {
+        return <span className="text-orange-700">Client sends</span>;
     }
+    if (method.wsDirection === "server-to-client") {
+        return <span className="text-indigo-700">Server pushes</span>;
+    }
+    return "Request";
+}
 
-    // Error tabs — one per error type, ordered by status code
+/** The single 200 OK (or 204 No Content) success response. */
+function SuccessResponseSection({method, doc}: {method: MethodDoc; doc: ApiDocsDocument}) {
+    if (method.successResponse) {
+        return (
+            <Section title="Success response">
+                <ResponseCard
+                    statusCode={200}
+                    typeName="OK"
+                    schemaRef={method.successResponse}
+                    doc={doc}
+                />
+            </Section>
+        );
+    }
+    if (method.httpMethod) {
+        return (
+            <Section title="Success response">
+                <ResponseCard
+                    statusCode={204}
+                    typeName="No Content"
+                    doc={doc}
+                    emptyLabel="No response body."
+                />
+            </Section>
+        );
+    }
+    return null;
+}
+
+/** All 4xx/5xx errors stacked, sorted by status code. Section omitted if none. */
+function ErrorResponsesSection({method, doc}: {method: MethodDoc; doc: ApiDocsDocument}) {
     const errors = method.errors
         .map(t => doc.errors[t])
         .filter((e): e is ErrorDoc => !!e)
         .sort((a, b) => a.statusCode - b.statusCode);
 
-    for (const err of errors) {
-        const errData = err.data;
-        tabs.push({
-            id: err.type,
-            label: <StatusTab code={err.statusCode} type={err.type} variant="error" />,
-            content: (
-                <div className="space-y-3">
-                    <div className="flex items-center gap-3 text-sm">
-                        <span className={`text-[11px] font-bold font-mono px-2 py-0.5 rounded ${statusColor(err.statusCode)}`}>
-                            {err.statusCode}
-                        </span>
-                        <code className="font-mono text-gray-900">{err.type}</code>
-                        {err.description && <span className="text-gray-500 text-xs">— {err.description}</span>}
-                    </div>
-                    {errData ? (
-                        <ResponseBody schemaRef={errData} doc={doc} />
-                    ) : (
-                        <div className="text-sm text-gray-500 italic">No payload.</div>
-                    )}
-                </div>
-            ),
-        });
-    }
+    if (errors.length === 0) return null;
 
-    if (tabs.length === 0) {
-        return <div className="text-sm text-gray-500 italic">No responses defined.</div>;
-    }
-
-    return <Tabs tabs={tabs} defaultId={defaultId} />;
-}
-
-/** Response body with Example/Schema toggle. Default = Example. */
-function ResponseBody({schemaRef, doc}: {schemaRef: SchemaRef; doc: ApiDocsDocument}) {
-    const [view, setView] = useState<"example" | "schema">("example");
     return (
-        <div>
-            <div className="flex justify-end mb-1.5">
-                <PillToggle
-                    options={[{id: "example", label: "Example"}, {id: "schema", label: "Schema"}]}
-                    value={view}
-                    onChange={setView}
-                />
+        <Section title={`Error responses (${errors.length})`}>
+            <div className="space-y-4">
+                {errors.map(err => (
+                    <ResponseCard
+                        key={err.type}
+                        statusCode={err.statusCode}
+                        typeName={err.type}
+                        description={err.description}
+                        schemaRef={err.data}
+                        doc={doc}
+                        emptyLabel="No payload."
+                    />
+                ))}
             </div>
-            {view === "example"
-                ? <ExampleSchema schemaRef={schemaRef} doc={doc} />
-                : <CompactSchema schemaRef={schemaRef} doc={doc} />}
-        </div>
+        </Section>
     );
 }
 
-function StatusTab({code, type, variant}: {code: number | string; type: string; variant?: "error"}) {
-    const color = typeof code === "number" ? statusColor(code) : "bg-emerald-100 text-emerald-700";
+function ResponseCard({
+    statusCode,
+    typeName,
+    description,
+    schemaRef,
+    emptyLabel,
+    doc,
+}: {
+    statusCode: number;
+    typeName: string;
+    description?: string;
+    schemaRef?: SchemaRef;
+    emptyLabel?: string;
+    doc: ApiDocsDocument;
+}) {
+    // Toggle state lives on the card so the pill can sit on the same line
+    // as the status header (toggle right-justified via `ml-auto`).
+    const [view, setView] = useState<"schema" | "example">("schema");
     return (
-        <span className="inline-flex items-center gap-1.5">
-            <span className={`text-[10px] font-bold font-mono px-1.5 py-0.5 rounded ${color}`}>
-                {code}
-            </span>
-            <span className={`text-xs ${variant === "error" ? "text-gray-700" : "font-medium"}`}>{type}</span>
-        </span>
+        <div>
+            <div className="flex items-center gap-2 mb-2">
+                <span className={`text-[11px] font-bold font-mono px-2 py-0.5 rounded ${statusColor(statusCode)}`}>
+                    {statusCode}
+                </span>
+                <code className="text-sm font-mono text-gray-900">{typeName}</code>
+                {description && <span className="text-xs text-gray-500 truncate">— {description}</span>}
+                {schemaRef && (
+                    <div className="ml-auto shrink-0">
+                        <PillToggle
+                            options={[{id: "schema", label: "Schema"}, {id: "example", label: "Example"}]}
+                            value={view}
+                            onChange={setView}
+                        />
+                    </div>
+                )}
+            </div>
+            {schemaRef ? (
+                view === "schema"
+                    ? <CompactSchema schemaRef={schemaRef} doc={doc} />
+                    : <ExampleSchema schemaRef={schemaRef} doc={doc} />
+            ) : (
+                <div className="text-sm text-gray-500 italic px-1">{emptyLabel ?? "—"}</div>
+            )}
+        </div>
     );
 }
 
@@ -272,9 +297,8 @@ function MethodHeader({contract, method}: {contract: ContractDoc; method: Method
             </div>
         );
     }
-    // WS
-    const arrow = method.wsDirection === "client-to-server" ? "→" : "←";
-    const patternLabel = patternToLabel(method.wsPattern);
+    // WS — direction shown via colored 3-segment chip; pattern (req/event)
+    // shown via the same shared PatternBadge as the sidebar.
     return (
         <div className="mb-6">
             <div className="flex items-center gap-3 text-sm text-gray-500 mb-2">
@@ -282,27 +306,56 @@ function MethodHeader({contract, method}: {contract: ContractDoc; method: Method
                 <span>›</span>
                 <span>{method.summary ?? method.name}</span>
             </div>
-            <div className="flex items-center gap-3 mb-3">
-                <span className="text-xs font-bold px-2 py-1 rounded bg-purple-100 text-purple-700 uppercase">WS</span>
-                <span className="text-purple-600 font-bold">{arrow}</span>
+            <div className="flex items-center gap-3 mb-3 flex-wrap">
+                <DirectionChip direction={method.wsDirection ?? "client-to-server"} />
                 <code className="text-lg font-mono text-gray-800">{contract.path}</code>
-                <span className="text-xs px-2 py-1 rounded bg-gray-100 text-gray-700">
-                    {patternLabel}
-                </span>
+                <PatternBadge method={method} size="sm" />
             </div>
             <h1 className="text-2xl font-bold">{method.summary ?? method.name}</h1>
+            {/* Plain-language helper — removes any guesswork about who sends what */}
+            <p className="text-sm text-gray-500 mt-2">
+                {directionExplainer(method.wsDirection, method.wsPattern)}
+            </p>
         </div>
     );
 }
 
-function patternToLabel(p?: string): string {
-    switch (p) {
-        case "request-response":         return "Request / Response";
-        case "fire-and-forget":          return "Fire-and-forget";
-        case "server-push":              return "Server push";
-        case "server-initiated-request": return "Server-initiated request";
-        default:                          return "";
+/**
+ * Three-segment direction chip. Same word ("SEND") for both directions —
+ * color and actor labels carry the directional meaning.
+ *
+ *   [ CLIENT ][ SEND ][ SERVER ]   orange   (client pushes to server)
+ *   [ SERVER ][ SEND ][ CLIENT ]   indigo   (server pushes to client)
+ */
+function DirectionChip({direction}: {direction: "client-to-server" | "server-to-client"}) {
+    if (direction === "client-to-server") {
+        return (
+            <div className="inline-flex items-stretch text-xs font-semibold rounded-md overflow-hidden border border-orange-300 shadow-sm">
+                <span className="px-2 py-1 bg-orange-100 text-orange-900 uppercase tracking-wider">Client</span>
+                <span className="px-2 py-1 bg-orange-500 text-white">SENDS TO</span>
+                <span className="px-2 py-1 bg-orange-100 text-orange-900 uppercase tracking-wider">Server</span>
+            </div>
+        );
     }
+    return (
+        <div className="inline-flex items-stretch text-xs font-semibold rounded-md overflow-hidden border border-indigo-300 shadow-sm">
+            <span className="px-2 py-1 bg-indigo-100 text-indigo-900 uppercase tracking-wider">Server</span>
+            <span className="px-2 py-1 bg-indigo-500 text-white">SENDS TO</span>
+            <span className="px-2 py-1 bg-indigo-100 text-indigo-900 uppercase tracking-wider">Client</span>
+        </div>
+    );
+}
+
+function directionExplainer(direction?: "client-to-server" | "server-to-client", pattern?: MethodDoc["wsPattern"]): string {
+    if (direction === "client-to-server") {
+        if (pattern === "request-response") return "The client sends this message to the server and waits for a reply.";
+        return "The client sends this message to the server. No reply.";
+    }
+    if (direction === "server-to-client") {
+        if (pattern === "server-initiated-request") return "The server pushes this message and expects the client to reply.";
+        return "The server pushes this message to the client unprompted.";
+    }
+    return "";
 }
 
 function methodColor(m?: string): string {
@@ -318,7 +371,7 @@ function methodColor(m?: string): string {
 
 // ── Layout helpers ─────────────────────────────────────────────────────
 
-function Section({title, children}: {title: string; children: React.ReactNode}) {
+function Section({title, children}: {title: React.ReactNode; children: React.ReactNode}) {
     return (
         <section className="mb-6">
             <h2 className="text-xs uppercase tracking-wider text-gray-500 font-semibold mb-2">{title}</h2>

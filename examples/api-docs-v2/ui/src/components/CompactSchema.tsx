@@ -180,38 +180,39 @@ function renderUnion(
 
 // ── Discriminated union — render compactly with discriminator label ────
 
+/**
+ * Discriminated union — render as a TypeScript-style intersection of object
+ * literals separated by `|`. Each variant is fully expanded so the reader
+ * sees its complete shape (including the discriminator field) inline.
+ *
+ *   /* discriminated by status *​/
+ *   {
+ *     status: "online",
+ *     userId: string,
+ *     ...
+ *   } | {
+ *     status: "offline",
+ *     ...
+ *   }
+ */
 function renderDiscriminated(
     node: { kind: "discriminated"; discriminator: string; variants: JsonSchemaDescription[] },
     doc: ApiDocsDocument,
     depth: number,
 ): React.ReactNode {
-    const indent = "  ".repeat(depth + 1);
-    const closeIndent = "  ".repeat(depth);
     return (
         <>
             <span className="text-gray-500">{`/* discriminated by `}</span>
             <span className="text-purple-600">{node.discriminator}</span>
             <span className="text-gray-500">{` */`}</span>
             {"\n"}
-            {node.variants.map((v, i) => {
-                const props = (v.node as any).properties;
-                const dval = props?.[node.discriminator]?.node?.values?.[0];
-                return (
-                    <span key={i}>
-                        {indent}
-                        <span className="text-gray-500">| </span>
-                        {dval !== undefined && (
-                            <>
-                                <span className="text-emerald-700">{JSON.stringify(dval)}</span>
-                                <span className="text-gray-500"> ⇒ </span>
-                            </>
-                        )}
-                        {renderInline(v, doc, depth + 1)}
-                        {"\n"}
-                    </span>
-                );
-            })}
-            {closeIndent}
+            {"  ".repeat(depth)}
+            {node.variants.map((v, i) => (
+                <span key={i}>
+                    {i > 0 && <span className="text-gray-500"> | </span>}
+                    {renderInline(v, doc, depth)}
+                </span>
+            ))}
         </>
     );
 }
@@ -243,10 +244,16 @@ function renderTuple(
 function renderInline(desc: JsonSchemaDescription, doc: ApiDocsDocument, depth: number): React.ReactNode {
     const node = desc.node;
 
-    // Brand types — render the brand name
+    // Brand types — render `BaseType & BrandName` (TS-style intersection),
+    // so the underlying primitive isn't hidden behind the brand label.
+    // Drop the `<format>` suffix when a brand name exists — the brand name
+    // already conveys the semantic role, so e.g. `string<email> & EmailAddress`
+    // is just duplication.
     if (isPrimitive(node.kind) && desc.docs?.title) {
         return (
             <>
+                <span className="text-emerald-700">{bareTypeLabel(desc)}</span>
+                <span className="text-gray-500"> & </span>
                 <span className="text-purple-600">{desc.docs.title.replace(/\s+/g, "")}</span>
                 {desc.nullable && <span className="text-gray-500"> | null</span>}
                 {desc.defaultValue !== undefined && <DefaultValue value={desc.defaultValue} />}
@@ -333,6 +340,10 @@ function renderTrailingComment(desc: JsonSchemaDescription): React.ReactNode {
 
     if (desc.docs?.description) parts.push(desc.docs.description);
     if (desc.docs?.example !== undefined) parts.push(`e.g. ${JSON.stringify(desc.docs.example)}`);
+    // Format hint last — labelled "html format" because it maps directly
+    // onto an HTML <input type="..."> hint (email, date, password, url, ...).
+    // Angle brackets visually signal "this is a tag-like meta hint", not prose.
+    if (desc.docs?.format) parts.push(`<html format: ${desc.docs.format}>`);
 
     if (parts.length === 0) return null;
     return <span className="text-gray-400 italic">  {`// ${parts.join(" — ")}`}</span>;
@@ -353,10 +364,28 @@ function isScalar(desc: JsonSchemaDescription): boolean {
     return k !== "object" && k !== "discriminated";
 }
 
+/** Type label *with* the format hint suffix — used when there's no brand name. */
 function primitiveTypeLabel(desc: JsonSchemaDescription): string {
     const node = desc.node;
     switch (node.kind) {
         case "string":   return desc.docs?.format ? `string<${desc.docs.format}>` : "string";
+        case "number":   return (node as any).integer ? "integer" : "number";
+        case "boolean":  return "boolean";
+        case "bit":      return "0|1";
+        case "any":      return "any";
+        case "unknown":  return "unknown";
+        case "file":     return "File";
+        case "password": return "Password";
+        default:         return node.kind;
+    }
+}
+
+/** Type label *without* the format hint — used alongside a brand name where
+ *  format would just duplicate what the brand already says. */
+function bareTypeLabel(desc: JsonSchemaDescription): string {
+    const node = desc.node;
+    switch (node.kind) {
+        case "string":   return "string";
         case "number":   return (node as any).integer ? "integer" : "number";
         case "boolean":  return "boolean";
         case "bit":      return "0|1";

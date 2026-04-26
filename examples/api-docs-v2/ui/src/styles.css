@@ -24,3 +24,10 @@ html, body, #root {
 code, pre, .font-mono {
     font-family: ui-monospace, "SF Mono", Menlo, Monaco, Consolas, monospace;
 }
+
+/* Tailwind 4 dropped the implicit `cursor: pointer` on <button>. Restore it
+   project-wide so every interactive control gets the pointer cursor. */
+button:not(:disabled),
+[role="button"]:not(:disabled) {
+    cursor: pointer;
+}

@@ -82,7 +82,7 @@ function Welcome({doc}: {doc: ApiDocsDocument}) {
         s + g.contracts.reduce((cs, c) => cs + c.methods.length, 0), 0);
     const totalContracts = doc.groups.reduce((s, g) => s + g.contracts.length, 0);
     return (
-        <div className="p-12 max-w-3xl">
+        <div className="px-8 py-8 max-w-[1800px]">
             <h1 className="text-3xl font-bold mb-2">{doc.service.name}</h1>
             {doc.service.version && (
                 <div className="text-sm text-gray-500 mb-6">v{doc.service.version}</div>

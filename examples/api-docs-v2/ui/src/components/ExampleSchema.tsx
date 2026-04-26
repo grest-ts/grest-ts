@@ -34,15 +34,43 @@ export function ExampleSchema({schemaRef, doc}: Props) {
 
 type Example =
     | {kind: "primitive"; value: unknown; brand?: string; comment?: string}
-    | {kind: "object"; entries: Array<{key: string; value: Example; required: boolean; comment?: string}>}
-    | {kind: "array"; items: Example[]; comment?: string}
+    | {kind: "object"; entries: Array<{key: string; value: Example; required: boolean; comment?: string}>; brand?: string}
+    | {kind: "array"; items: Example[]; brand?: string; comment?: string}
     | {kind: "null"};
+
+/**
+ * Convert a raw JS value (typically `desc.docs.example`) into the structured
+ * Example tree. Handles arbitrarily nested objects and arrays so they get
+ * pretty-printed with indentation rather than collapsed via JSON.stringify.
+ */
+function valueToExample(value: unknown, brand?: string): Example {
+    if (value === null || value === undefined) return {kind: "null"};
+    if (Array.isArray(value)) {
+        return {
+            kind: "array",
+            items: value.map(v => valueToExample(v)),
+            ...(brand ? {brand} : {}),
+        };
+    }
+    if (typeof value === "object") {
+        return {
+            kind: "object",
+            entries: Object.entries(value as Record<string, unknown>).map(([key, v]) => ({
+                key,
+                value: valueToExample(v),
+                required: true,
+            })),
+            ...(brand ? {brand} : {}),
+        };
+    }
+    return {kind: "primitive", value, ...(brand ? {brand} : {})};
+}
 
 function generateExample(ref: SchemaRef, doc: ApiDocsDocument, seen: Set<string>): Example {
     if ("ref" in ref) {
-        if (seen.has(ref.ref)) return {kind: "primitive", value: `<${ref.ref}>`, brand: ref.ref, comment: "(circular)"};
+        if (seen.has(ref.ref)) return {kind: "primitive", value: `some${ref.ref}`, brand: ref.ref, comment: "(circular)"};
         const named = doc.schemas[ref.ref];
-        if (!named) return {kind: "primitive", value: `<${ref.ref}>`};
+        if (!named) return {kind: "primitive", value: `some${ref.ref}`};
         const nextSeen = new Set(seen);
         nextSeen.add(ref.ref);
         return generateFromDesc(named.schema, doc, nextSeen, ref.ref);
@@ -56,23 +84,33 @@ function generateFromDesc(
     seen: Set<string>,
     namedAs?: string,
 ): Example {
-    // Honor explicit example annotations
+    // Brand annotation for primitives is "<baseType> & <BrandName>" so the
+    // underlying type stays visible even when the schema has a named title.
+    const brandTitle = namedAs ?? desc.docs?.title?.replace(/\s+/g, "");
+    const baseType = brandedBaseTypeLabel(desc);
+    const brand = brandTitle
+        ? (baseType ? `${baseType} & ${brandTitle}` : brandTitle)
+        : undefined;
+
+    // Honor explicit example annotations.
+    // Use valueToExample so object/array examples get pretty-printed instead
+    // of collapsed onto a single line by JSON.stringify in the primitive renderer.
     if (desc.docs?.example !== undefined) {
-        return {kind: "primitive", value: desc.docs.example, brand: namedAs ?? desc.docs.title?.replace(/\s+/g, "")};
+        return valueToExample(desc.docs.example, brand);
     }
     if (desc.docs?.examples && desc.docs.examples.length > 0) {
-        return {kind: "primitive", value: desc.docs.examples[0], brand: namedAs ?? desc.docs.title?.replace(/\s+/g, "")};
+        return valueToExample(desc.docs.examples[0], brand);
     }
     if (desc.defaultValue !== undefined) {
-        return {kind: "primitive", value: desc.defaultValue, brand: namedAs ?? desc.docs.title?.replace(/\s+/g, "")};
+        return valueToExample(desc.defaultValue, brand);
     }
 
     const node = desc.node;
     switch (node.kind) {
         case "string":
-            return {kind: "primitive", value: stringPlaceholder(desc), brand: namedAs ?? desc.docs?.title?.replace(/\s+/g, "")};
+            return {kind: "primitive", value: stringPlaceholder(desc), brand};
         case "number":
-            return {kind: "primitive", value: numberPlaceholder(node), brand: namedAs ?? desc.docs?.title?.replace(/\s+/g, "")};
+            return {kind: "primitive", value: numberPlaceholder(node), brand};
         case "boolean":
             return {kind: "primitive", value: true};
         case "bit":
@@ -83,7 +121,7 @@ function generateFromDesc(
         case "unknown":
             return {kind: "primitive", value: null};
         case "file":
-            return {kind: "primitive", value: "<binary>", comment: node.accept ? `accepts ${node.accept.join(", ")}` : undefined};
+            return {kind: "primitive", value: "someBinary", comment: node.accept ? `accepts ${node.accept.join(", ")}` : undefined};
         case "password":
             return {kind: "primitive", value: "********"};
 
@@ -109,7 +147,7 @@ function generateFromDesc(
         case "record":
             return {
                 kind: "object",
-                entries: [{key: "<key>", value: generateFromDesc(node.value, doc, seen), required: true, comment: "any string"}],
+                entries: [{key: "someKey", value: generateFromDesc(node.value, doc, seen), required: true, comment: "any string"}],
             };
 
         case "tuple":
@@ -127,23 +165,51 @@ function generateFromDesc(
     }
 }
 
+/**
+ * Underlying primitive label shown next to a brand name (`string & UserId`).
+ * Format hint is dropped when the brand is present — the brand already implies
+ * the semantic role; format would just be duplication.
+ */
+function brandedBaseTypeLabel(desc: JsonSchemaDescription): string | undefined {
+    const node = desc.node;
+    switch (node.kind) {
+        case "string":   return "string";
+        case "number":   return node.integer ? "integer" : "number";
+        case "boolean":  return "boolean";
+        case "bit":      return "0|1";
+        case "literal":  return undefined; // brand on a literal is unusual; skip the prefix
+        case "file":     return "binary";
+        case "password": return "string";
+        default:         return undefined;
+    }
+}
+
+/**
+ * Generic placeholder for a string field that has no `docs.example`.
+ *
+ * Format: `someBrandName` / `someString` — camelCase'd so a double-click
+ * selects the whole token in a browser (angle brackets like `<string>`
+ * would split the selection on the brackets). Easy to copy and replace.
+ *
+ * Deliberately does NOT have any format-specific hardcoding (no
+ * `if (format === "email") return "user@example.com"`). If contract authors
+ * want canonical values like that, they should set `.docs({example: ...})` on
+ * the brand definition itself — that's the source of truth. The docs UI's job
+ * is to display what the contract says, not to invent it.
+ */
 function stringPlaceholder(desc: JsonSchemaDescription): string {
-    const fmt = desc.docs?.format;
-    if (fmt === "email") return "user@example.com";
-    if (fmt === "uri" || fmt === "url") return "https://example.com";
-    if (fmt === "date") return "2024-01-15";
-    if (fmt === "date-time") return "2024-01-15T12:00:00Z";
-    if (fmt === "uuid") return "00000000-0000-0000-0000-000000000000";
-    if (fmt === "ip") return "203.0.113.1";
-    if (fmt === "phone") return "+15551234567";
-    if (fmt === "password") return "********";
-    return desc.docs?.title?.replace(/\s+/g, "_").toLowerCase() ?? "string";
+    if (desc.docs?.title) {
+        const brand = desc.docs.title.replace(/\s+/g, "");
+        return `some${brand[0].toUpperCase()}${brand.slice(1)}`;
+    }
+    return "someString";
 }
 
 function numberPlaceholder(node: Extract<JsonSchemaDescription["node"], {kind: "number"}>): number {
     if (node.min !== undefined) return node.min;
     if (node.max !== undefined) return Math.min(node.max, 100);
-    return node.integer ? 1 : 1.5;
+    // Default 100 — looks more "real" than 1, doesn't pretend to be exact like 1.5
+    return 100;
 }
 
 // ── JSON-syntax rendering ──────────────────────────────────────────────
@@ -162,12 +228,18 @@ function renderJsonValue(ex: Example, depth: number): React.ReactNode {
     }
 
     if (ex.kind === "array") {
-        if (ex.items.length === 0) return <span className="text-gray-500">[]</span>;
+        if (ex.items.length === 0) return (
+            <>
+                <span className="text-gray-500">[]</span>
+                {ex.brand && <>  <CommentSpan>{ex.brand}</CommentSpan></>}
+            </>
+        );
         const indent = "  ".repeat(depth + 1);
         const closeIndent = "  ".repeat(depth);
         return (
             <>
                 <span className="text-gray-500">[</span>
+                {ex.brand && <>  <CommentSpan>{ex.brand}</CommentSpan></>}
                 {"\n"}
                 {ex.items.map((item, i) => (
                     <span key={i}>
@@ -183,12 +255,18 @@ function renderJsonValue(ex: Example, depth: number): React.ReactNode {
     }
 
     // object
-    if (ex.entries.length === 0) return <span className="text-gray-500">{"{}"}</span>;
+    if (ex.entries.length === 0) return (
+        <>
+            <span className="text-gray-500">{"{}"}</span>
+            {ex.brand && <>  <CommentSpan>{ex.brand}</CommentSpan></>}
+        </>
+    );
     const indent = "  ".repeat(depth + 1);
     const closeIndent = "  ".repeat(depth);
     return (
         <>
             <span className="text-gray-500">{"{"}</span>
+            {ex.brand && <>  <CommentSpan>{ex.brand}</CommentSpan></>}
             {"\n"}
             {ex.entries.map((entry, i) => (
                 <span key={i}>
