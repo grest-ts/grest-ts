@@ -4,7 +4,7 @@
   "version": "0.0.25",
   "type": "module",
   "license": "MIT",
-  "description": "Unified HTTP + WebSocket API documentation UI for grest-ts",
+  "description": "Native React-based documentation UI for grest-ts services — renders contracts directly, no OpenAPI/AsyncAPI conversion in the rendering path",
   "exports": {
     ".": {
       "types": "./src/index-node.ts",
@@ -12,10 +12,11 @@
     }
   },
   "files": [
-    "src"
+    "src",
+    "dist-ui"
   ],
   "scripts": {
-    "typecheck": "tsc --noEmit -p src && tsc --noEmit -p test",
+    "typecheck": "tsc --noEmit -p src",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "test:coverage:html": "vitest run --coverage --reporter=html"
@@ -40,20 +41,17 @@
     "microservices",
     "testing",
     "api-docs",
-    "openapi",
-    "asyncapi",
-    "swagger",
-    "documentation"
+    "documentation",
+    "react",
+    "contracts"
   ],
   "engines": {
     "node": ">=25"
   },
   "dependencies": {
-    "@asyncapi/react-component": "^2.5.0",
-    "@grest-ts/asyncapi": "0.0.25",
     "@grest-ts/http": "0.0.25",
     "@grest-ts/locator": "0.0.25",
-    "@grest-ts/openapi": "0.0.25",
+    "@grest-ts/schema": "0.0.25",
     "@grest-ts/websocket": "0.0.25"
   }
 }

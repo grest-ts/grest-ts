@@ -1,78 +1,71 @@
+import {readFileSync, readdirSync} from "fs";
+import {join, dirname, extname} from "path";
+import {fileURLToPath} from "url";
+import type {GGHttpSchema} from "@grest-ts/http";
 import {GGHttpServer, GG_HTTP_SERVER} from "@grest-ts/http";
+import type {GGWebSocketSchema} from "@grest-ts/websocket";
 import {GGLocator} from "@grest-ts/locator";
-import {toOpenApi} from "@grest-ts/openapi";
-import {toAsyncApi} from "@grest-ts/asyncapi";
-import type {ApiDocsCommonOptions, ApiDocsManifest} from "./types";
-import {buildManifest, findGroupHttpSchemas, findGroupWsSchemas, resolveGroups, toSlug} from "./manifest";
-import {buildShellHtml} from "./shell/shellHtml";
-import {loadVendoredAssets} from "./shell/assets";
+import {buildContractDoc, type BuildContractDocOptions} from "./buildContractDoc";
+import type {ApiDocsDocument} from "./docTypes";
 
-export interface GGApiDocsOptions extends ApiDocsCommonOptions {
-    /**
-     * Mount path. All sub-routes hang off this prefix —
-     *   GET ${docsPath}                              → shell HTML
-     *   GET ${docsPath}/manifest.json                → manifest
-     *   GET ${docsPath}/specs/<group>/openapi.json   → OpenAPI spec
-     *   GET ${docsPath}/specs/<group>/asyncapi.json  → AsyncAPI spec
-     *   GET ${docsPath}/assets/<filename>            → bundled viewer assets
-     */
+/** Directory shipped with the package containing the Vite-built React UI. */
+const HERE = dirname(fileURLToPath(import.meta.url));
+const DIST_UI = join(HERE, "..", "dist-ui");
+
+/**
+ * One logical group. `http` and `ws` arrays carry the actual contracts; both
+ * are optional so a group can be HTTP-only, WS-only, or mixed.
+ */
+export interface ApiDocsGroup {
+    http?: GGHttpSchema<any, any>[];
+    ws?: GGWebSocketSchema<any, any, any, any, any>[];
+    description?: string;
+}
+
+export interface ApiDocsBranding {
+    logoUrl?: string;
+    primaryColor?: string;
+}
+
+export interface GGApiDocsOptions {
+    title: string;
+    version?: string;
+    description?: string;
+
+    /** When set, sidebar groups + chrome use these. */
+    groups?: Record<string, ApiDocsGroup>;
+    /** Convenience shorthand for ungrouped APIs — placed under one "API" group. */
+    http?: GGHttpSchema<any, any>[];
+    ws?: GGWebSocketSchema<any, any, any, any, any>[];
+
+    /** Mount path. All sub-routes hang off this prefix. */
     docsPath: string;
 
-    /** Build all specs eagerly at construction (default: lazy on first request). */
+    branding?: ApiDocsBranding;
+
+    /** Build doc eagerly at construction (default: lazy on first request). */
     eager?: boolean;
 
-    /**
-     * Override the HTTP server to mount routes on. Defaults to the locator's
-     * GG_HTTP_SERVER. Named `httpServer` (not `http`) to avoid colliding with
-     * the `http` schemas shorthand on the common options.
-     */
+    /** Override the HTTP server. Defaults to the locator's GG_HTTP_SERVER. */
     httpServer?: GGHttpServer;
-
-    /**
-     * Load embedded viewer assets from a CDN instead of serving the bundled
-     * copies. When set for a viewer, the corresponding /assets/* route is not
-     * registered and the shell loads the script directly from the CDN URL.
-     */
-    cdnUrl?: {
-        swaggerUi?: string;   // e.g. "https://unpkg.com/swagger-ui-dist@5.32.2"
-        asyncApi?: string;    // e.g. "https://unpkg.com/@asyncapi/react-component@latest"
-    };
-
-    /**
-     * Replace the shell HTML entirely. Receives the manifest so the user can
-     * build their own switcher UI around the same standards-compliant spec
-     * endpoints we serve.
-     */
-    customUi?: (manifest: ApiDocsManifest) => string;
 }
 
 /**
- * Unified HTTP + WebSocket API documentation UI.
+ * Live-mode docs server. Mounts a single React UI at `docsPath` plus a
+ * `docsPath/api-docs.json` endpoint that returns the contract document.
  *
- * `GGApiDocs.register({...})` mounts a single shell at `docsPath` whose sidebar
- * lists each group with its HTTP and/or WebSocket APIs. Selecting an entry
- * loads the appropriate spec into the right pane via the matching embedded
- * viewer (Swagger UI for OpenAPI, AsyncAPI react-component for AsyncAPI).
+ * Routes:
+ *   GET  ${docsPath}                  → shell HTML (Vite-built React app)
+ *   GET  ${docsPath}/api-docs.json    → ApiDocsDocument (lazy build, cached)
+ *   GET  ${docsPath}/assets/*         → bundled JS/CSS/etc.
  *
- * Spec JSON is unchanged — it is the same OpenAPI 3.1 / AsyncAPI 3.0 output
- * that `toOpenApi()` / `toAsyncApi()` produce, served at predictable URLs
- * that any external tool can consume.
- *
- * @example
- * GGApiDocs.register({
- *     title: "MyOrg",
- *     docsPath: "/docs",
- *     groups: {
- *         "Users":  { http: [UserApi], ws: [UserNotificationsApi] },
- *         "Orders": { http: [OrderApi] },
- *     },
- * });
+ * No openapi.json / asyncapi.json — those live in their own peer packages
+ * (`@grest-ts/openapi`, `@grest-ts/asyncapi`) which a user installs separately
+ * if they want them. api-docs is intentionally standalone.
  */
 export class GGApiDocs {
     private readonly options: GGApiDocsOptions;
-    private readonly manifest: ApiDocsManifest;
-    private readonly openapiCache = new Map<string, unknown>();
-    private readonly asyncapiCache = new Map<string, unknown>();
+    private _doc: ApiDocsDocument | undefined;
 
     static register(options: GGApiDocsOptions): void {
         const server = options.httpServer ?? GGLocator.getScope().get(GG_HTTP_SERVER);
@@ -82,125 +75,121 @@ export class GGApiDocs {
 
     constructor(server: GGHttpServer, options: GGApiDocsOptions) {
         this.options = options;
-        this.manifest = buildManifest(options, options.docsPath);
-        if (options.eager) {
-            for (const group of this.manifest.groups) {
-                for (const spec of group.specs) {
-                    if (spec.type === "openapi") this.openapiCache.set(group.name, this.buildOpenApi(group.name));
-                    else this.asyncapiCache.set(group.name, this.buildAsyncApi(group.name));
-                }
-            }
-        }
+        if (options.eager) this._doc = this.build();
         this.registerWith(server);
     }
 
-    public getManifest(): ApiDocsManifest {
-        return this.manifest;
+    public getDoc(): ApiDocsDocument {
+        return this._doc ??= this.build();
     }
 
-    public getSpec(groupName: string, type: "openapi" | "asyncapi"): unknown {
-        if (type === "openapi") {
-            let spec = this.openapiCache.get(groupName);
-            if (!spec) { spec = this.buildOpenApi(groupName); this.openapiCache.set(groupName, spec); }
-            return spec;
-        } else {
-            let spec = this.asyncapiCache.get(groupName);
-            if (!spec) { spec = this.buildAsyncApi(groupName); this.asyncapiCache.set(groupName, spec); }
-            return spec;
+    private build(): ApiDocsDocument {
+        return buildContractDoc(this.toContractDocOptions());
+    }
+
+    private toContractDocOptions(): BuildContractDocOptions {
+        const {title, version, description, branding} = this.options;
+        const groups: BuildContractDocOptions["groups"] = {...(this.options.groups ?? {})};
+        // Top-level http/ws shorthand becomes one synthesized "API" group when
+        // no explicit groups are passed; otherwise it's an extra group alongside.
+        if (this.options.http?.length || this.options.ws?.length) {
+            groups["API"] = {http: this.options.http, ws: this.options.ws};
         }
-    }
-
-    private buildOpenApi(groupName: string): unknown {
-        const schemas = findGroupHttpSchemas(this.options, groupName);
-        if (!schemas) throw new Error(`GGApiDocs: group "${groupName}" has no HTTP schemas.`);
-        return toOpenApi(schemas, this.options);
-    }
-
-    private buildAsyncApi(groupName: string): unknown {
-        const schemas = findGroupWsSchemas(this.options, groupName);
-        if (!schemas) throw new Error(`GGApiDocs: group "${groupName}" has no WebSocket schemas.`);
-        return toAsyncApi(schemas, this.options);
+        return {title, version, description, branding, groups};
     }
 
     public registerWith(server: GGHttpServer): this {
-        const docsPath = this.options.docsPath;
+        const {docsPath} = this.options;
 
-        // Manifest endpoint
-        server.registerRoute("GET", `${docsPath}/manifest.json`, async (_req, res) => {
-            const body = JSON.stringify(this.manifest, null, 2);
+        // JSON doc endpoint — lazy build, cached on the instance.
+        server.registerRoute("GET", `${docsPath}/api-docs.json`, async (_req, res) => {
+            const body = JSON.stringify(this.getDoc(), null, 2);
             res.writeHead(200, {"Content-Type": "application/json", "Content-Length": Buffer.byteLength(body)});
             res.end(body);
         });
 
-        // Per-group spec endpoints (only register routes for spec types that exist)
-        for (const {name, group} of resolveGroups(this.options)) {
-            const slug = toSlug(name);
-            if (group.http && group.http.length > 0) {
-                server.registerRoute("GET", `${docsPath}/specs/${slug}/openapi.json`, async (_req, res) => {
-                    const body = JSON.stringify(this.getSpec(name, "openapi"), null, 2);
-                    res.writeHead(200, {"Content-Type": "application/json", "Content-Length": Buffer.byteLength(body)});
-                    res.end(body);
-                });
-            }
-            if (group.ws && group.ws.length > 0) {
-                server.registerRoute("GET", `${docsPath}/specs/${slug}/asyncapi.json`, async (_req, res) => {
-                    const body = JSON.stringify(this.getSpec(name, "asyncapi"), null, 2);
-                    res.writeHead(200, {"Content-Type": "application/json", "Content-Length": Buffer.byteLength(body)});
-                    res.end(body);
-                });
-            }
-        }
-
-        // Shell HTML route
+        // Shell HTML — Vite-built React app.
         server.registerRoute("GET", docsPath, async (_req, res) => {
-            const html = this.buildHtml();
+            const html = buildShellHtml(docsPath);
             res.writeHead(200, {"Content-Type": "text/html; charset=utf-8", "Content-Length": Buffer.byteLength(html)});
             res.end(html);
         });
 
-        // Bundled assets — only register what we actually serve.
-        if (!this.options.customUi) {
-            const assetsBase = `${docsPath}/assets`;
-            const assets = loadVendoredAssets();
-            const cdn = this.options.cdnUrl ?? {};
-            for (const a of assets) {
-                if (cdn.swaggerUi && (a.filename === "swagger-ui-bundle.js" || a.filename === "swagger-ui.css")) continue;
-                if (cdn.asyncApi && (a.filename === "asyncapi-component.js" || a.filename === "asyncapi-component.css")) continue;
-                server.registerRoute("GET", `${assetsBase}/${a.filename}`, async (_req, res) => {
-                    res.writeHead(200, {
-                        "Content-Type": a.contentType,
-                        "Content-Length": a.body.length,
-                        "Cache-Control": "public, max-age=86400"
-                    });
-                    res.end(a.body);
+        // Bundled UI assets.
+        const assets = loadDistUiAssets();
+        const assetsBase = `${docsPath}/assets`;
+        for (const [filename, asset] of assets) {
+            server.registerRoute("GET", `${assetsBase}/${filename}`, async (_req, res) => {
+                res.writeHead(200, {
+                    "Content-Type": asset.contentType,
+                    "Content-Length": asset.body.length,
+                    "Cache-Control": "public, max-age=86400"
                 });
-            }
+                res.end(asset.body);
+            });
         }
 
         return this;
     }
+}
 
-    private buildHtml(): string {
-        if (this.options.customUi) return this.options.customUi(this.manifest);
-        const docsPath = this.options.docsPath;
-        const cdn = this.options.cdnUrl ?? {};
-        const swagger = cdn.swaggerUi
-            ? {js: `${cdn.swaggerUi}/swagger-ui-bundle.js`, css: `${cdn.swaggerUi}/swagger-ui.css`}
-            : {js: `${docsPath}/assets/swagger-ui-bundle.js`, css: `${docsPath}/assets/swagger-ui.css`};
-        const asyncApi = cdn.asyncApi
-            ? {
-                js: `${cdn.asyncApi}/browser/standalone/index.js`,
-                css: `${cdn.asyncApi}/styles/default.min.css`
-            }
-            : {js: `${docsPath}/assets/asyncapi-component.js`, css: `${docsPath}/assets/asyncapi-component.css`};
-        return buildShellHtml(this.manifest, {
-            swaggerUiCss: swagger.css,
-            swaggerUiJs: swagger.js,
-            asyncApiCss: asyncApi.css,
-            asyncApiJs: asyncApi.js,
-            shellCss: `${docsPath}/assets/shell.css`,
-            shellJs: `${docsPath}/assets/shell.js`,
-            manifestUrl: `${docsPath}/manifest.json`,
+// ── Asset loading from the shipped dist-ui ─────────────────────────────
+
+interface VendoredAsset {
+    body: Buffer;
+    contentType: string;
+}
+
+let _assetCache: Map<string, VendoredAsset> | undefined;
+function loadDistUiAssets(): Map<string, VendoredAsset> {
+    if (_assetCache) return _assetCache;
+    const out = new Map<string, VendoredAsset>();
+    const assetsDir = join(DIST_UI, "assets");
+    for (const filename of readdirSync(assetsDir)) {
+        out.set(filename, {
+            body: readFileSync(join(assetsDir, filename)),
+            contentType: contentTypeFor(filename),
         });
     }
+    _assetCache = out;
+    return out;
+}
+
+function contentTypeFor(filename: string): string {
+    switch (extname(filename).toLowerCase()) {
+        case ".js":   return "application/javascript";
+        case ".css":  return "text/css";
+        case ".html": return "text/html; charset=utf-8";
+        case ".svg":  return "image/svg+xml";
+        case ".png":  return "image/png";
+        case ".woff2": return "font/woff2";
+        default:      return "application/octet-stream";
+    }
+}
+
+// ── Shell HTML — derived from the Vite-built index.html with a few rewrites ──
+
+let _shellTemplate: string | undefined;
+function loadShellTemplate(): string {
+    if (_shellTemplate) return _shellTemplate;
+    _shellTemplate = readFileSync(join(DIST_UI, "index.html"), "utf-8");
+    return _shellTemplate;
+}
+
+/**
+ * Adapt the Vite-built index.html for the runtime mount path. Vite is
+ * configured with `base: "./"` so its index.html uses relative `./assets/...`
+ * paths — perfect for static mode but ambiguous when served from an arbitrary
+ * mount path (browser resolves `./` against the document URL's parent dir,
+ * which usually isn't where the assets live). We rewrite to absolute
+ * `${docsPath}/assets/...` so requests land on the right place.
+ *
+ * Also injects `window.GG_API_DOCS_CONFIG = {docUrl: "${docsPath}/api-docs.json"}`
+ * so the React app fetches the doc in single-doc mode.
+ */
+function buildShellHtml(docsPath: string): string {
+    const template = loadShellTemplate();
+    const rewritten = template.replace(/(src|href)="(\.\/|\/)assets\//g, `$1="${docsPath}/assets/`);
+    const configScript = `<script>window.GG_API_DOCS_CONFIG = ${JSON.stringify({docUrl: `${docsPath}/api-docs.json`})};</script>`;
+    return rewritten.replace("</head>", `${configScript}</head>`);
 }

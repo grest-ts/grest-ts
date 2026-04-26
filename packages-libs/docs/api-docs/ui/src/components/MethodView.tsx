@@ -1,0 +1,465 @@
+import {useEffect, useRef, useState} from "react";
+import type {ApiDocsDocument, ContractDoc, ErrorDoc, MethodDoc, SchemaRef} from "../docTypes";
+import {CompactSchema} from "./CompactSchema";
+import {ExampleSchema} from "./ExampleSchema";
+import {PillToggle} from "./Tabs";
+import {PatternBadge} from "./Badges";
+import {ERROR_TYPE_PREFIX, type UsageIndex} from "../lib/usageIndex";
+import {ReusedChip} from "./ReusedChip";
+
+interface Props {
+    contract: ContractDoc;
+    method: MethodDoc;
+    doc: ApiDocsDocument;
+    /** When set, every appearance of this type in the body is highlighted. */
+    highlightType?: string;
+    /** When provided, drives the "↔ N" reuse chips on schemas in the body. */
+    usageIndex?: UsageIndex;
+}
+
+export function MethodView({contract, method, doc, highlightType, usageIndex}: Props) {
+    const containerRef = useRef<HTMLDivElement>(null);
+
+    /**
+     * After the body renders (or re-renders due to a different method/highlight),
+     * find the first highlight marker in the DOM and scroll it into view. Helps
+     * the reader locate the type they came in to look at without manual scanning.
+     */
+    useEffect(() => {
+        if (!highlightType) return;
+        // requestAnimationFrame ensures all child schemas have flushed to DOM.
+        const id = requestAnimationFrame(() => {
+            const el = containerRef.current?.querySelector("[data-gg-highlight]");
+            if (el) el.scrollIntoView({behavior: "smooth", block: "center"});
+        });
+        return () => cancelAnimationFrame(id);
+    }, [highlightType, contract.name, method.name]);
+
+    return (
+        <div ref={containerRef} className="max-w-[1800px] px-8 py-8">
+            <MethodHeader contract={contract} method={method} />
+
+            {method.description && (
+                <p className="text-gray-700 mb-6 leading-relaxed">{method.description}</p>
+            )}
+
+            {method.deprecated && (
+                <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 mb-6">
+                    <span className="font-semibold text-amber-900">Deprecated</span>
+                    {method.deprecationMessage && (
+                        <span className="text-amber-800 ml-2">— {method.deprecationMessage}</span>
+                    )}
+                </div>
+            )}
+
+            {contract.auth && contract.auth.length > 0 && (
+                <Section title="Authentication">
+                    <div className="space-y-1.5">
+                        {contract.auth.map(a => (
+                            <div key={a.headerName} className="flex items-baseline gap-3 text-sm">
+                                <span className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 uppercase">{a.scheme}</span>
+                                <code className="text-gray-700 font-mono">{a.headerName}</code>
+                                {a.description && <span className="text-gray-500">{a.description}</span>}
+                            </div>
+                        ))}
+                    </div>
+                </Section>
+            )}
+
+            {/* Request — params and body */}
+            {(method.pathParams?.length || method.queryParams?.length || method.requestBody || method.wsInput) ? (
+                <Section title={requestSectionTitle(method)}>
+                    <RequestPane method={method} doc={doc} highlightType={highlightType} usageIndex={usageIndex} contractName={contract.name} />
+                </Section>
+            ) : null}
+
+            {!isNoReplyWs(method) && <SuccessResponseSection method={method} doc={doc} highlightType={highlightType} usageIndex={usageIndex} contractName={contract.name} />}
+            {!isNoReplyWs(method) && <ErrorResponsesSection method={method} doc={doc} highlightType={highlightType} usageIndex={usageIndex} contractName={contract.name} />}
+        </div>
+    );
+}
+
+// ── Request pane ───────────────────────────────────────────────────────
+
+function RequestPane({method, doc, highlightType, usageIndex, contractName}: {
+    method: MethodDoc; doc: ApiDocsDocument; highlightType?: string; usageIndex?: UsageIndex; contractName: string;
+}) {
+    return (
+        <div className="space-y-4">
+            {method.pathParams && method.pathParams.length > 0 && (
+                <ParamGroup label="Path" params={method.pathParams} doc={doc} highlightType={highlightType} />
+            )}
+            {method.queryParams && method.queryParams.length > 0 && (
+                <ParamGroup label="Query" params={method.queryParams} doc={doc} highlightType={highlightType} />
+            )}
+            {method.requestBody && (
+                <SchemaPane label="Body" schemaRef={method.requestBody} doc={doc} highlightType={highlightType} usageIndex={usageIndex} currentContract={contractName} currentMethod={method.name} />
+            )}
+            {method.wsInput && (
+                <SchemaPane
+                    label={method.wsDirection === "client-to-server" ? "Send" : "Receive"}
+                    schemaRef={method.wsInput}
+                    doc={doc}
+                    highlightType={highlightType}
+                    usageIndex={usageIndex}
+                    currentContract={contractName}
+                    currentMethod={method.name}
+                />
+            )}
+        </div>
+    );
+}
+
+/** Schema pane with Schema/Example toggle. Default = Schema. */
+function SchemaPane({label, schemaRef, doc, highlightType, usageIndex, currentContract, currentMethod}: {
+    label: string; schemaRef: SchemaRef; doc: ApiDocsDocument;
+    highlightType?: string; usageIndex?: UsageIndex; currentContract: string; currentMethod: string;
+}) {
+    const [view, setView] = useState<"schema" | "example">("schema");
+    return (
+        <div>
+            <div className="flex items-center justify-between mb-1.5">
+                <Label>{label}</Label>
+                <PillToggle
+                    options={[{id: "schema", label: "Schema"}, {id: "example", label: "Example"}]}
+                    value={view}
+                    onChange={setView}
+                />
+            </div>
+            {view === "schema"
+                ? <CompactSchema schemaRef={schemaRef} doc={doc} highlightType={highlightType} usageIndex={usageIndex} currentContract={currentContract} currentMethod={currentMethod} />
+                : <ExampleSchema schemaRef={schemaRef} doc={doc} highlightType={highlightType} />}
+        </div>
+    );
+}
+
+function ParamGroup({label, params, doc, highlightType}: {label: string; params: NonNullable<MethodDoc["pathParams"]>; doc: ApiDocsDocument; highlightType?: string}) {
+    return (
+        <div>
+            <Label>{label}</Label>
+            <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 font-mono text-[13px] leading-6">
+                {params.map(p => {
+                    const matches = highlightType && refContainsBrand(p.schema, highlightType, doc);
+                    return (
+                        <div key={p.name} className={`flex items-baseline gap-2 ${matches ? "bg-yellow-100 -mx-2 px-2 rounded" : ""}`}>
+                            <span className="text-blue-700">{p.name}</span>
+                            {!p.required && <span className="text-gray-400">?</span>}
+                            <span className="text-gray-500">:</span>
+                            <InlineRef schemaRef={p.schema} doc={doc} highlightType={highlightType} />
+                            {p.description && <span className="text-gray-400 italic ml-2">  // {p.description}</span>}
+                        </div>
+                    );
+                })}
+            </div>
+        </div>
+    );
+}
+
+/** Tiny inline schema renderer for path/query param values — picks up brand or primitive label. */
+function InlineRef({schemaRef, doc, highlightType}: {schemaRef: SchemaRef; doc: ApiDocsDocument; highlightType?: string}) {
+    if ("ref" in schemaRef) {
+        return <span className="text-purple-600">{schemaRef.ref}</span>;
+    }
+    const desc = schemaRef.inline;
+    const brand = desc.docs?.brand ?? (desc.docs?.title && isPrimitiveKind(desc.node.kind) ? desc.docs.title.replace(/\s+/g, "") : undefined);
+    if (brand && isPrimitiveKind(desc.node.kind)) {
+        const isHighlighted = highlightType === brand;
+        return (
+            <span className={`text-purple-600 ${isHighlighted ? "bg-yellow-200 ring-1 ring-yellow-400 px-0.5 rounded" : ""}`}>
+                {brand}
+            </span>
+        );
+    }
+    const node = desc.node;
+    switch (node.kind) {
+        case "string":   return <span className="text-emerald-700">{desc.docs?.format ? `string<${desc.docs.format}>` : "string"}</span>;
+        case "number":   return <span className="text-emerald-700">{(node as any).integer ? "integer" : "number"}</span>;
+        case "boolean":  return <span className="text-emerald-700">boolean</span>;
+        case "literal":  return <span className="text-emerald-700">{(node as any).values.map((v: any) => JSON.stringify(v)).join(" | ")}</span>;
+        default:         return <span className="text-emerald-700">{node.kind}</span>;
+    }
+}
+
+/** Walk a SchemaRef recursively and return true if it (or anything nested under it) carries the given brand. */
+function refContainsBrand(ref: SchemaRef, brand: string, doc: ApiDocsDocument, seen = new Set<string>()): boolean {
+    if ("ref" in ref) {
+        if (seen.has(ref.ref)) return false;
+        seen.add(ref.ref);
+        const named = doc.schemas[ref.ref];
+        return !!named && descContainsBrand(named.schema, brand, doc, seen);
+    }
+    return descContainsBrand(ref.inline, brand, doc, seen);
+}
+
+function descContainsBrand(desc: import("../docTypes").JsonSchemaDescription, brand: string, doc: ApiDocsDocument, seen: Set<string>): boolean {
+    if (desc.docs?.brand === brand) return true;
+    const node = desc.node;
+    switch (node.kind) {
+        case "object":
+            return Object.values(node.properties).some(p => descContainsBrand(p, brand, doc, seen));
+        case "array":
+            return descContainsBrand(node.element, brand, doc, seen);
+        case "record":
+            return descContainsBrand(node.value, brand, doc, seen);
+        case "union":
+        case "discriminated":
+            return node.variants.some(v => descContainsBrand(v, brand, doc, seen));
+        case "tuple":
+            return node.elements.some(e => descContainsBrand(e, brand, doc, seen));
+    }
+    return false;
+}
+
+function isPrimitiveKind(k: string): boolean {
+    return ["string", "number", "boolean", "bit", "literal", "any", "unknown", "file", "password"].includes(k);
+}
+
+// ── Responses (tabbed) ─────────────────────────────────────────────────
+
+function isNoReplyWs(method: MethodDoc): boolean {
+    return method.wsPattern === "fire-and-forget" || method.wsPattern === "server-push";
+}
+
+function requestSectionTitle(method: MethodDoc): React.ReactNode {
+    if (method.wsDirection === "client-to-server") {
+        return <span className="text-orange-700">Client sends</span>;
+    }
+    if (method.wsDirection === "server-to-client") {
+        return <span className="text-indigo-700">Server pushes</span>;
+    }
+    return "Request";
+}
+
+function SuccessResponseSection({method, doc, highlightType, usageIndex, contractName}: {
+    method: MethodDoc; doc: ApiDocsDocument; highlightType?: string; usageIndex?: UsageIndex; contractName: string;
+}) {
+    if (method.successResponse) {
+        return (
+            <Section title="Success response">
+                <ResponseCard
+                    statusCode={200} typeName="OK"
+                    schemaRef={method.successResponse} doc={doc}
+                    highlightType={highlightType}
+                    usageIndex={usageIndex} currentContract={contractName} currentMethod={method.name}
+                />
+            </Section>
+        );
+    }
+    if (method.httpMethod) {
+        return (
+            <Section title="Success response">
+                <ResponseCard
+                    statusCode={204} typeName="No Content"
+                    doc={doc} emptyLabel="No response body."
+                    currentContract={contractName} currentMethod={method.name}
+                />
+            </Section>
+        );
+    }
+    return null;
+}
+
+function ErrorResponsesSection({method, doc, highlightType, usageIndex, contractName}: {
+    method: MethodDoc; doc: ApiDocsDocument; highlightType?: string; usageIndex?: UsageIndex; contractName: string;
+}) {
+    const errors = method.errors
+        .map(t => doc.errors[t])
+        .filter((e): e is ErrorDoc => !!e)
+        .sort((a, b) => a.statusCode - b.statusCode);
+
+    if (errors.length === 0) return null;
+
+    return (
+        <Section title={`Error responses (${errors.length})`}>
+            <div className="space-y-4">
+                {errors.map(err => (
+                    <ResponseCard
+                        key={err.type}
+                        statusCode={err.statusCode} typeName={err.type}
+                        description={err.description} schemaRef={err.data}
+                        doc={doc} emptyLabel="No payload."
+                        highlightType={highlightType}
+                        usageIndex={usageIndex} currentContract={contractName} currentMethod={method.name}
+                        errorType={err.type}
+                    />
+                ))}
+            </div>
+        </Section>
+    );
+}
+
+function ResponseCard({
+    statusCode, typeName, description, schemaRef, emptyLabel, doc, highlightType, usageIndex, currentContract, currentMethod, errorType,
+}: {
+    statusCode: number;
+    typeName: string;
+    description?: string;
+    schemaRef?: SchemaRef;
+    emptyLabel?: string;
+    doc: ApiDocsDocument;
+    highlightType?: string;
+    usageIndex?: UsageIndex;
+    currentContract: string;
+    currentMethod: string;
+    /** When set, this card represents a declared error type. Triggers an error-namespace reuse chip + highlight. */
+    errorType?: string;
+}) {
+    const [view, setView] = useState<"schema" | "example">("schema");
+
+    // Error reuse chip: cross-method "this same error is thrown by …".
+    const errorKey = errorType ? ERROR_TYPE_PREFIX + errorType : undefined;
+    const errorRefs = errorKey && usageIndex ? usageIndex.get(errorKey) : undefined;
+    const errorChip = errorRefs && errorRefs.length >= 2
+        ? <ReusedChip refs={errorRefs} highlightType={errorKey!} highlighted={highlightType === errorKey} />
+        : null;
+    const cardHighlighted = errorKey ? highlightType === errorKey : false;
+
+    return (
+        <div data-gg-highlight={cardHighlighted ? "" : undefined}
+             className={cardHighlighted ? "bg-yellow-50 -mx-2 px-2 py-1 rounded ring-1 ring-yellow-300" : ""}>
+            <div className="flex items-center gap-2 mb-2">
+                <span className={`text-[11px] font-bold font-mono px-2 py-0.5 rounded ${statusColor(statusCode)}`}>
+                    {statusCode}
+                </span>
+                <code className="text-sm font-mono text-gray-900">{typeName}</code>
+                {errorChip}
+                {description && <span className="text-xs text-gray-500 truncate">— {description}</span>}
+                {schemaRef && (
+                    <div className="ml-auto shrink-0">
+                        <PillToggle
+                            options={[{id: "schema", label: "Schema"}, {id: "example", label: "Example"}]}
+                            value={view}
+                            onChange={setView}
+                        />
+                    </div>
+                )}
+            </div>
+            {schemaRef ? (
+                view === "schema"
+                    ? <CompactSchema schemaRef={schemaRef} doc={doc} highlightType={highlightType} usageIndex={usageIndex} currentContract={currentContract} currentMethod={currentMethod} />
+                    : <ExampleSchema schemaRef={schemaRef} doc={doc} highlightType={highlightType} />
+            ) : (
+                <div className="text-sm text-gray-500 italic px-1">{emptyLabel ?? "—"}</div>
+            )}
+        </div>
+    );
+}
+
+function statusColor(code: number): string {
+    if (code >= 500) return "bg-red-100 text-red-700";
+    if (code >= 400) return "bg-orange-100 text-orange-700";
+    if (code >= 300) return "bg-amber-100 text-amber-700";
+    if (code >= 200) return "bg-emerald-100 text-emerald-700";
+    return "bg-gray-100 text-gray-700";
+}
+
+// ── Header ─────────────────────────────────────────────────────────────
+
+function MethodHeader({contract, method}: {contract: ContractDoc; method: MethodDoc}) {
+    if (contract.kind === "http") {
+        const fullPath = (contract.pathPrefix ?? "").replace(/\/$/, "") + (method.httpPath ?? "");
+        return (
+            <div className="mb-6">
+                <div className="flex items-center gap-3 text-sm text-gray-500 mb-2">
+                    <span>{contract.name}</span>
+                    <span>›</span>
+                    <span>{method.summary ?? method.name}</span>
+                </div>
+                <div className="flex items-center gap-3 mb-3">
+                    <span className={`text-xs font-bold px-2 py-1 rounded ${methodColor(method.httpMethod)}`}>
+                        {method.httpMethod}
+                    </span>
+                    <code className="text-lg font-mono text-gray-800">{fullPath}</code>
+                </div>
+                <h1 className="text-2xl font-bold">{method.summary ?? method.name}</h1>
+            </div>
+        );
+    }
+    // WS — direction shown via colored 3-segment chip; pattern (req/event)
+    // shown via the same shared PatternBadge as the sidebar.
+    return (
+        <div className="mb-6">
+            <div className="flex items-center gap-3 text-sm text-gray-500 mb-2">
+                <span>{contract.name}</span>
+                <span>›</span>
+                <span>{method.summary ?? method.name}</span>
+            </div>
+            <div className="flex items-center gap-3 mb-3 flex-wrap">
+                <DirectionChip direction={method.wsDirection ?? "client-to-server"} />
+                <code className="text-lg font-mono text-gray-800">{contract.path}</code>
+                <PatternBadge method={method} size="sm" />
+            </div>
+            <h1 className="text-2xl font-bold">{method.summary ?? method.name}</h1>
+            {/* Plain-language helper — removes any guesswork about who sends what */}
+            <p className="text-sm text-gray-500 mt-2">
+                {directionExplainer(method.wsDirection, method.wsPattern)}
+            </p>
+        </div>
+    );
+}
+
+/**
+ * Three-segment direction chip. Same word ("SEND") for both directions —
+ * color and actor labels carry the directional meaning.
+ *
+ *   [ CLIENT ][ SEND ][ SERVER ]   orange   (client pushes to server)
+ *   [ SERVER ][ SEND ][ CLIENT ]   indigo   (server pushes to client)
+ */
+function DirectionChip({direction}: {direction: "client-to-server" | "server-to-client"}) {
+    if (direction === "client-to-server") {
+        return (
+            <div className="inline-flex items-stretch text-xs font-semibold rounded-md overflow-hidden border border-orange-300 shadow-sm">
+                <span className="px-2 py-1 bg-orange-100 text-orange-900 uppercase tracking-wider">Client</span>
+                <span className="px-2 py-1 bg-orange-500 text-white">SENDS TO</span>
+                <span className="px-2 py-1 bg-orange-100 text-orange-900 uppercase tracking-wider">Server</span>
+            </div>
+        );
+    }
+    return (
+        <div className="inline-flex items-stretch text-xs font-semibold rounded-md overflow-hidden border border-indigo-300 shadow-sm">
+            <span className="px-2 py-1 bg-indigo-100 text-indigo-900 uppercase tracking-wider">Server</span>
+            <span className="px-2 py-1 bg-indigo-500 text-white">SENDS TO</span>
+            <span className="px-2 py-1 bg-indigo-100 text-indigo-900 uppercase tracking-wider">Client</span>
+        </div>
+    );
+}
+
+function directionExplainer(direction?: "client-to-server" | "server-to-client", pattern?: MethodDoc["wsPattern"]): string {
+    if (direction === "client-to-server") {
+        if (pattern === "request-response") return "The client sends this message to the server and waits for a reply.";
+        return "The client sends this message to the server. No reply.";
+    }
+    if (direction === "server-to-client") {
+        if (pattern === "server-initiated-request") return "The server pushes this message and expects the client to reply.";
+        return "The server pushes this message to the client unprompted.";
+    }
+    return "";
+}
+
+function methodColor(m?: string): string {
+    switch (m) {
+        case "GET":    return "bg-blue-100 text-blue-700";
+        case "POST":   return "bg-green-100 text-green-700";
+        case "PUT":    return "bg-amber-100 text-amber-700";
+        case "PATCH":  return "bg-amber-100 text-amber-700";
+        case "DELETE": return "bg-red-100 text-red-700";
+        default:       return "bg-gray-100 text-gray-700";
+    }
+}
+
+// ── Layout helpers ─────────────────────────────────────────────────────
+
+function Section({title, children}: {title: React.ReactNode; children: React.ReactNode}) {
+    return (
+        <section className="mb-6">
+            <h2 className="text-xs uppercase tracking-wider text-gray-500 font-semibold mb-2">{title}</h2>
+            <div className="bg-white border border-gray-200 rounded-lg p-4">
+                {children}
+            </div>
+        </section>
+    );
+}
+
+function Label({children}: {children: React.ReactNode}) {
+    return <div className="text-[11px] uppercase tracking-wider text-gray-500 font-semibold mb-1.5">{children}</div>;
+}

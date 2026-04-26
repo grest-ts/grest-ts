@@ -160,6 +160,23 @@ function rewriteGuideLinks(content: string, dirToDocPath: Map<string, string>): 
     return content
 }
 
+/**
+ * Insert a "Live demo" link into the api-docs package page, right after the H1
+ * heading. The static demo is built by build-api-docs-demo.ts into
+ * src/public/api-docs-demo/ and served at /api-docs-demo/.
+ */
+function injectLiveDemo(content: string): string {
+    const demoBlock = `
+> 🚀 <a href="/api-docs-demo/" target="_blank" rel="noopener"><strong>Open the live demo →</strong></a> &nbsp; Try the actual UI rendered against the <a href="https://github.com/grest-ts/grest-ts/tree/master/examples/grest-test" target="_blank" rel="noopener">grest-test</a> example service — sidebar navigation, brand highlighting, discriminated unions, Schema/Example view toggle.
+
+`
+    // Insert after the first H1 (before the first H2 or end of intro paragraph)
+    const h1Match = content.match(/^# .+$/m)
+    if (!h1Match) return demoBlock + content
+    const h1End = (h1Match.index ?? 0) + h1Match[0].length
+    return content.slice(0, h1End) + "\n" + demoBlock + content.slice(h1End)
+}
+
 /** Rewrite @-prefixed link placeholders using the centralized link index (docs-web/links.ts) */
 function rewriteDocLinks(content: string): string {
     return content.replace(
@@ -184,7 +201,13 @@ function discoverRootGuides(): { src: string; slug: string; title: string }[] {
         const title = headingMatch ? headingMatch[1].trim() : titleize(slug)
         entries.push({src, slug, title})
     }
-    return entries.sort((a, b) => a.slug.localeCompare(b.slug))
+    // Sort alphabetically, but pin api-docs to the end (it's the long-tail
+    // reference page; users typically reach for the smaller guides first).
+    return entries.sort((a, b) => {
+        if (a.slug === "api-docs") return 1
+        if (b.slug === "api-docs") return -1
+        return a.slug.localeCompare(b.slug)
+    })
 }
 
 // ── Guide processing ───────────────────────────────────────────────────
@@ -236,6 +259,13 @@ function processPackages(nodes: DependencyNode[], packageDirs: Map<string, strin
         // Empty READMEs (just banner) → minimal page
         if (!content || content.length < 10) {
             content = `# @grest-ts/${node.name}\n\n${node.description}\n`
+        }
+
+        // Inject a live, interactive demo of the rendered docs UI for the
+        // api-docs package. The demo is built separately by build-api-docs-demo.ts
+        // and served from /api-docs-demo/ via VitePress's public/ directory.
+        if (node.name === "api-docs") {
+            content = injectLiveDemo(content)
         }
 
         writeFileSync(

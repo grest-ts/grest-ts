@@ -5,19 +5,21 @@
 
 # @grest-ts/api-docs
 
-> **Optional package** — unified HTTP + WebSocket API documentation UI for grest-ts. One sidebar, one page, both protocols.
+> **The native documentation UI for grest-ts services.** Renders contracts directly — no conversion to OpenAPI or AsyncAPI in the rendering path. Brand intersection types, typed errors, request/response/event patterns, cross-method reuse detection, all surfaced honestly from your `GGContractClass` definitions.
 
-A typical grest-ts service exposes both `httpSchema()` HTTP APIs and `webSocketSchema()` WebSocket APIs. This package gives you a single doc page that lists them all in one sidebar — Swagger UI renders the OpenAPI panes, AsyncAPI react-component renders the AsyncAPI panes, and a small built-in shell ties them together.
+A typical grest-ts service has both HTTP and WebSocket APIs, with rich types like branded primitives, discriminated unions, and shared response shapes. Generic OpenAPI/AsyncAPI tooling flattens most of that into spec-language. This package renders your contracts as they actually exist — `string & UserId`, `req`/`event` patterns, `IN`/`OUT` for WS direction, "↔ N" reuse chips when the same shape flows through multiple methods.
 
 ## Features
 
-- **Live mode (`GGApiDocs`)** — register one route prefix, get the unified UI plus standards-compliant spec endpoints (OpenAPI 3.1 / AsyncAPI 3.0)
-- **Static mode (`buildApiDocs`)** — write a complete static site to disk for hosting on S3, Cloudflare Pages, GitHub Pages, etc.
-- **Mixed HTTP + WebSocket in one page** — the only built-in tool that does this; spec consumers don't have to switch between two URLs
-- **User-defined grouping** — organize APIs by team, domain, or any other dimension; sidebar shows groups with HTTP/WS sub-entries
-- **Bundled viewers** — Swagger UI and AsyncAPI react-component shipped with the package; works offline; CDN escape hatch via `cdnUrl`
-- **`customUi` escape hatch** — replace the shell entirely with your own HTML; the manifest is passed in so you can build any switcher you want around the same standard spec endpoints
-- **Stable spec URLs** — `/specs/<group>/openapi.json` and `/specs/<group>/asyncapi.json`; external SDK pipelines / Postman / contract tests work the same way regardless of UI choices
+- **Native React UI**, served from a single bundle (~70 KB gzipped). Pre-built and shipped with the package — users do not rebuild.
+- **Live mode (`GGApiDocs.register`)** mounts the UI + a contract document JSON endpoint on your runtime's HTTP server.
+- **Static mode (`buildApiDocs`)** writes the same UI + JSON to a directory — drop on S3 / GitHub Pages / Cloudflare Pages, no rewriting needed.
+- **Brand types as `string & BrandName`** intersections — no information lost, the underlying primitive stays visible.
+- **HTTP + WebSocket in one page** — `GET /api/users/:id` and `[CLIENT][SENDS TO][SERVER] ws/chat` rendered with the same vocabulary, color-coded distinctions for direction (`IN` indigo / `OUT` orange) and pattern (`req` / `event`).
+- **Typed error responses** — every `errors: [VALIDATION_ERROR, ...]` declaration becomes its own response card, with the error data shape rendered alongside.
+- **Reuse detection** — when the same `const X = IsObject({...})` (or any branded type) is referenced from multiple methods, an `↔ N` chip surfaces in the schema view. Click → popover lists every other method using it. cmd/ctrl-click opens new tab. Highlight follows you across navigation.
+- **Three navigation lenses** — sidebar tabs: **Groups** (your APIs as you composed them), **Brands** (alphabetical brand index), and inline reuse chips (per-schema cross-references).
+- **Stable JSON contract document** — the underlying `ApiDocsDocument` format is exported; drives the UI but is also useful for SDK pipelines, AI tooling, or anything that wants a richer view of your contracts than OpenAPI provides.
 
 ## Installation
 
@@ -25,11 +27,9 @@ A typical grest-ts service exposes both `httpSchema()` HTTP APIs and `webSocketS
 npm install @grest-ts/api-docs
 ```
 
-This pulls in `@grest-ts/openapi`, `@grest-ts/asyncapi`, and the bundled viewer dependencies.
-
 ## Live mode — `GGApiDocs.register()`
 
-Mount the unified UI inside a runtime's `compose()`:
+Drop one call into your runtime's `compose()`:
 
 ```typescript
 import {GGApiDocs} from "@grest-ts/api-docs"
@@ -47,8 +47,9 @@ protected compose(): void {
         version: "1.0.0",
         docsPath: "/docs",
         groups: {
-            "Users":  {http: [UserApi], ws: [ChatApiSchema]},
-            "Orders": {http: [OrderApi]},
+            "Users":    {http: [UserApi]},
+            "Orders":   {http: [OrderApi]},
+            "Realtime": {ws:   [ChatApiSchema]},
         },
     })
 }
@@ -56,18 +57,13 @@ protected compose(): void {
 
 Routes mounted under `docsPath`:
 
-| Route | Purpose |
-|---|---|
-| `GET /docs` | Shell HTML |
-| `GET /docs/manifest.json` | Sidebar manifest |
-| `GET /docs/specs/users/openapi.json` | OpenAPI for the Users group's HTTP APIs |
-| `GET /docs/specs/users/asyncapi.json` | AsyncAPI for the Users group's WS APIs |
-| `GET /docs/specs/orders/openapi.json` | OpenAPI for the Orders group |
-| `GET /docs/assets/*` | Bundled viewer + shell assets |
+| URL                       | Purpose                                                  |
+|---------------------------|----------------------------------------------------------|
+| `GET /docs`               | React UI shell (HTML)                                    |
+| `GET /docs/api-docs.json` | The contract document (lazy build, cached)               |
+| `GET /docs/assets/*`      | Pre-built JS/CSS bundle (~70 KB gzipped, served offline) |
 
 ### Ungrouped shorthand
-
-When you have a small service, skip `groups` entirely:
 
 ```typescript
 GGApiDocs.register({
@@ -76,50 +72,10 @@ GGApiDocs.register({
     http: [ItemApi, OrderApi],
     ws:   [ChatApiSchema],
 })
-// Sidebar shows one "API" group with the schemas split into HTTP / WebSocket.
+// Sidebar shows one "API" group with the schemas split by HTTP / WebSocket.
 ```
 
-## Static mode — `buildApiDocs()`
-
-Build a complete static site to disk — no runtime required:
-
-```typescript
-import {buildApiDocs} from "@grest-ts/api-docs"
-
-await buildApiDocs({
-    title: "MyOrg Platform",
-    outDir: "./dist/docs",
-    primary: "Users",
-    groups: {
-        "Users":  {http: [UserApi], ws: [ChatApiSchema]},
-        "Orders": {http: [OrderApi]},
-    },
-})
-```
-
-Output:
-
-```
-dist/docs/
-├── index.html
-├── manifest.json
-├── specs/
-│   ├── users/
-│   │   ├── openapi.json
-│   │   └── asyncapi.json
-│   └── orders/
-│       └── openapi.json
-└── assets/
-    ├── swagger-ui-bundle.js, swagger-ui.css
-    ├── asyncapi-component.js, asyncapi-component.css
-    └── shell.js, shell.css
-```
-
-The shell uses **relative URLs**, so the directory works on any path prefix — drop it on `s3://my-bucket/api-docs/` or `pages.cloudflare.com/myorg/`, no rewriting needed.
-
-The spec JSONs `buildApiDocs()` writes are byte-identical to what live mode serves at the corresponding URLs, so external SDK pipelines work the same way regardless of which mode produced them.
-
-## Branding
+### Branding
 
 Light visual customization without replacing the shell:
 
@@ -135,47 +91,54 @@ GGApiDocs.register({
 })
 ```
 
-## CDN-loaded viewers
+## Static mode — `buildApiDocs()`
 
-By default the viewers are served from bundled assets (works offline). Switch one or both to a CDN to slim the runtime image:
+Build a complete static site to disk — no runtime required:
 
 ```typescript
-GGApiDocs.register({
-    title: "MyOrg",
-    docsPath: "/docs",
-    cdnUrl: {
-        swaggerUi: "https://unpkg.com/swagger-ui-dist@5.32.2",
-        asyncApi:  "https://unpkg.com/@asyncapi/react-component@2.5.0",
+import {buildApiDocs} from "@grest-ts/api-docs"
+
+await buildApiDocs({
+    title: "MyOrg Platform",
+    outDir: "./dist/docs",
+    groups: {
+        "Users":    {http: [UserApi]},
+        "Orders":   {http: [OrderApi]},
+        "Realtime": {ws:   [ChatApiSchema]},
     },
-    groups: { /* ... */ },
 })
 ```
 
-## Custom UI
+Output:
 
-Replace the shell entirely. The manifest is passed in so you can build a switcher around the same spec endpoints we serve:
+```
+dist/docs/
+├── index.html        ← shell, references ./assets/* (relative)
+├── api-docs.json     ← contract document
+└── assets/
+    └── index-[hash].{js,css}
+```
+
+The shell uses **relative URLs**, so the directory drops onto any static host at any path prefix without rewriting.
+
+## API reference
 
 ```typescript
-GGApiDocs.register({
-    title: "MyOrg",
-    docsPath: "/docs",
-    groups: { /* ... */ },
-    customUi: (manifest) => `<!DOCTYPE html>
-<html><body>
-  <h1>${manifest.title}</h1>
-  <ul>
-    ${manifest.groups.map(g => `<li>${g.name}: ${g.specs.map(s => `<a href="${s.url}">${s.label}</a>`).join(", ")}</li>`).join("")}
-  </ul>
-</body></html>`,
-})
+GGApiDocs.register(options: GGApiDocsOptions): void
+new GGApiDocs(server: GGHttpServer, options: GGApiDocsOptions)
+
+await buildApiDocs(options: BuildApiDocsOptions): Promise<void>
+
+// Lower-level: just the contract document, no UI — useful for SDK pipelines or custom renderers
+buildContractDoc(options: BuildContractDocOptions): ApiDocsDocument
 ```
 
-When `customUi` is set, no asset routes are registered — the user's HTML is on its own.
+See `index-node.ts` for the full type surface.
 
 ## When NOT to use this package
 
-- **HTTP-only or WS-only service** — `GGOpenApiDocs.register()` or `GGAsyncApiDocs.register()` are simpler if you only have one protocol. Use [`@grest-ts/openapi`](@pkg/openapi) / [`@grest-ts/asyncapi`](@pkg/asyncapi) directly.
-- **Spec only, no UI** — for SDK generation, contract tests, etc., use `toOpenApi()` / `toAsyncApi()` directly. They have no UI dependencies.
-- **You need vanilla Swagger UI** — if you specifically want the standard Swagger UI experience without a custom shell, use `GGOpenApiDocs.register()`.
+- **You specifically need OpenAPI tooling** (Postman, openapi-generator, contract testing) — install [`@grest-ts/openapi`](@pkg/openapi) instead (or alongside).
+- **You specifically need AsyncAPI tooling** — install [`@grest-ts/asyncapi`](@pkg/asyncapi).
+- **You want vanilla Swagger UI / AsyncAPI Studio** for some other reason — those ship with the openapi/asyncapi packages respectively.
 
-`@grest-ts/api-docs` is the right choice when (and pretty much only when) you want **mixed HTTP + WebSocket APIs in one page**, which is the typical grest-ts service shape.
+If you want a polished docs UI for your grest-ts service that surfaces what your contracts actually contain, this is the right package.

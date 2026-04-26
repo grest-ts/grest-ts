@@ -25,23 +25,28 @@ A contract carries information that OpenAPI and AsyncAPI flatten or lose:
 
 The v1 shell tried to compose two third-party renderers (Swagger UI + AsyncAPI react-component) on top of generated specs. This plan flips it: render contracts natively in a React UI we own end-to-end, and treat OpenAPI/AsyncAPI as *exports* offered alongside.
 
-## Three-package layout (peers, not stacked)
+## Three peer packages — fully independent
 
 ```
 packages-libs/docs/
 ├── api-docs/        ← THE PRIMARY DOCS UI — renders contracts directly
 │                      React app, Vite-built, ships pre-built assets
 │                      Live mode (GGApiDocs.register) + static mode (buildApiDocs)
-│                      Header: "Export ▾" with OpenAPI/AsyncAPI download buttons
+│                      NO dependency on openapi/asyncapi
 │
 ├── openapi/         ← INDUSTRY EXPORT — toOpenApi() + optional GGOpenApiDocs (Swagger UI)
-│                      Independent peer; users who want OpenAPI tooling/SDK pipelines/Postman
+│                      Standalone; install if you want OpenAPI tooling
 │
 └── asyncapi/        ← INDUSTRY EXPORT — toAsyncApi() + optional GGAsyncApiDocs (Studio)
-                       Independent peer; users who want AsyncAPI tooling
+                       Standalone; install if you want AsyncAPI tooling
 ```
 
-`api-docs` only depends on `openapi` and `asyncapi` for the **export buttons** (lazy-loaded, on click). They are not in the rendering path.
+**No coupling between the three.** Each package has one job and one audience:
+
+- **api-docs** is for users browsing their own service docs. It renders contracts *directly* — `GGSchemaDescription` walked through our React UI, no intermediate spec format, no information loss. Opinionated grouping (groups → contracts → methods) optimized for navigation.
+- **openapi / asyncapi** are exports for *external tooling* — SDK generators, Postman, contract testing, AsyncAPI Studio. They emit standards-compliant JSON. They are *not* what api-docs reads.
+
+The earlier plan had api-docs depend on openapi/asyncapi for an "Export ▾" download menu. That's been dropped: the api-docs grouping has no clean mapping to OpenAPI's structure, so any export from that menu would either pick one grouping (losing the others) or emit one spec per group (consumers have to stitch). Keeping the standards exports as completely separate packages means they can stay aligned with the *spec's* native shape, not ours.
 
 ---
 
@@ -298,7 +303,7 @@ packages-libs/docs/api-docs/
 │   ├── buildApiDocs.ts                 ← static-mode disk writer
 │   ├── buildContractDoc.ts             ← contract → ApiDocsDocument
 │   ├── docTypes.ts                     ← ApiDocsDocument types (used by both server and UI)
-│   └── exporters.ts                    ← lazy callers into @grest-ts/openapi and @grest-ts/asyncapi for download buttons
+│   (no exporters.ts — api-docs is standalone, no openapi/asyncapi calls)
 ├── ui/
 │   ├── package.json                    ← UI subpackage; not published; build only
 │   ├── vite.config.ts
@@ -618,11 +623,9 @@ Routes mounted:
 |---|---|
 | `GET /docs` | `dist-ui/index.html` |
 | `GET /docs/api-docs.json` | `ApiDocsDocument` (lazy build, cached) |
-| `GET /docs/openapi.json` | `toOpenApi(...)` of the HTTP schemas — lazy |
-| `GET /docs/asyncapi.json` | `toAsyncApi(...)` of the WS schemas — lazy |
 | `GET /docs/assets/*` | Vite-built JS/CSS, served from `dist-ui/assets/` |
 
-OpenAPI/AsyncAPI routes are served only if any HTTP/WS schemas exist respectively. `Export ▾` menu in the UI shows the relevant downloads.
+No openapi.json / asyncapi.json routes — those live in their own packages (`@grest-ts/openapi`, `@grest-ts/asyncapi`) which a user installs separately if they want them. api-docs is fully standalone.
 
 `customUi` option still exists — receives the `ApiDocsDocument` and returns a full HTML string. Skips all asset routes.
 
@@ -653,8 +656,8 @@ OpenAPI/AsyncAPI routes are served only if any HTTP/WS schemas exist respectivel
 | Try It Out for both HTTP and WS | WS try-it-out is uniquely useful — no industry tool does it |
 | Pre-built UI shipped in dist-ui/ | Users do not rebuild; dist-ui/ committed and published |
 | dist-ui served at /docs/assets/* in live mode and ./assets/* in static | Same URL layout, different absolute prefix |
-| OpenAPI/AsyncAPI links surface as small Export ▾ menu | Available without taking center stage |
-| customUi receives ApiDocsDocument | User can build any UI around the same standards-compliant doc |
+| api-docs is standalone — no dep on openapi/asyncapi | The two grouping models don't compose cleanly; keeping the standards exports as separate peer packages lets each align with its native shape |
+| customUi receives ApiDocsDocument | User can build any UI around the standards-compliant internal doc |
 | No backward compatibility with v1 | Free to redesign; v1 unreleased |
 
 ## Open decisions to revisit during implementation
@@ -707,7 +710,7 @@ Phases 1–4 are the riskiest; phases 6–10 are mostly "more of the same" once 
 
 | File | Change |
 |------|--------|
-| `packages-libs/docs/api-docs/grest.package.ts` | Drop `@asyncapi/react-component` dep; keep `@grest-ts/openapi` + `@grest-ts/asyncapi` (only used for export endpoints) |
+| `packages-libs/docs/api-docs/grest.package.ts` | Drop `@asyncapi/react-component`, `@grest-ts/openapi`, and `@grest-ts/asyncapi` — api-docs is standalone |
 | `packages-libs/docs/api-docs/src/GGApiDocs.ts` | Rewrite — serve dist-ui assets + api-docs.json + lazy openapi.json/asyncapi.json |
 | `packages-libs/docs/api-docs/src/buildApiDocs.ts` | Rewrite — write dist-ui copy + api-docs.json + optional openapi.json/asyncapi.json |
 | `packages-libs/docs/api-docs/src/manifest.ts` | Replaced by `buildContractDoc.ts` |
@@ -733,7 +736,6 @@ A lot — see the `ui/` directory layout under Phase 2 and the codegen/render st
 - `src/buildContractDoc.ts` (~350 lines — thinner than originally estimated since the schema walker reuses `toSchemaDescription()` and the JSON adapter is a small recursive function)
 - `src/docTypes.ts` (~80 lines — wrapper-only types; the schema portion is just `JsonSchemaDescription` plus the wrapping `ContractDoc`/`MethodDoc`/`ErrorDoc`/`AuthDoc`/etc.)
 - `src/jsonSchemaAdapter.ts` (~50 lines — converts `GGSchemaDescription` ↔ `JsonSchemaDescription` by swapping schema/canonical references for stable IDs)
-- `src/exporters.ts` (~50 lines)
 - `ui/src/main.tsx`, `App.tsx` (~100 lines combined)
 - `ui/src/components/*` (~600 lines)
 - `ui/src/method/*` (~800 lines, includes tabs and try-it-out)

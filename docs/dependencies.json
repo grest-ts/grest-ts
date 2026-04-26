@@ -3,7 +3,7 @@
   "nodes": [
     {
       "name": "api-docs",
-      "description": "Unified HTTP + WebSocket API documentation UI for grest-ts",
+      "description": "Native React-based documentation UI for grest-ts services — renders contracts directly, no OpenAPI/AsyncAPI conversion in the rendering path",
       "flags": {
         "node": true,
         "browser": false,
@@ -29,7 +29,7 @@
         "implementation": false,
         "npm": true
       },
-      "layer": 1,
+      "layer": 0,
       "color": "#59A14F",
       "category": "libs",
       "group": "docs",
@@ -331,7 +331,7 @@
         "implementation": false,
         "npm": true
       },
-      "layer": 3,
+      "layer": 2,
       "color": "#4E79A7",
       "category": "core",
       "group": "http",
@@ -465,7 +465,7 @@
         "implementation": false,
         "npm": true
       },
-      "layer": 4,
+      "layer": 3,
       "color": "#4E79A7",
       "category": "core",
       "readme": "<!-- GREST-TS-BANNER-START -->\n> Part of the [grest-ts](https://github.com/grest-ts/grest-ts) framework.\n> [Documentation](https://github.com/grest-ts/grest-ts#readme) | [All packages](https://github.com/grest-ts/grest-ts#package-reference)\n<!-- GREST-TS-BANNER-END -->\n\n# @grest-ts/metrics\n\nType-safe metrics collection library for Grest Framework.\n\n## Features\n\nType-safe metrics collection library with support for counters, gauges, and histograms.\n\nProvides a structured way to define, collect, and export application metrics with:\n\n- Prometheus-style metrics (Counter, Gauge, Histogram)\n- Type-safe labels\n- Centralized metric definitions\n- Multiple export formats\n\nType-safe metrics collection library with support for counters, gauges, and histograms.\n\n## Quick usage example\n\n```typescript\n// Define metric keys.\n// This additionally acts as documentation of metrics provided by the application.\nexport const AppMetrics = GGMetrics.define('/app/', () => ({\n    actions: new GGCounterKey('actions_total', {\n        help: 'Total number of actions',\n        labelNames: ['type']\n    }),\n    // ... add more metrics here. All well documented and type safe.\n}));\n\n// Usage in the runtime.\nAppMetrics.actions.inc(1, {type: \"read\"}); // labels are typesafe (values are always strings)\n\n```\n\n## Documentation\n\n- [Usage](./README-usage.md) - How to define and collect metrics\n- [Testing](./README-testkit.md) - How to test metric changes with testkit\n- [Extending](./README-extending.md) - How to add custom exporters\n"
@@ -481,7 +481,7 @@
         "implementation": false,
         "npm": true
       },
-      "layer": 2,
+      "layer": 1,
       "color": "#59A14F",
       "category": "libs",
       "group": "docs",
@@ -697,7 +697,7 @@
         "implementation": false,
         "npm": true
       },
-      "layer": 2,
+      "layer": 1,
       "color": "#4E79A7",
       "category": "core",
       "group": "http",
@@ -705,10 +705,6 @@
     }
   ],
   "edges": [
-    {
-      "from": "api-docs",
-      "to": "asyncapi"
-    },
     {
       "from": "api-docs",
       "to": "http"
@@ -719,7 +715,7 @@
     },
     {
       "from": "api-docs",
-      "to": "openapi"
+      "to": "schema"
     },
     {
       "from": "api-docs",

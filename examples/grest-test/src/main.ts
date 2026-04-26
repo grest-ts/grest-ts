@@ -139,7 +139,7 @@ export class MainRuntime extends GGRuntime {
             httpServer: unifiedShowcaseServer,
             title: "Unified Showcase",
             version: "1.0.0",
-            description: "Mixed HTTP + WebSocket APIs in one unified shell — Swagger UI for HTTP panes, AsyncAPI react-component for WS panes.",
+            description: "Mixed HTTP + WebSocket APIs rendered natively from grest-ts contracts — brand intersection types, typed errors, reuse detection, color-coded WS direction.",
             docsPath: "/docs",
             groups: {
                 "HTTP":      {http: [ShowcaseApi]},

@@ -6,9 +6,13 @@
   "scripts": {
     "generate": "tsx generate.ts",
     "generate:watch": "tsx generate.ts --watch",
+    "build:demo": "tsx build-api-docs-demo.ts",
     "dev": "vitepress dev",
-    "build": "tsx generate.ts && vitepress build",
+    "build": "tsx generate.ts && tsx build-api-docs-demo.ts && vitepress build",
     "preview": "vitepress preview"
+  },
+  "dependencies": {
+    "@grest-ts/api-docs": "*"
   },
   "devDependencies": {
     "mermaid": "^11.4.1",
