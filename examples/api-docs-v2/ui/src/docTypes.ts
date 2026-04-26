@@ -86,6 +86,8 @@ export interface GGSchemaDocs {
     examples?: readonly unknown[];
     deprecated?: boolean;
     format?: string;
+    /** Runtime form of the TypeScript brand (e.g. "UserId" from `.brand("UserId")`). */
+    brand?: string;
 }
 
 export type JsonSchemaNodeKind =

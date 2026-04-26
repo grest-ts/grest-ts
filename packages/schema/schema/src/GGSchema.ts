@@ -111,8 +111,17 @@ export abstract class GGSchema<Type, TDef extends GGSchemaDefinition = GGSchemaD
         return this.derive({coercions: [...(this.def.coercions ?? []), fn]} as any, true) as this;
     }
 
-    public brand<B extends string>(_name: B): GGSchema<Type & Brand<B>, TDef> {
-        return this as any;
+    public brand<B extends string>(name: B): GGSchema<Type & Brand<B>, TDef> {
+        // The TypeScript-side `Brand<B>` intersection is purely type-level.
+        // We also stash the name into `docs.brand` at runtime so docs and
+        // openapi/asyncapi tooling can surface the brand alongside the
+        // underlying primitive (e.g. `string & UserId`). Explicit
+        // `.docs({brand: "..."})` always wins.
+        if (this.def.docs?.brand !== undefined) {
+            return this as any;
+        }
+        const mergedDocs: GGSchemaDocs = {...(this.def.docs ?? {}), brand: name};
+        return this.derive({docs: mergedDocs} as Partial<TDef>, true) as any;
     }
 
     /**

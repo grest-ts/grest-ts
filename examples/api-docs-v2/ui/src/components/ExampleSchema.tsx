@@ -86,7 +86,12 @@ function generateFromDesc(
 ): Example {
     // Brand annotation for primitives is "<baseType> & <BrandName>" so the
     // underlying type stays visible even when the schema has a named title.
-    const brandTitle = namedAs ?? desc.docs?.title?.replace(/\s+/g, "");
+    // Prefer explicit `docs.brand` (auto-populated by `.brand("UserId")`),
+    // fall back to whitespace-stripped title for legacy schemas, and finally
+    // fall back to the named-as parameter (used when this is a top-level $ref).
+    const brandTitle = namedAs
+        ?? desc.docs?.brand
+        ?? desc.docs?.title?.replace(/\s+/g, "");
     const baseType = brandedBaseTypeLabel(desc);
     const brand = brandTitle
         ? (baseType ? `${baseType} & ${brandTitle}` : brandTitle)
@@ -198,10 +203,8 @@ function brandedBaseTypeLabel(desc: JsonSchemaDescription): string | undefined {
  * is to display what the contract says, not to invent it.
  */
 function stringPlaceholder(desc: JsonSchemaDescription): string {
-    if (desc.docs?.title) {
-        const brand = desc.docs.title.replace(/\s+/g, "");
-        return `some${brand[0].toUpperCase()}${brand.slice(1)}`;
-    }
+    const brand = desc.docs?.brand ?? desc.docs?.title?.replace(/\s+/g, "");
+    if (brand) return `some${brand[0].toUpperCase()}${brand.slice(1)}`;
     return "someString";
 }
 

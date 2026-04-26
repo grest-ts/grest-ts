@@ -166,12 +166,45 @@ function renderUnion(
     doc: ApiDocsDocument,
     depth: number,
 ): React.ReactNode {
+    return renderUnionLike(
+        node.variants.map(v => renderInline(v, doc, depth + 1)),
+        depth,
+        false,
+    );
+}
+
+/**
+ * Shared renderer for union/literal alternatives. Inline if ≤3 alternatives,
+ * one-per-line with leading `|` if more — easier to scan when the set gets
+ * long (e.g. an enum of 10 categories).
+ */
+function renderUnionLike(
+    parts: React.ReactNode[],
+    depth: number,
+    nullable: boolean,
+): React.ReactNode {
+    const all = nullable ? [...parts, <span className="text-emerald-700">null</span>] : parts;
+    if (all.length <= 3) {
+        return (
+            <>
+                {all.map((p, i) => (
+                    <span key={i}>
+                        {i > 0 && <span className="text-gray-500"> | </span>}
+                        {p}
+                    </span>
+                ))}
+            </>
+        );
+    }
+    const indent = "  ".repeat(depth + 1);
     return (
         <>
-            {node.variants.map((v, i) => (
+            {all.map((p, i) => (
                 <span key={i}>
-                    {i > 0 && <span className="text-gray-500"> | </span>}
-                    {renderInline(v, doc, depth)}
+                    {"\n"}
+                    {indent}
+                    <span className="text-gray-500">| </span>
+                    {p}
                 </span>
             ))}
         </>
@@ -249,12 +282,18 @@ function renderInline(desc: JsonSchemaDescription, doc: ApiDocsDocument, depth: 
     // Drop the `<format>` suffix when a brand name exists — the brand name
     // already conveys the semantic role, so e.g. `string<email> & EmailAddress`
     // is just duplication.
-    if (isPrimitive(node.kind) && desc.docs?.title) {
+    //
+    // `docs.brand` is the canonical brand identifier (auto-populated by
+    // `.brand("UserId")` in @grest-ts/schema). `docs.title` is the human label
+    // ("User ID"); fall back to a stripped-whitespace title for legacy schemas
+    // that set title but not brand.
+    const brandName = brandIdentifier(desc);
+    if (isPrimitive(node.kind) && brandName) {
         return (
             <>
                 <span className="text-emerald-700">{bareTypeLabel(desc)}</span>
                 <span className="text-gray-500"> & </span>
-                <span className="text-purple-600">{desc.docs.title.replace(/\s+/g, "")}</span>
+                <span className="text-purple-600">{brandName}</span>
                 {desc.nullable && <span className="text-gray-500"> | null</span>}
                 {desc.defaultValue !== undefined && <DefaultValue value={desc.defaultValue} />}
             </>
@@ -280,17 +319,8 @@ function renderInline(desc: JsonSchemaDescription, doc: ApiDocsDocument, depth: 
 
         case "literal": {
             const values = (node as any).values as readonly any[];
-            return (
-                <>
-                    {values.map((v, i) => (
-                        <span key={i}>
-                            {i > 0 && <span className="text-gray-500"> | </span>}
-                            <span className="text-emerald-700">{JSON.stringify(v)}</span>
-                        </span>
-                    ))}
-                    {desc.nullable && <span className="text-gray-500"> | null</span>}
-                </>
-            );
+            const renderVal = (v: unknown) => <span className="text-emerald-700">{JSON.stringify(v)}</span>;
+            return renderUnionLike(values.map(renderVal), depth, desc.nullable);
         }
 
         case "array":
@@ -332,21 +362,67 @@ function DefaultValue({value}: {value: unknown}) {
 
 // ── Trailing-comment annotations (constraints / description / example) ─
 
+/**
+ * Trailing comment after a property: a row of colored "tag" chips for the
+ * concise factual hints (title / constraints / example / format) plus the
+ * human description as plain prose at the end. Color-coded so the eye can
+ * triage what kind of metadata each chip is at a glance.
+ */
 function renderTrailingComment(desc: JsonSchemaDescription): React.ReactNode {
-    const parts: string[] = [];
+    const tags: React.ReactNode[] = [];
+
+    // Tag prefixes (`title:`, `e.g.`, `html format:`) are dropped — the chip
+    // colors carry the role distinction (indigo=title, emerald=example,
+    // amber=html-format-hint, slate=constraints), so the prefix words are
+    // visual noise.
+    //
+    // Order: example → title → format → description (per user preference),
+    // with constraints right after example since both are value-level facts.
+    if (desc.docs?.example !== undefined) {
+        tags.push(<TagChip key="e" tone="emerald">{JSON.stringify(desc.docs.example)}</TagChip>);
+    }
 
     const constraints = primitiveConstraints(desc);
-    if (constraints.length > 0) parts.push(constraints.join(", "));
+    if (constraints.length > 0) {
+        tags.push(<TagChip key="c" tone="slate">{constraints.join(", ")}</TagChip>);
+    }
 
-    if (desc.docs?.description) parts.push(desc.docs.description);
-    if (desc.docs?.example !== undefined) parts.push(`e.g. ${JSON.stringify(desc.docs.example)}`);
-    // Format hint last — labelled "html format" because it maps directly
-    // onto an HTML <input type="..."> hint (email, date, password, url, ...).
-    // Angle brackets visually signal "this is a tag-like meta hint", not prose.
-    if (desc.docs?.format) parts.push(`<html format: ${desc.docs.format}>`);
+    if (desc.docs?.title) {
+        tags.push(<TagChip key="t" tone="indigo">{desc.docs.title}</TagChip>);
+    }
 
-    if (parts.length === 0) return null;
-    return <span className="text-gray-400 italic">  {`// ${parts.join(" — ")}`}</span>;
+    // Format hint — maps onto HTML <input type="..."> conventions.
+    if (desc.docs?.format) {
+        tags.push(<TagChip key="f" tone="amber">{desc.docs.format}</TagChip>);
+    }
+
+    const hasDescription = !!desc.docs?.description;
+    if (tags.length === 0 && !hasDescription) return null;
+
+    return (
+        <span className="ml-2 inline-flex items-center gap-1 align-middle">
+            <span className="text-gray-300 font-mono">//</span>
+            {tags}
+            {hasDescription && (
+                <span className="text-gray-500 italic ml-0.5">{desc.docs!.description}</span>
+            )}
+        </span>
+    );
+}
+
+const TONE_CLASSES = {
+    slate:   "bg-slate-100 text-slate-600",
+    indigo:  "bg-indigo-50 text-indigo-700",
+    emerald: "bg-emerald-50 text-emerald-700",
+    amber:   "bg-amber-50 text-amber-700",
+} as const;
+
+function TagChip({tone, children}: {tone: keyof typeof TONE_CLASSES; children: React.ReactNode}) {
+    return (
+        <span className={`text-[10px] font-mono not-italic px-1.5 py-0 rounded ${TONE_CLASSES[tone]}`}>
+            {children}
+        </span>
+    );
 }
 
 function Pill({children}: {children: React.ReactNode}) {
@@ -355,13 +431,33 @@ function Pill({children}: {children: React.ReactNode}) {
 
 // ── Helpers ────────────────────────────────────────────────────────────
 
+/**
+ * Brand identifier for display. Prefers the explicit `docs.brand` field
+ * (auto-populated by grest-ts `.brand("UserId")`), falls back to a
+ * whitespace-stripped `docs.title` for older schemas that haven't migrated.
+ */
+function brandIdentifier(desc: JsonSchemaDescription): string | undefined {
+    if (desc.docs?.brand) return desc.docs.brand;
+    if (desc.docs?.title) return desc.docs.title.replace(/\s+/g, "");
+    return undefined;
+}
+
 function isPrimitive(kind: string): boolean {
     return ["string", "number", "boolean", "bit", "literal", "any", "unknown", "file", "password"].includes(kind);
 }
 
+/**
+ * "Scalar" here means: rendering this inline as `T[]` is unambiguous.
+ * Anything that produces a `|` in its rendering (union, multi-value literal,
+ * nullable) needs `Array<T>` instead — otherwise the trailing `[]` looks
+ * like it only applies to the last alternative (`"a" | "b" | "c"[]`).
+ */
 function isScalar(desc: JsonSchemaDescription): boolean {
+    if (desc.nullable) return false;
     const k = desc.node.kind;
-    return k !== "object" && k !== "discriminated";
+    if (k === "object" || k === "discriminated" || k === "union") return false;
+    if (k === "literal" && (desc.node as any).values.length > 1) return false;
+    return true;
 }
 
 /** Type label *with* the format hint suffix — used when there's no brand name. */

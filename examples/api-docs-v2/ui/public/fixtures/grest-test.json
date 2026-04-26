@@ -171,6 +171,7 @@
                                     "kind": "string"
                                   },
                                   "docs": {
+                                    "brand": "email",
                                     "title": "Email address",
                                     "format": "email",
                                     "example": "user@example.com"
@@ -196,6 +197,7 @@
                                     "kind": "string"
                                   },
                                   "docs": {
+                                    "brand": "phone",
                                     "title": "Phone number",
                                     "description": "International format with country code",
                                     "example": "+12025551234"
@@ -209,6 +211,7 @@
                                     "kind": "string"
                                   },
                                   "docs": {
+                                    "brand": "language",
                                     "title": "Language code",
                                     "description": "ISO 639-1",
                                     "example": "en"
@@ -222,6 +225,7 @@
                                     "kind": "string"
                                   },
                                   "docs": {
+                                    "brand": "locale",
                                     "title": "Locale code",
                                     "description": "BCP 47 language or language-region format",
                                     "example": "en-US"
@@ -235,6 +239,7 @@
                                     "kind": "string"
                                   },
                                   "docs": {
+                                    "brand": "url",
                                     "title": "URL",
                                     "format": "uri",
                                     "description": "HTTP or HTTPS URL",
@@ -291,6 +296,7 @@
                                           "kind": "string"
                                         },
                                         "docs": {
+                                          "brand": "country",
                                           "title": "Country code",
                                           "description": "ISO 3166-1 alpha-2",
                                           "example": "US"
@@ -330,6 +336,7 @@
                                     "kind": "string"
                                   },
                                   "docs": {
+                                    "brand": "date",
                                     "title": "Date",
                                     "format": "date",
                                     "description": "Registration date",
@@ -347,6 +354,7 @@
                                     "max": 32503680000
                                   },
                                   "docs": {
+                                    "brand": "timestamp",
                                     "title": "Unix timestamp in seconds",
                                     "description": "Seconds since Unix epoch (year 1970–3000)",
                                     "example": 1700000000
@@ -409,6 +417,7 @@
                                           "max": 90
                                         },
                                         "docs": {
+                                          "brand": "latitude",
                                           "title": "Latitude",
                                           "description": "Decimal degrees (-90 to 90)",
                                           "example": 59.437
@@ -425,6 +434,7 @@
                                           "max": 180
                                         },
                                         "docs": {
+                                          "brand": "longitude",
                                           "title": "Longitude",
                                           "description": "Decimal degrees (-180 to 180)",
                                           "example": 24.754
@@ -465,6 +475,7 @@
                                     "kind": "string"
                                   },
                                   "docs": {
+                                    "brand": "ip",
                                     "title": "IP address",
                                     "format": "ip",
                                     "description": "IPv4 or IPv6",
@@ -645,6 +656,7 @@
                           "kind": "string"
                         },
                         "docs": {
+                          "brand": "url",
                           "title": "URL",
                           "format": "uri",
                           "description": "HTTP or HTTPS URL",
@@ -689,6 +701,7 @@
                                 "kind": "string"
                               },
                               "docs": {
+                                "brand": "country",
                                 "title": "Country code",
                                 "description": "ISO 3166-1 alpha-2",
                                 "example": "US"
@@ -736,6 +749,7 @@
                                 "max": 90
                               },
                               "docs": {
+                                "brand": "latitude",
                                 "title": "Latitude",
                                 "description": "Decimal degrees (-90 to 90)",
                                 "example": 59.437
@@ -752,6 +766,7 @@
                                 "max": 180
                               },
                               "docs": {
+                                "brand": "longitude",
                                 "title": "Longitude",
                                 "description": "Decimal degrees (-180 to 180)",
                                 "example": 24.754
@@ -890,6 +905,7 @@
                           "kind": "string"
                         },
                         "docs": {
+                          "brand": "url",
                           "title": "URL",
                           "format": "uri",
                           "description": "HTTP or HTTPS URL",
@@ -1363,6 +1379,7 @@
           "kind": "string"
         },
         "docs": {
+          "brand": "country",
           "title": "Country code",
           "description": "ISO 3166-1 alpha-2",
           "example": "US"
@@ -1387,6 +1404,7 @@
           "kind": "string"
         },
         "docs": {
+          "brand": "currency",
           "title": "Currency code",
           "description": "ISO 4217",
           "example": "USD"
@@ -1411,6 +1429,7 @@
           "kind": "string"
         },
         "docs": {
+          "brand": "date",
           "title": "Date",
           "format": "date",
           "description": "Format YYYY-MM-DD",
@@ -1453,6 +1472,7 @@
                 "kind": "string"
               },
               "docs": {
+                "brand": "email",
                 "title": "Email address",
                 "format": "email",
                 "example": "user@example.com"
@@ -1478,6 +1498,7 @@
                 "kind": "string"
               },
               "docs": {
+                "brand": "phone",
                 "title": "Phone number",
                 "description": "International format with country code",
                 "example": "+12025551234"
@@ -1491,6 +1512,7 @@
                 "kind": "string"
               },
               "docs": {
+                "brand": "language",
                 "title": "Language code",
                 "description": "ISO 639-1",
                 "example": "en"
@@ -1504,6 +1526,7 @@
                 "kind": "string"
               },
               "docs": {
+                "brand": "locale",
                 "title": "Locale code",
                 "description": "BCP 47 language or language-region format",
                 "example": "en-US"
@@ -1517,6 +1540,7 @@
                 "kind": "string"
               },
               "docs": {
+                "brand": "url",
                 "title": "URL",
                 "format": "uri",
                 "description": "HTTP or HTTPS URL",
@@ -1573,6 +1597,7 @@
                       "kind": "string"
                     },
                     "docs": {
+                      "brand": "country",
                       "title": "Country code",
                       "description": "ISO 3166-1 alpha-2",
                       "example": "US"
@@ -1612,6 +1637,7 @@
                 "kind": "string"
               },
               "docs": {
+                "brand": "date",
                 "title": "Date",
                 "format": "date",
                 "description": "Registration date",
@@ -1629,6 +1655,7 @@
                 "max": 32503680000
               },
               "docs": {
+                "brand": "timestamp",
                 "title": "Unix timestamp in seconds",
                 "description": "Seconds since Unix epoch (year 1970–3000)",
                 "example": 1700000000
@@ -1691,6 +1718,7 @@
                       "max": 90
                     },
                     "docs": {
+                      "brand": "latitude",
                       "title": "Latitude",
                       "description": "Decimal degrees (-90 to 90)",
                       "example": 59.437
@@ -1707,6 +1735,7 @@
                       "max": 180
                     },
                     "docs": {
+                      "brand": "longitude",
                       "title": "Longitude",
                       "description": "Decimal degrees (-180 to 180)",
                       "example": 24.754
@@ -1747,6 +1776,7 @@
                 "kind": "string"
               },
               "docs": {
+                "brand": "ip",
                 "title": "IP address",
                 "format": "ip",
                 "description": "IPv4 or IPv6",
@@ -1821,6 +1851,7 @@
                 "kind": "string"
               },
               "docs": {
+                "brand": "email",
                 "title": "Email address",
                 "format": "email",
                 "example": "user@example.com"
@@ -1856,6 +1887,7 @@
                 "kind": "string"
               },
               "docs": {
+                "brand": "country",
                 "title": "Country code",
                 "description": "ISO 3166-1 alpha-2",
                 "example": "US"
@@ -1869,6 +1901,7 @@
                 "kind": "string"
               },
               "docs": {
+                "brand": "language",
                 "title": "Language code",
                 "description": "ISO 639-1",
                 "example": "en"
@@ -1964,6 +1997,7 @@
                           "kind": "string"
                         },
                         "docs": {
+                          "brand": "country",
                           "title": "Country code",
                           "description": "ISO 3166-1 alpha-2",
                           "example": "US"
@@ -2025,6 +2059,7 @@
                 "max": 32503680000
               },
               "docs": {
+                "brand": "timestamp",
                 "title": "Unix timestamp in seconds",
                 "description": "Seconds since Unix epoch (year 1970–3000)",
                 "example": 1700000000
@@ -2038,6 +2073,7 @@
                 "kind": "string"
               },
               "docs": {
+                "brand": "datetime",
                 "title": "DateTime",
                 "description": "Format YYYY-MM-DD HH:mm:ss",
                 "example": "2024-01-15 14:30:00"
@@ -2054,6 +2090,7 @@
                 "max": 90
               },
               "docs": {
+                "brand": "latitude",
                 "title": "Latitude",
                 "description": "Decimal degrees (-90 to 90)",
                 "example": 59.437
@@ -2070,6 +2107,7 @@
                 "max": 180
               },
               "docs": {
+                "brand": "longitude",
                 "title": "Longitude",
                 "description": "Decimal degrees (-180 to 180)",
                 "example": 24.754
@@ -2143,6 +2181,7 @@
                             "max": 32503680000
                           },
                           "docs": {
+                            "brand": "timestamp",
                             "title": "Unix timestamp in seconds",
                             "description": "When the event occurred",
                             "example": 1700000000
@@ -2167,6 +2206,7 @@
                             "kind": "string"
                           },
                           "docs": {
+                            "brand": "email",
                             "title": "Email address",
                             "format": "email",
                             "example": "user@example.com"
@@ -2180,6 +2220,7 @@
                             "kind": "string"
                           },
                           "docs": {
+                            "brand": "country",
                             "title": "Country code",
                             "description": "ISO 3166-1 alpha-2",
                             "example": "US"
@@ -2230,6 +2271,7 @@
                             "max": 32503680000
                           },
                           "docs": {
+                            "brand": "timestamp",
                             "title": "Unix timestamp in seconds",
                             "description": "When the event occurred",
                             "example": 1700000000
@@ -2276,6 +2318,7 @@
                             "kind": "string"
                           },
                           "docs": {
+                            "brand": "currency",
                             "title": "Currency code",
                             "description": "ISO 4217",
                             "example": "USD"
@@ -2327,6 +2370,7 @@
                             "max": 32503680000
                           },
                           "docs": {
+                            "brand": "timestamp",
                             "title": "Unix timestamp in seconds",
                             "description": "When the event occurred",
                             "example": 1700000000
@@ -2496,6 +2540,7 @@
                       "max": 32503680000
                     },
                     "docs": {
+                      "brand": "timestamp",
                       "title": "Unix timestamp in seconds",
                       "description": "When the event occurred",
                       "example": 1700000000
@@ -2520,6 +2565,7 @@
                       "kind": "string"
                     },
                     "docs": {
+                      "brand": "email",
                       "title": "Email address",
                       "format": "email",
                       "example": "user@example.com"
@@ -2533,6 +2579,7 @@
                       "kind": "string"
                     },
                     "docs": {
+                      "brand": "country",
                       "title": "Country code",
                       "description": "ISO 3166-1 alpha-2",
                       "example": "US"
@@ -2583,6 +2630,7 @@
                       "max": 32503680000
                     },
                     "docs": {
+                      "brand": "timestamp",
                       "title": "Unix timestamp in seconds",
                       "description": "When the event occurred",
                       "example": 1700000000
@@ -2629,6 +2677,7 @@
                       "kind": "string"
                     },
                     "docs": {
+                      "brand": "currency",
                       "title": "Currency code",
                       "description": "ISO 4217",
                       "example": "USD"
@@ -2680,6 +2729,7 @@
                       "max": 32503680000
                     },
                     "docs": {
+                      "brand": "timestamp",
                       "title": "Unix timestamp in seconds",
                       "description": "When the event occurred",
                       "example": 1700000000

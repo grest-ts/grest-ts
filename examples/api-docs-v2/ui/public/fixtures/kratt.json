@@ -82,6 +82,9 @@
                               "node": {
                                 "kind": "string"
                               },
+                              "docs": {
+                                "brand": "UserId"
+                              },
                               "nullable": false,
                               "optional": false
                             },
@@ -146,6 +149,9 @@
                             "canonicalId": "s1",
                             "node": {
                               "kind": "string"
+                            },
+                            "docs": {
+                              "brand": "OrgId"
                             },
                             "nullable": false,
                             "optional": false
@@ -244,6 +250,9 @@
                         "node": {
                           "kind": "string"
                         },
+                        "docs": {
+                          "brand": "OrgId"
+                        },
                         "nullable": false,
                         "optional": false
                       }
@@ -280,6 +289,9 @@
                               "canonicalId": "s1",
                               "node": {
                                 "kind": "string"
+                              },
+                              "docs": {
+                                "brand": "OrgId"
                               },
                               "nullable": false,
                               "optional": false
@@ -456,6 +468,9 @@
                               "node": {
                                 "kind": "string"
                               },
+                              "docs": {
+                                "brand": "UserId"
+                              },
                               "nullable": false,
                               "optional": false
                             },
@@ -494,6 +509,9 @@
                               "canonicalId": "s1",
                               "node": {
                                 "kind": "string"
+                              },
+                              "docs": {
+                                "brand": "OrgId"
                               },
                               "nullable": false,
                               "optional": false
@@ -607,6 +625,9 @@
                             "node": {
                               "kind": "string"
                             },
+                            "docs": {
+                              "brand": "UserId"
+                            },
                             "nullable": false,
                             "optional": false
                           },
@@ -663,6 +684,9 @@
                         "node": {
                           "kind": "string"
                         },
+                        "docs": {
+                          "brand": "UserId"
+                        },
                         "nullable": false,
                         "optional": false
                       }
@@ -686,6 +710,9 @@
                         "canonicalId": "s1",
                         "node": {
                           "kind": "string"
+                        },
+                        "docs": {
+                          "brand": "UserId"
                         },
                         "nullable": false,
                         "optional": false
@@ -772,6 +799,9 @@
                         "node": {
                           "kind": "string"
                         },
+                        "docs": {
+                          "brand": "UserId"
+                        },
                         "nullable": false,
                         "optional": false
                       },
@@ -825,6 +855,9 @@
                         "node": {
                           "kind": "string"
                         },
+                        "docs": {
+                          "brand": "UserId"
+                        },
                         "nullable": false,
                         "optional": false
                       },
@@ -865,6 +898,9 @@
                         "canonicalId": "s1",
                         "node": {
                           "kind": "string"
+                        },
+                        "docs": {
+                          "brand": "UserId"
                         },
                         "nullable": false,
                         "optional": false
@@ -917,6 +953,9 @@
                         "canonicalId": "s1",
                         "node": {
                           "kind": "string"
+                        },
+                        "docs": {
+                          "brand": "UserId"
                         },
                         "nullable": false,
                         "optional": false
@@ -1034,6 +1073,9 @@
                             "node": {
                               "kind": "string"
                             },
+                            "docs": {
+                              "brand": "OrgId"
+                            },
                             "nullable": false,
                             "optional": false
                           },
@@ -1131,6 +1173,9 @@
                         "node": {
                           "kind": "string"
                         },
+                        "docs": {
+                          "brand": "OrgId"
+                        },
                         "nullable": false,
                         "optional": false
                       }
@@ -1154,6 +1199,9 @@
                         "canonicalId": "s1",
                         "node": {
                           "kind": "string"
+                        },
+                        "docs": {
+                          "brand": "OrgId"
                         },
                         "nullable": false,
                         "optional": false
@@ -1272,6 +1320,9 @@
                         "node": {
                           "kind": "string"
                         },
+                        "docs": {
+                          "brand": "OrgId"
+                        },
                         "nullable": false,
                         "optional": false
                       },
@@ -1366,6 +1417,9 @@
                         "node": {
                           "kind": "string"
                         },
+                        "docs": {
+                          "brand": "OrgId"
+                        },
                         "nullable": false,
                         "optional": false
                       },
@@ -1398,6 +1452,9 @@
                         "canonicalId": "s1",
                         "node": {
                           "kind": "string"
+                        },
+                        "docs": {
+                          "brand": "OrgId"
                         },
                         "nullable": false,
                         "optional": false
@@ -1492,6 +1549,9 @@
                         "node": {
                           "kind": "string"
                         },
+                        "docs": {
+                          "brand": "OrgId"
+                        },
                         "nullable": false,
                         "optional": false
                       }
@@ -1527,6 +1587,9 @@
                         "node": {
                           "kind": "string"
                         },
+                        "docs": {
+                          "brand": "OrgId"
+                        },
                         "nullable": false,
                         "optional": false
                       },
@@ -1559,6 +1622,9 @@
                         "canonicalId": "s1",
                         "node": {
                           "kind": "string"
+                        },
+                        "docs": {
+                          "brand": "OrgId"
                         },
                         "nullable": false,
                         "optional": false
@@ -1660,6 +1726,9 @@
                         "node": {
                           "kind": "string"
                         },
+                        "docs": {
+                          "brand": "OrgUserId"
+                        },
                         "nullable": false,
                         "optional": false
                       }
@@ -1684,6 +1753,9 @@
                         "node": {
                           "kind": "string"
                         },
+                        "docs": {
+                          "brand": "OrgUserId"
+                        },
                         "nullable": false,
                         "optional": false
                       },
@@ -1692,6 +1764,9 @@
                         "node": {
                           "kind": "string"
                         },
+                        "docs": {
+                          "brand": "OrgId"
+                        },
                         "nullable": false,
                         "optional": false
                       },
@@ -1699,6 +1774,9 @@
                         "canonicalId": "s1",
                         "node": {
                           "kind": "string"
+                        },
+                        "docs": {
+                          "brand": "UserId"
                         },
                         "nullable": false,
                         "optional": false
@@ -1758,6 +1836,9 @@
                             "node": {
                               "kind": "string"
                             },
+                            "docs": {
+                              "brand": "OrgUserId"
+                            },
                             "nullable": false,
                             "optional": false
                           },
@@ -1766,6 +1847,9 @@
                             "node": {
                               "kind": "string"
                             },
+                            "docs": {
+                              "brand": "OrgId"
+                            },
                             "nullable": false,
                             "optional": false
                           },
@@ -1773,6 +1857,9 @@
                             "canonicalId": "s1",
                             "node": {
                               "kind": "string"
+                            },
+                            "docs": {
+                              "brand": "UserId"
                             },
                             "nullable": false,
                             "optional": false
@@ -1834,6 +1921,9 @@
                         "node": {
                           "kind": "string"
                         },
+                        "docs": {
+                          "brand": "UserId"
+                        },
                         "nullable": false,
                         "optional": false
                       },
@@ -1867,6 +1957,9 @@
                         "node": {
                           "kind": "string"
                         },
+                        "docs": {
+                          "brand": "OrgUserId"
+                        },
                         "nullable": false,
                         "optional": false
                       },
@@ -1875,6 +1968,9 @@
                         "node": {
                           "kind": "string"
                         },
+                        "docs": {
+                          "brand": "OrgId"
+                        },
                         "nullable": false,
                         "optional": false
                       },
@@ -1882,6 +1978,9 @@
                         "canonicalId": "s1",
                         "node": {
                           "kind": "string"
+                        },
+                        "docs": {
+                          "brand": "UserId"
                         },
                         "nullable": false,
                         "optional": false
@@ -1938,6 +2037,9 @@
                         "node": {
                           "kind": "string"
                         },
+                        "docs": {
+                          "brand": "OrgUserId"
+                        },
                         "nullable": false,
                         "optional": false
                       },
@@ -1971,6 +2073,9 @@
                         "node": {
                           "kind": "string"
                         },
+                        "docs": {
+                          "brand": "OrgUserId"
+                        },
                         "nullable": false,
                         "optional": false
                       },
@@ -1979,6 +2084,9 @@
                         "node": {
                           "kind": "string"
                         },
+                        "docs": {
+                          "brand": "OrgId"
+                        },
                         "nullable": false,
                         "optional": false
                       },
@@ -1986,6 +2094,9 @@
                         "canonicalId": "s1",
                         "node": {
                           "kind": "string"
+                        },
+                        "docs": {
+                          "brand": "UserId"
                         },
                         "nullable": false,
                         "optional": false
@@ -2042,6 +2153,9 @@
                         "node": {
                           "kind": "string"
                         },
+                        "docs": {
+                          "brand": "OrgUserId"
+                        },
                         "nullable": false,
                         "optional": false
                       }
@@ -2083,6 +2197,9 @@
                         "canonicalId": "s1",
                         "node": {
                           "kind": "string"
+                        },
+                        "docs": {
+                          "brand": "TaskId"
                         },
                         "nullable": false,
                         "optional": false
@@ -2126,6 +2243,9 @@
                         "node": {
                           "kind": "string"
                         },
+                        "docs": {
+                          "brand": "AgentId"
+                        },
                         "nullable": false,
                         "optional": false
                       },
@@ -2133,6 +2253,9 @@
                         "canonicalId": "s1",
                         "node": {
                           "kind": "string"
+                        },
+                        "docs": {
+                          "brand": "TaskId"
                         },
                         "nullable": false,
                         "optional": false
@@ -2262,6 +2385,9 @@
                         "node": {
                           "kind": "string"
                         },
+                        "docs": {
+                          "brand": "TaskId"
+                        },
                         "nullable": false,
                         "optional": false
                       }
@@ -2290,6 +2416,9 @@
                             "node": {
                               "kind": "string"
                             },
+                            "docs": {
+                              "brand": "AgentId"
+                            },
                             "nullable": false,
                             "optional": false
                           },
@@ -2297,6 +2426,9 @@
                             "canonicalId": "s1",
                             "node": {
                               "kind": "string"
+                            },
+                            "docs": {
+                              "brand": "TaskId"
                             },
                             "nullable": false,
                             "optional": false
@@ -2430,6 +2562,9 @@
                         "node": {
                           "kind": "string"
                         },
+                        "docs": {
+                          "brand": "TaskId"
+                        },
                         "nullable": false,
                         "optional": false
                       },
@@ -2437,6 +2572,9 @@
                         "canonicalId": "s1",
                         "node": {
                           "kind": "string"
+                        },
+                        "docs": {
+                          "brand": "AgentId"
                         },
                         "nullable": false,
                         "optional": false
@@ -2463,6 +2601,9 @@
                         "node": {
                           "kind": "string"
                         },
+                        "docs": {
+                          "brand": "AgentId"
+                        },
                         "nullable": false,
                         "optional": false
                       },
@@ -2470,6 +2611,9 @@
                         "canonicalId": "s1",
                         "node": {
                           "kind": "string"
+                        },
+                        "docs": {
+                          "brand": "TaskId"
                         },
                         "nullable": false,
                         "optional": false
@@ -2599,6 +2743,9 @@
                         "node": {
                           "kind": "string"
                         },
+                        "docs": {
+                          "brand": "TaskId"
+                        },
                         "nullable": false,
                         "optional": false
                       },
@@ -2606,6 +2753,9 @@
                         "canonicalId": "s1",
                         "node": {
                           "kind": "string"
+                        },
+                        "docs": {
+                          "brand": "AgentId"
                         },
                         "nullable": false,
                         "optional": false
@@ -2632,6 +2782,9 @@
                         "node": {
                           "kind": "string"
                         },
+                        "docs": {
+                          "brand": "AgentId"
+                        },
                         "nullable": false,
                         "optional": false
                       },
@@ -2639,6 +2792,9 @@
                         "canonicalId": "s1",
                         "node": {
                           "kind": "string"
+                        },
+                        "docs": {
+                          "brand": "TaskId"
                         },
                         "nullable": false,
                         "optional": false
@@ -2768,6 +2924,9 @@
                         "node": {
                           "kind": "string"
                         },
+                        "docs": {
+                          "brand": "TaskId"
+                        },
                         "nullable": false,
                         "optional": false
                       },
@@ -2775,6 +2934,9 @@
                         "canonicalId": "s1",
                         "node": {
                           "kind": "string"
+                        },
+                        "docs": {
+                          "brand": "AgentId"
                         },
                         "nullable": false,
                         "optional": false
@@ -2812,6 +2974,9 @@
                         "node": {
                           "kind": "string"
                         },
+                        "docs": {
+                          "brand": "TaskId"
+                        },
                         "nullable": false,
                         "optional": false
                       },
@@ -2819,6 +2984,9 @@
                         "canonicalId": "s1",
                         "node": {
                           "kind": "string"
+                        },
+                        "docs": {
+                          "brand": "AgentId"
                         },
                         "nullable": false,
                         "optional": false
@@ -2863,6 +3031,9 @@
                         "node": {
                           "kind": "string"
                         },
+                        "docs": {
+                          "brand": "TaskId"
+                        },
                         "nullable": false,
                         "optional": false
                       },
@@ -2894,6 +3065,9 @@
                         "canonicalId": "s1",
                         "node": {
                           "kind": "string"
+                        },
+                        "docs": {
+                          "brand": "ServiceName"
                         },
                         "nullable": false,
                         "optional": true
@@ -3054,6 +3228,9 @@
                         "node": {
                           "kind": "string"
                         },
+                        "docs": {
+                          "brand": "ProjectId"
+                        },
                         "nullable": false,
                         "optional": false
                       },
@@ -3126,6 +3303,9 @@
                         "canonicalId": "s1",
                         "node": {
                           "kind": "string"
+                        },
+                        "docs": {
+                          "brand": "ProjectImageId"
                         },
                         "nullable": false,
                         "optional": true
@@ -3289,6 +3469,9 @@
                         "node": {
                           "kind": "string"
                         },
+                        "docs": {
+                          "brand": "ProjectId"
+                        },
                         "nullable": false,
                         "optional": false
                       }
@@ -3312,6 +3495,9 @@
                         "canonicalId": "s1",
                         "node": {
                           "kind": "string"
+                        },
+                        "docs": {
+                          "brand": "ProjectId"
                         },
                         "nullable": false,
                         "optional": false
@@ -3385,6 +3571,9 @@
                         "canonicalId": "s1",
                         "node": {
                           "kind": "string"
+                        },
+                        "docs": {
+                          "brand": "ProjectImageId"
                         },
                         "nullable": false,
                         "optional": true
@@ -3551,6 +3740,9 @@
                             "node": {
                               "kind": "string"
                             },
+                            "docs": {
+                              "brand": "ProjectId"
+                            },
                             "nullable": false,
                             "optional": false
                           },
@@ -3623,6 +3815,9 @@
                             "canonicalId": "s1",
                             "node": {
                               "kind": "string"
+                            },
+                            "docs": {
+                              "brand": "ProjectImageId"
                             },
                             "nullable": false,
                             "optional": true
@@ -3790,6 +3985,9 @@
                         "node": {
                           "kind": "string"
                         },
+                        "docs": {
+                          "brand": "ProjectId"
+                        },
                         "nullable": false,
                         "optional": false
                       },
@@ -3862,6 +4060,9 @@
                         "canonicalId": "s1",
                         "node": {
                           "kind": "string"
+                        },
+                        "docs": {
+                          "brand": "ProjectImageId"
                         },
                         "nullable": false,
                         "optional": true
@@ -4012,6 +4213,9 @@
                         "node": {
                           "kind": "string"
                         },
+                        "docs": {
+                          "brand": "ProjectId"
+                        },
                         "nullable": false,
                         "optional": false
                       },
@@ -4084,6 +4288,9 @@
                         "canonicalId": "s1",
                         "node": {
                           "kind": "string"
+                        },
+                        "docs": {
+                          "brand": "ProjectImageId"
                         },
                         "nullable": false,
                         "optional": true
@@ -4247,6 +4454,9 @@
                         "node": {
                           "kind": "string"
                         },
+                        "docs": {
+                          "brand": "ProjectId"
+                        },
                         "nullable": false,
                         "optional": false
                       }
@@ -4281,6 +4491,9 @@
                         "canonicalId": "s1",
                         "node": {
                           "kind": "string"
+                        },
+                        "docs": {
+                          "brand": "ProjectId"
                         },
                         "nullable": false,
                         "optional": false
@@ -4339,6 +4552,9 @@
                         "canonicalId": "s1",
                         "node": {
                           "kind": "string"
+                        },
+                        "docs": {
+                          "brand": "ProjectId"
                         },
                         "nullable": false,
                         "optional": false
@@ -4412,6 +4628,9 @@
                         "canonicalId": "s1",
                         "node": {
                           "kind": "string"
+                        },
+                        "docs": {
+                          "brand": "ProjectImageId"
                         },
                         "nullable": false,
                         "optional": true
@@ -4575,6 +4794,9 @@
                         "node": {
                           "kind": "string"
                         },
+                        "docs": {
+                          "brand": "ProjectId"
+                        },
                         "nullable": false,
                         "optional": false
                       },
@@ -4607,6 +4829,9 @@
                         "canonicalId": "s1",
                         "node": {
                           "kind": "string"
+                        },
+                        "docs": {
+                          "brand": "ProjectId"
                         },
                         "nullable": false,
                         "optional": false
@@ -4680,6 +4905,9 @@
                         "canonicalId": "s1",
                         "node": {
                           "kind": "string"
+                        },
+                        "docs": {
+                          "brand": "ProjectImageId"
                         },
                         "nullable": false,
                         "optional": true
@@ -4842,6 +5070,9 @@
                         "canonicalId": "s1",
                         "node": {
                           "kind": "string"
+                        },
+                        "docs": {
+                          "brand": "ProjectId"
                         },
                         "nullable": false,
                         "optional": false
@@ -5102,6 +5333,9 @@
                             "node": {
                               "kind": "string"
                             },
+                            "docs": {
+                              "brand": "BaseImageId"
+                            },
                             "nullable": false,
                             "optional": false
                           },
@@ -5256,6 +5490,9 @@
                         "node": {
                           "kind": "string"
                         },
+                        "docs": {
+                          "brand": "BaseImageId"
+                        },
                         "nullable": false,
                         "optional": false
                       }
@@ -5279,6 +5516,9 @@
                         "canonicalId": "s1",
                         "node": {
                           "kind": "string"
+                        },
+                        "docs": {
+                          "brand": "BaseImageId"
                         },
                         "nullable": false,
                         "optional": false
@@ -5463,6 +5703,9 @@
                               "node": {
                                 "kind": "string"
                               },
+                              "docs": {
+                                "brand": "BaseImageId"
+                              },
                               "nullable": false,
                               "optional": false
                             },
@@ -5622,6 +5865,9 @@
                         "node": {
                           "kind": "string"
                         },
+                        "docs": {
+                          "brand": "BaseImageId"
+                        },
                         "nullable": false,
                         "optional": false
                       }
@@ -5663,6 +5909,9 @@
                         "node": {
                           "kind": "string"
                         },
+                        "docs": {
+                          "brand": "ProjectId"
+                        },
                         "nullable": false,
                         "optional": true
                       }
@@ -5689,6 +5938,9 @@
                             "node": {
                               "kind": "string"
                             },
+                            "docs": {
+                              "brand": "ProjectImageId"
+                            },
                             "nullable": false,
                             "optional": false
                           },
@@ -5696,6 +5948,9 @@
                             "canonicalId": "s1",
                             "node": {
                               "kind": "string"
+                            },
+                            "docs": {
+                              "brand": "ProjectId"
                             },
                             "nullable": false,
                             "optional": false
@@ -5733,6 +5988,9 @@
                             "node": {
                               "kind": "string"
                             },
+                            "docs": {
+                              "brand": "BaseImageId"
+                            },
                             "nullable": false,
                             "optional": false
                           },
@@ -5766,6 +6024,9 @@
                             "canonicalId": "s1",
                             "node": {
                               "kind": "string"
+                            },
+                            "docs": {
+                              "brand": "TaskId"
                             },
                             "nullable": false,
                             "optional": true
@@ -5873,6 +6134,9 @@
                         "node": {
                           "kind": "string"
                         },
+                        "docs": {
+                          "brand": "ProjectImageId"
+                        },
                         "nullable": false,
                         "optional": false
                       }
@@ -5897,6 +6161,9 @@
                         "node": {
                           "kind": "string"
                         },
+                        "docs": {
+                          "brand": "ProjectImageId"
+                        },
                         "nullable": false,
                         "optional": false
                       },
@@ -5904,6 +6171,9 @@
                         "canonicalId": "s1",
                         "node": {
                           "kind": "string"
+                        },
+                        "docs": {
+                          "brand": "ProjectId"
                         },
                         "nullable": false,
                         "optional": false
@@ -5941,6 +6211,9 @@
                         "node": {
                           "kind": "string"
                         },
+                        "docs": {
+                          "brand": "BaseImageId"
+                        },
                         "nullable": false,
                         "optional": false
                       },
@@ -5974,6 +6247,9 @@
                         "canonicalId": "s1",
                         "node": {
                           "kind": "string"
+                        },
+                        "docs": {
+                          "brand": "TaskId"
                         },
                         "nullable": false,
                         "optional": true
@@ -6077,6 +6353,9 @@
                         "node": {
                           "kind": "string"
                         },
+                        "docs": {
+                          "brand": "ProjectImageId"
+                        },
                         "nullable": false,
                         "optional": false
                       }
@@ -6118,6 +6397,9 @@
                         "canonicalId": "s1",
                         "node": {
                           "kind": "string"
+                        },
+                        "docs": {
+                          "brand": "TaskId"
                         },
                         "nullable": false,
                         "optional": false
@@ -6295,6 +6577,9 @@
                         "node": {
                           "kind": "string"
                         },
+                        "docs": {
+                          "brand": "TaskId"
+                        },
                         "nullable": false,
                         "optional": false
                       }
@@ -6470,6 +6755,9 @@
                         "node": {
                           "kind": "string"
                         },
+                        "docs": {
+                          "brand": "TaskId"
+                        },
                         "nullable": false,
                         "optional": false
                       },
@@ -6578,6 +6866,9 @@
                         "canonicalId": "s1",
                         "node": {
                           "kind": "string"
+                        },
+                        "docs": {
+                          "brand": "TaskId"
                         },
                         "nullable": false,
                         "optional": false
@@ -6714,6 +7005,9 @@
                         "node": {
                           "kind": "string"
                         },
+                        "docs": {
+                          "brand": "TaskId"
+                        },
                         "nullable": false,
                         "optional": false
                       },
@@ -6766,6 +7060,9 @@
                         "canonicalId": "s1",
                         "node": {
                           "kind": "string"
+                        },
+                        "docs": {
+                          "brand": "TaskId"
                         },
                         "nullable": false,
                         "optional": false
@@ -6872,6 +7169,9 @@
                         "node": {
                           "kind": "string"
                         },
+                        "docs": {
+                          "brand": "TaskId"
+                        },
                         "nullable": false,
                         "optional": false
                       }
@@ -6960,6 +7260,9 @@
                             "node": {
                               "kind": "string"
                             },
+                            "docs": {
+                              "brand": "TaskId"
+                            },
                             "nullable": false,
                             "optional": false
                           },
@@ -6967,6 +7270,9 @@
                             "canonicalId": "s1",
                             "node": {
                               "kind": "string"
+                            },
+                            "docs": {
+                              "brand": "ProjectId"
                             },
                             "nullable": false,
                             "optional": false
@@ -7050,6 +7356,9 @@
                             "node": {
                               "kind": "string"
                             },
+                            "docs": {
+                              "brand": "ProjectImageId"
+                            },
                             "nullable": false,
                             "optional": true
                           },
@@ -7057,6 +7366,9 @@
                             "canonicalId": "s1",
                             "node": {
                               "kind": "string"
+                            },
+                            "docs": {
+                              "brand": "BaseImageId"
                             },
                             "nullable": false,
                             "optional": true
@@ -7127,6 +7439,9 @@
                             "node": {
                               "kind": "string"
                             },
+                            "docs": {
+                              "brand": "ProjectImageId"
+                            },
                             "nullable": false,
                             "optional": true
                           },
@@ -7134,6 +7449,9 @@
                             "canonicalId": "s1",
                             "node": {
                               "kind": "string"
+                            },
+                            "docs": {
+                              "brand": "ProjectImageId"
                             },
                             "nullable": false,
                             "optional": true
@@ -7208,6 +7526,9 @@
                         "node": {
                           "kind": "string"
                         },
+                        "docs": {
+                          "brand": "TaskId"
+                        },
                         "nullable": false,
                         "optional": false
                       }
@@ -7232,6 +7553,9 @@
                         "node": {
                           "kind": "string"
                         },
+                        "docs": {
+                          "brand": "TaskId"
+                        },
                         "nullable": false,
                         "optional": false
                       },
@@ -7239,6 +7563,9 @@
                         "canonicalId": "s1",
                         "node": {
                           "kind": "string"
+                        },
+                        "docs": {
+                          "brand": "ProjectId"
                         },
                         "nullable": false,
                         "optional": false
@@ -7322,6 +7649,9 @@
                         "node": {
                           "kind": "string"
                         },
+                        "docs": {
+                          "brand": "ProjectImageId"
+                        },
                         "nullable": false,
                         "optional": true
                       },
@@ -7329,6 +7659,9 @@
                         "canonicalId": "s1",
                         "node": {
                           "kind": "string"
+                        },
+                        "docs": {
+                          "brand": "BaseImageId"
                         },
                         "nullable": false,
                         "optional": true
@@ -7399,6 +7732,9 @@
                         "node": {
                           "kind": "string"
                         },
+                        "docs": {
+                          "brand": "ProjectImageId"
+                        },
                         "nullable": false,
                         "optional": true
                       },
@@ -7406,6 +7742,9 @@
                         "canonicalId": "s1",
                         "node": {
                           "kind": "string"
+                        },
+                        "docs": {
+                          "brand": "ProjectImageId"
                         },
                         "nullable": false,
                         "optional": true
@@ -7477,6 +7816,9 @@
                         "node": {
                           "kind": "string"
                         },
+                        "docs": {
+                          "brand": "ProjectId"
+                        },
                         "nullable": false,
                         "optional": false
                       },
@@ -7505,6 +7847,9 @@
                         "node": {
                           "kind": "string"
                         },
+                        "docs": {
+                          "brand": "ProjectImageId"
+                        },
                         "nullable": false,
                         "optional": true
                       },
@@ -7512,6 +7857,9 @@
                         "canonicalId": "s1",
                         "node": {
                           "kind": "string"
+                        },
+                        "docs": {
+                          "brand": "BaseImageId"
                         },
                         "nullable": false,
                         "optional": true
@@ -7543,6 +7891,9 @@
                               "node": {
                                 "kind": "string"
                               },
+                              "docs": {
+                                "brand": "TaskId"
+                              },
                               "nullable": false,
                               "optional": false
                             },
@@ -7550,6 +7901,9 @@
                               "canonicalId": "s1",
                               "node": {
                                 "kind": "string"
+                              },
+                              "docs": {
+                                "brand": "ProjectId"
                               },
                               "nullable": false,
                               "optional": false
@@ -7633,6 +7987,9 @@
                               "node": {
                                 "kind": "string"
                               },
+                              "docs": {
+                                "brand": "ProjectImageId"
+                              },
                               "nullable": false,
                               "optional": true
                             },
@@ -7640,6 +7997,9 @@
                               "canonicalId": "s1",
                               "node": {
                                 "kind": "string"
+                              },
+                              "docs": {
+                                "brand": "BaseImageId"
                               },
                               "nullable": false,
                               "optional": true
@@ -7710,6 +8070,9 @@
                               "node": {
                                 "kind": "string"
                               },
+                              "docs": {
+                                "brand": "ProjectImageId"
+                              },
                               "nullable": false,
                               "optional": true
                             },
@@ -7717,6 +8080,9 @@
                               "canonicalId": "s1",
                               "node": {
                                 "kind": "string"
+                              },
+                              "docs": {
+                                "brand": "ProjectImageId"
                               },
                               "nullable": false,
                               "optional": true
@@ -7796,6 +8162,9 @@
                         "node": {
                           "kind": "string"
                         },
+                        "docs": {
+                          "brand": "TaskId"
+                        },
                         "nullable": false,
                         "optional": false
                       }
@@ -7825,6 +8194,9 @@
                               "node": {
                                 "kind": "string"
                               },
+                              "docs": {
+                                "brand": "TaskId"
+                              },
                               "nullable": false,
                               "optional": false
                             },
@@ -7832,6 +8204,9 @@
                               "canonicalId": "s1",
                               "node": {
                                 "kind": "string"
+                              },
+                              "docs": {
+                                "brand": "ProjectId"
                               },
                               "nullable": false,
                               "optional": false
@@ -7915,6 +8290,9 @@
                               "node": {
                                 "kind": "string"
                               },
+                              "docs": {
+                                "brand": "ProjectImageId"
+                              },
                               "nullable": false,
                               "optional": true
                             },
@@ -7922,6 +8300,9 @@
                               "canonicalId": "s1",
                               "node": {
                                 "kind": "string"
+                              },
+                              "docs": {
+                                "brand": "BaseImageId"
                               },
                               "nullable": false,
                               "optional": true
@@ -7992,6 +8373,9 @@
                               "node": {
                                 "kind": "string"
                               },
+                              "docs": {
+                                "brand": "ProjectImageId"
+                              },
                               "nullable": false,
                               "optional": true
                             },
@@ -7999,6 +8383,9 @@
                               "canonicalId": "s1",
                               "node": {
                                 "kind": "string"
+                              },
+                              "docs": {
+                                "brand": "ProjectImageId"
                               },
                               "nullable": false,
                               "optional": true
@@ -8078,6 +8465,9 @@
                         "node": {
                           "kind": "string"
                         },
+                        "docs": {
+                          "brand": "TaskId"
+                        },
                         "nullable": false,
                         "optional": false
                       }
@@ -8107,6 +8497,9 @@
                               "node": {
                                 "kind": "string"
                               },
+                              "docs": {
+                                "brand": "TaskId"
+                              },
                               "nullable": false,
                               "optional": false
                             },
@@ -8114,6 +8507,9 @@
                               "canonicalId": "s1",
                               "node": {
                                 "kind": "string"
+                              },
+                              "docs": {
+                                "brand": "ProjectId"
                               },
                               "nullable": false,
                               "optional": false
@@ -8197,6 +8593,9 @@
                               "node": {
                                 "kind": "string"
                               },
+                              "docs": {
+                                "brand": "ProjectImageId"
+                              },
                               "nullable": false,
                               "optional": true
                             },
@@ -8204,6 +8603,9 @@
                               "canonicalId": "s1",
                               "node": {
                                 "kind": "string"
+                              },
+                              "docs": {
+                                "brand": "BaseImageId"
                               },
                               "nullable": false,
                               "optional": true
@@ -8274,6 +8676,9 @@
                               "node": {
                                 "kind": "string"
                               },
+                              "docs": {
+                                "brand": "ProjectImageId"
+                              },
                               "nullable": false,
                               "optional": true
                             },
@@ -8281,6 +8686,9 @@
                               "canonicalId": "s1",
                               "node": {
                                 "kind": "string"
+                              },
+                              "docs": {
+                                "brand": "ProjectImageId"
                               },
                               "nullable": false,
                               "optional": true
@@ -8360,6 +8768,9 @@
                         "node": {
                           "kind": "string"
                         },
+                        "docs": {
+                          "brand": "TaskId"
+                        },
                         "nullable": false,
                         "optional": false
                       }
@@ -8389,6 +8800,9 @@
                               "node": {
                                 "kind": "string"
                               },
+                              "docs": {
+                                "brand": "TaskId"
+                              },
                               "nullable": false,
                               "optional": false
                             },
@@ -8396,6 +8810,9 @@
                               "canonicalId": "s1",
                               "node": {
                                 "kind": "string"
+                              },
+                              "docs": {
+                                "brand": "ProjectId"
                               },
                               "nullable": false,
                               "optional": false
@@ -8479,6 +8896,9 @@
                               "node": {
                                 "kind": "string"
                               },
+                              "docs": {
+                                "brand": "ProjectImageId"
+                              },
                               "nullable": false,
                               "optional": true
                             },
@@ -8486,6 +8906,9 @@
                               "canonicalId": "s1",
                               "node": {
                                 "kind": "string"
+                              },
+                              "docs": {
+                                "brand": "BaseImageId"
                               },
                               "nullable": false,
                               "optional": true
@@ -8556,6 +8979,9 @@
                               "node": {
                                 "kind": "string"
                               },
+                              "docs": {
+                                "brand": "ProjectImageId"
+                              },
                               "nullable": false,
                               "optional": true
                             },
@@ -8563,6 +8989,9 @@
                               "canonicalId": "s1",
                               "node": {
                                 "kind": "string"
+                              },
+                              "docs": {
+                                "brand": "ProjectImageId"
                               },
                               "nullable": false,
                               "optional": true
@@ -8642,6 +9071,9 @@
                         "node": {
                           "kind": "string"
                         },
+                        "docs": {
+                          "brand": "TaskId"
+                        },
                         "nullable": false,
                         "optional": false
                       }
@@ -8671,6 +9103,9 @@
                               "node": {
                                 "kind": "string"
                               },
+                              "docs": {
+                                "brand": "TaskId"
+                              },
                               "nullable": false,
                               "optional": false
                             },
@@ -8678,6 +9113,9 @@
                               "canonicalId": "s1",
                               "node": {
                                 "kind": "string"
+                              },
+                              "docs": {
+                                "brand": "ProjectId"
                               },
                               "nullable": false,
                               "optional": false
@@ -8761,6 +9199,9 @@
                               "node": {
                                 "kind": "string"
                               },
+                              "docs": {
+                                "brand": "ProjectImageId"
+                              },
                               "nullable": false,
                               "optional": true
                             },
@@ -8768,6 +9209,9 @@
                               "canonicalId": "s1",
                               "node": {
                                 "kind": "string"
+                              },
+                              "docs": {
+                                "brand": "BaseImageId"
                               },
                               "nullable": false,
                               "optional": true
@@ -8838,6 +9282,9 @@
                               "node": {
                                 "kind": "string"
                               },
+                              "docs": {
+                                "brand": "ProjectImageId"
+                              },
                               "nullable": false,
                               "optional": true
                             },
@@ -8845,6 +9292,9 @@
                               "canonicalId": "s1",
                               "node": {
                                 "kind": "string"
+                              },
+                              "docs": {
+                                "brand": "ProjectImageId"
                               },
                               "nullable": false,
                               "optional": true
@@ -8924,6 +9374,9 @@
                         "node": {
                           "kind": "string"
                         },
+                        "docs": {
+                          "brand": "TaskId"
+                        },
                         "nullable": false,
                         "optional": false
                       }
@@ -8959,6 +9412,9 @@
                         "canonicalId": "s1",
                         "node": {
                           "kind": "string"
+                        },
+                        "docs": {
+                          "brand": "TaskId"
                         },
                         "nullable": false,
                         "optional": false
@@ -8998,6 +9454,9 @@
                               "node": {
                                 "kind": "string"
                               },
+                              "docs": {
+                                "brand": "TaskId"
+                              },
                               "nullable": false,
                               "optional": false
                             },
@@ -9005,6 +9464,9 @@
                               "canonicalId": "s1",
                               "node": {
                                 "kind": "string"
+                              },
+                              "docs": {
+                                "brand": "ProjectId"
                               },
                               "nullable": false,
                               "optional": false
@@ -9088,6 +9550,9 @@
                               "node": {
                                 "kind": "string"
                               },
+                              "docs": {
+                                "brand": "ProjectImageId"
+                              },
                               "nullable": false,
                               "optional": true
                             },
@@ -9095,6 +9560,9 @@
                               "canonicalId": "s1",
                               "node": {
                                 "kind": "string"
+                              },
+                              "docs": {
+                                "brand": "BaseImageId"
                               },
                               "nullable": false,
                               "optional": true
@@ -9165,6 +9633,9 @@
                               "node": {
                                 "kind": "string"
                               },
+                              "docs": {
+                                "brand": "ProjectImageId"
+                              },
                               "nullable": false,
                               "optional": true
                             },
@@ -9172,6 +9643,9 @@
                               "canonicalId": "s1",
                               "node": {
                                 "kind": "string"
+                              },
+                              "docs": {
+                                "brand": "ProjectImageId"
                               },
                               "nullable": false,
                               "optional": true
@@ -9251,6 +9725,9 @@
                         "node": {
                           "kind": "string"
                         },
+                        "docs": {
+                          "brand": "TaskId"
+                        },
                         "nullable": false,
                         "optional": false
                       }
@@ -9319,6 +9796,9 @@
                         "node": {
                           "kind": "string"
                         },
+                        "docs": {
+                          "brand": "TaskId"
+                        },
                         "nullable": false,
                         "optional": false
                       },
@@ -9360,6 +9840,9 @@
                         "canonicalId": "s1",
                         "node": {
                           "kind": "string"
+                        },
+                        "docs": {
+                          "brand": "ProjectImageId"
                         },
                         "nullable": false,
                         "optional": false
@@ -9403,6 +9886,9 @@
                                   "canonicalId": "s1",
                                   "node": {
                                     "kind": "string"
+                                  },
+                                  "docs": {
+                                    "brand": "TaskId"
                                   },
                                   "nullable": false,
                                   "optional": false
@@ -9579,6 +10065,9 @@
                         "node": {
                           "kind": "string"
                         },
+                        "docs": {
+                          "brand": "TaskId"
+                        },
                         "nullable": false,
                         "optional": false
                       }
@@ -9611,6 +10100,9 @@
                                   "canonicalId": "s1",
                                   "node": {
                                     "kind": "string"
+                                  },
+                                  "docs": {
+                                    "brand": "ServiceName"
                                   },
                                   "nullable": false,
                                   "optional": false
@@ -9698,6 +10190,9 @@
                         "node": {
                           "kind": "string"
                         },
+                        "docs": {
+                          "brand": "TaskId"
+                        },
                         "nullable": false,
                         "optional": false
                       }
@@ -9730,6 +10225,9 @@
                                   "canonicalId": "s1",
                                   "node": {
                                     "kind": "string"
+                                  },
+                                  "docs": {
+                                    "brand": "ServiceName"
                                   },
                                   "nullable": false,
                                   "optional": false
@@ -9817,6 +10315,9 @@
                         "node": {
                           "kind": "string"
                         },
+                        "docs": {
+                          "brand": "TaskId"
+                        },
                         "nullable": false,
                         "optional": false
                       },
@@ -9824,6 +10325,9 @@
                         "canonicalId": "s1",
                         "node": {
                           "kind": "string"
+                        },
+                        "docs": {
+                          "brand": "ServiceName"
                         },
                         "nullable": false,
                         "optional": false
@@ -9862,6 +10366,9 @@
                         "node": {
                           "kind": "string"
                         },
+                        "docs": {
+                          "brand": "TaskId"
+                        },
                         "nullable": false,
                         "optional": false
                       },
@@ -9869,6 +10376,9 @@
                         "canonicalId": "s1",
                         "node": {
                           "kind": "string"
+                        },
+                        "docs": {
+                          "brand": "ServiceName"
                         },
                         "nullable": false,
                         "optional": false
@@ -9906,6 +10416,9 @@
                         "canonicalId": "s1",
                         "node": {
                           "kind": "string"
+                        },
+                        "docs": {
+                          "brand": "TaskId"
                         },
                         "nullable": false,
                         "optional": false
@@ -9971,6 +10484,9 @@
                                   "canonicalId": "s1",
                                   "node": {
                                     "kind": "string"
+                                  },
+                                  "docs": {
+                                    "brand": "AgentId"
                                   },
                                   "nullable": false,
                                   "optional": false
@@ -10154,6 +10670,9 @@
                               "node": {
                                 "kind": "string"
                               },
+                              "docs": {
+                                "brand": "AgentId"
+                              },
                               "nullable": false,
                               "optional": false
                             },
@@ -10286,6 +10805,9 @@
                         "node": {
                           "kind": "string"
                         },
+                        "docs": {
+                          "brand": "AgentId"
+                        },
                         "nullable": false,
                         "optional": false
                       }
@@ -10314,6 +10836,9 @@
                               "canonicalId": "s1",
                               "node": {
                                 "kind": "string"
+                              },
+                              "docs": {
+                                "brand": "AgentId"
                               },
                               "nullable": false,
                               "optional": false
@@ -10447,6 +10972,9 @@
                         "node": {
                           "kind": "string"
                         },
+                        "docs": {
+                          "brand": "AgentId"
+                        },
                         "nullable": false,
                         "optional": false
                       }
@@ -10475,6 +11003,9 @@
                               "canonicalId": "s1",
                               "node": {
                                 "kind": "string"
+                              },
+                              "docs": {
+                                "brand": "AgentId"
                               },
                               "nullable": false,
                               "optional": false
@@ -10608,6 +11139,9 @@
                         "node": {
                           "kind": "string"
                         },
+                        "docs": {
+                          "brand": "AgentId"
+                        },
                         "nullable": false,
                         "optional": false
                       }
@@ -10641,6 +11175,9 @@
                         "node": {
                           "kind": "string"
                         },
+                        "docs": {
+                          "brand": "AgentId"
+                        },
                         "nullable": false,
                         "optional": false
                       }
@@ -10670,13 +11207,16 @@
                     "kind": "object",
                     "properties": {
                       "suspended": {
-                        "canonicalId": "s45",
+                        "canonicalId": "s135",
                         "node": {
                           "kind": "array",
                           "element": {
                             "canonicalId": "s1",
                             "node": {
                               "kind": "string"
+                            },
+                            "docs": {
+                              "brand": "AgentId"
                             },
                             "nullable": false,
                             "optional": false
@@ -10713,7 +11253,7 @@
               ],
               "requestBody": {
                 "inline": {
-                  "canonicalId": "s135",
+                  "canonicalId": "s136",
                   "node": {
                     "kind": "object",
                     "properties": {
@@ -10753,16 +11293,16 @@
               },
               "successResponse": {
                 "inline": {
-                  "canonicalId": "s136",
+                  "canonicalId": "s137",
                   "node": {
                     "kind": "object",
                     "properties": {
                       "repos": {
-                        "canonicalId": "s137",
+                        "canonicalId": "s138",
                         "node": {
                           "kind": "array",
                           "element": {
-                            "canonicalId": "s138",
+                            "canonicalId": "s139",
                             "node": {
                               "kind": "object",
                               "properties": {
@@ -10783,11 +11323,11 @@
                                   "optional": false
                                 },
                                 "changes": {
-                                  "canonicalId": "s139",
+                                  "canonicalId": "s140",
                                   "node": {
                                     "kind": "array",
                                     "element": {
-                                      "canonicalId": "s140",
+                                      "canonicalId": "s141",
                                       "node": {
                                         "kind": "object",
                                         "properties": {
@@ -10887,7 +11427,7 @@
               ],
               "requestBody": {
                 "inline": {
-                  "canonicalId": "s141",
+                  "canonicalId": "s142",
                   "node": {
                     "kind": "object",
                     "properties": {
@@ -10911,16 +11451,16 @@
               },
               "successResponse": {
                 "inline": {
-                  "canonicalId": "s142",
+                  "canonicalId": "s143",
                   "node": {
                     "kind": "object",
                     "properties": {
                       "repos": {
-                        "canonicalId": "s143",
+                        "canonicalId": "s144",
                         "node": {
                           "kind": "array",
                           "element": {
-                            "canonicalId": "s144",
+                            "canonicalId": "s145",
                             "node": {
                               "kind": "object",
                               "properties": {
@@ -10957,11 +11497,11 @@
                                   "optional": false
                                 },
                                 "commits": {
-                                  "canonicalId": "s145",
+                                  "canonicalId": "s146",
                                   "node": {
                                     "kind": "array",
                                     "element": {
-                                      "canonicalId": "s146",
+                                      "canonicalId": "s147",
                                       "node": {
                                         "kind": "object",
                                         "properties": {
@@ -11060,7 +11600,7 @@
               ],
               "requestBody": {
                 "inline": {
-                  "canonicalId": "s147",
+                  "canonicalId": "s148",
                   "node": {
                     "kind": "object",
                     "properties": {
@@ -11118,7 +11658,7 @@
               },
               "successResponse": {
                 "inline": {
-                  "canonicalId": "s148",
+                  "canonicalId": "s149",
                   "node": {
                     "kind": "object",
                     "properties": {
@@ -11167,7 +11707,7 @@
               ],
               "requestBody": {
                 "inline": {
-                  "canonicalId": "s149",
+                  "canonicalId": "s150",
                   "node": {
                     "kind": "object",
                     "properties": {
@@ -11227,7 +11767,7 @@
               },
               "successResponse": {
                 "inline": {
-                  "canonicalId": "s150",
+                  "canonicalId": "s151",
                   "node": {
                     "kind": "object",
                     "properties": {
@@ -11248,7 +11788,7 @@
                         "optional": false
                       },
                       "conflict": {
-                        "canonicalId": "s151",
+                        "canonicalId": "s152",
                         "node": {
                           "kind": "object",
                           "properties": {
@@ -11300,7 +11840,7 @@
               ],
               "requestBody": {
                 "inline": {
-                  "canonicalId": "s152",
+                  "canonicalId": "s153",
                   "node": {
                     "kind": "object",
                     "properties": {
@@ -11351,7 +11891,7 @@
               ],
               "requestBody": {
                 "inline": {
-                  "canonicalId": "s141",
+                  "canonicalId": "s142",
                   "node": {
                     "kind": "object",
                     "properties": {
@@ -11375,16 +11915,16 @@
               },
               "successResponse": {
                 "inline": {
-                  "canonicalId": "s153",
+                  "canonicalId": "s154",
                   "node": {
                     "kind": "object",
                     "properties": {
                       "repos": {
-                        "canonicalId": "s154",
+                        "canonicalId": "s155",
                         "node": {
                           "kind": "array",
                           "element": {
-                            "canonicalId": "s155",
+                            "canonicalId": "s156",
                             "node": {
                               "kind": "object",
                               "properties": {
@@ -11454,16 +11994,16 @@
               ],
               "successResponse": {
                 "inline": {
-                  "canonicalId": "s156",
+                  "canonicalId": "s157",
                   "node": {
                     "kind": "object",
                     "properties": {
                       "services": {
-                        "canonicalId": "s157",
+                        "canonicalId": "s158",
                         "node": {
                           "kind": "array",
                           "element": {
-                            "canonicalId": "s158",
+                            "canonicalId": "s159",
                             "node": {
                               "kind": "object",
                               "properties": {
@@ -11471,6 +12011,9 @@
                                   "canonicalId": "s1",
                                   "node": {
                                     "kind": "string"
+                                  },
+                                  "docs": {
+                                    "brand": "ServiceName"
                                   },
                                   "nullable": false,
                                   "optional": false
@@ -11537,16 +12080,16 @@
               ],
               "successResponse": {
                 "inline": {
-                  "canonicalId": "s156",
+                  "canonicalId": "s157",
                   "node": {
                     "kind": "object",
                     "properties": {
                       "services": {
-                        "canonicalId": "s157",
+                        "canonicalId": "s158",
                         "node": {
                           "kind": "array",
                           "element": {
-                            "canonicalId": "s158",
+                            "canonicalId": "s159",
                             "node": {
                               "kind": "object",
                               "properties": {
@@ -11554,6 +12097,9 @@
                                   "canonicalId": "s1",
                                   "node": {
                                     "kind": "string"
+                                  },
+                                  "docs": {
+                                    "brand": "ServiceName"
                                   },
                                   "nullable": false,
                                   "optional": false
@@ -11620,7 +12166,7 @@
               ],
               "requestBody": {
                 "inline": {
-                  "canonicalId": "s159",
+                  "canonicalId": "s160",
                   "node": {
                     "kind": "object",
                     "properties": {
@@ -11653,7 +12199,7 @@
               ],
               "requestBody": {
                 "inline": {
-                  "canonicalId": "s159",
+                  "canonicalId": "s160",
                   "node": {
                     "kind": "object",
                     "properties": {
@@ -11686,7 +12232,7 @@
               ],
               "requestBody": {
                 "inline": {
-                  "canonicalId": "s160",
+                  "canonicalId": "s161",
                   "node": {
                     "kind": "object",
                     "properties": {
@@ -11733,7 +12279,7 @@
               ],
               "requestBody": {
                 "inline": {
-                  "canonicalId": "s161",
+                  "canonicalId": "s162",
                   "node": {
                     "kind": "object",
                     "properties": {
@@ -11750,6 +12296,9 @@
                         "node": {
                           "kind": "string"
                         },
+                        "docs": {
+                          "brand": "OrgId"
+                        },
                         "nullable": false,
                         "optional": false
                       },
@@ -11757,6 +12306,9 @@
                         "canonicalId": "s1",
                         "node": {
                           "kind": "string"
+                        },
+                        "docs": {
+                          "brand": "TaskId"
                         },
                         "nullable": false,
                         "optional": false
@@ -11771,7 +12323,7 @@
                         "optional": false
                       },
                       "entity": {
-                        "canonicalId": "s162",
+                        "canonicalId": "s163",
                         "node": {
                           "kind": "object",
                           "properties": {
@@ -11785,6 +12337,9 @@
                                     "node": {
                                       "kind": "string"
                                     },
+                                    "docs": {
+                                      "brand": "TaskId"
+                                    },
                                     "nullable": false,
                                     "optional": false
                                   },
@@ -11792,6 +12347,9 @@
                                     "canonicalId": "s1",
                                     "node": {
                                       "kind": "string"
+                                    },
+                                    "docs": {
+                                      "brand": "ProjectId"
                                     },
                                     "nullable": false,
                                     "optional": false
@@ -11875,6 +12433,9 @@
                                     "node": {
                                       "kind": "string"
                                     },
+                                    "docs": {
+                                      "brand": "ProjectImageId"
+                                    },
                                     "nullable": false,
                                     "optional": true
                                   },
@@ -11882,6 +12443,9 @@
                                     "canonicalId": "s1",
                                     "node": {
                                       "kind": "string"
+                                    },
+                                    "docs": {
+                                      "brand": "BaseImageId"
                                     },
                                     "nullable": false,
                                     "optional": true
@@ -11952,6 +12516,9 @@
                                     "node": {
                                       "kind": "string"
                                     },
+                                    "docs": {
+                                      "brand": "ProjectImageId"
+                                    },
                                     "nullable": false,
                                     "optional": true
                                   },
@@ -11959,6 +12526,9 @@
                                     "canonicalId": "s1",
                                     "node": {
                                       "kind": "string"
+                                    },
+                                    "docs": {
+                                      "brand": "ProjectImageId"
                                     },
                                     "nullable": false,
                                     "optional": true
@@ -12041,7 +12611,7 @@
               ],
               "requestBody": {
                 "inline": {
-                  "canonicalId": "s163",
+                  "canonicalId": "s164",
                   "node": {
                     "kind": "object",
                     "properties": {
@@ -12058,6 +12628,9 @@
                         "node": {
                           "kind": "string"
                         },
+                        "docs": {
+                          "brand": "OrgId"
+                        },
                         "nullable": false,
                         "optional": false
                       },
@@ -12066,6 +12639,9 @@
                         "node": {
                           "kind": "string"
                         },
+                        "docs": {
+                          "brand": "TaskId"
+                        },
                         "nullable": false,
                         "optional": false
                       },
@@ -12073,6 +12649,9 @@
                         "canonicalId": "s1",
                         "node": {
                           "kind": "string"
+                        },
+                        "docs": {
+                          "brand": "AgentId"
                         },
                         "nullable": false,
                         "optional": false
@@ -12087,7 +12666,7 @@
                         "optional": false
                       },
                       "entity": {
-                        "canonicalId": "s164",
+                        "canonicalId": "s165",
                         "node": {
                           "kind": "object",
                           "properties": {
@@ -12101,6 +12680,9 @@
                                     "node": {
                                       "kind": "string"
                                     },
+                                    "docs": {
+                                      "brand": "AgentId"
+                                    },
                                     "nullable": false,
                                     "optional": false
                                   },
@@ -12108,6 +12690,9 @@
                                     "canonicalId": "s1",
                                     "node": {
                                       "kind": "string"
+                                    },
+                                    "docs": {
+                                      "brand": "TaskId"
                                     },
                                     "nullable": false,
                                     "optional": false
@@ -12250,7 +12835,7 @@
               ],
               "requestBody": {
                 "inline": {
-                  "canonicalId": "s165",
+                  "canonicalId": "s166",
                   "node": {
                     "kind": "object",
                     "properties": {
@@ -12267,6 +12852,9 @@
                         "node": {
                           "kind": "string"
                         },
+                        "docs": {
+                          "brand": "OrgId"
+                        },
                         "nullable": false,
                         "optional": false
                       },
@@ -12275,6 +12863,9 @@
                         "node": {
                           "kind": "string"
                         },
+                        "docs": {
+                          "brand": "TaskId"
+                        },
                         "nullable": false,
                         "optional": false
                       },
@@ -12282,6 +12873,9 @@
                         "canonicalId": "s1",
                         "node": {
                           "kind": "string"
+                        },
+                        "docs": {
+                          "brand": "ServiceName"
                         },
                         "nullable": false,
                         "optional": false
@@ -12296,7 +12890,7 @@
                         "optional": false
                       },
                       "entity": {
-                        "canonicalId": "s166",
+                        "canonicalId": "s167",
                         "node": {
                           "kind": "object",
                           "properties": {
@@ -12309,6 +12903,9 @@
                                     "canonicalId": "s1",
                                     "node": {
                                       "kind": "string"
+                                    },
+                                    "docs": {
+                                      "brand": "ServiceName"
                                     },
                                     "nullable": false,
                                     "optional": false
@@ -12395,7 +12992,7 @@
               ],
               "requestBody": {
                 "inline": {
-                  "canonicalId": "s167",
+                  "canonicalId": "s168",
                   "node": {
                     "kind": "object",
                     "properties": {
@@ -12412,6 +13009,9 @@
                         "node": {
                           "kind": "string"
                         },
+                        "docs": {
+                          "brand": "BaseImageId"
+                        },
                         "nullable": false,
                         "optional": false
                       },
@@ -12425,7 +13025,7 @@
                         "optional": false
                       },
                       "entity": {
-                        "canonicalId": "s168",
+                        "canonicalId": "s169",
                         "node": {
                           "kind": "object",
                           "properties": {
@@ -12438,6 +13038,9 @@
                                     "canonicalId": "s1",
                                     "node": {
                                       "kind": "string"
+                                    },
+                                    "docs": {
+                                      "brand": "BaseImageId"
                                     },
                                     "nullable": false,
                                     "optional": false
@@ -12600,7 +13203,7 @@
               ],
               "requestBody": {
                 "inline": {
-                  "canonicalId": "s169",
+                  "canonicalId": "s170",
                   "node": {
                     "kind": "object",
                     "properties": {
@@ -12617,6 +13220,9 @@
                         "node": {
                           "kind": "string"
                         },
+                        "docs": {
+                          "brand": "OrgId"
+                        },
                         "nullable": false,
                         "optional": false
                       },
@@ -12624,6 +13230,9 @@
                         "canonicalId": "s1",
                         "node": {
                           "kind": "string"
+                        },
+                        "docs": {
+                          "brand": "ProjectImageId"
                         },
                         "nullable": false,
                         "optional": false
@@ -12638,7 +13247,7 @@
                         "optional": false
                       },
                       "entity": {
-                        "canonicalId": "s170",
+                        "canonicalId": "s171",
                         "node": {
                           "kind": "object",
                           "properties": {
@@ -12652,6 +13261,9 @@
                                     "node": {
                                       "kind": "string"
                                     },
+                                    "docs": {
+                                      "brand": "ProjectImageId"
+                                    },
                                     "nullable": false,
                                     "optional": false
                                   },
@@ -12659,6 +13271,9 @@
                                     "canonicalId": "s1",
                                     "node": {
                                       "kind": "string"
+                                    },
+                                    "docs": {
+                                      "brand": "ProjectId"
                                     },
                                     "nullable": false,
                                     "optional": false
@@ -12696,6 +13311,9 @@
                                     "node": {
                                       "kind": "string"
                                     },
+                                    "docs": {
+                                      "brand": "BaseImageId"
+                                    },
                                     "nullable": false,
                                     "optional": false
                                   },
@@ -12729,6 +13347,9 @@
                                     "canonicalId": "s1",
                                     "node": {
                                       "kind": "string"
+                                    },
+                                    "docs": {
+                                      "brand": "TaskId"
                                     },
                                     "nullable": false,
                                     "optional": true
@@ -12844,7 +13465,7 @@
               ],
               "requestBody": {
                 "inline": {
-                  "canonicalId": "s171",
+                  "canonicalId": "s172",
                   "node": {
                     "kind": "object",
                     "properties": {
@@ -12861,6 +13482,9 @@
                         "node": {
                           "kind": "string"
                         },
+                        "docs": {
+                          "brand": "OrgId"
+                        },
                         "nullable": false,
                         "optional": false
                       },
@@ -12874,12 +13498,12 @@
                         "optional": false
                       },
                       "entity": {
-                        "canonicalId": "s172",
+                        "canonicalId": "s173",
                         "node": {
                           "kind": "object",
                           "properties": {
                             "summary": {
-                              "canonicalId": "s173",
+                              "canonicalId": "s174",
                               "node": {
                                 "kind": "object",
                                 "properties": {
@@ -12887,6 +13511,9 @@
                                     "canonicalId": "s1",
                                     "node": {
                                       "kind": "string"
+                                    },
+                                    "docs": {
+                                      "brand": "TaskId"
                                     },
                                     "nullable": false,
                                     "optional": false
@@ -12896,6 +13523,9 @@
                                     "node": {
                                       "kind": "string"
                                     },
+                                    "docs": {
+                                      "brand": "OrgId"
+                                    },
                                     "nullable": false,
                                     "optional": false
                                   },
@@ -12903,6 +13533,9 @@
                                     "canonicalId": "s1",
                                     "node": {
                                       "kind": "string"
+                                    },
+                                    "docs": {
+                                      "brand": "ProjectId"
                                     },
                                     "nullable": false,
                                     "optional": false
@@ -12916,7 +13549,7 @@
                                     "optional": false
                                   },
                                   "status": {
-                                    "canonicalId": "s174",
+                                    "canonicalId": "s175",
                                     "node": {
                                       "kind": "literal",
                                       "values": [
@@ -13024,7 +13657,7 @@
               ],
               "wsInput": {
                 "inline": {
-                  "canonicalId": "s175",
+                  "canonicalId": "s176",
                   "node": {
                     "kind": "object",
                     "properties": {
@@ -13057,7 +13690,7 @@
               ],
               "wsInput": {
                 "inline": {
-                  "canonicalId": "s175",
+                  "canonicalId": "s176",
                   "node": {
                     "kind": "object",
                     "properties": {
@@ -13088,7 +13721,7 @@
               "errors": [],
               "wsInput": {
                 "inline": {
-                  "canonicalId": "s161",
+                  "canonicalId": "s162",
                   "node": {
                     "kind": "object",
                     "properties": {
@@ -13105,6 +13738,9 @@
                         "node": {
                           "kind": "string"
                         },
+                        "docs": {
+                          "brand": "OrgId"
+                        },
                         "nullable": false,
                         "optional": false
                       },
@@ -13112,6 +13748,9 @@
                         "canonicalId": "s1",
                         "node": {
                           "kind": "string"
+                        },
+                        "docs": {
+                          "brand": "TaskId"
                         },
                         "nullable": false,
                         "optional": false
@@ -13126,7 +13765,7 @@
                         "optional": false
                       },
                       "entity": {
-                        "canonicalId": "s162",
+                        "canonicalId": "s163",
                         "node": {
                           "kind": "object",
                           "properties": {
@@ -13140,6 +13779,9 @@
                                     "node": {
                                       "kind": "string"
                                     },
+                                    "docs": {
+                                      "brand": "TaskId"
+                                    },
                                     "nullable": false,
                                     "optional": false
                                   },
@@ -13147,6 +13789,9 @@
                                     "canonicalId": "s1",
                                     "node": {
                                       "kind": "string"
+                                    },
+                                    "docs": {
+                                      "brand": "ProjectId"
                                     },
                                     "nullable": false,
                                     "optional": false
@@ -13230,6 +13875,9 @@
                                     "node": {
                                       "kind": "string"
                                     },
+                                    "docs": {
+                                      "brand": "ProjectImageId"
+                                    },
                                     "nullable": false,
                                     "optional": true
                                   },
@@ -13237,6 +13885,9 @@
                                     "canonicalId": "s1",
                                     "node": {
                                       "kind": "string"
+                                    },
+                                    "docs": {
+                                      "brand": "BaseImageId"
                                     },
                                     "nullable": false,
                                     "optional": true
@@ -13307,6 +13958,9 @@
                                     "node": {
                                       "kind": "string"
                                     },
+                                    "docs": {
+                                      "brand": "ProjectImageId"
+                                    },
                                     "nullable": false,
                                     "optional": true
                                   },
@@ -13314,6 +13968,9 @@
                                     "canonicalId": "s1",
                                     "node": {
                                       "kind": "string"
+                                    },
+                                    "docs": {
+                                      "brand": "ProjectImageId"
                                     },
                                     "nullable": false,
                                     "optional": true
@@ -13393,7 +14050,7 @@
               "errors": [],
               "wsInput": {
                 "inline": {
-                  "canonicalId": "s163",
+                  "canonicalId": "s164",
                   "node": {
                     "kind": "object",
                     "properties": {
@@ -13410,6 +14067,9 @@
                         "node": {
                           "kind": "string"
                         },
+                        "docs": {
+                          "brand": "OrgId"
+                        },
                         "nullable": false,
                         "optional": false
                       },
@@ -13418,6 +14078,9 @@
                         "node": {
                           "kind": "string"
                         },
+                        "docs": {
+                          "brand": "TaskId"
+                        },
                         "nullable": false,
                         "optional": false
                       },
@@ -13425,6 +14088,9 @@
                         "canonicalId": "s1",
                         "node": {
                           "kind": "string"
+                        },
+                        "docs": {
+                          "brand": "AgentId"
                         },
                         "nullable": false,
                         "optional": false
@@ -13439,7 +14105,7 @@
                         "optional": false
                       },
                       "entity": {
-                        "canonicalId": "s164",
+                        "canonicalId": "s165",
                         "node": {
                           "kind": "object",
                           "properties": {
@@ -13453,6 +14119,9 @@
                                     "node": {
                                       "kind": "string"
                                     },
+                                    "docs": {
+                                      "brand": "AgentId"
+                                    },
                                     "nullable": false,
                                     "optional": false
                                   },
@@ -13460,6 +14129,9 @@
                                     "canonicalId": "s1",
                                     "node": {
                                       "kind": "string"
+                                    },
+                                    "docs": {
+                                      "brand": "TaskId"
                                     },
                                     "nullable": false,
                                     "optional": false
@@ -13599,7 +14271,7 @@
               "errors": [],
               "wsInput": {
                 "inline": {
-                  "canonicalId": "s165",
+                  "canonicalId": "s166",
                   "node": {
                     "kind": "object",
                     "properties": {
@@ -13616,6 +14288,9 @@
                         "node": {
                           "kind": "string"
                         },
+                        "docs": {
+                          "brand": "OrgId"
+                        },
                         "nullable": false,
                         "optional": false
                       },
@@ -13624,6 +14299,9 @@
                         "node": {
                           "kind": "string"
                         },
+                        "docs": {
+                          "brand": "TaskId"
+                        },
                         "nullable": false,
                         "optional": false
                       },
@@ -13631,6 +14309,9 @@
                         "canonicalId": "s1",
                         "node": {
                           "kind": "string"
+                        },
+                        "docs": {
+                          "brand": "ServiceName"
                         },
                         "nullable": false,
                         "optional": false
@@ -13645,7 +14326,7 @@
                         "optional": false
                       },
                       "entity": {
-                        "canonicalId": "s166",
+                        "canonicalId": "s167",
                         "node": {
                           "kind": "object",
                           "properties": {
@@ -13658,6 +14339,9 @@
                                     "canonicalId": "s1",
                                     "node": {
                                       "kind": "string"
+                                    },
+                                    "docs": {
+                                      "brand": "ServiceName"
                                     },
                                     "nullable": false,
                                     "optional": false
@@ -13741,7 +14425,7 @@
               "errors": [],
               "wsInput": {
                 "inline": {
-                  "canonicalId": "s167",
+                  "canonicalId": "s168",
                   "node": {
                     "kind": "object",
                     "properties": {
@@ -13758,6 +14442,9 @@
                         "node": {
                           "kind": "string"
                         },
+                        "docs": {
+                          "brand": "BaseImageId"
+                        },
                         "nullable": false,
                         "optional": false
                       },
@@ -13771,7 +14458,7 @@
                         "optional": false
                       },
                       "entity": {
-                        "canonicalId": "s168",
+                        "canonicalId": "s169",
                         "node": {
                           "kind": "object",
                           "properties": {
@@ -13784,6 +14471,9 @@
                                     "canonicalId": "s1",
                                     "node": {
                                       "kind": "string"
+                                    },
+                                    "docs": {
+                                      "brand": "BaseImageId"
                                     },
                                     "nullable": false,
                                     "optional": false
@@ -13943,7 +14633,7 @@
               "errors": [],
               "wsInput": {
                 "inline": {
-                  "canonicalId": "s169",
+                  "canonicalId": "s170",
                   "node": {
                     "kind": "object",
                     "properties": {
@@ -13960,6 +14650,9 @@
                         "node": {
                           "kind": "string"
                         },
+                        "docs": {
+                          "brand": "OrgId"
+                        },
                         "nullable": false,
                         "optional": false
                       },
@@ -13967,6 +14660,9 @@
                         "canonicalId": "s1",
                         "node": {
                           "kind": "string"
+                        },
+                        "docs": {
+                          "brand": "ProjectImageId"
                         },
                         "nullable": false,
                         "optional": false
@@ -13981,7 +14677,7 @@
                         "optional": false
                       },
                       "entity": {
-                        "canonicalId": "s170",
+                        "canonicalId": "s171",
                         "node": {
                           "kind": "object",
                           "properties": {
@@ -13995,6 +14691,9 @@
                                     "node": {
                                       "kind": "string"
                                     },
+                                    "docs": {
+                                      "brand": "ProjectImageId"
+                                    },
                                     "nullable": false,
                                     "optional": false
                                   },
@@ -14002,6 +14701,9 @@
                                     "canonicalId": "s1",
                                     "node": {
                                       "kind": "string"
+                                    },
+                                    "docs": {
+                                      "brand": "ProjectId"
                                     },
                                     "nullable": false,
                                     "optional": false
@@ -14039,6 +14741,9 @@
                                     "node": {
                                       "kind": "string"
                                     },
+                                    "docs": {
+                                      "brand": "BaseImageId"
+                                    },
                                     "nullable": false,
                                     "optional": false
                                   },
@@ -14072,6 +14777,9 @@
                                     "canonicalId": "s1",
                                     "node": {
                                       "kind": "string"
+                                    },
+                                    "docs": {
+                                      "brand": "TaskId"
                                     },
                                     "nullable": false,
                                     "optional": true
@@ -14184,7 +14892,7 @@
               "errors": [],
               "wsInput": {
                 "inline": {
-                  "canonicalId": "s171",
+                  "canonicalId": "s172",
                   "node": {
                     "kind": "object",
                     "properties": {
@@ -14201,6 +14909,9 @@
                         "node": {
                           "kind": "string"
                         },
+                        "docs": {
+                          "brand": "OrgId"
+                        },
                         "nullable": false,
                         "optional": false
                       },
@@ -14214,12 +14925,12 @@
                         "optional": false
                       },
                       "entity": {
-                        "canonicalId": "s172",
+                        "canonicalId": "s173",
                         "node": {
                           "kind": "object",
                           "properties": {
                             "summary": {
-                              "canonicalId": "s173",
+                              "canonicalId": "s174",
                               "node": {
                                 "kind": "object",
                                 "properties": {
@@ -14227,6 +14938,9 @@
                                     "canonicalId": "s1",
                                     "node": {
                                       "kind": "string"
+                                    },
+                                    "docs": {
+                                      "brand": "TaskId"
                                     },
                                     "nullable": false,
                                     "optional": false
@@ -14236,6 +14950,9 @@
                                     "node": {
                                       "kind": "string"
                                     },
+                                    "docs": {
+                                      "brand": "OrgId"
+                                    },
                                     "nullable": false,
                                     "optional": false
                                   },
@@ -14243,6 +14960,9 @@
                                     "canonicalId": "s1",
                                     "node": {
                                       "kind": "string"
+                                    },
+                                    "docs": {
+                                      "brand": "ProjectId"
                                     },
                                     "nullable": false,
                                     "optional": false
@@ -14256,7 +14976,7 @@
                                     "optional": false
                                   },
                                   "status": {
-                                    "canonicalId": "s174",
+                                    "canonicalId": "s175",
                                     "node": {
                                       "kind": "literal",
                                       "values": [
