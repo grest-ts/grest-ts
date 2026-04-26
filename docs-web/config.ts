@@ -25,6 +25,7 @@ export const DOC_TREE: Record<string, DocEntry[]> = {
     ],
     "Libraries": [
         {db: ["db-mysql", "db-postgre"]},
+        {docs: ["api-docs", "openapi", "asyncapi"]},
     ],
     "Useful": [
         "sql",

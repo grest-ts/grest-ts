@@ -11,6 +11,7 @@
 export const GUIDE_LINKS: Record<string, string> = {
     "discovery": "/guide/discovery",
     "local-and-live-config": "/guide/local-and-live-config",
+    "api-docs": "/guide/api-docs",
 }
 
 /**

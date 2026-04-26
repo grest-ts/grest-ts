@@ -29,8 +29,11 @@
   },
   "workspaces": [
     "docs-web",
+    "examples/api-docs-v2",
+    "examples/api-docs-v2/ui",
     "packages-libs/*",
     "packages-libs/db/*",
+    "packages-libs/docs/*",
     "packages-libs/events/*",
     "packages-libs/intl/intl",
     "packages-libs/lock/lock",

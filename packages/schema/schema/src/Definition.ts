@@ -43,6 +43,16 @@ export interface GGSchemaDocs {
      * Purely informational — does not affect runtime validation.
      */
     readonly format?: string;
+    /**
+     * Brand identifier — the runtime form of the TypeScript-only `.brand("Foo")`
+     * tag, used by docs/openapi/asyncapi tooling to display the brand alongside
+     * the underlying primitive (e.g. `string & UserId`).
+     *
+     * Auto-populated by `.brand(name)` when not already set; can be overridden
+     * with `.docs({brand: "..."})`. Distinct from `title`, which is the
+     * human-readable label (e.g. brand `"UserId"` vs title `"User ID"`).
+     */
+    readonly brand?: string;
 }
 
 export interface GGSchemaRefinement<T = unknown> {

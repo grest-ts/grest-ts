@@ -1,0 +1,23 @@
+[
+  {
+    "slug": "grest-test",
+    "title": "Grest Test Showcase",
+    "description": "A deliberately rich showcase API used as a snapshot anchor — exercises every structurally interesting schema type, plus a WebSocket showcase.",
+    "groupCount": 2,
+    "methodCount": 20
+  },
+  {
+    "slug": "realestate",
+    "title": "Realestate v2",
+    "description": "Real estate management platform — multi-company, with bank integrations, bookkeeping, expense tracking, and tenant contracts.",
+    "groupCount": 8,
+    "methodCount": 152
+  },
+  {
+    "slug": "kratt",
+    "title": "Kratt",
+    "description": "Multi-agent dev platform — hub for management, relay for agent comms, socket for real-time events.",
+    "groupCount": 4,
+    "methodCount": 105
+  }
+]

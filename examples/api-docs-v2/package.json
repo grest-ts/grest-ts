@@ -1,0 +1,25 @@
+{
+  "name": "api-docs-v2-demo",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "description": "Demo / sandbox for the api-docs v2 native UI — see PLAN-api-docs-v2.md",
+  "scripts": {
+    "generate": "tsx src/generate.ts",
+    "dev": "cd ui && vite",
+    "build:ui": "cd ui && vite build"
+  },
+  "dependencies": {
+    "@grest-ts/schema": "*",
+    "@grest-ts/schema-file": "*",
+    "@grest-ts/http": "*",
+    "@grest-ts/http-file": "*",
+    "@grest-ts/context": "*",
+    "@grest-ts/websocket": "*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.0",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3"
+  }
+}

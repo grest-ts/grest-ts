@@ -644,6 +644,16 @@ Many packages provide testkit utilities making testing easier. These are
 |----------------------------------------------|-------------------------------------------------|
 | [`@grest-ts/struct`](./packages-libs/struct) | Binary struct serialization and code generation |
 
+### API Documentation (All optional)
+
+Three independent peer packages — pick whichever surface(s) you need. `api-docs` renders contracts directly into a native React UI (recommended for documenting your own service). `openapi` / `asyncapi` produce industry-standard specs for external tooling. No coupling between them — install only what you use. See the [API Docs guide](./README-api-docs.md) for usage and multi-service patterns.
+
+| Package                                                  | Purpose                                                                                                                          |
+|----------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------|
+| [`@grest-ts/api-docs`](./packages-libs/docs/api-docs)    | Native React UI — renders HTTP + WebSocket contracts directly with brand intersection types, typed errors, and reuse detection   |
+| [`@grest-ts/openapi`](./packages-libs/docs/openapi)      | OpenAPI 3.1 spec export + Swagger UI — for SDK generation, Postman, contract tests, and the OpenAPI tooling ecosystem            |
+| [`@grest-ts/asyncapi`](./packages-libs/docs/asyncapi)    | AsyncAPI 3.0 spec export + AsyncAPI Studio — for WebSocket contracts in the AsyncAPI tooling ecosystem                           |
+
 ---
 
 ## Design Principles

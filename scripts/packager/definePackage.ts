@@ -61,6 +61,15 @@ export interface GGPackage {
      */
     implementationFor?: string
 
+    /**
+     * Extra entries to include in the published package.json `files` field
+     * beyond the defaults (`src`, plus `bin`/`testkit`/`codegen` when applicable).
+     *
+     * Used when a package ships pre-built assets — e.g. `@grest-ts/api-docs`
+     * adds `dist-ui` so the React UI bundle is included in the npm tarball.
+     */
+    extraFiles?: string[]
+
     targets: {
         /**
          * src/index-node.ts is the entry file name.

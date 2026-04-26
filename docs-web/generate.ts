@@ -184,7 +184,13 @@ function discoverRootGuides(): { src: string; slug: string; title: string }[] {
         const title = headingMatch ? headingMatch[1].trim() : titleize(slug)
         entries.push({src, slug, title})
     }
-    return entries.sort((a, b) => a.slug.localeCompare(b.slug))
+    // Sort alphabetically, but pin api-docs to the end (it's the long-tail
+    // reference page; users typically reach for the smaller guides first).
+    return entries.sort((a, b) => {
+        if (a.slug === "api-docs") return 1
+        if (b.slug === "api-docs") return -1
+        return a.slug.localeCompare(b.slug)
+    })
 }
 
 // ── Guide processing ───────────────────────────────────────────────────

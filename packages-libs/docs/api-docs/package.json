@@ -1,0 +1,57 @@
+{
+  "//": "THIS FILE IS GENERATED - DO NOT EDIT",
+  "name": "@grest-ts/api-docs",
+  "version": "0.0.25",
+  "type": "module",
+  "license": "MIT",
+  "description": "Native React-based documentation UI for grest-ts services — renders contracts directly, no OpenAPI/AsyncAPI conversion in the rendering path",
+  "exports": {
+    ".": {
+      "types": "./src/index-node.ts",
+      "import": "./src/index-node.ts"
+    }
+  },
+  "files": [
+    "src",
+    "dist-ui"
+  ],
+  "scripts": {
+    "typecheck": "tsc --noEmit -p src",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "test:coverage:html": "vitest run --coverage --reporter=html"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/grest-ts/grest-ts.git",
+    "directory": "packages-libs/docs/api-docs"
+  },
+  "homepage": "https://grest-ts.com/packages/api-docs",
+  "bugs": {
+    "url": "https://github.com/grest-ts/grest-ts/issues"
+  },
+  "keywords": [
+    "typescript",
+    "framework",
+    "contract",
+    "api",
+    "microservices",
+    "testing",
+    "api-docs",
+    "documentation",
+    "react",
+    "contracts"
+  ],
+  "engines": {
+    "node": ">=25"
+  },
+  "dependencies": {
+    "@grest-ts/http": "0.0.25",
+    "@grest-ts/locator": "0.0.25",
+    "@grest-ts/schema": "0.0.25",
+    "@grest-ts/websocket": "0.0.25"
+  }
+}
