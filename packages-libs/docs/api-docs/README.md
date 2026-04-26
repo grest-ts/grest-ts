@@ -7,6 +7,8 @@
 
 > **The native documentation UI for grest-ts services.** Renders contracts directly — no conversion to OpenAPI or AsyncAPI in the rendering path. Brand intersection types, typed errors, request/response/event patterns, cross-method reuse detection, all surfaced honestly from your `GGContractClass` definitions.
 
+🚀 <a href="/api-docs-demo/" target="_blank" rel="noopener"><strong>Open the live demo →</strong></a> &nbsp; The actual UI rendered against the [grest-test](https://github.com/grest-ts/grest-ts/tree/master/examples/grest-test) example service. Try the sidebar, brand highlighting, discriminated unions, Schema/Example view toggle.
+
 A typical grest-ts service has both HTTP and WebSocket APIs, with rich types like branded primitives, discriminated unions, and shared response shapes. Generic OpenAPI/AsyncAPI tooling flattens most of that into spec-language. This package renders your contracts as they actually exist — `string & UserId`, `req`/`event` patterns, `IN`/`OUT` for WS direction, "↔ N" reuse chips when the same shape flows through multiple methods.
 
 ## Features

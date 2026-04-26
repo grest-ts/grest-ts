@@ -1,5 +1,7 @@
 # API Docs
 
+🚀 <a href="/api-docs-demo/" target="_blank" rel="noopener"><strong>Open the live demo →</strong></a> &nbsp; The native [@grest-ts/api-docs](@pkg/api-docs) UI rendered against a real example service. The fastest way to see what grest-ts can do with your contracts.
+
 grest-ts contracts already carry every piece of information a typical API consumer needs — request/response schemas, brand identities, error shapes, route paths, HTTP verbs, WebSocket interaction patterns, handshake auth headers. Three independent packages turn that information into different surfaces:
 
 | Package | What it produces | Best for | Detailed docs |
