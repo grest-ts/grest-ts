@@ -19,13 +19,16 @@ import type {ApiDocsDocument, JsonSchemaDescription, SchemaRef} from "../docType
 interface Props {
     schemaRef: SchemaRef;
     doc: ApiDocsDocument;
+    /** When set, brand comments matching this value get a yellow accent. */
+    /** Type identifier (brand or `__<canonicalId>`) to accent in the example. */
+    highlightType?: string;
 }
 
-export function ExampleSchema({schemaRef, doc}: Props) {
+export function ExampleSchema({schemaRef, doc, highlightType}: Props) {
     const value = generateExample(schemaRef, doc, new Set());
     return (
         <pre className="text-[13px] leading-6 font-mono bg-gray-50 border border-gray-200 rounded-lg p-3 overflow-x-auto">
-            <code>{renderJsonValue(value, 0)}</code>
+            <code>{renderJsonValue(value, 0, highlightType)}</code>
         </pre>
     );
 }
@@ -217,13 +220,13 @@ function numberPlaceholder(node: Extract<JsonSchemaDescription["node"], {kind: "
 
 // ── JSON-syntax rendering ──────────────────────────────────────────────
 
-function renderJsonValue(ex: Example, depth: number): React.ReactNode {
+function renderJsonValue(ex: Example, depth: number, hl?: string): React.ReactNode {
     if (ex.kind === "null") return <span className="text-emerald-700">null</span>;
 
     if (ex.kind === "primitive") {
         const valueRender = renderPrimitive(ex.value);
         const brandComment = ex.brand
-            ? <CommentSpan>{ex.comment ? `${ex.brand} — ${ex.comment}` : ex.brand}</CommentSpan>
+            ? <BrandCommentSpan brand={ex.brand} comment={ex.comment} hl={hl} />
             : ex.comment
                 ? <CommentSpan>{ex.comment}</CommentSpan>
                 : null;
@@ -234,7 +237,7 @@ function renderJsonValue(ex: Example, depth: number): React.ReactNode {
         if (ex.items.length === 0) return (
             <>
                 <span className="text-gray-500">[]</span>
-                {ex.brand && <>  <CommentSpan>{ex.brand}</CommentSpan></>}
+                {ex.brand && <>  <BrandCommentSpan brand={ex.brand} hl={hl} /></>}
             </>
         );
         const indent = "  ".repeat(depth + 1);
@@ -242,12 +245,12 @@ function renderJsonValue(ex: Example, depth: number): React.ReactNode {
         return (
             <>
                 <span className="text-gray-500">[</span>
-                {ex.brand && <>  <CommentSpan>{ex.brand}</CommentSpan></>}
+                {ex.brand && <>  <BrandCommentSpan brand={ex.brand} hl={hl} /></>}
                 {"\n"}
                 {ex.items.map((item, i) => (
                     <span key={i}>
                         {indent}
-                        {renderJsonValue(item, depth + 1)}
+                        {renderJsonValue(item, depth + 1, hl)}
                         {i < ex.items.length - 1 ? <span className="text-gray-500">,</span> : null}
                         {"\n"}
                     </span>
@@ -257,11 +260,10 @@ function renderJsonValue(ex: Example, depth: number): React.ReactNode {
         );
     }
 
-    // object
     if (ex.entries.length === 0) return (
         <>
             <span className="text-gray-500">{"{}"}</span>
-            {ex.brand && <>  <CommentSpan>{ex.brand}</CommentSpan></>}
+            {ex.brand && <>  <BrandCommentSpan brand={ex.brand} hl={hl} /></>}
         </>
     );
     const indent = "  ".repeat(depth + 1);
@@ -269,14 +271,14 @@ function renderJsonValue(ex: Example, depth: number): React.ReactNode {
     return (
         <>
             <span className="text-gray-500">{"{"}</span>
-            {ex.brand && <>  <CommentSpan>{ex.brand}</CommentSpan></>}
+            {ex.brand && <>  <BrandCommentSpan brand={ex.brand} hl={hl} /></>}
             {"\n"}
             {ex.entries.map((entry, i) => (
-                <span key={i}>
+                <span key={i} className={isBrandLeaf(entry.value, hl) ? "bg-yellow-100 -mx-1 px-1 rounded" : ""}>
                     {indent}
                     <span className="text-blue-700">"{entry.key}"</span>
                     <span className="text-gray-500">: </span>
-                    {renderJsonValue(entry.value, depth + 1)}
+                    {renderJsonValue(entry.value, depth + 1, hl)}
                     {i < ex.entries.length - 1 ? <span className="text-gray-500">,</span> : null}
                     {entry.comment && <>  <CommentSpan>{entry.comment}</CommentSpan></>}
                     {"\n"}
@@ -297,4 +299,39 @@ function renderPrimitive(value: unknown): React.ReactNode {
 
 function CommentSpan({children}: {children: React.ReactNode}) {
     return <span className="text-gray-400 italic">{`// ${children}`}</span>;
+}
+
+/**
+ * Brand-aware variant of CommentSpan. The brand name within the comment
+ * gets a yellow highlight when it matches the active highlightBrand. Brand
+ * may be `"baseType & BrandName"` or just `"BrandName"`; we extract the
+ * trailing identifier and highlight it specifically.
+ */
+function BrandCommentSpan({brand, comment, hl}: {brand: string; comment?: string; hl?: string}) {
+    const trailing = brand.includes(" & ") ? brand.split(" & ").pop()! : brand;
+    const isHl = hl === trailing;
+    const text = comment ? `${brand} — ${comment}` : brand;
+    if (!isHl) return <CommentSpan>{text}</CommentSpan>;
+    return (
+        <span className="text-gray-400 italic">
+            <span>// </span>
+            <span className="bg-yellow-200 ring-1 ring-yellow-400 px-0.5 rounded text-purple-700 font-semibold not-italic">
+                {text}
+            </span>
+        </span>
+    );
+}
+
+/**
+ * Does this Example *itself* carry the highlighted brand (NOT recursing into
+ * children)? Used to background-tint exactly the row whose value is the
+ * branded leaf, without spreading the highlight up through its ancestors.
+ */
+function isBrandLeaf(ex: Example, hl?: string): boolean {
+    if (!hl) return false;
+    if (ex.kind === "null") return false;
+    const brand = (ex as {brand?: string}).brand;
+    if (!brand) return false;
+    const trailing = brand.includes(" & ") ? brand.split(" & ").pop()! : brand;
+    return trailing === hl;
 }

@@ -1,19 +1,42 @@
-import {useState} from "react";
+import {useEffect, useRef, useState} from "react";
 import type {ApiDocsDocument, ContractDoc, ErrorDoc, MethodDoc, SchemaRef} from "../docTypes";
 import {CompactSchema} from "./CompactSchema";
 import {ExampleSchema} from "./ExampleSchema";
 import {PillToggle} from "./Tabs";
 import {PatternBadge} from "./Badges";
+import {ERROR_TYPE_PREFIX, type UsageIndex} from "../lib/usageIndex";
+import {ReusedChip} from "./ReusedChip";
 
 interface Props {
     contract: ContractDoc;
     method: MethodDoc;
     doc: ApiDocsDocument;
+    /** When set, every appearance of this type in the body is highlighted. */
+    highlightType?: string;
+    /** When provided, drives the "↔ N" reuse chips on schemas in the body. */
+    usageIndex?: UsageIndex;
 }
 
-export function MethodView({contract, method, doc}: Props) {
+export function MethodView({contract, method, doc, highlightType, usageIndex}: Props) {
+    const containerRef = useRef<HTMLDivElement>(null);
+
+    /**
+     * After the body renders (or re-renders due to a different method/highlight),
+     * find the first highlight marker in the DOM and scroll it into view. Helps
+     * the reader locate the type they came in to look at without manual scanning.
+     */
+    useEffect(() => {
+        if (!highlightType) return;
+        // requestAnimationFrame ensures all child schemas have flushed to DOM.
+        const id = requestAnimationFrame(() => {
+            const el = containerRef.current?.querySelector("[data-gg-highlight]");
+            if (el) el.scrollIntoView({behavior: "smooth", block: "center"});
+        });
+        return () => cancelAnimationFrame(id);
+    }, [highlightType, contract.name, method.name]);
+
     return (
-        <div className="max-w-[1800px] px-8 py-8">
+        <div ref={containerRef} className="max-w-[1800px] px-8 py-8">
             <MethodHeader contract={contract} method={method} />
 
             {method.description && (
@@ -46,39 +69,41 @@ export function MethodView({contract, method, doc}: Props) {
             {/* Request — params and body */}
             {(method.pathParams?.length || method.queryParams?.length || method.requestBody || method.wsInput) ? (
                 <Section title={requestSectionTitle(method)}>
-                    <RequestPane method={method} doc={doc} />
+                    <RequestPane method={method} doc={doc} highlightType={highlightType} usageIndex={usageIndex} contractName={contract.name} />
                 </Section>
             ) : null}
 
-            {/* Success and error responses live in separate sections so the
-                visual split between "what you get on success" and "what can go
-                wrong" is unmistakable. Both sections skipped entirely for WS
-                fire-and-forget / server-push (no reply by definition). */}
-            {!isNoReplyWs(method) && <SuccessResponseSection method={method} doc={doc} />}
-            {!isNoReplyWs(method) && <ErrorResponsesSection method={method} doc={doc} />}
+            {!isNoReplyWs(method) && <SuccessResponseSection method={method} doc={doc} highlightType={highlightType} usageIndex={usageIndex} contractName={contract.name} />}
+            {!isNoReplyWs(method) && <ErrorResponsesSection method={method} doc={doc} highlightType={highlightType} usageIndex={usageIndex} contractName={contract.name} />}
         </div>
     );
 }
 
 // ── Request pane ───────────────────────────────────────────────────────
 
-function RequestPane({method, doc}: {method: MethodDoc; doc: ApiDocsDocument}) {
+function RequestPane({method, doc, highlightType, usageIndex, contractName}: {
+    method: MethodDoc; doc: ApiDocsDocument; highlightType?: string; usageIndex?: UsageIndex; contractName: string;
+}) {
     return (
         <div className="space-y-4">
             {method.pathParams && method.pathParams.length > 0 && (
-                <ParamGroup label="Path" params={method.pathParams} doc={doc} />
+                <ParamGroup label="Path" params={method.pathParams} doc={doc} highlightType={highlightType} />
             )}
             {method.queryParams && method.queryParams.length > 0 && (
-                <ParamGroup label="Query" params={method.queryParams} doc={doc} />
+                <ParamGroup label="Query" params={method.queryParams} doc={doc} highlightType={highlightType} />
             )}
             {method.requestBody && (
-                <SchemaPane label="Body" schemaRef={method.requestBody} doc={doc} />
+                <SchemaPane label="Body" schemaRef={method.requestBody} doc={doc} highlightType={highlightType} usageIndex={usageIndex} currentContract={contractName} currentMethod={method.name} />
             )}
             {method.wsInput && (
                 <SchemaPane
                     label={method.wsDirection === "client-to-server" ? "Send" : "Receive"}
                     schemaRef={method.wsInput}
                     doc={doc}
+                    highlightType={highlightType}
+                    usageIndex={usageIndex}
+                    currentContract={contractName}
+                    currentMethod={method.name}
                 />
             )}
         </div>
@@ -86,7 +111,10 @@ function RequestPane({method, doc}: {method: MethodDoc; doc: ApiDocsDocument}) {
 }
 
 /** Schema pane with Schema/Example toggle. Default = Schema. */
-function SchemaPane({label, schemaRef, doc}: {label: string; schemaRef: SchemaRef; doc: ApiDocsDocument}) {
+function SchemaPane({label, schemaRef, doc, highlightType, usageIndex, currentContract, currentMethod}: {
+    label: string; schemaRef: SchemaRef; doc: ApiDocsDocument;
+    highlightType?: string; usageIndex?: UsageIndex; currentContract: string; currentMethod: string;
+}) {
     const [view, setView] = useState<"schema" | "example">("schema");
     return (
         <div>
@@ -99,39 +127,48 @@ function SchemaPane({label, schemaRef, doc}: {label: string; schemaRef: SchemaRe
                 />
             </div>
             {view === "schema"
-                ? <CompactSchema schemaRef={schemaRef} doc={doc} />
-                : <ExampleSchema schemaRef={schemaRef} doc={doc} />}
+                ? <CompactSchema schemaRef={schemaRef} doc={doc} highlightType={highlightType} usageIndex={usageIndex} currentContract={currentContract} currentMethod={currentMethod} />
+                : <ExampleSchema schemaRef={schemaRef} doc={doc} highlightType={highlightType} />}
         </div>
     );
 }
 
-function ParamGroup({label, params, doc}: {label: string; params: NonNullable<MethodDoc["pathParams"]>; doc: ApiDocsDocument}) {
+function ParamGroup({label, params, doc, highlightType}: {label: string; params: NonNullable<MethodDoc["pathParams"]>; doc: ApiDocsDocument; highlightType?: string}) {
     return (
         <div>
             <Label>{label}</Label>
             <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 font-mono text-[13px] leading-6">
-                {params.map((p, i) => (
-                    <div key={p.name} className="flex items-baseline gap-2">
-                        <span className="text-blue-700">{p.name}</span>
-                        {!p.required && <span className="text-gray-400">?</span>}
-                        <span className="text-gray-500">:</span>
-                        <InlineRef schemaRef={p.schema} doc={doc} />
-                        {p.description && <span className="text-gray-400 italic ml-2">  // {p.description}</span>}
-                    </div>
-                ))}
+                {params.map(p => {
+                    const matches = highlightType && refContainsBrand(p.schema, highlightType, doc);
+                    return (
+                        <div key={p.name} className={`flex items-baseline gap-2 ${matches ? "bg-yellow-100 -mx-2 px-2 rounded" : ""}`}>
+                            <span className="text-blue-700">{p.name}</span>
+                            {!p.required && <span className="text-gray-400">?</span>}
+                            <span className="text-gray-500">:</span>
+                            <InlineRef schemaRef={p.schema} doc={doc} highlightType={highlightType} />
+                            {p.description && <span className="text-gray-400 italic ml-2">  // {p.description}</span>}
+                        </div>
+                    );
+                })}
             </div>
         </div>
     );
 }
 
 /** Tiny inline schema renderer for path/query param values — picks up brand or primitive label. */
-function InlineRef({schemaRef, doc}: {schemaRef: SchemaRef; doc: ApiDocsDocument}) {
+function InlineRef({schemaRef, doc, highlightType}: {schemaRef: SchemaRef; doc: ApiDocsDocument; highlightType?: string}) {
     if ("ref" in schemaRef) {
         return <span className="text-purple-600">{schemaRef.ref}</span>;
     }
     const desc = schemaRef.inline;
-    if (desc.docs?.title && isPrimitiveKind(desc.node.kind)) {
-        return <span className="text-purple-600">{desc.docs.title.replace(/\s+/g, "")}</span>;
+    const brand = desc.docs?.brand ?? (desc.docs?.title && isPrimitiveKind(desc.node.kind) ? desc.docs.title.replace(/\s+/g, "") : undefined);
+    if (brand && isPrimitiveKind(desc.node.kind)) {
+        const isHighlighted = highlightType === brand;
+        return (
+            <span className={`text-purple-600 ${isHighlighted ? "bg-yellow-200 ring-1 ring-yellow-400 px-0.5 rounded" : ""}`}>
+                {brand}
+            </span>
+        );
     }
     const node = desc.node;
     switch (node.kind) {
@@ -141,6 +178,36 @@ function InlineRef({schemaRef, doc}: {schemaRef: SchemaRef; doc: ApiDocsDocument
         case "literal":  return <span className="text-emerald-700">{(node as any).values.map((v: any) => JSON.stringify(v)).join(" | ")}</span>;
         default:         return <span className="text-emerald-700">{node.kind}</span>;
     }
+}
+
+/** Walk a SchemaRef recursively and return true if it (or anything nested under it) carries the given brand. */
+function refContainsBrand(ref: SchemaRef, brand: string, doc: ApiDocsDocument, seen = new Set<string>()): boolean {
+    if ("ref" in ref) {
+        if (seen.has(ref.ref)) return false;
+        seen.add(ref.ref);
+        const named = doc.schemas[ref.ref];
+        return !!named && descContainsBrand(named.schema, brand, doc, seen);
+    }
+    return descContainsBrand(ref.inline, brand, doc, seen);
+}
+
+function descContainsBrand(desc: import("../docTypes").JsonSchemaDescription, brand: string, doc: ApiDocsDocument, seen: Set<string>): boolean {
+    if (desc.docs?.brand === brand) return true;
+    const node = desc.node;
+    switch (node.kind) {
+        case "object":
+            return Object.values(node.properties).some(p => descContainsBrand(p, brand, doc, seen));
+        case "array":
+            return descContainsBrand(node.element, brand, doc, seen);
+        case "record":
+            return descContainsBrand(node.value, brand, doc, seen);
+        case "union":
+        case "discriminated":
+            return node.variants.some(v => descContainsBrand(v, brand, doc, seen));
+        case "tuple":
+            return node.elements.some(e => descContainsBrand(e, brand, doc, seen));
+    }
+    return false;
 }
 
 function isPrimitiveKind(k: string): boolean {
@@ -163,16 +230,17 @@ function requestSectionTitle(method: MethodDoc): React.ReactNode {
     return "Request";
 }
 
-/** The single 200 OK (or 204 No Content) success response. */
-function SuccessResponseSection({method, doc}: {method: MethodDoc; doc: ApiDocsDocument}) {
+function SuccessResponseSection({method, doc, highlightType, usageIndex, contractName}: {
+    method: MethodDoc; doc: ApiDocsDocument; highlightType?: string; usageIndex?: UsageIndex; contractName: string;
+}) {
     if (method.successResponse) {
         return (
             <Section title="Success response">
                 <ResponseCard
-                    statusCode={200}
-                    typeName="OK"
-                    schemaRef={method.successResponse}
-                    doc={doc}
+                    statusCode={200} typeName="OK"
+                    schemaRef={method.successResponse} doc={doc}
+                    highlightType={highlightType}
+                    usageIndex={usageIndex} currentContract={contractName} currentMethod={method.name}
                 />
             </Section>
         );
@@ -181,10 +249,9 @@ function SuccessResponseSection({method, doc}: {method: MethodDoc; doc: ApiDocsD
         return (
             <Section title="Success response">
                 <ResponseCard
-                    statusCode={204}
-                    typeName="No Content"
-                    doc={doc}
-                    emptyLabel="No response body."
+                    statusCode={204} typeName="No Content"
+                    doc={doc} emptyLabel="No response body."
+                    currentContract={contractName} currentMethod={method.name}
                 />
             </Section>
         );
@@ -192,8 +259,9 @@ function SuccessResponseSection({method, doc}: {method: MethodDoc; doc: ApiDocsD
     return null;
 }
 
-/** All 4xx/5xx errors stacked, sorted by status code. Section omitted if none. */
-function ErrorResponsesSection({method, doc}: {method: MethodDoc; doc: ApiDocsDocument}) {
+function ErrorResponsesSection({method, doc, highlightType, usageIndex, contractName}: {
+    method: MethodDoc; doc: ApiDocsDocument; highlightType?: string; usageIndex?: UsageIndex; contractName: string;
+}) {
     const errors = method.errors
         .map(t => doc.errors[t])
         .filter((e): e is ErrorDoc => !!e)
@@ -207,12 +275,12 @@ function ErrorResponsesSection({method, doc}: {method: MethodDoc; doc: ApiDocsDo
                 {errors.map(err => (
                     <ResponseCard
                         key={err.type}
-                        statusCode={err.statusCode}
-                        typeName={err.type}
-                        description={err.description}
-                        schemaRef={err.data}
-                        doc={doc}
-                        emptyLabel="No payload."
+                        statusCode={err.statusCode} typeName={err.type}
+                        description={err.description} schemaRef={err.data}
+                        doc={doc} emptyLabel="No payload."
+                        highlightType={highlightType}
+                        usageIndex={usageIndex} currentContract={contractName} currentMethod={method.name}
+                        errorType={err.type}
                     />
                 ))}
             </div>
@@ -221,12 +289,7 @@ function ErrorResponsesSection({method, doc}: {method: MethodDoc; doc: ApiDocsDo
 }
 
 function ResponseCard({
-    statusCode,
-    typeName,
-    description,
-    schemaRef,
-    emptyLabel,
-    doc,
+    statusCode, typeName, description, schemaRef, emptyLabel, doc, highlightType, usageIndex, currentContract, currentMethod, errorType,
 }: {
     statusCode: number;
     typeName: string;
@@ -234,17 +297,32 @@ function ResponseCard({
     schemaRef?: SchemaRef;
     emptyLabel?: string;
     doc: ApiDocsDocument;
+    highlightType?: string;
+    usageIndex?: UsageIndex;
+    currentContract: string;
+    currentMethod: string;
+    /** When set, this card represents a declared error type. Triggers an error-namespace reuse chip + highlight. */
+    errorType?: string;
 }) {
-    // Toggle state lives on the card so the pill can sit on the same line
-    // as the status header (toggle right-justified via `ml-auto`).
     const [view, setView] = useState<"schema" | "example">("schema");
+
+    // Error reuse chip: cross-method "this same error is thrown by …".
+    const errorKey = errorType ? ERROR_TYPE_PREFIX + errorType : undefined;
+    const errorRefs = errorKey && usageIndex ? usageIndex.get(errorKey) : undefined;
+    const errorChip = errorRefs && errorRefs.length >= 2
+        ? <ReusedChip refs={errorRefs} highlightType={errorKey!} highlighted={highlightType === errorKey} />
+        : null;
+    const cardHighlighted = errorKey ? highlightType === errorKey : false;
+
     return (
-        <div>
+        <div data-gg-highlight={cardHighlighted ? "" : undefined}
+             className={cardHighlighted ? "bg-yellow-50 -mx-2 px-2 py-1 rounded ring-1 ring-yellow-300" : ""}>
             <div className="flex items-center gap-2 mb-2">
                 <span className={`text-[11px] font-bold font-mono px-2 py-0.5 rounded ${statusColor(statusCode)}`}>
                     {statusCode}
                 </span>
                 <code className="text-sm font-mono text-gray-900">{typeName}</code>
+                {errorChip}
                 {description && <span className="text-xs text-gray-500 truncate">— {description}</span>}
                 {schemaRef && (
                     <div className="ml-auto shrink-0">
@@ -258,8 +336,8 @@ function ResponseCard({
             </div>
             {schemaRef ? (
                 view === "schema"
-                    ? <CompactSchema schemaRef={schemaRef} doc={doc} />
-                    : <ExampleSchema schemaRef={schemaRef} doc={doc} />
+                    ? <CompactSchema schemaRef={schemaRef} doc={doc} highlightType={highlightType} usageIndex={usageIndex} currentContract={currentContract} currentMethod={currentMethod} />
+                    : <ExampleSchema schemaRef={schemaRef} doc={doc} highlightType={highlightType} />
             ) : (
                 <div className="text-sm text-gray-500 italic px-1">{emptyLabel ?? "—"}</div>
             )}

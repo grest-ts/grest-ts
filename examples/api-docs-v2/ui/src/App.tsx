@@ -3,6 +3,7 @@ import type {ApiDocsDocument, FixtureIndexEntry, ContractDoc, MethodDoc} from ".
 import {Sidebar} from "./components/Sidebar";
 import {Header} from "./components/Header";
 import {MethodView} from "./components/MethodView";
+import {buildUsageIndex} from "./lib/usageIndex";
 
 export function App() {
     const [index, setIndex] = useState<FixtureIndexEntry[] | null>(null);
@@ -39,6 +40,7 @@ export function App() {
     }, []);
 
     const selection = useMemo(() => parseRoute(route, doc), [route, doc]);
+    const usageIndex = useMemo(() => doc ? buildUsageIndex(doc) : null, [doc]);
 
     const navigate = (path: string) => {
         window.location.hash = path;
@@ -67,7 +69,13 @@ export function App() {
                 <Sidebar doc={doc} selection={selection} onNavigate={navigate} />
                 <main className="flex-1 overflow-y-auto bg-gray-50">
                     {selection ? (
-                        <MethodView contract={selection.contract} method={selection.method} doc={doc} />
+                        <MethodView
+                            contract={selection.contract}
+                            method={selection.method}
+                            doc={doc}
+                            highlightType={selection.highlightType}
+                            usageIndex={usageIndex ?? undefined}
+                        />
                     ) : (
                         <Welcome doc={doc} />
                     )}
@@ -125,12 +133,22 @@ function Stat({label, value}: {label: string; value: number}) {
 interface Selection {
     contract: ContractDoc;
     method: MethodDoc;
+    /** Generic type-highlight: a brand name, a named-schema title (PascalCase), or `__<canonicalId>` for anonymous types. */
+    highlightType?: string;
 }
 
+/**
+ * Route format: `/<group-slug>/<contract-name>/<method-name>[?type=Name]`
+ *
+ * `?type=X` triggers schema-highlighting in the body. X can be:
+ *   - a brand identifier (`UserId`, `ExpenseId`, …)
+ *   - a named-schema title with whitespace stripped (`UserProfile`)
+ *   - `__<canonicalId>` for anonymous reused types (e.g. `__s42`)
+ */
 function parseRoute(route: string, doc: ApiDocsDocument | null): Selection | null {
     if (!doc || !route) return null;
-    // Format: /<group-slug>/<contract-name>/<method-name>
-    const parts = route.replace(/^\/+/, "").split("/").filter(Boolean);
+    const [pathPart, queryPart] = route.split("?");
+    const parts = pathPart.replace(/^\/+/, "").split("/").filter(Boolean);
     if (parts.length < 3) return null;
     const [groupSlug, contractName, methodName] = parts;
     const group = doc.groups.find(g => g.slug === groupSlug);
@@ -139,5 +157,11 @@ function parseRoute(route: string, doc: ApiDocsDocument | null): Selection | nul
     if (!contract) return null;
     const method = contract.methods.find(m => m.name === methodName);
     if (!method) return null;
-    return {contract, method};
+
+    let highlightType: string | undefined;
+    if (queryPart) {
+        const params = new URLSearchParams(queryPart);
+        highlightType = params.get("type") ?? params.get("brand") ?? undefined; // accept legacy ?brand=
+    }
+    return {contract, method, highlightType};
 }

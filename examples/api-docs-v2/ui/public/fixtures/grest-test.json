@@ -36,7 +36,7 @@
                   "name": "q",
                   "schema": {
                     "inline": {
-                      "canonicalId": "s8",
+                      "canonicalId": "s9",
                       "node": {
                         "kind": "string",
                         "minLength": 1
@@ -69,11 +69,11 @@
                   "name": "roles",
                   "schema": {
                     "inline": {
-                      "canonicalId": "s11",
+                      "canonicalId": "s12",
                       "node": {
                         "kind": "array",
                         "element": {
-                          "canonicalId": "s12",
+                          "canonicalId": "s13",
                           "node": {
                             "kind": "literal",
                             "values": [
@@ -103,7 +103,7 @@
                   "name": "limit",
                   "schema": {
                     "inline": {
-                      "canonicalId": "s14",
+                      "canonicalId": "s15",
                       "node": {
                         "kind": "number",
                         "integer": true,
@@ -124,7 +124,7 @@
                   "name": "offset",
                   "schema": {
                     "inline": {
-                      "canonicalId": "s14",
+                      "canonicalId": "s16",
                       "node": {
                         "kind": "number",
                         "integer": true,
@@ -140,21 +140,21 @@
               ],
               "successResponse": {
                 "inline": {
-                  "canonicalId": "s15",
+                  "canonicalId": "s17",
                   "node": {
                     "kind": "object",
                     "properties": {
                       "users": {
-                        "canonicalId": "s16",
+                        "canonicalId": "s18",
                         "node": {
                           "kind": "array",
                           "element": {
-                            "canonicalId": "s17",
+                            "canonicalId": "s19",
                             "node": {
                               "kind": "object",
                               "properties": {
                                 "id": {
-                                  "canonicalId": "s18",
+                                  "canonicalId": "s20",
                                   "node": {
                                     "kind": "string",
                                     "minLength": 1
@@ -166,7 +166,7 @@
                                   "optional": false
                                 },
                                 "email": {
-                                  "canonicalId": "s19",
+                                  "canonicalId": "s21",
                                   "node": {
                                     "kind": "string"
                                   },
@@ -180,7 +180,7 @@
                                   "optional": false
                                 },
                                 "name": {
-                                  "canonicalId": "s20",
+                                  "canonicalId": "s22",
                                   "node": {
                                     "kind": "string",
                                     "minLength": 1
@@ -192,7 +192,7 @@
                                   "optional": false
                                 },
                                 "phone": {
-                                  "canonicalId": "s21",
+                                  "canonicalId": "s23",
                                   "node": {
                                     "kind": "string"
                                   },
@@ -206,7 +206,7 @@
                                   "optional": true
                                 },
                                 "language": {
-                                  "canonicalId": "s22",
+                                  "canonicalId": "s24",
                                   "node": {
                                     "kind": "string"
                                   },
@@ -220,7 +220,7 @@
                                   "optional": false
                                 },
                                 "locale": {
-                                  "canonicalId": "s23",
+                                  "canonicalId": "s25",
                                   "node": {
                                     "kind": "string"
                                   },
@@ -234,7 +234,7 @@
                                   "optional": true
                                 },
                                 "website": {
-                                  "canonicalId": "s24",
+                                  "canonicalId": "s26",
                                   "node": {
                                     "kind": "string"
                                   },
@@ -249,7 +249,7 @@
                                   "optional": true
                                 },
                                 "bio": {
-                                  "canonicalId": "s25",
+                                  "canonicalId": "s27",
                                   "node": {
                                     "kind": "string",
                                     "maxLength": 500
@@ -261,12 +261,12 @@
                                   "optional": true
                                 },
                                 "address": {
-                                  "canonicalId": "s26",
+                                  "canonicalId": "s28",
                                   "node": {
                                     "kind": "object",
                                     "properties": {
                                       "street": {
-                                        "canonicalId": "s27",
+                                        "canonicalId": "s29",
                                         "node": {
                                           "kind": "string",
                                           "minLength": 1
@@ -279,7 +279,7 @@
                                         "optional": false
                                       },
                                       "city": {
-                                        "canonicalId": "s28",
+                                        "canonicalId": "s30",
                                         "node": {
                                           "kind": "string",
                                           "minLength": 1
@@ -291,7 +291,7 @@
                                         "optional": false
                                       },
                                       "country": {
-                                        "canonicalId": "s9",
+                                        "canonicalId": "s10",
                                         "node": {
                                           "kind": "string"
                                         },
@@ -305,7 +305,7 @@
                                         "optional": false
                                       },
                                       "zip": {
-                                        "canonicalId": "s29",
+                                        "canonicalId": "s31",
                                         "node": {
                                           "kind": "string"
                                         },
@@ -331,7 +331,7 @@
                                   "optional": true
                                 },
                                 "joinedAt": {
-                                  "canonicalId": "s13",
+                                  "canonicalId": "s32",
                                   "node": {
                                     "kind": "string"
                                   },
@@ -346,7 +346,7 @@
                                   "optional": false
                                 },
                                 "lastActiveAt": {
-                                  "canonicalId": "s30",
+                                  "canonicalId": "s33",
                                   "node": {
                                     "kind": "number",
                                     "integer": true,
@@ -363,7 +363,7 @@
                                   "optional": true
                                 },
                                 "isVerified": {
-                                  "canonicalId": "s31",
+                                  "canonicalId": "s34",
                                   "node": {
                                     "kind": "boolean"
                                   },
@@ -372,7 +372,7 @@
                                   "optional": false
                                 },
                                 "role": {
-                                  "canonicalId": "s32",
+                                  "canonicalId": "s35",
                                   "node": {
                                     "kind": "literal",
                                     "values": [
@@ -386,11 +386,11 @@
                                   "optional": false
                                 },
                                 "tags": {
-                                  "canonicalId": "s33",
+                                  "canonicalId": "s36",
                                   "node": {
                                     "kind": "array",
                                     "element": {
-                                      "canonicalId": "s34",
+                                      "canonicalId": "s37",
                                       "node": {
                                         "kind": "string",
                                         "minLength": 1
@@ -404,12 +404,12 @@
                                   "optional": false
                                 },
                                 "coordinates": {
-                                  "canonicalId": "s35",
+                                  "canonicalId": "s38",
                                   "node": {
                                     "kind": "tuple",
                                     "elements": [
                                       {
-                                        "canonicalId": "s36",
+                                        "canonicalId": "s39",
                                         "node": {
                                           "kind": "number",
                                           "integer": false,
@@ -426,7 +426,7 @@
                                         "optional": false
                                       },
                                       {
-                                        "canonicalId": "s37",
+                                        "canonicalId": "s40",
                                         "node": {
                                           "kind": "number",
                                           "integer": false,
@@ -451,7 +451,7 @@
                                   "optional": true
                                 },
                                 "metadata": {
-                                  "canonicalId": "s38",
+                                  "canonicalId": "s41",
                                   "node": {
                                     "kind": "record",
                                     "value": {
@@ -470,7 +470,7 @@
                                   "optional": true
                                 },
                                 "ipAddress": {
-                                  "canonicalId": "s39",
+                                  "canonicalId": "s42",
                                   "node": {
                                     "kind": "string"
                                   },
@@ -488,7 +488,7 @@
                                   "optional": true
                                 },
                                 "deprecatedField": {
-                                  "canonicalId": "s29",
+                                  "canonicalId": "s43",
                                   "node": {
                                     "kind": "string"
                                   },
@@ -524,7 +524,7 @@
                         "optional": false
                       },
                       "total": {
-                        "canonicalId": "s14",
+                        "canonicalId": "s44",
                         "node": {
                           "kind": "number",
                           "integer": true,
@@ -559,7 +559,7 @@
                   "name": "id",
                   "schema": {
                     "inline": {
-                      "canonicalId": "s40",
+                      "canonicalId": "s45",
                       "node": {
                         "kind": "string",
                         "minLength": 1
@@ -611,7 +611,7 @@
                   "name": "id",
                   "schema": {
                     "inline": {
-                      "canonicalId": "s44",
+                      "canonicalId": "s51",
                       "node": {
                         "kind": "string",
                         "minLength": 1
@@ -633,7 +633,7 @@
                     "kind": "object",
                     "properties": {
                       "name": {
-                        "canonicalId": "s45",
+                        "canonicalId": "s52",
                         "node": {
                           "kind": "string",
                           "minLength": 1
@@ -642,7 +642,7 @@
                         "optional": true
                       },
                       "bio": {
-                        "canonicalId": "s46",
+                        "canonicalId": "s53",
                         "node": {
                           "kind": "string",
                           "maxLength": 500
@@ -651,7 +651,7 @@
                         "optional": true
                       },
                       "website": {
-                        "canonicalId": "s24",
+                        "canonicalId": "s26",
                         "node": {
                           "kind": "string"
                         },
@@ -666,12 +666,12 @@
                         "optional": true
                       },
                       "address": {
-                        "canonicalId": "s26",
+                        "canonicalId": "s28",
                         "node": {
                           "kind": "object",
                           "properties": {
                             "street": {
-                              "canonicalId": "s27",
+                              "canonicalId": "s29",
                               "node": {
                                 "kind": "string",
                                 "minLength": 1
@@ -684,7 +684,7 @@
                               "optional": false
                             },
                             "city": {
-                              "canonicalId": "s28",
+                              "canonicalId": "s30",
                               "node": {
                                 "kind": "string",
                                 "minLength": 1
@@ -696,7 +696,7 @@
                               "optional": false
                             },
                             "country": {
-                              "canonicalId": "s9",
+                              "canonicalId": "s10",
                               "node": {
                                 "kind": "string"
                               },
@@ -710,7 +710,7 @@
                               "optional": false
                             },
                             "zip": {
-                              "canonicalId": "s29",
+                              "canonicalId": "s31",
                               "node": {
                                 "kind": "string"
                               },
@@ -736,12 +736,12 @@
                         "optional": true
                       },
                       "coordinates": {
-                        "canonicalId": "s47",
+                        "canonicalId": "s54",
                         "node": {
                           "kind": "tuple",
                           "elements": [
                             {
-                              "canonicalId": "s36",
+                              "canonicalId": "s39",
                               "node": {
                                 "kind": "number",
                                 "integer": false,
@@ -758,7 +758,7 @@
                               "optional": false
                             },
                             {
-                              "canonicalId": "s37",
+                              "canonicalId": "s40",
                               "node": {
                                 "kind": "number",
                                 "integer": false,
@@ -805,7 +805,7 @@
                   "name": "id",
                   "schema": {
                     "inline": {
-                      "canonicalId": "s48",
+                      "canonicalId": "s55",
                       "node": {
                         "kind": "string",
                         "minLength": 1
@@ -858,7 +858,7 @@
                     "kind": "object",
                     "properties": {
                       "avatar": {
-                        "canonicalId": "s70",
+                        "canonicalId": "s86",
                         "node": {
                           "kind": "file",
                           "accept": [
@@ -873,7 +873,7 @@
                         "optional": false
                       },
                       "crop": {
-                        "canonicalId": "s29",
+                        "canonicalId": "s87",
                         "node": {
                           "kind": "string"
                         },
@@ -895,12 +895,12 @@
               },
               "successResponse": {
                 "inline": {
-                  "canonicalId": "s71",
+                  "canonicalId": "s88",
                   "node": {
                     "kind": "object",
                     "properties": {
                       "url": {
-                        "canonicalId": "s24",
+                        "canonicalId": "s89",
                         "node": {
                           "kind": "string"
                         },
@@ -915,7 +915,7 @@
                         "optional": false
                       },
                       "width": {
-                        "canonicalId": "s14",
+                        "canonicalId": "s44",
                         "node": {
                           "kind": "number",
                           "integer": true,
@@ -925,7 +925,7 @@
                         "optional": false
                       },
                       "height": {
-                        "canonicalId": "s14",
+                        "canonicalId": "s44",
                         "node": {
                           "kind": "number",
                           "integer": true,
@@ -961,7 +961,7 @@
                   "name": "id",
                   "schema": {
                     "inline": {
-                      "canonicalId": "s72",
+                      "canonicalId": "s90",
                       "node": {
                         "kind": "string",
                         "minLength": 1
@@ -978,7 +978,7 @@
                   "name": "format",
                   "schema": {
                     "inline": {
-                      "canonicalId": "s73",
+                      "canonicalId": "s91",
                       "node": {
                         "kind": "literal",
                         "values": [
@@ -997,7 +997,7 @@
               ],
               "successResponse": {
                 "inline": {
-                  "canonicalId": "s74",
+                  "canonicalId": "s92",
                   "node": {
                     "kind": "file"
                   },
@@ -1066,16 +1066,16 @@
               ],
               "successResponse": {
                 "inline": {
-                  "canonicalId": "s83",
+                  "canonicalId": "s103",
                   "node": {
                     "kind": "array",
                     "element": {
-                      "canonicalId": "s84",
+                      "canonicalId": "s104",
                       "node": {
                         "kind": "object",
                         "properties": {
                           "roomId": {
-                            "canonicalId": "s85",
+                            "canonicalId": "s105",
                             "node": {
                               "kind": "string",
                               "minLength": 1
@@ -1087,7 +1087,7 @@
                             "optional": false
                           },
                           "name": {
-                            "canonicalId": "s86",
+                            "canonicalId": "s106",
                             "node": {
                               "kind": "string",
                               "minLength": 1
@@ -1099,7 +1099,7 @@
                             "optional": false
                           },
                           "participantCount": {
-                            "canonicalId": "s67",
+                            "canonicalId": "s107",
                             "node": {
                               "kind": "number",
                               "integer": false
@@ -1138,12 +1138,12 @@
               "errors": [],
               "wsInput": {
                 "inline": {
-                  "canonicalId": "s87",
+                  "canonicalId": "s108",
                   "node": {
                     "kind": "object",
                     "properties": {
                       "roomId": {
-                        "canonicalId": "s88",
+                        "canonicalId": "s109",
                         "node": {
                           "kind": "string",
                           "minLength": 1
@@ -1152,7 +1152,7 @@
                         "optional": false
                       },
                       "typing": {
-                        "canonicalId": "s31",
+                        "canonicalId": "s83",
                         "node": {
                           "kind": "boolean"
                         },
@@ -1236,16 +1236,16 @@
               ],
               "wsInput": {
                 "inline": {
-                  "canonicalId": "s102",
+                  "canonicalId": "s123",
                   "node": {
                     "kind": "object",
                     "properties": {
                       "topics": {
-                        "canonicalId": "s103",
+                        "canonicalId": "s124",
                         "node": {
                           "kind": "array",
                           "element": {
-                            "canonicalId": "s104",
+                            "canonicalId": "s125",
                             "node": {
                               "kind": "string",
                               "minLength": 1
@@ -1279,16 +1279,16 @@
               },
               "successResponse": {
                 "inline": {
-                  "canonicalId": "s105",
+                  "canonicalId": "s126",
                   "node": {
                     "kind": "object",
                     "properties": {
                       "subscribed": {
-                        "canonicalId": "s106",
+                        "canonicalId": "s127",
                         "node": {
                           "kind": "array",
                           "element": {
-                            "canonicalId": "s107",
+                            "canonicalId": "s128",
                             "node": {
                               "kind": "string",
                               "minLength": 1
@@ -1322,16 +1322,16 @@
               "errors": [],
               "wsInput": {
                 "inline": {
-                  "canonicalId": "s108",
+                  "canonicalId": "s129",
                   "node": {
                     "kind": "object",
                     "properties": {
                       "topics": {
-                        "canonicalId": "s109",
+                        "canonicalId": "s130",
                         "node": {
                           "kind": "array",
                           "element": {
-                            "canonicalId": "s110",
+                            "canonicalId": "s131",
                             "node": {
                               "kind": "string",
                               "minLength": 1
@@ -1374,7 +1374,7 @@
       "title": "Country code",
       "description": "ISO 3166-1 alpha-2",
       "schema": {
-        "canonicalId": "s9",
+        "canonicalId": "s10",
         "node": {
           "kind": "string"
         },
@@ -1399,7 +1399,7 @@
       "title": "Currency code",
       "description": "ISO 4217",
       "schema": {
-        "canonicalId": "s10",
+        "canonicalId": "s11",
         "node": {
           "kind": "string"
         },
@@ -1424,7 +1424,7 @@
       "title": "Date",
       "description": "Format YYYY-MM-DD",
       "schema": {
-        "canonicalId": "s13",
+        "canonicalId": "s14",
         "node": {
           "kind": "string"
         },
@@ -1450,12 +1450,12 @@
       "title": "User profile",
       "description": "Complete user profile returned from GET /users/:id",
       "schema": {
-        "canonicalId": "s17",
+        "canonicalId": "s19",
         "node": {
           "kind": "object",
           "properties": {
             "id": {
-              "canonicalId": "s18",
+              "canonicalId": "s20",
               "node": {
                 "kind": "string",
                 "minLength": 1
@@ -1467,7 +1467,7 @@
               "optional": false
             },
             "email": {
-              "canonicalId": "s19",
+              "canonicalId": "s21",
               "node": {
                 "kind": "string"
               },
@@ -1481,7 +1481,7 @@
               "optional": false
             },
             "name": {
-              "canonicalId": "s20",
+              "canonicalId": "s22",
               "node": {
                 "kind": "string",
                 "minLength": 1
@@ -1493,7 +1493,7 @@
               "optional": false
             },
             "phone": {
-              "canonicalId": "s21",
+              "canonicalId": "s23",
               "node": {
                 "kind": "string"
               },
@@ -1507,7 +1507,7 @@
               "optional": true
             },
             "language": {
-              "canonicalId": "s22",
+              "canonicalId": "s24",
               "node": {
                 "kind": "string"
               },
@@ -1521,7 +1521,7 @@
               "optional": false
             },
             "locale": {
-              "canonicalId": "s23",
+              "canonicalId": "s25",
               "node": {
                 "kind": "string"
               },
@@ -1535,7 +1535,7 @@
               "optional": true
             },
             "website": {
-              "canonicalId": "s24",
+              "canonicalId": "s26",
               "node": {
                 "kind": "string"
               },
@@ -1550,7 +1550,7 @@
               "optional": true
             },
             "bio": {
-              "canonicalId": "s25",
+              "canonicalId": "s27",
               "node": {
                 "kind": "string",
                 "maxLength": 500
@@ -1562,12 +1562,12 @@
               "optional": true
             },
             "address": {
-              "canonicalId": "s26",
+              "canonicalId": "s28",
               "node": {
                 "kind": "object",
                 "properties": {
                   "street": {
-                    "canonicalId": "s27",
+                    "canonicalId": "s29",
                     "node": {
                       "kind": "string",
                       "minLength": 1
@@ -1580,7 +1580,7 @@
                     "optional": false
                   },
                   "city": {
-                    "canonicalId": "s28",
+                    "canonicalId": "s30",
                     "node": {
                       "kind": "string",
                       "minLength": 1
@@ -1592,7 +1592,7 @@
                     "optional": false
                   },
                   "country": {
-                    "canonicalId": "s9",
+                    "canonicalId": "s10",
                     "node": {
                       "kind": "string"
                     },
@@ -1606,7 +1606,7 @@
                     "optional": false
                   },
                   "zip": {
-                    "canonicalId": "s29",
+                    "canonicalId": "s31",
                     "node": {
                       "kind": "string"
                     },
@@ -1632,7 +1632,7 @@
               "optional": true
             },
             "joinedAt": {
-              "canonicalId": "s13",
+              "canonicalId": "s32",
               "node": {
                 "kind": "string"
               },
@@ -1647,7 +1647,7 @@
               "optional": false
             },
             "lastActiveAt": {
-              "canonicalId": "s30",
+              "canonicalId": "s33",
               "node": {
                 "kind": "number",
                 "integer": true,
@@ -1664,7 +1664,7 @@
               "optional": true
             },
             "isVerified": {
-              "canonicalId": "s31",
+              "canonicalId": "s34",
               "node": {
                 "kind": "boolean"
               },
@@ -1673,7 +1673,7 @@
               "optional": false
             },
             "role": {
-              "canonicalId": "s32",
+              "canonicalId": "s35",
               "node": {
                 "kind": "literal",
                 "values": [
@@ -1687,11 +1687,11 @@
               "optional": false
             },
             "tags": {
-              "canonicalId": "s33",
+              "canonicalId": "s36",
               "node": {
                 "kind": "array",
                 "element": {
-                  "canonicalId": "s34",
+                  "canonicalId": "s37",
                   "node": {
                     "kind": "string",
                     "minLength": 1
@@ -1705,12 +1705,12 @@
               "optional": false
             },
             "coordinates": {
-              "canonicalId": "s35",
+              "canonicalId": "s38",
               "node": {
                 "kind": "tuple",
                 "elements": [
                   {
-                    "canonicalId": "s36",
+                    "canonicalId": "s39",
                     "node": {
                       "kind": "number",
                       "integer": false,
@@ -1727,7 +1727,7 @@
                     "optional": false
                   },
                   {
-                    "canonicalId": "s37",
+                    "canonicalId": "s40",
                     "node": {
                       "kind": "number",
                       "integer": false,
@@ -1752,7 +1752,7 @@
               "optional": true
             },
             "metadata": {
-              "canonicalId": "s38",
+              "canonicalId": "s41",
               "node": {
                 "kind": "record",
                 "value": {
@@ -1771,7 +1771,7 @@
               "optional": true
             },
             "ipAddress": {
-              "canonicalId": "s39",
+              "canonicalId": "s42",
               "node": {
                 "kind": "string"
               },
@@ -1789,7 +1789,7 @@
               "optional": true
             },
             "deprecatedField": {
-              "canonicalId": "s29",
+              "canonicalId": "s43",
               "node": {
                 "kind": "string"
               },
@@ -1841,12 +1841,12 @@
     "Create user request": {
       "title": "Create user request",
       "schema": {
-        "canonicalId": "s41",
+        "canonicalId": "s46",
         "node": {
           "kind": "object",
           "properties": {
             "email": {
-              "canonicalId": "s19",
+              "canonicalId": "s21",
               "node": {
                 "kind": "string"
               },
@@ -1860,7 +1860,7 @@
               "optional": false
             },
             "name": {
-              "canonicalId": "s42",
+              "canonicalId": "s47",
               "node": {
                 "kind": "string",
                 "minLength": 1
@@ -1869,7 +1869,7 @@
               "optional": false
             },
             "password": {
-              "canonicalId": "s43",
+              "canonicalId": "s48",
               "node": {
                 "kind": "password",
                 "minLength": 8,
@@ -1882,7 +1882,7 @@
               "optional": false
             },
             "country": {
-              "canonicalId": "s9",
+              "canonicalId": "s10",
               "node": {
                 "kind": "string"
               },
@@ -1896,7 +1896,7 @@
               "optional": false
             },
             "language": {
-              "canonicalId": "s22",
+              "canonicalId": "s49",
               "node": {
                 "kind": "string"
               },
@@ -1911,7 +1911,7 @@
               "optional": false
             },
             "inviteCode": {
-              "canonicalId": "s29",
+              "canonicalId": "s50",
               "node": {
                 "kind": "string"
               },
@@ -1948,12 +1948,12 @@
     "Platform statistics": {
       "title": "Platform statistics",
       "schema": {
-        "canonicalId": "s49",
+        "canonicalId": "s56",
         "node": {
           "kind": "object",
           "properties": {
             "totalUsers": {
-              "canonicalId": "s14",
+              "canonicalId": "s44",
               "node": {
                 "kind": "number",
                 "integer": true,
@@ -1963,7 +1963,7 @@
               "optional": false
             },
             "verifiedUsers": {
-              "canonicalId": "s14",
+              "canonicalId": "s44",
               "node": {
                 "kind": "number",
                 "integer": true,
@@ -1973,7 +1973,7 @@
               "optional": false
             },
             "countriesRepresented": {
-              "canonicalId": "s14",
+              "canonicalId": "s44",
               "node": {
                 "kind": "number",
                 "integer": true,
@@ -1983,16 +1983,16 @@
               "optional": false
             },
             "topCountries": {
-              "canonicalId": "s50",
+              "canonicalId": "s57",
               "node": {
                 "kind": "array",
                 "element": {
-                  "canonicalId": "s51",
+                  "canonicalId": "s58",
                   "node": {
                     "kind": "object",
                     "properties": {
                       "country": {
-                        "canonicalId": "s9",
+                        "canonicalId": "s10",
                         "node": {
                           "kind": "string"
                         },
@@ -2006,7 +2006,7 @@
                         "optional": false
                       },
                       "count": {
-                        "canonicalId": "s14",
+                        "canonicalId": "s44",
                         "node": {
                           "kind": "number",
                           "integer": true,
@@ -2030,11 +2030,11 @@
               "optional": false
             },
             "topLanguages": {
-              "canonicalId": "s52",
+              "canonicalId": "s59",
               "node": {
                 "kind": "record",
                 "value": {
-                  "canonicalId": "s14",
+                  "canonicalId": "s44",
                   "node": {
                     "kind": "number",
                     "integer": true,
@@ -2051,7 +2051,7 @@
               "optional": false
             },
             "serverTime": {
-              "canonicalId": "s30",
+              "canonicalId": "s60",
               "node": {
                 "kind": "number",
                 "integer": true,
@@ -2068,7 +2068,7 @@
               "optional": false
             },
             "serverDateTime": {
-              "canonicalId": "s53",
+              "canonicalId": "s61",
               "node": {
                 "kind": "string"
               },
@@ -2082,7 +2082,7 @@
               "optional": false
             },
             "avgLatitude": {
-              "canonicalId": "s36",
+              "canonicalId": "s62",
               "node": {
                 "kind": "number",
                 "integer": false,
@@ -2099,7 +2099,7 @@
               "optional": false
             },
             "avgLongitude": {
-              "canonicalId": "s37",
+              "canonicalId": "s63",
               "node": {
                 "kind": "number",
                 "integer": false,
@@ -2116,7 +2116,7 @@
               "optional": false
             },
             "bitFlag": {
-              "canonicalId": "s54",
+              "canonicalId": "s64",
               "node": {
                 "kind": "bit"
               },
@@ -2127,7 +2127,7 @@
               "optional": false
             },
             "unknownData": {
-              "canonicalId": "s55",
+              "canonicalId": "s65",
               "node": {
                 "kind": "unknown"
               },
@@ -2138,7 +2138,7 @@
               "optional": false
             },
             "anyData": {
-              "canonicalId": "s6",
+              "canonicalId": "s66",
               "node": {
                 "kind": "any"
               },
@@ -2149,18 +2149,18 @@
               "optional": false
             },
             "recentEvent": {
-              "canonicalId": "s56",
+              "canonicalId": "s67",
               "node": {
                 "kind": "discriminated",
                 "discriminator": "type",
                 "variants": [
                   {
-                    "canonicalId": "s57",
+                    "canonicalId": "s68",
                     "node": {
                       "kind": "object",
                       "properties": {
                         "id": {
-                          "canonicalId": "s58",
+                          "canonicalId": "s69",
                           "node": {
                             "kind": "string",
                             "minLength": 1
@@ -2173,7 +2173,7 @@
                           "optional": false
                         },
                         "occurredAt": {
-                          "canonicalId": "s30",
+                          "canonicalId": "s70",
                           "node": {
                             "kind": "number",
                             "integer": true,
@@ -2190,7 +2190,7 @@
                           "optional": false
                         },
                         "type": {
-                          "canonicalId": "s59",
+                          "canonicalId": "s71",
                           "node": {
                             "kind": "literal",
                             "values": [
@@ -2201,7 +2201,7 @@
                           "optional": false
                         },
                         "email": {
-                          "canonicalId": "s19",
+                          "canonicalId": "s21",
                           "node": {
                             "kind": "string"
                           },
@@ -2215,7 +2215,7 @@
                           "optional": false
                         },
                         "country": {
-                          "canonicalId": "s9",
+                          "canonicalId": "s10",
                           "node": {
                             "kind": "string"
                           },
@@ -2245,12 +2245,12 @@
                     "optional": false
                   },
                   {
-                    "canonicalId": "s60",
+                    "canonicalId": "s72",
                     "node": {
                       "kind": "object",
                       "properties": {
                         "id": {
-                          "canonicalId": "s58",
+                          "canonicalId": "s69",
                           "node": {
                             "kind": "string",
                             "minLength": 1
@@ -2263,7 +2263,7 @@
                           "optional": false
                         },
                         "occurredAt": {
-                          "canonicalId": "s30",
+                          "canonicalId": "s70",
                           "node": {
                             "kind": "number",
                             "integer": true,
@@ -2280,7 +2280,7 @@
                           "optional": false
                         },
                         "type": {
-                          "canonicalId": "s61",
+                          "canonicalId": "s73",
                           "node": {
                             "kind": "literal",
                             "values": [
@@ -2291,7 +2291,7 @@
                           "optional": false
                         },
                         "orderId": {
-                          "canonicalId": "s62",
+                          "canonicalId": "s74",
                           "node": {
                             "kind": "string",
                             "minLength": 1
@@ -2300,7 +2300,7 @@
                           "optional": false
                         },
                         "totalCents": {
-                          "canonicalId": "s14",
+                          "canonicalId": "s75",
                           "node": {
                             "kind": "number",
                             "integer": true,
@@ -2313,7 +2313,7 @@
                           "optional": false
                         },
                         "currency": {
-                          "canonicalId": "s10",
+                          "canonicalId": "s11",
                           "node": {
                             "kind": "string"
                           },
@@ -2344,12 +2344,12 @@
                     "optional": false
                   },
                   {
-                    "canonicalId": "s63",
+                    "canonicalId": "s76",
                     "node": {
                       "kind": "object",
                       "properties": {
                         "id": {
-                          "canonicalId": "s58",
+                          "canonicalId": "s69",
                           "node": {
                             "kind": "string",
                             "minLength": 1
@@ -2362,7 +2362,7 @@
                           "optional": false
                         },
                         "occurredAt": {
-                          "canonicalId": "s30",
+                          "canonicalId": "s70",
                           "node": {
                             "kind": "number",
                             "integer": true,
@@ -2379,7 +2379,7 @@
                           "optional": false
                         },
                         "type": {
-                          "canonicalId": "s64",
+                          "canonicalId": "s77",
                           "node": {
                             "kind": "literal",
                             "values": [
@@ -2390,7 +2390,7 @@
                           "optional": false
                         },
                         "orderId": {
-                          "canonicalId": "s65",
+                          "canonicalId": "s78",
                           "node": {
                             "kind": "string",
                             "minLength": 1
@@ -2399,7 +2399,7 @@
                           "optional": false
                         },
                         "reason": {
-                          "canonicalId": "s29",
+                          "canonicalId": "s79",
                           "node": {
                             "kind": "string"
                           },
@@ -2434,12 +2434,12 @@
               "optional": false
             },
             "unionsExample": {
-              "canonicalId": "s66",
+              "canonicalId": "s80",
               "node": {
                 "kind": "union",
                 "variants": [
                   {
-                    "canonicalId": "s29",
+                    "canonicalId": "s81",
                     "node": {
                       "kind": "string"
                     },
@@ -2447,7 +2447,7 @@
                     "optional": false
                   },
                   {
-                    "canonicalId": "s67",
+                    "canonicalId": "s82",
                     "node": {
                       "kind": "number",
                       "integer": false
@@ -2456,7 +2456,7 @@
                     "optional": false
                   },
                   {
-                    "canonicalId": "s31",
+                    "canonicalId": "s83",
                     "node": {
                       "kind": "boolean"
                     },
@@ -2508,18 +2508,18 @@
       "title": "Event",
       "description": "Discriminated union of all domain events keyed by type",
       "schema": {
-        "canonicalId": "s56",
+        "canonicalId": "s93",
         "node": {
           "kind": "discriminated",
           "discriminator": "type",
           "variants": [
             {
-              "canonicalId": "s57",
+              "canonicalId": "s68",
               "node": {
                 "kind": "object",
                 "properties": {
                   "id": {
-                    "canonicalId": "s58",
+                    "canonicalId": "s69",
                     "node": {
                       "kind": "string",
                       "minLength": 1
@@ -2532,7 +2532,7 @@
                     "optional": false
                   },
                   "occurredAt": {
-                    "canonicalId": "s30",
+                    "canonicalId": "s70",
                     "node": {
                       "kind": "number",
                       "integer": true,
@@ -2549,7 +2549,7 @@
                     "optional": false
                   },
                   "type": {
-                    "canonicalId": "s59",
+                    "canonicalId": "s71",
                     "node": {
                       "kind": "literal",
                       "values": [
@@ -2560,7 +2560,7 @@
                     "optional": false
                   },
                   "email": {
-                    "canonicalId": "s19",
+                    "canonicalId": "s21",
                     "node": {
                       "kind": "string"
                     },
@@ -2574,7 +2574,7 @@
                     "optional": false
                   },
                   "country": {
-                    "canonicalId": "s9",
+                    "canonicalId": "s10",
                     "node": {
                       "kind": "string"
                     },
@@ -2604,12 +2604,12 @@
               "optional": false
             },
             {
-              "canonicalId": "s60",
+              "canonicalId": "s72",
               "node": {
                 "kind": "object",
                 "properties": {
                   "id": {
-                    "canonicalId": "s58",
+                    "canonicalId": "s69",
                     "node": {
                       "kind": "string",
                       "minLength": 1
@@ -2622,7 +2622,7 @@
                     "optional": false
                   },
                   "occurredAt": {
-                    "canonicalId": "s30",
+                    "canonicalId": "s70",
                     "node": {
                       "kind": "number",
                       "integer": true,
@@ -2639,7 +2639,7 @@
                     "optional": false
                   },
                   "type": {
-                    "canonicalId": "s61",
+                    "canonicalId": "s73",
                     "node": {
                       "kind": "literal",
                       "values": [
@@ -2650,7 +2650,7 @@
                     "optional": false
                   },
                   "orderId": {
-                    "canonicalId": "s62",
+                    "canonicalId": "s74",
                     "node": {
                       "kind": "string",
                       "minLength": 1
@@ -2659,7 +2659,7 @@
                     "optional": false
                   },
                   "totalCents": {
-                    "canonicalId": "s14",
+                    "canonicalId": "s75",
                     "node": {
                       "kind": "number",
                       "integer": true,
@@ -2672,7 +2672,7 @@
                     "optional": false
                   },
                   "currency": {
-                    "canonicalId": "s10",
+                    "canonicalId": "s11",
                     "node": {
                       "kind": "string"
                     },
@@ -2703,12 +2703,12 @@
               "optional": false
             },
             {
-              "canonicalId": "s63",
+              "canonicalId": "s76",
               "node": {
                 "kind": "object",
                 "properties": {
                   "id": {
-                    "canonicalId": "s58",
+                    "canonicalId": "s69",
                     "node": {
                       "kind": "string",
                       "minLength": 1
@@ -2721,7 +2721,7 @@
                     "optional": false
                   },
                   "occurredAt": {
-                    "canonicalId": "s30",
+                    "canonicalId": "s70",
                     "node": {
                       "kind": "number",
                       "integer": true,
@@ -2738,7 +2738,7 @@
                     "optional": false
                   },
                   "type": {
-                    "canonicalId": "s64",
+                    "canonicalId": "s77",
                     "node": {
                       "kind": "literal",
                       "values": [
@@ -2749,7 +2749,7 @@
                     "optional": false
                   },
                   "orderId": {
-                    "canonicalId": "s65",
+                    "canonicalId": "s78",
                     "node": {
                       "kind": "string",
                       "minLength": 1
@@ -2758,7 +2758,7 @@
                     "optional": false
                   },
                   "reason": {
-                    "canonicalId": "s29",
+                    "canonicalId": "s79",
                     "node": {
                       "kind": "string"
                     },
@@ -2803,12 +2803,12 @@
     "Send message request": {
       "title": "Send message request",
       "schema": {
-        "canonicalId": "s75",
+        "canonicalId": "s94",
         "node": {
           "kind": "object",
           "properties": {
             "roomId": {
-              "canonicalId": "s76",
+              "canonicalId": "s95",
               "node": {
                 "kind": "string",
                 "minLength": 1
@@ -2817,7 +2817,7 @@
               "optional": false
             },
             "text": {
-              "canonicalId": "s77",
+              "canonicalId": "s96",
               "node": {
                 "kind": "string",
                 "minLength": 1,
@@ -2854,12 +2854,12 @@
       "title": "Chat message",
       "description": "A message in a chat room",
       "schema": {
-        "canonicalId": "s78",
+        "canonicalId": "s97",
         "node": {
           "kind": "object",
           "properties": {
             "messageId": {
-              "canonicalId": "s79",
+              "canonicalId": "s98",
               "node": {
                 "kind": "string",
                 "minLength": 1
@@ -2871,7 +2871,7 @@
               "optional": false
             },
             "roomId": {
-              "canonicalId": "s80",
+              "canonicalId": "s99",
               "node": {
                 "kind": "string",
                 "minLength": 1
@@ -2880,7 +2880,7 @@
               "optional": false
             },
             "userId": {
-              "canonicalId": "s81",
+              "canonicalId": "s100",
               "node": {
                 "kind": "string",
                 "minLength": 1
@@ -2892,7 +2892,7 @@
               "optional": false
             },
             "text": {
-              "canonicalId": "s82",
+              "canonicalId": "s101",
               "node": {
                 "kind": "string",
                 "minLength": 1,
@@ -2905,7 +2905,7 @@
               "optional": false
             },
             "timestamp": {
-              "canonicalId": "s67",
+              "canonicalId": "s102",
               "node": {
                 "kind": "number",
                 "integer": false
@@ -2951,18 +2951,18 @@
       "title": "Presence update",
       "description": "User presence status change in a room",
       "schema": {
-        "canonicalId": "s89",
+        "canonicalId": "s110",
         "node": {
           "kind": "discriminated",
           "discriminator": "status",
           "variants": [
             {
-              "canonicalId": "s90",
+              "canonicalId": "s111",
               "node": {
                 "kind": "object",
                 "properties": {
                   "status": {
-                    "canonicalId": "s91",
+                    "canonicalId": "s112",
                     "node": {
                       "kind": "literal",
                       "values": [
@@ -2973,7 +2973,7 @@
                     "optional": false
                   },
                   "userId": {
-                    "canonicalId": "s92",
+                    "canonicalId": "s113",
                     "node": {
                       "kind": "string",
                       "minLength": 1
@@ -2982,7 +2982,7 @@
                     "optional": false
                   },
                   "roomId": {
-                    "canonicalId": "s93",
+                    "canonicalId": "s114",
                     "node": {
                       "kind": "string",
                       "minLength": 1
@@ -3002,12 +3002,12 @@
               "optional": false
             },
             {
-              "canonicalId": "s94",
+              "canonicalId": "s115",
               "node": {
                 "kind": "object",
                 "properties": {
                   "status": {
-                    "canonicalId": "s95",
+                    "canonicalId": "s116",
                     "node": {
                       "kind": "literal",
                       "values": [
@@ -3018,7 +3018,7 @@
                     "optional": false
                   },
                   "userId": {
-                    "canonicalId": "s96",
+                    "canonicalId": "s117",
                     "node": {
                       "kind": "string",
                       "minLength": 1
@@ -3027,7 +3027,7 @@
                     "optional": false
                   },
                   "roomId": {
-                    "canonicalId": "s97",
+                    "canonicalId": "s118",
                     "node": {
                       "kind": "string",
                       "minLength": 1
@@ -3047,12 +3047,12 @@
               "optional": false
             },
             {
-              "canonicalId": "s98",
+              "canonicalId": "s119",
               "node": {
                 "kind": "object",
                 "properties": {
                   "status": {
-                    "canonicalId": "s99",
+                    "canonicalId": "s120",
                     "node": {
                       "kind": "literal",
                       "values": [
@@ -3063,7 +3063,7 @@
                     "optional": false
                   },
                   "userId": {
-                    "canonicalId": "s100",
+                    "canonicalId": "s121",
                     "node": {
                       "kind": "string",
                       "minLength": 1
@@ -3072,7 +3072,7 @@
                     "optional": false
                   },
                   "roomId": {
-                    "canonicalId": "s101",
+                    "canonicalId": "s122",
                     "node": {
                       "kind": "string",
                       "minLength": 1
@@ -3111,12 +3111,12 @@
     "Chat room": {
       "title": "Chat room",
       "schema": {
-        "canonicalId": "s84",
+        "canonicalId": "s104",
         "node": {
           "kind": "object",
           "properties": {
             "roomId": {
-              "canonicalId": "s85",
+              "canonicalId": "s105",
               "node": {
                 "kind": "string",
                 "minLength": 1
@@ -3128,7 +3128,7 @@
               "optional": false
             },
             "name": {
-              "canonicalId": "s86",
+              "canonicalId": "s106",
               "node": {
                 "kind": "string",
                 "minLength": 1
@@ -3140,7 +3140,7 @@
               "optional": false
             },
             "participantCount": {
-              "canonicalId": "s67",
+              "canonicalId": "s107",
               "node": {
                 "kind": "number",
                 "integer": false
@@ -3177,12 +3177,12 @@
       "title": "Notification",
       "description": "A notification event for a subscribed topic",
       "schema": {
-        "canonicalId": "s111",
+        "canonicalId": "s132",
         "node": {
           "kind": "object",
           "properties": {
             "topic": {
-              "canonicalId": "s112",
+              "canonicalId": "s133",
               "node": {
                 "kind": "string",
                 "minLength": 1
@@ -3191,7 +3191,7 @@
               "optional": false
             },
             "title": {
-              "canonicalId": "s113",
+              "canonicalId": "s134",
               "node": {
                 "kind": "string",
                 "minLength": 1
@@ -3203,7 +3203,7 @@
               "optional": false
             },
             "body": {
-              "canonicalId": "s114",
+              "canonicalId": "s135",
               "node": {
                 "kind": "string",
                 "minLength": 1
@@ -3215,7 +3215,7 @@
               "optional": false
             },
             "timestamp": {
-              "canonicalId": "s67",
+              "canonicalId": "s82",
               "node": {
                 "kind": "number",
                 "integer": false
@@ -3338,7 +3338,7 @@
                     "optional": true
                   },
                   "expectedLanguage": {
-                    "canonicalId": "s7",
+                    "canonicalId": "s8",
                     "node": {
                       "kind": "string",
                       "pattern": "^[a-z]{2}(-[A-Z]{2})?$"
@@ -3517,12 +3517,12 @@
       "statusCode": 429,
       "data": {
         "inline": {
-          "canonicalId": "s68",
+          "canonicalId": "s84",
           "node": {
             "kind": "object",
             "properties": {
               "retryAfterSeconds": {
-                "canonicalId": "s69",
+                "canonicalId": "s85",
                 "node": {
                   "kind": "number",
                   "integer": true

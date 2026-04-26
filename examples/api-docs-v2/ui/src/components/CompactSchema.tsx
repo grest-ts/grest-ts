@@ -4,39 +4,101 @@
  * only for nested composites. Types are syntax-colored, brands clickable,
  * constraints as inline pill-comments.
  *
- * Tradeoff vs the verbose multi-line form: density wins for common cases;
- * descriptions and examples render as muted line-comments after the type.
+ * Two cross-cutting features come from the `RenderCtx` threaded through
+ * every helper:
+ *
+ *   - `hl` (highlightBrand) — when set, every appearance of that brand is
+ *     rendered with a yellow accent, and the row holding the branded leaf
+ *     gets a soft yellow background.
+ *
+ *   - `usageIndex` — when set, every named/branded/composite schema with
+ *     >1 method using it (by canonicalId) gets a "↔ N" chip with a click
+ *     popover listing the other locations.
  */
 
 import type {ApiDocsDocument, JsonSchemaDescription, SchemaRef} from "../docTypes";
+import type {UsageIndex} from "../lib/usageIndex";
+import {ReusedChip} from "./ReusedChip";
 
 interface Props {
     schemaRef: SchemaRef;
     doc: ApiDocsDocument;
-    /** Show wrapping `{` `}` braces — false when used inline. */
     bare?: boolean;
+    /** Type identifier (brand or `__<canonicalId>`) — see matchesType. */
+    highlightType?: string;
+    usageIndex?: UsageIndex;
+    currentContract?: string;
+    currentMethod?: string;
 }
 
-export function CompactSchema({schemaRef, doc, bare}: Props) {
+interface RenderCtx {
+    hl?: string;
+    usageIndex?: UsageIndex;
+    currentContract?: string;
+    currentMethod?: string;
+}
+
+export function CompactSchema({schemaRef, doc, bare, highlightType, usageIndex, currentContract, currentMethod}: Props) {
+    const ctx: RenderCtx = {hl: highlightType, usageIndex, currentContract, currentMethod};
     return (
         <pre className="text-[13px] leading-6 font-mono bg-gray-50 border border-gray-200 rounded-lg p-3 overflow-x-auto">
             <code>
-                {renderRef(schemaRef, doc, 0, bare ?? false)}
+                {renderRef(schemaRef, doc, 0, bare ?? false, ctx)}
             </code>
         </pre>
     );
 }
 
+/**
+ * Type-identifier for the URL/highlight system.
+ *
+ *   - If the schema has a `docs.brand`, use it (brands are guaranteed-unique
+ *     runtime identifiers).
+ *   - Otherwise fall back to `__<canonicalId>` (the underscore prefix avoids
+ *     collisions with any user-chosen brand).
+ *
+ * Title is deliberately NOT used for matching — it's a human label, not an
+ * identifier, and may not be unique across schemas.
+ */
+function typeIdFor(desc: JsonSchemaDescription): string {
+    return desc.docs?.brand ?? `__${desc.canonicalId}`;
+}
+
+/** Match a schema against a `?type=X` highlight value. */
+function matchesType(desc: JsonSchemaDescription, hl: string | undefined): boolean {
+    if (!hl) return false;
+    if (hl.startsWith("__")) return `__${desc.canonicalId}` === hl;
+    return desc.docs?.brand === hl;
+}
+
+/**
+ * Build the chip JSX for a given schema, or null if not reused.
+ * Includes the current method in the popover (full picture, not just "elsewhere").
+ * When the schema is the active highlight target, the chip itself takes a
+ * yellow accent so anonymous objects without a name are still visually marked.
+ */
+function reuseChipFor(desc: JsonSchemaDescription, ctx: RenderCtx): React.ReactNode {
+    if (!ctx.usageIndex) return null;
+    const usages = ctx.usageIndex.get(desc.canonicalId);
+    if (!usages || usages.length < 2) return null;
+    return (
+        <ReusedChip
+            refs={usages}
+            highlightType={typeIdFor(desc)}
+            highlighted={matchesType(desc, ctx.hl)}
+        />
+    );
+}
+
 // ── Recursive rendering ────────────────────────────────────────────────
 
-function renderRef(ref: SchemaRef, doc: ApiDocsDocument, depth: number, bare: boolean): React.ReactNode {
+function renderRef(ref: SchemaRef, doc: ApiDocsDocument, depth: number, bare: boolean, ctx: RenderCtx): React.ReactNode {
     if ("ref" in ref) {
         const named = doc.schemas[ref.ref];
         if (!named) return <span className="text-red-500">unknown:{ref.ref}</span>;
-        // Top-level $ref — render the named schema's inner shape inline.
-        return renderDesc(named.schema, doc, depth, bare, ref.ref);
+        return renderDesc(named.schema, doc, depth, bare, ref.ref, ctx);
     }
-    return renderDesc(ref.inline, doc, depth, bare);
+    return renderDesc(ref.inline, doc, depth, bare, undefined, ctx);
 }
 
 function renderDesc(
@@ -44,24 +106,18 @@ function renderDesc(
     doc: ApiDocsDocument,
     depth: number,
     bare: boolean,
-    namedAs?: string,
+    namedAs: string | undefined,
+    ctx: RenderCtx,
 ): React.ReactNode {
     const node = desc.node;
     switch (node.kind) {
-        case "object":
-            return renderObject(node as any, desc, doc, depth, bare, namedAs);
-        case "array":
-            return renderArray(node as any, desc, doc, depth);
-        case "record":
-            return renderRecord(node as any, doc, depth);
-        case "union":
-            return renderUnion(node as any, doc, depth);
-        case "discriminated":
-            return renderDiscriminated(node as any, doc, depth);
-        case "tuple":
-            return renderTuple(node as any, doc, depth);
-        default:
-            return renderType(desc, doc);
+        case "object":         return renderObject(node as any, desc, doc, depth, bare, namedAs, ctx);
+        case "array":          return renderArray(node as any, desc, doc, depth, ctx);
+        case "record":         return renderRecord(node as any, doc, depth, ctx);
+        case "union":          return renderUnion(node as any, doc, depth, ctx);
+        case "discriminated":  return renderDiscriminated(node as any, doc, depth, ctx);
+        case "tuple":          return renderTuple(node as any, doc, depth, ctx);
+        default:               return renderType(desc, doc, ctx);
     }
 }
 
@@ -73,7 +129,8 @@ function renderObject(
     doc: ApiDocsDocument,
     depth: number,
     bare: boolean,
-    namedAs?: string,
+    namedAs: string | undefined,
+    ctx: RenderCtx,
 ): React.ReactNode {
     const indent = "  ".repeat(depth + 1);
     const closeIndent = "  ".repeat(depth);
@@ -83,21 +140,43 @@ function renderObject(
         return <><span className="text-gray-700">{"{}"}</span></>;
     }
 
-    return (
+    // Reuse chip — render whenever this object's canonicalId is reused
+    // elsewhere, named or not. For named refs the chip sits next to the
+    // type name (`User ↔ 3 {`); for anonymous reused objects it sits right
+    // after the opening brace (`{  ↔ 3`) so prepareCreate ↔ finalizeCreate
+    // style symmetry is visible without the schema needing a title.
+    const chip = !bare ? reuseChipFor(desc, ctx) : null;
+
+    // When this object itself is the highlight target, the entire `{...}`
+    // block (braces + every property + nested children) gets a yellow tint,
+    // so the reader sees the whole subtree as "the highlighted type" — a
+    // composite type's value isn't a single token like a brand, it's a
+    // structure, so the highlight has to be structural too.
+    const selfMatches = !bare && matchesType(desc, ctx.hl);
+    const braceClass = selfMatches ? "text-yellow-900 font-semibold" : "text-gray-700";
+
+    const content = (
         <>
             {!bare && namedAs && <span className="text-purple-600">{namedAs}</span>}
+            {!bare && namedAs && chip && <>{" "}{chip}</>}
             {!bare && namedAs && " "}
-            {!bare && <span className="text-gray-700">{"{"}</span>}
+            {!bare && <span className={braceClass}>{"{"}</span>}
+            {!bare && !namedAs && chip && <>{" "}{chip}</>}
             {!bare && "\n"}
             {entries.map(([name, propDesc], i) => {
                 const required = node.required.includes(name);
+                // Row-level highlight: only the row whose value IS the
+                // highlighted type. Suppressed when an ancestor is already
+                // highlighting (avoid double-yellow).
+                const rowMatch = !selfMatches && matchesType(propDesc, ctx.hl);
+                const rowClass = rowMatch ? "bg-yellow-100 -mx-1 px-1 rounded" : "";
                 return (
-                    <span key={name}>
+                    <span key={name} className={rowClass} {...(rowMatch ? {"data-gg-highlight": ""} : {})}>
                         {indent}
                         <span className="text-blue-700">{name}</span>
                         {!required && <span className="text-gray-400">?</span>}
                         <span className="text-gray-500">: </span>
-                        {renderInline(propDesc, doc, depth + 1)}
+                        {renderInline(propDesc, doc, depth + 1, ctx)}
                         {i < entries.length - 1 ? <span className="text-gray-500">,</span> : null}
                         {renderTrailingComment(propDesc)}
                         {"\n"}
@@ -105,18 +184,28 @@ function renderObject(
                 );
             })}
             {!bare && closeIndent}
-            {!bare && <span className="text-gray-700">{"}"}</span>}
+            {!bare && <span className={braceClass}>{"}"}</span>}
         </>
     );
+
+    // Wrap the whole `{...}` block in a yellow background when self matches.
+    // `box-decoration-clone` makes the background apply per-line in a <pre>,
+    // so the highlight reads as a continuous block instead of patches behind
+    // each text run.
+    if (selfMatches) {
+        return <span data-gg-highlight="" className="bg-yellow-100 rounded box-decoration-clone">{content}</span>;
+    }
+    return content;
 }
 
-// ── Array: T[] (or expanded for complex item types) ──────────────────
+// ── Array ──────────────────────────────────────────────────────────────
 
 function renderArray(
     node: { kind: "array"; element: JsonSchemaDescription; minItems?: number; maxItems?: number },
-    desc: JsonSchemaDescription,
+    _desc: JsonSchemaDescription,
     doc: ApiDocsDocument,
     depth: number,
+    ctx: RenderCtx,
 ): React.ReactNode {
     const elementIsScalar = isScalar(node.element);
     const sizePill = (node.minItems !== undefined || node.maxItems !== undefined)
@@ -126,58 +215,54 @@ function renderArray(
     if (elementIsScalar) {
         return (
             <>
-                {renderInline(node.element, doc, depth)}
+                {renderInline(node.element, doc, depth, ctx)}
                 <span className="text-gray-500">[]</span>
                 {sizePill && <> {sizePill}</>}
             </>
         );
     }
-    // Complex element — render expanded
     return (
         <>
             <span className="text-gray-700">Array&lt;</span>
-            {renderInline(node.element, doc, depth)}
+            {renderInline(node.element, doc, depth, ctx)}
             <span className="text-gray-700">&gt;</span>
             {sizePill && <> {sizePill}</>}
         </>
     );
 }
 
-// ── Record: Record<string, V> ──────────────────────────────────────────
+// ── Record ─────────────────────────────────────────────────────────────
 
 function renderRecord(
     node: { kind: "record"; value: JsonSchemaDescription },
     doc: ApiDocsDocument,
     depth: number,
+    ctx: RenderCtx,
 ): React.ReactNode {
     return (
         <>
             <span className="text-gray-700">Record&lt;string, </span>
-            {renderInline(node.value, doc, depth)}
+            {renderInline(node.value, doc, depth, ctx)}
             <span className="text-gray-700">&gt;</span>
         </>
     );
 }
 
-// ── Union: A | B | C ───────────────────────────────────────────────────
+// ── Union ──────────────────────────────────────────────────────────────
 
 function renderUnion(
     node: { kind: "union"; variants: JsonSchemaDescription[] },
     doc: ApiDocsDocument,
     depth: number,
+    ctx: RenderCtx,
 ): React.ReactNode {
     return renderUnionLike(
-        node.variants.map(v => renderInline(v, doc, depth + 1)),
+        node.variants.map(v => renderInline(v, doc, depth + 1, ctx)),
         depth,
         false,
     );
 }
 
-/**
- * Shared renderer for union/literal alternatives. Inline if ≤3 alternatives,
- * one-per-line with leading `|` if more — easier to scan when the set gets
- * long (e.g. an enum of 10 categories).
- */
 function renderUnionLike(
     parts: React.ReactNode[],
     depth: number,
@@ -211,28 +296,18 @@ function renderUnionLike(
     );
 }
 
-// ── Discriminated union — render compactly with discriminator label ────
+// ── Discriminated union ────────────────────────────────────────────────
 
-/**
- * Discriminated union — render as a TypeScript-style intersection of object
- * literals separated by `|`. Each variant is fully expanded so the reader
- * sees its complete shape (including the discriminator field) inline.
- *
- *   /* discriminated by status *​/
- *   {
- *     status: "online",
- *     userId: string,
- *     ...
- *   } | {
- *     status: "offline",
- *     ...
- *   }
- */
 function renderDiscriminated(
     node: { kind: "discriminated"; discriminator: string; variants: JsonSchemaDescription[] },
     doc: ApiDocsDocument,
     depth: number,
+    ctx: RenderCtx,
 ): React.ReactNode {
+    // Need the parent desc to look up reuse — the discriminator caller passes
+    // a node only, not the desc. Reuse rendering for these is added on the
+    // closest containing renderObject/renderInline path, so we just emit the
+    // structure here.
     return (
         <>
             <span className="text-gray-500">{`/* discriminated by `}</span>
@@ -243,19 +318,20 @@ function renderDiscriminated(
             {node.variants.map((v, i) => (
                 <span key={i}>
                     {i > 0 && <span className="text-gray-500"> | </span>}
-                    {renderInline(v, doc, depth)}
+                    {renderInline(v, doc, depth, ctx)}
                 </span>
             ))}
         </>
     );
 }
 
-// ── Tuple: [A, B, C] ───────────────────────────────────────────────────
+// ── Tuple ──────────────────────────────────────────────────────────────
 
 function renderTuple(
     node: { kind: "tuple"; elements: JsonSchemaDescription[] },
     doc: ApiDocsDocument,
     depth: number,
+    ctx: RenderCtx,
 ): React.ReactNode {
     return (
         <>
@@ -263,7 +339,7 @@ function renderTuple(
             {node.elements.map((el, i) => (
                 <span key={i}>
                     {i > 0 && <span className="text-gray-500">, </span>}
-                    {renderInline(el, doc, depth)}
+                    {renderInline(el, doc, depth, ctx)}
                 </span>
             ))}
             <span className="text-gray-500">]</span>
@@ -273,27 +349,26 @@ function renderTuple(
 
 // ── Inline type rendering for property values ──────────────────────────
 
-/** Render a schema as a single-line value (used as the right side of `field: ...`). */
-function renderInline(desc: JsonSchemaDescription, doc: ApiDocsDocument, depth: number): React.ReactNode {
+function renderInline(desc: JsonSchemaDescription, doc: ApiDocsDocument, depth: number, ctx: RenderCtx): React.ReactNode {
     const node = desc.node;
 
-    // Brand types — render `BaseType & BrandName` (TS-style intersection),
-    // so the underlying primitive isn't hidden behind the brand label.
-    // Drop the `<format>` suffix when a brand name exists — the brand name
-    // already conveys the semantic role, so e.g. `string<email> & EmailAddress`
-    // is just duplication.
-    //
-    // `docs.brand` is the canonical brand identifier (auto-populated by
-    // `.brand("UserId")` in @grest-ts/schema). `docs.title` is the human label
-    // ("User ID"); fall back to a stripped-whitespace title for legacy schemas
-    // that set title but not brand.
     const brandName = brandIdentifier(desc);
     if (isPrimitive(node.kind) && brandName) {
+        const isHl = matchesType(desc, ctx.hl);
+        // Reuse chip lives next to the brand name — the brand IS the
+        // semantic identity, so the chip belongs there.
+        const chip = reuseChipFor(desc, ctx);
         return (
             <>
                 <span className="text-emerald-700">{bareTypeLabel(desc)}</span>
                 <span className="text-gray-500"> & </span>
-                <span className="text-purple-600">{brandName}</span>
+                <span
+                    className={`text-purple-600 ${isHl ? "bg-yellow-200 ring-1 ring-yellow-400 px-0.5 rounded font-semibold" : ""}`}
+                    {...(isHl ? {"data-gg-highlight": ""} : {})}
+                >
+                    {brandName}
+                </span>
+                {chip && <>{" "}{chip}</>}
                 {desc.nullable && <span className="text-gray-500"> | null</span>}
                 {desc.defaultValue !== undefined && <DefaultValue value={desc.defaultValue} />}
             </>
@@ -320,35 +395,31 @@ function renderInline(desc: JsonSchemaDescription, doc: ApiDocsDocument, depth: 
         case "literal": {
             const values = (node as any).values as readonly any[];
             const renderVal = (v: unknown) => <span className="text-emerald-700">{JSON.stringify(v)}</span>;
-            return renderUnionLike(values.map(renderVal), depth, desc.nullable);
+            const enumChip = values.length > 1 ? reuseChipFor(desc, ctx) : null;
+            const isHl = matchesType(desc, ctx.hl);
+            const wrap = (children: React.ReactNode) => isHl
+                ? <span data-gg-highlight="" className="bg-yellow-100 rounded px-0.5 box-decoration-clone">{children}</span>
+                : <>{children}</>;
+            return wrap(<>
+                {renderUnionLike(values.map(renderVal), depth, desc.nullable)}
+                {enumChip && <>{" "}{enumChip}</>}
+            </>);
         }
 
-        case "array":
-            return renderArray(node as any, desc, doc, depth);
-
-        case "object":
-            // Inline nested object — recurse to render multi-line
-            return renderObject(node as any, desc, doc, depth, false);
-
-        case "record":
-            return renderRecord(node as any, doc, depth);
-
-        case "union":
-            return renderUnion(node as any, doc, depth);
-
-        case "discriminated":
-            return renderDiscriminated(node as any, doc, depth);
-
-        case "tuple":
-            return renderTuple(node as any, doc, depth);
+        case "array":          return renderArray(node as any, desc, doc, depth, ctx);
+        case "object":         return renderObject(node as any, desc, doc, depth, false, undefined, ctx);
+        case "record":         return renderRecord(node as any, doc, depth, ctx);
+        case "union":          return renderUnion(node as any, doc, depth, ctx);
+        case "discriminated":  return renderDiscriminated(node as any, doc, depth, ctx);
+        case "tuple":          return renderTuple(node as any, doc, depth, ctx);
 
         default:
             return <span className="text-red-500">{(node as any).kind}</span>;
     }
 }
 
-function renderType(desc: JsonSchemaDescription, doc: ApiDocsDocument): React.ReactNode {
-    return renderInline(desc, doc, 0);
+function renderType(desc: JsonSchemaDescription, doc: ApiDocsDocument, ctx: RenderCtx): React.ReactNode {
+    return renderInline(desc, doc, 0, ctx);
 }
 
 function DefaultValue({value}: {value: unknown}) {
@@ -360,24 +431,11 @@ function DefaultValue({value}: {value: unknown}) {
     );
 }
 
-// ── Trailing-comment annotations (constraints / description / example) ─
+// ── Trailing-comment annotations ──────────────────────────────────────
 
-/**
- * Trailing comment after a property: a row of colored "tag" chips for the
- * concise factual hints (title / constraints / example / format) plus the
- * human description as plain prose at the end. Color-coded so the eye can
- * triage what kind of metadata each chip is at a glance.
- */
 function renderTrailingComment(desc: JsonSchemaDescription): React.ReactNode {
     const tags: React.ReactNode[] = [];
 
-    // Tag prefixes (`title:`, `e.g.`, `html format:`) are dropped — the chip
-    // colors carry the role distinction (indigo=title, emerald=example,
-    // amber=html-format-hint, slate=constraints), so the prefix words are
-    // visual noise.
-    //
-    // Order: example → title → format → description (per user preference),
-    // with constraints right after example since both are value-level facts.
     if (desc.docs?.example !== undefined) {
         tags.push(<TagChip key="e" tone="emerald">{JSON.stringify(desc.docs.example)}</TagChip>);
     }
@@ -391,7 +449,6 @@ function renderTrailingComment(desc: JsonSchemaDescription): React.ReactNode {
         tags.push(<TagChip key="t" tone="indigo">{desc.docs.title}</TagChip>);
     }
 
-    // Format hint — maps onto HTML <input type="..."> conventions.
     if (desc.docs?.format) {
         tags.push(<TagChip key="f" tone="amber">{desc.docs.format}</TagChip>);
     }
@@ -431,11 +488,6 @@ function Pill({children}: {children: React.ReactNode}) {
 
 // ── Helpers ────────────────────────────────────────────────────────────
 
-/**
- * Brand identifier for display. Prefers the explicit `docs.brand` field
- * (auto-populated by grest-ts `.brand("UserId")`), falls back to a
- * whitespace-stripped `docs.title` for older schemas that haven't migrated.
- */
 function brandIdentifier(desc: JsonSchemaDescription): string | undefined {
     if (desc.docs?.brand) return desc.docs.brand;
     if (desc.docs?.title) return desc.docs.title.replace(/\s+/g, "");
@@ -446,12 +498,6 @@ function isPrimitive(kind: string): boolean {
     return ["string", "number", "boolean", "bit", "literal", "any", "unknown", "file", "password"].includes(kind);
 }
 
-/**
- * "Scalar" here means: rendering this inline as `T[]` is unambiguous.
- * Anything that produces a `|` in its rendering (union, multi-value literal,
- * nullable) needs `Array<T>` instead — otherwise the trailing `[]` looks
- * like it only applies to the last alternative (`"a" | "b" | "c"[]`).
- */
 function isScalar(desc: JsonSchemaDescription): boolean {
     if (desc.nullable) return false;
     const k = desc.node.kind;
@@ -460,7 +506,6 @@ function isScalar(desc: JsonSchemaDescription): boolean {
     return true;
 }
 
-/** Type label *with* the format hint suffix — used when there's no brand name. */
 function primitiveTypeLabel(desc: JsonSchemaDescription): string {
     const node = desc.node;
     switch (node.kind) {
@@ -476,8 +521,6 @@ function primitiveTypeLabel(desc: JsonSchemaDescription): string {
     }
 }
 
-/** Type label *without* the format hint — used alongside a brand name where
- *  format would just duplicate what the brand already says. */
 function bareTypeLabel(desc: JsonSchemaDescription): string {
     const node = desc.node;
     switch (node.kind) {

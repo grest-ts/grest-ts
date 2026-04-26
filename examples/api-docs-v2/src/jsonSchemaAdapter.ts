@@ -17,10 +17,19 @@ export class JsonSchemaAdapter {
     private readonly idsBySchema = new Map<GGSchema<any>, string>();
     private nextId = 0;
 
-    /** Convert a GGSchemaDescription → JsonSchemaDescription, recursing into composites. */
+    /**
+     * Convert a GGSchemaDescription → JsonSchemaDescription, recursing into composites.
+     *
+     * Identity uses `desc.schema` (the actual GGSchema instance) rather than
+     * `desc.canonical`. Brands like `IsExpenseId = IsNumber.brand("ExpenseId")`
+     * are presentational variants whose canonical collapses to `IsNumber` —
+     * if we used canonical here, every IsNumber-based brand would share an id.
+     * Using the schema instance keeps each `const` distinct, while still
+     * producing the same id for repeated references to the same `const`.
+     */
     convert(desc: GGSchemaDescription): JsonSchemaDescription {
         return {
-            canonicalId: this.idFor(desc.canonical ?? desc.schema),
+            canonicalId: this.idFor(desc.schema),
             node: this.convertNode(desc.node),
             ...(desc.docs ? {docs: desc.docs} : {}),
             ...(desc.defaultValue !== undefined ? {defaultValue: desc.defaultValue} : {}),
