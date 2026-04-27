@@ -5,7 +5,7 @@ import {GG_WS_CONNECTION} from "../server/GG_WS_CONNECTION";
 import {Message, MessageType} from "../socket/SocketMessage";
 import {GGContractExecutor, GGValidator, SERVER_ERROR} from "@grest-ts/schema";
 import {withTimeout} from "@grest-ts/common";
-import {GGContext} from "@grest-ts/context";
+import {GGContext, GGContextStore} from "@grest-ts/context";
 import {GG_TRACE} from "@grest-ts/trace";
 import {getDefaultAdapter} from "../adapter/getDefaultAdapter";
 
@@ -220,7 +220,15 @@ export class GGSocketPool {
             const adapter = new adapterClass(fullUrl);
             adapter.onOpen(async () => {
                 try {
-                    const context = new GGContext("ws-client-connection");
+                    // Inherit the connecting context as parent so context
+                    // keys (auth tokens, user/org session, trace ids…) set
+                    // by the caller propagate into the WS connection's
+                    // operations and into events delivered through it.
+                    // Without a parent, downstream HTTP calls fired from
+                    // a WS event handler can't see the user's session
+                    // tokens — they'd be looking up GG_USER_TOKEN /
+                    // GG_ORG_TOKEN in an empty isolated context.
+                    const context = new GGContext("ws-client-connection", GGContextStore.tryGetContext());
                     await context.run(async () => {
                         GG_TRACE.init();
                         GG_WS_CONNECTION.set({
