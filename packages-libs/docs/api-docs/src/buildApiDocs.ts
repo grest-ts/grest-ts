@@ -1,4 +1,4 @@
-import {readFileSync, readdirSync, mkdirSync, writeFileSync, copyFileSync} from "fs";
+import {readFileSync, readdirSync, mkdirSync, writeFileSync, copyFileSync, existsSync} from "fs";
 import {join, dirname} from "path";
 import {fileURLToPath} from "url";
 import type {GGHttpSchema} from "@grest-ts/http";
@@ -7,7 +7,9 @@ import {buildContractDoc, type BuildContractDocOptions} from "./buildContractDoc
 import type {ApiDocsBranding, ApiDocsGroup} from "./GGApiDocs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const DIST_UI = join(HERE, "..", "dist-ui");
+const DIST_UI = existsSync(join(HERE, "..", "dist-ui"))
+    ? join(HERE, "..", "dist-ui")           // src/buildApiDocs.{ts,js}
+    : join(HERE, "..", "..", "dist-ui");    // dist/src/buildApiDocs.js
 
 export interface BuildApiDocsOptions {
     title: string;

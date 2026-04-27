@@ -1,16 +1,23 @@
-import {readFileSync, readdirSync} from "fs";
+import {readFileSync, readdirSync, existsSync} from "fs";
 import {join, dirname, extname} from "path";
 import {fileURLToPath} from "url";
 import type {GGHttpSchema} from "@grest-ts/http";
 import {GGHttpServer, GG_HTTP_SERVER} from "@grest-ts/http";
 import type {GGWebSocketSchema} from "@grest-ts/websocket";
 import {GGLocator} from "@grest-ts/locator";
+import {GG_DISCOVERY} from "@grest-ts/discovery";
 import {buildContractDoc, type BuildContractDocOptions} from "./buildContractDoc";
 import type {ApiDocsDocument} from "./docTypes";
 
-/** Directory shipped with the package containing the Vite-built React UI. */
+/**
+ * Directory shipped with the package containing the Vite-built React UI.
+ * Resolves to <pkg>/dist-ui regardless of whether this module is loaded
+ * from src/ (in-tree dev) or dist/src/ (published tarball).
+ */
 const HERE = dirname(fileURLToPath(import.meta.url));
-const DIST_UI = join(HERE, "..", "dist-ui");
+const DIST_UI = existsSync(join(HERE, "..", "dist-ui"))
+    ? join(HERE, "..", "dist-ui")           // src/GGApiDocs.{ts,js}
+    : join(HERE, "..", "..", "dist-ui");    // dist/src/GGApiDocs.js
 
 /**
  * One logical group. `http` and `ws` arrays carry the actual contracts; both
@@ -128,6 +135,24 @@ export class GGApiDocs {
                 res.end(asset.body);
             });
         }
+
+        // Tell service-discovery (e.g. the local dev router) that requests
+        // beginning with `docsPath` belong on this server. Without this, a
+        // local-router consumer 404s `/docs` because GGHttpSchema.startServer
+        // is the only thing that normally publishes prefixes to discovery.
+        // pathPrefix is left without a trailing slash so both `/docs` and
+        // `/docs/...` match (the matcher uses `path.startsWith`).
+        const docsPrefix = docsPath.endsWith("/") ? docsPath.slice(0, -1) : docsPath;
+        const scope = GGLocator.getScope();
+        server.onStart(() => {
+            GG_DISCOVERY.tryGet()?.registerRoutes([{
+                runtime: scope.serviceName,
+                api: "GGApiDocs",
+                pathPrefix: docsPrefix,
+                protocol: "http",
+                port: server.port!,
+            }]);
+        });
 
         return this;
     }
