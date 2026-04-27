@@ -104,7 +104,19 @@ export interface ContractDoc {
     path?: string;
 
     description?: string;
+    /**
+     * Auth schemes the transport middleware declares (security UX in the UI —
+     * "Authorize" buttons, lock icons). Populated only when a header schema
+     * carries `format: "bearer"` or `format: "api-key"`.
+     */
     auth?: AuthDoc[];
+    /**
+     * Other transport headers declared by middleware on the schema — the
+     * non-auth ones. Each carries the same metadata as a query/path param
+     * (name, schema, required, description). Authentication headers are
+     * intentionally excluded; they live in `auth` to drive different UI.
+     */
+    headers?: ParamDoc[];
     methods: MethodDoc[];
 }
 

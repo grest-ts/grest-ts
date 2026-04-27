@@ -66,6 +66,22 @@ export function MethodView({contract, method, doc, highlightType, usageIndex}: P
                 </Section>
             )}
 
+            {contract.headers && contract.headers.length > 0 && (
+                <Section title="Headers">
+                    <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 font-mono text-[13px] leading-6">
+                        {contract.headers.map(h => (
+                            <div key={h.name} className="flex items-baseline gap-2">
+                                <span className="text-blue-700">{h.name}</span>
+                                {!h.required && <span className="text-gray-400">?</span>}
+                                <span className="text-gray-500">:</span>
+                                <InlineRef schemaRef={h.schema} doc={doc} highlightType={highlightType} />
+                                {h.description && <span className="text-gray-400 italic ml-2">  // {h.description}</span>}
+                            </div>
+                        ))}
+                    </div>
+                </Section>
+            )}
+
             {/* Request — params and body */}
             {(method.pathParams?.length || method.queryParams?.length || method.requestBody || method.wsInput) ? (
                 <Section title={requestSectionTitle(method)}>

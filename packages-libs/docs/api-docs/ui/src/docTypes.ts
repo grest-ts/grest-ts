@@ -33,6 +33,8 @@ export interface ContractDoc {
     path?: string;
     description?: string;
     auth?: AuthDoc[];
+    /** Non-auth transport headers declared by middleware (bearer/api-key live in `auth`). */
+    headers?: ParamDoc[];
     methods: MethodDoc[];
 }
 

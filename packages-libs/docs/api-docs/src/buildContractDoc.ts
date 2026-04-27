@@ -109,6 +109,7 @@ export function buildContractDoc(options: BuildContractDocOptions): ApiDocsDocum
 
 function buildHttpContract(httpSchema: GGHttpSchema<any, any>, ctx: BuildContext): ContractDoc {
     const auth = extractHttpAuth(httpSchema.apiMiddlewares as readonly GGHttpTransportMiddleware[]);
+    const headers = extractHttpHeaders(httpSchema.apiMiddlewares as readonly GGHttpTransportMiddleware[], ctx, httpSchema.name);
     const methods: MethodDoc[] = [];
 
     for (const methodName of Object.keys(httpSchema.codec)) {
@@ -124,6 +125,7 @@ function buildHttpContract(httpSchema: GGHttpSchema<any, any>, ctx: BuildContext
         kind: "http",
         pathPrefix: normalizePath(httpSchema.pathPrefix),
         ...(auth.length > 0 ? {auth} : {}),
+        ...(headers.length > 0 ? {headers} : {}),
         methods,
     };
 }
@@ -204,7 +206,9 @@ function buildHttpMethod(
 // ── WS contract ────────────────────────────────────────────────────────
 
 function buildWsContract(wsSchema: GGWebSocketSchema<any, any, any, any, any>, ctx: BuildContext): ContractDoc {
-    const auth = extractWsAuth((wsSchema as any).middlewares ?? []);
+    const wsMiddlewares: any[] = (wsSchema as any).middlewares ?? [];
+    const auth = extractWsAuth(wsMiddlewares);
+    const headers = extractWsHeaders(wsMiddlewares, ctx, wsSchema.name);
     const methods: MethodDoc[] = [];
     const contract = wsSchema.contract;
 
@@ -222,6 +226,7 @@ function buildWsContract(wsSchema: GGWebSocketSchema<any, any, any, any, any>, c
         kind: "ws",
         path: "/" + wsSchema.path.replace(/^\/+/, ""),
         ...(auth.length > 0 ? {auth} : {}),
+        ...(headers.length > 0 ? {headers} : {}),
         methods,
     };
 }
@@ -400,6 +405,64 @@ function extractWsAuth(middlewares: any[]): AuthDoc[] {
         }
     }
     return auth;
+}
+
+// ── Non-auth headers ───────────────────────────────────────────────────
+//
+// Mirror of extract*Auth, but for everything that ISN'T a bearer/api-key
+// header. Useful for surfacing transport headers like Idempotency-Key,
+// Accept-Language, X-Request-Id — middleware-declared headers that don't
+// belong in the security UX but are still part of the contract a caller
+// needs to know about.
+
+function extractHttpHeaders(
+    middlewares: readonly GGHttpTransportMiddleware[],
+    ctx: BuildContext,
+    contractName: string,
+): ParamDoc[] {
+    const out: ParamDoc[] = [];
+    for (const mw of middlewares) {
+        for (const [name, schema] of Object.entries(mw.headers ?? {})) {
+            const desc = schema.toSchemaDescription();
+            const format = desc.docs?.format;
+            if (format === "bearer" || format === "api-key") continue; // → goes to `auth`
+            out.push(toHeaderParam(name, schema, desc, ctx, contractName));
+        }
+    }
+    return out;
+}
+
+function extractWsHeaders(
+    middlewares: any[],
+    ctx: BuildContext,
+    contractName: string,
+): ParamDoc[] {
+    const out: ParamDoc[] = [];
+    for (const mw of middlewares) {
+        for (const [name, schema] of Object.entries(mw.headers ?? {}) as [string, any][]) {
+            const desc = schema.toSchemaDescription?.();
+            if (!desc) continue;
+            const format = desc.docs?.format;
+            if (format === "bearer" || format === "api-key") continue;
+            out.push(toHeaderParam(name, schema, desc, ctx, contractName));
+        }
+    }
+    return out;
+}
+
+function toHeaderParam(
+    name: string,
+    _schema: GGSchema<any>,
+    desc: import("@grest-ts/schema").GGSchemaDescription,
+    ctx: BuildContext,
+    contractName: string,
+): ParamDoc {
+    return {
+        name,
+        schema: schemaRefFor(desc, contractName, "$headers", "input", ctx),
+        required: !desc.optional,
+        ...(desc.docs?.description ? {description: desc.docs.description} : {}),
+    };
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────
