@@ -24,7 +24,7 @@ export const DOC_TREE: Record<string, DocEntry[]> = {
         {trace: ["trace", "trace-http"]},
     ],
     "Libraries": [
-        {db: ["db-mysql", "db-postgre"]},
+        {db: ["db-mysql", "db-postgre", "db-dynamodb"]},
         {docs: ["api-docs", "openapi", "asyncapi"]},
     ],
     "Useful": [
