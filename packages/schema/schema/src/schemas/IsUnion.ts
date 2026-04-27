@@ -2,7 +2,20 @@ import {GGSchema, Opt} from "../GGSchema";
 import {UnionDef} from "../Definition";
 import type {GGSchemaNodeKind} from "../GGSchemaDescription";
 
-type InferUnion<T extends GGSchema<any>[]> = T[number] extends GGSchema<infer U> ? U : never;
+/**
+ * Extract the union of inferred types from a tuple of schemas.
+ *
+ * The naive `T[number] extends GGSchema<infer U> ? U : never` does NOT
+ * distribute, because `T[number]` is an indexed access expression, not a
+ * naked type parameter — TypeScript looks for a single `U` that satisfies
+ * `GGSchema<U>` against the whole union, fails, and falls through to
+ * `never`. The mapped-type pattern here checks each tuple index in
+ * isolation (where `T[K]` IS a concrete single schema) and `[number]` at
+ * the end unions the per-element inferences back together.
+ */
+type InferUnion<T extends GGSchema<any>[]> = {
+    [K in keyof T]: T[K] extends GGSchema<infer U> ? U : never
+}[number];
 
 export class UnionSchema<T = unknown> extends GGSchema<T, UnionDef> {
 
