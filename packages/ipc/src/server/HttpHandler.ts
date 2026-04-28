@@ -73,9 +73,10 @@ export class HttpHandler {
         const routeToUrl = this.routeResolver(path)
         if (routeToUrl) {
             GGLog.debug(this, `Proxying ${req.method} ${req.url} -> ${routeToUrl}`);
-            this.proxy.web(req, res, {target: routeToUrl}, (err: Error) => {
-                GGLog.error(this, "Proxy error", err);
-                this.sendResponse(res, 502, {issue: "Proxy error: " + err.message + " (Did the service crash?)"});
+            this.proxy.web(req, res, {target: routeToUrl}, (err: any) => {
+                const code = err?.code ?? err?.errors?.[0]?.code ?? 'UNKNOWN';
+                GGLog.error(this, `Proxy error [${code}] ${req.method} ${req.url} -> ${routeToUrl}: ${err.message}`);
+                this.sendResponse(res, 502, {issue: `Proxy error [${code}] -> ${routeToUrl}: ${err.message} (Did the service crash?)`});
             });
             return;
         }

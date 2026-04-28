@@ -57,8 +57,9 @@ export class SocketHandler {
         const routeToUrl = this.routeResolver(req.url)
         if (routeToUrl) {
             GGLog.debug(this, `Proxying WS ${req.url} -> ${routeToUrl}`);
-            this.proxy.ws(req, socket, head, {target: routeToUrl}, (err: Error) => {
-                GGLog.error(this, `WebSocket proxy error: ${err.message}`);
+            this.proxy.ws(req, socket, head, {target: routeToUrl}, (err: any) => {
+                const code = err?.code ?? err?.errors?.[0]?.code ?? 'UNKNOWN';
+                GGLog.error(this, `WebSocket proxy error [${code}] ${req.url} -> ${routeToUrl}: ${err.message}`);
                 socket.destroy();
             });
             return;
