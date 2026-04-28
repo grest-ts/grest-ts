@@ -1,86 +1,128 @@
 import {useEffect, useMemo, useState} from "react";
-import type {ApiDocsDocument, FixtureIndexEntry, ContractDoc, MethodDoc} from "./docTypes";
+import type {ApiDocsConfig, ApiDocsDocument, ContractDoc, MethodDoc} from "./docTypes";
 import {Sidebar} from "./components/Sidebar";
 import {Header} from "./components/Header";
 import {MethodView} from "./components/MethodView";
+import {ActiveSlugContext} from "./lib/activeSlug";
 import {buildUsageIndex} from "./lib/usageIndex";
 
+/**
+ * Multi-doc UI — same shape as the production package UI. The demo's
+ * main.tsx fakes `window.GG_API_DOCS_CONFIG` from `/fixtures/index.json`
+ * before mounting; the dropdown then switches between bundled fixtures.
+ */
+declare global {
+    interface Window {
+        GG_API_DOCS_CONFIG?: ApiDocsConfig;
+    }
+}
+
 export function App() {
-    const [index, setIndex] = useState<FixtureIndexEntry[] | null>(null);
-    const [activeFixture, setActiveFixture] = useState<string>("realestate");
+    const config = window.GG_API_DOCS_CONFIG;
+    if (!config || config.docs.length === 0) {
+        return <ConfigError />;
+    }
+    return <MultiDocApp config={config} />;
+}
+
+function MultiDocApp({config}: {config: ApiDocsConfig}) {
+    const initialSlug = pickInitialSlug(config, window.location.hash.slice(1));
+    const [activeSlug, setActiveSlug] = useState<string>(initialSlug);
     const [doc, setDoc] = useState<ApiDocsDocument | null>(null);
     const [route, setRoute] = useState<string>(window.location.hash.slice(1) || "");
 
-    // Load fixture index once
-    useEffect(() => {
-        fetch("/fixtures/index.json")
-            .then(r => r.json())
-            .then((data: FixtureIndexEntry[]) => {
-                setIndex(data);
-                if (data.length > 0 && !data.find(d => d.slug === activeFixture)) {
-                    setActiveFixture(data[0].slug);
-                }
-            });
-    }, []);
+    const activeEntry = config.docs.find(d => d.slug === activeSlug)!;
 
-    // Load active fixture
     useEffect(() => {
-        if (!activeFixture) return;
+        let cancelled = false;
         setDoc(null);
-        fetch(`/fixtures/${activeFixture}.json`)
+        fetch(activeEntry.url)
             .then(r => r.json())
-            .then(setDoc);
-    }, [activeFixture]);
+            .then(d => { if (!cancelled) setDoc(d); });
+        return () => { cancelled = true; };
+    }, [activeEntry.url]);
 
-    // Hash-based routing
     useEffect(() => {
-        const onHash = () => setRoute(window.location.hash.slice(1));
+        const onHash = () => {
+            const h = window.location.hash.slice(1);
+            setRoute(h);
+            const slug = parseSlugFromHash(h);
+            if (slug && slug !== activeSlug && config.docs.find(d => d.slug === slug)) {
+                setActiveSlug(slug);
+            }
+        };
         window.addEventListener("hashchange", onHash);
         return () => window.removeEventListener("hashchange", onHash);
-    }, []);
+    }, [activeSlug, config.docs]);
 
-    const selection = useMemo(() => parseRoute(route, doc), [route, doc]);
+    const selection = useMemo(() => parseRoute(route, activeSlug, doc), [route, activeSlug, doc]);
     const usageIndex = useMemo(() => doc ? buildUsageIndex(doc) : null, [doc]);
 
-    const navigate = (path: string) => {
-        window.location.hash = path;
+    const navigate = (path: string) => { window.location.hash = path; };
+
+    const onSlugChange = (slug: string) => {
+        setActiveSlug(slug);
+        window.location.hash = `/${slug}`;
     };
 
-    if (!doc) {
-        return (
-            <div className="h-full flex items-center justify-center text-gray-500">
-                Loading {activeFixture}…
-            </div>
-        );
-    }
-
     return (
-        <div className="h-full flex flex-col">
-            <Header
-                doc={doc}
-                fixtures={index ?? []}
-                activeFixture={activeFixture}
-                onFixtureChange={(slug) => {
-                    setActiveFixture(slug);
-                    navigate("");
-                }}
-            />
-            <div className="flex-1 flex overflow-hidden">
-                <Sidebar doc={doc} selection={selection} onNavigate={navigate} />
-                <main className="flex-1 overflow-y-auto bg-gray-50">
-                    {selection ? (
-                        <MethodView
-                            contract={selection.contract}
-                            method={selection.method}
-                            doc={doc}
-                            highlightType={selection.highlightType}
-                            usageIndex={usageIndex ?? undefined}
-                        />
-                    ) : (
-                        <Welcome doc={doc} />
-                    )}
-                </main>
+        <ActiveSlugContext.Provider value={activeSlug}>
+            <div className="h-full flex flex-col">
+                <Header
+                    doc={doc}
+                    docs={config.docs}
+                    activeSlug={activeSlug}
+                    onSlugChange={onSlugChange}
+                />
+                {doc ? (
+                    <div className="flex-1 flex overflow-hidden">
+                        <Sidebar doc={doc} selection={selection} onNavigate={navigate} />
+                        <main className="flex-1 overflow-y-auto bg-gray-50">
+                            {selection ? (
+                                <MethodView
+                                    contract={selection.contract}
+                                    method={selection.method}
+                                    doc={doc}
+                                    highlightType={selection.highlightType}
+                                    usageIndex={usageIndex ?? undefined}
+                                />
+                            ) : (
+                                <Welcome doc={doc} />
+                            )}
+                        </main>
+                    </div>
+                ) : (
+                    <Loading label={activeEntry.title} />
+                )}
             </div>
+        </ActiveSlugContext.Provider>
+    );
+}
+
+function pickInitialSlug(config: ApiDocsConfig, hash: string): string {
+    const fromHash = parseSlugFromHash(hash);
+    if (fromHash && config.docs.find(d => d.slug === fromHash)) return fromHash;
+    return config.docs[0].slug;
+}
+
+function parseSlugFromHash(hash: string): string | null {
+    const [pathPart] = hash.split("?");
+    const parts = pathPart.replace(/^\/+/, "").split("/").filter(Boolean);
+    return parts[0] ?? null;
+}
+
+function ConfigError() {
+    return (
+        <div className="h-full flex items-center justify-center text-gray-500 text-sm px-8 text-center">
+            No API docs configured. Inject <code className="px-1 bg-gray-100 rounded">window.GG_API_DOCS_CONFIG</code> with a non-empty <code className="px-1 bg-gray-100 rounded">docs</code> array.
+        </div>
+    );
+}
+
+function Loading({label}: {label?: string}) {
+    return (
+        <div className="flex-1 flex items-center justify-center text-gray-500">
+            Loading{label ? ` ${label}` : ""}…
         </div>
     );
 }
@@ -133,24 +175,16 @@ function Stat({label, value}: {label: string; value: number}) {
 interface Selection {
     contract: ContractDoc;
     method: MethodDoc;
-    /** Generic type-highlight: a brand name, a named-schema title (PascalCase), or `__<canonicalId>` for anonymous types. */
     highlightType?: string;
 }
 
-/**
- * Route format: `/<group-slug>/<contract-name>/<method-name>[?type=Name]`
- *
- * `?type=X` triggers schema-highlighting in the body. X can be:
- *   - a brand identifier (`UserId`, `ExpenseId`, …)
- *   - a named-schema title with whitespace stripped (`UserProfile`)
- *   - `__<canonicalId>` for anonymous reused types (e.g. `__s42`)
- */
-function parseRoute(route: string, doc: ApiDocsDocument | null): Selection | null {
+function parseRoute(route: string, activeSlug: string, doc: ApiDocsDocument | null): Selection | null {
     if (!doc || !route) return null;
     const [pathPart, queryPart] = route.split("?");
     const parts = pathPart.replace(/^\/+/, "").split("/").filter(Boolean);
-    if (parts.length < 3) return null;
-    const [groupSlug, contractName, methodName] = parts;
+    if (parts.length < 4) return null;
+    const [slug, groupSlug, contractName, methodName] = parts;
+    if (slug !== activeSlug) return null;
     const group = doc.groups.find(g => g.slug === groupSlug);
     if (!group) return null;
     const contract = group.contracts.find(c => c.name === contractName);
@@ -161,7 +195,7 @@ function parseRoute(route: string, doc: ApiDocsDocument | null): Selection | nul
     let highlightType: string | undefined;
     if (queryPart) {
         const params = new URLSearchParams(queryPart);
-        highlightType = params.get("type") ?? params.get("brand") ?? undefined; // accept legacy ?brand=
+        highlightType = params.get("type") ?? params.get("brand") ?? undefined;
     }
     return {contract, method, highlightType};
 }

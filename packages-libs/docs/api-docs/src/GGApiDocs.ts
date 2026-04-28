@@ -7,7 +7,7 @@ import type {GGWebSocketSchema} from "@grest-ts/websocket";
 import {GGLocator} from "@grest-ts/locator";
 import {GG_DISCOVERY} from "@grest-ts/discovery";
 import {buildContractDoc, type BuildContractDocOptions} from "./buildContractDoc";
-import type {ApiDocsDocument} from "./docTypes";
+import type {ApiDocsConfig, ApiDocsDocument} from "./docTypes";
 
 /**
  * Directory shipped with the package containing the Vite-built React UI.
@@ -20,8 +20,8 @@ const DIST_UI = existsSync(join(HERE, "..", "dist-ui"))
     : join(HERE, "..", "..", "dist-ui");    // dist/src/GGApiDocs.js
 
 /**
- * One logical group. `http` and `ws` arrays carry the actual contracts; both
- * are optional so a group can be HTTP-only, WS-only, or mixed.
+ * One logical group inside a doc. `http` and `ws` arrays carry the actual
+ * contracts; both are optional so a group can be HTTP-only, WS-only, or mixed.
  */
 export interface ApiDocsGroup {
     http?: GGHttpSchema<any, any>[];
@@ -34,23 +34,38 @@ export interface ApiDocsBranding {
     primaryColor?: string;
 }
 
-export interface GGApiDocsOptions {
+/**
+ * One documented API. The UI dropdown lists these by `title`. Each spec
+ * builds an independent `ApiDocsDocument` — schemas/errors are not shared
+ * across docs.
+ */
+export interface ApiDocSpec {
+    /** URL slug — must be unique within `docs[]`; used in route `/<docsPath>/<slug>/api-docs.json` and in hash deep-links. */
+    slug: string;
+    /** Human-readable title shown in the dropdown and as the doc heading. */
     title: string;
     version?: string;
     description?: string;
 
-    /** When set, sidebar groups + chrome use these. */
+    /** Group label → schemas. Renders as sidebar sections. */
     groups?: Record<string, ApiDocsGroup>;
-    /** Convenience shorthand for ungrouped APIs — placed under one "API" group. */
+    /** Shorthand: ungrouped HTTP schemas — placed under one "API" group. */
     http?: GGHttpSchema<any, any>[];
+    /** Shorthand: ungrouped WebSocket schemas. */
     ws?: GGWebSocketSchema<any, any, any, any, any>[];
+}
 
+export interface GGApiDocsOptions {
     /** Mount path. All sub-routes hang off this prefix. */
     docsPath: string;
 
+    /** Documents to expose. Order = dropdown order; first entry is the default. */
+    docs: ApiDocSpec[];
+
+    /** Optional branding applied to every doc. */
     branding?: ApiDocsBranding;
 
-    /** Build doc eagerly at construction (default: lazy on first request). */
+    /** Build all docs eagerly at construction (default: lazy on first request). */
     eager?: boolean;
 
     /** Override the HTTP server. Defaults to the locator's GG_HTTP_SERVER. */
@@ -58,13 +73,14 @@ export interface GGApiDocsOptions {
 }
 
 /**
- * Live-mode docs server. Mounts a single React UI at `docsPath` plus a
- * `docsPath/api-docs.json` endpoint that returns the contract document.
+ * Live-mode docs server. Mounts a single React UI at `docsPath` plus one
+ * `api-docs.json` endpoint per doc; the UI fetches the active doc on
+ * demand and switches via a dropdown in the header.
  *
  * Routes:
- *   GET  ${docsPath}                  → shell HTML (Vite-built React app)
- *   GET  ${docsPath}/api-docs.json    → ApiDocsDocument (lazy build, cached)
- *   GET  ${docsPath}/assets/*         → bundled JS/CSS/etc.
+ *   GET  ${docsPath}                            → shell HTML (Vite-built React app)
+ *   GET  ${docsPath}/<slug>/api-docs.json       → ApiDocsDocument for that slug (lazy build, cached)
+ *   GET  ${docsPath}/assets/*                   → bundled JS/CSS/etc.
  *
  * No openapi.json / asyncapi.json — those live in their own peer packages
  * (`@grest-ts/openapi`, `@grest-ts/asyncapi`) which a user installs separately
@@ -72,7 +88,7 @@ export interface GGApiDocsOptions {
  */
 export class GGApiDocs {
     private readonly options: GGApiDocsOptions;
-    private _doc: ApiDocsDocument | undefined;
+    private readonly docCache = new Map<string, ApiDocsDocument>();
 
     static register(options: GGApiDocsOptions): void {
         const server = options.httpServer ?? GGLocator.getScope().get(GG_HTTP_SERVER);
@@ -81,43 +97,41 @@ export class GGApiDocs {
     }
 
     constructor(server: GGHttpServer, options: GGApiDocsOptions) {
+        validateDocSpecs(options.docs, "GGApiDocs");
         this.options = options;
-        if (options.eager) this._doc = this.build();
+        if (options.eager) {
+            for (const spec of options.docs) this.getDoc(spec.slug);
+        }
         this.registerWith(server);
     }
 
-    public getDoc(): ApiDocsDocument {
-        return this._doc ??= this.build();
-    }
-
-    private build(): ApiDocsDocument {
-        return buildContractDoc(this.toContractDocOptions());
-    }
-
-    private toContractDocOptions(): BuildContractDocOptions {
-        const {title, version, description, branding} = this.options;
-        const groups: BuildContractDocOptions["groups"] = {...(this.options.groups ?? {})};
-        // Top-level http/ws shorthand becomes one synthesized "API" group when
-        // no explicit groups are passed; otherwise it's an extra group alongside.
-        if (this.options.http?.length || this.options.ws?.length) {
-            groups["API"] = {http: this.options.http, ws: this.options.ws};
-        }
-        return {title, version, description, branding, groups};
+    /** Build (or return cached) the `ApiDocsDocument` for a given slug. */
+    public getDoc(slug: string): ApiDocsDocument {
+        const cached = this.docCache.get(slug);
+        if (cached) return cached;
+        const spec = this.options.docs.find(d => d.slug === slug);
+        if (!spec) throw new Error(`GGApiDocs: no such doc slug "${slug}".`);
+        const doc = buildContractDoc(specToContractOptions(spec, this.options.branding));
+        this.docCache.set(slug, doc);
+        return doc;
     }
 
     public registerWith(server: GGHttpServer): this {
-        const {docsPath} = this.options;
+        const {docsPath, docs} = this.options;
 
-        // JSON doc endpoint — lazy build, cached on the instance.
-        server.registerRoute("GET", `${docsPath}/api-docs.json`, async (_req, res) => {
-            const body = JSON.stringify(this.getDoc(), null, 2);
-            res.writeHead(200, {"Content-Type": "application/json", "Content-Length": Buffer.byteLength(body)});
-            res.end(body);
-        });
+        // Per-doc JSON endpoints — lazy build, cached on the instance.
+        for (const spec of docs) {
+            const url = `${docsPath}/${spec.slug}/api-docs.json`;
+            server.registerRoute("GET", url, async (_req, res) => {
+                const body = JSON.stringify(this.getDoc(spec.slug), null, 2);
+                res.writeHead(200, {"Content-Type": "application/json", "Content-Length": Buffer.byteLength(body)});
+                res.end(body);
+            });
+        }
 
-        // Shell HTML — Vite-built React app.
+        // Shell HTML — Vite-built React app, with the multi-doc config injected.
         server.registerRoute("GET", docsPath, async (_req, res) => {
-            const html = buildShellHtml(docsPath);
+            const html = buildShellHtml(docsPath, docs);
             res.writeHead(200, {"Content-Type": "text/html; charset=utf-8", "Content-Length": Buffer.byteLength(html)});
             res.end(html);
         });
@@ -156,6 +170,36 @@ export class GGApiDocs {
 
         return this;
     }
+}
+
+// ── Shared helpers ─────────────────────────────────────────────────────
+
+export function validateDocSpecs(docs: readonly ApiDocSpec[], caller: string): void {
+    if (docs.length === 0) {
+        throw new Error(`${caller}: options.docs must contain at least one document.`);
+    }
+    const slugs = new Set<string>();
+    for (const spec of docs) {
+        if (!spec.slug) throw new Error(`${caller}: every doc must have a non-empty slug.`);
+        if (slugs.has(spec.slug)) {
+            throw new Error(`${caller}: duplicate slug "${spec.slug}" in options.docs — slugs must be unique.`);
+        }
+        slugs.add(spec.slug);
+    }
+}
+
+export function specToContractOptions(spec: ApiDocSpec, branding: ApiDocsBranding | undefined): BuildContractDocOptions {
+    const groups: BuildContractDocOptions["groups"] = {...(spec.groups ?? {})};
+    if (spec.http?.length || spec.ws?.length) {
+        groups["API"] = {http: spec.http, ws: spec.ws};
+    }
+    return {
+        title: spec.title,
+        ...(spec.version ? {version: spec.version} : {}),
+        ...(spec.description ? {description: spec.description} : {}),
+        ...(branding ? {branding} : {}),
+        groups,
+    };
 }
 
 // ── Asset loading from the shipped dist-ui ─────────────────────────────
@@ -209,12 +253,19 @@ function loadShellTemplate(): string {
  * which usually isn't where the assets live). We rewrite to absolute
  * `${docsPath}/assets/...` so requests land on the right place.
  *
- * Also injects `window.GG_API_DOCS_CONFIG = {docUrl: "${docsPath}/api-docs.json"}`
- * so the React app fetches the doc in single-doc mode.
+ * Also injects the multi-doc `window.GG_API_DOCS_CONFIG` so the React app
+ * knows which doc URLs to fetch and what to put in the dropdown.
  */
-function buildShellHtml(docsPath: string): string {
+function buildShellHtml(docsPath: string, docs: readonly ApiDocSpec[]): string {
     const template = loadShellTemplate();
     const rewritten = template.replace(/(src|href)="(\.\/|\/)assets\//g, `$1="${docsPath}/assets/`);
-    const configScript = `<script>window.GG_API_DOCS_CONFIG = ${JSON.stringify({docUrl: `${docsPath}/api-docs.json`})};</script>`;
+    const config: ApiDocsConfig = {
+        docs: docs.map(d => ({
+            slug: d.slug,
+            title: d.title,
+            url: `${docsPath}/${d.slug}/api-docs.json`,
+        })),
+    };
+    const configScript = `<script>window.GG_API_DOCS_CONFIG = ${JSON.stringify(config)};</script>`;
     return rewritten.replace("</head>", `${configScript}</head>`);
 }

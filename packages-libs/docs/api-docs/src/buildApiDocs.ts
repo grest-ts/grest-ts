@@ -1,10 +1,9 @@
 import {readFileSync, readdirSync, mkdirSync, writeFileSync, copyFileSync, existsSync} from "fs";
 import {join, dirname} from "path";
 import {fileURLToPath} from "url";
-import type {GGHttpSchema} from "@grest-ts/http";
-import type {GGWebSocketSchema} from "@grest-ts/websocket";
-import {buildContractDoc, type BuildContractDocOptions} from "./buildContractDoc";
-import type {ApiDocsBranding, ApiDocsGroup} from "./GGApiDocs";
+import {buildContractDoc} from "./buildContractDoc";
+import {specToContractOptions, validateDocSpecs, type ApiDocSpec, type ApiDocsBranding} from "./GGApiDocs";
+import type {ApiDocsConfig} from "./docTypes";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const DIST_UI = existsSync(join(HERE, "..", "dist-ui"))
@@ -12,18 +11,14 @@ const DIST_UI = existsSync(join(HERE, "..", "dist-ui"))
     : join(HERE, "..", "..", "dist-ui");    // dist/src/buildApiDocs.js
 
 export interface BuildApiDocsOptions {
-    title: string;
-    version?: string;
-    description?: string;
-
-    groups?: Record<string, ApiDocsGroup>;
-    http?: GGHttpSchema<any, any>[];
-    ws?: GGWebSocketSchema<any, any, any, any, any>[];
-
-    branding?: ApiDocsBranding;
-
     /** Output directory. Created if missing; existing files overwritten. */
     outDir: string;
+
+    /** Documents to expose. Order = dropdown order; first entry is the default. */
+    docs: ApiDocSpec[];
+
+    /** Optional branding applied to every doc. */
+    branding?: ApiDocsBranding;
 }
 
 /**
@@ -31,7 +26,8 @@ export interface BuildApiDocsOptions {
  *
  *   ${outDir}/
  *   ├── index.html              ← shell, references ./assets/* relative
- *   ├── api-docs.json           ← contract doc
+ *   ├── <slug-1>/api-docs.json  ← contract doc for first doc
+ *   ├── <slug-2>/api-docs.json  ← contract doc for second doc
  *   └── assets/
  *       └── index-[hash].{js,css}
  *
@@ -39,25 +35,21 @@ export interface BuildApiDocsOptions {
  * GitHub Pages / Cloudflare Pages at any path prefix without rewriting.
  */
 export async function buildApiDocs(options: BuildApiDocsOptions): Promise<void> {
-    const {outDir} = options;
+    const {outDir, docs, branding} = options;
+    validateDocSpecs(docs, "buildApiDocs");
+
     mkdirSync(outDir, {recursive: true});
 
-    // Build + write the contract doc
-    const groups: BuildContractDocOptions["groups"] = {...(options.groups ?? {})};
-    if (options.http?.length || options.ws?.length) {
-        groups["API"] = {http: options.http, ws: options.ws};
+    // Per-doc directories with api-docs.json
+    for (const spec of docs) {
+        const docDir = join(outDir, spec.slug);
+        mkdirSync(docDir, {recursive: true});
+        const doc = buildContractDoc(specToContractOptions(spec, branding));
+        writeFileSync(join(docDir, "api-docs.json"), JSON.stringify(doc, null, 2));
     }
-    const doc = buildContractDoc({
-        title: options.title,
-        version: options.version,
-        description: options.description,
-        branding: options.branding,
-        groups,
-    });
-    writeFileSync(join(outDir, "api-docs.json"), JSON.stringify(doc, null, 2));
 
-    // Shell HTML
-    writeFileSync(join(outDir, "index.html"), buildStaticShellHtml());
+    // Shell HTML (relative URLs to per-doc JSONs).
+    writeFileSync(join(outDir, "index.html"), buildStaticShellHtml(docs));
 
     // Assets — copy the Vite build output verbatim
     const srcAssets = join(DIST_UI, "assets");
@@ -70,12 +62,19 @@ export async function buildApiDocs(options: BuildApiDocsOptions): Promise<void> 
 
 /**
  * Build the shell HTML for static output — same Vite-built index.html, with
- * the `GG_API_DOCS_CONFIG` injection pointing at a relative `./api-docs.json`.
- * Asset paths in the template are already relative `./assets/...` from Vite,
- * so no rewriting is needed.
+ * `GG_API_DOCS_CONFIG` injected pointing at relative `./<slug>/api-docs.json`
+ * URLs. Asset paths in the template are already relative `./assets/...` from
+ * Vite, so no rewriting is needed.
  */
-function buildStaticShellHtml(): string {
+function buildStaticShellHtml(docs: readonly ApiDocSpec[]): string {
     const template = readFileSync(join(DIST_UI, "index.html"), "utf-8");
-    const configScript = `<script>window.GG_API_DOCS_CONFIG = ${JSON.stringify({docUrl: "./api-docs.json"})};</script>`;
+    const config: ApiDocsConfig = {
+        docs: docs.map(d => ({
+            slug: d.slug,
+            title: d.title,
+            url: `./${d.slug}/api-docs.json`,
+        })),
+    };
+    const configScript = `<script>window.GG_API_DOCS_CONFIG = ${JSON.stringify(config)};</script>`;
     return template.replace("</head>", `${configScript}</head>`);
 }

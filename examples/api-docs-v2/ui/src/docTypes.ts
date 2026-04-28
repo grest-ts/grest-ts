@@ -145,10 +145,17 @@ export interface BrandingDoc {
     fontFamily?: string;
 }
 
-export interface FixtureIndexEntry {
+/**
+ * Runtime config injected as `window.GG_API_DOCS_CONFIG` by GGApiDocs
+ * (live) and buildApiDocs (static). The demo fakes it from
+ * `/fixtures/index.json` in main.tsx.
+ */
+export interface ApiDocsConfig {
+    docs: ApiDocsConfigEntry[];
+}
+
+export interface ApiDocsConfigEntry {
     slug: string;
     title: string;
-    description?: string;
-    groupCount: number;
-    methodCount: number;
+    url: string;
 }

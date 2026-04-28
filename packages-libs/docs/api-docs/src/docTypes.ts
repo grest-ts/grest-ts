@@ -196,3 +196,25 @@ export interface BrandingDoc {
     primaryColor?: string;
     fontFamily?: string;
 }
+
+// ── Window-injected config ─────────────────────────────────────────────
+
+/**
+ * Runtime config injected as `window.GG_API_DOCS_CONFIG` by both
+ * `GGApiDocs` (live) and `buildApiDocs` (static). Tells the React UI
+ * which documents are available and where to fetch each one.
+ *
+ * Order = dropdown order; first entry is the default selection.
+ */
+export interface ApiDocsConfig {
+    docs: ApiDocsConfigEntry[];
+}
+
+export interface ApiDocsConfigEntry {
+    /** URL slug — must be unique within `docs[]`; used in hash routes. */
+    slug: string;
+    /** Human-readable title shown in the dropdown. */
+    title: string;
+    /** Absolute or relative URL to the contract document JSON. */
+    url: string;
+}

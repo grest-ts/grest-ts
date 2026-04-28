@@ -31,7 +31,7 @@ npm install @grest-ts/api-docs
 
 ## Live mode — `GGApiDocs.register()`
 
-Drop one call into your runtime's `compose()`:
+Drop one call into your runtime's `compose()`. Every distributed system tends to expose more than one API surface (public, admin, internal callbacks) — `docs[]` lets you mount them side-by-side under a single mount path with a header dropdown to switch:
 
 ```typescript
 import {GGApiDocs} from "@grest-ts/api-docs"
@@ -45,69 +45,98 @@ protected compose(): void {
     ChatApiSchema.register(new ChatHandler())
 
     GGApiDocs.register({
-        title: "MyOrg Platform",
-        version: "1.0.0",
         docsPath: "/docs",
-        groups: {
-            "Users":    {http: [UserApi]},
-            "Orders":   {http: [OrderApi]},
-            "Realtime": {ws:   [ChatApiSchema]},
-        },
+        docs: [
+            {
+                slug: "platform",
+                title: "MyOrg Platform",
+                version: "1.0.0",
+                groups: {
+                    "Users":    {http: [UserApi]},
+                    "Orders":   {http: [OrderApi]},
+                    "Realtime": {ws:   [ChatApiSchema]},
+                },
+            },
+            {
+                slug: "internal",
+                title: "Internal Callbacks",
+                groups: {
+                    "Webhooks": {http: [WebhookApi]},
+                },
+            },
+        ],
     })
 }
 ```
 
 Routes mounted under `docsPath`:
 
-| URL                       | Purpose                                                  |
-|---------------------------|----------------------------------------------------------|
-| `GET /docs`               | React UI shell (HTML)                                    |
-| `GET /docs/api-docs.json` | The contract document (lazy build, cached)               |
-| `GET /docs/assets/*`      | Pre-built JS/CSS bundle (~70 KB gzipped, served offline) |
+| URL                                | Purpose                                                                  |
+|------------------------------------|--------------------------------------------------------------------------|
+| `GET /docs`                        | React UI shell (HTML), with the doc-switcher dropdown                    |
+| `GET /docs/<slug>/api-docs.json`   | The contract document for a single doc (lazy build, cached)              |
+| `GET /docs/assets/*`               | Pre-built JS/CSS bundle (~70 KB gzipped, served offline)                 |
 
-### Ungrouped shorthand
+The first entry in `docs[]` is the default selection. Deep links use the form `#/<slug>/<group>/<contract>/<method>` — paste any one of those into the URL bar and the dropdown follows.
+
+### Single doc
+
+The same call with one entry — no dropdown is rendered:
 
 ```typescript
 GGApiDocs.register({
-    title: "My App",
     docsPath: "/docs",
-    http: [ItemApi, OrderApi],
-    ws:   [ChatApiSchema],
+    docs: [{slug: "api", title: "My App", http: [ItemApi, OrderApi], ws: [ChatApiSchema]}],
 })
-// Sidebar shows one "API" group with the schemas split by HTTP / WebSocket.
+// One "API" group with the schemas split by HTTP / WebSocket; no dropdown.
+```
+
+### Ungrouped shorthand
+
+Each `ApiDocSpec` accepts top-level `http`/`ws` arrays as a shortcut for a single auto-named "API" group, just like a `groups` map with one entry:
+
+```typescript
+GGApiDocs.register({
+    docsPath: "/docs",
+    docs: [{slug: "api", title: "My App", http: [ItemApi, OrderApi], ws: [ChatApiSchema]}],
+})
 ```
 
 ### Branding
 
-Light visual customization without replacing the shell:
+Light visual customization shared across all docs:
 
 ```typescript
 GGApiDocs.register({
-    title: "MyOrg Platform",
     docsPath: "/docs",
     branding: {
         logoUrl: "/static/logo.svg",
         primaryColor: "#1d4ed8",
     },
-    groups: { /* ... */ },
+    docs: [{slug: "platform", title: "MyOrg Platform", groups: { /* ... */ }}],
 })
 ```
 
 ## Static mode — `buildApiDocs()`
 
-Build a complete static site to disk — no runtime required:
+Build a complete static site to disk — no runtime required. Same `docs[]` shape as the live mode:
 
 ```typescript
 import {buildApiDocs} from "@grest-ts/api-docs"
 
 await buildApiDocs({
-    title: "MyOrg Platform",
     outDir: "./dist/docs",
-    groups: {
-        "Users":    {http: [UserApi]},
-        "Orders":   {http: [OrderApi]},
-        "Realtime": {ws:   [ChatApiSchema]},
-    },
+    docs: [
+        {
+            slug: "platform",
+            title: "MyOrg Platform",
+            groups: {
+                "Users":    {http: [UserApi]},
+                "Orders":   {http: [OrderApi]},
+                "Realtime": {ws:   [ChatApiSchema]},
+            },
+        },
+    ],
 })
 ```
 
@@ -115,8 +144,9 @@ Output:
 
 ```
 dist/docs/
-├── index.html        ← shell, references ./assets/* (relative)
-├── api-docs.json     ← contract document
+├── index.html              ← shell, references ./assets/* + ./<slug>/api-docs.json (relative)
+├── platform/
+│   └── api-docs.json
 └── assets/
     └── index-[hash].{js,css}
 ```

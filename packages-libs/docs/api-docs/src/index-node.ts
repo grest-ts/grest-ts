@@ -1,5 +1,5 @@
 export {GGApiDocs} from "./GGApiDocs";
-export type {GGApiDocsOptions, ApiDocsGroup, ApiDocsBranding} from "./GGApiDocs";
+export type {GGApiDocsOptions, ApiDocSpec, ApiDocsGroup, ApiDocsBranding} from "./GGApiDocs";
 
 export {buildApiDocs} from "./buildApiDocs";
 export type {BuildApiDocsOptions} from "./buildApiDocs";
@@ -14,6 +14,8 @@ export type {BuildContractDocOptions} from "./buildContractDoc";
 /** Wrapper / schema types — the JSON format the UI consumes. */
 export type {
     ApiDocsDocument,
+    ApiDocsConfig,
+    ApiDocsConfigEntry,
     ServiceDoc,
     GroupDoc,
     ContractDoc,

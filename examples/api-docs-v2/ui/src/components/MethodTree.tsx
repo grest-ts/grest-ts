@@ -8,6 +8,7 @@
 import {useMemo} from "react";
 import type {ContractDoc, MethodDoc} from "../docTypes";
 import type {MethodRef} from "../lib/brandIndex";
+import {useActiveSlug} from "../lib/activeSlug";
 
 interface Props {
     refs: MethodRef[];
@@ -94,8 +95,9 @@ function MethodLink({ref_, highlightType, onNavigated, onNavigate}: {
     onNavigated?: () => void;
     onNavigate?: (path: string) => void;
 }) {
+    const activeSlug = useActiveSlug();
     const m = ref_.method;
-    const path = `/${ref_.groupSlug}/${ref_.contract.name}/${m.name}` + (highlightType ? `?type=${encodeURIComponent(highlightType)}` : "");
+    const path = `/${activeSlug}/${ref_.groupSlug}/${ref_.contract.name}/${m.name}` + (highlightType ? `?type=${encodeURIComponent(highlightType)}` : "");
     const className = "w-full text-left pl-9 pr-3 py-1 text-[13px] flex items-center gap-2 hover:bg-gray-50 transition text-gray-700 no-underline";
 
     const countBadge = ref_.count > 1

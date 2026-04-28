@@ -147,10 +147,19 @@ export interface BrandingDoc {
     fontFamily?: string;
 }
 
-export interface FixtureIndexEntry {
+/**
+ * Runtime config injected as `window.GG_API_DOCS_CONFIG` by GGApiDocs
+ * (live) and buildApiDocs (static). Tells the UI which docs to expose
+ * in the dropdown and where to fetch each one.
+ *
+ * Order = dropdown order; first entry is the default.
+ */
+export interface ApiDocsConfig {
+    docs: ApiDocsConfigEntry[];
+}
+
+export interface ApiDocsConfigEntry {
     slug: string;
     title: string;
-    description?: string;
-    groupCount: number;
-    methodCount: number;
+    url: string;
 }

@@ -2,6 +2,7 @@ import {useMemo, useState} from "react";
 import type {ApiDocsDocument, ContractDoc, MethodDoc} from "../docTypes";
 import {PatternBadge} from "./Badges";
 import {buildBrandIndex, type MethodRef} from "../lib/brandIndex";
+import {useActiveSlug} from "../lib/activeSlug";
 import {MethodTree} from "./MethodTree";
 
 interface Selection {
@@ -302,8 +303,9 @@ function MethodRow({
     /** When set, the navigated URL carries `?type=X` so the method view highlights it. */
     highlightType?: string;
 }) {
+    const activeSlug = useActiveSlug();
     const isActive = selection?.contract.name === contract.name && selection.method.name === method.name;
-    const target = `/${groupSlug}/${contract.name}/${method.name}` + (highlightType ? `?type=${encodeURIComponent(highlightType)}` : "");
+    const target = `/${activeSlug}/${groupSlug}/${contract.name}/${method.name}` + (highlightType ? `?type=${encodeURIComponent(highlightType)}` : "");
     return (
         <button
             onClick={() => onNavigate(target)}
