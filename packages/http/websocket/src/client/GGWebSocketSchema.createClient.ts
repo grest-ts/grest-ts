@@ -29,10 +29,12 @@ import {
     SERVER_ERROR,
     VALIDATION_ERROR,
 } from "@grest-ts/schema"
+import {GGLog} from "@grest-ts/logger"
 import {GGWebSocketSchema} from "../schema/GGWebSocketSchema"
 import {GGSocketPool} from "./GGSocketPool"
 import {GGSocket} from "../socket/GGSocket"
 import {GGWebSocketMiddleware} from "../schema/GGWebSocketMiddleware"
+import {GGWsLogMode} from "./GGWsLogMode"
 
 export interface GGHeartbeatConfig {
     /** How often to send a PING. Default 30 000 ms. */
@@ -95,6 +97,13 @@ export interface GGWebSocketClientConfig<TQuery = undefined> {
      * Manual `disconnect()` / `close()` always wins over reconnect.
      */
     reconnect?: boolean | GGReconnectConfig
+
+    /**
+     * Wire-log verbosity. `ALL` (default) logs every frame and lifecycle
+     * transition; `NON_OK` logs only sketchy outcomes; `OFF` is silent
+     * (fast path — no entry construction). Static for the client lifetime.
+     */
+    logMode?: GGWsLogMode
 }
 
 export interface GGWebSocketSetupTools<TServerToClientImpl, TClientToServer> {
@@ -242,6 +251,7 @@ GGWebSocketSchema.prototype.createClient = function (
     const serverToClientContract = contract.serverToClient
     const timeout = config?.timeout ?? 30_000
     const reconnectConfig = normalizeReconnect(config?.reconnect)
+    const logMode = config?.logMode ?? GGWsLogMode.ALL
 
     let socket: GGSocket | undefined
     let savedSetup: GGWebSocketSetup<any, any> | undefined
@@ -297,6 +307,7 @@ GGWebSocketSchema.prototype.createClient = function (
                     displayMessage: "WebSocket client is not connected. Call connect() first.",
                 })
             }
+            logMode === GGWsLogMode.ALL && GGLog.info(schemaName, `ws→ ${schemaName}.${methodName}`, {kind: "outgoing", methodName, payload: data})
             return socket.send(`${schemaName}.${methodName}`, data, hasResponse, timeout)
         }
     }
@@ -316,9 +327,12 @@ GGWebSocketSchema.prototype.createClient = function (
                     if (!contractFn) {
                         throw new Error(`Method "${methodName}" is not defined in serverToClient of "${schemaName}"`)
                     }
-                    const wrapped = (data: any) => new GGPromise(
-                        GGContractExecutor.call(contractFn, data, undefined, async (validated) => userHandler(validated))
-                    )
+                    const wrapped = (data: any) => {
+                        logMode === GGWsLogMode.ALL && GGLog.info(schemaName, `ws← ${schemaName}.${methodName}`, {kind: "incoming", methodName, payload: data})
+                        return new GGPromise(
+                            GGContractExecutor.call(contractFn, data, undefined, async (validated) => userHandler(validated))
+                        )
+                    }
                     s.registerHandler({path: `${schemaName}.${methodName}`, handler: wrapped})
                 }
             },
@@ -367,7 +381,15 @@ GGWebSocketSchema.prototype.createClient = function (
             if (socket === newSocket) {
                 socket = undefined
             }
-            fireOnDisconnect(finallyClosed ? "manual" : "drop")
+            const reason: "manual" | "drop" = finallyClosed ? "manual" : "drop"
+            if (logMode) {
+                if (!finallyClosed) {
+                    GGLog.warn(schemaName, `ws drop ${schemaName}`, {kind: "drop", reason})
+                } else if (logMode === GGWsLogMode.ALL) {
+                    GGLog.info(schemaName, `ws close ${schemaName}`, {kind: "close", reason})
+                }
+            }
+            fireOnDisconnect(reason)
             if (finallyClosed) {
                 fireFinalClose("manual")
                 return
@@ -405,7 +427,7 @@ GGWebSocketSchema.prototype.createClient = function (
                 throw setupErr
             }
         }
-
+        logMode === GGWsLogMode.ALL && GGLog.info(schemaName, `ws ${reconnectAttempt > 0 ? "reconnected" : "open"} ${schemaName}`, {kind: reconnectAttempt > 0 ? "reconnect-success" : "open"})
         setupPhase = false
         reconnectAttempt = 0
     }
@@ -421,6 +443,7 @@ GGWebSocketSchema.prototype.createClient = function (
             reconnectConfig.initialDelayMs * Math.pow(reconnectConfig.multiplier, attempt),
             reconnectConfig.maxDelayMs,
         )
+        logMode === GGWsLogMode.ALL && GGLog.info(schemaName, `ws reconnect-attempt ${schemaName}`, {kind: "reconnect-attempt", attempt: attempt + 1, delayMs: delay})
         reconnectTimer = setTimeout(async () => {
             reconnectTimer = undefined
             if (finallyClosed) return
@@ -454,6 +477,18 @@ GGWebSocketSchema.prototype.createClient = function (
     const fireFinalClose = (reason: GGWebSocketCloseReason, error?: Error) => {
         if (finalCloseFired) return
         finalCloseFired = true
+        if (logMode) {
+            const message = `ws final-close ${schemaName} (${reason})`
+            const data = {kind: "final-close", reason}
+            if (reason === "retries-exhausted" || reason === "unrecoverable") {
+                error ? GGLog.error(schemaName, message, error, data) : GGLog.error(schemaName, message, data)
+            } else if (reason === "drop") {
+                GGLog.warn(schemaName, message, data)
+            } else if (logMode === GGWsLogMode.ALL) {
+                // reason === "manual" — informational, ALL only
+                GGLog.info(schemaName, message, data)
+            }
+        }
         for (const cb of onCloseCallbacks) {
             try { cb(reason, error) } catch (_) {}
         }

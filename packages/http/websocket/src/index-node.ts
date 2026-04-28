@@ -23,6 +23,7 @@ export * from "./server/GGWebSocketSchema.startServer";
 // Client
 export * from "./client/GGSocketPool";
 export * from "./client/GGWebSocketSchema.createClient";
+export * from "./client/GGWsLogMode";
 
 // Extensions
 import "./server/GGWebSocketSchema.startServer";
