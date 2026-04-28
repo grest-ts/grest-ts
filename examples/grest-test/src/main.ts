@@ -137,14 +137,17 @@ export class MainRuntime extends GGRuntime {
         const unifiedShowcaseServer = new GGHttpServer({port: unifiedShowcasePort, key: new GGLocatorKey('unified-showcase-server')});
         GGApiDocs.register({
             httpServer: unifiedShowcaseServer,
-            title: "Unified Showcase",
-            version: "1.0.0",
-            description: "Mixed HTTP + WebSocket APIs rendered natively from grest-ts contracts — brand intersection types, typed errors, reuse detection, color-coded WS direction.",
             docsPath: "/docs",
-            groups: {
-                "HTTP":      {http: [ShowcaseApi]},
-                "Realtime":  {ws:   [ChatApiSchema, NotificationApiSchema]},
-            },
+            docs: [{
+                slug: "unified",
+                title: "Unified Showcase",
+                version: "1.0.0",
+                description: "Mixed HTTP + WebSocket APIs rendered natively from grest-ts contracts — brand intersection types, typed errors, reuse detection, color-coded WS direction.",
+                groups: {
+                    "HTTP":      {http: [ShowcaseApi]},
+                    "Realtime":  {ws:   [ChatApiSchema, NotificationApiSchema]},
+                },
+            }],
         });
 
         // new GGHttp()
