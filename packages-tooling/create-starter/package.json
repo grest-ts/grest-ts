@@ -1,7 +1,7 @@
 {
   "//": "THIS FILE IS GENERATED - DO NOT EDIT",
   "name": "@grest-ts/create-starter",
-  "version": "0.0.27",
+  "version": "0.0.28",
   "type": "module",
   "license": "MIT",
   "description": "Scaffold a new grest-ts project",
