@@ -1,7 +1,7 @@
 {
   "//": "THIS FILE IS GENERATED - DO NOT EDIT",
   "name": "@grest-ts/context",
-  "version": "0.0.28",
+  "version": "0.0.29",
   "type": "module",
   "license": "MIT",
   "description": "Hierarchical async context",
@@ -53,7 +53,7 @@
     "node": ">=25"
   },
   "dependencies": {
-    "@grest-ts/common": "0.0.28",
-    "@grest-ts/schema": "0.0.28"
+    "@grest-ts/common": "0.0.29",
+    "@grest-ts/schema": "0.0.29"
   }
 }

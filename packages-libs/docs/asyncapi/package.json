@@ -1,7 +1,7 @@
 {
   "//": "THIS FILE IS GENERATED - DO NOT EDIT",
   "name": "@grest-ts/asyncapi",
-  "version": "0.0.28",
+  "version": "0.0.29",
   "type": "module",
   "license": "MIT",
   "description": "AsyncAPI 3.0 spec generation for grest-ts WebSocket APIs",
@@ -48,10 +48,10 @@
     "node": ">=25"
   },
   "dependencies": {
-    "@grest-ts/http": "0.0.28",
-    "@grest-ts/locator": "0.0.28",
-    "@grest-ts/openapi": "0.0.28",
-    "@grest-ts/schema": "0.0.28",
-    "@grest-ts/websocket": "0.0.28"
+    "@grest-ts/http": "0.0.29",
+    "@grest-ts/locator": "0.0.29",
+    "@grest-ts/openapi": "0.0.29",
+    "@grest-ts/schema": "0.0.29",
+    "@grest-ts/websocket": "0.0.29"
   }
 }
