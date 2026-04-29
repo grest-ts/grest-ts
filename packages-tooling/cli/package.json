@@ -1,0 +1,39 @@
+{
+  "//": "THIS FILE IS GENERATED - DO NOT EDIT",
+  "name": "@grest-ts/cli",
+  "version": "0.0.27",
+  "type": "module",
+  "license": "MIT",
+  "description": "CLI for managing grest-ts in a project (atomic version upgrades, etc.)",
+  "files": [
+    "index.mjs"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/grest-ts/grest-ts.git",
+    "directory": "packages-tooling/cli"
+  },
+  "homepage": "https://grest-ts.com/packages/cli",
+  "bugs": {
+    "url": "https://github.com/grest-ts/grest-ts/issues"
+  },
+  "keywords": [
+    "typescript",
+    "framework",
+    "contract",
+    "api",
+    "microservices",
+    "testing",
+    "grest-ts",
+    "cli",
+    "upgrade",
+    "tooling"
+  ],
+  "engines": {
+    "node": ">=25"
+  },
+  "bin": "./index.mjs"
+}
