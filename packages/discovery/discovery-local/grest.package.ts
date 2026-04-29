@@ -6,6 +6,7 @@ definePackage({
     publishToNpm: true,
     keywords: ["service-discovery", "local", "development"],
     targets: {node: true},
+    hasTests: true,
     extendsTestKit: true,
     implementationFor: "@grest-ts/package",
     dependencies: {

@@ -22,12 +22,15 @@ interface SocketClient {
     socket: IPCSocket;
 }
 
+export type ClientDisconnectListener = (clientId: string, runtimeId?: string) => void;
+
 export class SocketHandler {
 
     private readonly wss: WebSocketServer;
     private readonly clients: Map<string, SocketClient> = new Map();
     private readonly clientsByRuntimeId: Map<string, SocketClient> = new Map();
     private readonly handlers: Map<string, SocketMessageHandler> = new Map();
+    private readonly disconnectListeners: ClientDisconnectListener[] = [];
     private clientIdCounter = 0;
 
     private routeResolver: (path: string) => string
@@ -44,6 +47,14 @@ export class SocketHandler {
 
     public onMessage(path: string, handler: SocketMessageHandler): void {
         this.handlers.set(path, handler);
+    }
+
+    /** Subscribe to client-disconnect events. Fires synchronously when a
+     *  client's IPC websocket closes (graceful or violent). Listeners
+     *  must not throw — errors are caught and logged so other listeners
+     *  still run. */
+    public onClientDisconnect(listener: ClientDisconnectListener): void {
+        this.disconnectListeners.push(listener);
     }
 
     public async handleUpgrade(req: http.IncomingMessage, socket: Duplex, head: Buffer): Promise<void> {
@@ -104,6 +115,13 @@ export class SocketHandler {
                 this.clientsByRuntimeId.delete(runtimeId);
             }
             GGLog.debug(this, `Socket client disconnected: ${clientId}`);
+            for (const listener of this.disconnectListeners) {
+                try {
+                    listener(clientId, runtimeId);
+                } catch (err) {
+                    GGLog.error(this, `Client-disconnect listener threw for ${clientId}`, err);
+                }
+            }
         });
 
         ipcSocket.onError((err: Error) => {

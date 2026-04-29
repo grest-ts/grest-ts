@@ -17,18 +17,33 @@ export const ROUTING_STRATEGIES = {
 
 export type RoutingStrategyName = "first" | "last" | "roundRobin" | "random" | RoutingStrategy;
 
+/** Server-side bookkeeping: a registered entry remembers which IPC
+ *  client registered it, so its routes can be evicted when that client
+ *  disconnects without a graceful unregister. The clientId is stamped
+ *  by the register handler — never trusted from the wire. Direct
+ *  injections via addRoute (e.g. tests) leave it undefined and are
+ *  never auto-evicted. */
+interface RegisteredEntry extends GGServiceDiscoveryEntry {
+    clientId?: string;
+}
+
 export class GGLocalDiscoveryServer {
 
     private readonly server: IPCServer;
-    private readonly routes: Map<string, GGServiceDiscoveryEntry[]> = new Map();
+    private readonly routes: Map<string, RegisteredEntry[]> = new Map();
     private readonly routingStrategies: Map<string, RoutingStrategy> = new Map();
 
     constructor(server: IPCServer) {
         this.server = server;
 
         // Socket handlers for framework communication
-        this.server.onFrameworkMessage(GGDiscoveryIPC.discoveryServer.register, async (routes) => {
-            routes.forEach(route => this.addRoute(route));
+        this.server.onFrameworkMessage(GGDiscoveryIPC.discoveryServer.register, async (routes, msg) => {
+            for (const route of routes) {
+                // Shallow copy + overwrite clientId so a buggy/malicious
+                // client cannot smuggle ownership claims through the wire.
+                const stored: RegisteredEntry = {...route, clientId: msg.clientId};
+                this.addRoute(stored);
+            }
         });
 
         this.server.onFrameworkMessage(GGDiscoveryIPC.discoveryServer.unregister, async (routes) => {
@@ -45,6 +60,14 @@ export class GGLocalDiscoveryServer {
         this.server.setRouteProxyResolver((path) => {
             return this.matchRoute(path)?.baseUrl || undefined;
         })
+
+        // When an IPC client's socket closes — for any reason, including
+        // a SIGKILLed remote process — drop the routes owned by that
+        // client. Routes owned by other clients (including legitimate
+        // replicas registering identical baseUrls) are untouched.
+        this.server.onClientDisconnect((clientId) => {
+            this.removeRoutesByClient(clientId);
+        });
     }
 
     public async start(): Promise<boolean> {
@@ -86,6 +109,24 @@ export class GGLocalDiscoveryServer {
         existing.push(route);
         this.routes.set(route.api, existing);
         GGLog.info(this, `Added route: ${route.pathPrefix} (${route.api}) -> ${route.baseUrl}`);
+    }
+
+    /** Drop every route registered by a given IPC client. Routes added
+     *  directly (no clientId) are never matched and stay in place. */
+    private removeRoutesByClient(clientId: string): void {
+        let removed = 0;
+        for (const [api, instances] of this.routes.entries()) {
+            const kept = instances.filter(r => r.clientId !== clientId);
+            removed += instances.length - kept.length;
+            if (kept.length === 0) {
+                this.routes.delete(api);
+            } else if (kept.length !== instances.length) {
+                this.routes.set(api, kept);
+            }
+        }
+        if (removed > 0) {
+            GGLog.info(this, `Cleaned up ${removed} routes from disconnected client ${clientId}`);
+        }
     }
 
     public removeRoute(api: string, baseUrl?: string): void {

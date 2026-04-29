@@ -18,6 +18,7 @@ export default defineConfig({
       'packages-tooling/testkit/testkit',
       'packages-tooling/testkit/testkit-vitest',
       'packages/context',
+      'packages/discovery/discovery-local',
       'packages/locator',
       'packages/schema/schema',
       'packages/trace/trace',

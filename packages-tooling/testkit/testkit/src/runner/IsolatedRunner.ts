@@ -99,6 +99,13 @@ export class IsolatedRunner implements RuntimeRunner {
             return;
         }
 
+        // Process already exited (e.g. self-crashed during the test).
+        // Nothing to ask; return so the rest of teardown can proceed.
+        if (this.process.exitCode !== null || this.process.signalCode !== null) {
+            GGLog.debug(this, 'Process already exited before stopRuntime');
+            return;
+        }
+
         GGLog.debug(this, 'Stopping runtime in process...');
 
         const RUNTIME_STOPPED = 'IsolatedRunner:RUNTIME_STOPPED';
@@ -113,6 +120,14 @@ export class IsolatedRunner implements RuntimeRunner {
                 GGLog.error(this, 'Timeout waiting for runtime to stop');
                 reject(new Error('Timeout waiting for runtime to stop'));
             }, 5000);
+
+            // Race: process may exit before stdout signal arrives (e.g.
+            // crashed mid-stop). Resolve in that case too.
+            const onExit = () => {
+                clearTimeout(timeout);
+                resolve();
+            };
+            this.process.once('exit', onExit);
 
             // Listen for RUNTIME_STOPPED signal in stdout
             const onData = (data: string) => {
@@ -139,6 +154,15 @@ export class IsolatedRunner implements RuntimeRunner {
 
     async shutdown(): Promise<void> {
         if (!this.process) {
+            return;
+        }
+
+        // Process already exited (e.g. self-crashed during the test).
+        // The 'exit' event has already fired and won't fire again, so
+        // listening for it would hang forever.
+        if (this.process.exitCode !== null || this.process.signalCode !== null) {
+            GGLog.debug(this, 'Process already exited before shutdown');
+            this.process = undefined;
             return;
         }
 

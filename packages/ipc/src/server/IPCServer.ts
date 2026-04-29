@@ -4,7 +4,7 @@ import {GGLog} from "@grest-ts/logger";
 import {Duplex} from "stream";
 import {HttpMethod} from "@grest-ts/common";
 import {HttpHandler} from "./HttpHandler";
-import {SocketHandler, SocketMessage} from "./SocketHandler";
+import {ClientDisconnectListener, SocketHandler, SocketMessage} from "./SocketHandler";
 import {IPCClientRequest, IPCServerRequest} from "../common/IPCTypes";
 import {GGLocator, GGLocatorScope} from "@grest-ts/locator";
 import {GGContext} from "@grest-ts/context";
@@ -123,6 +123,14 @@ export class IPCServer {
     public setRouteProxyResolver(resolver: (path: string) => string) {
         this.httpHandler.setRouteResolver(resolver);
         this.socketHandler.setRouteResolver(resolver);
+    }
+
+    /** Subscribe to IPC client-disconnect events. Fires synchronously
+     *  when a client's websocket closes — graceful, violent, or remote
+     *  process death. Used by consumers (e.g. discovery server) to clean
+     *  up state owned by clients that won't be sending a final message. */
+    public onClientDisconnect(listener: ClientDisconnectListener): void {
+        this.socketHandler.onClientDisconnect(listener);
     }
 
     // -----------------------------------------------
