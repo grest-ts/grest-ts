@@ -63,10 +63,13 @@ export class IsolatedRunner implements RuntimeRunner {
                 return;
             }
 
+            // 30s — tsx cold-start + runtime composition can take >10s
+            // when the full monorepo suite is running and CPU is saturated.
+            // This is a *max wait*, fast machines still resolve in milliseconds.
             const timeout = setTimeout(() => {
                 this.process?.kill('SIGKILL');
-                reject(new Error(`Process did not send READY signal within 10 seconds`));
-            }, 10000);
+                reject(new Error(`Process did not send READY signal within 30 seconds`));
+            }, 30000);
 
             // Watch stdout for READY signal and forward all output using console.log
             // so vitest can capture and sequence it properly with test output
