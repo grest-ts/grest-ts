@@ -92,10 +92,15 @@ if (typeof describe !== "undefined") {
             const crashClient = callOn(CrashTestApi)
             await crashClient.crashSelf({}).catch(() => { /* expected */ })
 
-            // Wait for: (1) OS to deliver SIGKILL and tear the socket,
-            // (2) leader to observe the close and run discovery-side
-            // cleanup. Generous; the actual cleanup is microseconds.
-            await new Promise(r => setTimeout(r, 500))
+            // Poll for cleanup. A fixed sleep is brittle under parallel
+            // suite load (other tests competing for CPU can delay the
+            // close-event delivery and the discovery-side cleanup tick).
+            // Polling keeps the happy path fast while tolerating slow
+            // CI machines.
+            const deadline = Date.now() + 5000
+            while (discoveryServer.getRoute(CrashTestApi.contract.name) !== undefined && Date.now() < deadline) {
+                await new Promise(r => setTimeout(r, 50))
+            }
 
             expect(discoveryServer.getRoute(CrashTestApi.contract.name)).toBeUndefined()
         }, 30000)

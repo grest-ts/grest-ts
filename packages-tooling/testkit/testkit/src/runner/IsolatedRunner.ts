@@ -41,6 +41,12 @@ export class IsolatedRunner implements RuntimeRunner {
             shell: true // Required for Windows to find npx
         });
 
+        // Swallow stdin errors. We write STOP_RUNTIME / SHUTDOWN to the
+        // child during teardown, and a self-crashed runtime may already
+        // be gone by then — write() raises async EPIPE which would
+        // otherwise surface as an unhandled error.
+        this.process.stdin?.on('error', () => { /* ignore */ });
+
         // Forward stderr to console.error so vitest can capture and sequence it
         this.process.stderr?.setEncoding('utf8');
         this.process.stderr?.on('data', (data: string) => {

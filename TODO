@@ -2,6 +2,7 @@
 * schema/file -> schema/schema-file
 * http/file-http -> http/http-file
 
+* Socket client has a test that is skipped (wsWireLog tests), because it uses console.log instead of GGLog. GGLog requires GGLocator that requires async storage and then browsers break. Need to rethink logging library a bit or separate browser&node loggers.
 
 * symmetric codec for RPC was nice idea, but doesn't actually work. Code is filled with solutions for browser that would not "load server part". Need to fix the whole architecture.
 
