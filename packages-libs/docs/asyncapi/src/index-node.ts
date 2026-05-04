@@ -1,3 +1,4 @@
+import "./_dedupCheck";
 export {toAsyncApi} from "./toAsyncApi";
 export type {ToAsyncApiOptions} from "./toAsyncApi";
 export {GGAsyncApiDocs} from "./GGAsyncApiDocs";

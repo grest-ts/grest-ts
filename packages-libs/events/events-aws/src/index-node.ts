@@ -1,3 +1,4 @@
+import "./_dedupCheck";
 import {EventPublisherResource, GGEventApi, GGEventsApi} from "@grest-ts/events"
 import {GGContractClass} from "@grest-ts/schema"
 import {AwsSnsAdapter, AwsSnsProviderConfig, createAwsSnsProviderConfig} from "./AwsSnsAdapter"

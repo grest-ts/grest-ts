@@ -1,3 +1,4 @@
+import "./_dedupCheck";
 /**
  * Test setup file
  * This file is automatically loaded before tests run to register global utilities.

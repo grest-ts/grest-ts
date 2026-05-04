@@ -1,3 +1,4 @@
+import "./_dedupCheck";
 export * from './GGMysql';
 export * from "./GGMysqlConfig";
 export * from './GGMysqlConnection';

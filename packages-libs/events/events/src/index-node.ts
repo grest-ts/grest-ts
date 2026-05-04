@@ -1,3 +1,4 @@
+import "./_dedupCheck";
 export * from "./pub/PublisherTransport"
 export * from "./sub/SubscriberTransport"
 export * from "./GGEventsContract"

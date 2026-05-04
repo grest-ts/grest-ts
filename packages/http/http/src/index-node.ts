@@ -1,3 +1,4 @@
+import "./_dedupCheck";
 // Register server RPC codec factory (must be before other exports that use it)
 import {_registerRpcServerCodecFactory} from "./rpc/GGHttpRouteRPC";
 import {GGRpcResponseBuilder} from "./rpc/RpcResponse/GGRpcResponseBuilder";

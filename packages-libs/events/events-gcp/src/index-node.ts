@@ -1,3 +1,4 @@
+import "./_dedupCheck";
 import {createGcpPubsubProviderConfig, GcpPubsubProviderConfig, GcpPubsubPublisherAdapter} from "./GcpPubsubPublisherAdapter"
 import {createGcpPubsubSubscriberProviderConfig, GcpPubsubSubscriberAdapter} from "./GcpPubsubSubscriberAdapter"
 import {EventPublisherResource, GGEventsApi} from "@grest-ts/events";

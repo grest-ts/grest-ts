@@ -1,3 +1,4 @@
+import "./_dedupCheck";
 export * from './SQL';
 export * from './SqlFunctions';
 export * from './SqlExpression';

@@ -1,14 +1,22 @@
 import {GGConfigDefinition} from "./GGConfigLocator";
 import {AsyncLocalStorage} from "node:async_hooks";
 import {GGConfigKey} from "./GGConfigKey";
-import {ConstructorOf} from "@grest-ts/common";
+import {ConstructorOf, getOrInstallGlobal} from "@grest-ts/common";
 
 export interface GGConfigKeyCreationContext {
     name: string
     add: (key: GGConfigKey) => void;
 }
 
-const defineContext = new AsyncLocalStorage<GGConfigKeyCreationContext>();
+// Globally-keyed AsyncLocalStorage so duplicate module loads share a single
+// instance. Without this, a bundled copy of @grest-ts/config and a
+// node_modules copy each get their own ALS — `define()` running under copy A
+// is invisible to `getCreationContext()` running under copy B, and the
+// throw-on-missing-context fires.
+const defineContext = getOrInstallGlobal(
+    "@grest-ts/config:creation-context",
+    () => new AsyncLocalStorage<GGConfigKeyCreationContext>(),
+);
 
 export class GGConfig {
 

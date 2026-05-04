@@ -1,3 +1,4 @@
+import "./_dedupCheck";
 export * from './core/Project'
 export * from './core/File'
 export * from './core/FileChunk'

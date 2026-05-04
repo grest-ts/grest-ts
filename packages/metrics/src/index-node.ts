@@ -1,3 +1,4 @@
+import "./_dedupCheck";
 import {AsyncLocalStorage} from "node:async_hooks";
 import {_initMetricsStorage} from "./GGMetricsDefineStorage";
 _initMetricsStorage(new AsyncLocalStorage());

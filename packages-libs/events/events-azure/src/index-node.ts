@@ -1,3 +1,4 @@
+import "./_dedupCheck";
 import {EventPublisherResource, GGEventsApi} from "@grest-ts/events"
 import {AzureServiceBusProviderConfig, AzureServiceBusPublisherAdapter, createAzureServiceBusProviderConfig} from "./AzureServiceBusPublisherAdapter"
 import {AzureServiceBusSubscriberAdapter, createAzureServiceBusSubscriberProviderConfig} from "./AzureServiceBusSubscriberAdapter"

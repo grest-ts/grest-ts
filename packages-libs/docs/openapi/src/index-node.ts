@@ -1,3 +1,4 @@
+import "./_dedupCheck";
 export {toOpenApi} from "./toOpenApi";
 export type {ToOpenApiOptions} from "./toOpenApi";
 export {GGOpenApiDocs} from "./GGOpenApiDocs";

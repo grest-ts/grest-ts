@@ -1,3 +1,4 @@
+import "./_dedupCheck";
 export * from './deepFreeze';
 export * from './deepClone';
 export * from './withTimeout';
@@ -9,4 +10,5 @@ export * from './Secret';
 export * from "./sleep"
 export * from "./environment"
 export * from "./GGAsyncStorage"
+export * from "./getOrInstallGlobal"
 // GGExtensionDiscovery excluded — uses Node.js fs/path/url

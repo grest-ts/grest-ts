@@ -1,3 +1,4 @@
+import "./_dedupCheck";
 export * from './GGConfig';
 export * from './GG_CONFIG';
 export * from './GGConfigLocator';

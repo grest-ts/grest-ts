@@ -1,3 +1,4 @@
+import "./_dedupCheck";
 // Type helpers
 export * from "./socket/WebSocketTypes";
 

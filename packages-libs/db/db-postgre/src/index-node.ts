@@ -1,3 +1,4 @@
+import "./_dedupCheck";
 export * from './GGPostgres';
 export * from "./GGPostgresConfig";
 export * from './GGPostgresConnection';

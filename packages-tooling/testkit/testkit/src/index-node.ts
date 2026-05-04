@@ -1,3 +1,4 @@
+import "./_dedupCheck";
 /**
  * @grest-ts/testkit - Component testing library
  */

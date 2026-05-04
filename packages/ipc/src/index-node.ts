@@ -1,3 +1,4 @@
+import "./_dedupCheck";
 export * from './server/IPCServer'
 export * from './client/IPCClient'
 export * from './common/IPCSocket'

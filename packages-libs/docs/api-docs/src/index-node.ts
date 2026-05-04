@@ -1,3 +1,4 @@
+import "./_dedupCheck";
 export {GGApiDocs} from "./GGApiDocs";
 export type {GGApiDocsOptions, ApiDocSpec, ApiDocsGroup, ApiDocsBranding} from "./GGApiDocs";
 

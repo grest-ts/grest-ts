@@ -11,6 +11,7 @@ import { GGReadmeBannerBuilder } from "./GGReadmeBannerBuilder"
 import { GGCircularDependencyChecker } from "./GGCircularDependencyChecker"
 import { GGAllowedPackagesChecker } from "./GGAllowedPackagesChecker"
 import { GGAiRulesBuilder } from "./GGAiRulesBuilder"
+import { GGDedupCheckBuilder } from "./GGDedupCheckBuilder"
 import { PackagerFile } from "./PackagerFile"
 import type {GGPackage, GGPackageRoot} from "../definePackage"
 
@@ -161,6 +162,12 @@ export class GGPackager {
                 files.push(PackagerFile.copy(join(pkg.path, "LICENSE"), rootLicense))
             }
         }
+
+        // Inject duplicate-load detector into every package's entry files.
+        // See GGDedupCheckBuilder for why this is its own leaf module rather
+        // than inline in the entry.
+        console.log("🛡️  Injecting duplicate-load detectors...")
+        files.push(...new GGDedupCheckBuilder(packages, rootMeta.version).build())
 
         // Update README banners
         console.log("📝 Updating README banners...")
@@ -433,7 +440,8 @@ ${allEntries.map(p => `      '${p}'`).join(',\n')}
         const files: PackagerFile[] = [
             ...tsConfigBuilder.buildForPackage(targetPackage),
             ...packageBuilder.buildForPackage(targetPackage),
-            ...vitestBuilder.buildForPackage(targetPackage)
+            ...vitestBuilder.buildForPackage(targetPackage),
+            ...new GGDedupCheckBuilder(allPackages, rootMeta.version).buildForPackage(targetPackage)
         ]
 
         // Copy root LICENSE into the package

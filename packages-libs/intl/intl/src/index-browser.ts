@@ -1,3 +1,4 @@
+import "./_dedupCheck";
 export * from './GGIntl';
 export * from './GG_INTL_LOCALE';
 export * from './GGIntlMessage';
