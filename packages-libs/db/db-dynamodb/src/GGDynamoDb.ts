@@ -59,8 +59,8 @@ export class GGDynamoDb {
             const msg = err instanceof Error ? err.message : String(err)
             GGLog.critical(this, "Failed to connect to DynamoDB!", {
                 name: this.config.name,
-                region: host.region,
-                endpoint: host.endpoint || "(default AWS)",
+                region: host?.region ?? "(SDK default)",
+                endpoint: host?.endpoint ?? "(default AWS)",
                 error: msg,
             })
             throw new Error(`GGDynamoDb '${this.config.name}' connect failed: ${msg}`)
@@ -73,8 +73,8 @@ export class GGDynamoDb {
 
         GGLog.info(this, "DynamoDB connected", {
             name: this.config.name,
-            region: host.region,
-            endpoint: host.endpoint || "(default AWS)",
+            region: host?.region ?? "(SDK default)",
+            endpoint: host?.endpoint ?? "(default AWS)",
         })
     }
 
@@ -96,14 +96,14 @@ export class GGDynamoDb {
         this.started = false
     }
 
-    private buildClient(host: GGDynamoDbHostData, user: GGDynamoDbUserData): DynamoDBDocumentClient {
-        const endpoint = host.endpoint
-        const explicitCreds = (user.accessKeyId && user.secretAccessKey)
+    private buildClient(host: GGDynamoDbHostData | undefined, user: GGDynamoDbUserData | undefined): DynamoDBDocumentClient {
+        const endpoint = host?.endpoint
+        const explicitCreds = (user?.accessKeyId && user?.secretAccessKey)
             ? {accessKeyId: user.accessKeyId, secretAccessKey: user.secretAccessKey}
             : undefined
 
         const raw = new DynamoDBClient({
-            region: host.region,
+            ...(host?.region && {region: host.region}),
             ...(endpoint && {endpoint}),
             ...(explicitCreds && {credentials: explicitCreds}),
             // Dev-mode safety net: when an endpoint is set (dynamodb-local /
@@ -208,12 +208,12 @@ export class GGDynamoDb {
     getRawClient(): DynamoDBClient {
         const host = this.config.host.get()
         const user = this.config.user.reveal()
-        const endpoint = host.endpoint
-        const explicitCreds = (user.accessKeyId && user.secretAccessKey)
+        const endpoint = host?.endpoint
+        const explicitCreds = (user?.accessKeyId && user?.secretAccessKey)
             ? {accessKeyId: user.accessKeyId, secretAccessKey: user.secretAccessKey}
             : undefined
         return new DynamoDBClient({
-            region: host.region,
+            ...(host?.region && {region: host.region}),
             ...(endpoint && {endpoint}),
             credentials: explicitCreds ?? (endpoint ? {accessKeyId: "local", secretAccessKey: "local"} : undefined),
         })
