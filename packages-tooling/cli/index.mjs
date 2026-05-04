@@ -195,6 +195,14 @@ async function runUpdate(args) {
     return
   }
 
+  // No package.json edits → assume node_modules is already consistent with the
+  // (now-canonical) lockfile and skip the destructive reinstall. Repeated runs
+  // become a true no-op instead of churning the lockfile and re-fetching deps.
+  if (totalChanged === 0) {
+    console.log(`\n✓ All @grest-ts/* already at ${canonicalRange}. Nothing to do.`)
+    return
+  }
+
   // 7. Clear lockfile + installed @grest-ts/* state.
   //    Three things hold npm to old grest-ts versions:
   //    - package-lock.json (the visible lockfile)
