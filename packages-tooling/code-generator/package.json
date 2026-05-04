@@ -49,8 +49,10 @@
     "grest": "./bin/grest.cjs"
   },
   "dependencies": {
-    "@grest-ts/common": "0.0.30",
-    "@grest-ts/http": "0.0.30",
     "fast-glob": "^3.3.3"
+  },
+  "peerDependencies": {
+    "@grest-ts/common": "0.0.30",
+    "@grest-ts/http": "0.0.30"
   }
 }

@@ -50,7 +50,7 @@
   "engines": {
     "node": ">=25"
   },
-  "dependencies": {
+  "peerDependencies": {
     "@grest-ts/config": "0.0.30",
     "@grest-ts/locator": "0.0.30",
     "@grest-ts/lock": "0.0.30",

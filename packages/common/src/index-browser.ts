@@ -10,5 +10,4 @@ export * from './Secret';
 export * from "./sleep"
 export * from "./environment"
 export * from "./GGAsyncStorage"
-export * from "./getOrInstallGlobal"
 // GGExtensionDiscovery excluded — uses Node.js fs/path/url

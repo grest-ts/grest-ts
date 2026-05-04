@@ -37,7 +37,7 @@
     },
     {
       "name": "cli",
-      "description": "CLI for managing grest-ts in a project (atomic version upgrades, etc.)",
+      "description": "CLI for managing grest-ts in a project (atomic version updates, etc.)",
       "flags": {
         "node": false,
         "browser": false,
@@ -49,7 +49,7 @@
       "layer": 0,
       "color": "#F28E2B",
       "category": "tooling",
-      "readme": "<!-- GREST-TS-BANNER-START -->\n> Part of the [grest-ts](https://github.com/grest-ts/grest-ts) framework.\n> [Documentation](https://github.com/grest-ts/grest-ts#readme) | [All packages](https://github.com/grest-ts/grest-ts#package-reference)\n<!-- GREST-TS-BANNER-END -->\n\n# @grest-ts/cli\n\nCLI for managing grest-ts in a project.\n\n## Why\n\ngrest-ts is single-version: every `@grest-ts/*` package in a project must be at the same version. Inter-package peer dependencies are pinned exactly, so bumping one package forces bumping all of them — and once a `package-lock.json` is in play, npm's resolver can't reconcile the cross-package pins through a partial update.\n\nThis CLI does the bump atomically.\n\n## Usage\n\nRun from your project root (single-package or npm workspaces monorepo):\n\n```bash\nnpx @grest-ts/cli upgrade            # bumps to \"latest\" dist-tag\nnpx @grest-ts/cli upgrade 0.0.27     # bumps to a specific version\nnpx @grest-ts/cli upgrade next       # bumps to the \"next\" dist-tag\nnpx @grest-ts/cli upgrade --dry-run  # preview without writing\n```\n\n## What it does\n\n1. Discovers every `package.json` (root + workspaces).\n2. Collects every distinct `@grest-ts/*` dep referenced in `dependencies` and `devDependencies`.\n3. Resolves the target version (concrete version or dist-tag).\n4. Pre-flight: verifies every collected package is published at the target version. Fails fast if any are missing.\n5. Rewrites every `@grest-ts/*` entry to `^<target-version>` (canonical form — overwrites any pre-existing range).\n6. Deletes `package-lock.json`.\n7. Runs `npm install`.\n"
+      "readme": "<!-- GREST-TS-BANNER-START -->\n> Part of the [grest-ts](https://github.com/grest-ts/grest-ts) framework.\n> [Documentation](https://github.com/grest-ts/grest-ts#readme) | [All packages](https://github.com/grest-ts/grest-ts#package-reference)\n<!-- GREST-TS-BANNER-END -->\n\n# @grest-ts/cli\n\nCLI for keeping every `@grest-ts/*` package in your project on the same version. Full guide: [Guide → CLI](@guide/cli).\n\n## Usage\n\n```bash\nnpx @grest-ts/cli update             # bump to \"latest\"\nnpx @grest-ts/cli update 0.0.30      # bump to a specific version\nnpx @grest-ts/cli update next        # bump to a dist-tag\nnpx @grest-ts/cli update --dry-run   # preview only\n```\n\n## Install (optional)\n\n`npx` works without installing anything. To pin a CLI version per-project:\n\n```bash\nnpm install -D @grest-ts/cli\n```\n"
     },
     {
       "name": "code-generator",

@@ -44,8 +44,10 @@
     "node": ">=25"
   },
   "dependencies": {
-    "@grest-ts/schema": "0.0.30",
     "sqlstring": "^2.3.3"
+  },
+  "peerDependencies": {
+    "@grest-ts/schema": "0.0.30"
   },
   "devDependencies": {
     "@types/sqlstring": "^2.3.2"

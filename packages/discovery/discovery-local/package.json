@@ -52,12 +52,14 @@
     "node": ">=25"
   },
   "dependencies": {
+    "ws": "^8.19.0"
+  },
+  "peerDependencies": {
     "@grest-ts/discovery": "0.0.30",
     "@grest-ts/ipc": "0.0.30",
     "@grest-ts/locator": "0.0.30",
     "@grest-ts/logger": "0.0.30",
-    "@grest-ts/schema": "0.0.30",
-    "ws": "^8.19.0"
+    "@grest-ts/schema": "0.0.30"
   },
   "devDependencies": {
     "@grest-ts/testkit": "0.0.30"

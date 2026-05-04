@@ -8,6 +8,9 @@ export const DOC_TREE: Record<string, DocEntry[]> = {
     "Starter": [
         "create-starter",
     ],
+    "Tooling": [
+        "cli",
+    ],
     "Framework": [
         {schema: ["schema", "schema-file"]},
         {http: ["http", "http-file", "websocket"]},

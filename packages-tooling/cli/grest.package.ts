@@ -2,10 +2,10 @@ import {definePackage} from "#scripts/packager/definePackage"
 
 definePackage({
     name: "@grest-ts/cli",
-    description: "CLI for managing grest-ts in a project (atomic version upgrades, etc.)",
+    description: "CLI for managing grest-ts in a project (atomic version updates, etc.)",
     publishToNpm: true,
     targets: {},
-    keywords: ["grest-ts", "cli", "upgrade", "tooling"],
+    keywords: ["grest-ts", "cli", "update", "tooling"],
     noSourceCode: {
         bin: "./index.mjs",
         files: [

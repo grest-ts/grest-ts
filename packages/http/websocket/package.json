@@ -54,18 +54,16 @@
   "engines": {
     "node": ">=25"
   },
-  "dependencies": {
+  "peerDependencies": {
     "@grest-ts/common": "0.0.30",
     "@grest-ts/context": "0.0.30",
-    "@grest-ts/http": "0.0.30",
-    "@grest-ts/logger": "0.0.30",
-    "@grest-ts/schema": "0.0.30",
-    "@grest-ts/trace": "0.0.30"
-  },
-  "peerDependencies": {
     "@grest-ts/discovery": "0.0.30",
+    "@grest-ts/http": "0.0.30",
     "@grest-ts/locator": "0.0.30",
+    "@grest-ts/logger": "0.0.30",
     "@grest-ts/metrics": "0.0.30",
+    "@grest-ts/schema": "0.0.30",
+    "@grest-ts/trace": "0.0.30",
     "ws": "^8.19.0"
   },
   "devDependencies": {

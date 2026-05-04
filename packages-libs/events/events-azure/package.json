@@ -42,7 +42,9 @@
     "node": ">=25"
   },
   "dependencies": {
-    "@azure/service-bus": "^7.9.5",
+    "@azure/service-bus": "^7.9.5"
+  },
+  "peerDependencies": {
     "@grest-ts/config": "0.0.30",
     "@grest-ts/events": "0.0.30",
     "@grest-ts/logger": "0.0.30",

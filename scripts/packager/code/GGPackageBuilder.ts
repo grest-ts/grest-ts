@@ -237,71 +237,56 @@ export class GGPackageBuilder {
     }
 
     /**
-     * Check if a package is node-only (has node target but no browser target)
-     */
-    private isNodeOnly(shortName: string): boolean {
-        const depPkg = this.packageMap.get(shortName)
-        if (!depPkg) return false
-        return !!depPkg.config.targets.node && !depPkg.config.targets.browser
-    }
-
-    /**
      * Build dependencies from external imports + config.
-     * For packages with browser target, node-only @grest-ts/* deps become peerDependencies.
+     *
+     * Policy: every internal @grest-ts/* cross-dep is emitted as a
+     * peerDependency at the exact workspace version. This prevents npm/pnpm
+     * from installing two physical copies of a state-bearing package when a
+     * consumer's transitive graph would otherwise hoist conflicting versions
+     * — duplicate loads break async context, validation registries, and
+     * service discovery (caught at runtime by each package's _dedupCheck).
+     *
+     * External (non-@grest-ts) deps stay where the package config puts them.
      */
     private buildDependencies(pkg: GGPackageInfo): { dependencies: Record<string, string>, peerDependencies: Record<string, string> } {
         const deps: Record<string, string> = {}
         const peerDeps: Record<string, string> = {}
-        const hasBrowserTarget = !!pkg.config.targets.browser
 
-        // Add @grest-ts/* dependencies from discovered imports
+        // Every @grest-ts/* cross-dep from discovered imports → peerDependency
         for (const ggImport of pkg.imports.gg) {
-            // Skip self-reference
             if (ggImport === pkg.shortName) continue
-
-            // Only add if package exists in workspace
             if (this.packageMap.has(ggImport)) {
-                // If this package has browser target and the dep is node-only,
-                // make it a peerDependency instead
-                if (hasBrowserTarget && this.isNodeOnly(ggImport)) {
-                    peerDeps[`@grest-ts/${ggImport}`] = this.rootMeta.version
-                } else {
-                    deps[`@grest-ts/${ggImport}`] = this.rootMeta.version
-                }
+                peerDeps[`@grest-ts/${ggImport}`] = this.rootMeta.version
             }
         }
 
-        // Add @grest-ts/* dependencies from explicit references
+        // Same for explicit references (imports the parser couldn't auto-detect)
         if (pkg.config.references) {
             for (const ref of pkg.config.references) {
                 if (ref === pkg.shortName) continue
                 if (this.packageMap.has(ref)) {
-                    if (hasBrowserTarget && this.isNodeOnly(ref)) {
-                        peerDeps[`@grest-ts/${ref}`] = this.rootMeta.version
-                    } else {
-                        deps[`@grest-ts/${ref}`] = this.rootMeta.version
-                    }
+                    peerDeps[`@grest-ts/${ref}`] = this.rootMeta.version
                 }
             }
         }
 
-        // Add external dependencies from config
+        // External (non-@grest-ts) dependencies from config
         if (pkg.config.dependencies) {
             this.validateNoGGPackages(pkg.name, "dependencies", pkg.config.dependencies)
             Object.assign(deps, pkg.config.dependencies)
         }
 
-        // Add external peerDependencies from config
+        // External (non-@grest-ts) peerDependencies from config
         if (pkg.config.peerDependencies) {
             this.validateNoGGPackages(pkg.name, "peerDependencies", pkg.config.peerDependencies)
             Object.assign(peerDeps, pkg.config.peerDependencies)
         }
 
-        // Add @grest-ts/* imports from vitest/ folder as peerDependencies
-        // (only if not already in regular dependencies)
+        // @grest-ts/* imports from vitest/ folder are peerDependencies
+        // (consumer-supplied during testing)
         for (const ggImport of pkg.vitestImports.gg) {
             const pkgName = `@grest-ts/${ggImport}`
-            if (ggImport !== pkg.shortName && this.packageMap.has(ggImport) && !deps[pkgName]) {
+            if (ggImport !== pkg.shortName && this.packageMap.has(ggImport)) {
                 peerDeps[pkgName] = this.rootMeta.version
             }
         }

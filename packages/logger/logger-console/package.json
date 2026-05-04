@@ -43,7 +43,7 @@
   "engines": {
     "node": ">=25"
   },
-  "dependencies": {
+  "peerDependencies": {
     "@grest-ts/logger": "0.0.30",
     "@grest-ts/schema": "0.0.30",
     "@grest-ts/schema-file": "0.0.30"

@@ -44,7 +44,9 @@
   },
   "dependencies": {
     "@aws-sdk/client-sns": "^3.991.0",
-    "@aws-sdk/client-sqs": "^3.991.0",
+    "@aws-sdk/client-sqs": "^3.991.0"
+  },
+  "peerDependencies": {
     "@grest-ts/config": "0.0.30",
     "@grest-ts/events": "0.0.30",
     "@grest-ts/logger": "0.0.30",

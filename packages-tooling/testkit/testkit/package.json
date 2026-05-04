@@ -45,7 +45,7 @@
   "engines": {
     "node": ">=25"
   },
-  "dependencies": {
+  "peerDependencies": {
     "@grest-ts/common": "0.0.30",
     "@grest-ts/context": "0.0.30",
     "@grest-ts/ipc": "0.0.30",
@@ -55,9 +55,7 @@
     "@grest-ts/runtime": "0.0.30",
     "@grest-ts/schema": "0.0.30",
     "@grest-ts/testkit-runtime": "0.0.30",
-    "@grest-ts/trace": "0.0.30"
-  },
-  "peerDependencies": {
+    "@grest-ts/trace": "0.0.30",
     "esbuild": ">=0.27.0"
   }
 }

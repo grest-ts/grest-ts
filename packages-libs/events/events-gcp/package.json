@@ -43,7 +43,9 @@
     "node": ">=25"
   },
   "dependencies": {
-    "@google-cloud/pubsub": "^5.2.3",
+    "@google-cloud/pubsub": "^5.2.3"
+  },
+  "peerDependencies": {
     "@grest-ts/config": "0.0.30",
     "@grest-ts/events": "0.0.30",
     "@grest-ts/logger": "0.0.30",

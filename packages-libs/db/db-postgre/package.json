@@ -49,11 +49,13 @@
     "node": ">=25"
   },
   "dependencies": {
+    "pg": "^8.18.0"
+  },
+  "peerDependencies": {
     "@grest-ts/config": "0.0.30",
     "@grest-ts/locator": "0.0.30",
     "@grest-ts/logger": "0.0.30",
-    "@grest-ts/schema": "0.0.30",
-    "pg": "^8.18.0"
+    "@grest-ts/schema": "0.0.30"
   },
   "devDependencies": {
     "@grest-ts/testkit": "0.0.30",

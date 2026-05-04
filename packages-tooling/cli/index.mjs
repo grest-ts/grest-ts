@@ -5,9 +5,10 @@ import { join, resolve, dirname } from "path"
 import { spawnSync } from "child_process"
 
 const GREST_PREFIX = "@grest-ts/"
+const DEP_BLOCKS = ["dependencies", "devDependencies", "peerDependencies"]
 
 const COMMANDS = {
-  upgrade: runUpgrade,
+  update: runUpdate,
   help: runHelp,
 }
 
@@ -36,16 +37,18 @@ Usage:
   grest-ts <command> [options]
 
 Commands:
-  upgrade [version]   Atomically update all @grest-ts/* deps to a single version.
-                      Version can be a semver (e.g. 0.0.27) or a dist-tag
-                      (latest, next). Defaults to "latest".
+  update [version]    Atomically update all @grest-ts/* deps to a single version.
+                      Version can be a semver (e.g. 0.0.30) or a dist-tag
+                      (latest, next). Defaults to "latest". Also walks the
+                      published peer-dep graph and silently adds any missing
+                      @grest-ts/* peers to your dependencies.
                       Flags:
                         --dry-run   Show what would change without writing.
   help                Show this message.
 `)
 }
 
-async function runUpgrade(args) {
+async function runUpdate(args) {
   const dryRun = args.includes("--dry-run") || args.includes("--dry")
   const positional = args.filter(a => !a.startsWith("--"))
   const versionArg = positional[0] || "latest"
@@ -65,7 +68,7 @@ async function runUpgrade(args) {
   const grestDeps = new Set()
   for (const p of allPkgPaths) {
     const pkg = readJson(p)
-    for (const block of ["dependencies", "devDependencies"]) {
+    for (const block of DEP_BLOCKS) {
       if (!pkg[block]) continue
       for (const key of Object.keys(pkg[block])) {
         if (key.startsWith(GREST_PREFIX)) grestDeps.add(key)
@@ -79,10 +82,12 @@ async function runUpgrade(args) {
   }
   console.log(`Found ${grestDeps.size} unique @grest-ts/* dependency name(s).`)
 
-  // 3. Resolve target version (handle dist-tags)
+  // 3. Resolve target version (handle dist-tags). Pin exactly — grest-ts
+  //    publishes all packages in lockstep with each other's peers declared
+  //    at the exact version, so the consumer must match exactly.
   const targetVersion = await resolveTargetVersion(versionArg)
-  const canonicalRange = `^${targetVersion}`
-  console.log(`Target version: ${targetVersion} (writing as "${canonicalRange}")`)
+  const canonicalRange = targetVersion
+  console.log(`Target version: ${targetVersion}`)
 
   // 4. Pre-flight: every grest-ts package must be published at target version.
   //    grest-ts is single-version across all packages — partial publishes would
@@ -101,14 +106,66 @@ async function runUpgrade(args) {
     )
   }
 
-  // 5. Rewrite every package.json — normalize every @grest-ts/* range to canonical form.
+  // 5. Walk the peer-dep graph at the target version and silently add any
+  //    missing @grest-ts/* peers to the root project. Each grest-ts package
+  //    declares its internal cross-deps as peerDependencies — when a consumer
+  //    adds @grest-ts/http but forgets @grest-ts/schema, npm warns and the
+  //    framework's runtime dedup check has nothing to dedup against. Better
+  //    to fix it here.
+  console.log("Walking peer-dep graph to discover missing peers...")
+  const peerCache = new Map()
+  const expandedDeps = new Set(grestDeps)
+  const queue = [...grestDeps]
+  while (queue.length > 0) {
+    const name = queue.shift()
+    let manifest
+    try {
+      manifest = await fetchJson(`https://registry.npmjs.org/${name}/${targetVersion}`)
+    } catch (e) {
+      throw new Error(`Failed to fetch ${name}@${targetVersion} manifest: ${e.message}`)
+    }
+    const peers = manifest.peerDependencies || {}
+    peerCache.set(name, peers)
+    for (const peerName of Object.keys(peers)) {
+      if (peerName.startsWith(GREST_PREFIX) && !expandedDeps.has(peerName)) {
+        expandedDeps.add(peerName)
+        queue.push(peerName)
+      }
+    }
+  }
+
+  // Anything in expandedDeps not already in the root package.json gets added
+  // to its dependencies block at the target version.
+  const autoAdded = []
+  for (const name of expandedDeps) {
+    if (!isInAnyBlock(rootPkg, name)) {
+      autoAdded.push(name)
+    }
+  }
+  if (autoAdded.length > 0) {
+    console.log(`Adding ${autoAdded.length} missing peer(s) to ${relativeTo(cwd, rootPkgPath)}:`)
+    for (const name of autoAdded) console.log(`  + ${name}`)
+  }
+
+  // 6. Rewrite every package.json — normalize every @grest-ts/* range to canonical form.
+  //    For the root, also insert any auto-discovered missing peers into "dependencies".
   let totalChanged = 0
   let filesChanged = 0
   for (const p of allPkgPaths) {
     const raw = readFileSync(p, "utf-8")
     const pkg = JSON.parse(raw)
     let fileChanged = false
-    for (const block of ["dependencies", "devDependencies"]) {
+
+    if (p === rootPkgPath && autoAdded.length > 0) {
+      pkg.dependencies = pkg.dependencies || {}
+      for (const name of autoAdded) {
+        pkg.dependencies[name] = canonicalRange
+      }
+      fileChanged = true
+      totalChanged += autoAdded.length
+    }
+
+    for (const block of DEP_BLOCKS) {
       if (!pkg[block]) continue
       for (const key of Object.keys(pkg[block])) {
         if (!key.startsWith(GREST_PREFIX)) continue
@@ -138,7 +195,7 @@ async function runUpgrade(args) {
     return
   }
 
-  // 6. Clear lockfile + installed @grest-ts/* state.
+  // 7. Clear lockfile + installed @grest-ts/* state.
   //    Three things hold npm to old grest-ts versions:
   //    - package-lock.json (the visible lockfile)
   //    - node_modules/.package-lock.json (npm's hidden install-state lockfile)
@@ -161,7 +218,7 @@ async function runUpgrade(args) {
     rmSync(grestNodeModulesPath, { recursive: true, force: true })
   }
 
-  // 7. Reinstall. Pass as a single shell command string — Node refuses to spawn
+  // 8. Reinstall. Pass as a single shell command string — Node refuses to spawn
   //    .cmd files directly on Windows (CVE-2024-27980), and passing arg arrays
   //    with shell:true triggers DEP0190.
   console.log("Running npm install...")
@@ -170,13 +227,20 @@ async function runUpgrade(args) {
     throw new Error(`npm install exited with code ${result.status}`)
   }
 
-  console.log(`\n✓ Upgraded all @grest-ts/* to ${canonicalRange}`)
+  console.log(`\n✓ Updated all @grest-ts/* to ${canonicalRange}`)
 }
 
 // ---- helpers ----
 
 function readJson(path) {
   return JSON.parse(readFileSync(path, "utf-8"))
+}
+
+function isInAnyBlock(pkg, depName) {
+  for (const block of DEP_BLOCKS) {
+    if (pkg[block] && Object.hasOwn(pkg[block], depName)) return true
+  }
+  return false
 }
 
 function relativeTo(base, path) {

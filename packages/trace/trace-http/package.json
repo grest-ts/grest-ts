@@ -46,7 +46,7 @@
   "engines": {
     "node": ">=25"
   },
-  "dependencies": {
+  "peerDependencies": {
     "@grest-ts/http": "0.0.30",
     "@grest-ts/schema": "0.0.30",
     "@grest-ts/trace": "0.0.30"
