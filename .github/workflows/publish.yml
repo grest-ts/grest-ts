@@ -10,19 +10,22 @@ permissions:
 
 jobs:
   publish:
-    # Only publish when CI succeeded on a push to master. PR runs of CI
-    # also complete successfully but must never trigger a publish.
+    # Only publish when CI succeeded on a push to release. PR runs of CI
+    # complete successfully too — they must never trigger a publish.
     if: >-
       github.event.workflow_run.conclusion == 'success'
       && github.event.workflow_run.event == 'push'
-      && github.event.workflow_run.head_branch == 'master'
+      && github.event.workflow_run.head_branch == 'release'
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
+      - name: Checkout master
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.workflow_run.head_sha }}
+          # CI's bump commit lives on master, not on release. workflow_run's
+          # head_sha points at the release-branch tip (pre-bump), so we have
+          # to explicitly check out master to get the released state.
+          ref: master
 
       - name: Setup Node 25
         uses: actions/setup-node@v4

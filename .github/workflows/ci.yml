@@ -2,21 +2,24 @@ name: CI
 
 on:
   push:
-    branches: [master]
+    branches: [release]
   pull_request:
-    branches: [master, dev]
+    branches: [master, dev, release]
 
 permissions:
   contents: write
 
+# On release: serialize releases, never cancel an in-flight one (a publish
+# may be partway through). On every other ref: cancel-in-progress is fine.
 concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  group: ${{ github.ref == 'refs/heads/release' && 'release' || format('ci-{0}', github.ref) }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/release' }}
 
 jobs:
   ci:
-    # Skip only the bot's own version-bump commits (avoids infinite loop).
-    # Anything else — including human commits that happen to start with "v" — runs.
+    # Defense-in-depth: skip the bot's own version-bump commits if they ever
+    # re-enter (GITHUB_TOKEN-driven pushes don't trigger workflows by default,
+    # but keep the guard).
     if: ${{ github.event.head_commit.author.email != 'github-actions[bot]@users.noreply.github.com' }}
     runs-on: ubuntu-latest
 
@@ -39,6 +42,10 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          # Need full history so the bump commit can be pushed cleanly to
+          # master (FF requires master's tip to be reachable).
+          fetch-depth: 0
 
       - name: Setup Node 25
         uses: actions/setup-node@v4
@@ -65,21 +72,38 @@ jobs:
         run: npx tsx grest.2.vitest.ts
 
       - name: Version bump
-        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+        if: github.event_name == 'push' && github.ref == 'refs/heads/release'
         run: npx tsx grest.3.ver.patch.ts
 
       - name: Read version
-        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+        if: github.event_name == 'push' && github.ref == 'refs/heads/release'
         id: version
         run: echo "version=$(node -p "require('./package.json').version")" >> $GITHUB_OUTPUT
 
-      - name: Commit & tag
-        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+      - name: Commit, tag, and fast-forward master + backmerge dev
+        if: github.event_name == 'push' && github.ref == 'refs/heads/release'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add package.json '**/package.json'
-          git diff --name-only | xargs -r git checkout --
+
+          # Permissive mode: capture every file the regen step touched, not
+          # just package.json bumps. Anything check / generate produces
+          # (subpackage.jsons, dependency graph, AI rules, _dedupCheck files,
+          # etc.) gets bundled into the release commit so the released state
+          # is internally consistent.
+          git add -A
           git commit -m "v${{ steps.version.outputs.version }}"
           git tag -a "v${{ steps.version.outputs.version }}" -m "v${{ steps.version.outputs.version }}"
-          git push --follow-tags
+
+          # Fast-forward master to the bump commit. release was built from a
+          # descendant of master in the normal flow (dev → release after dev
+          # was based on master), so this is a clean FF. If it isn't, the
+          # push fails and the action fails — release stays in a failed
+          # state, master is untouched, and a human resolves it.
+          git push origin HEAD:refs/heads/master --follow-tags
+
+          # Silent backmerge to dev. If dev moved during validation, the
+          # non-FF push is rejected and we move on — version-resolution on
+          # the next release uses max(package.json, npm-registry) so we
+          # never republish the same version.
+          git push origin HEAD:refs/heads/dev || echo "::warning::Could not push bump to dev (likely moved during release). Manual sync may be needed."
