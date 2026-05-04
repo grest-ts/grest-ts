@@ -16,14 +16,17 @@ console.log("Building api-docs live demo...")
 console.log(`  → ${OUT_DIR}`)
 
 await buildApiDocs({
-    title: "grest-ts API Docs — Live Demo",
-    version: "1.0.0",
-    description: "Live demo of @grest-ts/api-docs rendering mixed HTTP + WebSocket contracts from the grest-test example service.",
     outDir: OUT_DIR,
-    groups: {
-        "HTTP":     {http: [ShowcaseApi]},
-        "Realtime": {ws:   [ChatApiSchema, NotificationApiSchema]},
-    },
+    docs: [{
+        slug: "demo",
+        title: "grest-ts API Docs — Live Demo",
+        version: "1.0.0",
+        description: "Live demo of @grest-ts/api-docs rendering mixed HTTP + WebSocket contracts from the grest-test example service.",
+        groups: {
+            "HTTP":     {http: [ShowcaseApi]},
+            "Realtime": {ws:   [ChatApiSchema, NotificationApiSchema]},
+        },
+    }],
 })
 
 console.log("Done.")
