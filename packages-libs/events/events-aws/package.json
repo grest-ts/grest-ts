@@ -1,7 +1,7 @@
 {
   "//": "THIS FILE IS GENERATED - DO NOT EDIT",
   "name": "@grest-ts/events-aws",
-  "version": "0.0.30",
+  "version": "0.0.31",
   "type": "module",
   "license": "MIT",
   "description": "AWS SNS/SQS adapter for @grest-ts/events",
@@ -47,9 +47,9 @@
     "@aws-sdk/client-sqs": "^3.991.0"
   },
   "peerDependencies": {
-    "@grest-ts/config": "0.0.30",
-    "@grest-ts/events": "0.0.30",
-    "@grest-ts/logger": "0.0.30",
-    "@grest-ts/schema": "0.0.30"
+    "@grest-ts/config": "0.0.31",
+    "@grest-ts/events": "0.0.31",
+    "@grest-ts/logger": "0.0.31",
+    "@grest-ts/schema": "0.0.31"
   }
 }
