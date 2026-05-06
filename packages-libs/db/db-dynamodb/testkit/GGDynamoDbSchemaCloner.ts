@@ -1,6 +1,6 @@
 import {DynamoDBClient} from "@aws-sdk/client-dynamodb"
 import {DynamoDBDocumentClient} from "@aws-sdk/lib-dynamodb"
-import {GGDynamoDbHostData, GGDynamoDbUserData} from "../src/GGDynamoDbConfig"
+import {GGDynamoDbHostData, GGDynamoDbUserData} from "@grest-ts/db-dynamodb"
 import {GGDynamoDbConnection, GGDynamoDbTableOperations} from "./GGDynamoDbTableOperations"
 
 export interface GGDynamoDbSetupClients {

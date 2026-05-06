@@ -1,7 +1,7 @@
 import {GG_TEST_RESOURCE, GG_TEST_RUNNER, GGTestSharedRef, callOn, LocatorLookupAccess} from "@grest-ts/testkit"
 import {GGConfigIPC} from "@grest-ts/config/testkit"
-import {GGDynamoDbConfig, GGDynamoDbHostData} from "../src/GGDynamoDbConfig"
-import {GGDynamoDb} from "../src/GGDynamoDb"
+import {GGDynamoDbConfig, GGDynamoDbHostData} from "@grest-ts/db-dynamodb"
+import {GGDynamoDb} from "@grest-ts/db-dynamodb"
 import {GGDynamoDbProvisionOptions, GGDynamoDbSchemaCloner, GGDynamoDbSetupFn} from "./GGDynamoDbSchemaCloner"
 
 export interface GGDynamoDbCloneTestOptions {
@@ -128,7 +128,7 @@ Object.defineProperty(GGDynamoDbConfig.prototype, GG_TEST_RESOURCE, {
     configurable: true,
 })
 
-declare module "../src/GGDynamoDbConfig" {
+declare module "@grest-ts/db-dynamodb" {
     interface GGDynamoDbConfig {
         [GG_TEST_RESOURCE]: GGDynamoDbTestMethods
     }
