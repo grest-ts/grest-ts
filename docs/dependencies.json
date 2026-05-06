@@ -155,7 +155,7 @@
       "flags": {
         "node": true,
         "browser": false,
-        "testkit": false,
+        "testkit": true,
         "hidden": false,
         "implementation": false,
         "npm": true
