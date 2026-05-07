@@ -1,0 +1,30 @@
+{
+  "setup": {
+    "init": [
+      {
+        "name": "deps",
+        "run": "npm install"
+      },
+      {
+        "name": "postgres",
+        "run": "docker compose -f examples/checklist/docker-compose.yml up -d --wait postgres"
+      },
+      {
+        "name": "db_checklist_create",
+        "run": "docker exec -i gg-postgres psql -U postgres -c 'CREATE DATABASE checklist;'"
+      },
+      {
+        "name": "db_blocker_create",
+        "run": "docker exec -i gg-postgres psql -U postgres -c 'CREATE DATABASE blocker;'"
+      },
+      {
+        "name": "db_checklist_schema",
+        "run": "docker exec -i gg-postgres psql -U postgres -d checklist < examples/checklist/checklist/schema/checklist.postgres.sql"
+      },
+      {
+        "name": "db_blocker_schema",
+        "run": "docker exec -i gg-postgres psql -U postgres -d blocker < examples/checklist/blocker/schema/blocker.postgres.sql"
+      }
+    ]
+  }
+}
