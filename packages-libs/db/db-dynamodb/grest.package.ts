@@ -5,6 +5,7 @@ definePackage({
     description: "DynamoDB database utilities for Grest Framework",
     keywords: ["database", "dynamodb", "aws", "nosql"],
     targets: { node: true },
+    extendsTestKit: true,
     publishToNpm: true,
     dependencies: {
         "@aws-sdk/client-dynamodb": "^3.750.0",

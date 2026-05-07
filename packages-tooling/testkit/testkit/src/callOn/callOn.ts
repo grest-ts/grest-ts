@@ -85,7 +85,7 @@ export type GGTestCallOnCollection<T> = { [K in keyof T]: GGTestCallOn<T[K]> }
  * - Plain objects → recurse into properties
  */
 export type GGTestCallOn<T> =
-    T extends { [CALL_ON_FACTORY]: (ctx?: GGContext) => infer R } ? R
+    T extends { [CALL_ON_FACTORY]: (ctx: GGContext) => infer R } ? R
         : T extends GGContractClass<infer TContract> ? ContractLocatorAccess<TContract>
             : T extends GGLocatorKey<infer Instance> ? LocatorLookupAccess<Instance>
                 : T extends new (...args: any[]) => infer Instance ? LocatorLookupAccess<Instance>
