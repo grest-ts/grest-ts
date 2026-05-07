@@ -1,7 +1,7 @@
 {
   "//": "THIS FILE IS GENERATED - DO NOT EDIT",
   "name": "@grest-ts/intl",
-  "version": "0.0.31",
+  "version": "0.0.32",
   "type": "module",
   "license": "MIT",
   "description": "Internationalization and localization library with typed message descriptors",
@@ -52,8 +52,8 @@
     "i18next-icu": "^2.4.3"
   },
   "peerDependencies": {
-    "@grest-ts/context": "0.0.31",
-    "@grest-ts/locator": "0.0.31",
-    "@grest-ts/schema": "0.0.31"
+    "@grest-ts/context": "0.0.32",
+    "@grest-ts/locator": "0.0.32",
+    "@grest-ts/schema": "0.0.32"
   }
 }

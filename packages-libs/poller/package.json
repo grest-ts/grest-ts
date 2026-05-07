@@ -1,7 +1,7 @@
 {
   "//": "THIS FILE IS GENERATED - DO NOT EDIT",
   "name": "@grest-ts/poller",
-  "version": "0.0.31",
+  "version": "0.0.32",
   "type": "module",
   "license": "MIT",
   "description": "Poll-based job executor with leader election for single-master processing",
@@ -51,13 +51,13 @@
     "node": ">=25"
   },
   "peerDependencies": {
-    "@grest-ts/config": "0.0.31",
-    "@grest-ts/locator": "0.0.31",
-    "@grest-ts/lock": "0.0.31",
-    "@grest-ts/metrics": "0.0.31",
-    "@grest-ts/schema": "0.0.31"
+    "@grest-ts/config": "0.0.32",
+    "@grest-ts/locator": "0.0.32",
+    "@grest-ts/lock": "0.0.32",
+    "@grest-ts/metrics": "0.0.32",
+    "@grest-ts/schema": "0.0.32"
   },
   "devDependencies": {
-    "@grest-ts/testkit": "0.0.31"
+    "@grest-ts/testkit": "0.0.32"
   }
 }
