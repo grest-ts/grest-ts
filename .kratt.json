@@ -8,5 +8,6 @@
   "resume": [
     {"name": "services", "run": "docker compose -f examples/checklist/docker-compose.yml up -d --wait"}
   ],
-  "services": {}
+  "services": {},
+  "pullRequestTarget": "release"
 }
