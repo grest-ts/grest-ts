@@ -1,7 +1,7 @@
 {
   "//": "THIS FILE IS GENERATED - DO NOT EDIT",
   "name": "@grest-ts/api-docs",
-  "version": "0.0.33",
+  "version": "0.0.34",
   "type": "module",
   "license": "MIT",
   "description": "Native React-based documentation UI for grest-ts services — renders contracts directly, no OpenAPI/AsyncAPI conversion in the rendering path",
@@ -49,10 +49,10 @@
     "node": ">=25"
   },
   "peerDependencies": {
-    "@grest-ts/discovery": "0.0.33",
-    "@grest-ts/http": "0.0.33",
-    "@grest-ts/locator": "0.0.33",
-    "@grest-ts/schema": "0.0.33",
-    "@grest-ts/websocket": "0.0.33"
+    "@grest-ts/discovery": "0.0.34",
+    "@grest-ts/http": "0.0.34",
+    "@grest-ts/locator": "0.0.34",
+    "@grest-ts/schema": "0.0.34",
+    "@grest-ts/websocket": "0.0.34"
   }
 }
