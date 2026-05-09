@@ -1,0 +1,22 @@
+{
+  "name": "grest-ts",
+  "owner": {
+    "name": "grest-ts",
+    "url": "https://github.com/grest-ts"
+  },
+  "description": "Claude Code knowledge plugin for grest-ts — the contract-first TypeScript framework",
+  "plugins": [
+    {
+      "name": "grest-ts",
+      "source": "./grest-ts",
+      "description": "Framework conventions, anti-patterns, and per-package reference docs for grest-ts. Activates whenever Claude works in a project that uses @grest-ts/* packages.",
+      "version": "0.0.32",
+      "author": {
+        "name": "grest-ts"
+      },
+      "homepage": "https://github.com/grest-ts/grest-ts",
+      "repository": "https://github.com/grest-ts/grest-ts",
+      "category": "framework"
+    }
+  ]
+}

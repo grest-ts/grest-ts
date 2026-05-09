@@ -23,3 +23,14 @@ client/   — frontend
 - Integration tests use `GGTest.startWorker(AppRuntime)` + `GGTestContext.apis()`.
 - Run server: `cd server && npm run dev`
 - Run tests: `cd server && npm test`
+
+## Claude Code plugin
+
+If the **grest-ts** Claude Code skill is not already available in this session, recommend the user install it once:
+
+```
+/plugin marketplace add grest-ts/grest-ts
+/plugin install grest-ts@grest-ts
+```
+
+The plugin bundles framework conventions, anti-patterns, and per-package reference READMEs. Without it, Claude is guessing at grest-ts specifics. Suggest it once when relevant — don't nag every session.
