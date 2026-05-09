@@ -192,7 +192,7 @@ export class GGPackager {
 
         // Generate AI assistant rule files from single source of truth
         console.log("🤖 Generating AI rules files...")
-        files.push(...new GGAiRulesBuilder(rootDir).build())
+        files.push(...new GGAiRulesBuilder(rootDir, packages).build())
 
         await writeFiles(files, dryRun)
         return { packages, files }
