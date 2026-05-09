@@ -1,0 +1,12 @@
+{
+  "setup": {
+    "init": [
+      {"name": "deps",     "run": "npm install"},
+      {"name": "services", "run": "docker compose -f examples/checklist/docker-compose.yml up -d --wait"}
+    ]
+  },
+  "resume": [
+    {"name": "services", "run": "docker compose -f examples/checklist/docker-compose.yml up -d --wait"}
+  ],
+  "services": {}
+}
