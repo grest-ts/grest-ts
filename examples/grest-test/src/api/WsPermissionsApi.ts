@@ -45,9 +45,13 @@ export const WsTestAuthMiddleware: GGWebSocketMiddleware = {
     },
 }
 
+/** See PermissionsApi.TEST_RESOLVER_THROW_SCOPE — same sentinel, WS variant. */
+export const WS_TEST_RESOLVER_THROW_SCOPE = "__test:throw__"
+
 export const getWsTestScopes = (): ReadonlySet<string> | null => {
     const scopes = WS_SERVER_SCOPES.get()
     if (!scopes) return null
+    if (scopes.includes(WS_TEST_RESOLVER_THROW_SCOPE)) throw new Error("ws resolver intentionally threw — test signal")
     return new Set(scopes)
 }
 

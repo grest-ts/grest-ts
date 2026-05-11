@@ -6,6 +6,7 @@ import {
     WsFeaturePermissionsApi,
     WsPermissionsApi,
     WS_CLIENT_SCOPES,
+    WS_TEST_RESOLVER_THROW_SCOPE,
 } from "../src/api/WsPermissionsApi"
 
 function urlFor(apiName: string): string {
@@ -181,6 +182,18 @@ describe("WebSocket permission gate", () => {
                 } finally {
                     await client.disconnect()
                 }
+            })
+        })
+    })
+
+    describe("resolver crashes at handshake", () => {
+        test("resolver throws → handshake fails, client.connect() rejects", async () => {
+            // Sentinel scope makes getWsTestScopes() throw inside the handshake
+            // permission middleware. The handshake's try/catch surfaces it to
+            // the client as a HANDSHAKE_ERR.
+            await withClientScopes([WS_TEST_RESOLVER_THROW_SCOPE], async () => {
+                const client = WsPermissionsApi.createClient({url: urlFor("WsPermissionsApi")})
+                await expect(client.connect()).rejects.toBeDefined()
             })
         })
     })

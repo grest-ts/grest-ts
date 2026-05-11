@@ -2,7 +2,7 @@ import {callOn, GGTest} from "@grest-ts/testkit"
 import {GGContext} from "@grest-ts/context"
 import {afterEach} from "vitest"
 import {MainRuntime} from "../src/main"
-import {AppPermission, GG_TEST_SCOPES, PermissionsApi} from "../src/api/PermissionsApi"
+import {AppPermission, GG_TEST_SCOPES, PermissionsApi, TEST_RESOLVER_THROW_SCOPE} from "../src/api/PermissionsApi"
 
 /**
  * Helper: create a request scope with the given scopes set.
@@ -133,6 +133,23 @@ describe.shuffle("permissions / HTTP gate", () => {
             scope = new GGContext("permissions-test-empty")
             scope.set(GG_TEST_SCOPES, [])
             await expect(callOn(PermissionsApi, scope).needsRead()).rejects.toThrow(/NOT_AUTHORIZED/)
+        })
+    })
+
+    describe("resolver crashes", () => {
+        test("resolver throws → SERVER_ERROR to caller (handler not invoked)", async () => {
+            // Sentinel scope makes getTestScopes() throw an unrelated Error.
+            // The gate's outer catch converts it to SERVER_ERROR via ERROR.fromUnknown.
+            scope = withScopes(TEST_RESOLVER_THROW_SCOPE)
+            await expect(callOn(PermissionsApi, scope).needsRead()).rejects.toThrow(/SERVER_ERROR/)
+        })
+        test("resolver throws on a public method → still SERVER_ERROR (gate runs the resolver to populate GG_PERMISSIONS)", async () => {
+            // Even though the method is GG_NO_PERMISSIONS, the gate still calls
+            // the resolver (to populate the checker for handler-side use). A
+            // crashing resolver therefore breaks public endpoints too — a tradeoff
+            // that's intentional: the resolver is meant to be reliable.
+            scope = withScopes(TEST_RESOLVER_THROW_SCOPE)
+            await expect(callOn(PermissionsApi, scope).publicMethod()).rejects.toThrow(/SERVER_ERROR/)
         })
     })
 })

@@ -56,12 +56,24 @@ export const TestAuthMiddleware: GGHttpTransportMiddleware = {
 }
 
 /**
+ * Sentinel scope value tests use to verify the gate behaves correctly when
+ * the resolver itself throws (DB lookup failure, etc.). Sending this scope
+ * in the test header makes the resolver throw a plain Error.
+ */
+export const TEST_RESOLVER_THROW_SCOPE = "__test:throw__"
+
+/**
  * Scope resolver passed to GGHttp.usePermissions(). Reads from the context
  * the auth middleware populated — never parses headers itself.
+ *
+ * The TEST_RESOLVER_THROW_SCOPE sentinel is honored to exercise the gate's
+ * defensive path: a resolver that crashes should surface as a SERVER_ERROR
+ * to HTTP callers and a HANDSHAKE_ERR to WS callers.
  */
 export const getTestScopes = (): ReadonlySet<string> | null => {
     const scopes = GG_TEST_SCOPES.get()
     if (!scopes) return null
+    if (scopes.includes(TEST_RESOLVER_THROW_SCOPE)) throw new Error("resolver intentionally threw — test signal")
     return new Set(scopes)
 }
 
