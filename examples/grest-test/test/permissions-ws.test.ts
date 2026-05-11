@@ -147,26 +147,17 @@ describe("WebSocket permission gate", () => {
     })
 
     describe("connectPermission (feature socket)", () => {
-        test("connecting without required connect scope closes the socket", async () => {
+        test("connecting without required connect scope rejects the handshake with FORBIDDEN", async () => {
             await withClientScopes([AppPermission.Read], async () => {
                 const client = WsFeaturePermissionsApi.createClient({url: urlFor("WsFeaturePermissionsApi")})
-                // The connect promise should reject (or the socket should close immediately).
-                // The current implementation closes after HANDSHAKE_OK was already sent —
-                // the next operation observes a closed socket. Either reject-on-connect or
-                // reject-on-first-call is acceptable for this iteration.
-                let rejected = false
-                try {
-                    await client.connect()
-                    try {
-                        await client.outgoing.ping()
-                    } catch {
-                        rejected = true
-                    }
-                } catch {
-                    rejected = true
-                }
-                expect(rejected).toBe(true)
-                await client.disconnect().catch(() => {})
+                await expect(client.connect()).rejects.toMatchObject({type: "FORBIDDEN"})
+            })
+        })
+
+        test("connecting without any identity rejects the handshake with NOT_AUTHORIZED", async () => {
+            await withClientScopes(null, async () => {
+                const client = WsFeaturePermissionsApi.createClient({url: urlFor("WsFeaturePermissionsApi")})
+                await expect(client.connect()).rejects.toMatchObject({type: "NOT_AUTHORIZED"})
             })
         })
 

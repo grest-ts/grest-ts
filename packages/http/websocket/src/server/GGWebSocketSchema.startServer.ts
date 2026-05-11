@@ -95,40 +95,54 @@ GGWebSocketSchema.prototype.startServer = function (
         }
     }
 
+    const connectPermission = this.connectPermission
+    const permissionResolver = config.permissionResolver
+
+    // Permission gate as a handshake middleware: runs after user middlewares
+    // (so identity is already in context), resolves scopes, sets GG_PERMISSIONS,
+    // and rejects the handshake with a typed NOT_AUTHORIZED/FORBIDDEN if the
+    // connectPermission doesn't hold. The throw is caught by handleHandshake
+    // and surfaced to the client as a HANDSHAKE_ERR — not a silent disconnect.
+    const middlewares: GGWebSocketMiddleware[] = [...this.middlewares, ...(config?.middlewares ?? [])]
+    if (permissionResolver) {
+        middlewares.push({
+            async process() {
+                const scopes = await permissionResolver()
+                if (scopes != null) GG_PERMISSIONS.set(new GGPermissionChecker(scopes))
+                if (connectPermission !== undefined && connectPermission !== GG_NO_PERMISSIONS) {
+                    if (scopes == null) {
+                        throw new NOT_AUTHORIZED({
+                            debugMessage: `${schemaName} connection requires ${describePermission(connectPermission)} but no caller identity was resolved at handshake`,
+                        })
+                    }
+                    if (!satisfies(connectPermission, scopes)) {
+                        throw new FORBIDDEN({
+                            debugMessage: `${schemaName} connection requires ${describePermission(connectPermission)} — caller scopes did not satisfy`,
+                        })
+                    }
+                }
+            },
+        })
+    }
+
     // @TODO We might want some lookup here based on path/middlewares etc. If I use same socket for multiple paths, we need to reuse also same GGSocketServer.
     const socketServer = new GGSocketServer(http, {
         apiName: schemaName,
         path: normalizedPath,
-        middlewares: [...this.middlewares, ...(config?.middlewares ?? [])],
+        middlewares,
         queryValidator: this.queryValidator,
     });
 
-    const connectPermission = this.connectPermission
-    const permissionResolver = config.permissionResolver
-
-    socketServer.onConnection(async (socket: GGSocket, queryArgs: any) => {
+    socketServer.onConnection((socket: GGSocket, queryArgs: any) => {
         const clientToServerContract = contract.clientToServer
         const serverToClientContract = contract.serverToClient
 
-        // Resolve scopes once at connection start (handshake middlewares already
-        // populated context). Result is cached on this closure for every
-        // subsequent message on this socket.
-        let cachedScopes: ReadonlySet<string> | null = null
-        if (permissionResolver) {
-            cachedScopes = await permissionResolver()
-            if (cachedScopes != null) GG_PERMISSIONS.set(new GGPermissionChecker(cachedScopes))
-
-            if (connectPermission !== undefined && connectPermission !== GG_NO_PERMISSIONS) {
-                if (cachedScopes == null || !satisfies(connectPermission, cachedScopes)) {
-                    // The handshake already completed (HANDSHAKE_OK was sent), so we
-                    // close the socket here. The client sees a normal disconnect.
-                    // @TODO Plumb connectPermission into the handshake itself so the
-                    // client receives a typed HANDSHAKE_ERR with NOT_AUTHORIZED/FORBIDDEN.
-                    socket.close()
-                    return
-                }
-            }
-        }
+        // Handshake middleware (above) resolved scopes and populated GG_PERMISSIONS
+        // for the lifetime of this connection. Capture them into a closure so
+        // per-message handlers gate without re-resolving — a 10-year-old socket
+        // keeps the scopes it was issued at handshake, never re-fetched.
+        const checker = GG_PERMISSIONS.get()
+        const cachedScopes: ReadonlySet<string> | null = checker?.scopes ?? null
 
         const incoming: any = {
             on(handlers: any) {

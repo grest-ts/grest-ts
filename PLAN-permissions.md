@@ -315,7 +315,7 @@ export const ChatApi = webSocketSchema(ChatContract)
     .done()
 ```
 
-Enforcement happens at handshake: the same scope resolver is called, `satisfies()` against the connect permission, reject with HTTP `401`/`403` before opening the socket. Saves resources and gives the client a clean error before they invest in a connection.
+Enforcement happens **during** the handshake: a synthetic permission middleware runs after the user's handshake middlewares, calls the resolver, populates `GG_PERMISSIONS`, and throws `NOT_AUTHORIZED`/`FORBIDDEN` if the connect permission isn't satisfied. The throw is caught by the existing handshake flow and surfaced to the client as a typed `HANDSHAKE_ERR` — not a silent disconnect. The socket is never opened on the client side.
 
 General multiplex sockets simply omit `.connectPermission(...)` — anyone authenticated can connect, each message is gated individually.
 
