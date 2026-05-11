@@ -138,6 +138,8 @@ Plain string literals are also accepted (for token formats that emit ad-hoc scop
 
 ## 2. Contract change
 
+Applies uniformly to both `GGContractClass` (multi-method) and `GGContractFunction` (single-method). Same mandatory `permission` field, same construction-time validation of the `errors:` array, same downstream behavior.
+
 **File:** `packages/schema/schema/src/contract/GGContractClass.ts`
 
 ```typescript
@@ -321,6 +323,8 @@ General multiplex sockets simply omit `.connectPermission(...)` — anyone authe
 
 The resolver runs once at handshake and the result is stored on the connection (alongside other handshake-time context). Per-message gates read this cached set — no re-parsing tokens for every message.
 
+**Revocation limitation, accepted.** Cached-at-handshake means scope revocation (admin removes a user's `chat:write` mid-session) does not take effect until the socket closes. This is the same constraint that already applies to authenticated tokens generally — mid-connection identity rotation isn't a feature. Apps that need strong revocation guarantees on a surface must either avoid long-lived sockets there, or close affected connections externally when revoking. Documented as a known limitation, not a TODO.
+
 ---
 
 ## 6. Startup check
@@ -365,7 +369,7 @@ Mapping rules:
 - `anyOf(...)` → multiple requirement objects (logical OR): `security: [{bearerAuth: ["a"]}, {bearerAuth: ["b"]}]`
 - Nested `anyOf` containing `allOf` is the only awkward case — flatten to disjunctive normal form at emit time.
 
-A default `bearerAuth` scheme is emitted into `securitySchemes` unless the app provides one explicitly.
+A default `bearerAuth` scheme is emitted into `securitySchemes` unless the app provides one explicitly. Apps using OAuth2/OIDC/multiple schemes register their own via a small builder (`.openApiSecurityScheme(name, def)` on the `GGHttp` instance — separate from `.usePermissions(...)` so OpenAPI emit config stays out of the runtime gate). Multi-scheme support deferred until a real use case lands; for v1 we ship a single configurable default.
 
 ### AsyncAPI (`packages-libs/docs/asyncapi`)
 
@@ -523,6 +527,13 @@ For each scenario, the test uses `TestContext` extended with `.scopes(...)` help
 14. **Contract construction rejects missing error types** — defining a non-public method whose `errors:` array lacks `NOT_AUTHORIZED` or `FORBIDDEN` throws at `new GGContractClass(...)` time with a clear message naming the offending method.
 15. **OpenAPI emit** — table-driven test: each combinator → expected `security` shape, including the `anyOf(allOf(...))` flatten-to-DNF case.
 16. **apiDocs render** — snapshot tests for each combinator's rendered "Permissions" block.
+
+### `callOn` (testkit IPC) bypasses the gate — by design
+
+`callOn(SomeContractClass).method(...)` and `callOn(SomeTestableService).method(...)` route through IPC, not HTTP/WS. The permission gate is a transport-layer concern and is not reachable from `callOn`. This is intentional and documented:
+
+- `callOn` is for unit-style testing of handler/service logic in isolation. Permission tests must go through the typed client (`ctx.api.method(...)`), which exercises the real transport including the gate.
+- Devs should not assume "all my `callOn` tests pass → permissions are wired correctly." The dedicated permission integration tests cover the gate.
 
 ### Test layout
 
