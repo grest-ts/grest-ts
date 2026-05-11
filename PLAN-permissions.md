@@ -301,7 +301,7 @@ export const ChatContract = defineSocketContract("Chat", {
 })
 ```
 
-`serverToClient` methods *do not have* a `permission` field at the type level — adding one is a type error. Read access is enforced via the subscribe message's permission, not via the push.
+`serverToClient` methods use the same `GGContractMethod` shape as `clientToServer` (permission field is required at the type level) — but the gate never reads it for s2c since the server originates these messages. Convention: set `permission: GG_NO_PERMISSIONS` on every s2c method. Read access is enforced via the subscribe message's permission, not via the push. (Earlier drafts considered an `Omit<GGContractMethod, "permission">` shape for s2c, but the type plumbing through `GGContractClient` / `GGContractImplementation` / `GGContractApiDefinition` was too invasive for the small ergonomic win.)
 
 ### Connection-level — optional, per the builder
 
