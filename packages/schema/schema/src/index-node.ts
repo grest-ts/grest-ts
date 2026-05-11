@@ -18,6 +18,12 @@ export * from "./contract/GGPromise";
 export * from "./contract/standardErrors";
 export * from "./contract/OK";
 
+// Permission
+export * from "./contract/permission/GGPermission";
+export * from "./contract/permission/satisfies";
+export * from "./contract/permission/GGPermissionChecker";
+export * from "./contract/permission/validatePermission";
+
 // Common
 export * from "./GGSchema";
 export * from "./GGSchemaDescription";
