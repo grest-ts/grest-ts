@@ -421,11 +421,6 @@ exports[`toAsyncApi > matches snapshot 1`] = `
           "$ref": "#/channels/ChatApi/messages/ChatApi_joinRoom",
         },
       ],
-      "security": [
-        {
-          "$ref": "#/components/securitySchemes/BearerToken",
-        },
-      ],
       "title": "Join Room",
     },
     "ChatApi_send_sendMessage": {
@@ -455,11 +450,6 @@ exports[`toAsyncApi > matches snapshot 1`] = `
           },
         ],
       },
-      "security": [
-        {
-          "$ref": "#/components/securitySchemes/BearerToken",
-        },
-      ],
       "title": "Send Message",
     },
     "ConfigTestSocketApi_receive_configChanged": {

@@ -142,11 +142,13 @@ describe("toAsyncApi", () => {
             }
         });
 
-        it("operation has security requirement from bearer middleware", () => {
+        it("operation security follows contract permission, not middleware", () => {
+            // ChatApi.sendMessage declares permission: GG_NO_PERMISSIONS, which is
+            // the source of truth for the operation's security. Middleware-derived
+            // BearerToken is registered as a scheme (clients may still send the
+            // header) but the operation no longer claims it as required.
             const op = doc.operations["ChatApi_send_sendMessage"];
-            expect(op.security).toBeDefined();
-            // AsyncAPI 3.0: security uses $ref, not name-keyed object
-            expect((op.security![0] as any).$ref).toBe("#/components/securitySchemes/BearerToken");
+            expect(op.security).toBeUndefined();
         });
     });
 
