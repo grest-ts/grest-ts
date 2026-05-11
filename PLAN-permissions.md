@@ -151,7 +151,7 @@ export interface GGContractMethod<Request = any, Response = any, ErrorsUnion ext
 
 **Breaking change.** Every existing contract method in every grest-ts project must add `permission`. Greppable, fixable in one pass per project. No deprecation window — single release, flip the switch.
 
-The framework also auto-extends non-`GG_NO_PERMISSIONS` methods' error sets with `NOT_AUTHORIZED | FORBIDDEN` at the client-type level — apps stop listing them by hand and the client type stays accurate.
+**Errors must be listed explicitly.** If `permission !== GG_NO_PERMISSIONS`, the method's `errors:` array MUST include both `NOT_AUTHORIZED` and `FORBIDDEN`. `GGContractClass`'s constructor validates this at contract definition time and throws a clear error if either is missing. No auto-extension — the philosophy matches the mandatory `permission` field: force the developer to see the error paths the framework can throw on this method. Doc generators and client types stay accurate without inference.
 
 ---
 
@@ -192,14 +192,18 @@ Truth table:
 
 ### Validator interface
 
-A zero-arg function that reads from app context (populated by an upstream auth middleware):
+A zero-arg function that reads from app context (populated by an upstream auth middleware). Sync or async — both supported:
 
 ```typescript
-export type GGScopeResolver = () => ReadonlySet<string> | null
+export type GGScopeResolver =
+    () => ReadonlySet<string> | null
+        | Promise<ReadonlySet<string> | null>
 ```
 
 - `null` — no caller identity available → framework throws `NOT_AUTHORIZED`
 - a set — caller is authenticated → framework calls `satisfies(required, set)` → throws `FORBIDDEN` on miss
+
+The gate `await`s the resolver result unconditionally. Sync returns pay only a microtask (negligible). Async is for cases where scopes have to be fetched from a DB or upstream service (uncommon — preferred pattern remains "auth middleware pre-resolves into context, resolver reads context synchronously" — but the door stays open).
 
 ### Wiring on `GGHttp`
 
@@ -233,15 +237,21 @@ Between `requestParser.parseRequest(req)` (line 128) and `implFn(rpcInput)` (lin
 
 ```typescript
 const required = contractFunctionSchema.permission
-if (required !== GG_NO_PERMISSIONS) {
-    const scopes = config.permissionResolver?.()
-    if (scopes == null) throw new NOT_AUTHORIZED()
-    if (!satisfies(required, scopes)) throw new FORBIDDEN()
+if (config.permissionResolver) {
+    const scopes = await config.permissionResolver()
+    if (scopes != null) GG_PERMISSIONS.set(new GGPermissionChecker(scopes))
+    if (required !== GG_NO_PERMISSIONS) {
+        if (scopes == null) throw new NOT_AUTHORIZED()
+        if (!satisfies(required, scopes)) throw new FORBIDDEN()
+    }
+} else if (required !== GG_NO_PERMISSIONS) {
+    // unreachable in practice — startup check prevents this configuration
+    throw new SERVER_ERROR()
 }
 rpcResult = {success: true, type: "OK", data: await implFn(rpcInput)}
 ```
 
-`config.permissionResolver` is passed alongside `middlewares` from `GGHttp`. The check is sync (resolver is sync, `satisfies` is sync) — no extra await on the hot path.
+`config.permissionResolver` is passed alongside `middlewares` from `GGHttp`. The `await` is unconditional (so sync and async resolvers share one code path); for sync resolvers the cost is a single microtask. `GG_PERMISSIONS` is populated for every request when a resolver is wired — including `GG_NO_PERMISSIONS` methods — so public handlers can still call `GG_PERMISSIONS.tryGet()` to personalize for authenticated callers.
 
 ### Sample resolver
 
@@ -270,13 +280,13 @@ export const ChatContract = defineSocketContract("Chat", {
         sendMessage: {
             input: IsMessage,
             success: IsVoid,
-            errors: [SERVER_ERROR],
+            errors: [NOT_AUTHORIZED, FORBIDDEN, SERVER_ERROR],
             permission: AppPermission.ChatWrite,   // mandatory
         },
         subscribe: {
             input: IsRoomId,
             success: IsVoid,
-            errors: [SERVER_ERROR],
+            errors: [NOT_AUTHORIZED, FORBIDDEN, SERVER_ERROR],
             permission: AppPermission.ChatRead,
         },
     },
@@ -421,18 +431,18 @@ export enum AppPermission {
 export const ItemApiContract = new GGContractClass("ItemApi", {
     list: {
         success: IsArray(IsItem),
-        errors: [SERVER_ERROR],
+        errors: [NOT_AUTHORIZED, FORBIDDEN, SERVER_ERROR],
         permission: AppPermission.ItemsRead,
     },
     create: {
         input: IsCreateItemRequest,
         success: IsItem,
-        errors: [VALIDATION_ERROR, SERVER_ERROR],
+        errors: [NOT_AUTHORIZED, FORBIDDEN, VALIDATION_ERROR, SERVER_ERROR],
         permission: {anyOf: [AppPermission.ItemsWrite, AppPermission.Admin]},
     },
     delete: {
         input: IsObject({id: IsUint}),
-        errors: [NOT_FOUND, SERVER_ERROR],
+        errors: [NOT_AUTHORIZED, FORBIDDEN, NOT_FOUND, SERVER_ERROR],
         permission: AppPermission.Admin,
     },
 })
@@ -510,7 +520,7 @@ For each scenario, the test uses `TestContext` extended with `.scopes(...)` help
 11. **WebSocket per-message** — connection accepted, message with insufficient scopes → message-level error, connection stays open.
 12. **WebSocket connect-level reject** — `.connectPermission(...)` set, caller lacks the scope → handshake rejected before socket opens.
 13. **WebSocket s2c emit** — server pushes regardless of scopes (server originates); but a `subscribe` c2s gate prevents subscription in the first place.
-14. **Auto-extended error type** — client type for a protected method includes `NOT_AUTHORIZED | FORBIDDEN` even if the contract's `errors:` array omitted them.
+14. **Contract construction rejects missing error types** — defining a non-public method whose `errors:` array lacks `NOT_AUTHORIZED` or `FORBIDDEN` throws at `new GGContractClass(...)` time with a clear message naming the offending method.
 15. **OpenAPI emit** — table-driven test: each combinator → expected `security` shape, including the `anyOf(allOf(...))` flatten-to-DNF case.
 16. **apiDocs render** — snapshot tests for each combinator's rendered "Permissions" block.
 
@@ -569,5 +579,5 @@ The `@grest-ts/schema` README also gets a short subsection introducing `GGPermis
 1. **`anyOf(allOf(...))` flatten to DNF for OpenAPI** — is the upper bound on output size acceptable? Worst case `anyOf(allOf(a,b,c), allOf(d,e,f), allOf(g,h,i))` produces three requirement objects, each with three scopes — fine. Deeper nesting could blow up; we'll cap depth at 3 levels and reject deeper trees at construction time with a clear error.
 2. **Connection-level WS permission and per-message permission overlap.** If a method requires `chat:write` and the connection requires `chat:connect`, the per-message check still runs (we don't infer that `chat:connect` implies anything about `chat:write`). Document explicitly: connect-level is a *gate*, not an *inheritance*.
 3. **Should `GG_ANY_PERMISSION` accept empty scope sets?** Current decision: no — empty set fails (`scopes.size > 0`). Rationale: lets apps distinguish "authenticated identity with some assigned role" from "authenticated identity with nothing assigned yet" (e.g. just-registered users awaiting role assignment). Apps that don't care can issue every user a baseline scope like `user:basic` and the distinction collapses.
-4. **Resolver async signature?** Current design is sync. If apps need async (e.g. to consult a policy engine over the network on the request hot path), we can widen to `() => ReadonlySet<string> | null | Promise<ReadonlySet<string> | null>`. Defer until a real use case appears — sync is faster on the hot path and most policy lookups are upstream of the handler anyway (auth middleware can pre-resolve scopes into context).
+4. ~~**Resolver async signature?**~~ **Resolved.** Both sync and async are supported. Door stays open for resolvers that need DB / upstream lookups; the preferred pattern remains pre-resolving in auth middleware.
 5. **Field name `permission` vs OpenAPI's `security`?** Keep `permission` — grest-ts speaks the language of the developer reading the contract ("what permission does this need?") rather than the security-tool reader. Doc generators bridge to OpenAPI's `security` at emit time.
