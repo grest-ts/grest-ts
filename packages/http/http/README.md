@@ -166,6 +166,25 @@ export const MyApiContract = new GGContractClass("MyApi", {
 })
 ```
 
+## Permissions
+
+Every contract method declares a `permission` — this is mandatory at the type level. The framework gates every request against the declared permission **before the handler runs**, so missing or wrong scopes can never reach service code.
+
+The wiring chain is read top-to-bottom:
+
+```typescript
+new GGHttp(httpServer)
+    .use(new JwtAuthMiddleware(secret))   // parses the token → context
+    .usePermissions(getScopes)             // reads context → scope set
+    .http(ItemApi, new ItemApiImpl())
+```
+
+Each step has one job: the auth middleware turns a token into identity in context; the scope resolver (a zero-arg `() => ReadonlySet<string> | null`, sync or async) extracts the caller's scopes from that context; the gate calls the resolver, checks `satisfies(method.permission, scopes)`, and throws `NOT_AUTHORIZED` (no identity) or `FORBIDDEN` (wrong scopes). Order matters — `.usePermissions(...)` must come before the `.http(...)` calls it should apply to.
+
+**Hard guarantee.** If a schema has any method with a non-`GG_NO_PERMISSIONS` permission and no resolver is wired, the server **refuses to start** — listing every offending method by name. No silent under-protection is possible. Methods that are genuinely public must say so by setting `permission: GG_NO_PERMISSIONS`.
+
+**What this does not cover.** The permission gates *endpoint access* — "is this caller allowed to invoke this method at all?" It does not handle *resource access* — "can this caller edit *this specific* post?" That check still belongs in the handler. The same `GGPermissionChecker` the gate used is exposed via `GG_PERMISSIONS.get()`, so handler-side sub-decisions use identical logic with no drift between framework and app code.
+
 ## Authentication & Context
 
 ### Using Codec (Recommended for Header-Based Auth)

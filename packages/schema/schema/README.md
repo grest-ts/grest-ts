@@ -102,6 +102,20 @@ if (result.success) {
 
 See [Contract documentation](./README-contract.md) for custom errors, GGPromise helpers, and more.
 
+## Permissions (reference)
+
+Contract methods declare a `permission` field, which is **mandatory** on every method. Exports from `@grest-ts/schema`:
+
+- `GG_NO_PERMISSIONS` — explicit public endpoint.
+- `GG_ANY_PERMISSION` — any authenticated identity (caller must have at least one scope).
+- A bare `string` — single OAuth-style scope.
+- `{allOf: [...]}` / `{anyOf: [...]}` — AND/OR combinators (non-empty tuples).
+- `satisfies(required, scopes)` — pure checker used by both the gate and `GGPermissionChecker.has(...)`.
+- `GGPermissionChecker` — handler-side accessor (the gate populates one in context via `GG_PERMISSIONS` from `@grest-ts/http`).
+- `validatePermission(tree)` — well-formedness pass; runs in `GGContractClass`/`GGContractFunction` constructors.
+
+For the runtime mechanics — gate placement, transport wiring, and the refuse-to-start startup check — see [`@grest-ts/http`](../../http/http/README.md) and [`@grest-ts/websocket`](../../http/websocket/README.md).
+
 ## Documentation
 
 - [Usage](./README-usage.md) - How to define and use validators

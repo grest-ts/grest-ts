@@ -21,6 +21,9 @@ TypeScript framework for building services around **contracts** — typed API de
 * **Tree-shakable** — Fully tree-shakable for minimal bundle sizes (for server package 400mb vs 5mb starts to matter at scale for release speeds)
 * **Typed errors across boundaries** — Errors carry reference IDs, typed data, and flow across service boundaries as discriminated unions. `await` to throw, `.asResult()` to handle explicitly —
   callers choose per call site.
+* **Framework-enforced permissions** — Every contract method declares a required `permission` (mandatory at compile time; `GG_NO_PERMISSIONS` marks a method explicitly public). The framework gates
+  every HTTP request and every clientToServer WebSocket message before the handler runs. See the [`@grest-ts/http`](packages/http/http/README.md) and [`@grest-ts/websocket`](packages/http/websocket/README.md)
+  READMEs for the mechanism and guarantees.
 * **Extendable** — Testkit, config sources, loggers, metrics exporters — all pluggable. Or don't even use them if you like your own opensource version – they most likely work just fine.
 
 ### Purpose

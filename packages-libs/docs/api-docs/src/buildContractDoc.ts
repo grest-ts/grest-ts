@@ -13,11 +13,12 @@
 
 import type {GGHttpSchema, GGHttpTransportMiddleware} from "@grest-ts/http";
 import type {GGWebSocketSchema} from "@grest-ts/websocket";
-import type {ANY_ERROR_CLS, GGSchema} from "@grest-ts/schema";
+import type {ANY_ERROR_CLS, GGPermission, GGSchema} from "@grest-ts/schema";
+import {GG_ANY_PERMISSION, GG_NO_PERMISSIONS} from "@grest-ts/schema";
 import {JsonSchemaAdapter} from "./jsonSchemaAdapter";
 import type {
     ApiDocsDocument, AuthDoc, ContractDoc, ErrorDoc, GroupDoc,
-    JsonSchemaDescription, MethodDoc, NamedSchemaDoc, ParamDoc, SchemaRef,
+    JsonSchemaDescription, MethodDoc, NamedSchemaDoc, ParamDoc, PermissionDoc, PermissionTree, SchemaRef,
     SchemaUsage,
 } from "./docTypes";
 
@@ -133,7 +134,7 @@ function buildHttpContract(httpSchema: GGHttpSchema<any, any>, ctx: BuildContext
 function buildHttpMethod(
     methodName: string,
     codec: { method: string; path: string },
-    contract: { input?: GGSchema<any>; success?: GGSchema<any>; errors?: ANY_ERROR_CLS[] },
+    contract: { input?: GGSchema<any>; success?: GGSchema<any>; errors?: ANY_ERROR_CLS[]; permission?: GGPermission },
     contractName: string,
     ctx: BuildContext,
 ): MethodDoc {
@@ -147,6 +148,7 @@ function buildHttpMethod(
         httpMethod,
         httpPath: fullPath,
         errors: collectErrors(contract.errors, contractName, methodName, ctx),
+        ...(contract.permission !== undefined ? {permission: buildPermissionDoc(contract.permission)} : {}),
     };
 
     // Input handling — split by HTTP verb.
@@ -221,19 +223,23 @@ function buildWsContract(wsSchema: GGWebSocketSchema<any, any, any, any, any>, c
         methods.push(buildWsMethod(methodName, m, "server-to-client", wsSchema.name, ctx));
     }
 
+    const connectPermission = wsSchema.connectPermission !== undefined
+        ? buildPermissionDoc(wsSchema.connectPermission)
+        : undefined;
     return {
         name: wsSchema.name,
         kind: "ws",
         path: "/" + wsSchema.path.replace(/^\/+/, ""),
         ...(auth.length > 0 ? {auth} : {}),
         ...(headers.length > 0 ? {headers} : {}),
+        ...(connectPermission ? {connectPermission} : {}),
         methods,
     };
 }
 
 function buildWsMethod(
     methodName: string,
-    contract: { input?: GGSchema<any>; success?: GGSchema<any>; errors?: ANY_ERROR_CLS[] },
+    contract: { input?: GGSchema<any>; success?: GGSchema<any>; errors?: ANY_ERROR_CLS[]; permission?: GGPermission },
     direction: "client-to-server" | "server-to-client",
     contractName: string,
     ctx: BuildContext,
@@ -246,12 +252,18 @@ function buildWsMethod(
         pattern = hasReply ? "server-initiated-request" : "server-push";
     }
 
+    // Server-pushed messages have no caller identity for the gate to check, so
+    // the permission field on those is documentation-only — render it only for
+    // c2s methods to avoid surfacing a meaningless requirement on s2c pushes.
+    const includePermission = direction === "client-to-server" && contract.permission !== undefined;
+
     const method: MethodDoc = {
         name: methodName,
         summary: camelToTitle(methodName),
         wsDirection: direction,
         wsPattern: pattern,
         errors: collectErrors(contract.errors, contractName, methodName, ctx),
+        ...(includePermission ? {permission: buildPermissionDoc(contract.permission!)} : {}),
     };
 
     if (contract.input) {
@@ -495,4 +507,48 @@ function normalizePath(path: string): string {
     let p = path;
     if (!p.startsWith("/")) p = "/" + p;
     return p.replace(/\/+$/, "") || "/";
+}
+
+// ── Permission rendering ───────────────────────────────────────────────
+
+function buildPermissionDoc(permission: GGPermission): PermissionDoc {
+    const tree = toPermissionTree(permission);
+    return {tree, text: renderPermissionText(tree)};
+}
+
+function toPermissionTree(p: GGPermission): PermissionTree {
+    if (p === GG_NO_PERMISSIONS) return {kind: "public"};
+    if (p === GG_ANY_PERMISSION) return {kind: "anyAuth"};
+    if (typeof p === "string") return {kind: "scope", scope: p};
+    if (typeof p === "symbol") {
+        // Unknown sentinel — defensive, validatePermission should have caught it.
+        return {kind: "public"};
+    }
+    if ("allOf" in p) return {kind: "allOf", children: p.allOf.map(toPermissionTree)};
+    if ("anyOf" in p) return {kind: "anyOf", children: p.anyOf.map(toPermissionTree)};
+    return {kind: "public"};
+}
+
+function renderPermissionText(tree: PermissionTree): string {
+    switch (tree.kind) {
+        case "public":  return "Public — no authentication required.";
+        case "anyAuth": return "Any authenticated identity.";
+        case "scope":   return `Requires \`${tree.scope}\`.`;
+        case "allOf":   return `Requires ${joinChildren(tree.children, " **and** ")}.`;
+        case "anyOf":   return `Requires ${joinChildren(tree.children, " **or** ")}.`;
+    }
+}
+
+function joinChildren(children: PermissionTree[], sep: string): string {
+    return children.map(renderInline).join(sep);
+}
+
+function renderInline(tree: PermissionTree): string {
+    switch (tree.kind) {
+        case "public":  return "public";
+        case "anyAuth": return "any authenticated identity";
+        case "scope":   return `\`${tree.scope}\``;
+        case "allOf":   return `(${joinChildren(tree.children, " **and** ")})`;
+        case "anyOf":   return `(${joinChildren(tree.children, " **or** ")})`;
+    }
 }
