@@ -11,6 +11,9 @@ function walk(p: unknown, path: string, depth: number): void {
         throw new Error(`Permission tree too deep at ${path || "root"}: max depth is ${MAX_DEPTH}`);
     }
     if (p === GG_NO_PERMISSIONS || p === GG_ANY_PERMISSION) return;
+    if (typeof p === "symbol") {
+        throw new Error(`Permission at ${path || "root"} uses an unknown symbol; only GG_NO_PERMISSIONS and GG_ANY_PERMISSION are recognized`);
+    }
     if (typeof p === "string") {
         if (p.length === 0) throw new Error(`Permission scope at ${path || "root"} must be a non-empty string`);
         return;

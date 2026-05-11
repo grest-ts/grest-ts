@@ -1,5 +1,5 @@
 import {defineSocketContract, webSocketSchema} from "@grest-ts/websocket"
-import {IsNumber, IsObject, IsString, SERVER_ERROR} from "@grest-ts/schema"
+import {IsNumber, IsObject, IsString, SERVER_ERROR, GG_NO_PERMISSIONS } from "@grest-ts/schema"
 
 export const IsQueryArgs = IsObject({
     room: IsString.nonEmpty,
@@ -12,6 +12,7 @@ export const QuerySocketApiContract = defineSocketContract("QuerySocketApi", {
         echoRoom: {
             success: IsString,
             errors: [SERVER_ERROR],
+            permission: GG_NO_PERMISSIONS
         },
     },
     serverToClient: {},

@@ -1,5 +1,5 @@
 import {defineSocketContract, webSocketSchema} from "@grest-ts/websocket"
-import {IsObject, IsString, SERVER_ERROR} from "@grest-ts/schema"
+import {IsObject, IsString, SERVER_ERROR, GG_NO_PERMISSIONS } from "@grest-ts/schema"
 import {UNAUTHORIZED, NOT_FOUND} from "../hub/errors"
 import {SocketAuthHeaderMiddleware} from "../auth/internalAuth"
 import {
@@ -23,16 +23,32 @@ const IsTopicRequest = IsObject({topic: IsString})
  */
 export const SocketContract = defineSocketContract("KrattSocket", {
     clientToServer: {
-        subscribe:   {input: IsTopicRequest, errors: [UNAUTHORIZED, NOT_FOUND, SERVER_ERROR]},
-        unsubscribe: {input: IsTopicRequest, errors: [SERVER_ERROR]},
+        subscribe:   {input: IsTopicRequest, errors: [UNAUTHORIZED, NOT_FOUND, SERVER_ERROR],
+            permission: GG_NO_PERMISSIONS
+        },
+        unsubscribe: {input: IsTopicRequest, errors: [SERVER_ERROR],
+            permission: GG_NO_PERMISSIONS
+        },
     },
     serverToClient: {
-        onTask:         {input: IsTaskEvent},
-        onAgent:        {input: IsAgentEvent},
-        onService:      {input: IsServiceEvent},
-        onBaseImage:    {input: IsBaseImageEvent},
-        onProjectImage: {input: IsProjectImageEvent},
-        onTaskOverview: {input: IsTaskOverviewEvent},
+        onTask:         {input: IsTaskEvent,
+            permission: GG_NO_PERMISSIONS
+        },
+        onAgent:        {input: IsAgentEvent,
+            permission: GG_NO_PERMISSIONS
+        },
+        onService:      {input: IsServiceEvent,
+            permission: GG_NO_PERMISSIONS
+        },
+        onBaseImage:    {input: IsBaseImageEvent,
+            permission: GG_NO_PERMISSIONS
+        },
+        onProjectImage: {input: IsProjectImageEvent,
+            permission: GG_NO_PERMISSIONS
+        },
+        onTaskOverview: {input: IsTaskOverviewEvent,
+            permission: GG_NO_PERMISSIONS
+        },
     },
 })
 

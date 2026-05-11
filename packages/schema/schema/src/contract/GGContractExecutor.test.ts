@@ -12,6 +12,7 @@ import {IsString} from '../schemas/IsString';
 import {IsNumber} from '../schemas/IsNumber';
 import {IsObject} from '../schemas/IsObject';
 import {GGContractMethod} from './GGContractClass';
+import {GG_NO_PERMISSIONS} from "./permission/GGPermission";
 
 const EXEC_CUSTOM_ERROR = ERROR.define('EXEC_CUSTOM_ERROR', 400);
 const EXEC_DATA_ERROR = ERROR.define('EXEC_DATA_ERROR', 400, IsString);
@@ -24,6 +25,7 @@ describe('GGContractExecutor', () => {
             const contract: GGContractMethod = {
                 input: IsObject({name: IsString}),
                 success: IsString,
+                permission: GG_NO_PERMISSIONS
             };
 
             const result = await GGContractExecutor.call(
@@ -42,6 +44,7 @@ describe('GGContractExecutor', () => {
             const contract: GGContractMethod = {
                 input: IsObject({value: IsNumber}),
                 success: IsNumber,
+                permission: GG_NO_PERMISSIONS
             };
 
             await GGContractExecutor.call(
@@ -61,6 +64,7 @@ describe('GGContractExecutor', () => {
         it('should allow any input when no schema', async () => {
             const contract: GGContractMethod = {
                 success: IsString,
+                permission: GG_NO_PERMISSIONS
             };
 
             const result = await GGContractExecutor.call(
@@ -78,6 +82,7 @@ describe('GGContractExecutor', () => {
             const contract: GGContractMethod = {
                 input: IsObject({count: IsNumber}),
                 success: IsNumber,
+                permission: GG_NO_PERMISSIONS
             };
 
             await GGContractExecutor.call(
@@ -101,6 +106,7 @@ describe('GGContractExecutor', () => {
             const contract: GGContractMethod = {
                 input: IsNumber,
                 success: IsNumber,
+                permission: GG_NO_PERMISSIONS
             };
 
             const result = await GGContractExecutor.call(
@@ -121,6 +127,7 @@ describe('GGContractExecutor', () => {
             const contract: GGContractMethod = {
                 input: IsNumber,
                 success: IsNumber,
+                permission: GG_NO_PERMISSIONS
             };
 
             const result = await GGContractExecutor.call(
@@ -138,6 +145,7 @@ describe('GGContractExecutor', () => {
             const contract: GGContractMethod = {
                 input: IsString,
                 success: IsObject({id: IsNumber}),
+                permission: GG_NO_PERMISSIONS
             };
 
             const result = await GGContractExecutor.call(
@@ -157,6 +165,7 @@ describe('GGContractExecutor', () => {
         it('should set data to undefined when no success schema', async () => {
             const contract: GGContractMethod = {
                 input: IsString,
+                permission: GG_NO_PERMISSIONS
             };
 
             const result = await GGContractExecutor.call(
@@ -180,6 +189,7 @@ describe('GGContractExecutor', () => {
                 input: IsString,
                 success: IsString,
                 errors: [EXEC_CUSTOM_ERROR],
+                permission: GG_NO_PERMISSIONS
             };
 
             const result = await GGContractExecutor.call(
@@ -200,6 +210,7 @@ describe('GGContractExecutor', () => {
                 input: IsString,
                 success: IsString,
                 errors: [EXEC_CUSTOM_ERROR],
+                permission: GG_NO_PERMISSIONS
             };
 
             const result = await GGContractExecutor.call(
@@ -219,6 +230,7 @@ describe('GGContractExecutor', () => {
             const contract: GGContractMethod = {
                 input: IsString,
                 success: IsString,
+                permission: GG_NO_PERMISSIONS
             };
 
             const result = await GGContractExecutor.call(
@@ -239,6 +251,7 @@ describe('GGContractExecutor', () => {
                 input: IsString,
                 success: IsString,
                 errors: [EXEC_CUSTOM_ERROR], // EXEC_DATA_ERROR not listed
+                permission: GG_NO_PERMISSIONS
             };
 
             const result = await GGContractExecutor.call(
@@ -259,6 +272,7 @@ describe('GGContractExecutor', () => {
                 input: IsString,
                 success: IsString,
                 errors: [EXEC_DATA_ERROR],
+                permission: GG_NO_PERMISSIONS
             };
 
             const result = await GGContractExecutor.call(
@@ -282,6 +296,7 @@ describe('GGContractExecutor', () => {
             const contract: GGContractMethod = {
                 success: IsString,
                 errors: [NOT_AUTHORIZED],
+                permission: GG_NO_PERMISSIONS
             };
 
             const result = await GGContractExecutor.call(
@@ -301,6 +316,7 @@ describe('GGContractExecutor', () => {
             const contract: GGContractMethod = {
                 success: IsString,
                 errors: [FORBIDDEN],
+                permission: GG_NO_PERMISSIONS
             };
 
             const result = await GGContractExecutor.call(
@@ -320,6 +336,7 @@ describe('GGContractExecutor', () => {
             const contract: GGContractMethod = {
                 success: IsString,
                 errors: [NOT_FOUND],
+                permission: GG_NO_PERMISSIONS
             };
 
             const result = await GGContractExecutor.call(
@@ -339,6 +356,7 @@ describe('GGContractExecutor', () => {
             const contract: GGContractMethod = {
                 success: IsString,
                 errors: [EXISTS],
+                permission: GG_NO_PERMISSIONS
             };
 
             const result = await GGContractExecutor.call(
@@ -358,6 +376,7 @@ describe('GGContractExecutor', () => {
             const contract: GGContractMethod = {
                 success: IsString,
                 errors: [ROUTE_NOT_FOUND],
+                permission: GG_NO_PERMISSIONS
             };
 
             const result = await GGContractExecutor.call(
@@ -377,6 +396,7 @@ describe('GGContractExecutor', () => {
             const contract: GGContractMethod = {
                 success: IsString,
                 // NOT_AUTHORIZED not listed in errors
+                permission: GG_NO_PERMISSIONS,
             };
 
             const result = await GGContractExecutor.call(
@@ -400,6 +420,7 @@ describe('GGContractExecutor', () => {
             const contract: GGContractMethod = {
                 input: IsObject({value: IsNumber}),
                 success: IsNumber,
+                permission: GG_NO_PERMISSIONS
             };
 
             await GGContractExecutor.call(
@@ -419,6 +440,7 @@ describe('GGContractExecutor', () => {
             const contract: GGContractMethod = {
                 input: IsNumber,
                 success: IsNumber,
+                permission: GG_NO_PERMISSIONS
             };
 
             const result = await GGContractExecutor.call(
@@ -437,6 +459,7 @@ describe('GGContractExecutor', () => {
         it('should still create error instances when noValidation is true but errors array is provided', async () => {
             const contract: GGContractMethod = {
                 errors: [EXEC_CUSTOM_ERROR, EXEC_DATA_ERROR],
+                permission: GG_NO_PERMISSIONS
             };
 
             // Simulates client receiving error JSON from server
@@ -460,6 +483,7 @@ describe('GGContractExecutor', () => {
         it('should handle error with data when noValidation is true', async () => {
             const contract: GGContractMethod = {
                 errors: [EXEC_DATA_ERROR],
+                permission: GG_NO_PERMISSIONS
             };
 
             // Simulates client receiving error JSON with data from server
@@ -484,6 +508,7 @@ describe('GGContractExecutor', () => {
         it('should handle undefined errors array gracefully when noValidation is true', async () => {
             const contract: GGContractMethod = {
                 // No errors array - this should not throw
+                permission: GG_NO_PERMISSIONS,
             };
 
             // When errors array is undefined, custom errors can't be created
@@ -510,6 +535,7 @@ describe('GGContractExecutor', () => {
         it('should reject non-object response', async () => {
             const contract: GGContractMethod = {
                 success: IsString,
+                permission: GG_NO_PERMISSIONS
             };
 
             const result = await GGContractExecutor.call(
@@ -526,6 +552,7 @@ describe('GGContractExecutor', () => {
         it('should reject null response when success schema defined', async () => {
             const contract: GGContractMethod = {
                 success: IsString,
+                permission: GG_NO_PERMISSIONS
             };
 
             const result = await GGContractExecutor.call(
@@ -544,6 +571,7 @@ describe('GGContractExecutor', () => {
             const contract: GGContractMethod = {
                 success: IsString,
                 errors: [EXEC_CUSTOM_ERROR],
+                permission: GG_NO_PERMISSIONS
             };
 
             const result = await GGContractExecutor.call(
@@ -565,6 +593,7 @@ describe('GGContractExecutor', () => {
         it('should handle client-side OK JSON format', async () => {
             const contract: GGContractMethod = {
                 success: IsString,
+                permission: GG_NO_PERMISSIONS
             };
 
             const result = await GGContractExecutor.call(
@@ -591,6 +620,7 @@ describe('GGContractExecutor', () => {
             const contract: GGContractMethod = {
                 input: IsNumber,
                 success: IsNumber,
+                permission: GG_NO_PERMISSIONS
             };
 
             const result = await GGContractExecutor.call(
@@ -612,6 +642,7 @@ describe('GGContractExecutor', () => {
         it('should handle Promise rejection', async () => {
             const contract: GGContractMethod = {
                 success: IsString,
+                permission: GG_NO_PERMISSIONS
             };
 
             const result = await GGContractExecutor.call(

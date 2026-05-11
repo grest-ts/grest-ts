@@ -1,4 +1,4 @@
-import {GGContractClass, IsObject, IsString, IsNumber, IsLiteral, IsArray, SERVER_ERROR} from "@grest-ts/schema"
+import {GGContractClass, IsObject, IsString, IsNumber, IsLiteral, IsArray, SERVER_ERROR, GG_NO_PERMISSIONS } from "@grest-ts/schema"
 import {GGRpc, httpSchema} from "@grest-ts/http"
 import {UNAUTHORIZED, NOT_FOUND} from "./errors"
 import {GG_USER_TOKEN, GG_ORG_TOKEN} from "../auth/AuthContext"
@@ -51,15 +51,18 @@ export const ProjectImageApiContract = new GGContractClass("ProjectImageApi", {
         input: IsListProjectImagesRequest,
         success: IsArray(IsProjectImage),
         errors: [UNAUTHORIZED, SERVER_ERROR],
+        permission: GG_NO_PERMISSIONS
     },
     get: {
         input: IsProjectImageIdRequest,
         success: IsProjectImage,
         errors: [UNAUTHORIZED, NOT_FOUND, SERVER_ERROR],
+        permission: GG_NO_PERMISSIONS
     },
     delete: {
         input: IsProjectImageIdRequest,
         errors: [UNAUTHORIZED, NOT_FOUND, SERVER_ERROR],
+        permission: GG_NO_PERMISSIONS
     },
 })
 

@@ -1,9 +1,8 @@
-export const GG_NO_PERMISSIONS = Symbol.for("@grest-ts/permission/none")
-export const GG_ANY_PERMISSION = Symbol.for("@grest-ts/permission/any")
+export const GG_NO_PERMISSIONS: symbol = Symbol.for("@grest-ts/permission/none")
+export const GG_ANY_PERMISSION: symbol = Symbol.for("@grest-ts/permission/any")
 
 export type GGPermission =
-    | typeof GG_NO_PERMISSIONS
-    | typeof GG_ANY_PERMISSION
+    | symbol
     | string
     | {allOf: readonly [GGPermission, ...GGPermission[]]}
     | {anyOf: readonly [GGPermission, ...GGPermission[]]}

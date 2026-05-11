@@ -1,5 +1,5 @@
 import {GGRpc, httpSchema} from "@grest-ts/http"
-import {FORBIDDEN, GGContractClass, IsArray, IsBoolean, IsLatitude, IsLongitude, IsObject, IsString, IsUint, NOT_AUTHORIZED, NOT_FOUND, SERVER_ERROR, VALIDATION_ERROR} from "@grest-ts/schema";
+import {FORBIDDEN, GGContractClass, IsArray, IsBoolean, IsLatitude, IsLongitude, IsObject, IsString, IsUint, NOT_AUTHORIZED, NOT_FOUND, SERVER_ERROR, VALIDATION_ERROR, GG_NO_PERMISSIONS } from "@grest-ts/schema";
 import {GG_USER_AUTH_TOKEN} from "./auth/UserAuth";
 
 // ---------------------------------------------------------
@@ -51,32 +51,38 @@ export const IsChecklistIdParam = IsObject({
 export const ChecklistApiContract = new GGContractClass("ChecklistApi", {
     list: {
         success: IsArray(IsChecklistItem),
-        errors: [NOT_AUTHORIZED, SERVER_ERROR]
+        errors: [NOT_AUTHORIZED, SERVER_ERROR],
+        permission: GG_NO_PERMISSIONS
     },
     add: {
         input: IsAddChecklistRequest,
         success: IsChecklistItem,
-        errors: [NOT_AUTHORIZED, VALIDATION_ERROR, SERVER_ERROR]
+        errors: [NOT_AUTHORIZED, VALIDATION_ERROR, SERVER_ERROR],
+        permission: GG_NO_PERMISSIONS
     },
     get: {
         input: IsChecklistIdParam,
         success: IsChecklistItem,
-        errors: [NOT_AUTHORIZED, FORBIDDEN, NOT_FOUND, VALIDATION_ERROR, SERVER_ERROR]
+        errors: [NOT_AUTHORIZED, FORBIDDEN, NOT_FOUND, VALIDATION_ERROR, SERVER_ERROR],
+        permission: GG_NO_PERMISSIONS
     },
     edit: {
         input: IsEditChecklistRequest,
         success: IsChecklistItem,
-        errors: [NOT_AUTHORIZED, FORBIDDEN, NOT_FOUND, VALIDATION_ERROR, SERVER_ERROR]
+        errors: [NOT_AUTHORIZED, FORBIDDEN, NOT_FOUND, VALIDATION_ERROR, SERVER_ERROR],
+        permission: GG_NO_PERMISSIONS
     },
     delete: {
         input: IsChecklistIdParam,
         success: undefined as undefined,
-        errors: [NOT_AUTHORIZED, FORBIDDEN, NOT_FOUND, VALIDATION_ERROR, SERVER_ERROR]
+        errors: [NOT_AUTHORIZED, FORBIDDEN, NOT_FOUND, VALIDATION_ERROR, SERVER_ERROR],
+        permission: GG_NO_PERMISSIONS
     },
     markDone: {
         input: IsChecklistIdParam,
         success: IsChecklistItem,
-        errors: [NOT_AUTHORIZED, FORBIDDEN, NOT_FOUND, VALIDATION_ERROR, SERVER_ERROR]
+        errors: [NOT_AUTHORIZED, FORBIDDEN, NOT_FOUND, VALIDATION_ERROR, SERVER_ERROR],
+        permission: GG_NO_PERMISSIONS
     }
 })
 

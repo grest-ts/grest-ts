@@ -1,4 +1,4 @@
-import {GGContractClass, IsObject, IsString, IsArray, SERVER_ERROR} from "@grest-ts/schema"
+import {GGContractClass, IsObject, IsString, IsArray, SERVER_ERROR, GG_NO_PERMISSIONS } from "@grest-ts/schema"
 import {IsFile} from "@grest-ts/schema-file"
 import {GGRpc, httpSchema} from "@grest-ts/http"
 import {GGFileUpload} from "@grest-ts/http-file"
@@ -33,35 +33,42 @@ export const UserApiContract = new GGContractClass("UserApi", {
     list: {
         success: IsArray(IsUser),
         errors: [UNAUTHORIZED, SERVER_ERROR],
+        permission: GG_NO_PERMISSIONS
     },
     get: {
         input: IsUserIdRequest,
         success: IsUser,
         errors: [UNAUTHORIZED, NOT_FOUND, SERVER_ERROR],
+        permission: GG_NO_PERMISSIONS
     },
     create: {
         input: IsCreateUserRequest,
         success: IsUser,
         errors: [UNAUTHORIZED, ALREADY_EXISTS, SERVER_ERROR],
+        permission: GG_NO_PERMISSIONS
     },
     update: {
         input: IsUpdateUserRequest,
         success: IsUser,
         errors: [UNAUTHORIZED, NOT_FOUND, ALREADY_EXISTS, SERVER_ERROR],
+        permission: GG_NO_PERMISSIONS
     },
     delete: {
         input: IsUserIdRequest,
         errors: [UNAUTHORIZED, NOT_FOUND, SERVER_ERROR],
+        permission: GG_NO_PERMISSIONS
     },
     /** Upload Claude CLI credentials (.credentials.json). Encrypted at rest, pushed to VMs on credential sync. */
     setClaudeCredentials: {
         input: IsSetClaudeCredentialsRequest,
         errors: [UNAUTHORIZED, SERVER_ERROR],
+        permission: GG_NO_PERMISSIONS
     },
     /** Set Claude CLI config (.claude.json). Editable online. mcpServers stripped before storage. */
     setClaudeConfig: {
         input: IsSetClaudeConfigRequest,
         errors: [UNAUTHORIZED, SERVER_ERROR],
+        permission: GG_NO_PERMISSIONS
     },
 })
 

@@ -1,5 +1,5 @@
 import {GGRpc, httpSchema} from "@grest-ts/http";
-import {IsArray, IsObject, IsString, IsNumber, IsTuple, IsLiteral, GGContractClass, FORBIDDEN, NOT_AUTHORIZED, NOT_FOUND, SERVER_ERROR, VALIDATION_ERROR} from "@grest-ts/schema";
+import {IsArray, IsObject, IsString, IsNumber, IsTuple, IsLiteral, GGContractClass, FORBIDDEN, NOT_AUTHORIZED, NOT_FOUND, SERVER_ERROR, VALIDATION_ERROR, GG_NO_PERMISSIONS } from "@grest-ts/schema";
 import {GG_COMPANY_AUTH_TOKEN} from "../middleware/CompanyAuthHeader";
 import {IsEmailId} from "../Brands";
 import {GG_USER_AUTH} from "../middleware/UserAuthHeader";
@@ -52,17 +52,20 @@ export const ExpenseEmailApiContract = new GGContractClass("ExpenseEmailApi", {
     list: {
         input: IsEmailQuery,
         success: IsEmailQueryResponse,
-        errors: [NOT_AUTHORIZED, FORBIDDEN, VALIDATION_ERROR, SERVER_ERROR]
+        errors: [NOT_AUTHORIZED, FORBIDDEN, VALIDATION_ERROR, SERVER_ERROR],
+        permission: GG_NO_PERMISSIONS
     },
     get: {
         input: IsEmailGetRequest,
         success: IsEmailQueryResponseRow,
-        errors: [NOT_AUTHORIZED, NOT_FOUND, FORBIDDEN, VALIDATION_ERROR, SERVER_ERROR]
+        errors: [NOT_AUTHORIZED, NOT_FOUND, FORBIDDEN, VALIDATION_ERROR, SERVER_ERROR],
+        permission: GG_NO_PERMISSIONS
     },
     delete: {
         input: IsEmailDeleteRequest,
         success: undefined as undefined,
-        errors: [NOT_AUTHORIZED, NOT_FOUND, FORBIDDEN, VALIDATION_ERROR, SERVER_ERROR]
+        errors: [NOT_AUTHORIZED, NOT_FOUND, FORBIDDEN, VALIDATION_ERROR, SERVER_ERROR],
+        permission: GG_NO_PERMISSIONS
     }
 })
 

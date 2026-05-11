@@ -14,8 +14,7 @@
 import {defineSocketContract, webSocketSchema} from "@grest-ts/websocket";
 import {
     IsString, IsNumber, IsBoolean, IsArray, IsObject, IsLiteral,
-    IsDiscriminated, IsBearerToken, VALIDATION_ERROR, SERVER_ERROR, ERROR
-} from "@grest-ts/schema";
+    IsDiscriminated, IsBearerToken, VALIDATION_ERROR, SERVER_ERROR, ERROR, GG_NO_PERMISSIONS } from "@grest-ts/schema";
 
 // ---------------------------------------------------------------------------
 // Error classes
@@ -61,12 +60,14 @@ export const ChatContract = defineSocketContract("ChatApi", {
                 text: IsString.nonEmpty.maxLength(2000).docs({description: "Message text to send"}),
             }).docs({title: "Send message request"}),
             success: IsChatMessage,
-            errors: [VALIDATION_ERROR, ROOM_NOT_FOUND, MESSAGE_TOO_LONG, SERVER_ERROR]
+            errors: [VALIDATION_ERROR, ROOM_NOT_FOUND, MESSAGE_TOO_LONG, SERVER_ERROR],
+            permission: GG_NO_PERMISSIONS
         },
         getRooms: {
             // no input — client requests list of rooms
             success: IsArray(IsChatRoom),
-            errors: [SERVER_ERROR]
+            errors: [SERVER_ERROR],
+            permission: GG_NO_PERMISSIONS
         },
         // FIRE-AND-FORGET — client sends, no response expected
         setTyping: {
@@ -74,6 +75,7 @@ export const ChatContract = defineSocketContract("ChatApi", {
                 roomId: IsString.nonEmpty,
                 typing: IsBoolean,
             }).docs({description: "Notify the server the user started/stopped typing"}),
+            permission: GG_NO_PERMISSIONS
         },
         ping: {
             // no input, no response — keep-alive ping
@@ -83,12 +85,15 @@ export const ChatContract = defineSocketContract("ChatApi", {
         // SERVER PUSH — server sends to client unprompted
         onMessage: {
             input: IsChatMessage,
+            permission: GG_NO_PERMISSIONS
         },
         onPresence: {
             input: IsPresenceUpdate,
+            permission: GG_NO_PERMISSIONS
         },
         onRoomUpdated: {
             input: IsChatRoom,
+            permission: GG_NO_PERMISSIONS
         },
     }
 });
@@ -104,11 +109,13 @@ export const NotificationContract = defineSocketContract("NotificationApi", {
                 topics: IsArray(IsString.nonEmpty).docs({description: "Topic names to subscribe to", example: ["orders", "inventory"]})
             }).docs({description: "Subscribe to notification topics"}),
             success: IsObject({subscribed: IsArray(IsString.nonEmpty)}).docs({description: "Confirmed subscriptions"}),
-            errors: [VALIDATION_ERROR, SERVER_ERROR]
+            errors: [VALIDATION_ERROR, SERVER_ERROR],
+            permission: GG_NO_PERMISSIONS
         },
         unsubscribe: {
             input: IsObject({topics: IsArray(IsString.nonEmpty)}),
             // fire-and-forget
+            permission: GG_NO_PERMISSIONS
         }
     },
     serverToClient: {
@@ -119,6 +126,7 @@ export const NotificationContract = defineSocketContract("NotificationApi", {
                 body: IsString.nonEmpty.docs({example: "Your order #1234 has been shipped"}),
                 timestamp: IsNumber,
             }).docs({title: "Notification", description: "A notification event for a subscribed topic"}),
+            permission: GG_NO_PERMISSIONS
         }
     }
 });

@@ -5,6 +5,7 @@ import {ERROR} from './ERROR';
 import {IsString} from '../schemas/IsString';
 import {IsNumber} from '../schemas/IsNumber';
 import {IsObject} from '../schemas/IsObject';
+import {GG_NO_PERMISSIONS} from "./permission/GGPermission";
 
 const FN_CUSTOM_ERROR = ERROR.define('FN_CUSTOM_ERROR', 400);
 
@@ -16,6 +17,7 @@ describe('GGContractFunction', () => {
             const method = {
                 input: IsString,
                 success: IsNumber,
+                permission: GG_NO_PERMISSIONS,
             };
             const fn = new GGContractFunction(method);
             expect(fn.method).toBe(method);
@@ -25,6 +27,7 @@ describe('GGContractFunction', () => {
             const fn = new GGContractFunction({
                 input: IsString,
                 success: IsString,
+                permission: GG_NO_PERMISSIONS
             });
             expect(Object.isFrozen(fn)).toBe(true);
         });
@@ -33,6 +36,7 @@ describe('GGContractFunction', () => {
             const method = {
                 input: IsString,
                 success: IsString,
+                permission: GG_NO_PERMISSIONS
             };
             const fn = new GGContractFunction(method);
             expect(Object.isFrozen(fn.method)).toBe(true);
@@ -45,6 +49,7 @@ describe('GGContractFunction', () => {
             const method = {
                 input: IsObject({name: IsString}),
                 success: IsObject({greeting: IsString}),
+                permission: GG_NO_PERMISSIONS,
             };
 
             it('should return a callable function', () => {
@@ -104,6 +109,7 @@ describe('GGContractFunction', () => {
         describe('with no input schema', () => {
             const method = {
                 success: IsNumber,
+                permission: GG_NO_PERMISSIONS
             };
 
             it('should work without input', async () => {
@@ -122,6 +128,7 @@ describe('GGContractFunction', () => {
                 input: IsNumber,
                 success: IsString,
                 errors: [FN_CUSTOM_ERROR],
+                permission: GG_NO_PERMISSIONS,
             };
 
             it('should handle thrown errors', async () => {
@@ -170,6 +177,7 @@ describe('GGContractFunction', () => {
                 const method = {
                     input: IsNumber,
                     success: IsNumber,
+                    permission: GG_NO_PERMISSIONS,
                 };
                 const fn = new GGContractFunction(method);
                 const impl = fn.implement(async (n) => {
@@ -191,6 +199,7 @@ describe('GGContractFunction', () => {
                 const method = {
                     input: IsString,
                     success: IsNumber,
+                    permission: GG_NO_PERMISSIONS,
                 };
                 const fn = new GGContractFunction(method);
                 const impl = fn.implement(async () => {

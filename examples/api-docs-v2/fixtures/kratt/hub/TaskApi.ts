@@ -1,4 +1,4 @@
-import {GGContractClass, IsObject, IsString, IsNumber, IsBoolean, IsLiteral, IsArray, SERVER_ERROR} from "@grest-ts/schema"
+import {GGContractClass, IsObject, IsString, IsNumber, IsBoolean, IsLiteral, IsArray, SERVER_ERROR, GG_NO_PERMISSIONS } from "@grest-ts/schema"
 import {GGRpc, httpSchema} from "@grest-ts/http"
 import {UNAUTHORIZED, NOT_FOUND, NAME_TAKEN, AGENT_NOT_RUNNING} from "./errors"
 import {GG_USER_TOKEN, GG_ORG_TOKEN} from "../auth/AuthContext"
@@ -154,81 +154,98 @@ export const TaskApiContract = new GGContractClass("TaskApi", {
     list: {
         success: IsArray(IsTask),
         errors: [UNAUTHORIZED, SERVER_ERROR],
+        permission: GG_NO_PERMISSIONS
     },
     get: {
         input: IsTaskIdRequest,
         success: IsTask,
         errors: [UNAUTHORIZED, NOT_FOUND, SERVER_ERROR],
+        permission: GG_NO_PERMISSIONS
     },
     spawn: {
         input: IsSpawnTaskRequest,
         success: IsTaskResponse,
         errors: [UNAUTHORIZED, NOT_FOUND, NAME_TAKEN, SERVER_ERROR],
+        permission: GG_NO_PERMISSIONS
     },
     resume: {
         input: IsTaskIdRequest,
         success: IsTaskResponse,
         errors: [UNAUTHORIZED, NOT_FOUND, SERVER_ERROR],
+        permission: GG_NO_PERMISSIONS
     },
     retrySpawn: {
         input: IsTaskIdRequest,
         success: IsTaskResponse,
         errors: [UNAUTHORIZED, NOT_FOUND, SERVER_ERROR],
+        permission: GG_NO_PERMISSIONS
     },
     stop: {
         input: IsTaskIdRequest,
         success: IsTaskResponse,
         errors: [UNAUTHORIZED, NOT_FOUND, SERVER_ERROR],
+        permission: GG_NO_PERMISSIONS
     },
     archive: {
         input: IsTaskIdRequest,
         success: IsTaskResponse,
         errors: [UNAUTHORIZED, NOT_FOUND, SERVER_ERROR],
+        permission: GG_NO_PERMISSIONS
     },
     delete: {
         input: IsTaskIdRequest,
         errors: [UNAUTHORIZED, NOT_FOUND, SERVER_ERROR],
+        permission: GG_NO_PERMISSIONS
     },
     rename: {
         input: IsRenameTaskRequest,
         success: IsTaskResponse,
         errors: [UNAUTHORIZED, NOT_FOUND, NAME_TAKEN, SERVER_ERROR],
+        permission: GG_NO_PERMISSIONS
     },
     syncCredentials: {
         input: IsTaskIdRequest,
         success: IsSyncCredentialsResponse,
         errors: [UNAUTHORIZED, NOT_FOUND, SERVER_ERROR],
+        permission: GG_NO_PERMISSIONS
     },
     snapshotAsImage: {
         input: IsSnapshotAsImageRequest,
         success: IsSnapshotAsImageResponse,
         errors: [UNAUTHORIZED, NOT_FOUND, SERVER_ERROR],
+        permission: GG_NO_PERMISSIONS
     },
     reconcile: {
         success: IsReconcileResponse,
         errors: [UNAUTHORIZED, SERVER_ERROR],
+        permission: GG_NO_PERMISSIONS
     },
     listServices: {
         input: IsTaskIdRequest,
         success: IsListServicesResponse,
         errors: [UNAUTHORIZED, NOT_FOUND, AGENT_NOT_RUNNING, SERVER_ERROR],
+        permission: GG_NO_PERMISSIONS
     },
     syncServices: {
         input: IsTaskIdRequest,
         success: IsListServicesResponse,
         errors: [UNAUTHORIZED, NOT_FOUND, AGENT_NOT_RUNNING, SERVER_ERROR],
+        permission: GG_NO_PERMISSIONS
     },
     restartService: {
         input: IsServiceActionRequest,
         errors: [UNAUTHORIZED, NOT_FOUND, AGENT_NOT_RUNNING, SERVER_ERROR],
+        permission: GG_NO_PERMISSIONS
     },
     stopService: {
         input: IsServiceActionRequest,
         errors: [UNAUTHORIZED, NOT_FOUND, AGENT_NOT_RUNNING, SERVER_ERROR],
+        permission: GG_NO_PERMISSIONS
     },
     setServicesPublic: {
         input: IsObject({taskId: IsTaskId, public: IsBoolean}),
         errors: [UNAUTHORIZED, NOT_FOUND, AGENT_NOT_RUNNING, SERVER_ERROR],
+        permission: GG_NO_PERMISSIONS
     },
 })
 

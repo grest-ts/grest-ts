@@ -3,7 +3,12 @@ import {GGWebSocketMiddleware} from "./GGWebSocketMiddleware";
 import {GGContractClass, GGContractClient, GGContractImplementation, GGContractMethod, GGValidator} from "@grest-ts/schema";
 
 /**
- * Bidirectional websocket contract methods
+ * Bidirectional websocket contract methods.
+ *
+ * Both directions use GGContractMethod (which requires `permission`), but only
+ * the `clientToServer` permission is enforced by the gate — server-pushed
+ * messages have no caller identity to check against. By convention, set
+ * `serverToClient` methods to `permission: GG_NO_PERMISSIONS`.
  */
 export interface GGSocketContractMethods {
     clientToServer: Record<string, GGContractMethod>

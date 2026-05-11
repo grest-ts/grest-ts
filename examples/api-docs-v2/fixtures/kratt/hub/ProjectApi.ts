@@ -1,4 +1,4 @@
-import {GGContractClass, IsObject, IsString, IsArray, IsBoolean, IsNumber, SERVER_ERROR} from "@grest-ts/schema"
+import {GGContractClass, IsObject, IsString, IsArray, IsBoolean, IsNumber, SERVER_ERROR, GG_NO_PERMISSIONS } from "@grest-ts/schema"
 import {GGRpc, httpSchema} from "@grest-ts/http"
 import {UNAUTHORIZED, NOT_FOUND, NAME_TAKEN} from "./errors"
 import {IsProject, IsProjectRepo, IsLayoutProfile, IsProjectId, IsProjectImageId} from "./schemas"
@@ -72,51 +72,62 @@ export const ProjectApiContract = new GGContractClass("ProjectApi", {
         input: IsCreateProjectRequest,
         success: IsProject,
         errors: [UNAUTHORIZED, NOT_FOUND, NAME_TAKEN, SERVER_ERROR],
+        permission: GG_NO_PERMISSIONS
     },
     get: {
         input: IsProjectIdRequest,
         success: IsProject,
         errors: [UNAUTHORIZED, NOT_FOUND, SERVER_ERROR],
+        permission: GG_NO_PERMISSIONS
     },
     list: {
         success: IsArray(IsProject),
         errors: [UNAUTHORIZED, SERVER_ERROR],
+        permission: GG_NO_PERMISSIONS
     },
     update: {
         input: IsUpdateProjectRequest,
         success: IsProject,
         errors: [UNAUTHORIZED, NOT_FOUND, SERVER_ERROR],
+        permission: GG_NO_PERMISSIONS
     },
     delete: {
         input: IsProjectIdRequest,
         errors: [UNAUTHORIZED, NOT_FOUND, SERVER_ERROR],
+        permission: GG_NO_PERMISSIONS
     },
     addRepo: {
         input: IsAddRepoRequest,
         success: IsProject,
         errors: [UNAUTHORIZED, NOT_FOUND, SERVER_ERROR],
+        permission: GG_NO_PERMISSIONS
     },
     removeRepo: {
         input: IsRemoveRepoRequest,
         success: IsProject,
         errors: [UNAUTHORIZED, NOT_FOUND, SERVER_ERROR],
+        permission: GG_NO_PERMISSIONS
     },
     testRepoConnection: {
         input: IsTestRepoConnectionRequest,
         success: IsTestConnectionResponse,
         errors: [UNAUTHORIZED, NOT_FOUND, SERVER_ERROR],
+        permission: GG_NO_PERMISSIONS
     },
     generateKeyPair: {
         success: IsKeyPairResponse,
         errors: [UNAUTHORIZED, SERVER_ERROR],
+        permission: GG_NO_PERMISSIONS
     },
     githubInstallUrl: {
         success: IsGitHubInstallUrlResponse,
         errors: [UNAUTHORIZED, NOT_FOUND, SERVER_ERROR],
+        permission: GG_NO_PERMISSIONS
     },
     githubListRepos: {
         success: IsGitHubListReposResponse,
         errors: [UNAUTHORIZED, NOT_FOUND, SERVER_ERROR],
+        permission: GG_NO_PERMISSIONS
     },
 })
 

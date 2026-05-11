@@ -1,6 +1,6 @@
 import {GGRpc, httpSchema} from "@grest-ts/http";
 import {GGFileUpload} from "@grest-ts/http-file";
-import {IsArray, IsObject, IsString, IsNumber, IsEnum, GGContractClass, FORBIDDEN, NOT_AUTHORIZED, NOT_FOUND, SERVER_ERROR, VALIDATION_ERROR} from "@grest-ts/schema";
+import {IsArray, IsObject, IsString, IsNumber, IsEnum, GGContractClass, FORBIDDEN, NOT_AUTHORIZED, NOT_FOUND, SERVER_ERROR, VALIDATION_ERROR, GG_NO_PERMISSIONS } from "@grest-ts/schema";
 import {IsFile} from "@grest-ts/schema-file";
 import {GG_COMPANY_AUTH_TOKEN} from "../middleware/CompanyAuthHeader";
 import {IsUploadedFileId} from "../Brands";
@@ -84,27 +84,32 @@ export const UploadedFileApiContract = new GGContractClass("UploadedFileApi", {
     list: {
         input: IsAnyUploadedFileParent,
         success: IsListUploadedFileResponse,
-        errors: [NOT_AUTHORIZED, FORBIDDEN, VALIDATION_ERROR, SERVER_ERROR]
+        errors: [NOT_AUTHORIZED, FORBIDDEN, VALIDATION_ERROR, SERVER_ERROR],
+        permission: GG_NO_PERMISSIONS
     },
     upload: {
         input: IsUploadFileRequest,
         success: undefined as undefined,
-        errors: [NOT_AUTHORIZED, FORBIDDEN, VALIDATION_ERROR, SERVER_ERROR]
+        errors: [NOT_AUTHORIZED, FORBIDDEN, VALIDATION_ERROR, SERVER_ERROR],
+        permission: GG_NO_PERMISSIONS
     },
     delete: {
         input: IsDeleteUploadedFileRequest,
         success: undefined as undefined,
-        errors: [NOT_AUTHORIZED, NOT_FOUND, FORBIDDEN, VALIDATION_ERROR, SERVER_ERROR]
+        errors: [NOT_AUTHORIZED, NOT_FOUND, FORBIDDEN, VALIDATION_ERROR, SERVER_ERROR],
+        permission: GG_NO_PERMISSIONS
     },
     renameFolder: {
         input: IsRenameFolderRequest,
         success: undefined as undefined,
-        errors: [NOT_AUTHORIZED, FORBIDDEN, VALIDATION_ERROR, SERVER_ERROR]
+        errors: [NOT_AUTHORIZED, FORBIDDEN, VALIDATION_ERROR, SERVER_ERROR],
+        permission: GG_NO_PERMISSIONS
     },
     renameFile: {
         input: IsRenameFileRequest,
         success: undefined as undefined,
-        errors: [NOT_AUTHORIZED, NOT_FOUND, FORBIDDEN, VALIDATION_ERROR, SERVER_ERROR]
+        errors: [NOT_AUTHORIZED, NOT_FOUND, FORBIDDEN, VALIDATION_ERROR, SERVER_ERROR],
+        permission: GG_NO_PERMISSIONS
     }
 })
 

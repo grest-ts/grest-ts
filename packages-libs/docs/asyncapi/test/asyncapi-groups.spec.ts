@@ -1,23 +1,31 @@
 import {describe, it, expect, beforeEach} from "vitest";
-import {IsString, IsObject, SERVER_ERROR} from "@grest-ts/schema";
+import {IsString, IsObject, SERVER_ERROR, GG_NO_PERMISSIONS } from "@grest-ts/schema";
 import {GGHttpServer} from "@grest-ts/http";
 import {defineSocketContract, webSocketSchema} from "@grest-ts/websocket";
 import {GGAsyncApiDocsGroups} from "../src/GGAsyncApiDocsGroups";
 
 const ChatContract = defineSocketContract("ChatApi", {
     clientToServer: {
-        send: {input: IsObject({text: IsString}), success: IsObject({id: IsString}), errors: [SERVER_ERROR]}
+        send: {input: IsObject({text: IsString}), success: IsObject({id: IsString}), errors: [SERVER_ERROR],
+            permission: GG_NO_PERMISSIONS
+        }
     },
     serverToClient: {
-        onMessage: {input: IsObject({text: IsString})}
+        onMessage: {input: IsObject({text: IsString}),
+            permission: GG_NO_PERMISSIONS
+        }
     }
 });
 const NotificationContract = defineSocketContract("NotificationApi", {
     clientToServer: {
-        subscribe: {input: IsObject({topic: IsString}), success: IsObject({ok: IsString}), errors: [SERVER_ERROR]}
+        subscribe: {input: IsObject({topic: IsString}), success: IsObject({ok: IsString}), errors: [SERVER_ERROR],
+            permission: GG_NO_PERMISSIONS
+        }
     },
     serverToClient: {
-        onPush: {input: IsObject({title: IsString})}
+        onPush: {input: IsObject({title: IsString}),
+            permission: GG_NO_PERMISSIONS
+        }
     }
 });
 

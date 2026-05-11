@@ -1,5 +1,5 @@
 import {GGRpc, httpSchema} from "@grest-ts/http"
-import {GGContractClass, GGContractImplementation, IsObject, IsString, SERVER_ERROR, VALIDATION_ERROR} from "@grest-ts/schema";
+import {GGContractClass, GGContractImplementation, IsObject, IsString, SERVER_ERROR, VALIDATION_ERROR, GG_NO_PERMISSIONS } from "@grest-ts/schema";
 
 // ---------------------------------------------------------
 // Type Schemas
@@ -32,12 +32,14 @@ export const EventsTestApiContract = new GGContractClass("EventsTestApi", {
     publishSomething: {
         input: IsCreateTestRequest,
         success: IsCreateTestResponse,
-        errors: [VALIDATION_ERROR, SERVER_ERROR]
+        errors: [VALIDATION_ERROR, SERVER_ERROR],
+        permission: GG_NO_PERMISSIONS
     },
     publishSomethingElse: {
         input: IsStartTestRequest,
         success: undefined as undefined,
-        errors: [VALIDATION_ERROR, SERVER_ERROR]
+        errors: [VALIDATION_ERROR, SERVER_ERROR],
+        permission: GG_NO_PERMISSIONS
     }
 })
 

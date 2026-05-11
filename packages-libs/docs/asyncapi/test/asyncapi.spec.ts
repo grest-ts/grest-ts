@@ -5,7 +5,7 @@ import {toAsyncApi} from "../src/toAsyncApi";
 import {ConfigTestSocketApi} from "../../../../examples/grest-test/src/api/ConfigTestSocketApi";
 
 import {webSocketSchema, defineSocketContract} from "@grest-ts/websocket";
-import {IsString, IsObject, IsNumber, SERVER_ERROR, VALIDATION_ERROR, IsBearerToken} from "@grest-ts/schema";
+import {IsString, IsObject, IsNumber, SERVER_ERROR, VALIDATION_ERROR, IsBearerToken, GG_NO_PERMISSIONS } from "@grest-ts/schema";
 
 // ---------------------------------------------------------------------------
 // A rich WebSocket showcase contract for snapshot testing
@@ -19,11 +19,13 @@ const ChatContract = defineSocketContract("ChatApi", {
                 roomId: IsString.nonEmpty
             }),
             success: IsObject({messageId: IsString.nonEmpty, timestamp: IsNumber}),
-            errors: [VALIDATION_ERROR, SERVER_ERROR]
+            errors: [VALIDATION_ERROR, SERVER_ERROR],
+            permission: GG_NO_PERMISSIONS
         },
         joinRoom: {
             input: IsObject({roomId: IsString.nonEmpty}),
             // no success — fire-and-forget
+            permission: GG_NO_PERMISSIONS
         }
     },
     serverToClient: {
@@ -33,10 +35,12 @@ const ChatContract = defineSocketContract("ChatApi", {
                 text: IsString.nonEmpty,
                 userId: IsString.nonEmpty,
                 timestamp: IsNumber
-            }).docs({title: "Chat message", description: "A message pushed to the client"})
+            }).docs({title: "Chat message", description: "A message pushed to the client"}),
+            permission: GG_NO_PERMISSIONS
         },
         onUserJoined: {
-            input: IsObject({userId: IsString.nonEmpty, roomId: IsString.nonEmpty})
+            input: IsObject({userId: IsString.nonEmpty, roomId: IsString.nonEmpty}),
+            permission: GG_NO_PERMISSIONS
         }
     }
 });

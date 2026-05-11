@@ -1,5 +1,5 @@
 import {GGRpc, httpSchema} from "@grest-ts/http";
-import {FORBIDDEN, GGContractClass, GGIssueInvalid, IsArray, IsDiscriminated, IsEnum, IsLiteral, IsNumber, IsObject, IsString, IsTuple, NOT_AUTHORIZED, NOT_FOUND, SERVER_ERROR, VALIDATION_ERROR} from "@grest-ts/schema";
+import {FORBIDDEN, GGContractClass, GGIssueInvalid, IsArray, IsDiscriminated, IsEnum, IsLiteral, IsNumber, IsObject, IsString, IsTuple, NOT_AUTHORIZED, NOT_FOUND, SERVER_ERROR, VALIDATION_ERROR, GG_NO_PERMISSIONS } from "@grest-ts/schema";
 import {IsCreatedAndChangedBy} from "./UserApi";
 import {GG_COMPANY_AUTH_TOKEN} from "../middleware/CompanyAuthHeader";
 import {IsApartmentId, IsClientId, IsCountry2, IsLanguage, IsRegCode, IsVatNo} from "../Brands";
@@ -176,27 +176,32 @@ export const ClientApiContract = new GGContractClass("ClientApi", {
     getForSelect: {
         input: IsClientApiGetForSelectRequest,
         success: IsClientApiGetForSelectResponse,
-        errors: [NOT_AUTHORIZED, FORBIDDEN, VALIDATION_ERROR, SERVER_ERROR]
+        errors: [NOT_AUTHORIZED, FORBIDDEN, VALIDATION_ERROR, SERVER_ERROR],
+        permission: GG_NO_PERMISSIONS
     },
     list: {
         input: IsClientsQuery,
         success: IsClientsResult,
-        errors: [NOT_AUTHORIZED, FORBIDDEN, VALIDATION_ERROR, SERVER_ERROR]
+        errors: [NOT_AUTHORIZED, FORBIDDEN, VALIDATION_ERROR, SERVER_ERROR],
+        permission: GG_NO_PERMISSIONS
     },
     get: {
         input: IsClientApiGetRequest,
         success: IsSyncClientData,
-        errors: [NOT_AUTHORIZED, NOT_FOUND, FORBIDDEN, VALIDATION_ERROR, SERVER_ERROR]
+        errors: [NOT_AUTHORIZED, NOT_FOUND, FORBIDDEN, VALIDATION_ERROR, SERVER_ERROR],
+        permission: GG_NO_PERMISSIONS
     },
     sync: {
         input: IsSyncClientData,
         success: IsClientSyncResponse,
-        errors: [NOT_AUTHORIZED, FORBIDDEN, VALIDATION_ERROR, SERVER_ERROR]
+        errors: [NOT_AUTHORIZED, FORBIDDEN, VALIDATION_ERROR, SERVER_ERROR],
+        permission: GG_NO_PERMISSIONS
     },
     delete: {
         input: IsClientApiDeleteRequest,
         success: undefined as undefined,
-        errors: [NOT_AUTHORIZED, NOT_FOUND, FORBIDDEN, VALIDATION_ERROR, SERVER_ERROR]
+        errors: [NOT_AUTHORIZED, NOT_FOUND, FORBIDDEN, VALIDATION_ERROR, SERVER_ERROR],
+        permission: GG_NO_PERMISSIONS
     }
 })
 

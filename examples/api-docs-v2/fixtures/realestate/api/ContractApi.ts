@@ -1,5 +1,5 @@
 import {GGRpc, httpSchema} from "@grest-ts/http";
-import {FORBIDDEN, GGContractClass, IsArray, IsBit, IsEnum, IsLiteral, IsNumber, IsObject, IsString, IsTuple, NOT_AUTHORIZED, NOT_FOUND, SERVER_ERROR, VALIDATION_ERROR} from "@grest-ts/schema";
+import {FORBIDDEN, GGContractClass, IsArray, IsBit, IsEnum, IsLiteral, IsNumber, IsObject, IsString, IsTuple, NOT_AUTHORIZED, NOT_FOUND, SERVER_ERROR, VALIDATION_ERROR, GG_NO_PERMISSIONS } from "@grest-ts/schema";
 import {IsCreatedAndChangedBy} from "./UserApi";
 import {GG_COMPANY_AUTH_TOKEN} from "../middleware/CompanyAuthHeader";
 import {IsApartmentFeatureId, IsApartmentId, IsBuildingId, IsClientId, IsContractExtraId, IsContractId, IsDate, IsDateTime} from "../Brands";
@@ -220,37 +220,44 @@ export const ContractApiContract = new GGContractClass("ContractApi", {
     getForSelect: {
         input: IsContractApiGetForSelectRequest,
         success: IsContractApiGetForSelectResponse,
-        errors: [NOT_AUTHORIZED, FORBIDDEN, VALIDATION_ERROR, SERVER_ERROR]
+        errors: [NOT_AUTHORIZED, FORBIDDEN, VALIDATION_ERROR, SERVER_ERROR],
+        permission: GG_NO_PERMISSIONS
     },
     getSummary: {
         input: IsObject({}).orUndefined.default({}),
         success: IsContractsSummaryResult,
-        errors: [NOT_AUTHORIZED, FORBIDDEN, VALIDATION_ERROR, SERVER_ERROR]
+        errors: [NOT_AUTHORIZED, FORBIDDEN, VALIDATION_ERROR, SERVER_ERROR],
+        permission: GG_NO_PERMISSIONS
     },
     list: {
         input: IsContractsQuery,
         success: IsContractsResult,
-        errors: [NOT_AUTHORIZED, FORBIDDEN, VALIDATION_ERROR, SERVER_ERROR]
+        errors: [NOT_AUTHORIZED, FORBIDDEN, VALIDATION_ERROR, SERVER_ERROR],
+        permission: GG_NO_PERMISSIONS
     },
     get: {
         input: IsGetContractRequest,
         success: IsSyncContractData,
-        errors: [NOT_AUTHORIZED, NOT_FOUND, FORBIDDEN, VALIDATION_ERROR, SERVER_ERROR]
+        errors: [NOT_AUTHORIZED, NOT_FOUND, FORBIDDEN, VALIDATION_ERROR, SERVER_ERROR],
+        permission: GG_NO_PERMISSIONS
     },
     sync: {
         input: IsSyncContractData,
         success: IsSyncContractDataResponse,
-        errors: [NOT_AUTHORIZED, NOT_FOUND, FORBIDDEN, VALIDATION_ERROR, SERVER_ERROR]
+        errors: [NOT_AUTHORIZED, NOT_FOUND, FORBIDDEN, VALIDATION_ERROR, SERVER_ERROR],
+        permission: GG_NO_PERMISSIONS
     },
     delete: {
         input: IsDeleteContractRequest,
         success: undefined as undefined,
-        errors: [NOT_AUTHORIZED, NOT_FOUND, FORBIDDEN, VALIDATION_ERROR, SERVER_ERROR]
+        errors: [NOT_AUTHORIZED, NOT_FOUND, FORBIDDEN, VALIDATION_ERROR, SERVER_ERROR],
+        permission: GG_NO_PERMISSIONS
     },
     getContractEmails: {
         input: IsGetContractEmailsQuery,
         success: IsGetContractEmailsResponse,
-        errors: [NOT_AUTHORIZED, FORBIDDEN, VALIDATION_ERROR, SERVER_ERROR]
+        errors: [NOT_AUTHORIZED, FORBIDDEN, VALIDATION_ERROR, SERVER_ERROR],
+        permission: GG_NO_PERMISSIONS
     }
 })
 

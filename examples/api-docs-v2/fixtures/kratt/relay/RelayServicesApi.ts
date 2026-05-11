@@ -1,4 +1,4 @@
-import {GGContractClass, IsObject, IsString, IsBoolean, IsArray, SERVER_ERROR} from "@grest-ts/schema"
+import {GGContractClass, IsObject, IsString, IsBoolean, IsArray, SERVER_ERROR, GG_NO_PERMISSIONS } from "@grest-ts/schema"
 import {GGRpc, httpSchema} from "@grest-ts/http"
 import {GG_RELAY_TOKEN} from "./RelayAuthContext.js"
 import {IsServiceStatus} from "./RelayTypes.js"
@@ -27,6 +27,7 @@ export const RelayServicesApiContract = new GGContractClass("RelayServicesApi", 
     list: {
         success: IsListServicesResponse,
         errors: [SERVER_ERROR],
+        permission: GG_NO_PERMISSIONS
     },
     /**
      * Re-read `.kratt.json` across all workspace repos and reconcile
@@ -36,21 +37,25 @@ export const RelayServicesApiContract = new GGContractClass("RelayServicesApi", 
     sync: {
         success: IsListServicesResponse,
         errors: [SERVER_ERROR],
+        permission: GG_NO_PERMISSIONS
     },
     /** Restart a single declared service. */
     restart: {
         input: IsServiceNameRequest,
         errors: [SERVER_ERROR],
+        permission: GG_NO_PERMISSIONS
     },
     /** Stop a single declared service without disabling it. */
     stop: {
         input: IsServiceNameRequest,
         errors: [SERVER_ERROR],
+        permission: GG_NO_PERMISSIONS
     },
     /** Toggle public/private mode for all services at once. */
     setPublic: {
         input: IsObject({public: IsBoolean}),
         errors: [SERVER_ERROR],
+        permission: GG_NO_PERMISSIONS
     },
 })
 

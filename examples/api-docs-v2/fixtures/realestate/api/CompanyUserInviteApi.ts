@@ -1,5 +1,5 @@
 import {GGRpc, httpSchema} from "@grest-ts/http";
-import {IsArray, IsObject, IsString, IsNumber, IsEnum, GGContractClass, NOT_AUTHORIZED, NOT_FOUND, SERVER_ERROR, VALIDATION_ERROR} from "@grest-ts/schema";
+import {IsArray, IsObject, IsString, IsNumber, IsEnum, GGContractClass, NOT_AUTHORIZED, NOT_FOUND, SERVER_ERROR, VALIDATION_ERROR, GG_NO_PERMISSIONS } from "@grest-ts/schema";
 import {GG_COMPANY_AUTH_TOKEN} from "../middleware/CompanyAuthHeader";
 import {IsCompanyId} from "./CompanyApi";
 import {IsCompanyUserPermission} from "./CompanyUserApi";
@@ -80,27 +80,32 @@ export const CompanyUserInviteApiContract = new GGContractClass("CompanyUserInvi
     list: {
         input: IsCompanyUserInviteListRequest,
         success: IsCompanyUserInvitesResult,
-        errors: [NOT_AUTHORIZED, VALIDATION_ERROR, SERVER_ERROR]
+        errors: [NOT_AUTHORIZED, VALIDATION_ERROR, SERVER_ERROR],
+        permission: GG_NO_PERMISSIONS
     },
     get: {
         input: IsCompanyUserInviteGetRequest,
         success: IsCompanyUserInvite,
-        errors: [NOT_AUTHORIZED, NOT_FOUND, VALIDATION_ERROR, SERVER_ERROR]
+        errors: [NOT_AUTHORIZED, NOT_FOUND, VALIDATION_ERROR, SERVER_ERROR],
+        permission: GG_NO_PERMISSIONS
     },
     update: {
         input: IsCompanyUserInviteUpdateRequest,
         success: undefined as undefined,
-        errors: [NOT_AUTHORIZED, VALIDATION_ERROR, SERVER_ERROR]
+        errors: [NOT_AUTHORIZED, VALIDATION_ERROR, SERVER_ERROR],
+        permission: GG_NO_PERMISSIONS
     },
     acceptInvite: {
         input: IsInviteResponse,
         success: undefined as undefined,
-        errors: [NOT_AUTHORIZED, NOT_FOUND, VALIDATION_ERROR, SERVER_ERROR]
+        errors: [NOT_AUTHORIZED, NOT_FOUND, VALIDATION_ERROR, SERVER_ERROR],
+        permission: GG_NO_PERMISSIONS
     },
     rejectInvite: {
         input: IsInviteResponse,
         success: undefined as undefined,
-        errors: [NOT_AUTHORIZED, NOT_FOUND, VALIDATION_ERROR, SERVER_ERROR]
+        errors: [NOT_AUTHORIZED, NOT_FOUND, VALIDATION_ERROR, SERVER_ERROR],
+        permission: GG_NO_PERMISSIONS
     }
 })
 
