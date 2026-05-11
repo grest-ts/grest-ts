@@ -1,6 +1,6 @@
 import {GGWebSocketSchema, GGWebSocketContractRuntime} from "./GGWebSocketSchema";
 import {GGWebSocketMiddleware} from "./GGWebSocketMiddleware";
-import {GGContractClass, GGContractClient, GGContractImplementation, GGContractMethod, GGValidator} from "@grest-ts/schema";
+import {GGContractClass, GGContractClient, GGContractImplementation, GGContractMethod, GGPermission, GGValidator} from "@grest-ts/schema";
 
 /**
  * Bidirectional websocket contract methods.
@@ -75,6 +75,7 @@ class GGWebSocketSchemaBuilder<
     private _path: string = ""
     private _middlewares: GGWebSocketMiddleware[] = []
     private _queryValidator?: GGValidator<any>
+    private _connectPermission?: GGPermission
 
     constructor(
         private readonly _contract: GGSocketContract
@@ -101,6 +102,21 @@ class GGWebSocketSchemaBuilder<
         return this as any
     }
 
+    /**
+     * Require a connection-level permission. The scope resolver runs once at
+     * handshake and the result is checked against this permission BEFORE the
+     * socket opens. Use this for "feature-specific" sockets where lacking
+     * permission means there's no point opening the connection. Per-message
+     * gates on individual clientToServer methods still apply.
+     *
+     * Omit this builder call for general multiplex sockets — authenticated
+     * users can connect, and each message is gated by its own permission.
+     */
+    connectPermission(permission: GGPermission): this {
+        this._connectPermission = permission
+        return this
+    }
+
     done(): GGWebSocketSchema<TClientToServer, TServerToClient, TContext, TQuery, TClientToServerImpl, TServerToClientImpl> {
         const contract = this._contract;
         const contractFactory = (): GGWebSocketContractRuntime => {
@@ -118,7 +134,8 @@ class GGWebSocketSchemaBuilder<
             this._path,
             contractFactory,
             this._middlewares,
-            this._queryValidator
+            this._queryValidator,
+            this._connectPermission
         )
     }
 }
