@@ -106,6 +106,28 @@ function setupRoutes<TContract extends GGContractApiDefinition>(
     // @TODO This is not really used and only for testkit so it would register implementation of the contract... Not cool
     httpSchema.contract.implement(implementation);
 
+    // Startup permission check: any non-public method without a resolver wired
+    // is a misconfiguration — fail fast at registration with a list of every
+    // offending method and an actionable fix.
+    if (!config.permissionResolver) {
+        const offenders: Array<{name: string, permission: any}> = []
+        for (const methodName in httpSchema.contract.methods) {
+            const m = httpSchema.contract.methods[methodName] as GGContractMethod
+            if (m.permission !== GG_NO_PERMISSIONS) {
+                offenders.push({name: methodName, permission: m.permission})
+            }
+        }
+        if (offenders.length > 0) {
+            const lines = offenders.map(o => `  ${httpSchema.name}.${o.name}   requires ${describePermission(o.permission)}`).join("\n")
+            throw new Error(
+                `GGHttp: cannot register ${httpSchema.name} — these methods declare non-public permissions but no scope resolver was registered via .usePermissions():\n\n` +
+                lines +
+                `\n\nFix: add .usePermissions(yourScopeResolver) before .http(${httpSchema.name}, ...),\n` +
+                `     or set permission: GG_NO_PERMISSIONS on methods that are genuinely public.`
+            )
+        }
+    }
+
     for (const methodName in httpSchema.codec) {
         // Wire format.
         const codec: GGHttpCodec = httpSchema.codec[methodName]
