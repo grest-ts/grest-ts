@@ -520,12 +520,10 @@ function toPermissionTree(p: GGPermission): PermissionTree {
     if (p === GG_NO_PERMISSIONS) return {kind: "public"};
     if (p === GG_ANY_PERMISSION) return {kind: "anyAuth"};
     if (typeof p === "string") return {kind: "scope", scope: p};
-    if (typeof p === "symbol") {
-        // Unknown sentinel — defensive, validatePermission should have caught it.
-        return {kind: "public"};
+    if (p && typeof p === "object") {
+        if ("allOf" in p) return {kind: "allOf", children: p.allOf.map(toPermissionTree)};
+        if ("anyOf" in p) return {kind: "anyOf", children: p.anyOf.map(toPermissionTree)};
     }
-    if ("allOf" in p) return {kind: "allOf", children: p.allOf.map(toPermissionTree)};
-    if ("anyOf" in p) return {kind: "anyOf", children: p.anyOf.map(toPermissionTree)};
     return {kind: "public"};
 }
 

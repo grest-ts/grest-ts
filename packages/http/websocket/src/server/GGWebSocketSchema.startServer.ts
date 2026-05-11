@@ -9,7 +9,7 @@ import {GGWebSocketMiddleware} from "../schema/GGWebSocketMiddleware";
 import {GGSocketServer} from "./GGSocketServer";
 import {GGLocator} from "@grest-ts/locator";
 import {WebSocketIncoming, WebSocketOutgoing} from "../socket/WebSocketTypes";
-import {FORBIDDEN, GG_NO_PERMISSIONS, GGPermissionChecker, GGPromise, NOT_AUTHORIZED, satisfies} from "@grest-ts/schema";
+import {FORBIDDEN, GG_ANY_PERMISSION, GG_NO_PERMISSIONS, GGPermissionChecker, GGPromise, NOT_AUTHORIZED, satisfies} from "@grest-ts/schema";
 import {GG_HTTP_SERVER, GG_PERMISSIONS, GGHttpServer, GGScopeResolver} from "@grest-ts/http";
 
 export interface WebSocketSchemaConfig {
@@ -230,10 +230,8 @@ GGWebSocketSchema.prototype.register = function (
 }
 
 function describePermission(p: unknown): string {
-    if (typeof p === "symbol") {
-        if (p === GG_NO_PERMISSIONS) return "GG_NO_PERMISSIONS"
-        return "GG_ANY_PERMISSION"
-    }
+    if (p === GG_NO_PERMISSIONS) return "GG_NO_PERMISSIONS"
+    if (p === GG_ANY_PERMISSION) return "GG_ANY_PERMISSION"
     if (typeof p === "string") return JSON.stringify(p)
     if (p && typeof p === "object") {
         if ("allOf" in p) return `allOf(${(p as any).allOf.map(describePermission).join(", ")})`

@@ -144,6 +144,45 @@ describe("WebSocket permission gate", () => {
                 }
             })
         })
+
+        test("server-pushed s2c messages reach unauthenticated callers — gate has no caller identity to check", async () => {
+            // No client scopes set — connection opens (multiplex socket has no
+            // connectPermission). Server still pushes `echo` right after connect.
+            await withClientScopes(null, async () => {
+                const received: string[] = []
+                const client = WsPermissionsApi.createClient({url: urlFor("WsPermissionsApi")})
+                await client.connect(({incoming}) => {
+                    incoming.on({
+                        echo: async (text: string) => { received.push(text) },
+                    })
+                })
+                try {
+                    // Give the server's setImmediate push a beat to arrive.
+                    await new Promise(r => setTimeout(r, 100))
+                    expect(received).toEqual(["hello-from-server"])
+                } finally {
+                    await client.disconnect()
+                }
+            })
+        })
+
+        test("authenticated callers also receive s2c pushes — same behavior, same code path", async () => {
+            await withClientScopes([AppPermission.Read], async () => {
+                const received: string[] = []
+                const client = WsPermissionsApi.createClient({url: urlFor("WsPermissionsApi")})
+                await client.connect(({incoming}) => {
+                    incoming.on({
+                        echo: async (text: string) => { received.push(text) },
+                    })
+                })
+                try {
+                    await new Promise(r => setTimeout(r, 100))
+                    expect(received).toEqual(["hello-from-server"])
+                } finally {
+                    await client.disconnect()
+                }
+            })
+        })
     })
 
     describe("connectPermission (feature socket)", () => {

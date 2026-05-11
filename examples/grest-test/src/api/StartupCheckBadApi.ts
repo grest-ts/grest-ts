@@ -1,6 +1,7 @@
 import {GGRpc, httpSchema} from "@grest-ts/http"
 import {
     FORBIDDEN,
+    GG_NO_PERMISSIONS,
     GGContractClass,
     IsString,
     NOT_AUTHORIZED,
@@ -24,4 +25,21 @@ export const StartupCheckBadApi = httpSchema(StartupCheckBadContract)
     .pathPrefix("api/startup-check-bad")
     .routes({
         needsScope: GGRpc.GET("read"),
+    })
+
+/**
+ * Fixture for the positive startup-check test: every method is GG_NO_PERMISSIONS.
+ * Wiring via GGHttp without .usePermissions(...) must NOT throw — public-only
+ * services are legitimate and start silently.
+ */
+export const StartupCheckAllPublicContract = new GGContractClass("StartupCheckAllPublic", {
+    ping: {success: IsString, errors: [SERVER_ERROR], permission: GG_NO_PERMISSIONS},
+    pong: {success: IsString, errors: [SERVER_ERROR], permission: GG_NO_PERMISSIONS},
+})
+
+export const StartupCheckAllPublicApi = httpSchema(StartupCheckAllPublicContract)
+    .pathPrefix("api/startup-check-all-public")
+    .routes({
+        ping: GGRpc.GET("ping"),
+        pong: GGRpc.GET("pong"),
     })

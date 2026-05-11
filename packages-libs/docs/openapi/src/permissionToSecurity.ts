@@ -40,7 +40,10 @@ export function permissionToSecurity(
 
 function toDNF(p: GGPermission): string[][] {
     if (typeof p === "string") return [[p]];
-    if (typeof p === "symbol") return [];
+    if (p === GG_NO_PERMISSIONS || p === GG_ANY_PERMISSION) {
+        // Handled by buildSecurityFromPermission before reaching here; defensive.
+        return [];
+    }
     if ("allOf" in p) {
         let result: string[][] = [[]];
         for (const child of p.allOf) {

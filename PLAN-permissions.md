@@ -28,18 +28,23 @@ All exports live in `@grest-ts/schema` under a new `permission/` subdirectory.
 ### Constants
 
 ```typescript
-export const GG_NO_PERMISSIONS = Symbol.for("@grest-ts/permission/none")
-export const GG_ANY_PERMISSION = Symbol.for("@grest-ts/permission/any")
+export const GG_NO_PERMISSIONS = Object.freeze({__permission: "none"} as const)
+export const GG_ANY_PERMISSION = Object.freeze({__permission: "any"} as const)
+
+export type GG_NO_PERMISSIONS = typeof GG_NO_PERMISSIONS
+export type GG_ANY_PERMISSION = typeof GG_ANY_PERMISSION
 
 export type GGPermission =
-    | typeof GG_NO_PERMISSIONS                                          // truly public — no auth required
-    | typeof GG_ANY_PERMISSION                                          // authenticated identity required, any non-empty scope set passes
+    | GG_NO_PERMISSIONS                                                 // truly public — no auth required
+    | GG_ANY_PERMISSION                                                 // authenticated identity required, any non-empty scope set passes
     | string                                                            // single specific scope
     | {allOf: readonly [GGPermission, ...GGPermission[]]}               // all must hold (non-empty tuple)
     | {anyOf: readonly [GGPermission, ...GGPermission[]]}               // at least one must hold (non-empty tuple)
 ```
 
-A bare string *is* a scope — no wrapper needed. The combinator objects are structurally distinct from strings, so there's no ambiguity in the union, and `typeof required === "string"` is a clean discriminant in `satisfies()`.
+**Why frozen singleton objects, not `Symbol.for(...)`.** Unique symbols widen to `symbol` in object property positions even when their source const is typed as `unique symbol`. That leak admits arbitrary symbols past the type system and defeats the strictness the algebra is supposed to enforce. A `Readonly<{__permission: "none"}>` literal type does NOT widen, so writing `permission: GG_NO_PERMISSIONS` in a contract carries the discriminating literal type through to the gate. Identity comparison stays cheap (frozen singletons + `===`); `Object.freeze` prevents user code from mutating the markers.
+
+A bare string *is* a scope — no wrapper needed. The combinator objects are structurally distinct (different key names) and so do not collide with the sentinels. `typeof required === "string"` and reference-equality (`required === GG_NO_PERMISSIONS`) are clean discriminants in `satisfies()`.
 
 ### No exported helpers
 
@@ -377,23 +382,13 @@ AsyncAPI 3 inherits OpenAPI's security scheme shape on operations. Same mapping.
 
 ### apiDocs (`packages-libs/docs/api-docs` — our own renderer)
 
-Since we own the UI, this is where wording matters most.
-
-Each method gets a **Permissions** block:
-
-> **Permissions** — *enforced by the framework*
->
-> Requires `items:write` **or** `admin`.
+Each method gets a small **Permissions** block when the permission is non-trivial:
 
 For `GG_NO_PERMISSIONS`: *"Public — no authentication required."*
 For `GG_ANY_PERMISSION`: *"Any authenticated identity."*
-For combinators: render the tree in plain English (`allOf` → "and", `anyOf` → "or"), bold the scope strings.
+For combinators: render the tree in plain English (`allOf` → "and", `anyOf` → "or"), bold the scope strings (e.g. *"Requires `items:write` **or** `admin`."*).
 
-A persistent banner at the top of every contract page makes the boundary clear:
-
-> Permissions declared on contract methods gate *endpoint access* — whether the caller is allowed to invoke the method at all. They do not cover *resource access* ("can this user edit *this specific* post"); that check remains in the implementation.
-
-This callout is non-negotiable. Without it, "framework guarantees permissions" becomes a false security promise.
+The build emits both a plain-text rendering and a structured `PermissionTree` so the UI can choose between them. Whether to also show the "endpoint access vs resource access" boundary lives with framework documentation (READMEs, this plan), not the per-method UI — it's framework behavior, obvious from context, and overstating it in the docs UI is noise.
 
 ---
 

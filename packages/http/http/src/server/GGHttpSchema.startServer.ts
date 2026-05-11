@@ -6,7 +6,7 @@
 import http from "http";
 import {GGLocator} from "@grest-ts/locator";
 import {ClientHttpRouteToRpcTransformServerCodec, GGHttpCodec, GGHttpSchema} from "../schema/GGHttpSchema";
-import {ERROR, FORBIDDEN, GG_NO_PERMISSIONS, GGContractApiDefinition, GGContractImplementation, GGContractMethod, GGPermissionChecker, NOT_AUTHORIZED, OK, satisfies, SERVER_ERROR} from "@grest-ts/schema";
+import {ERROR, FORBIDDEN, GG_ANY_PERMISSION, GG_NO_PERMISSIONS, GGContractApiDefinition, GGContractImplementation, GGContractMethod, GGPermissionChecker, NOT_AUTHORIZED, OK, satisfies, SERVER_ERROR} from "@grest-ts/schema";
 import {HttpMethod} from "@grest-ts/common";
 import {GG_DISCOVERY} from "@grest-ts/discovery";
 import {GGContext, GGContextStore} from "@grest-ts/context";
@@ -192,10 +192,8 @@ function setupRoutes<TContract extends GGContractApiDefinition>(
 }
 
 function describePermission(p: unknown): string {
-    if (typeof p === "symbol") {
-        if (p === GG_NO_PERMISSIONS) return "GG_NO_PERMISSIONS"
-        return "GG_ANY_PERMISSION"
-    }
+    if (p === GG_NO_PERMISSIONS) return "GG_NO_PERMISSIONS"
+    if (p === GG_ANY_PERMISSION) return "GG_ANY_PERMISSION"
     if (typeof p === "string") return JSON.stringify(p)
     if (p && typeof p === "object") {
         if ("allOf" in p) return `allOf(${(p as any).allOf.map(describePermission).join(", ")})`
