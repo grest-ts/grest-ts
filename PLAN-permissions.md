@@ -66,6 +66,46 @@ Well-formedness is enforced in two places:
 
 No checks live inside `satisfies()` — by the time the gate runs, the tree is known well-formed. Hot-path stays branch-free of validation.
 
+### `GGPermissionChecker` — exposed for user code
+
+The framework wraps the resolved scope set in a class so handler code can run sub-checks against the *same* logic the gate uses. No parallel implementations, no drift.
+
+```typescript
+export class GGPermissionChecker {
+    constructor(public readonly scopes: ReadonlySet<string>) {}
+    has(permission: GGPermission): boolean { return satisfies(permission, this.scopes) }
+}
+
+export const GG_PERMISSIONS = new GGContextKey<GGPermissionChecker>("permissions", ...)
+```
+
+When the gate runs (HTTP per-message or WS per-message/handshake), it resolves scopes once, wraps them into a `GGPermissionChecker`, and `GG_PERMISSIONS.set(checker)` on the request context. The framework then calls `checker.has(method.permission)` for its own gate check.
+
+Handler code accesses the same checker for finer-grained decisions:
+
+```typescript
+public update = async (input: UpdateRequest): Promise<Item> => {
+    const item = await this.db.items.find(input.id)
+    if (!item) throw new NOT_FOUND()
+
+    const perm = GG_PERMISSIONS.get()
+    if (perm.has(AppPermission.Admin)) {
+        return await this.db.items.update(input.id, input.data)
+    }
+    const user = UserContext.get()
+    if (perm.has(AppPermission.Owner) && item.ownerId === user.id) {
+        return await this.db.items.update(input.id, input.data)
+    }
+    throw new FORBIDDEN()
+}
+```
+
+**Population rule.** Whenever a scope resolver is wired (`.usePermissions(...)`), the gate populates `GG_PERMISSIONS` for *every* request — including those targeting `GG_NO_PERMISSIONS` methods. Public endpoints can still personalize for authenticated callers via `GG_PERMISSIONS.tryGet()`. If no resolver is wired, the key is never set.
+
+**API surface.** Only `has(permission: GGPermission)` and the raw `scopes` accessor. No `hasAll(...)`/`hasAny(...)` shorthands — they'd just be sugar for `has({allOf: [...]})`/`has({anyOf: [...]})` and double the surface area for negligible win.
+
+**Resolver signature stays unchanged.** The app still implements `() => ReadonlySet<string> | null`. The framework owns checker construction, so the class can grow (cache derived sets, lazy expansion, etc.) without breaking app resolvers.
+
 Empty arrays are constructor-rejected: vacuous `allOf` shouldn't silently pass, vacuous `anyOf` shouldn't silently fail. If you want "no permission required" the answer is `GG_NO_PERMISSIONS`, not `allOf()`.
 
 ### Centralizing scopes — enum convention
@@ -496,7 +536,27 @@ packages-libs/docs/api-docs/test/permissions-render.test.ts        # scenario 16
 
 ---
 
-## 11. Migration / rollout
+## 11. README updates
+
+Three sources of truth, each with its own audience.
+
+- **Repository root `README.md`** — 1-2 sentences. Surface that grest-ts contracts include mandatory `permission` declarations enforced by the framework, with a link to the HTTP and WebSocket package READMEs for details. The root README is the elevator pitch; it must mention this exists but not drown the casual reader.
+
+- **`packages/http/http/README.md`** — one paragraph covering:
+  - That every contract method declares `permission` and the HTTP gate enforces it before the handler runs.
+  - The wiring chain (`.use(auth) → .usePermissions(getScopes) → .http(...)`) and what each piece is responsible for.
+  - The hard guarantee: a non-public method cannot be served without a wired resolver — the server refuses to start. No silent under-protection.
+  - The explicit non-guarantee: this gates *endpoint access*; resource-level checks (ownership, tenant scoping) remain in handler code, and `GG_PERMISSIONS.get()` is provided for those handler-side checks.
+
+- **`packages/http/websocket/README.md`** — one paragraph covering:
+  - Per-message gating on every `clientToServer` method (mandatory `permission`); `serverToClient` methods have no `permission` field by design.
+  - Optional `.connectPermission(...)` for feature-specific sockets — handshake-time reject vs. per-message reject.
+  - Scope resolution runs once at handshake and is cached on the connection; per-message gates read the cached set.
+  - Same compile-time mandatory + startup-fail guarantees as HTTP.
+
+The `@grest-ts/schema` README also gets a short subsection introducing `GGPermission`, the constants, and `GGPermissionChecker`. That subsection is reference-style (terse, just enough to find the right type), since the conceptual "how it works" lives in the HTTP/WebSocket READMEs where the gate actually runs.
+
+## 12. Migration / rollout
 
 - Single breaking release. No optional-then-required transition.
 - `CHANGELOG`: a top-billed entry with the upgrade recipe — "add `permission` to every method; the compiler will tell you where; use `GG_NO_PERMISSIONS` if you have no auth model yet."
@@ -504,7 +564,7 @@ packages-libs/docs/api-docs/test/permissions-render.test.ts        # scenario 16
 
 ---
 
-## 12. Open questions
+## 13. Open questions
 
 1. **`anyOf(allOf(...))` flatten to DNF for OpenAPI** — is the upper bound on output size acceptable? Worst case `anyOf(allOf(a,b,c), allOf(d,e,f), allOf(g,h,i))` produces three requirement objects, each with three scopes — fine. Deeper nesting could blow up; we'll cap depth at 3 levels and reject deeper trees at construction time with a clear error.
 2. **Connection-level WS permission and per-message permission overlap.** If a method requires `chat:write` and the connection requires `chat:connect`, the per-message check still runs (we don't infer that `chat:connect` implies anything about `chat:write`). Document explicitly: connect-level is a *gate*, not an *inheritance*.
