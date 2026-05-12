@@ -1,5 +1,5 @@
 import {GGRpc, httpSchema} from "@grest-ts/http"
-import {GGContractClass, GGContractImplementation, IsBoolean, IsNumber, IsObject, SERVER_ERROR, VALIDATION_ERROR} from "@grest-ts/schema";
+import {GGContractClass, GGContractImplementation, IsBoolean, IsNumber, IsObject, SERVER_ERROR, VALIDATION_ERROR, GG_NO_PERMISSIONS } from "@grest-ts/schema";
 
 // ---------------------------------------------------------
 // Type Schemas
@@ -40,26 +40,31 @@ export type ResetResponse = typeof IsResetResponse.infer
 export const MetricsTestApiContract = new GGContractClass("MetricsTestApi", {
     getMetrics: {
         success: IsMetricsResponse,
-        errors: [SERVER_ERROR]
+        errors: [SERVER_ERROR],
+        permission: GG_NO_PERMISSIONS
     },
     incrementCounter: {
         input: IsIncrementRequest,
         success: IsMetricsResponse,
-        errors: [VALIDATION_ERROR, SERVER_ERROR]
+        errors: [VALIDATION_ERROR, SERVER_ERROR],
+        permission: GG_NO_PERMISSIONS
     },
     setGauge: {
         input: IsSetGaugeRequest,
         success: IsMetricsResponse,
-        errors: [VALIDATION_ERROR, SERVER_ERROR]
+        errors: [VALIDATION_ERROR, SERVER_ERROR],
+        permission: GG_NO_PERMISSIONS
     },
     recordDuration: {
         input: IsRecordDurationRequest,
         success: IsMetricsResponse,
-        errors: [VALIDATION_ERROR, SERVER_ERROR]
+        errors: [VALIDATION_ERROR, SERVER_ERROR],
+        permission: GG_NO_PERMISSIONS
     },
     resetMetrics: {
         success: IsResetResponse,
-        errors: [SERVER_ERROR]
+        errors: [SERVER_ERROR],
+        permission: GG_NO_PERMISSIONS
     }
 })
 

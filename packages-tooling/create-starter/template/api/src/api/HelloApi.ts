@@ -1,4 +1,4 @@
-import {GGContractClass, IsObject, IsString, VALIDATION_ERROR, SERVER_ERROR} from "@grest-ts/schema"
+import {GGContractClass, IsObject, IsString, VALIDATION_ERROR, SERVER_ERROR } from "@grest-ts/schema"
 import {httpSchema, GGRpc} from "@grest-ts/http"
 
 // --- Types ---
@@ -19,7 +19,7 @@ export const HelloApiContract = new GGContractClass("HelloApi", {
     hello: {
         input: IsHelloRequest,
         success: IsHelloResponse,
-        errors: [VALIDATION_ERROR, SERVER_ERROR]
+        errors: [VALIDATION_ERROR, SERVER_ERROR],
     }
 })
 

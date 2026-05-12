@@ -10,3 +10,4 @@ export {GGOpenApiDocs as GGOpenApiServer} from "./GGOpenApiDocs";
 export type {GGOpenApiDocsOptions as GGOpenApiServerOptions} from "./GGOpenApiDocs";
 export {SchemaRegistry, toComponentName, errorComponentName} from "./SchemaRegistry";
 export {schemaDescriptionToOpenApi, inlineSchemaResolver} from "./schemaDescriptionToOpenApi";
+export {permissionToSecurity, registerBearerAuth, DEFAULT_BEARER_SCHEME} from "./permissionToSecurity";

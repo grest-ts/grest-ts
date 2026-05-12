@@ -1,4 +1,4 @@
-import {GGContractClass, SERVER_ERROR} from "@grest-ts/schema"
+import {GGContractClass, SERVER_ERROR } from "@grest-ts/schema"
 import {GGRpc, httpSchema} from "@grest-ts/http"
 import {UNAUTHORIZED} from "../hub/errors"
 import {GG_INTERNAL_TOKEN} from "../auth/internalAuth"
@@ -17,12 +17,18 @@ import {
  * not user-facing auth.
  */
 export const NotifyApiContract = new GGContractClass("NotifyApi", {
-    notifyTask:         {input: IsTaskEvent,         errors: [UNAUTHORIZED, SERVER_ERROR]},
-    notifyAgent:        {input: IsAgentEvent,        errors: [UNAUTHORIZED, SERVER_ERROR]},
-    notifyService:      {input: IsServiceEvent,      errors: [UNAUTHORIZED, SERVER_ERROR]},
-    notifyBaseImage:    {input: IsBaseImageEvent,    errors: [UNAUTHORIZED, SERVER_ERROR]},
-    notifyProjectImage: {input: IsProjectImageEvent, errors: [UNAUTHORIZED, SERVER_ERROR]},
-    notifyTaskOverview: {input: IsTaskOverviewEvent, errors: [UNAUTHORIZED, SERVER_ERROR]},
+    notifyTask:         {input: IsTaskEvent,         errors: [UNAUTHORIZED, SERVER_ERROR],
+    },
+    notifyAgent:        {input: IsAgentEvent,        errors: [UNAUTHORIZED, SERVER_ERROR],
+    },
+    notifyService:      {input: IsServiceEvent,      errors: [UNAUTHORIZED, SERVER_ERROR],
+    },
+    notifyBaseImage:    {input: IsBaseImageEvent,    errors: [UNAUTHORIZED, SERVER_ERROR],
+    },
+    notifyProjectImage: {input: IsProjectImageEvent, errors: [UNAUTHORIZED, SERVER_ERROR],
+    },
+    notifyTaskOverview: {input: IsTaskOverviewEvent, errors: [UNAUTHORIZED, SERVER_ERROR],
+    },
 })
 
 export const NotifyApi = httpSchema(NotifyApiContract)

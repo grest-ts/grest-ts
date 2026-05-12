@@ -1,5 +1,5 @@
 import {defineSocketContract, webSocketSchema} from "@grest-ts/websocket"
-import {GGContractClient, GGContractImplementation, SERVER_ERROR} from "@grest-ts/schema";
+import {GGContractClient, GGContractImplementation, SERVER_ERROR, GG_NO_PERMISSIONS } from "@grest-ts/schema";
 import {IsConfigTestResponse} from "./ConfigTestApi";
 
 // ---------------------------------------------------------
@@ -10,12 +10,14 @@ export const ConfigTestSocketApiContract = defineSocketContract("ConfigTestSocke
     clientToServer: {
         getWatchedValue: {
             success: IsConfigTestResponse,
-            errors: [SERVER_ERROR]
+            errors: [SERVER_ERROR],
+            permission: GG_NO_PERMISSIONS
         }
     },
     serverToClient: {
         configChanged: {
             input: IsConfigTestResponse,
+            permission: GG_NO_PERMISSIONS
         }
     }
 })

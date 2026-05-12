@@ -13,6 +13,7 @@ export * from "./server/GGHttpMetrics";
 
 // Context
 export * from "./server/GG_HTTP_REQUEST";
+export * from "./server/GG_PERMISSIONS";
 
 // API Schema
 export * from "./schema/GGHttpSchema";

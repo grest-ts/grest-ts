@@ -2,6 +2,7 @@ import type {GGHttpSchema, GGHttpTransportMiddleware} from "@grest-ts/http";
 import type {ANY_ERROR_CLS} from "@grest-ts/schema";
 import type {OpenAPIV3_1} from "openapi-types";
 import {SchemaRegistry} from "./SchemaRegistry";
+import {permissionToSecurity} from "./permissionToSecurity";
 
 export interface ToOpenApiOptions {
     title?: string;
@@ -53,6 +54,15 @@ export function toOpenApi(
             }
             if (operationSecurity.length > 0) {
                 operation.security = operationSecurity;
+            }
+
+            // Contract permission → OpenAPI security. This overrides middleware-derived
+            // security so the doc reflects the gate's actual required-scope semantics.
+            if (contract.permission !== undefined) {
+                const permSecurity = permissionToSecurity(contract.permission, securitySchemes);
+                if (permSecurity !== null) {
+                    operation.security = permSecurity;
+                }
             }
 
             if (!paths[openApiPath]) paths[openApiPath] = {};

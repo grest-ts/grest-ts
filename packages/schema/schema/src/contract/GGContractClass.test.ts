@@ -5,6 +5,7 @@ import {ERROR} from './ERROR';
 import {IsString} from '../schemas/IsString';
 import {IsNumber} from '../schemas/IsNumber';
 import {IsObject} from '../schemas/IsObject';
+import {GG_NO_PERMISSIONS} from "./permission/GGPermission";
 
 const USER_NOT_FOUND = ERROR.define('USER_NOT_FOUND', 404);
 const INVALID_PASSWORD = ERROR.define('INVALID_PASSWORD', 400);
@@ -20,8 +21,12 @@ describe('GGContractClass', () => {
 
         it('should store methods', () => {
             const methods = {
-                getUser: {success: IsString},
-                setUser: {input: IsString, success: IsString},
+                getUser: {success: IsString,
+                    permission: GG_NO_PERMISSIONS
+                },
+                setUser: {input: IsString, success: IsString,
+                    permission: GG_NO_PERMISSIONS
+                },
             };
             const contract = new GGContractClass('UserContract', methods);
             expect(contract.methods).toBe(methods);
@@ -34,8 +39,12 @@ describe('GGContractClass', () => {
 
         it('should freeze each method', () => {
             const methods = {
-                method1: {success: IsString},
-                method2: {input: IsNumber, success: IsNumber},
+                method1: {success: IsString,
+                    permission: GG_NO_PERMISSIONS
+                },
+                method2: {input: IsNumber, success: IsNumber,
+                    permission: GG_NO_PERMISSIONS
+                },
             };
             const contract = new GGContractClass('Contract', methods);
 
@@ -51,9 +60,11 @@ describe('GGContractClass', () => {
                 greet: {
                     input: IsObject({name: IsString}),
                     success: IsString,
+                    permission: GG_NO_PERMISSIONS
                 },
                 getNumber: {
                     success: IsNumber,
+                    permission: GG_NO_PERMISSIONS
                 },
             });
 
@@ -107,6 +118,7 @@ describe('GGContractClass', () => {
                     }),
                     success: IsObject({token: IsString}),
                     errors: [USER_NOT_FOUND, INVALID_PASSWORD],
+                    permission: GG_NO_PERMISSIONS
                 },
             });
 
@@ -165,8 +177,12 @@ describe('GGContractClass', () => {
 
         describe('missing handler validation', () => {
             const Contract = new GGContractClass('TestContract', {
-                method1: {success: IsString},
-                method2: {success: IsNumber},
+                method1: {success: IsString,
+                    permission: GG_NO_PERMISSIONS
+                },
+                method2: {success: IsNumber,
+                    permission: GG_NO_PERMISSIONS
+                },
             });
 
             it('should throw if handler is missing', () => {
@@ -182,10 +198,12 @@ describe('GGContractClass', () => {
                 slow: {
                     input: IsNumber,
                     success: IsNumber,
+                    permission: GG_NO_PERMISSIONS
                 },
                 fast: {
                     input: IsNumber,
                     success: IsNumber,
+                    permission: GG_NO_PERMISSIONS
                 },
             });
 

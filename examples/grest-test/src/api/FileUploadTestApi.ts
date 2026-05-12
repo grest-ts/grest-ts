@@ -1,6 +1,6 @@
 import {httpSchema} from "@grest-ts/http"
 import {GGFileUpload, GGFileDownload} from "@grest-ts/http-file"
-import {GGContractClass, GGContractImplementation, IsArray, IsNumber, IsObject, IsString, VALIDATION_ERROR, SERVER_ERROR} from "@grest-ts/schema";
+import {GGContractClass, GGContractImplementation, IsArray, IsNumber, IsObject, IsString, VALIDATION_ERROR, SERVER_ERROR, GG_NO_PERMISSIONS } from "@grest-ts/schema";
 import {IsFile} from "@grest-ts/schema-file";
 
 // ---------------------------------------------------------
@@ -81,31 +81,36 @@ export const FileUploadTestApiContract = new GGContractClass("FileUploadTestApi"
     uploadFile: {
         input: IsUploadFileRequest,
         success: IsUploadFileResponse,
-        errors: [VALIDATION_ERROR]
+        errors: [VALIDATION_ERROR],
+        permission: GG_NO_PERMISSIONS
     },
     // Multiple files with JSON metadata
     uploadMultiple: {
         input: IsUploadMultipleRequest,
         success: IsUploadMultipleResponse,
-        errors: [VALIDATION_ERROR]
+        errors: [VALIDATION_ERROR],
+        permission: GG_NO_PERMISSIONS
     },
     // Image-only upload with size constraint
     uploadImage: {
         input: IsUploadImageRequest,
         success: IsUploadImageResponse,
-        errors: [VALIDATION_ERROR]
+        errors: [VALIDATION_ERROR],
+        permission: GG_NO_PERMISSIONS
     },
     // Download file (POST with JSON body, returns raw file)
     downloadFile: {
         input: IsDownloadFileRequest,
         success: IsFile,
-        errors: [VALIDATION_ERROR]
+        errors: [VALIDATION_ERROR],
+        permission: GG_NO_PERMISSIONS
     },
     // Download file by ID (GET with query params, returns raw file)
     downloadById: {
         input: IsDownloadByIdRequest,
         success: IsFile,
-        errors: [VALIDATION_ERROR, SERVER_ERROR]
+        errors: [VALIDATION_ERROR, SERVER_ERROR],
+        permission: GG_NO_PERMISSIONS
     }
 })
 

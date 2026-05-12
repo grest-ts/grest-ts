@@ -1,5 +1,5 @@
 import {GGRpc, httpSchema} from "@grest-ts/http";
-import {IsArray, IsObject, IsString, IsNumber, IsEnum, IsBit, IsLiteral, IsTuple, GGContractClass, FORBIDDEN, NOT_AUTHORIZED, NOT_FOUND, SERVER_ERROR, VALIDATION_ERROR} from "@grest-ts/schema";
+import {IsArray, IsObject, IsString, IsNumber, IsEnum, IsBit, IsLiteral, IsTuple, GGContractClass, FORBIDDEN, NOT_AUTHORIZED, NOT_FOUND, SERVER_ERROR, VALIDATION_ERROR } from "@grest-ts/schema";
 import {IsCompanyId} from "./CompanyApi";
 import {IsEmail, IsPhone, IsUserId} from "../Brands";
 import {GG_USER_AUTH} from "../middleware/UserAuthHeader";
@@ -193,32 +193,32 @@ export const CompanyUserApiContract = new GGContractClass("CompanyUserApi", {
     login: {
         input: IsCompanyAuthRequest,
         success: IsAuthCompanyJwt,
-        errors: [NOT_FOUND, VALIDATION_ERROR, SERVER_ERROR]
+        errors: [NOT_FOUND, VALIDATION_ERROR, SERVER_ERROR],
     },
     getForSelect: {
         input: IsCompanyUserGetForSelectRequest,
         success: IsCompanyUserGetForSelectResponse,
-        errors: [NOT_AUTHORIZED, VALIDATION_ERROR, SERVER_ERROR]
+        errors: [NOT_AUTHORIZED, VALIDATION_ERROR, SERVER_ERROR],
     },
     list: {
         input: IsCompanyUserListRequest,
         success: IsCompanyUsersResponse,
-        errors: [NOT_AUTHORIZED, FORBIDDEN, VALIDATION_ERROR, SERVER_ERROR]
+        errors: [NOT_AUTHORIZED, FORBIDDEN, VALIDATION_ERROR, SERVER_ERROR],
     },
     get: {
         input: IsCompanyUserGetRequest,
         success: IsCompanyUser,
-        errors: [NOT_AUTHORIZED, NOT_FOUND, FORBIDDEN, VALIDATION_ERROR, SERVER_ERROR]
+        errors: [NOT_AUTHORIZED, NOT_FOUND, FORBIDDEN, VALIDATION_ERROR, SERVER_ERROR],
     },
     update: {
         input: IsUpdateCompanyUserRequest,
         success: undefined as undefined,
-        errors: [NOT_AUTHORIZED, NOT_FOUND, FORBIDDEN, VALIDATION_ERROR, SERVER_ERROR]
+        errors: [NOT_AUTHORIZED, NOT_FOUND, FORBIDDEN, VALIDATION_ERROR, SERVER_ERROR],
     },
     create: {
         input: IsCreateCompanyUserRequest,
         success: IsCreateCompanyUserResponse,
-        errors: [NOT_AUTHORIZED, FORBIDDEN, VALIDATION_ERROR, SERVER_ERROR]
+        errors: [NOT_AUTHORIZED, FORBIDDEN, VALIDATION_ERROR, SERVER_ERROR],
     }
 })
 

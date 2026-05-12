@@ -1,5 +1,5 @@
 import {GGRpc, httpSchema} from "@grest-ts/http"
-import {GGContractClass, IsBoolean, IsObject, SERVER_ERROR} from "@grest-ts/schema";
+import {GGContractClass, IsBoolean, IsObject, SERVER_ERROR, GG_NO_PERMISSIONS } from "@grest-ts/schema";
 
 // ---------------------------------------------------------
 // Type Schemas
@@ -16,7 +16,8 @@ export const IsStatusResponse = IsObject({
 export const PurePublicApiContract = new GGContractClass("PurePublicApi", {
     status: {
         success: IsStatusResponse,
-        errors: [SERVER_ERROR]
+        errors: [SERVER_ERROR],
+        permission: GG_NO_PERMISSIONS
     }
 })
 

@@ -1,6 +1,6 @@
 import type {GGWebSocketSchema} from "@grest-ts/websocket";
 import type {ANY_ERROR_CLS, GGSchema} from "@grest-ts/schema";
-import {schemaDescriptionToOpenApi, SchemaRegistry} from "@grest-ts/openapi";
+import {permissionToSecurity, schemaDescriptionToOpenApi, SchemaRegistry} from "@grest-ts/openapi";
 import type {
     AsyncAPIDocument, ChannelObject, MessageObject,
     OperationObject, ReferenceObject, SchemaObject, SecurityRequirementObject,
@@ -47,6 +47,13 @@ export function toAsyncApi(
             wsSchema.middlewares as any[], securitySchemes
         );
 
+        // Connection-level permission overrides middleware-derived security
+        // for the channel: handshake gate enforces it before the socket opens.
+        const connectSecurity = wsSchema.connectPermission !== undefined
+            ? permissionToSecurity(wsSchema.connectPermission, securitySchemes as any)
+            : null;
+        const effectiveChannelSecurity = connectSecurity ?? channelSecurity;
+
         const messages: Record<string, MessageObject | ReferenceObject> = {};
 
         // ── clientToServer ──────────────────────────────────────────────────
@@ -90,7 +97,14 @@ export function toAsyncApi(
                     : {description: `${camelToTitle(methodName)} — fire-and-forget`}),
                 messages: [{$ref: `#/channels/${channelId}/messages/${requestMsgId}`}],
             };
-            if (channelSecurity.length) operation.security = channelSecurity;
+            // Per-method permission overrides channel security on c2s operations
+            // (server-pushed s2c retains channel security since the gate has no
+            // caller identity to check for those).
+            const methodSecurity = method.permission !== undefined
+                ? permissionToSecurity(method.permission, securitySchemes as any)
+                : null;
+            const opSecurity = methodSecurity ?? effectiveChannelSecurity;
+            if (opSecurity.length) operation.security = opSecurity;
             if (hasReply && replyMsgRefs.length) {
                 operation.reply = {channel: channelRef, messages: replyMsgRefs};
             }
@@ -136,7 +150,7 @@ export function toAsyncApi(
                     title: camelToTitle(methodName),
                     description: `${camelToTitle(methodName)} — server-initiated request/response`,
                     messages: [{$ref: `#/channels/${channelId}/messages/${triggerMsgId}`}],
-                    ...(channelSecurity.length ? {security: channelSecurity} : {}),
+                    ...(effectiveChannelSecurity.length ? {security: effectiveChannelSecurity} : {}),
                     reply: {channel: channelRef, messages: replyMsgRefs},
                 };
             } else {
@@ -152,7 +166,7 @@ export function toAsyncApi(
                     title: camelToTitle(methodName),
                     description: `${camelToTitle(methodName)} — server push`,
                     messages: [{$ref: `#/channels/${channelId}/messages/${msgId}`}],
-                    ...(channelSecurity.length ? {security: channelSecurity} : {}),
+                    ...(effectiveChannelSecurity.length ? {security: effectiveChannelSecurity} : {}),
                 };
             }
         }

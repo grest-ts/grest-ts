@@ -18,7 +18,7 @@
  */
 import {GGRuntime} from "@grest-ts/runtime"
 import {GGHttpServer, GGRpc, httpSchema} from "@grest-ts/http"
-import {GGContractClass, GGContractImplementation, IsObject, SERVER_ERROR} from "@grest-ts/schema"
+import {GGContractClass, GGContractImplementation, IsObject, SERVER_ERROR, GG_NO_PERMISSIONS } from "@grest-ts/schema"
 import {callOn, GG_TEST_RUNNER, GGTest} from "@grest-ts/testkit"
 
 // ---------------------------------------------------------
@@ -33,6 +33,7 @@ const CrashTestApiContract = new GGContractClass("CrashTestApi", {
         input: IsCrashRequest,
         success: IsCrashResponse,
         errors: [SERVER_ERROR],
+        permission: GG_NO_PERMISSIONS
     },
 })
 

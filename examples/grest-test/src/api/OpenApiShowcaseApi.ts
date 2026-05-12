@@ -14,7 +14,7 @@
  *   - Error responses with typed data schemas
  */
 
-import {GGContractClass, GGContractImplementation} from "@grest-ts/schema";
+import {GGContractClass, GGContractImplementation, GG_NO_PERMISSIONS } from "@grest-ts/schema";
 import {
     IsString, IsNumber, IsBoolean, IsArray, IsObject, IsLiteral,
     IsUnion, IsRecord, IsTuple, IsAny, IsUnknown, IsBit,
@@ -194,7 +194,8 @@ export const ShowcaseApiContract = new GGContractClass("ShowcaseApi", {
             users: IsArray(IsUserProfile),
             total: IsUint,
         }),
-        errors: [VALIDATION_ERROR, SERVER_ERROR]
+        errors: [VALIDATION_ERROR, SERVER_ERROR],
+        permission: GG_NO_PERMISSIONS
     },
     // GET with path param
     getUser: {
@@ -202,13 +203,15 @@ export const ShowcaseApiContract = new GGContractClass("ShowcaseApi", {
             id: IsString.nonEmpty.docs({description: "User ID", example: "usr_abc123"})
         }),
         success: IsUserProfile,
-        errors: [RESOURCE_NOT_FOUND, SERVER_ERROR]
+        errors: [RESOURCE_NOT_FOUND, SERVER_ERROR],
+        permission: GG_NO_PERMISSIONS
     },
     // POST with JSON body
     createUser: {
         input: IsCreateUserRequest,
         success: IsUserProfile,
-        errors: [VALIDATION_ERROR, CONFLICT, SERVER_ERROR]
+        errors: [VALIDATION_ERROR, CONFLICT, SERVER_ERROR],
+        permission: GG_NO_PERMISSIONS
     },
     // PUT with path + JSON body
     updateProfile: {
@@ -216,29 +219,34 @@ export const ShowcaseApiContract = new GGContractClass("ShowcaseApi", {
             id: IsString.nonEmpty.docs({description: "User ID to update"})
         }),
         success: IsUserProfile,
-        errors: [VALIDATION_ERROR, RESOURCE_NOT_FOUND, SERVER_ERROR]
+        errors: [VALIDATION_ERROR, RESOURCE_NOT_FOUND, SERVER_ERROR],
+        permission: GG_NO_PERMISSIONS
     },
     // DELETE with path param, no success body
     deleteUser: {
         input: IsObject({
             id: IsString.nonEmpty
         }),
-        errors: [RESOURCE_NOT_FOUND, SERVER_ERROR]
+        errors: [RESOURCE_NOT_FOUND, SERVER_ERROR],
+        permission: GG_NO_PERMISSIONS
     },
     // GET with no input
     getStats: {
         success: IsStatsResponse,
-        errors: [SERVER_ERROR]
+        errors: [SERVER_ERROR],
+        permission: GG_NO_PERMISSIONS
     },
     // Multiple errors at same 404 status — tests oneOf merging in OpenAPI output
     multiError: {
-        errors: [RESOURCE_NOT_FOUND, PROFILE_NOT_FOUND, RATE_LIMITED, SERVER_ERROR]
+        errors: [RESOURCE_NOT_FOUND, PROFILE_NOT_FOUND, RATE_LIMITED, SERVER_ERROR],
+        permission: GG_NO_PERMISSIONS
     },
     // File upload (multipart/form-data)
     uploadAvatar: {
         input: IsAvatarUpload,
         success: IsObject({url: IsUrl, width: IsUint, height: IsUint}),
-        errors: [VALIDATION_ERROR, SERVER_ERROR]
+        errors: [VALIDATION_ERROR, SERVER_ERROR],
+        permission: GG_NO_PERMISSIONS
     },
     // File download (binary response)
     downloadAvatar: {
@@ -247,12 +255,14 @@ export const ShowcaseApiContract = new GGContractClass("ShowcaseApi", {
             format: IsLiteral("jpeg", "png", "webp").default("jpeg")
         }),
         success: IsFile,
-        errors: [RESOURCE_NOT_FOUND, SERVER_ERROR]
+        errors: [RESOURCE_NOT_FOUND, SERVER_ERROR],
+        permission: GG_NO_PERMISSIONS
     },
     // Event stream: discriminated union in success
     getLatestEvent: {
         success: IsEvent,
-        errors: [SERVER_ERROR]
+        errors: [SERVER_ERROR],
+        permission: GG_NO_PERMISSIONS
     },
 });
 

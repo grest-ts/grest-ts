@@ -1,6 +1,6 @@
 import {GGRpc, httpSchema} from "@grest-ts/http";
 import {GGFileDownload, GGFileUpload} from "@grest-ts/http-file";
-import {FORBIDDEN, GGContractClass, IsArray, IsBit, IsEnum, IsLiteral, IsNumber, IsObject, IsString, IsTuple, NOT_AUTHORIZED, NOT_FOUND, SERVER_ERROR, VALIDATION_ERROR} from "@grest-ts/schema";
+import {FORBIDDEN, GGContractClass, IsArray, IsBit, IsEnum, IsLiteral, IsNumber, IsObject, IsString, IsTuple, NOT_AUTHORIZED, NOT_FOUND, SERVER_ERROR, VALIDATION_ERROR } from "@grest-ts/schema";
 import {IsFile} from "@grest-ts/schema-file";
 import {GG_COMPANY_AUTH_TOKEN} from "../middleware/CompanyAuthHeader";
 import {IsLanguage, IsTemplateId} from "../Brands";
@@ -159,37 +159,37 @@ export const TemplateApiContract = new GGContractClass("TemplateApi", {
     list: {
         input: IsGetTemplatesQuery,
         success: IsGetTemplatesResult,
-        errors: [NOT_AUTHORIZED, FORBIDDEN, VALIDATION_ERROR, SERVER_ERROR]
+        errors: [NOT_AUTHORIZED, FORBIDDEN, VALIDATION_ERROR, SERVER_ERROR],
     },
     getForSelect: {
         input: IsGetTemplatesForSelectRequest,
         success: IsGetTemplatesForSelectResponse,
-        errors: [NOT_AUTHORIZED, VALIDATION_ERROR, SERVER_ERROR]
+        errors: [NOT_AUTHORIZED, VALIDATION_ERROR, SERVER_ERROR],
     },
     sync: {
         input: IsSyncTemplateData,
         success: undefined as undefined,
-        errors: [NOT_AUTHORIZED, NOT_FOUND, FORBIDDEN, VALIDATION_ERROR, SERVER_ERROR]
+        errors: [NOT_AUTHORIZED, NOT_FOUND, FORBIDDEN, VALIDATION_ERROR, SERVER_ERROR],
     },
     get: {
         input: IsGetTemplateRequest,
         success: IsSyncTemplateData,
-        errors: [NOT_AUTHORIZED, NOT_FOUND, FORBIDDEN, VALIDATION_ERROR, SERVER_ERROR]
+        errors: [NOT_AUTHORIZED, NOT_FOUND, FORBIDDEN, VALIDATION_ERROR, SERVER_ERROR],
     },
     delete: {
         input: IsDeleteTemplateRequest,
         success: undefined as undefined,
-        errors: [NOT_AUTHORIZED, NOT_FOUND, FORBIDDEN, VALIDATION_ERROR, SERVER_ERROR]
+        errors: [NOT_AUTHORIZED, NOT_FOUND, FORBIDDEN, VALIDATION_ERROR, SERVER_ERROR],
     },
     downloadFile: {
         input: IsTemplateFileGetRequest,
         success: IsFile,
-        errors: [NOT_AUTHORIZED, NOT_FOUND, VALIDATION_ERROR, SERVER_ERROR]
+        errors: [NOT_AUTHORIZED, NOT_FOUND, VALIDATION_ERROR, SERVER_ERROR],
     },
     getSystemTemplate: {
         input: IsGetSystemTemplateRequest,
         success: IsSyncTemplateData,
-        errors: [NOT_AUTHORIZED, NOT_FOUND, SERVER_ERROR]
+        errors: [NOT_AUTHORIZED, NOT_FOUND, SERVER_ERROR],
     }
 })
 

@@ -1,5 +1,9 @@
 import {GGRuntime} from "@grest-ts/runtime"
-import {GGHttpServer} from "@grest-ts/http"
+import {GGHttp, GGHttpServer} from "@grest-ts/http"
+import {getTestScopes, PermissionsApi} from "./api/PermissionsApi"
+import {PermissionsTestService} from "./services/PermissionsTestService"
+import {getWsTestScopes, WsFeaturePermissionsApi, WsPermissionsApi} from "./api/WsPermissionsApi"
+import {WsFeaturePermissionsService, WsPermissionsService} from "./services/WsPermissionsService"
 import {GGOpenApiDocs} from "@grest-ts/openapi"
 import {GGAsyncApiDocs} from "@grest-ts/asyncapi"
 import {GGApiDocs} from "@grest-ts/api-docs"
@@ -93,6 +97,17 @@ export class MainRuntime extends GGRuntime {
         ClientTestSocketApi.register(clientTestSocketService.handleConnection);
         AuthedSocketApi.register(authedSocketService.handleConnection);
         QuerySocketApi.register(querySocketService.handleConnection);
+
+        // Permissions API — wired via GGHttp builder so usePermissions(...) gates each request.
+        new GGHttp(httpServer)
+            .usePermissions(getTestScopes)
+            .http(PermissionsApi, new PermissionsTestService());
+
+        // WebSocket permission test fixtures.
+        const wsPermissionsService = new WsPermissionsService();
+        WsPermissionsApi.register(wsPermissionsService.handleConnection, {permissionResolver: getWsTestScopes});
+        const wsFeaturePermissionsService = new WsFeaturePermissionsService();
+        WsFeaturePermissionsApi.register(wsFeaturePermissionsService.handleConnection, {permissionResolver: getWsTestScopes});
 
         GGOpenApiDocs.register({http: httpServer, title: "Grest Test API", version: "1.0.0", specPath: "/openapi.json", docsPath: "/docs"});
 

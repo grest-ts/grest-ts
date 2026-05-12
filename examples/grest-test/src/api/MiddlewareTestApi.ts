@@ -1,5 +1,5 @@
 import {GGHttpRequest, GGHttpTransportMiddleware, GGRpc, httpSchema} from "@grest-ts/http"
-import {GGContractClass, GGContractImplementation, IsBoolean, IsLiteral, IsObject, IsString, SERVER_ERROR, VALIDATION_ERROR} from "@grest-ts/schema";
+import {GGContractClass, GGContractImplementation, IsBoolean, IsLiteral, IsObject, IsString, SERVER_ERROR, VALIDATION_ERROR, GG_NO_PERMISSIONS } from "@grest-ts/schema";
 import {GG_INTL_LOCALE} from "@grest-ts/intl"
 import {GGContextKey} from "@grest-ts/context";
 
@@ -111,11 +111,13 @@ export const MiddlewareTestApiContract = new GGContractClass("MiddlewareTestApi"
     echo: {
         input: IsMiddlewareTestRequest,
         success: IsMiddlewareTestResponse,
-        errors: [VALIDATION_ERROR, SERVER_ERROR]
+        errors: [VALIDATION_ERROR, SERVER_ERROR],
+        permission: GG_NO_PERMISSIONS
     },
     getLanguage: {
         success: IsLanguageResponse,
-        errors: [SERVER_ERROR]
+        errors: [SERVER_ERROR],
+        permission: GG_NO_PERMISSIONS
     }
 })
 

@@ -1,20 +1,25 @@
 import {describe, it, expect, beforeEach} from "vitest";
 import {
-    IsString, IsNumber, IsObject, ERROR, GGContractClass
-} from "@grest-ts/schema";
+    IsString, IsNumber, IsObject, ERROR, GGContractClass, GG_NO_PERMISSIONS } from "@grest-ts/schema";
 import {GGRpc, httpSchema, GGHttpServer} from "@grest-ts/http";
 import {GGOpenApiDocsGroups} from "../src/GGOpenApiDocsGroups";
 
 const NOT_FOUND = ERROR.define("NOT_FOUND", 404);
 
 const UserContract = new GGContractClass("UserApi", {
-    get: {input: IsObject({id: IsNumber}), success: IsObject({id: IsNumber, name: IsString}), errors: [NOT_FOUND]}
+    get: {input: IsObject({id: IsNumber}), success: IsObject({id: IsNumber, name: IsString}), errors: [NOT_FOUND],
+        permission: GG_NO_PERMISSIONS
+    }
 });
 const ProfileContract = new GGContractClass("ProfileApi", {
-    get: {input: IsObject({id: IsNumber}), success: IsObject({bio: IsString}), errors: [NOT_FOUND]}
+    get: {input: IsObject({id: IsNumber}), success: IsObject({bio: IsString}), errors: [NOT_FOUND],
+        permission: GG_NO_PERMISSIONS
+    }
 });
 const OrderContract = new GGContractClass("OrderApi", {
-    list: {success: IsObject({orders: IsString}), errors: [NOT_FOUND]}
+    list: {success: IsObject({orders: IsString}), errors: [NOT_FOUND],
+        permission: GG_NO_PERMISSIONS
+    }
 });
 
 const UserApi    = httpSchema(UserContract).pathPrefix("api/users").routes({get: GGRpc.GET(":id")});

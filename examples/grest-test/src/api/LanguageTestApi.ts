@@ -1,5 +1,5 @@
 import {GGRpc, httpSchema} from "@grest-ts/http"
-import {GGContractClass, GGContractImplementation, IsNumber, IsObject, IsString, SERVER_ERROR, VALIDATION_ERROR} from "@grest-ts/schema";
+import {GGContractClass, GGContractImplementation, IsNumber, IsObject, IsString, SERVER_ERROR, VALIDATION_ERROR, GG_NO_PERMISSIONS } from "@grest-ts/schema";
 import {GG_INTL_LOCALE} from "@grest-ts/intl";
 
 // ---------------------------------------------------------
@@ -27,7 +27,8 @@ export const LanguageTestApiContract = new GGContractClass("LanguageTestApi", {
     echo: {
         input: IsLanguageTestRequest,
         success: IsLanguageTestResponse,
-        errors: [VALIDATION_ERROR, SERVER_ERROR]
+        errors: [VALIDATION_ERROR, SERVER_ERROR],
+        permission: GG_NO_PERMISSIONS
     }
 })
 

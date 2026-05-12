@@ -5,8 +5,7 @@ import {
     IsObject,
     IsString,
     NOT_AUTHORIZED,
-    SERVER_ERROR,
-} from "@grest-ts/schema"
+    SERVER_ERROR, GG_NO_PERMISSIONS } from "@grest-ts/schema"
 import {GGContextKey} from "@grest-ts/context"
 
 // ---------------------------------------------------------
@@ -66,6 +65,7 @@ export const AuthedSocketApiContract = defineSocketContract("AuthedSocketApi", {
         whoAmI: {
             success: IsAuthedUser,
             errors: [SERVER_ERROR],
+            permission: GG_NO_PERMISSIONS
         },
     },
     serverToClient: {},

@@ -1,5 +1,5 @@
 import {GGRpc, httpSchema} from "@grest-ts/http"
-import {GGContractClass, GGContractImplementation, IsBoolean, IsNumber, IsObject, IsString, SERVER_ERROR, VALIDATION_ERROR} from "@grest-ts/schema";
+import {GGContractClass, GGContractImplementation, IsBoolean, IsNumber, IsObject, IsString, SERVER_ERROR, VALIDATION_ERROR, GG_NO_PERMISSIONS } from "@grest-ts/schema";
 import {IsTestObjectSettings} from "../MainConfig.api";
 
 // ---------------------------------------------------------
@@ -40,21 +40,25 @@ export type DelayedLogRequest = typeof IsDelayedLogRequest.infer
 export const ConfigTestApiContract = new GGContractClass("ConfigTestApi", {
     getWatchedValue: {
         success: IsConfigTestResponse,
-        errors: [SERVER_ERROR]
+        errors: [SERVER_ERROR],
+        permission: GG_NO_PERMISSIONS
     },
     getObjectConfig: {
         success: IsObjectConfigResponse,
-        errors: [SERVER_ERROR]
+        errors: [SERVER_ERROR],
+        permission: GG_NO_PERMISSIONS
     },
     logMessage: {
         input: IsLogRequest,
         success: IsLogResponse,
-        errors: [VALIDATION_ERROR, SERVER_ERROR]
+        errors: [VALIDATION_ERROR, SERVER_ERROR],
+        permission: GG_NO_PERMISSIONS
     },
     logDelayed: {
         input: IsDelayedLogRequest,
         success: undefined as undefined,
-        errors: [VALIDATION_ERROR, SERVER_ERROR]
+        errors: [VALIDATION_ERROR, SERVER_ERROR],
+        permission: GG_NO_PERMISSIONS
     }
 })
 
