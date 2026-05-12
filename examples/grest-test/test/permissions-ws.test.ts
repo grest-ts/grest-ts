@@ -1,5 +1,6 @@
 import {GG_TEST_RUNNER, GGTest} from "@grest-ts/testkit"
 import {GGContext} from "@grest-ts/context"
+import {GGSocketPool} from "@grest-ts/websocket"
 import {MainRuntime} from "../src/main"
 import {AppPermission} from "../src/api/PermissionsApi"
 import {
@@ -157,8 +158,10 @@ describe("WebSocket permission gate", () => {
         })
 
         test("server-pushed s2c messages reach unauthenticated callers — gate has no caller identity to check", async () => {
-            // No client scopes set — connection opens (multiplex socket has no
-            // connectPermission). Server still pushes `echo` right after connect.
+            // Server's `setImmediate(() => outgoing.echo(...))` fires once per
+            // handleConnection. Pooled-socket reuse from earlier tests would
+            // miss it, so clear the pool to force a fresh server-side connect.
+            await GGSocketPool.closeAll()
             await withClientScopes(null, async () => {
                 const received: string[] = []
                 const client = WsPermissionsApi.createClient({url: urlFor("WsPermissionsApi")})
@@ -177,6 +180,7 @@ describe("WebSocket permission gate", () => {
         })
 
         test("authenticated callers also receive s2c pushes — same behavior, same code path", async () => {
+            await GGSocketPool.closeAll()
             await withClientScopes([AppPermission.Read], async () => {
                 const received: string[] = []
                 const client = WsPermissionsApi.createClient({url: urlFor("WsPermissionsApi")})
