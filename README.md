@@ -6,7 +6,7 @@ TypeScript framework for building services around **contracts** — typed API de
 
 * **AI-era ready** — Clean, explicit service code is exactly what AI assistants thrive on — no magic to misunderstand, no hidden wiring to hallucinate about. And in an era where AI writes more of your
   code, integration tests are the one testing layer that actually gives you confidence it works end-to-end. Unit tests check pieces; integration tests prove the system.
-* **Very fast** — `@grest-ts/schema` validation and serialization performs equally well compared to Typia — the fastest in the ecosystem. `@grest-ts/http` benchmarks close to fastify with logging
+* **Very fast** — `@grest-ts/schema` validation and serialization performs on par with Typia — the fastest in the ecosystem. `@grest-ts/http` benchmarks close to fastify with logging
   disabled.
 * **Contract-first** — Define your API once. Get typed server handlers, typed clients, and typed test utilities automatically.
 * **Testing that survives refactors** — Integration tests at the contract level with per-request mocks and spies. Each test suite launches its own runtime instance with isolated ports and database —
