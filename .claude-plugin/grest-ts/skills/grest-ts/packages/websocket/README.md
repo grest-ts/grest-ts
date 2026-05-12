@@ -134,6 +134,27 @@ export const ChatApi = webSocketSchema(ChatApiContract)
     .done()                        // Finalize the schema
 ```
 
+## Permissions
+
+`clientToServer` methods may declare a `permission`; the gate runs **per incoming message**, before the handler. `serverToClient` methods are server-originated and never gated. The opt-in / infectious rule from HTTP applies: any c2s permission declaration or `connectPermission` on any WS schema registered on the same `GGHttpServer` triggers strict mode for the whole server — every HTTP and WS route on it must then declare.
+
+Two gating levels combine:
+
+- **`.connectPermission(...)`** on the schema (optional) is checked at handshake. Use it for feature-specific sockets where lacking permission means there's no point opening the connection at all. Failure closes the socket immediately.
+- **Per-c2s-method `permission`** is checked on every incoming message, against scopes that were resolved **once** at handshake and cached on the connection. There is no per-message token re-parsing.
+
+Wiring lives in `register()`'s config:
+
+```typescript
+ChatApi.register(chatService.handleConnection, {
+    permissionResolver: getScopes,   // () => ReadonlySet<string> | null | Promise<...>
+})
+```
+
+The same refuse-to-start guarantee from HTTP applies: a non-public c2s permission or `connectPermission` requires a resolver — the server start fails with the offending methods listed otherwise. The strict-mode trigger is shared with HTTP across the same `GGHttpServer`.
+
+**Revocation, accepted limitation.** Scopes are resolved at handshake and cached for the life of the connection. Mid-session revocation (an admin removes a user's `chat:write`) does not take effect until the socket closes — the same constraint that applies to bearer tokens generally. Apps that need strong revocation guarantees on a surface should either avoid long-lived sockets there or close affected connections externally when revoking.
+
 ## Middleware
 
 WebSocket middleware handles authentication and context during the connection handshake. Unlike HTTP middleware which runs per-request, WebSocket middleware runs once when the connection is established.

@@ -1,5 +1,5 @@
 import {useEffect, useRef, useState} from "react";
-import type {ApiDocsDocument, ContractDoc, ErrorDoc, MethodDoc, SchemaRef} from "../docTypes";
+import type {ApiDocsDocument, ContractDoc, ErrorDoc, MethodDoc, PermissionDoc, PermissionTree, SchemaRef} from "../docTypes";
 import {CompactSchema} from "./CompactSchema";
 import {ExampleSchema} from "./ExampleSchema";
 import {PillToggle} from "./Tabs";
@@ -52,19 +52,7 @@ export function MethodView({contract, method, doc, highlightType, usageIndex}: P
                 </div>
             )}
 
-            {contract.auth && contract.auth.length > 0 && (
-                <Section title="Authentication">
-                    <div className="space-y-1.5">
-                        {contract.auth.map(a => (
-                            <div key={a.headerName} className="flex items-baseline gap-3 text-sm">
-                                <span className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 uppercase">{a.scheme}</span>
-                                <code className="text-gray-700 font-mono">{a.headerName}</code>
-                                {a.description && <span className="text-gray-500">{a.description}</span>}
-                            </div>
-                        ))}
-                    </div>
-                </Section>
-            )}
+            <AuthenticationSection contract={contract} method={method} />
 
             {contract.headers && contract.headers.length > 0 && (
                 <Section title="Headers">
@@ -478,4 +466,120 @@ function Section({title, children}: {title: React.ReactNode; children: React.Rea
 
 function Label({children}: {children: React.ReactNode}) {
     return <div className="text-[11px] uppercase tracking-wider text-gray-500 font-semibold mb-1.5">{children}</div>;
+}
+
+// ── Authentication section ─────────────────────────────────────────────
+
+/**
+ * Combined Authentication + Permission block. Renders the auth-scheme
+ * rows declared by middleware (Bearer, api-key, …) and — when the
+ * contract gates the method on a non-trivial scope — an extra
+ * `[SCOPE] permission …` row using the same visual pattern.
+ *
+ * Hidden entirely when there's no auth middleware AND the permission is
+ * `public` or `anyAuth`. The auth pills already imply "must be
+ * authenticated"; restating that as a permission row is noise. Only
+ * interesting (scope / allOf / anyOf) permissions get rendered.
+ *
+ * For WS schemas, a non-trivial `connectPermission` adds a separate row
+ * — same visual style but labeled "connect" to disambiguate from the
+ * per-message gate.
+ */
+function AuthenticationSection({contract, method}: {contract: ContractDoc; method: MethodDoc}) {
+    const authRows = contract.auth ?? [];
+    const showMethodPerm = isInterestingPermission(method.permission);
+    const showConnectPerm = isInterestingPermission(contract.connectPermission);
+
+    if (authRows.length === 0 && !showMethodPerm && !showConnectPerm) return null;
+
+    return (
+        <Section title="Authentication">
+            <div className="space-y-1.5">
+                {authRows.map(a => (
+                    <div key={a.headerName} className="flex items-baseline gap-3 text-sm">
+                        <span className={`font-mono text-[10px] px-1.5 py-0.5 rounded uppercase ${authSchemePillStyle(a.scheme)}`}>{a.scheme}</span>
+                        <code className="text-gray-700 font-mono">{a.headerName}</code>
+                        {a.description && <span className="text-gray-500">{a.description}</span>}
+                    </div>
+                ))}
+                {showConnectPerm && (
+                    <PermissionRow label="connect" permission={contract.connectPermission!} />
+                )}
+                {showMethodPerm && (
+                    <PermissionRow label="permission" permission={method.permission!} />
+                )}
+            </div>
+        </Section>
+    );
+}
+
+/** Bearer keeps its dedicated purple pill (RFC 6750, known protocol).
+ *  Every other auth header renders gray — visually neutral, no implied
+ *  protocol claim beyond "this header is part of the auth surface." */
+function authSchemePillStyle(scheme: "bearer" | "header"): string {
+    if (scheme === "header") return "bg-slate-100 text-slate-600";
+    return "bg-purple-100 text-purple-700";
+}
+
+function isInterestingPermission(p?: PermissionDoc): boolean {
+    if (!p) return false;
+    return p.tree.kind !== "public" && p.tree.kind !== "anyAuth";
+}
+
+/** One row inside the Authentication section, styled to match the
+ *  `[scheme] header description` row pattern: `[SCOPE] label tree…`. */
+function PermissionRow({label, permission}: {label: string; permission: PermissionDoc}) {
+    return (
+        <div className="flex items-baseline gap-3 text-sm">
+            <span className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 uppercase">scope</span>
+            <code className="text-gray-700 font-mono">{label}</code>
+            <span className="text-gray-700"><PermissionNode tree={permission.tree} /></span>
+        </div>
+    );
+}
+
+function PermissionNode({tree}: {tree: PermissionTree}) {
+    switch (tree.kind) {
+        case "public":
+            // Filtered out at the section level, but render defensively in case
+            // a nested combinator child ever takes this shape.
+            return <span className="text-gray-500">public</span>;
+        case "anyAuth":
+            return <span className="text-gray-500">any authenticated identity</span>;
+        case "scope":
+            return (
+                <code className="inline-flex items-center text-[12px] font-mono px-1.5 py-0.5 rounded bg-blue-50 text-blue-800 border border-blue-200">
+                    {tree.scope}
+                </code>
+            );
+        case "allOf":
+            return <Combinator label="and" children={tree.children} />;
+        case "anyOf":
+            return <Combinator label="or" children={tree.children} />;
+    }
+}
+
+function Combinator({label, children}: {label: "and" | "or"; children: PermissionTree[]}) {
+    return (
+        <span className="inline-flex flex-wrap items-center gap-1.5">
+            {children.map((child, i) => (
+                <span key={i} className="inline-flex items-center gap-1.5">
+                    {i > 0 && (
+                        <span className="text-[11px] uppercase tracking-wider text-gray-500 font-semibold px-1">
+                            {label}
+                        </span>
+                    )}
+                    {needsParens(child)
+                        ? <span className="inline-flex items-center gap-1.5"><span className="text-gray-400">(</span><PermissionNode tree={child} /><span className="text-gray-400">)</span></span>
+                        : <PermissionNode tree={child} />}
+                </span>
+            ))}
+        </span>
+    );
+}
+
+/** A nested combinator gets parenthesised; leaves don't, to keep the
+ *  inline rendering readable for the common `anyOf(scope, scope)` case. */
+function needsParens(tree: PermissionTree): boolean {
+    return tree.kind === "allOf" || tree.kind === "anyOf";
 }
