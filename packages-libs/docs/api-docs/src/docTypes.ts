@@ -216,7 +216,12 @@ export interface ErrorUsage {
 }
 
 export interface AuthDoc {
-    scheme: "bearer" | "api-key";
+    /** Two values only. `"bearer"` is the RFC 6750 form (Authorization:
+     *  Bearer <token>) and gets dedicated tooling support. `"header"` is
+     *  the catch-all for every other auth header — OpenAPI-style api
+     *  keys, session bindings, tenant hints, custom tokens — anything
+     *  declared with `format: "api-key"` or `format: "auth"`. */
+    scheme: "bearer" | "header";
     headerName: string;
     description?: string;
 }

@@ -35,7 +35,26 @@ export interface ContractDoc {
     auth?: AuthDoc[];
     /** Non-auth transport headers declared by middleware (bearer/api-key live in `auth`). */
     headers?: ParamDoc[];
+    /** WS only — populated when the schema declares `.connectPermission(...)`. */
+    connectPermission?: PermissionDoc;
     methods: MethodDoc[];
+}
+
+export type PermissionTree =
+    | {kind: "public"}
+    | {kind: "anyAuth"}
+    | {kind: "scope"; scope: string}
+    | {kind: "allOf"; children: PermissionTree[]}
+    | {kind: "anyOf"; children: PermissionTree[]};
+
+export interface PermissionDoc {
+    /** Plain-English rendering with light Markdown — backticks for scopes,
+     *  `**and**` / `**or**` as combinator labels. The UI renders the tree
+     *  directly rather than parsing this string; `text` is kept for tooling
+     *  / accessibility consumers. */
+    text: string;
+    /** Structured tree mirroring GGPermission. */
+    tree: PermissionTree;
 }
 
 export interface MethodDoc {
@@ -59,6 +78,10 @@ export interface MethodDoc {
 
     deprecated?: boolean;
     deprecationMessage?: string;
+
+    /** Contract-declared permission. The framework gate enforces this BEFORE
+     *  the handler runs. */
+    permission?: PermissionDoc;
 }
 
 export interface ParamDoc {
@@ -136,7 +159,9 @@ export interface ErrorUsage {
 }
 
 export interface AuthDoc {
-    scheme: "bearer" | "api-key";
+    /** Two values only. "bearer" is RFC 6750; "header" is the catch-all
+     *  for every other auth header (api keys, session bindings, etc). */
+    scheme: "bearer" | "header";
     headerName: string;
     description?: string;
 }

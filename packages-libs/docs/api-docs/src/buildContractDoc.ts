@@ -391,11 +391,9 @@ function extractHttpAuth(middlewares: readonly GGHttpTransportMiddleware[]): Aut
     for (const mw of middlewares) {
         for (const [name, schema] of Object.entries(mw.headers ?? {})) {
             const desc = schema.toSchemaDescription();
-            const format = desc.docs?.format;
-            if (format === "bearer") {
-                auth.push({scheme: "bearer", headerName: name, ...(desc.docs?.description ? {description: desc.docs.description} : {})});
-            } else if (format === "api-key") {
-                auth.push({scheme: "api-key", headerName: name, ...(desc.docs?.description ? {description: desc.docs.description} : {})});
+            const scheme = authSchemeFromFormat(desc.docs?.format);
+            if (scheme) {
+                auth.push({scheme, headerName: name, ...(desc.docs?.description ? {description: desc.docs.description} : {})});
             }
         }
     }
@@ -408,15 +406,38 @@ function extractWsAuth(middlewares: any[]): AuthDoc[] {
     for (const mw of middlewares) {
         for (const [name, schema] of Object.entries(mw.headers ?? {}) as [string, any][]) {
             const desc = schema.toSchemaDescription?.();
-            const format = desc?.docs?.format;
-            if (format === "bearer") {
-                auth.push({scheme: "bearer", headerName: name, ...(desc.docs?.description ? {description: desc.docs.description} : {})});
-            } else if (format === "api-key") {
-                auth.push({scheme: "api-key", headerName: name, ...(desc.docs?.description ? {description: desc.docs.description} : {})});
+            const scheme = authSchemeFromFormat(desc?.docs?.format);
+            if (scheme) {
+                auth.push({scheme, headerName: name, ...(desc.docs?.description ? {description: desc.docs.description} : {})});
             }
         }
     }
     return auth;
+}
+
+/**
+ * Map a header schema's `format` hint to its auth scheme, or undefined
+ * if the header isn't part of the auth surface.
+ *
+ * Only two schemes:
+ *   - `"bearer"` — RFC 6750 `Authorization: Bearer <token>`. Specific
+ *     wire format, recognised by tooling (Swagger Authorize, etc).
+ *   - `"header"` — every other auth header. Covers OpenAPI-style
+ *     api-keys (`format: "api-key"`), session bindings / tenant hints
+ *     / paired identifiers (`format: "auth"`), and any other custom
+ *     header that belongs visually under Authentication but isn't a
+ *     Bearer token. The pill carries no protocol claim — only "this
+ *     header is part of the auth surface."
+ *
+ * The `"api-key"` format input is preserved for backward compat and
+ * because OpenAPI/AsyncAPI emit still keys off it to choose the right
+ * security scheme shape (`apiKey` vs `http: bearer`). The api-docs UI
+ * doesn't need that distinction — both render as `[HEADER]`.
+ */
+function authSchemeFromFormat(format: string | undefined): AuthDoc["scheme"] | undefined {
+    if (format === "bearer") return "bearer";
+    if (format === "api-key" || format === "auth") return "header";
+    return undefined;
 }
 
 // ── Non-auth headers ───────────────────────────────────────────────────
@@ -437,7 +458,7 @@ function extractHttpHeaders(
         for (const [name, schema] of Object.entries(mw.headers ?? {})) {
             const desc = schema.toSchemaDescription();
             const format = desc.docs?.format;
-            if (format === "bearer" || format === "api-key") continue; // → goes to `auth`
+            if (authSchemeFromFormat(format) !== undefined) continue; // → goes to `auth`
             out.push(toHeaderParam(name, schema, desc, ctx, contractName));
         }
     }
@@ -455,7 +476,7 @@ function extractWsHeaders(
             const desc = schema.toSchemaDescription?.();
             if (!desc) continue;
             const format = desc.docs?.format;
-            if (format === "bearer" || format === "api-key") continue;
+            if (authSchemeFromFormat(format) !== undefined) continue;
             out.push(toHeaderParam(name, schema, desc, ctx, contractName));
         }
     }
