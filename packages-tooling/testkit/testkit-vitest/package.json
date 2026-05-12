@@ -1,7 +1,7 @@
 {
   "//": "THIS FILE IS GENERATED - DO NOT EDIT",
   "name": "@grest-ts/testkit-vitest",
-  "version": "0.0.35",
+  "version": "0.0.36",
   "type": "module",
   "license": "MIT",
   "description": "Component testing library integration for vitest",
@@ -50,13 +50,13 @@
     "node": ">=25"
   },
   "peerDependencies": {
-    "@grest-ts/common": "0.0.35",
-    "@grest-ts/discovery": "0.0.35",
-    "@grest-ts/discovery-local": "0.0.35",
-    "@grest-ts/ipc": "0.0.35",
-    "@grest-ts/locator": "0.0.35",
-    "@grest-ts/logger": "0.0.35",
-    "@grest-ts/logger-console": "0.0.35",
-    "@grest-ts/testkit": "0.0.35"
+    "@grest-ts/common": "0.0.36",
+    "@grest-ts/discovery": "0.0.36",
+    "@grest-ts/discovery-local": "0.0.36",
+    "@grest-ts/ipc": "0.0.36",
+    "@grest-ts/locator": "0.0.36",
+    "@grest-ts/logger": "0.0.36",
+    "@grest-ts/logger-console": "0.0.36",
+    "@grest-ts/testkit": "0.0.36"
   }
 }
