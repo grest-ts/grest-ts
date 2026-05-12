@@ -1,4 +1,4 @@
-import {GGContractClass, IsObject, IsString, IsArray, SERVER_ERROR, GG_NO_PERMISSIONS } from "@grest-ts/schema"
+import {GGContractClass, IsObject, IsString, IsArray, SERVER_ERROR } from "@grest-ts/schema"
 import {GGRpc, httpSchema} from "@grest-ts/http"
 import {UNAUTHORIZED, NOT_FOUND, ALREADY_EXISTS} from "./errors"
 import {IsOrgUser, IsOrgUserId, IsUserId} from "./schemas"
@@ -23,29 +23,24 @@ export const OrgUserApiContract = new GGContractClass("OrgUserApi", {
         input: IsOrgUserIdRequest,
         success: IsOrgUser,
         errors: [UNAUTHORIZED, NOT_FOUND, SERVER_ERROR],
-        permission: GG_NO_PERMISSIONS
     },
     list: {
         success: IsArray(IsOrgUser),
         errors: [UNAUTHORIZED, SERVER_ERROR],
-        permission: GG_NO_PERMISSIONS
     },
     add: {
         input: IsAddOrgUserRequest,
         success: IsOrgUser,
         errors: [UNAUTHORIZED, NOT_FOUND, ALREADY_EXISTS, SERVER_ERROR],
-        permission: GG_NO_PERMISSIONS
     },
     update: {
         input: IsUpdateOrgUserRequest,
         success: IsOrgUser,
         errors: [UNAUTHORIZED, NOT_FOUND, SERVER_ERROR],
-        permission: GG_NO_PERMISSIONS
     },
     remove: {
         input: IsOrgUserIdRequest,
         errors: [UNAUTHORIZED, NOT_FOUND, SERVER_ERROR],
-        permission: GG_NO_PERMISSIONS
     },
 })
 

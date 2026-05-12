@@ -1,5 +1,5 @@
 import {GGRpc, httpSchema} from "@grest-ts/http";
-import {IsArray, IsObject, IsString, IsNumber, IsLiteral, IsTuple, GGContractClass, FORBIDDEN, NOT_AUTHORIZED, NOT_FOUND, SERVER_ERROR, VALIDATION_ERROR, GG_NO_PERMISSIONS } from "@grest-ts/schema";
+import {IsArray, IsObject, IsString, IsNumber, IsLiteral, IsTuple, GGContractClass, FORBIDDEN, NOT_AUTHORIZED, NOT_FOUND, SERVER_ERROR, VALIDATION_ERROR } from "@grest-ts/schema";
 import {GG_COMPANY_AUTH_TOKEN} from "../middleware/CompanyAuthHeader";
 import {IsApartmentId, IsDate, IsOwnerExpenseId, IsUserId} from "../Brands";
 import {IsOwnerId} from "./OwnerApi";
@@ -81,25 +81,21 @@ export const OwnerExpenseApiContract = new GGContractClass("OwnerExpenseApi", {
         input: IsOwnerExpenseQuery,
         success: IsOwnerExpenseResult,
         errors: [NOT_AUTHORIZED, FORBIDDEN, VALIDATION_ERROR, SERVER_ERROR],
-        permission: GG_NO_PERMISSIONS
     },
     get: {
         input: IsGetOwnerExpenseQuery,
         success: IsSyncOwnerExpenseData,
         errors: [NOT_AUTHORIZED, NOT_FOUND, FORBIDDEN, VALIDATION_ERROR, SERVER_ERROR],
-        permission: GG_NO_PERMISSIONS
     },
     sync: {
         input: IsSyncOwnerExpenseData,
         success: IsSyncOwnerExpenseResult,
         errors: [NOT_AUTHORIZED, NOT_FOUND, FORBIDDEN, VALIDATION_ERROR, SERVER_ERROR],
-        permission: GG_NO_PERMISSIONS
     },
     delete: {
         input: IsDeleteOwnerExpenseQuery,
         success: undefined as undefined,
         errors: [NOT_AUTHORIZED, NOT_FOUND, FORBIDDEN, VALIDATION_ERROR, SERVER_ERROR],
-        permission: GG_NO_PERMISSIONS
     }
 })
 

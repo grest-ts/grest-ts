@@ -1,5 +1,5 @@
 import {GGRpc, httpSchema} from "@grest-ts/http";
-import {IsArray, IsObject, IsString, IsNumber, IsEnum, IsLiteral, IsTuple, GGContractClass, FORBIDDEN, NOT_AUTHORIZED, NOT_FOUND, SERVER_ERROR, VALIDATION_ERROR, GG_NO_PERMISSIONS } from "@grest-ts/schema";
+import {IsArray, IsObject, IsString, IsNumber, IsEnum, IsLiteral, IsTuple, GGContractClass, FORBIDDEN, NOT_AUTHORIZED, NOT_FOUND, SERVER_ERROR, VALIDATION_ERROR } from "@grest-ts/schema";
 import {IsCreatedAndChangedBy} from "./UserApi";
 import {GG_COMPANY_AUTH_TOKEN} from "../middleware/CompanyAuthHeader";
 import {IsApartmentId, IsBuildingId, IsClientId, IsContractId, IsDate, IsDateTime, IsTaskCommentId, IsTaskDelegationId, IsTaskId, IsUserId} from "../Brands";
@@ -395,97 +395,81 @@ export const TaskApiContract = new GGContractClass("TaskApi", {
         input: IsTasksQuery,
         success: IsTasksResult,
         errors: [NOT_AUTHORIZED, FORBIDDEN, VALIDATION_ERROR, SERVER_ERROR],
-        permission: GG_NO_PERMISSIONS
     },
     listRelated: {
         input: IsTasksRelatedQuery,
         success: IsTasksRelatedResult,
         errors: [NOT_AUTHORIZED, FORBIDDEN, VALIDATION_ERROR, SERVER_ERROR],
-        permission: GG_NO_PERMISSIONS
     },
     get: {
         input: IsTaskGetRequest,
         success: IsSyncTaskData,
         errors: [NOT_AUTHORIZED, NOT_FOUND, FORBIDDEN, VALIDATION_ERROR, SERVER_ERROR],
-        permission: GG_NO_PERMISSIONS
     },
     getDetail: {
         input: IsTaskGetRequest,
         success: IsTaskDetailResponse,
         errors: [NOT_AUTHORIZED, NOT_FOUND, FORBIDDEN, VALIDATION_ERROR, SERVER_ERROR],
-        permission: GG_NO_PERMISSIONS
     },
     sync: {
         input: IsSyncTaskData,
         success: IsTaskSyncResponse,
         errors: [NOT_AUTHORIZED, FORBIDDEN, VALIDATION_ERROR, SERVER_ERROR],
-        permission: GG_NO_PERMISSIONS
     },
     delete: {
         input: IsTaskDeleteRequest,
         success: undefined as undefined,
         errors: [NOT_AUTHORIZED, NOT_FOUND, FORBIDDEN, VALIDATION_ERROR, SERVER_ERROR],
-        permission: GG_NO_PERMISSIONS
     },
     listDelegations: {
         input: IsTaskDelegationListRequest,
         success: IsTaskDelegationListResponse,
         errors: [NOT_AUTHORIZED, FORBIDDEN, VALIDATION_ERROR, SERVER_ERROR],
-        permission: GG_NO_PERMISSIONS
     },
     sendDelegation: {
         input: IsSendDelegationRequest,
         success: IsSendDelegationResponse,
         errors: [NOT_AUTHORIZED, FORBIDDEN, VALIDATION_ERROR, SERVER_ERROR],
-        permission: GG_NO_PERMISSIONS
     },
     resendDelegation: {
         input: IsResendDelegationRequest,
         success: undefined as undefined,
         errors: [NOT_AUTHORIZED, NOT_FOUND, FORBIDDEN, VALIDATION_ERROR, SERVER_ERROR],
-        permission: GG_NO_PERMISSIONS
     },
     deleteDelegation: {
         input: IsDeleteDelegationRequest,
         success: undefined as undefined,
         errors: [NOT_AUTHORIZED, NOT_FOUND, FORBIDDEN, VALIDATION_ERROR, SERVER_ERROR],
-        permission: GG_NO_PERMISSIONS
     },
     cancelDelegation: {
         input: IsCancelDelegationRequest,
         success: undefined as undefined,
         errors: [NOT_AUTHORIZED, NOT_FOUND, FORBIDDEN, VALIDATION_ERROR, SERVER_ERROR],
-        permission: GG_NO_PERMISSIONS
     },
     listComments: {
         input: IsTaskCommentListRequest,
         success: IsTaskCommentListResponse,
         errors: [NOT_AUTHORIZED, FORBIDDEN, VALIDATION_ERROR, SERVER_ERROR],
-        permission: GG_NO_PERMISSIONS
     },
     addComment: {
         input: IsAddTaskCommentRequest,
         success: undefined as undefined,
         errors: [NOT_AUTHORIZED, FORBIDDEN, VALIDATION_ERROR, SERVER_ERROR],
-        permission: GG_NO_PERMISSIONS
     },
     editComment: {
         input: IsEditTaskCommentRequest,
         success: undefined as undefined,
         errors: [NOT_AUTHORIZED, NOT_FOUND, FORBIDDEN, VALIDATION_ERROR, SERVER_ERROR],
-        permission: GG_NO_PERMISSIONS
     },
     editDelegationDescription: {
         input: IsEditDelegationDescriptionRequest,
         success: undefined as undefined,
         errors: [NOT_AUTHORIZED, NOT_FOUND, FORBIDDEN, VALIDATION_ERROR, SERVER_ERROR],
-        permission: GG_NO_PERMISSIONS
     },
     calendar: {
         input: IsTaskCalendarRequest,
         success: IsTaskCalendarResponse,
         errors: [NOT_AUTHORIZED, FORBIDDEN, VALIDATION_ERROR, SERVER_ERROR],
-        permission: GG_NO_PERMISSIONS
     }
 })
 

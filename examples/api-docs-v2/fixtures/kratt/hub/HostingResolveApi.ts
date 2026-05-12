@@ -1,6 +1,6 @@
 import {GGContextKey} from "@grest-ts/context"
 import type {GGHttpRequest} from "@grest-ts/http"
-import {GGContractClass, IsObject, IsString, IsNumber, SERVER_ERROR, type GGSchema, GG_NO_PERMISSIONS } from "@grest-ts/schema"
+import {GGContractClass, IsObject, IsString, IsNumber, SERVER_ERROR, type GGSchema } from "@grest-ts/schema"
 import {GGRpc, httpSchema} from "@grest-ts/http"
 import {NOT_FOUND, UNAUTHORIZED} from "./errors"
 import {IsTaskId} from "./schemas"
@@ -69,7 +69,6 @@ export const HostingResolveApiContract = new GGContractClass("HostingResolveApi"
         input: IsResolveRequest,
         success: IsResolveResponse,
         errors: [UNAUTHORIZED, NOT_FOUND, SERVER_ERROR],
-        permission: GG_NO_PERMISSIONS
     },
 })
 

@@ -1,16 +1,28 @@
 # Plan: Contract-level Permissions
 
+> **2026-05-12 revision — strict mode is per-server, triggered, not compile-time mandatory.**
+>
+> The initial draft (everything that follows below) made `permission` a *type-level* required field on every contract method. After shipping it we walked it back: forcing every API in every project — including no-auth services — to write `permission: GG_NO_PERMISSIONS` was friction without payoff. The current behavior:
+>
+> - `permission` is an **optional** field on `GGContractMethod` / `GGContractFunction`. Omitting it is fine.
+> - A server is in **strict mode** if any registered route declares `permission` (including the explicit-public sentinel `GG_NO_PERMISSIONS`) OR if any `GGHttp` chain on it called `.usePermissions(...)` (or a WS schema passed `permissionResolver`). The trigger is "any hint of permission intent anywhere on this server".
+> - In strict mode, **every** registered route on that server must declare `permission` explicitly. `GG_NO_PERMISSIONS` is the "intentionally public" marker. The check runs in `GGHttpServer.start()` and fails the runtime startup with a list of offending routes.
+> - The check is **per-server** (HTTP + WS routes on the same `GGHttpServer`), not per-`.http()` chain — so the trigger is order-independent and infectious across sibling chains.
+> - A route declaring a non-public permission without a resolver wired (for its own schema) still fails startup with an actionable error (unchanged guarantee, just lifted from per-registration to start-time).
+>
+> So: the safety property is preserved — once you opt into permissions anywhere, the framework refuses to start until every route has been considered. The cost for the no-auth case is zero. Sections below that say "mandatory" or "compile time" describe the prior design; the current implementation enforces at server start.
+
 ## Goal
 
 Move endpoint authorization from "developer must remember to write a check" to "the contract declares the required permission and the framework enforces it." The token format and identity model stay app-defined; the framework owns the *gate* (extract scopes → compare against the contract's declared requirement → reject or pass).
 
 ## What this changes
 
-1. `GGContractMethod` grows a **mandatory** `permission` field — TypeScript refuses to compile a method without it.
+1. `GGContractMethod` grows an **optional** `permission` field. Type-level enforcement was abandoned (see revision note above); the safety check has moved to server startup.
 2. A pure `satisfies(required, scopes)` checker lives in `@grest-ts/schema`. Unit-tested once, never re-implemented per app.
 3. `GGHttp.usePermissions(getScopes)` registers a zero-arg scope resolver that reads from app context (set by an upstream auth middleware). The gate runs between `parseRequest` and `implFn`.
-4. WebSocket gets the same model: every `clientToServer` method declares `permission`; `serverToClient` methods do not (server originates). Connection-level permission is an optional builder method for feature-specific sockets.
-5. At server start, the framework walks every registered schema. Any non-PUBLIC method with no validator wired → hard fail with an actionable error.
+4. WebSocket gets the same model: `clientToServer` methods may declare `permission`; `serverToClient` methods do not (server originates). Connection-level permission is an optional builder method for feature-specific sockets.
+5. At server start, the framework walks every registered HTTP/WS route on the server. If strict mode is triggered (any route declared a permission, or any resolver wired), every route must declare; otherwise the runtime refuses to start with an actionable error listing the offenders.
 6. OpenAPI / AsyncAPI / api-docs generators emit accurate permission metadata.
 
 ## Non-goals

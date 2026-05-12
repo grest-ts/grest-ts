@@ -1,6 +1,6 @@
 import {GGRpc, httpSchema} from "@grest-ts/http";
 import {GGFileDownload} from "@grest-ts/http-file";
-import {FORBIDDEN, GGContractClass, IsArray, IsBit, IsBoolean, IsEnum, IsLiteral, IsNumber, IsObject, IsString, IsTuple, NOT_AUTHORIZED, NOT_FOUND, SERVER_ERROR, VALIDATION_ERROR, GG_NO_PERMISSIONS } from "@grest-ts/schema";
+import {FORBIDDEN, GGContractClass, IsArray, IsBit, IsBoolean, IsEnum, IsLiteral, IsNumber, IsObject, IsString, IsTuple, NOT_AUTHORIZED, NOT_FOUND, SERVER_ERROR, VALIDATION_ERROR } from "@grest-ts/schema";
 import {IsFile} from "@grest-ts/schema-file";
 import {FORBIDDEN_BOOKKEEPING_LOCKED} from "../ApiError";
 import {IsBuildingId, tInvoiceNo} from "../Brands";
@@ -569,73 +569,61 @@ export const InvoicesApiContract = new GGContractClass("InvoicesApi", {
         input: IsInvoicesQuery,
         success: IsInvoicesResult,
         errors: [NOT_AUTHORIZED, FORBIDDEN, VALIDATION_ERROR, SERVER_ERROR],
-        permission: GG_NO_PERMISSIONS
     },
     get: {
         input: IsGetInvoiceRequest,
         success: IsSyncInvoiceData,
         errors: [NOT_AUTHORIZED, NOT_FOUND, FORBIDDEN, VALIDATION_ERROR, SERVER_ERROR],
-        permission: GG_NO_PERMISSIONS
     },
     delete: {
         input: IsDeleteInvoiceRequest,
         success: undefined as undefined,
         errors: [NOT_AUTHORIZED, NOT_FOUND, FORBIDDEN, FORBIDDEN_BOOKKEEPING_LOCKED, VALIDATION_ERROR, SERVER_ERROR],
-        permission: GG_NO_PERMISSIONS
     },
     create: {
         input: IsCreateInvoiceData,
         success: IsCreateInvoiceResult,
         errors: [NOT_AUTHORIZED, FORBIDDEN, FORBIDDEN_BOOKKEEPING_LOCKED, VALIDATION_ERROR, SERVER_ERROR],
-        permission: GG_NO_PERMISSIONS
     },
     createCredit: {
         input: IsCreateCreditInvoiceData,
         success: IsCreateInvoiceResult,
         errors: [NOT_AUTHORIZED, FORBIDDEN, VALIDATION_ERROR, SERVER_ERROR],
-        permission: GG_NO_PERMISSIONS
     },
     sync: {
         input: IsSyncInvoiceData,
         success: undefined as undefined,
         errors: [NOT_AUTHORIZED, FORBIDDEN, FORBIDDEN_BOOKKEEPING_LOCKED, VALIDATION_ERROR, SERVER_ERROR],
-        permission: GG_NO_PERMISSIONS
     },
     downloadPdf: {
         input: IsDownloadInvoicePdfRequest,
         success: IsFile,
         errors: [NOT_AUTHORIZED, NOT_FOUND, FORBIDDEN, VALIDATION_ERROR, SERVER_ERROR],
-        permission: GG_NO_PERMISSIONS
     },
     downloadHtml: {
         input: IsDownloadInvoicePdfRequest,
         success: IsFile,
         errors: [NOT_AUTHORIZED, NOT_FOUND, FORBIDDEN, VALIDATION_ERROR, SERVER_ERROR],
-        permission: GG_NO_PERMISSIONS
     },
     downloadEInvoice: {
         input: IsDownloadEInvoiceRequest,
         success: IsFile,
         errors: [NOT_AUTHORIZED, NOT_FOUND, FORBIDDEN, VALIDATION_ERROR, SERVER_ERROR],
-        permission: GG_NO_PERMISSIONS
     },
     downloadEInvoices: {
         input: IsDownloadEInvoicesRequest,
         success: IsFile,
         errors: [NOT_AUTHORIZED, NOT_FOUND, FORBIDDEN, VALIDATION_ERROR, SERVER_ERROR],
-        permission: GG_NO_PERMISSIONS
     },
     prepareCreate: {
         input: IsPrepareInvoicesQuery,
         success: IsPrepareInvoicesResult,
         errors: [NOT_AUTHORIZED, FORBIDDEN, VALIDATION_ERROR, SERVER_ERROR],
-        permission: GG_NO_PERMISSIONS
     },
     finalizeCreate: {
         input: IsCreateInvoicesQuery,
         success: IsCreateInvoicesResult,
         errors: [NOT_AUTHORIZED, FORBIDDEN, FORBIDDEN_BOOKKEEPING_LOCKED, VALIDATION_ERROR, SERVER_ERROR],
-        permission: GG_NO_PERMISSIONS
     }
 })
 

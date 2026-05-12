@@ -136,7 +136,7 @@ export const ChatApi = webSocketSchema(ChatApiContract)
 
 ## Permissions
 
-Every `clientToServer` method declares a `permission` — this is mandatory at the type level. The gate runs **per incoming message**, before the handler. `serverToClient` methods also declare a `permission` field (kept for type-plumbing symmetry), but the gate never reads it — the server originates server-pushed messages so there is no caller identity to gate against. Convention: set s2c methods to `permission: GG_NO_PERMISSIONS`.
+`clientToServer` methods may declare a `permission`; the gate runs **per incoming message**, before the handler. `serverToClient` methods are server-originated and never gated. The opt-in / infectious rule from HTTP applies: any c2s permission declaration or `connectPermission` on any WS schema registered on the same `GGHttpServer` triggers strict mode for the whole server — every HTTP and WS route on it must then declare.
 
 Two gating levels combine:
 
@@ -151,7 +151,7 @@ ChatApi.register(chatService.handleConnection, {
 })
 ```
 
-The same compile-time-mandatory and refuse-to-start guarantees from HTTP apply: any non-public c2s method or any `connectPermission` requires a resolver — `register()` throws at startup with the offending methods listed otherwise.
+The same refuse-to-start guarantee from HTTP applies: a non-public c2s permission or `connectPermission` requires a resolver — the server start fails with the offending methods listed otherwise. The strict-mode trigger is shared with HTTP across the same `GGHttpServer`.
 
 **Revocation, accepted limitation.** Scopes are resolved at handshake and cached for the life of the connection. Mid-session revocation (an admin removes a user's `chat:write`) does not take effect until the socket closes — the same constraint that applies to bearer tokens generally. Apps that need strong revocation guarantees on a surface should either avoid long-lived sockets there or close affected connections externally when revoking.
 

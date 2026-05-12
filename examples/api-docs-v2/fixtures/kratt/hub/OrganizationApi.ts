@@ -1,4 +1,4 @@
-import {GGContractClass, IsArray, IsObject, IsString, SERVER_ERROR, GG_NO_PERMISSIONS } from "@grest-ts/schema"
+import {GGContractClass, IsArray, IsObject, IsString, SERVER_ERROR } from "@grest-ts/schema"
 import {GGRpc, httpSchema} from "@grest-ts/http"
 import {ALREADY_EXISTS, NOT_FOUND, UNAUTHORIZED} from "./errors"
 import {IsOrganization, IsOrgId} from "./schemas"
@@ -26,36 +26,30 @@ export const OrganizationApiContract = new GGContractClass("OrganizationApi", {
     list: {
         success: IsArray(IsOrganization),
         errors: [UNAUTHORIZED, SERVER_ERROR],
-        permission: GG_NO_PERMISSIONS
     },
     get: {
         input: IsOrgIdRequest,
         success: IsOrganization,
         errors: [UNAUTHORIZED, NOT_FOUND, SERVER_ERROR],
-        permission: GG_NO_PERMISSIONS
     },
     create: {
         input: IsCreateOrgRequest,
         success: IsOrganization,
         errors: [UNAUTHORIZED, ALREADY_EXISTS, SERVER_ERROR],
-        permission: GG_NO_PERMISSIONS
     },
     update: {
         input: IsUpdateOrgRequest,
         success: IsOrganization,
         errors: [UNAUTHORIZED, NOT_FOUND, ALREADY_EXISTS, SERVER_ERROR],
-        permission: GG_NO_PERMISSIONS
     },
     delete: {
         input: IsOrgIdRequest,
         errors: [UNAUTHORIZED, NOT_FOUND, SERVER_ERROR],
-        permission: GG_NO_PERMISSIONS
     },
     setHetznerCredentials: {
         input: IsSetHetznerCredentialsRequest,
         success: IsOrganization,
         errors: [UNAUTHORIZED, NOT_FOUND, SERVER_ERROR],
-        permission: GG_NO_PERMISSIONS
     },
 })
 

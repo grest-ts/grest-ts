@@ -1,4 +1,4 @@
-import {GGContractClass, IsObject, IsString, IsArray, SERVER_ERROR, GG_NO_PERMISSIONS } from "@grest-ts/schema"
+import {GGContractClass, IsObject, IsString, IsArray, SERVER_ERROR } from "@grest-ts/schema"
 import {GGRpc, httpSchema} from "@grest-ts/http"
 import {UNAUTHORIZED, NOT_FOUND} from "./errors"
 import {IsAgent, IsTaskId, IsAgentId} from "./schemas"
@@ -24,25 +24,21 @@ export const AgentApiContract = new GGContractClass("AgentApi", {
         input: IsLaunchAgentRequest,
         success: IsAgent,
         errors: [UNAUTHORIZED, NOT_FOUND, SERVER_ERROR],
-        permission: GG_NO_PERMISSIONS
     },
     list: {
         input: IsListAgentsRequest,
         success: IsArray(IsAgent),
         errors: [UNAUTHORIZED, NOT_FOUND, SERVER_ERROR],
-        permission: GG_NO_PERMISSIONS
     },
     stop: {
         input: IsAgentIdRequest,
         success: IsAgent,
         errors: [UNAUTHORIZED, NOT_FOUND, SERVER_ERROR],
-        permission: GG_NO_PERMISSIONS
     },
     resume: {
         input: IsAgentIdRequest,
         success: IsAgent,
         errors: [UNAUTHORIZED, NOT_FOUND, SERVER_ERROR],
-        permission: GG_NO_PERMISSIONS
     },
     /** Soft-delete: agent moves to status="deleted" but registry entry stays
      *  so it can be Restored (via `resume`) later. Agents with no session
@@ -50,14 +46,12 @@ export const AgentApiContract = new GGContractClass("AgentApi", {
     delete: {
         input: IsAgentIdRequest,
         errors: [UNAUTHORIZED, NOT_FOUND, SERVER_ERROR],
-        permission: GG_NO_PERMISSIONS
     },
     /** Hard-delete a soft-deleted agent: drops the registry entry AND removes
      *  the underlying claude .jsonl transcript. */
     purge: {
         input: IsAgentIdRequest,
         errors: [UNAUTHORIZED, NOT_FOUND, SERVER_ERROR],
-        permission: GG_NO_PERMISSIONS
     },
 })
 

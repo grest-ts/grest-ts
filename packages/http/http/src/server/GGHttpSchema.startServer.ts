@@ -6,7 +6,7 @@
 import http from "http";
 import {GGLocator} from "@grest-ts/locator";
 import {ClientHttpRouteToRpcTransformServerCodec, GGHttpCodec, GGHttpSchema} from "../schema/GGHttpSchema";
-import {ERROR, FORBIDDEN, GG_ANY_PERMISSION, GG_NO_PERMISSIONS, GGContractApiDefinition, GGContractImplementation, GGContractMethod, GGPermissionChecker, NOT_AUTHORIZED, OK, satisfies, SERVER_ERROR} from "@grest-ts/schema";
+import {describePermission, ERROR, FORBIDDEN, GG_NO_PERMISSIONS, GGContractApiDefinition, GGContractImplementation, GGContractMethod, GGPermissionChecker, NOT_AUTHORIZED, OK, satisfies, SERVER_ERROR} from "@grest-ts/schema";
 import {HttpMethod} from "@grest-ts/common";
 import {GG_DISCOVERY} from "@grest-ts/discovery";
 import {GGContext, GGContextStore} from "@grest-ts/context";
@@ -106,27 +106,7 @@ function setupRoutes<TContract extends GGContractApiDefinition>(
     // @TODO This is not really used and only for testkit so it would register implementation of the contract... Not cool
     httpSchema.contract.implement(implementation);
 
-    // Startup permission check: any non-public method without a resolver wired
-    // is a misconfiguration — fail fast at registration with a list of every
-    // offending method and an actionable fix.
-    if (!config.permissionResolver) {
-        const offenders: Array<{name: string, permission: any}> = []
-        for (const methodName in httpSchema.contract.methods) {
-            const m = httpSchema.contract.methods[methodName] as GGContractMethod
-            if (m.permission !== GG_NO_PERMISSIONS) {
-                offenders.push({name: methodName, permission: m.permission})
-            }
-        }
-        if (offenders.length > 0) {
-            const lines = offenders.map(o => `  ${httpSchema.name}.${o.name}   requires ${describePermission(o.permission)}`).join("\n")
-            throw new Error(
-                `GGHttp: cannot register ${httpSchema.name} — these methods declare non-public permissions but no scope resolver was registered via .usePermissions():\n\n` +
-                lines +
-                `\n\nFix: add .usePermissions(yourScopeResolver) before .http(${httpSchema.name}, ...),\n` +
-                `     or set permission: GG_NO_PERMISSIONS on methods that are genuinely public.`
-            )
-        }
-    }
+    if (config.permissionResolver) server._markResolverWired(httpSchema);
 
     for (const methodName in httpSchema.codec) {
         // Wire format.
@@ -161,7 +141,7 @@ function setupRoutes<TContract extends GGContractApiDefinition>(
                             const scopes = await config.permissionResolver()
                             if (scopes != null) GG_PERMISSIONS.set(new GGPermissionChecker(scopes))
                             const required = contractFunctionSchema.permission
-                            if (required !== GG_NO_PERMISSIONS) {
+                            if (required !== undefined && required !== GG_NO_PERMISSIONS) {
                                 if (scopes == null) throw new NOT_AUTHORIZED({
                                     debugMessage: `${httpSchema.name}.${methodName} requires ${describePermission(required)} but no caller identity was resolved`
                                 })
@@ -189,17 +169,6 @@ function setupRoutes<TContract extends GGContractApiDefinition>(
             });
         })
     }
-}
-
-function describePermission(p: unknown): string {
-    if (p === GG_NO_PERMISSIONS) return "GG_NO_PERMISSIONS"
-    if (p === GG_ANY_PERMISSION) return "GG_ANY_PERMISSION"
-    if (typeof p === "string") return JSON.stringify(p)
-    if (p && typeof p === "object") {
-        if ("allOf" in p) return `allOf(${(p as any).allOf.map(describePermission).join(", ")})`
-        if ("anyOf" in p) return `anyOf(${(p as any).anyOf.map(describePermission).join(", ")})`
-    }
-    return String(p)
 }
 
 function metrics(

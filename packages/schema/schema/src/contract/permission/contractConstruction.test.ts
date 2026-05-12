@@ -10,6 +10,20 @@ describe("contract construction permission/errors enforcement", () => {
 
     describe("GGContractClass", () => {
 
+        it("method with permission omitted entirely is allowed at construction (strict-mode enforcement is per-server, at startup)", () => {
+            expect(() => new GGContractClass("NoPerms", {
+                hello: {success: IsString},
+                world: {success: IsString, errors: [SERVER_ERROR]},
+            })).not.toThrow();
+        });
+
+        it("mixed: one method declares permission, sibling omits — construction does not enforce", () => {
+            expect(() => new GGContractClass("Mixed", {
+                declared: {success: IsString, errors: [NOT_AUTHORIZED, FORBIDDEN, SERVER_ERROR], permission: "x"},
+                undeclared: {success: IsString},
+            })).not.toThrow();
+        });
+
         it("public method does not require NOT_AUTHORIZED/FORBIDDEN in errors", () => {
             expect(() => new GGContractClass("Public", {
                 ping: {success: IsString, errors: [SERVER_ERROR], permission: GG_NO_PERMISSIONS},
@@ -66,6 +80,12 @@ describe("contract construction permission/errors enforcement", () => {
     });
 
     describe("GGContractFunction", () => {
+
+        it("function with permission omitted is allowed at construction", () => {
+            expect(() => new GGContractFunction({
+                success: IsString,
+            })).not.toThrow();
+        });
 
         it("public function does not require NOT_AUTHORIZED/FORBIDDEN", () => {
             expect(() => new GGContractFunction({

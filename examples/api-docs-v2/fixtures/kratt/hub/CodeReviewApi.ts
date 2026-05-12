@@ -1,4 +1,4 @@
-import {GGContractClass, IsObject, IsString, IsNumber, IsBoolean, IsArray, SERVER_ERROR, GG_NO_PERMISSIONS } from "@grest-ts/schema"
+import {GGContractClass, IsObject, IsString, IsNumber, IsBoolean, IsArray, SERVER_ERROR } from "@grest-ts/schema"
 import {GGRpc, httpSchema} from "@grest-ts/http"
 import {UNAUTHORIZED, NOT_FOUND} from "./errors"
 import {GG_USER_TOKEN, GG_ORG_TOKEN} from "../auth/AuthContext"
@@ -105,36 +105,30 @@ export const CodeReviewApiContract = new GGContractClass("CodeReviewApi", {
         input: IsChangedFilesRequest,
         success: IsChangedFilesResponse,
         errors: [UNAUTHORIZED, NOT_FOUND, SERVER_ERROR],
-        permission: GG_NO_PERMISSIONS
     },
     commits: {
         input: IsTaskIdRequest,
         success: IsCommitsResponse,
         errors: [UNAUTHORIZED, NOT_FOUND, SERVER_ERROR],
-        permission: GG_NO_PERMISSIONS
     },
     fileDiff: {
         input: IsFileDiffRequest,
         success: IsFileDiffResponse,
         errors: [UNAUTHORIZED, NOT_FOUND, SERVER_ERROR],
-        permission: GG_NO_PERMISSIONS
     },
     saveFile: {
         input: IsSaveFileRequest,
         success: IsSaveFileResponse,
         errors: [UNAUTHORIZED, NOT_FOUND, SERVER_ERROR],
-        permission: GG_NO_PERMISSIONS
     },
     discardFile: {
         input: IsDiscardFileRequest,
         errors: [UNAUTHORIZED, NOT_FOUND, SERVER_ERROR],
-        permission: GG_NO_PERMISSIONS
     },
     fileTree: {
         input: IsTaskIdRequest,
         success: IsFileTreeResponse,
         errors: [UNAUTHORIZED, NOT_FOUND, SERVER_ERROR],
-        permission: GG_NO_PERMISSIONS
     },
 })
 

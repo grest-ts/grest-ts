@@ -1,5 +1,5 @@
 import {GGRpc, httpSchema} from "@grest-ts/http";
-import {IsArray, IsObject, IsString, IsNumber, IsLiteral, IsTuple, GGContractClass, FORBIDDEN, NOT_AUTHORIZED, NOT_FOUND, SERVER_ERROR, VALIDATION_ERROR, GG_NO_PERMISSIONS } from "@grest-ts/schema";
+import {IsArray, IsObject, IsString, IsNumber, IsLiteral, IsTuple, GGContractClass, FORBIDDEN, NOT_AUTHORIZED, NOT_FOUND, SERVER_ERROR, VALIDATION_ERROR } from "@grest-ts/schema";
 import {GG_COMPANY_AUTH_TOKEN} from "../middleware/CompanyAuthHeader";
 import {IsBankIntegrationId, IsBankStatementId, IsBankStatementRowId, IsDate, IsPaymentId} from "../Brands";
 import {IsCompanyId} from "./CompanyApi";
@@ -110,19 +110,16 @@ export const BankStatementApiContract = new GGContractClass("BankStatementApi", 
         input: IsBankStatementsQuery,
         success: IsBankStatementsResult,
         errors: [NOT_AUTHORIZED, FORBIDDEN, VALIDATION_ERROR, SERVER_ERROR],
-        permission: GG_NO_PERMISSIONS
     },
     get: {
         input: IsGetBankStatementQuery,
         success: IsSyncBankStatementData,
         errors: [NOT_AUTHORIZED, NOT_FOUND, FORBIDDEN, VALIDATION_ERROR, SERVER_ERROR],
-        permission: GG_NO_PERMISSIONS
     },
     sync: {
         input: IsSyncBankStatementData,
         success: IsSyncBankStatementResult,
         errors: [NOT_AUTHORIZED, FORBIDDEN, VALIDATION_ERROR, SERVER_ERROR],
-        permission: GG_NO_PERMISSIONS
     }
 })
 

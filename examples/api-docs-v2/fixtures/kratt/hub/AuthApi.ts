@@ -1,4 +1,4 @@
-import {GGContractClass, IsObject, IsString, IsArray, SERVER_ERROR, GG_NO_PERMISSIONS } from "@grest-ts/schema"
+import {GGContractClass, IsObject, IsString, IsArray, SERVER_ERROR } from "@grest-ts/schema"
 import {GGRpc, httpSchema} from "@grest-ts/http"
 import {INVALID_CREDENTIALS, UNAUTHORIZED, NOT_FOUND} from "./errors"
 import {IsUser, IsOrganization, IsOrgId} from "./schemas"
@@ -41,33 +41,27 @@ export const AuthApiContract = new GGContractClass("AuthApi", {
         input: IsLoginRequest,
         success: IsLoginResponse,
         errors: [INVALID_CREDENTIALS, SERVER_ERROR],
-        permission: GG_NO_PERMISSIONS
     },
     listOrgs: {
         success: IsArray(IsOrganization),
         errors: [UNAUTHORIZED, SERVER_ERROR],
-        permission: GG_NO_PERMISSIONS
     },
     selectOrg: {
         input: IsSelectOrgRequest,
         success: IsSelectOrgResponse,
         errors: [UNAUTHORIZED, NOT_FOUND, SERVER_ERROR],
-        permission: GG_NO_PERMISSIONS
     },
     refreshUserToken: {
         success: IsRefreshTokenResponse,
         errors: [UNAUTHORIZED, SERVER_ERROR],
-        permission: GG_NO_PERMISSIONS
     },
     refreshOrgToken: {
         success: IsRefreshOrgTokenResponse,
         errors: [UNAUTHORIZED, SERVER_ERROR],
-        permission: GG_NO_PERMISSIONS
     },
     me: {
         success: IsMeResponse,
         errors: [UNAUTHORIZED, SERVER_ERROR],
-        permission: GG_NO_PERMISSIONS
     },
 })
 

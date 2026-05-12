@@ -1,4 +1,4 @@
-import {GGContractClass, SERVER_ERROR, GG_NO_PERMISSIONS } from "@grest-ts/schema"
+import {GGContractClass, SERVER_ERROR } from "@grest-ts/schema"
 import {GGRpc, httpSchema} from "@grest-ts/http"
 import {UNAUTHORIZED} from "../hub/errors"
 import {GG_INTERNAL_TOKEN} from "../auth/internalAuth"
@@ -18,22 +18,16 @@ import {
  */
 export const NotifyApiContract = new GGContractClass("NotifyApi", {
     notifyTask:         {input: IsTaskEvent,         errors: [UNAUTHORIZED, SERVER_ERROR],
-        permission: GG_NO_PERMISSIONS
     },
     notifyAgent:        {input: IsAgentEvent,        errors: [UNAUTHORIZED, SERVER_ERROR],
-        permission: GG_NO_PERMISSIONS
     },
     notifyService:      {input: IsServiceEvent,      errors: [UNAUTHORIZED, SERVER_ERROR],
-        permission: GG_NO_PERMISSIONS
     },
     notifyBaseImage:    {input: IsBaseImageEvent,    errors: [UNAUTHORIZED, SERVER_ERROR],
-        permission: GG_NO_PERMISSIONS
     },
     notifyProjectImage: {input: IsProjectImageEvent, errors: [UNAUTHORIZED, SERVER_ERROR],
-        permission: GG_NO_PERMISSIONS
     },
     notifyTaskOverview: {input: IsTaskOverviewEvent, errors: [UNAUTHORIZED, SERVER_ERROR],
-        permission: GG_NO_PERMISSIONS
     },
 })
 

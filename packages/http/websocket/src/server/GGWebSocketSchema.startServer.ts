@@ -9,7 +9,7 @@ import {GGWebSocketMiddleware} from "../schema/GGWebSocketMiddleware";
 import {GGSocketServer} from "./GGSocketServer";
 import {GGLocator} from "@grest-ts/locator";
 import {WebSocketIncoming, WebSocketOutgoing} from "../socket/WebSocketTypes";
-import {FORBIDDEN, GG_ANY_PERMISSION, GG_NO_PERMISSIONS, GGPermissionChecker, GGPromise, NOT_AUTHORIZED, satisfies} from "@grest-ts/schema";
+import {describePermission, FORBIDDEN, GG_NO_PERMISSIONS, GGPermissionChecker, GGPromise, NOT_AUTHORIZED, satisfies} from "@grest-ts/schema";
 import {GG_HTTP_SERVER, GG_PERMISSIONS, GGHttpServer, GGScopeResolver} from "@grest-ts/http";
 
 export interface WebSocketSchemaConfig {
@@ -69,31 +69,7 @@ GGWebSocketSchema.prototype.startServer = function (
     const http = config.http ?? GGLocator.getScope().get(GG_HTTP_SERVER);
     http._registerWebSocketSchema(this as any);
 
-    // Startup permission check (same rule as HTTP): any non-public c2s method
-    // requires a wired resolver. serverToClient methods are exempt since the
-    // server originates them. .connectPermission on the schema also requires
-    // a resolver.
-    if (!config.permissionResolver) {
-        const c2sMethods = contract.clientToServer.methods
-        const offenders: Array<{name: string, permission: any}> = []
-        for (const methodName in c2sMethods) {
-            const m = c2sMethods[methodName] as any
-            if (m.permission !== GG_NO_PERMISSIONS) {
-                offenders.push({name: methodName, permission: m.permission})
-            }
-        }
-        const connectGated = this.connectPermission !== undefined && this.connectPermission !== GG_NO_PERMISSIONS
-        if (offenders.length > 0 || connectGated) {
-            const lines = offenders.map(o => `  ${schemaName}.${o.name}   requires ${describePermission(o.permission)}`).join("\n")
-            const connectLine = connectGated ? `  ${schemaName} connectPermission   requires ${describePermission(this.connectPermission)}\n` : ""
-            throw new Error(
-                `GGWebSocket: cannot register ${schemaName} — these surfaces declare non-public permissions but no scope resolver was registered via config.permissionResolver:\n\n` +
-                connectLine + lines +
-                `\n\nFix: pass {permissionResolver: yourScopeResolver} when calling ${schemaName}.register(...),\n` +
-                `     or set permission: GG_NO_PERMISSIONS on c2s methods that are genuinely public.`
-            )
-        }
-    }
+    if (config.permissionResolver) http._markResolverWired(this)
 
     const connectPermission = this.connectPermission
     const permissionResolver = config.permissionResolver
@@ -167,7 +143,8 @@ GGWebSocketSchema.prototype.startServer = function (
                     const methodDef = clientToServerContract.methods[methodName] as any
                     const required = methodDef.permission
                     const inner = (incomingInstance as any)[methodName]
-                    const wrapped = required === GG_NO_PERMISSIONS || !permissionResolver
+                    const requiresGate = required !== undefined && required !== GG_NO_PERMISSIONS
+                    const wrapped = !requiresGate || !permissionResolver
                         ? inner
                         : (data: any) => {
                             if (cachedScopes == null) {
@@ -229,13 +206,3 @@ GGWebSocketSchema.prototype.register = function (
     });
 }
 
-function describePermission(p: unknown): string {
-    if (p === GG_NO_PERMISSIONS) return "GG_NO_PERMISSIONS"
-    if (p === GG_ANY_PERMISSION) return "GG_ANY_PERMISSION"
-    if (typeof p === "string") return JSON.stringify(p)
-    if (p && typeof p === "object") {
-        if ("allOf" in p) return `allOf(${(p as any).allOf.map(describePermission).join(", ")})`
-        if ("anyOf" in p) return `anyOf(${(p as any).anyOf.map(describePermission).join(", ")})`
-    }
-    return String(p)
-}

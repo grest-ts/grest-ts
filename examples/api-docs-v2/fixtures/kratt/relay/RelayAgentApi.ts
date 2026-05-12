@@ -1,4 +1,4 @@
-import {GGContractClass, IsObject, IsString, IsNumber, IsLiteral, IsArray, SERVER_ERROR, GG_NO_PERMISSIONS } from "@grest-ts/schema"
+import {GGContractClass, IsObject, IsString, IsNumber, IsLiteral, IsArray, SERVER_ERROR } from "@grest-ts/schema"
 import {GGRpc, httpSchema} from "@grest-ts/http"
 import {GG_RELAY_TOKEN} from "./RelayAuthContext.js"
 import {IsAgentId} from "../hub/schemas.js"
@@ -48,28 +48,24 @@ export const RelayAgentApiContract = new GGContractClass("RelayAgentApi", {
     list: {
         success: IsListResponse,
         errors: [SERVER_ERROR],
-        permission: GG_NO_PERMISSIONS
     },
     /** Launch a new agent in a fresh tmux session. */
     launch: {
         input: IsLaunchInput,
         success: IsAgentResponse,
         errors: [SERVER_ERROR],
-        permission: GG_NO_PERMISSIONS
     },
     /** Stop an agent's tmux session (kills claude). Registry entry stays. */
     stop: {
         input: IsAgentIdInput,
         success: IsAgentResponse,
         errors: [SERVER_ERROR],
-        permission: GG_NO_PERMISSIONS
     },
     /** Relaunch a stopped/suspended agent, with `claude --resume` if a session-id is known. */
     resume: {
         input: IsAgentIdInput,
         success: IsAgentResponse,
         errors: [SERVER_ERROR],
-        permission: GG_NO_PERMISSIONS
     },
     /**
      * Soft-delete: kill tmux + mark status="deleted", keep the entry so the
@@ -80,7 +76,6 @@ export const RelayAgentApiContract = new GGContractClass("RelayAgentApi", {
     delete: {
         input: IsAgentIdInput,
         errors: [SERVER_ERROR],
-        permission: GG_NO_PERMISSIONS
     },
     /**
      * Hard-delete a soft-deleted agent. Drops the registry entry AND removes
@@ -90,13 +85,11 @@ export const RelayAgentApiContract = new GGContractClass("RelayAgentApi", {
     purge: {
         input: IsAgentIdInput,
         errors: [SERVER_ERROR],
-        permission: GG_NO_PERMISSIONS
     },
     /** Mark every running agent as suspended (called pre-VM-stop). */
     suspendAll: {
         success: IsSuspendResponse,
         errors: [SERVER_ERROR],
-        permission: GG_NO_PERMISSIONS
     },
 })
 

@@ -1,5 +1,5 @@
 import {GGRpc, httpSchema} from "@grest-ts/http";
-import {IsObject, IsString, IsNumber, GGContractClass, FORBIDDEN, NOT_AUTHORIZED, NOT_FOUND, SERVER_ERROR, VALIDATION_ERROR, GG_NO_PERMISSIONS } from "@grest-ts/schema";
+import {IsObject, IsString, IsNumber, GGContractClass, FORBIDDEN, NOT_AUTHORIZED, NOT_FOUND, SERVER_ERROR, VALIDATION_ERROR } from "@grest-ts/schema";
 import {GG_COMPANY_AUTH_TOKEN} from "../middleware/CompanyAuthHeader";
 import {IsApartmentId, IsDate, IsExpenseId, IsExpenseRowId, IsInsuranceId, IsUserId} from "../Brands";
 import {GG_USER_AUTH} from "../middleware/UserAuthHeader";
@@ -49,19 +49,16 @@ export const InsuranceApiContract = new GGContractClass("InsuranceApi", {
         input: IsGetInsuranceQuery,
         success: IsSyncInsuranceData,
         errors: [NOT_AUTHORIZED, NOT_FOUND, FORBIDDEN, VALIDATION_ERROR, SERVER_ERROR],
-        permission: GG_NO_PERMISSIONS
     },
     sync: {
         input: IsSyncInsuranceData,
         success: IsSyncInsuranceResult,
         errors: [NOT_AUTHORIZED, NOT_FOUND, FORBIDDEN, VALIDATION_ERROR, SERVER_ERROR],
-        permission: GG_NO_PERMISSIONS
     },
     delete: {
         input: IsDeleteInsuranceQuery,
         success: undefined as undefined,
         errors: [NOT_AUTHORIZED, NOT_FOUND, FORBIDDEN, VALIDATION_ERROR, SERVER_ERROR],
-        permission: GG_NO_PERMISSIONS
     }
 })
 

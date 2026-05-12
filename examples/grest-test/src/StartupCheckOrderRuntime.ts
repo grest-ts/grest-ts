@@ -6,7 +6,7 @@ class Impl {
     public needsScope = async () => "never reached"
 }
 
-const dummyResolver = () => null
+const dummyResolver = (): ReadonlySet<string> | null => null
 
 /**
  * Order-sensitivity check: `.http(...)` is called BEFORE `.usePermissions(...)`.

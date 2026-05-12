@@ -10,7 +10,7 @@ export interface GGContractMethod<Request = any, Response = any, ErrorsUnion ext
     input?: GGSchema<Request>
     success?: GGSchema<Response>;
     errors?: ErrorsUnion[];
-    permission: GGPermission;
+    permission?: GGPermission;
 }
 
 export type GGContractApiDefinition = Record<string, GGContractMethod>
@@ -58,13 +58,15 @@ export class GGContractClass<ContractMethods extends GGContractApiDefinition> {
         this.methods = methods;
         for (const methodName in this.methods) {
             const method = this.methods[methodName];
-            validatePermission(method.permission, `${name}.${methodName}.permission`);
-            if (method.permission !== GG_NO_PERMISSIONS) {
-                const errs = method.errors ?? [];
-                if (!errs.includes(NOT_AUTHORIZED as any) || !errs.includes(FORBIDDEN as any)) {
-                    throw new Error(
-                        `Contract ${name}.${methodName} has a non-public permission but its 'errors' array must include both NOT_AUTHORIZED and FORBIDDEN`
-                    );
+            if (method.permission !== undefined) {
+                validatePermission(method.permission, `${name}.${methodName}.permission`);
+                if (method.permission !== GG_NO_PERMISSIONS) {
+                    const errs = method.errors ?? [];
+                    if (!errs.includes(NOT_AUTHORIZED as any) || !errs.includes(FORBIDDEN as any)) {
+                        throw new Error(
+                            `Contract ${name}.${methodName} has a non-public permission but its 'errors' array must include both NOT_AUTHORIZED and FORBIDDEN`
+                        );
+                    }
                 }
             }
             Object.freeze(method);

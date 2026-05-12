@@ -1,4 +1,4 @@
-import {GGContractClass, IsObject, IsString, IsNumber, IsBoolean, IsArray, SERVER_ERROR, GG_NO_PERMISSIONS } from "@grest-ts/schema"
+import {GGContractClass, IsObject, IsString, IsNumber, IsBoolean, IsArray, SERVER_ERROR } from "@grest-ts/schema"
 import {GGRpc, httpSchema} from "@grest-ts/http"
 import {GG_RELAY_TOKEN} from "./RelayAuthContext.js"
 
@@ -103,36 +103,30 @@ export const RelayCodeApiContract = new GGContractClass("RelayCodeApi", {
         input: IsChangedFilesRequest,
         success: IsChangedFilesResponse,
         errors: [SERVER_ERROR],
-        permission: GG_NO_PERMISSIONS
     },
     commits: {
         input: IsWorkspaceIdRequest,
         success: IsCommitsResponse,
         errors: [SERVER_ERROR],
-        permission: GG_NO_PERMISSIONS
     },
     fileDiff: {
         input: IsFileDiffRequest,
         success: IsFileDiffResponse,
         errors: [SERVER_ERROR],
-        permission: GG_NO_PERMISSIONS
     },
     saveFile: {
         input: IsSaveFileRequest,
         success: IsSaveFileResponse,
         errors: [SERVER_ERROR],
-        permission: GG_NO_PERMISSIONS
     },
     discardFile: {
         input: IsDiscardFileRequest,
         errors: [SERVER_ERROR],
-        permission: GG_NO_PERMISSIONS
     },
     fileTree: {
         input: IsWorkspaceIdRequest,
         success: IsFileTreeResponse,
         errors: [SERVER_ERROR],
-        permission: GG_NO_PERMISSIONS
     },
 })
 
