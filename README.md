@@ -18,7 +18,7 @@ TypeScript framework for building services around **contracts** — typed API de
   are thin layers over standard libraries (for example, mysql2, pg, vitest) — use them or bring your own.
 * **Monorepo or multi-repo** — Run everything in one monorepo or split across multiple repos. The framework doesn't care — contracts are shared via packages (if you want to), choose the strategy that
   fits your team.
-* **Tree-shakable** — Fully tree-shakable for minimal bundle sizes (for server package 400mb vs 5mb starts to matter at scale for release speeds)
+* **Tree-shakable** — Fully tree-shakable for minimal bundle sizes (for server package 400MB vs 5MB starts to matter at scale for release speeds)
 * **Typed errors across boundaries** — Errors carry reference IDs, typed data, and flow across service boundaries as discriminated unions. `await` to throw, `.asResult()` to handle explicitly —
   callers choose per call site.
 * **Framework-enforced permissions** — Every contract method declares a required `permission` (mandatory at compile time; `GG_NO_PERMISSIONS` marks a method explicitly public). The framework gates
