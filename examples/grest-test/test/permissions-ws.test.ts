@@ -1,6 +1,5 @@
 import {GG_TEST_RUNNER, GGTest} from "@grest-ts/testkit"
 import {GGContext} from "@grest-ts/context"
-import {GGSocketPool} from "@grest-ts/websocket"
 import {MainRuntime} from "../src/main"
 import {AppPermission} from "../src/api/PermissionsApi"
 import {
@@ -12,16 +11,6 @@ import {
 
 function urlFor(apiName: string): string {
     return GG_TEST_RUNNER.get().discoveryServer.getRoutingUrl(apiName)
-}
-
-async function waitFor<T>(read: () => T, predicate: (v: T) => boolean, timeoutMs = 2000): Promise<T> {
-    const deadline = Date.now() + timeoutMs
-    while (Date.now() < deadline) {
-        const v = read()
-        if (predicate(v)) return v
-        await new Promise(r => setTimeout(r, 10))
-    }
-    return read()
 }
 
 async function withClientScopes<R>(scopes: string[] | null, fn: () => Promise<R>): Promise<R> {
@@ -158,10 +147,8 @@ describe("WebSocket permission gate", () => {
         })
 
         test("server-pushed s2c messages reach unauthenticated callers — gate has no caller identity to check", async () => {
-            // Server's `setImmediate(() => outgoing.echo(...))` fires once per
-            // handleConnection. Pooled-socket reuse from earlier tests would
-            // miss it, so clear the pool to force a fresh server-side connect.
-            await GGSocketPool.closeAll()
+            // No client scopes set — connection opens (multiplex socket has no
+            // connectPermission). Server still pushes `echo` right after connect.
             await withClientScopes(null, async () => {
                 const received: string[] = []
                 const client = WsPermissionsApi.createClient({url: urlFor("WsPermissionsApi")})
@@ -171,7 +158,7 @@ describe("WebSocket permission gate", () => {
                     })
                 })
                 try {
-                    await waitFor(() => received, r => r.length > 0)
+                    await new Promise(r => setTimeout(r, 150))
                     expect(received).toEqual(["hello-from-server"])
                 } finally {
                     await client.disconnect()
@@ -180,7 +167,6 @@ describe("WebSocket permission gate", () => {
         })
 
         test("authenticated callers also receive s2c pushes — same behavior, same code path", async () => {
-            await GGSocketPool.closeAll()
             await withClientScopes([AppPermission.Read], async () => {
                 const received: string[] = []
                 const client = WsPermissionsApi.createClient({url: urlFor("WsPermissionsApi")})
@@ -190,7 +176,7 @@ describe("WebSocket permission gate", () => {
                     })
                 })
                 try {
-                    await waitFor(() => received, r => r.length > 0)
+                    await new Promise(r => setTimeout(r, 150))
                     expect(received).toEqual(["hello-from-server"])
                 } finally {
                     await client.disconnect()

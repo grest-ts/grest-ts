@@ -19,13 +19,14 @@ export class WsPermissionsService {
             needsAnyReadOrAdmin: async (text) => `roa:${text}`,
         })
 
-        // Push a server-originated message right after the connection opens.
-        // The s2c gate is intentionally a no-op (no caller identity to check),
-        // so unauthenticated callers should still receive this push.
-        // Fire-and-forget; the await pattern is for symmetry with the contract.
-        setImmediate(() => {
+        // Push a server-originated message shortly after connection.
+        // setImmediate would race the client's setup callback (where the s2c
+        // handler is registered), so the push must wait until the client has
+        // had a chance to subscribe — 50ms is comfortably longer than any
+        // setup work the client does after the handshake.
+        setTimeout(() => {
             void outgoing.echo("hello-from-server")
-        })
+        }, 50)
     }
 }
 
