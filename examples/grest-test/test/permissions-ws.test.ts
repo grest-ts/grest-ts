@@ -13,6 +13,16 @@ function urlFor(apiName: string): string {
     return GG_TEST_RUNNER.get().discoveryServer.getRoutingUrl(apiName)
 }
 
+async function waitFor<T>(read: () => T, predicate: (v: T) => boolean, timeoutMs = 2000): Promise<T> {
+    const deadline = Date.now() + timeoutMs
+    while (Date.now() < deadline) {
+        const v = read()
+        if (predicate(v)) return v
+        await new Promise(r => setTimeout(r, 10))
+    }
+    return read()
+}
+
 async function withClientScopes<R>(scopes: string[] | null, fn: () => Promise<R>): Promise<R> {
     const scope = new GGContext("ws-perm-test")
     if (scopes && scopes.length > 0) scope.set(WS_CLIENT_SCOPES, scopes)
@@ -158,8 +168,7 @@ describe("WebSocket permission gate", () => {
                     })
                 })
                 try {
-                    // Give the server's setImmediate push a beat to arrive.
-                    await new Promise(r => setTimeout(r, 100))
+                    await waitFor(() => received, r => r.length > 0)
                     expect(received).toEqual(["hello-from-server"])
                 } finally {
                     await client.disconnect()
@@ -177,7 +186,7 @@ describe("WebSocket permission gate", () => {
                     })
                 })
                 try {
-                    await new Promise(r => setTimeout(r, 100))
+                    await waitFor(() => received, r => r.length > 0)
                     expect(received).toEqual(["hello-from-server"])
                 } finally {
                     await client.disconnect()
