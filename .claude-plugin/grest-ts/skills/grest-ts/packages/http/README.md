@@ -166,6 +166,30 @@ export const MyApiContract = new GGContractClass("MyApi", {
 })
 ```
 
+## Permissions
+
+Contract methods may declare a `permission`. The framework gates every request against the declared permission **before the handler runs**, so missing or wrong scopes can never reach service code. Declarations are opt-in but *infectious*: once any route on the server declares one (or `.usePermissions(...)` is wired), every route on the server must declare — the runtime refuses to start otherwise (see "Hard guarantee" below).
+
+The wiring chain is read top-to-bottom:
+
+```typescript
+new GGHttp(httpServer)
+    .use(new JwtAuthMiddleware(secret))   // parses the token → context
+    .usePermissions(getScopes)             // reads context → scope set
+    .http(ItemApi, new ItemApiImpl())
+```
+
+Each step has one job: the auth middleware turns a token into identity in context; the scope resolver (a zero-arg `() => ReadonlySet<string> | null`, sync or async) extracts the caller's scopes from that context; the gate calls the resolver, checks `satisfies(method.permission, scopes)`, and throws `NOT_AUTHORIZED` (no identity) or `FORBIDDEN` (wrong scopes). Order matters — `.usePermissions(...)` must come before the `.http(...)` calls it should apply to.
+
+**Hard guarantee.** At server start the framework walks every HTTP / WS route registered on the `GGHttpServer`. If any of them declared a permission, or any chain wired `.usePermissions(...)`, **strict mode** is on for the whole server. In strict mode:
+
+- Every route must declare `permission` — use `GG_NO_PERMISSIONS` for intentionally public ones. Routes that omit it fail the start and are listed by name.
+- A route declaring a non-public permission without a resolver on its registering chain also fails the start.
+
+The check is per-server (HTTP routes + WS schemas on the same `GGHttpServer`), so a permission declared anywhere is infectious across sibling chains. The only way to opt out is to declare nothing — projects with no auth pay zero ceremony, but the moment one route opts in, the framework forces consistency.
+
+**What this does not cover.** The permission gates *endpoint access* — "is this caller allowed to invoke this method at all?" It does not handle *resource access* — "can this caller edit *this specific* post?" That check still belongs in the handler. The same `GGPermissionChecker` the gate used is exposed via `GG_PERMISSIONS.get()`, so handler-side sub-decisions use identical logic with no drift between framework and app code.
+
 ## Authentication & Context
 
 ### Using Codec (Recommended for Header-Based Auth)
