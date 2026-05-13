@@ -1,7 +1,7 @@
 {
   "//": "THIS FILE IS GENERATED - DO NOT EDIT",
   "name": "@grest-ts/locator",
-  "version": "0.0.36",
+  "version": "0.0.37",
   "type": "module",
   "license": "MIT",
   "description": "Hierarchical async context with tree-based inheritance",
@@ -47,6 +47,6 @@
     "node": ">=25"
   },
   "peerDependencies": {
-    "@grest-ts/common": "0.0.36"
+    "@grest-ts/common": "0.0.37"
   }
 }
