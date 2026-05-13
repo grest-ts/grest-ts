@@ -6,6 +6,8 @@ import {
     UploadMultipleResponse,
     UploadImageRequest,
     UploadImageResponse,
+    UploadViaUnionRequest,
+    UploadViaUnionResponse,
     DownloadFileRequest,
     DownloadByIdRequest
 } from "../api/FileUploadTestApi";
@@ -76,6 +78,15 @@ export class FileUploadTestService implements IFileUploadTestApi {
             mimeType: image.mimeType,
             size: image.size
         };
+    }
+
+    public async uploadViaUnion(request: UploadViaUnionRequest): Promise<UploadViaUnionResponse> {
+        const {secret} = request;
+        if (secret.via === "file") {
+            const text = await secret.file.text();
+            return {via: "file", contentPreview: text.substring(0, 100)};
+        }
+        return {via: "text", contentPreview: secret.text.substring(0, 100)};
     }
 
     public async downloadFile(request: DownloadFileRequest): Promise<GGFile> {

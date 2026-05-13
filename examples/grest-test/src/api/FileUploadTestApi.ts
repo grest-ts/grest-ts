@@ -1,6 +1,6 @@
 import {httpSchema} from "@grest-ts/http"
 import {GGFileUpload, GGFileDownload} from "@grest-ts/http-file"
-import {GGContractClass, GGContractImplementation, IsArray, IsNumber, IsObject, IsString, VALIDATION_ERROR, SERVER_ERROR, GG_NO_PERMISSIONS } from "@grest-ts/schema";
+import {GGContractClass, GGContractImplementation, IsArray, IsLiteral, IsNumber, IsObject, IsString, IsUnion, VALIDATION_ERROR, SERVER_ERROR, GG_NO_PERMISSIONS } from "@grest-ts/schema";
 import {IsFile} from "@grest-ts/schema-file";
 
 // ---------------------------------------------------------
@@ -59,6 +59,21 @@ export const IsUploadImageResponse = IsObject({
 })
 export type UploadImageResponse = typeof IsUploadImageResponse.infer
 
+// File inside a discriminated union — see test.
+export const IsUploadViaUnionRequest = IsObject({
+    secret: IsUnion(
+        IsObject({via: IsLiteral("file"), file: IsFile}),
+        IsObject({via: IsLiteral("text"), text: IsString})
+    )
+})
+export type UploadViaUnionRequest = typeof IsUploadViaUnionRequest.infer
+
+export const IsUploadViaUnionResponse = IsObject({
+    via: IsString,
+    contentPreview: IsString
+})
+export type UploadViaUnionResponse = typeof IsUploadViaUnionResponse.infer
+
 // Download request schemas
 export const IsDownloadFileRequest = IsObject({
     content: IsString,
@@ -98,6 +113,12 @@ export const FileUploadTestApiContract = new GGContractClass("FileUploadTestApi"
         errors: [VALIDATION_ERROR],
         permission: GG_NO_PERMISSIONS
     },
+    uploadViaUnion: {
+        input: IsUploadViaUnionRequest,
+        success: IsUploadViaUnionResponse,
+        errors: [VALIDATION_ERROR],
+        permission: GG_NO_PERMISSIONS
+    },
     // Download file (POST with JSON body, returns raw file)
     downloadFile: {
         input: IsDownloadFileRequest,
@@ -122,6 +143,7 @@ export const FileUploadTestApi = httpSchema(FileUploadTestApiContract)
         uploadFile: GGFileUpload.POST("upload"),
         uploadMultiple: GGFileUpload.POST("upload-multiple"),
         uploadImage: GGFileUpload.POST("upload-image"),
+        uploadViaUnion: GGFileUpload.POST("upload-via-union"),
         downloadFile: GGFileDownload.POST("download"),
         downloadById: GGFileDownload.GET("download-by-id")
     })

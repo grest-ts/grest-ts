@@ -65,6 +65,8 @@ export class CODE_Stringify {
                 return this.stringifyRecordSlow(def, value as Record<string, unknown>, extras, path);
             case 'discriminated':
                 return this.stringifyDiscriminatedSlow(def, value as Record<string, unknown>, extras, path);
+            case 'union':
+                return this.stringifyUnionSlow(def, value, extras, path);
             default:
                 return JSON.stringify(value);
         }
@@ -125,6 +127,19 @@ export class CODE_Stringify {
             }
         }
         return `{${parts.join(',')}}`;
+    }
+
+    private stringifyUnionSlow(def: AnyStandardSchemaDef, value: unknown, extras: Promise<GGSchemaBinaryData>[], path: string): string {
+        const variants = (def as any).variants;
+        if (!variants) return JSON.stringify(value);
+
+        for (const variant of variants) {
+            if (variant.is(value)) {
+                const variantDef = variant.toCompilerDef?.() ?? variant.def ?? variant;
+                return this.stringifySlow(variantDef, value, extras, path) ?? 'null';
+            }
+        }
+        return JSON.stringify(value);
     }
 
     private stringifyDiscriminatedSlow(def: AnyStandardSchemaDef, value: Record<string, unknown>, extras: Promise<GGSchemaBinaryData>[], path: string): string {

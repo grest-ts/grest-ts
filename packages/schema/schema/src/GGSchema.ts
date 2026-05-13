@@ -1,7 +1,7 @@
 import {GGIssuesList} from "./issue/GGIssuesList";
 import {GGIssueKey} from "./issue/GGIssueKey";
 import {GGSchemaDefinition, GGSchemaDocs, GGSchemaBinaryData, GGJsonStringifyResult, GGSchemaNonJsonDefinition, isNonJsonDef} from "./Definition";
-import type {ArrayDef, ObjectDef} from "./Definition";
+import type {ArrayDef, DiscriminatedDef, ObjectDef, TupleDef, UnionDef} from "./Definition";
 import type {ExecutorStrategy, StringifyFn} from "./executor/ExecutorStrategy";
 import {AOTExecutor} from "./executor/aot/AOTExecutor";
 import {GGCodec} from "./GGCodec";
@@ -402,6 +402,19 @@ function collectDecoders(schema: GGSchema<any>, path: string, map: Map<string, N
         }
     } else if (def.type === 'array' && (def as ArrayDef).element) {
         collectDecoders((def as ArrayDef).element!, path ? path + ".*" : "*", map);
+    } else if (def.type === 'tuple' && (def as TupleDef).elements) {
+        const elements = (def as TupleDef).elements!;
+        for (let i = 0; i < elements.length; i++) {
+            collectDecoders(elements[i], path ? path + "." + i : String(i), map);
+        }
+    } else if (def.type === 'union' && (def as UnionDef).variants) {
+        for (const variant of (def as UnionDef).variants) {
+            collectDecoders(variant, path, map);
+        }
+    } else if (def.type === 'discriminated' && (def as DiscriminatedDef).variantMap) {
+        for (const variant of (def as DiscriminatedDef).variantMap!.values()) {
+            collectDecoders(variant, path, map);
+        }
     }
 }
 

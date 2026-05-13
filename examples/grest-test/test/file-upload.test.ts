@@ -132,6 +132,26 @@ describe("File upload tests", async () => {
     });
 
     // -------------------------------------------------
+    // File nested inside a discriminated union
+    // -------------------------------------------------
+
+    test('upload file via union variant round-trips multipart', async () => {
+        const file = GGTestFile.fromString('union-file payload', 'cred.json', 'application/json');
+
+        const result = await api.uploadViaUnion({secret: {via: 'file', file}});
+
+        expect(result.via).toBe('file');
+        expect(result.contentPreview).toBe('union-file payload');
+    });
+
+    test('upload text via the other union variant still works', async () => {
+        const result = await api.uploadViaUnion({secret: {via: 'text', text: 'plain-secret'}});
+
+        expect(result.via).toBe('text');
+        expect(result.contentPreview).toBe('plain-secret');
+    });
+
+    // -------------------------------------------------
     // Edge cases
     // -------------------------------------------------
 

@@ -1,7 +1,7 @@
 import {GGSchema} from "../../../GGSchema";
 import {CompilerState} from "../utils/CompilerState";
 import {propAccess} from "../utils/helpers";
-import type {AnyStandardSchemaDef, ArrayDef, DiscriminatedDef, GGSchemaBinaryData, LiteralDef, ObjectDef, RecordDef, TupleDef} from "../../../Definition";
+import type {AnyStandardSchemaDef, ArrayDef, DiscriminatedDef, GGSchemaBinaryData, LiteralDef, ObjectDef, RecordDef, TupleDef, UnionDef} from "../../../Definition";
 import {isNonJsonDef} from "../../../Definition";
 
 /**
@@ -68,6 +68,8 @@ export class AOT_Stringify {
                 return this.visitRecord(def, v, path);
             case 'discriminated':
                 return this.visitDiscriminated(def, v, path);
+            case 'union':
+                return this.visitUnion(def, v, path);
             case 'literal':
                 return this.visitLiteral(def, v);
             case 'string':
@@ -275,6 +277,24 @@ export class AOT_Stringify {
         }
         // Check Set first for O(1) rejection of invalid discriminators
         return `(${setVar}.has(${discAccess})?(${cases.join(':')}:undefined):undefined)`;
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // Union
+    // ──────────────────────────────────────────────────────────────────────────
+
+    private visitUnion(def: UnionDef, v: string, path: string): string {
+        const variants = def.variants;
+        if (!variants || variants.length === 0) return `JSON.stringify(${v})`;
+
+        const cases: string[] = [];
+        for (const variant of variants) {
+            const isVar = this.state.capture(variant.is.bind(variant), '_uis');
+            const variantCode = this.visit(variant, v, path);
+            cases.push(`${isVar}(${v})?${variantCode}`);
+        }
+        cases.push(`JSON.stringify(${v})`);
+        return `(${cases.join(':')})`;
     }
 
     // ──────────────────────────────────────────────────────────────────────────
