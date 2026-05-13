@@ -37,6 +37,8 @@
 
 * Fancy feature: await t.all().metrics.aggregate("request_count");
 
+* `.waitFor` s2c interceptor unregisters before the wait completes — fully described in `TEST_FLAKINESS.md`. Surfaces as sporadic `[Test Failed] Timeout waiting for interceptor` on WS server-to-client assertions under full-suite load; the message did arrive but landed past the framework's 25 ms post-action grace, after `GGTestAction.execute()`'s finally-block unregistered the handler.
+
 * Cron
 * DynamoDB
 * Redis

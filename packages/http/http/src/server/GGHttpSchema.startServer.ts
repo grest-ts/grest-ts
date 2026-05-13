@@ -6,7 +6,7 @@
 import http from "http";
 import {GGLocator} from "@grest-ts/locator";
 import {ClientHttpRouteToRpcTransformServerCodec, GGHttpCodec, GGHttpSchema} from "../schema/GGHttpSchema";
-import {ERROR, GGContractApiDefinition, GGContractImplementation, GGContractMethod, OK, SERVER_ERROR} from "@grest-ts/schema";
+import {describePermission, ERROR, FORBIDDEN, GG_NO_PERMISSIONS, GGContractApiDefinition, GGContractImplementation, GGContractMethod, GGPermissionChecker, NOT_AUTHORIZED, OK, satisfies, SERVER_ERROR} from "@grest-ts/schema";
 import {HttpMethod} from "@grest-ts/common";
 import {GG_DISCOVERY} from "@grest-ts/discovery";
 import {GGContext, GGContextStore} from "@grest-ts/context";
@@ -17,6 +17,8 @@ import {GGHttpMetrics} from "./GGHttpMetrics";
 import {GG_HTTP_SERVER} from "./GG_HTTP_SERVER";
 import {GGHttpServer} from "./GGHttpServer";
 import {GGLog} from "@grest-ts/logger";
+import {GG_PERMISSIONS} from "./GG_PERMISSIONS";
+import type {GGScopeResolver} from "./GGHttp";
 
 export interface GGHttpSchemaConfig {
     /**
@@ -27,6 +29,12 @@ export interface GGHttpSchemaConfig {
      * Additional middlewares to apply to all routes.
      */
     middlewares?: GGHttpServerMiddleware[];
+    /**
+     * Optional scope resolver. When set, the gate calls it once per request,
+     * populates GG_PERMISSIONS, and rejects requests whose contract permission
+     * is not satisfied by the resolved scopes.
+     */
+    permissionResolver?: GGScopeResolver;
 }
 
 export interface GGHttpServerMiddleware {
@@ -98,6 +106,8 @@ function setupRoutes<TContract extends GGContractApiDefinition>(
     // @TODO This is not really used and only for testkit so it would register implementation of the contract... Not cool
     httpSchema.contract.implement(implementation);
 
+    if (config.permissionResolver) server._markResolverWired(httpSchema);
+
     for (const methodName in httpSchema.codec) {
         // Wire format.
         const codec: GGHttpCodec = httpSchema.codec[methodName]
@@ -127,6 +137,19 @@ function setupRoutes<TContract extends GGContractApiDefinition>(
                 try {
                     const rpcInput = await requestParser.parseRequest(req)
                     try {
+                        if (config.permissionResolver) {
+                            const scopes = await config.permissionResolver()
+                            if (scopes != null) GG_PERMISSIONS.set(new GGPermissionChecker(scopes))
+                            const required = contractFunctionSchema.permission
+                            if (required !== undefined && required !== GG_NO_PERMISSIONS) {
+                                if (scopes == null) throw new NOT_AUTHORIZED({
+                                    debugMessage: `${httpSchema.name}.${methodName} requires ${describePermission(required)} but no caller identity was resolved`
+                                })
+                                if (!satisfies(required, scopes)) throw new FORBIDDEN({
+                                    debugMessage: `${httpSchema.name}.${methodName} requires ${describePermission(required)} — caller scopes did not satisfy`
+                                })
+                            }
+                        }
                         rpcResult = {success: true, type: "OK", data: await implFn(rpcInput)}
                         // GGLog.debug(httpSchema, "Response", rpcResult) // This is very slow to log this (like 3x performance loss)
                     } catch (error: unknown) {

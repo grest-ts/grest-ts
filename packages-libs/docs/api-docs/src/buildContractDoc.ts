@@ -13,11 +13,12 @@
 
 import type {GGHttpSchema, GGHttpTransportMiddleware} from "@grest-ts/http";
 import type {GGWebSocketSchema} from "@grest-ts/websocket";
-import type {ANY_ERROR_CLS, GGSchema} from "@grest-ts/schema";
+import type {ANY_ERROR_CLS, GGPermission, GGSchema} from "@grest-ts/schema";
+import {GG_ANY_PERMISSION, GG_NO_PERMISSIONS} from "@grest-ts/schema";
 import {JsonSchemaAdapter} from "./jsonSchemaAdapter";
 import type {
     ApiDocsDocument, AuthDoc, ContractDoc, ErrorDoc, GroupDoc,
-    JsonSchemaDescription, MethodDoc, NamedSchemaDoc, ParamDoc, SchemaRef,
+    JsonSchemaDescription, MethodDoc, NamedSchemaDoc, ParamDoc, PermissionDoc, PermissionTree, SchemaRef,
     SchemaUsage,
 } from "./docTypes";
 
@@ -133,7 +134,7 @@ function buildHttpContract(httpSchema: GGHttpSchema<any, any>, ctx: BuildContext
 function buildHttpMethod(
     methodName: string,
     codec: { method: string; path: string },
-    contract: { input?: GGSchema<any>; success?: GGSchema<any>; errors?: ANY_ERROR_CLS[] },
+    contract: { input?: GGSchema<any>; success?: GGSchema<any>; errors?: ANY_ERROR_CLS[]; permission?: GGPermission },
     contractName: string,
     ctx: BuildContext,
 ): MethodDoc {
@@ -147,6 +148,7 @@ function buildHttpMethod(
         httpMethod,
         httpPath: fullPath,
         errors: collectErrors(contract.errors, contractName, methodName, ctx),
+        ...(contract.permission !== undefined ? {permission: buildPermissionDoc(contract.permission)} : {}),
     };
 
     // Input handling — split by HTTP verb.
@@ -221,19 +223,23 @@ function buildWsContract(wsSchema: GGWebSocketSchema<any, any, any, any, any>, c
         methods.push(buildWsMethod(methodName, m, "server-to-client", wsSchema.name, ctx));
     }
 
+    const connectPermission = wsSchema.connectPermission !== undefined
+        ? buildPermissionDoc(wsSchema.connectPermission)
+        : undefined;
     return {
         name: wsSchema.name,
         kind: "ws",
         path: "/" + wsSchema.path.replace(/^\/+/, ""),
         ...(auth.length > 0 ? {auth} : {}),
         ...(headers.length > 0 ? {headers} : {}),
+        ...(connectPermission ? {connectPermission} : {}),
         methods,
     };
 }
 
 function buildWsMethod(
     methodName: string,
-    contract: { input?: GGSchema<any>; success?: GGSchema<any>; errors?: ANY_ERROR_CLS[] },
+    contract: { input?: GGSchema<any>; success?: GGSchema<any>; errors?: ANY_ERROR_CLS[]; permission?: GGPermission },
     direction: "client-to-server" | "server-to-client",
     contractName: string,
     ctx: BuildContext,
@@ -246,12 +252,18 @@ function buildWsMethod(
         pattern = hasReply ? "server-initiated-request" : "server-push";
     }
 
+    // Server-pushed messages have no caller identity for the gate to check, so
+    // the permission field on those is documentation-only — render it only for
+    // c2s methods to avoid surfacing a meaningless requirement on s2c pushes.
+    const includePermission = direction === "client-to-server" && contract.permission !== undefined;
+
     const method: MethodDoc = {
         name: methodName,
         summary: camelToTitle(methodName),
         wsDirection: direction,
         wsPattern: pattern,
         errors: collectErrors(contract.errors, contractName, methodName, ctx),
+        ...(includePermission ? {permission: buildPermissionDoc(contract.permission!)} : {}),
     };
 
     if (contract.input) {
@@ -379,11 +391,9 @@ function extractHttpAuth(middlewares: readonly GGHttpTransportMiddleware[]): Aut
     for (const mw of middlewares) {
         for (const [name, schema] of Object.entries(mw.headers ?? {})) {
             const desc = schema.toSchemaDescription();
-            const format = desc.docs?.format;
-            if (format === "bearer") {
-                auth.push({scheme: "bearer", headerName: name, ...(desc.docs?.description ? {description: desc.docs.description} : {})});
-            } else if (format === "api-key") {
-                auth.push({scheme: "api-key", headerName: name, ...(desc.docs?.description ? {description: desc.docs.description} : {})});
+            const scheme = authSchemeFromFormat(desc.docs?.format);
+            if (scheme) {
+                auth.push({scheme, headerName: name, ...(desc.docs?.description ? {description: desc.docs.description} : {})});
             }
         }
     }
@@ -396,15 +406,38 @@ function extractWsAuth(middlewares: any[]): AuthDoc[] {
     for (const mw of middlewares) {
         for (const [name, schema] of Object.entries(mw.headers ?? {}) as [string, any][]) {
             const desc = schema.toSchemaDescription?.();
-            const format = desc?.docs?.format;
-            if (format === "bearer") {
-                auth.push({scheme: "bearer", headerName: name, ...(desc.docs?.description ? {description: desc.docs.description} : {})});
-            } else if (format === "api-key") {
-                auth.push({scheme: "api-key", headerName: name, ...(desc.docs?.description ? {description: desc.docs.description} : {})});
+            const scheme = authSchemeFromFormat(desc?.docs?.format);
+            if (scheme) {
+                auth.push({scheme, headerName: name, ...(desc.docs?.description ? {description: desc.docs.description} : {})});
             }
         }
     }
     return auth;
+}
+
+/**
+ * Map a header schema's `format` hint to its auth scheme, or undefined
+ * if the header isn't part of the auth surface.
+ *
+ * Only two schemes:
+ *   - `"bearer"` — RFC 6750 `Authorization: Bearer <token>`. Specific
+ *     wire format, recognised by tooling (Swagger Authorize, etc).
+ *   - `"header"` — every other auth header. Covers OpenAPI-style
+ *     api-keys (`format: "api-key"`), session bindings / tenant hints
+ *     / paired identifiers (`format: "auth"`), and any other custom
+ *     header that belongs visually under Authentication but isn't a
+ *     Bearer token. The pill carries no protocol claim — only "this
+ *     header is part of the auth surface."
+ *
+ * The `"api-key"` format input is preserved for backward compat and
+ * because OpenAPI/AsyncAPI emit still keys off it to choose the right
+ * security scheme shape (`apiKey` vs `http: bearer`). The api-docs UI
+ * doesn't need that distinction — both render as `[HEADER]`.
+ */
+function authSchemeFromFormat(format: string | undefined): AuthDoc["scheme"] | undefined {
+    if (format === "bearer") return "bearer";
+    if (format === "api-key" || format === "auth") return "header";
+    return undefined;
 }
 
 // ── Non-auth headers ───────────────────────────────────────────────────
@@ -425,7 +458,7 @@ function extractHttpHeaders(
         for (const [name, schema] of Object.entries(mw.headers ?? {})) {
             const desc = schema.toSchemaDescription();
             const format = desc.docs?.format;
-            if (format === "bearer" || format === "api-key") continue; // → goes to `auth`
+            if (authSchemeFromFormat(format) !== undefined) continue; // → goes to `auth`
             out.push(toHeaderParam(name, schema, desc, ctx, contractName));
         }
     }
@@ -443,7 +476,7 @@ function extractWsHeaders(
             const desc = schema.toSchemaDescription?.();
             if (!desc) continue;
             const format = desc.docs?.format;
-            if (format === "bearer" || format === "api-key") continue;
+            if (authSchemeFromFormat(format) !== undefined) continue;
             out.push(toHeaderParam(name, schema, desc, ctx, contractName));
         }
     }
@@ -495,4 +528,46 @@ function normalizePath(path: string): string {
     let p = path;
     if (!p.startsWith("/")) p = "/" + p;
     return p.replace(/\/+$/, "") || "/";
+}
+
+// ── Permission rendering ───────────────────────────────────────────────
+
+function buildPermissionDoc(permission: GGPermission): PermissionDoc {
+    const tree = toPermissionTree(permission);
+    return {tree, text: renderPermissionText(tree)};
+}
+
+function toPermissionTree(p: GGPermission): PermissionTree {
+    if (p === GG_NO_PERMISSIONS) return {kind: "public"};
+    if (p === GG_ANY_PERMISSION) return {kind: "anyAuth"};
+    if (typeof p === "string") return {kind: "scope", scope: p};
+    if (p && typeof p === "object") {
+        if ("allOf" in p) return {kind: "allOf", children: p.allOf.map(toPermissionTree)};
+        if ("anyOf" in p) return {kind: "anyOf", children: p.anyOf.map(toPermissionTree)};
+    }
+    return {kind: "public"};
+}
+
+function renderPermissionText(tree: PermissionTree): string {
+    switch (tree.kind) {
+        case "public":  return "Public — no authentication required.";
+        case "anyAuth": return "Any authenticated identity.";
+        case "scope":   return `Requires \`${tree.scope}\`.`;
+        case "allOf":   return `Requires ${joinChildren(tree.children, " **and** ")}.`;
+        case "anyOf":   return `Requires ${joinChildren(tree.children, " **or** ")}.`;
+    }
+}
+
+function joinChildren(children: PermissionTree[], sep: string): string {
+    return children.map(renderInline).join(sep);
+}
+
+function renderInline(tree: PermissionTree): string {
+    switch (tree.kind) {
+        case "public":  return "public";
+        case "anyAuth": return "any authenticated identity";
+        case "scope":   return `\`${tree.scope}\``;
+        case "allOf":   return `(${joinChildren(tree.children, " **and** ")})`;
+        case "anyOf":   return `(${joinChildren(tree.children, " **or** ")})`;
+    }
 }

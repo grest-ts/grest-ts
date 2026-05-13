@@ -1,5 +1,5 @@
 import {defineSocketContract, webSocketSchema} from "@grest-ts/websocket"
-import {IsBoolean, IsObject, IsString, SERVER_ERROR, VALIDATION_ERROR} from "@grest-ts/schema";
+import {IsBoolean, IsObject, IsString, SERVER_ERROR, VALIDATION_ERROR, GG_NO_PERMISSIONS } from "@grest-ts/schema";
 import {IsChecklistItem} from "./ChecklistApi"
 import {GG_USER_AUTH_TOKEN} from "./auth/UserAuth"
 
@@ -26,17 +26,20 @@ export const ChecklistNotificationApiContract = defineSocketContract("ChecklistN
         updateItem: {
             input: IsUpdateItemRequest,
             success: IsUpdateItemResponse,
-            errors: [VALIDATION_ERROR, SERVER_ERROR]
+            errors: [VALIDATION_ERROR, SERVER_ERROR],
+            permission: GG_NO_PERMISSIONS
         },
-        askMeAmIHere: {}
+        askMeAmIHere: {permission: GG_NO_PERMISSIONS}
     },
     serverToClient: {
         itemMarked: {
             input: IsItemMarkedEvent,
+            permission: GG_NO_PERMISSIONS
         },
         areYouThere: {
             success: IsBoolean,
-            errors: [SERVER_ERROR]
+            errors: [SERVER_ERROR],
+            permission: GG_NO_PERMISSIONS
         }
     }
 })

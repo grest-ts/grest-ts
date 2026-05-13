@@ -1,5 +1,5 @@
 import {GGRpc, httpSchema} from "@grest-ts/http"
-import {ERROR, EXISTS, FORBIDDEN, GGContractClass, IsEmail, IsObject, IsString, SERVER_ERROR, VALIDATION_ERROR} from "@grest-ts/schema";
+import {ERROR, EXISTS, FORBIDDEN, GGContractClass, IsEmail, IsObject, IsString, SERVER_ERROR, VALIDATION_ERROR, GG_NO_PERMISSIONS } from "@grest-ts/schema";
 
 const IsUserId = IsString.brand("UserId")
 
@@ -38,12 +38,14 @@ export const UserPublicApiContract = new GGContractClass("UserPublicApi", {
     register: {
         input: IsRegisterRequest,
         success: IsLoginResponse,
-        errors: [EXISTS, FORBIDDEN, BadUsernameError, InvalidCredentialsError, SERVER_ERROR, VALIDATION_ERROR]
+        errors: [EXISTS, FORBIDDEN, BadUsernameError, InvalidCredentialsError, SERVER_ERROR, VALIDATION_ERROR],
+        permission: GG_NO_PERMISSIONS
     },
     login: {
         input: IsLoginRequest,
         success: IsLoginResponse,
-        errors: [FORBIDDEN, InvalidCredentialsError, VALIDATION_ERROR, SERVER_ERROR]
+        errors: [FORBIDDEN, InvalidCredentialsError, VALIDATION_ERROR, SERVER_ERROR],
+        permission: GG_NO_PERMISSIONS
     }
 })
 

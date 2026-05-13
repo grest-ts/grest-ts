@@ -1,5 +1,5 @@
 import {GGRpc, httpSchema} from "@grest-ts/http";
-import {IsArray, IsBoolean, IsObject, IsString, IsNumber, IsEnum, IsLiteral, IsTuple, GGContractClass, FORBIDDEN, NOT_AUTHORIZED, NOT_FOUND, SERVER_ERROR, VALIDATION_ERROR} from "@grest-ts/schema";
+import {IsArray, IsBoolean, IsObject, IsString, IsNumber, IsEnum, IsLiteral, IsTuple, GGContractClass, FORBIDDEN, NOT_AUTHORIZED, NOT_FOUND, SERVER_ERROR, VALIDATION_ERROR } from "@grest-ts/schema";
 import {FORBIDDEN_BOOKKEEPING_LOCKED} from "../ApiError";
 import {IsCreatedAndChangedBy} from "./UserApi";
 import {GG_COMPANY_AUTH_TOKEN} from "../middleware/CompanyAuthHeader";
@@ -259,32 +259,32 @@ export const ExpenseApiContract = new GGContractClass("ExpenseApi", {
     list: {
         input: IsExpensesQuery,
         success: IsExpensesResult,
-        errors: [NOT_AUTHORIZED, FORBIDDEN, VALIDATION_ERROR, SERVER_ERROR]
+        errors: [NOT_AUTHORIZED, FORBIDDEN, VALIDATION_ERROR, SERVER_ERROR],
     },
     get: {
         input: IsGetExpenseInput,
         success: IsSyncExpenseData,
-        errors: [NOT_AUTHORIZED, NOT_FOUND, FORBIDDEN, VALIDATION_ERROR, SERVER_ERROR]
+        errors: [NOT_AUTHORIZED, NOT_FOUND, FORBIDDEN, VALIDATION_ERROR, SERVER_ERROR],
     },
     getByFile: {
         input: IsGetByFileExpenseInput,
         success: IsSyncExpenseData,
-        errors: [NOT_AUTHORIZED, NOT_FOUND, FORBIDDEN, VALIDATION_ERROR, SERVER_ERROR]
+        errors: [NOT_AUTHORIZED, NOT_FOUND, FORBIDDEN, VALIDATION_ERROR, SERVER_ERROR],
     },
     getRow: {
         input: IsGetExpenseRowInput,
         success: IsExpenseRowResult,
-        errors: [NOT_AUTHORIZED, NOT_FOUND, FORBIDDEN, VALIDATION_ERROR, SERVER_ERROR]
+        errors: [NOT_AUTHORIZED, NOT_FOUND, FORBIDDEN, VALIDATION_ERROR, SERVER_ERROR],
     },
     sync: {
         input: IsSyncExpenseData,
         success: IsSyncExpenseResult,
-        errors: [NOT_AUTHORIZED, FORBIDDEN, FORBIDDEN_BOOKKEEPING_LOCKED, VALIDATION_ERROR, SERVER_ERROR]
+        errors: [NOT_AUTHORIZED, FORBIDDEN, FORBIDDEN_BOOKKEEPING_LOCKED, VALIDATION_ERROR, SERVER_ERROR],
     },
     delete: {
         input: IsDeleteExpenseRequest,
         success: undefined as undefined,
-        errors: [NOT_AUTHORIZED, NOT_FOUND, FORBIDDEN, FORBIDDEN_BOOKKEEPING_LOCKED, VALIDATION_ERROR, SERVER_ERROR]
+        errors: [NOT_AUTHORIZED, NOT_FOUND, FORBIDDEN, FORBIDDEN_BOOKKEEPING_LOCKED, VALIDATION_ERROR, SERVER_ERROR],
     }
 })
 

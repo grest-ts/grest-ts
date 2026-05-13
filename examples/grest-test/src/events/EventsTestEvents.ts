@@ -1,5 +1,5 @@
 import {awsSnsPublisher} from "@grest-ts/events-aws";
-import {GGContractClass, IsNumber, IsObject, IsString} from "@grest-ts/schema";
+import {GGContractClass, IsNumber, IsObject, IsString, GG_NO_PERMISSIONS } from "@grest-ts/schema";
 import {IsTestId} from "../api/EventsTestApi";
 import {GGEventApi} from "@grest-ts/events"
 
@@ -31,9 +31,15 @@ export type TestCompletedEvent = typeof IsTestCompletedEvent.infer
 // ---------------------------------------------------------
 
 export const EventsTestEventsContract = new GGContractClass("EventsTestEvents", {
-    created: {input: IsTestCreatedEvent},
-    started: {input: IsTestStartedEvent},
-    completed: {input: IsTestCompletedEvent}
+    created: {input: IsTestCreatedEvent,
+        permission: GG_NO_PERMISSIONS
+    },
+    started: {input: IsTestStartedEvent,
+        permission: GG_NO_PERMISSIONS
+    },
+    completed: {input: IsTestCompletedEvent,
+        permission: GG_NO_PERMISSIONS
+    }
 })
 
 export type EventsTestEvents = GGEventApi<typeof EventsTestEventsContract["methods"]>

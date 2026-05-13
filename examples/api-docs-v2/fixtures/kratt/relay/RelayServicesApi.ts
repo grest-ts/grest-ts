@@ -1,4 +1,4 @@
-import {GGContractClass, IsObject, IsString, IsBoolean, IsArray, SERVER_ERROR} from "@grest-ts/schema"
+import {GGContractClass, IsObject, IsString, IsBoolean, IsArray, SERVER_ERROR } from "@grest-ts/schema"
 import {GGRpc, httpSchema} from "@grest-ts/http"
 import {GG_RELAY_TOKEN} from "./RelayAuthContext.js"
 import {IsServiceStatus} from "./RelayTypes.js"

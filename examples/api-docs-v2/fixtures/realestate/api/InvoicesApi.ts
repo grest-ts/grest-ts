@@ -1,6 +1,6 @@
 import {GGRpc, httpSchema} from "@grest-ts/http";
 import {GGFileDownload} from "@grest-ts/http-file";
-import {FORBIDDEN, GGContractClass, IsArray, IsBit, IsBoolean, IsEnum, IsLiteral, IsNumber, IsObject, IsString, IsTuple, NOT_AUTHORIZED, NOT_FOUND, SERVER_ERROR, VALIDATION_ERROR} from "@grest-ts/schema";
+import {FORBIDDEN, GGContractClass, IsArray, IsBit, IsBoolean, IsEnum, IsLiteral, IsNumber, IsObject, IsString, IsTuple, NOT_AUTHORIZED, NOT_FOUND, SERVER_ERROR, VALIDATION_ERROR } from "@grest-ts/schema";
 import {IsFile} from "@grest-ts/schema-file";
 import {FORBIDDEN_BOOKKEEPING_LOCKED} from "../ApiError";
 import {IsBuildingId, tInvoiceNo} from "../Brands";
@@ -568,62 +568,62 @@ export const InvoicesApiContract = new GGContractClass("InvoicesApi", {
     list: {
         input: IsInvoicesQuery,
         success: IsInvoicesResult,
-        errors: [NOT_AUTHORIZED, FORBIDDEN, VALIDATION_ERROR, SERVER_ERROR]
+        errors: [NOT_AUTHORIZED, FORBIDDEN, VALIDATION_ERROR, SERVER_ERROR],
     },
     get: {
         input: IsGetInvoiceRequest,
         success: IsSyncInvoiceData,
-        errors: [NOT_AUTHORIZED, NOT_FOUND, FORBIDDEN, VALIDATION_ERROR, SERVER_ERROR]
+        errors: [NOT_AUTHORIZED, NOT_FOUND, FORBIDDEN, VALIDATION_ERROR, SERVER_ERROR],
     },
     delete: {
         input: IsDeleteInvoiceRequest,
         success: undefined as undefined,
-        errors: [NOT_AUTHORIZED, NOT_FOUND, FORBIDDEN, FORBIDDEN_BOOKKEEPING_LOCKED, VALIDATION_ERROR, SERVER_ERROR]
+        errors: [NOT_AUTHORIZED, NOT_FOUND, FORBIDDEN, FORBIDDEN_BOOKKEEPING_LOCKED, VALIDATION_ERROR, SERVER_ERROR],
     },
     create: {
         input: IsCreateInvoiceData,
         success: IsCreateInvoiceResult,
-        errors: [NOT_AUTHORIZED, FORBIDDEN, FORBIDDEN_BOOKKEEPING_LOCKED, VALIDATION_ERROR, SERVER_ERROR]
+        errors: [NOT_AUTHORIZED, FORBIDDEN, FORBIDDEN_BOOKKEEPING_LOCKED, VALIDATION_ERROR, SERVER_ERROR],
     },
     createCredit: {
         input: IsCreateCreditInvoiceData,
         success: IsCreateInvoiceResult,
-        errors: [NOT_AUTHORIZED, FORBIDDEN, VALIDATION_ERROR, SERVER_ERROR]
+        errors: [NOT_AUTHORIZED, FORBIDDEN, VALIDATION_ERROR, SERVER_ERROR],
     },
     sync: {
         input: IsSyncInvoiceData,
         success: undefined as undefined,
-        errors: [NOT_AUTHORIZED, FORBIDDEN, FORBIDDEN_BOOKKEEPING_LOCKED, VALIDATION_ERROR, SERVER_ERROR]
+        errors: [NOT_AUTHORIZED, FORBIDDEN, FORBIDDEN_BOOKKEEPING_LOCKED, VALIDATION_ERROR, SERVER_ERROR],
     },
     downloadPdf: {
         input: IsDownloadInvoicePdfRequest,
         success: IsFile,
-        errors: [NOT_AUTHORIZED, NOT_FOUND, FORBIDDEN, VALIDATION_ERROR, SERVER_ERROR]
+        errors: [NOT_AUTHORIZED, NOT_FOUND, FORBIDDEN, VALIDATION_ERROR, SERVER_ERROR],
     },
     downloadHtml: {
         input: IsDownloadInvoicePdfRequest,
         success: IsFile,
-        errors: [NOT_AUTHORIZED, NOT_FOUND, FORBIDDEN, VALIDATION_ERROR, SERVER_ERROR]
+        errors: [NOT_AUTHORIZED, NOT_FOUND, FORBIDDEN, VALIDATION_ERROR, SERVER_ERROR],
     },
     downloadEInvoice: {
         input: IsDownloadEInvoiceRequest,
         success: IsFile,
-        errors: [NOT_AUTHORIZED, NOT_FOUND, FORBIDDEN, VALIDATION_ERROR, SERVER_ERROR]
+        errors: [NOT_AUTHORIZED, NOT_FOUND, FORBIDDEN, VALIDATION_ERROR, SERVER_ERROR],
     },
     downloadEInvoices: {
         input: IsDownloadEInvoicesRequest,
         success: IsFile,
-        errors: [NOT_AUTHORIZED, NOT_FOUND, FORBIDDEN, VALIDATION_ERROR, SERVER_ERROR]
+        errors: [NOT_AUTHORIZED, NOT_FOUND, FORBIDDEN, VALIDATION_ERROR, SERVER_ERROR],
     },
     prepareCreate: {
         input: IsPrepareInvoicesQuery,
         success: IsPrepareInvoicesResult,
-        errors: [NOT_AUTHORIZED, FORBIDDEN, VALIDATION_ERROR, SERVER_ERROR]
+        errors: [NOT_AUTHORIZED, FORBIDDEN, VALIDATION_ERROR, SERVER_ERROR],
     },
     finalizeCreate: {
         input: IsCreateInvoicesQuery,
         success: IsCreateInvoicesResult,
-        errors: [NOT_AUTHORIZED, FORBIDDEN, FORBIDDEN_BOOKKEEPING_LOCKED, VALIDATION_ERROR, SERVER_ERROR]
+        errors: [NOT_AUTHORIZED, FORBIDDEN, FORBIDDEN_BOOKKEEPING_LOCKED, VALIDATION_ERROR, SERVER_ERROR],
     }
 })
 

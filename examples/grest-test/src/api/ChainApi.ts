@@ -3,7 +3,7 @@
  */
 
 import {GGRpc, httpSchema} from "@grest-ts/http";
-import {GGContractClass, IsObject, IsString, IsNumber, IsArray, IsBoolean, SERVER_ERROR, VALIDATION_ERROR} from "@grest-ts/schema";
+import {GGContractClass, IsObject, IsString, IsNumber, IsArray, IsBoolean, SERVER_ERROR, VALIDATION_ERROR, GG_NO_PERMISSIONS } from "@grest-ts/schema";
 import {GG_INTL_LOCALE} from "@grest-ts/intl";
 
 // ---------------------------------------------------------
@@ -54,17 +54,20 @@ export const ChainApiContract = new GGContractClass("ChainApi", {
     planTravel: {
         input: IsObject({destination: IsString}),
         success: IsTravelPlan,
-        errors: [VALIDATION_ERROR, SERVER_ERROR]
+        errors: [VALIDATION_ERROR, SERVER_ERROR],
+        permission: GG_NO_PERMISSIONS
     },
     compareDestinations: {
         input: IsObject({destinations: IsArray(IsString)}),
         success: IsTravelComparison,
-        errors: [VALIDATION_ERROR, SERVER_ERROR]
+        errors: [VALIDATION_ERROR, SERVER_ERROR],
+        permission: GG_NO_PERMISSIONS
     },
     quickWeatherCheck: {
         input: IsObject({city: IsString}),
         success: IsWeatherCheck,
-        errors: [VALIDATION_ERROR, SERVER_ERROR]
+        errors: [VALIDATION_ERROR, SERVER_ERROR],
+        permission: GG_NO_PERMISSIONS
     }
 });
 

@@ -1,4 +1,4 @@
-import {GGContractClass, IsObject, IsString, IsArray, SERVER_ERROR} from "@grest-ts/schema"
+import {GGContractClass, IsObject, IsString, IsArray, SERVER_ERROR } from "@grest-ts/schema"
 import {IsFile} from "@grest-ts/schema-file"
 import {GGRpc, httpSchema} from "@grest-ts/http"
 import {GGFileUpload} from "@grest-ts/http-file"

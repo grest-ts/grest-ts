@@ -1,6 +1,6 @@
 import {GGRpc, httpSchema} from "@grest-ts/http";
 import {GGFileUpload} from "@grest-ts/http-file";
-import {IsArray, IsObject, IsString, IsLiteral, GGContractClass, NOT_FOUND, VALIDATION_ERROR, SERVER_ERROR} from "@grest-ts/schema";
+import {IsArray, IsObject, IsString, IsLiteral, GGContractClass, NOT_FOUND, VALIDATION_ERROR, SERVER_ERROR } from "@grest-ts/schema";
 import {IsFile} from "@grest-ts/schema-file";
 import {IsTaskDelegationState} from "./TaskApi";
 
@@ -55,17 +55,17 @@ export const TaskPublicApiContract = new GGContractClass("TaskPublicApi", {
     getByToken: {
         input: IsTaskPublicGetByTokenRequest,
         success: IsTaskPublicGetByTokenResponse,
-        errors: [NOT_FOUND, VALIDATION_ERROR, SERVER_ERROR]
+        errors: [NOT_FOUND, VALIDATION_ERROR, SERVER_ERROR],
     },
     respond: {
         input: IsTaskPublicRespondRequest,
         success: undefined as undefined,
-        errors: [NOT_FOUND, VALIDATION_ERROR, SERVER_ERROR]
+        errors: [NOT_FOUND, VALIDATION_ERROR, SERVER_ERROR],
     },
     uploadFile: {
         input: IsTaskPublicUploadFileRequest,
         success: undefined as undefined,
-        errors: [NOT_FOUND, VALIDATION_ERROR, SERVER_ERROR]
+        errors: [NOT_FOUND, VALIDATION_ERROR, SERVER_ERROR],
     }
 })
 

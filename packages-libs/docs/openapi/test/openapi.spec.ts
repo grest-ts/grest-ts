@@ -2,8 +2,7 @@ import {describe, it, expect} from "vitest";
 import {
     IsString, IsNumber, IsArray, IsObject,
     IsEmail, IsDate, IsUrl,
-    ERROR, GGContractClass
-} from "@grest-ts/schema";
+    ERROR, GGContractClass, GG_NO_PERMISSIONS } from "@grest-ts/schema";
 import {GGRpc, httpSchema} from "@grest-ts/http";
 import {toOpenApi} from "../src/toOpenApi";
 
@@ -22,21 +21,25 @@ const CreateItemInput = IsObject({name: IsString, price: IsNumber});
 const ItemContract = new GGContractClass("ItemApi", {
     list: {
         success: IsArray(ItemSchema),
-        errors: [NOT_FOUND, UNAUTH]
+        errors: [NOT_FOUND, UNAUTH],
+        permission: GG_NO_PERMISSIONS
     },
     get: {
         input: IsObject({id: IsNumber}),
         success: ItemSchema,
-        errors: [NOT_FOUND]
+        errors: [NOT_FOUND],
+        permission: GG_NO_PERMISSIONS
     },
     create: {
         input: CreateItemInput,
         success: ItemSchema,
-        errors: [VALIDATION, UNAUTH]
+        errors: [VALIDATION, UNAUTH],
+        permission: GG_NO_PERMISSIONS
     },
     deleteItem: {
         input: IsObject({id: IsNumber}),
-        errors: [NOT_FOUND, UNAUTH]
+        errors: [NOT_FOUND, UNAUTH],
+        permission: GG_NO_PERMISSIONS
     }
 });
 
@@ -141,7 +144,9 @@ describe("toOpenApi", () => {
         const E400a = ERROR.define("ERR_A", 400);
         const E400b = ERROR.define("ERR_B", 400);
         const C = new GGContractClass("Mc", {
-            do: {errors: [E400a, E400b]}
+            do: {errors: [E400a, E400b],
+                permission: GG_NO_PERMISSIONS
+            }
         });
         const S = httpSchema(C).pathPrefix("mc").routes({do: GGRpc.POST("do")});
         const d = toOpenApi([S]);
@@ -164,7 +169,10 @@ describe("toOpenApi", () => {
             ["deleteItem", "Delete Item"],
         ];
         const C2 = new GGContractClass("X", {
-            list: {}, getWatchedValue: {}, createItem: {}, deleteItem: {}
+            list: {permission: GG_NO_PERMISSIONS},
+            getWatchedValue: {permission: GG_NO_PERMISSIONS},
+            createItem: {permission: GG_NO_PERMISSIONS},
+            deleteItem: {permission: GG_NO_PERMISSIONS},
         });
         const S2 = httpSchema(C2).pathPrefix("x").routes({
             list: GGRpc.GET("list"),
@@ -190,7 +198,9 @@ describe("toOpenApi", () => {
             limit: IsNumber.orUndefined
         });
         const SearchContract = new GGContractClass("SearchApi", {
-            search: {input: DescribedInput, success: IsArray(IsString)}
+            search: {input: DescribedInput, success: IsArray(IsString),
+                permission: GG_NO_PERMISSIONS
+            }
         });
         const SearchApi = httpSchema(SearchContract).pathPrefix("search").routes({
             search: GGRpc.GET("items")
@@ -212,8 +222,12 @@ describe("toOpenApi", () => {
         const SharedType = IsObject({id: IsNumber, name: IsString})
             .docs({title: "Shared item"});
         const RefContract = new GGContractClass("RefApi", {
-            get:    {success: SharedType, errors: []},
-            list:   {success: IsArray(SharedType), errors: []},
+            get:    {success: SharedType, errors: [],
+                permission: GG_NO_PERMISSIONS
+            },
+            list:   {success: IsArray(SharedType), errors: [],
+                permission: GG_NO_PERMISSIONS
+            },
         });
         const RefApi = httpSchema(RefContract).pathPrefix("ref").routes({
             get:  GGRpc.GET(":id"),
@@ -243,7 +257,9 @@ describe("toOpenApi", () => {
 
         it("schema without title stays inline (no $ref)", () => {
             const InlineContract = new GGContractClass("InlineApi", {
-                get: {success: IsObject({x: IsNumber}), errors: []}
+                get: {success: IsObject({x: IsNumber}), errors: [],
+                    permission: GG_NO_PERMISSIONS
+                }
             });
             const InlineApi = httpSchema(InlineContract).pathPrefix("il").routes({
                 get: GGRpc.GET("")
@@ -265,7 +281,8 @@ describe("toOpenApi", () => {
                     date: IsDate,
                     url: IsUrl,
                 }),
-                errors: []
+                errors: [],
+                permission: GG_NO_PERMISSIONS
             }
         });
         const FormatApi = httpSchema(FormatContract).pathPrefix("fmt").routes({
@@ -301,7 +318,7 @@ describe("toOpenApi", () => {
     });
 
     describe("codec contract enforcement", () => {
-        const C = new GGContractClass("ThirdParty", {do: {}});
+        const C = new GGContractClass("ThirdParty", {do: {permission: GG_NO_PERMISSIONS}});
 
         it("throws when toOpenApiOperation is missing", () => {
             const codecNoMethod = {

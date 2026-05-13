@@ -1,5 +1,5 @@
 import {awsSnsPublisher} from "@grest-ts/events-aws";
-import {GGContractClass, IsNumber, IsObject, IsString} from "@grest-ts/schema";
+import {GGContractClass, IsNumber, IsObject, IsString, GG_NO_PERMISSIONS } from "@grest-ts/schema";
 
 // ---------------------------------------------------------
 // Type Schemas
@@ -28,9 +28,15 @@ export const IsUserPasswordChangedEvent = IsObject({
 // ---------------------------------------------------------
 
 export const UserEventsContract = new GGContractClass("UserEvents", {
-    loggedIn: {input: IsUserLoggedInEvent},
-    registered: {input: IsUserRegisteredEvent},
-    passwordChanged: {input: IsUserPasswordChangedEvent}
+    loggedIn: {input: IsUserLoggedInEvent,
+        permission: GG_NO_PERMISSIONS
+    },
+    registered: {input: IsUserRegisteredEvent,
+        permission: GG_NO_PERMISSIONS
+    },
+    passwordChanged: {input: IsUserPasswordChangedEvent,
+        permission: GG_NO_PERMISSIONS
+    }
 })
 
 export const UserEventsPublisher = awsSnsPublisher(UserEventsContract, "user_events")

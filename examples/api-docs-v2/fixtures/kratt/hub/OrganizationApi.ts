@@ -1,4 +1,4 @@
-import {GGContractClass, IsArray, IsObject, IsString, SERVER_ERROR} from "@grest-ts/schema"
+import {GGContractClass, IsArray, IsObject, IsString, SERVER_ERROR } from "@grest-ts/schema"
 import {GGRpc, httpSchema} from "@grest-ts/http"
 import {ALREADY_EXISTS, NOT_FOUND, UNAUTHORIZED} from "./errors"
 import {IsOrganization, IsOrgId} from "./schemas"

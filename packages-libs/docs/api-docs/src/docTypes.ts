@@ -117,7 +117,30 @@ export interface ContractDoc {
      * intentionally excluded; they live in `auth` to drive different UI.
      */
     headers?: ParamDoc[];
+    /** WS only — populated when the schema declares `.connectPermission(...)`. */
+    connectPermission?: PermissionDoc;
     methods: MethodDoc[];
+}
+
+export type PermissionTree =
+    | {kind: "public"}
+    | {kind: "anyAuth"}
+    | {kind: "scope"; scope: string}
+    | {kind: "allOf"; children: PermissionTree[]}
+    | {kind: "anyOf"; children: PermissionTree[]};
+
+/**
+ * Renders contract-declared permission into both a human-readable form (for
+ * the UI) and a structured tree (for tooling).
+ */
+export interface PermissionDoc {
+    /**
+     * Plain-English rendering: "Public — no authentication required",
+     * "Any authenticated identity", "Requires `items:write` and `admin`", etc.
+     */
+    text: string;
+    /** Structured tree mirroring GGPermission. */
+    tree: PermissionTree;
 }
 
 export interface MethodDoc {
@@ -149,6 +172,13 @@ export interface MethodDoc {
 
     deprecated?: boolean;
     deprecationMessage?: string;
+
+    /**
+     * Contract-declared permission. The framework gate enforces this BEFORE
+     * the handler runs — see plan §7 for the "endpoint access vs resource
+     * access" boundary.
+     */
+    permission?: PermissionDoc;
 }
 
 export interface ParamDoc {
@@ -186,7 +216,12 @@ export interface ErrorUsage {
 }
 
 export interface AuthDoc {
-    scheme: "bearer" | "api-key";
+    /** Two values only. `"bearer"` is the RFC 6750 form (Authorization:
+     *  Bearer <token>) and gets dedicated tooling support. `"header"` is
+     *  the catch-all for every other auth header — OpenAPI-style api
+     *  keys, session bindings, tenant hints, custom tokens — anything
+     *  declared with `format: "api-key"` or `format: "auth"`. */
+    scheme: "bearer" | "header";
     headerName: string;
     description?: string;
 }

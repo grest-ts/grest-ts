@@ -1,6 +1,6 @@
 import {GGContextKey} from "@grest-ts/context"
 import type {GGHttpRequest} from "@grest-ts/http"
-import {GGContractClass, IsObject, IsString, IsNumber, SERVER_ERROR, type GGSchema} from "@grest-ts/schema"
+import {GGContractClass, IsObject, IsString, IsNumber, SERVER_ERROR, type GGSchema } from "@grest-ts/schema"
 import {GGRpc, httpSchema} from "@grest-ts/http"
 import {NOT_FOUND, UNAUTHORIZED} from "./errors"
 import {IsTaskId} from "./schemas"

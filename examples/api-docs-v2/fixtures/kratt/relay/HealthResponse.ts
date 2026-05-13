@@ -1,5 +1,5 @@
 import {GGRpc, httpSchema} from "@grest-ts/http"
-import {GGContractClass, IsObject, IsString, IsNumber, SERVER_ERROR} from "@grest-ts/schema"
+import {GGContractClass, IsObject, IsString, IsNumber, SERVER_ERROR } from "@grest-ts/schema"
 
 export const IsHealthResponse = IsObject({
     status: IsString,

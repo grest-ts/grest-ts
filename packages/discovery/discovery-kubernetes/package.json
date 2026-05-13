@@ -1,7 +1,7 @@
 {
   "//": "THIS FILE IS GENERATED - DO NOT EDIT",
   "name": "@grest-ts/discovery-kubernetes",
-  "version": "0.0.32",
+  "version": "0.0.36",
   "type": "module",
   "license": "MIT",
   "description": "Kubernetes service discovery implementation for Grest Framework",
@@ -42,7 +42,7 @@
     "node": ">=25"
   },
   "peerDependencies": {
-    "@grest-ts/discovery": "0.0.32",
-    "@grest-ts/logger": "0.0.32"
+    "@grest-ts/discovery": "0.0.36",
+    "@grest-ts/logger": "0.0.36"
   }
 }

@@ -20,6 +20,7 @@
     "packages-libs/db/db-postgre/src/**/*",
     "packages-libs/db/db-postgre/testkit/**/*",
     "packages-libs/docs/api-docs/src/**/*",
+    "packages-libs/docs/api-docs/test/**/*",
     "packages-libs/docs/asyncapi/src/**/*",
     "packages-libs/docs/asyncapi/test/**/*",
     "packages-libs/docs/openapi/src/**/*",

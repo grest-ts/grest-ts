@@ -5,7 +5,7 @@ import {toAsyncApi} from "../src/toAsyncApi";
 import {ConfigTestSocketApi} from "../../../../examples/grest-test/src/api/ConfigTestSocketApi";
 
 import {webSocketSchema, defineSocketContract} from "@grest-ts/websocket";
-import {IsString, IsObject, IsNumber, SERVER_ERROR, VALIDATION_ERROR, IsBearerToken} from "@grest-ts/schema";
+import {IsString, IsObject, IsNumber, SERVER_ERROR, VALIDATION_ERROR, IsBearerToken, GG_NO_PERMISSIONS } from "@grest-ts/schema";
 
 // ---------------------------------------------------------------------------
 // A rich WebSocket showcase contract for snapshot testing
@@ -19,11 +19,13 @@ const ChatContract = defineSocketContract("ChatApi", {
                 roomId: IsString.nonEmpty
             }),
             success: IsObject({messageId: IsString.nonEmpty, timestamp: IsNumber}),
-            errors: [VALIDATION_ERROR, SERVER_ERROR]
+            errors: [VALIDATION_ERROR, SERVER_ERROR],
+            permission: GG_NO_PERMISSIONS
         },
         joinRoom: {
             input: IsObject({roomId: IsString.nonEmpty}),
             // no success — fire-and-forget
+            permission: GG_NO_PERMISSIONS
         }
     },
     serverToClient: {
@@ -33,10 +35,12 @@ const ChatContract = defineSocketContract("ChatApi", {
                 text: IsString.nonEmpty,
                 userId: IsString.nonEmpty,
                 timestamp: IsNumber
-            }).docs({title: "Chat message", description: "A message pushed to the client"})
+            }).docs({title: "Chat message", description: "A message pushed to the client"}),
+            permission: GG_NO_PERMISSIONS
         },
         onUserJoined: {
-            input: IsObject({userId: IsString.nonEmpty, roomId: IsString.nonEmpty})
+            input: IsObject({userId: IsString.nonEmpty, roomId: IsString.nonEmpty}),
+            permission: GG_NO_PERMISSIONS
         }
     }
 });
@@ -138,11 +142,13 @@ describe("toAsyncApi", () => {
             }
         });
 
-        it("operation has security requirement from bearer middleware", () => {
+        it("operation security follows contract permission, not middleware", () => {
+            // ChatApi.sendMessage declares permission: GG_NO_PERMISSIONS, which is
+            // the source of truth for the operation's security. Middleware-derived
+            // BearerToken is registered as a scheme (clients may still send the
+            // header) but the operation no longer claims it as required.
             const op = doc.operations["ChatApi_send_sendMessage"];
-            expect(op.security).toBeDefined();
-            // AsyncAPI 3.0: security uses $ref, not name-keyed object
-            expect((op.security![0] as any).$ref).toBe("#/components/securitySchemes/BearerToken");
+            expect(op.security).toBeUndefined();
         });
     });
 
