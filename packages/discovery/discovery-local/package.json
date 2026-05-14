@@ -16,6 +16,7 @@
     }
   },
   "files": [
+    "bin",
     "src",
     "testkit"
   ],
@@ -50,6 +51,9 @@
   ],
   "engines": {
     "node": ">=25"
+  },
+  "bin": {
+    "discovery-local": "./src/bin/discovery-local.ts"
   },
   "dependencies": {
     "ws": "^8.19.0"
