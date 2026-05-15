@@ -53,8 +53,6 @@ describe("yield protocol", () => {
     test("resilient client that connected to a bin never re-bids after the bin dies", async () => {
         const {server: bin, port} = await startServer(DiscoveryServerKind.Bin);
 
-        // Sub-scope with a no-op lifecycle owner so the client constructor
-        // (which does setWithLifecycle on GG_DISCOVERY) doesn't throw.
         const subscope = new GGLocatorScope("ResilientClientTest");
         subscope.setLifecycleOwner(() => undefined);
         subscope.enter();
@@ -66,5 +64,73 @@ describe("yield protocol", () => {
 
         expect(await isPortFree(port)).toBe(true);
         await resilient.unregister();
+    });
+
+    test("addRoute dedups (same clientId, same api) on re-register", async () => {
+        const {server, port} = await startServer(DiscoveryServerKind.Embedded);
+        try {
+            const client = new IPCClient(port);
+            await client.connect();
+            const entry = {api: "myapi", baseUrl: "http://localhost:1111", pathPrefix: "/api/my/"};
+            await client.sendFrameworkRequest(GGDiscoveryIPC.discoveryServer.register, [entry]);
+            await client.sendFrameworkRequest(GGDiscoveryIPC.discoveryServer.register, [entry]);
+            await client.sendFrameworkRequest(GGDiscoveryIPC.discoveryServer.register, [entry]);
+            // Internal: same clientId + api should appear exactly once.
+            expect(server.getRoute("myapi")?.baseUrl).toBe("http://localhost:1111");
+            const internalRoutes = (server as unknown as {routes: Map<string, unknown[]>}).routes.get("myapi");
+            expect(internalRoutes?.length).toBe(1);
+            client.disconnect();
+        } finally {
+            await server.teardown();
+        }
+    });
+
+    test("addRoute keeps entries from different clients (legitimate replicas)", async () => {
+        const {server, port} = await startServer(DiscoveryServerKind.Embedded);
+        try {
+            const a = new IPCClient(port);
+            const b = new IPCClient(port);
+            await a.connect("replica-a");
+            await b.connect("replica-b");
+            await a.sendFrameworkRequest(GGDiscoveryIPC.discoveryServer.register, [{api: "rep", baseUrl: "http://localhost:2001", pathPrefix: "/api/rep/"}]);
+            await b.sendFrameworkRequest(GGDiscoveryIPC.discoveryServer.register, [{api: "rep", baseUrl: "http://localhost:2002", pathPrefix: "/api/rep/"}]);
+            const internalRoutes = (server as unknown as {routes: Map<string, Array<{baseUrl: string}>>}).routes.get("rep");
+            expect(internalRoutes?.length).toBe(2);
+            expect(new Set(internalRoutes!.map(r => r.baseUrl))).toEqual(new Set(["http://localhost:2001", "http://localhost:2002"]));
+            a.disconnect();
+            b.disconnect();
+        } finally {
+            await server.teardown();
+        }
+    });
+
+    test("resilient follower re-publishes its entries on a new leader after the old one dies", async () => {
+        const {server: leader1, port} = await startServer(DiscoveryServerKind.Bin);
+
+        const subscope = new GGLocatorScope("ResilientReregisterTest");
+        subscope.setLifecycleOwner(() => undefined);
+        subscope.enter();
+        const resilient = new GGLocalDiscoveryResilientClient(port);
+        resilient.registerRoutes([{runtime: "test", api: "myapi", protocol: "http", port: 1234, pathPrefix: "/api/my/"}]);
+        await resilient.register();
+        // Sanity: route is on leader1.
+        expect(leader1.getRoute("myapi")?.baseUrl).toBe("http://localhost:1234");
+
+        await leader1.teardown();
+        // New leader on the SAME port (also a "bin" so the resilient stays loyal).
+        const ipc2 = new IPCServer(port);
+        const leader2 = new GGLocalDiscoveryServer(ipc2, DiscoveryServerKind.Bin);
+        if (!(await leader2.start())) throw new Error("leader2 bind failed");
+        try {
+            // Wait long enough for resilient's onClose (1s retry) to trigger
+            // a fresh connectToLeader → re-register.
+            for (let i = 0; i < 20 && !leader2.getRoute("myapi"); i++) {
+                await new Promise(r => setTimeout(r, 200));
+            }
+            expect(leader2.getRoute("myapi")?.baseUrl).toBe("http://localhost:1234");
+        } finally {
+            await resilient.unregister();
+            await leader2.teardown();
+        }
     });
 });

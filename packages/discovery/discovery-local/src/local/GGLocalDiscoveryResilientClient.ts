@@ -43,6 +43,7 @@ export class GGLocalDiscoveryResilientClient extends GGLocalDiscoveryClient {
             this.discoveryServer = router;
             this.isLeader = true;
             router.onYield = async () => {
+                GGLog.warn(this, "Yielding leadership to authoritative discovery (bin); will not bid for the port again in this runtime");
                 this.seenBinBasedMaster = true;
                 this.isLeader = false;
                 this.discoveryServer = undefined;
@@ -64,21 +65,30 @@ export class GGLocalDiscoveryResilientClient extends GGLocalDiscoveryClient {
 
             if (!this.seenBinBasedMaster) {
                 const info = await this.client.sendFrameworkRequest(GGDiscoveryIPC.discoveryServer.getServerInfo, undefined);
-                if (info.kind === DiscoveryServerKind.Bin) this.seenBinBasedMaster = true;
+                if (info.kind === DiscoveryServerKind.Bin) {
+                    GGLog.warn(this, "Connected to authoritative discovery (bin); will not bid for the port in this runtime");
+                    this.seenBinBasedMaster = true;
+                }
+            }
+
+            // Re-publish entries on every successful connect — covers
+            // initial register, follower-on-leader-death, and post-yield
+            // reconnect uniformly. Server-side dedup on (clientId, api)
+            // makes this idempotent, so the wrapped register()'s own
+            // super.register() call is a harmless no-op.
+            if (this.entries.length > 0) {
+                await this.client.sendFrameworkRequest(GGDiscoveryIPC.discoveryServer.register, this.entries);
             }
 
             this.client.onClose(async () => {
                 if (this.isShuttingDown) return;
                 GGLog.warn(this, "Leader died");
                 await this.becomeLeaderOrFollower();
-                if (this.isLeader && this.entries.length > 0) {
-                    await super.register();
-                }
             });
 
             GGLog.debug(this, "Connected to leader");
         } catch (err: any) {
-            GGLog.error(this, `Failed to connect to leader: ${err.message}`);
+            GGLog.error(this, `Discovery router not reachable on port ${this.port} — is @grest-ts/discovery-local running? Will retry. (${err.message || err.code || err})`);
             await this.delay(1000);
             await this.connectToLeader();
         }
