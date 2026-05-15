@@ -118,8 +118,16 @@ export class GGLocalDiscoveryServer {
 
     public addRoute(route: GGServiceDiscoveryEntry): void {
         const existing = this.routes.get(route.api) ?? [];
-        existing.push(route);
-        this.routes.set(route.api, existing);
+        const stored = route as RegisteredEntry;
+        // Dedup on (clientId, api) so a client re-registering its own
+        // route — e.g. on reconnect after a leader restart — replaces
+        // its previous entry instead of appending a duplicate. Routes
+        // from different clients (legitimate replicas) coexist.
+        const filtered = stored.clientId !== undefined
+            ? existing.filter(r => r.clientId !== stored.clientId)
+            : existing;
+        filtered.push(stored);
+        this.routes.set(route.api, filtered);
         GGLog.info(this, `Added route: ${route.pathPrefix} (${route.api}) -> ${route.baseUrl}`);
     }
 

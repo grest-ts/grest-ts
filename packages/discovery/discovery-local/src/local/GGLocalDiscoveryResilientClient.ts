@@ -71,13 +71,19 @@ export class GGLocalDiscoveryResilientClient extends GGLocalDiscoveryClient {
                 }
             }
 
+            // Re-publish entries on every successful connect — covers
+            // initial register, follower-on-leader-death, and post-yield
+            // reconnect uniformly. Server-side dedup on (clientId, api)
+            // makes this idempotent, so the wrapped register()'s own
+            // super.register() call is a harmless no-op.
+            if (this.entries.length > 0) {
+                await this.client.sendFrameworkRequest(GGDiscoveryIPC.discoveryServer.register, this.entries);
+            }
+
             this.client.onClose(async () => {
                 if (this.isShuttingDown) return;
                 GGLog.warn(this, "Leader died");
                 await this.becomeLeaderOrFollower();
-                if (this.entries.length > 0) {
-                    await super.register();
-                }
             });
 
             GGLog.debug(this, "Connected to leader");
