@@ -13,6 +13,14 @@ For a full overview of how discovery works, see the [Discovery guide](@guide/dis
 
 Runs a local discovery server that acts as a central router. Service instances connect over IPC, register their routes, and discover each other through the router. The router also acts as a reverse proxy, forwarding requests to the correct backend based on path prefix matching.
 
+## Standalone bin
+
+```
+npx @grest-ts/discovery-local --port 9000
+```
+
+Runs `GGLocalDiscoveryServer` as its own process (default port `9000`). Use this when you want the router up before any runtime, with clean ownership and its own logs. Without it, runtimes default to `GGLocalDiscoveryResilientClient` and leader-elect for the router port; with it running, point runtimes at it as plain `GGLocalDiscoveryClient`s.
+
 ## Exported classes
 
 | Class | Purpose |
