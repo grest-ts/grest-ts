@@ -75,7 +75,7 @@ export class GGLocalDiscoveryResilientClient extends GGLocalDiscoveryClient {
                 if (this.isShuttingDown) return;
                 GGLog.warn(this, "Leader died");
                 await this.becomeLeaderOrFollower();
-                if (this.isLeader && this.entries.length > 0) {
+                if (this.entries.length > 0) {
                     await super.register();
                 }
             });
