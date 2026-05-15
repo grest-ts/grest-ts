@@ -20,8 +20,9 @@ async function main(): Promise<void> {
     let router: GGLocalDiscoveryServer | undefined;
     for (let i = 0; i < 100; i++) {
         const candidate = new GGLocalDiscoveryServer(new IPCServer(port), DiscoveryServerKind.Bin);
-        if (await candidate.start()) { 
-            router = candidate; 
+        if (await candidate.start()) {
+            router = candidate;
+            break;
         } else {
             const c = new IPCClient(port);
             try { 
