@@ -63,3 +63,5 @@ interface GGServiceRegistration {
 | [`@grest-ts/discovery-local`](@pkg/discovery-local) | Local development and testing |
 | [`@grest-ts/discovery-kubernetes`](@pkg/discovery-kubernetes) | Kubernetes deployments |
 | [`@grest-ts/discovery-migration`](@pkg/discovery-migration) | Zero-downtime migration between strategies |
+
+For local development the router can also be launched standalone with `npx @grest-ts/discovery-local --port 9000` — runtimes then connect as plain `GGLocalDiscoveryClient`s instead of the default leader-elected `GGLocalDiscoveryResilientClient`.

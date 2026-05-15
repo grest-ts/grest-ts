@@ -5,7 +5,7 @@ import {FirstStrategy} from "./routing/strategies/FirstStrategy";
 import {LastStrategy} from "./routing/strategies/LastStrategy";
 import {RandomStrategy} from "./routing/strategies/RandomStrategy";
 import {RoundRobinStrategy} from "./routing/strategies/RoundRobinStrategy";
-import {GGDiscoveryIPC} from "./GGDiscoveryIPC";
+import {GGDiscoveryIPC, DiscoveryServerKind} from "./GGDiscoveryIPC";
 import {GGServiceDiscoveryEntry} from "./GGLocalDiscoveryClient";
 
 export const ROUTING_STRATEGIES = {
@@ -32,8 +32,9 @@ export class GGLocalDiscoveryServer {
     private readonly server: IPCServer;
     private readonly routes: Map<string, RegisteredEntry[]> = new Map();
     private readonly routingStrategies: Map<string, RoutingStrategy> = new Map();
-
-    constructor(server: IPCServer) {
+    public onYield?: () => Promise<void>;
+  
+    constructor(server: IPCServer, public readonly kind: DiscoveryServerKind = DiscoveryServerKind.Embedded) {
         this.server = server;
 
         // Socket handlers for framework communication
@@ -55,6 +56,17 @@ export class GGLocalDiscoveryServer {
                 return {success: true, url: this.server.getUrl()};
             }
             return {success: false, error: "Service '" + apiName + "' is not registered! Did you forget to start it?"};
+        });
+
+        this.server.onFrameworkMessage(GGDiscoveryIPC.discoveryServer.getServerInfo, async () => ({kind: this.kind}));
+
+        // Defer release so the ack flushes before we close the socket.
+        // onYield owners (e.g. resilient client) own teardown themselves.
+        this.server.onFrameworkMessage(GGDiscoveryIPC.discoveryServer.requestYield, async () => {
+            setTimeout(async () => {
+                await this.teardown();
+                await this.onYield?.();
+            }, 10);
         });
 
         this.server.setRouteProxyResolver((path) => {

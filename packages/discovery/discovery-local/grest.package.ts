@@ -9,6 +9,9 @@ definePackage({
     hasTests: true,
     extendsTestKit: true,
     implementationFor: "@grest-ts/package",
+    bin: {
+        "discovery-local": "./src/bin/discovery-local.ts"
+    },
     dependencies: {
         "ws": "^8.19.0"
     }

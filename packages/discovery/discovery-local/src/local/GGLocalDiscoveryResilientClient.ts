@@ -1,15 +1,19 @@
 import {GGLog} from "@grest-ts/logger";
 import {IPCServer} from "@grest-ts/ipc";
 import {GGLocalDiscoveryServer} from "./GGLocalDiscoveryServer";
-import {GGLocalDiscoveryClient} from "./GGLocalDiscoveryClient";
+import {GGLocalDiscoveryClient, getLocalDiscoveryPort} from "./GGLocalDiscoveryClient";
+import {GGDiscoveryIPC, DiscoveryServerKind} from "./GGDiscoveryIPC";
 
 export class GGLocalDiscoveryResilientClient extends GGLocalDiscoveryClient {
 
     private discoveryServer?: GGLocalDiscoveryServer;
     private isLeader = false;
     private isShuttingDown = false;
+    /** Once any bin has held the port in this runtime's lifetime, never
+     *  bid for it again. In-memory only. */
+    private seenBinBasedMaster = false;
 
-    constructor(port = 9000) {
+    constructor(port = getLocalDiscoveryPort()) {
         super(port);
     }
 
@@ -32,12 +36,18 @@ export class GGLocalDiscoveryResilientClient extends GGLocalDiscoveryClient {
 
     private async becomeLeaderOrFollower(): Promise<void> {
         if (this.isShuttingDown) return;
+        if (this.seenBinBasedMaster) return this.connectToLeader();
 
-        const server = new IPCServer(this.port);
-        const router = new GGLocalDiscoveryServer(server);
+        const router = new GGLocalDiscoveryServer(new IPCServer(this.port));
         if (await router.start()) {
             this.discoveryServer = router;
             this.isLeader = true;
+            router.onYield = async () => {
+                this.seenBinBasedMaster = true;
+                this.isLeader = false;
+                this.discoveryServer = undefined;
+                await this.connectToLeader();
+            };
             GGLog.info(this, "This instance is LEADER");
         } else {
             this.isLeader = false;
@@ -51,6 +61,11 @@ export class GGLocalDiscoveryResilientClient extends GGLocalDiscoveryClient {
 
         try {
             await this.client.connect();
+
+            if (!this.seenBinBasedMaster) {
+                const info = await this.client.sendFrameworkRequest(GGDiscoveryIPC.discoveryServer.getServerInfo, undefined);
+                if (info.kind === DiscoveryServerKind.Bin) this.seenBinBasedMaster = true;
+            }
 
             this.client.onClose(async () => {
                 if (this.isShuttingDown) return;

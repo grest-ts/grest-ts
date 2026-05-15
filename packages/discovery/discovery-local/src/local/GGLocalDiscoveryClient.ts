@@ -11,6 +11,18 @@ import {SERVER_ERROR} from "@grest-ts/schema";
  */
 export const GG_LOCAL_ROUTER_PORT = "GG_LOCAL_ROUTER_PORT"
 
+/** Default port for the local discovery router. Centralised so a future
+ *  change (env-var override, per-environment isolation) has one hook. */
+export function getLocalDiscoveryPort(): number {
+    const v = process.env[GG_LOCAL_ROUTER_PORT];
+    if (v === undefined) return 9000;
+    const n = Number(v);
+    if (!Number.isInteger(n) || n <= 0) {
+        throw new Error(`Invalid ${GG_LOCAL_ROUTER_PORT}=${v}, expected positive integer`);
+    }
+    return n;
+}
+
 export class GGLocalDiscoveryClient extends GGDiscoveryClient {
 
     public override readonly isLocal = true;
@@ -77,10 +89,32 @@ export class GGLocalDiscoveryClient extends GGDiscoveryClient {
     }
 
     protected async ensureConnected(): Promise<void> {
-        if (!this.client.isConnected()) {
-            await this.client.connect();
+        if (this.client.isConnected()) return;
+        // Retry with backoff: when the router runs as its own process
+        // (e.g. launched via the `discovery-local` bin), a runtime can
+        // come up before the router has bound its port. Tolerate that
+        // instead of failing the runtime's startup outright.
+        const maxRetries = 20;
+        for (let attempt = 0; ; attempt++) {
+            try {
+                await this.client.connect();
+                return;
+            } catch (err: any) {
+                if (attempt >= maxRetries || !isConnectionError(err)) throw err;
+                GGLog.debug(this, "Waiting for discovery router...");
+                await new Promise(r => setTimeout(r, Math.min(500 * Math.pow(1.5, attempt), 5000)));
+            }
         }
     }
+}
+
+/** True for the transient socket errors seen while a router process is
+ *  still coming up — worth retrying, unlike a real protocol failure. */
+function isConnectionError(err: any): boolean {
+    const codes = ["ECONNREFUSED", "ETIMEDOUT", "ECONNRESET", "ENOENT"];
+    const has = (code?: string) => code !== undefined && codes.includes(code);
+    return has(err?.code) || has(err?.cause?.code)
+        || has(err?.originalError?.code) || has(err?.originalError?.cause?.code);
 }
 
 /**
