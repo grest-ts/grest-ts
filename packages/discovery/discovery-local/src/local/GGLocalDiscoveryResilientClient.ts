@@ -43,6 +43,7 @@ export class GGLocalDiscoveryResilientClient extends GGLocalDiscoveryClient {
             this.discoveryServer = router;
             this.isLeader = true;
             router.onYield = async () => {
+                GGLog.warn(this, "Yielding leadership to authoritative discovery (bin); will not bid for the port again in this runtime");
                 this.seenBinBasedMaster = true;
                 this.isLeader = false;
                 this.discoveryServer = undefined;
@@ -64,7 +65,10 @@ export class GGLocalDiscoveryResilientClient extends GGLocalDiscoveryClient {
 
             if (!this.seenBinBasedMaster) {
                 const info = await this.client.sendFrameworkRequest(GGDiscoveryIPC.discoveryServer.getServerInfo, undefined);
-                if (info.kind === DiscoveryServerKind.Bin) this.seenBinBasedMaster = true;
+                if (info.kind === DiscoveryServerKind.Bin) {
+                    GGLog.warn(this, "Connected to authoritative discovery (bin); will not bid for the port in this runtime");
+                    this.seenBinBasedMaster = true;
+                }
             }
 
             this.client.onClose(async () => {
@@ -78,7 +82,7 @@ export class GGLocalDiscoveryResilientClient extends GGLocalDiscoveryClient {
 
             GGLog.debug(this, "Connected to leader");
         } catch (err: any) {
-            GGLog.error(this, `Failed to connect to leader: ${err.message}`);
+            GGLog.error(this, `Discovery router not reachable on port ${this.port} — is @grest-ts/discovery-local running? Will retry. (${err.message || err.code || err})`);
             await this.delay(1000);
             await this.connectToLeader();
         }
