@@ -1,7 +1,7 @@
 {
   "//": "THIS FILE IS GENERATED - DO NOT EDIT",
   "name": "@grest-ts/config",
-  "version": "0.0.37",
+  "version": "0.0.38",
   "type": "module",
   "license": "MIT",
   "description": "Configuration management for Grest Framework - resources, secrets, and settings",
@@ -49,11 +49,11 @@
     "node": ">=25"
   },
   "peerDependencies": {
-    "@grest-ts/common": "0.0.37",
-    "@grest-ts/locator": "0.0.37",
-    "@grest-ts/schema": "0.0.37"
+    "@grest-ts/common": "0.0.38",
+    "@grest-ts/locator": "0.0.38",
+    "@grest-ts/schema": "0.0.38"
   },
   "devDependencies": {
-    "@grest-ts/testkit": "0.0.37"
+    "@grest-ts/testkit": "0.0.38"
   }
 }
