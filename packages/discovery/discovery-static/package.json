@@ -1,7 +1,7 @@
 {
   "//": "THIS FILE IS GENERATED - DO NOT EDIT",
   "name": "@grest-ts/discovery-static",
-  "version": "0.0.37",
+  "version": "0.0.38",
   "type": "module",
   "license": "MIT",
   "description": "Static service discovery implementation for Grest Framework",
@@ -44,7 +44,7 @@
     "node": ">=25"
   },
   "peerDependencies": {
-    "@grest-ts/discovery": "0.0.37",
-    "@grest-ts/logger": "0.0.37"
+    "@grest-ts/discovery": "0.0.38",
+    "@grest-ts/logger": "0.0.38"
   }
 }
