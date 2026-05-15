@@ -39,6 +39,7 @@ export class IPCClient {
 
     public async connect(runtimeId?: string): Promise<void> {
         if (this.socket?.isConnected()) return;
+        this.socket = undefined;
 
         // Capture scope before async boundary - WebSocket events don't preserve AsyncLocalStorage context
         const scope = GGLocator.getScope();
