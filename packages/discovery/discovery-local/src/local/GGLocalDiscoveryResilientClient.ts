@@ -11,7 +11,7 @@ export class GGLocalDiscoveryResilientClient extends GGLocalDiscoveryClient {
     private isShuttingDown = false;
     /** Once any bin has held the port in this runtime's lifetime, never
      *  bid for it again. In-memory only. */
-    private seenBin = false;
+    private seenBinBasedMaster = false;
 
     constructor(port = getLocalDiscoveryPort()) {
         super(port);
@@ -36,17 +36,16 @@ export class GGLocalDiscoveryResilientClient extends GGLocalDiscoveryClient {
 
     private async becomeLeaderOrFollower(): Promise<void> {
         if (this.isShuttingDown) return;
-        if (this.seenBin) return this.connectToLeader();
+        if (this.seenBinBasedMaster) return this.connectToLeader();
 
         const router = new GGLocalDiscoveryServer(new IPCServer(this.port));
         if (await router.start()) {
             this.discoveryServer = router;
             this.isLeader = true;
             router.onYield = async () => {
-                this.seenBin = true;
+                this.seenBinBasedMaster = true;
                 this.isLeader = false;
                 this.discoveryServer = undefined;
-                await router.teardown();
                 await this.connectToLeader();
             };
             GGLog.info(this, "This instance is LEADER");
@@ -63,9 +62,9 @@ export class GGLocalDiscoveryResilientClient extends GGLocalDiscoveryClient {
         try {
             await this.client.connect();
 
-            if (!this.seenBin) {
+            if (!this.seenBinBasedMaster) {
                 const info = await this.client.sendFrameworkRequest(GGDiscoveryIPC.discoveryServer.getServerInfo, undefined);
-                if (info.kind === DiscoveryServerKind.Bin) this.seenBin = true;
+                if (info.kind === DiscoveryServerKind.Bin) this.seenBinBasedMaster = true;
             }
 
             this.client.onClose(async () => {

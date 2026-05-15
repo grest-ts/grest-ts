@@ -32,8 +32,8 @@ export class GGLocalDiscoveryServer {
     private readonly server: IPCServer;
     private readonly routes: Map<string, RegisteredEntry[]> = new Map();
     private readonly routingStrategies: Map<string, RoutingStrategy> = new Map();
-    public onYield?: () => void | Promise<void>;
-
+    public onYield?: () => Promise<void>;
+  
     constructor(server: IPCServer, public readonly kind: DiscoveryServerKind = DiscoveryServerKind.Embedded) {
         this.server = server;
 
@@ -63,7 +63,10 @@ export class GGLocalDiscoveryServer {
         // Defer release so the ack flushes before we close the socket.
         // onYield owners (e.g. resilient client) own teardown themselves.
         this.server.onFrameworkMessage(GGDiscoveryIPC.discoveryServer.requestYield, async () => {
-            setTimeout(() => this.onYield ? this.onYield() : this.teardown(), 10);
+            setTimeout(async () =>{
+                await this.teardown()
+                await this.onYield()
+            }), 10);
         });
 
         this.server.setRouteProxyResolver((path) => {
