@@ -37,16 +37,16 @@ describe("yield protocol", () => {
         await server.teardown().catch((): undefined => undefined);
     });
 
-    test("requestYield with onYield invokes the callback instead of default teardown", async () => {
+    test("requestYield invokes onYield after teardown", async () => {
         const {server, port} = await startServer(DiscoveryServerKind.Embedded);
-        let fired = false;
-        server.onYield = async () => { fired = true; await server.teardown(); };
+        let firedAfterTeardown = false;
+        server.onYield = async () => { firedAfterTeardown = await isPortFree(port); };
         const client = new IPCClient(port);
         await client.connect();
         await client.sendFrameworkRequest(GGDiscoveryIPC.discoveryServer.requestYield, undefined);
         client.disconnect();
         await new Promise(r => setTimeout(r, 100));
-        expect(fired).toBe(true);
+        expect(firedAfterTeardown).toBe(true);
         expect(await isPortFree(port)).toBe(true);
     });
 

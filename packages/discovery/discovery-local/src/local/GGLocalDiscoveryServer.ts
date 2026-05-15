@@ -63,10 +63,10 @@ export class GGLocalDiscoveryServer {
         // Defer release so the ack flushes before we close the socket.
         // onYield owners (e.g. resilient client) own teardown themselves.
         this.server.onFrameworkMessage(GGDiscoveryIPC.discoveryServer.requestYield, async () => {
-            setTimeout(async () =>{
-                await this.teardown()
-                await this.onYield()
-            }), 10);
+            setTimeout(async () => {
+                await this.teardown();
+                await this.onYield?.();
+            }, 10);
         });
 
         this.server.setRouteProxyResolver((path) => {

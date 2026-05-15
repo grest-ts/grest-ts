@@ -14,7 +14,13 @@ export const GG_LOCAL_ROUTER_PORT = "GG_LOCAL_ROUTER_PORT"
 /** Default port for the local discovery router. Centralised so a future
  *  change (env-var override, per-environment isolation) has one hook. */
 export function getLocalDiscoveryPort(): number {
-    return process.env[GG_LOCAL_ROUTER_PORT] ?? 9000;
+    const v = process.env[GG_LOCAL_ROUTER_PORT];
+    if (v === undefined) return 9000;
+    const n = Number(v);
+    if (!Number.isInteger(n) || n <= 0) {
+        throw new Error(`Invalid ${GG_LOCAL_ROUTER_PORT}=${v}, expected positive integer`);
+    }
+    return n;
 }
 
 export class GGLocalDiscoveryClient extends GGDiscoveryClient {
