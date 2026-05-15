@@ -5,7 +5,7 @@ import {FirstStrategy} from "./routing/strategies/FirstStrategy";
 import {LastStrategy} from "./routing/strategies/LastStrategy";
 import {RandomStrategy} from "./routing/strategies/RandomStrategy";
 import {RoundRobinStrategy} from "./routing/strategies/RoundRobinStrategy";
-import {GGDiscoveryIPC} from "./GGDiscoveryIPC";
+import {GGDiscoveryIPC, ServerKind} from "./GGDiscoveryIPC";
 import {GGServiceDiscoveryEntry} from "./GGLocalDiscoveryClient";
 
 export const ROUTING_STRATEGIES = {
@@ -32,8 +32,9 @@ export class GGLocalDiscoveryServer {
     private readonly server: IPCServer;
     private readonly routes: Map<string, RegisteredEntry[]> = new Map();
     private readonly routingStrategies: Map<string, RoutingStrategy> = new Map();
+    private readonly yieldCallbacks: Array<() => void | Promise<void>> = [];
 
-    constructor(server: IPCServer) {
+    constructor(server: IPCServer, public readonly kind: ServerKind = "embedded") {
         this.server = server;
 
         // Socket handlers for framework communication
@@ -55,6 +56,26 @@ export class GGLocalDiscoveryServer {
                 return {success: true, url: this.server.getUrl()};
             }
             return {success: false, error: "Service '" + apiName + "' is not registered! Did you forget to start it?"};
+        });
+
+        this.server.onFrameworkMessage(GGDiscoveryIPC.discoveryServer.getServerInfo, async () => {
+            return {kind: this.kind};
+        });
+
+        this.server.onFrameworkMessage(GGDiscoveryIPC.discoveryServer.requestYield, async () => {
+            // Defer the actual release so the ack frame can flush before
+            // we tear the IPC server down. If a callback is registered
+            // (resilient client wiring), it owns the teardown so it can
+            // also flip its own state — no double-teardown.
+            setTimeout(async () => {
+                if (this.yieldCallbacks.length > 0) {
+                    for (const cb of this.yieldCallbacks) {
+                        try { await cb(); } catch (err) { GGLog.warn(this, "yield callback threw", err); }
+                    }
+                } else {
+                    await this.teardown().catch(err => GGLog.warn(this, "yield teardown failed", err));
+                }
+            }, 10);
         });
 
         this.server.setRouteProxyResolver((path) => {
@@ -83,6 +104,14 @@ export class GGLocalDiscoveryServer {
         this.routingStrategies.clear();
         await this.server.teardown();
         GGLog.info(this, 'Router stopped');
+    }
+
+    /** Register a callback fired when the holder is asked to yield the
+     *  port (`requestYield`). Owners that need to flip their own state
+     *  (e.g. resilient client setting `seenBin`) use this — and become
+     *  responsible for calling teardown themselves inside the callback. */
+    public onYield(cb: () => void | Promise<void>): void {
+        this.yieldCallbacks.push(cb);
     }
 
     public setRoutingStrategy(api: string, strategy: RoutingStrategyName | RoutingStrategy): void {
