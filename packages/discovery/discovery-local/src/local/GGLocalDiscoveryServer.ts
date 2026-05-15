@@ -5,7 +5,7 @@ import {FirstStrategy} from "./routing/strategies/FirstStrategy";
 import {LastStrategy} from "./routing/strategies/LastStrategy";
 import {RandomStrategy} from "./routing/strategies/RandomStrategy";
 import {RoundRobinStrategy} from "./routing/strategies/RoundRobinStrategy";
-import {GGDiscoveryIPC} from "./GGDiscoveryIPC";
+import {GGDiscoveryIPC, DiscoveryServerKind} from "./GGDiscoveryIPC";
 import {GGServiceDiscoveryEntry} from "./GGLocalDiscoveryClient";
 
 export const ROUTING_STRATEGIES = {
@@ -34,7 +34,7 @@ export class GGLocalDiscoveryServer {
     private readonly routingStrategies: Map<string, RoutingStrategy> = new Map();
     public onYield?: () => void | Promise<void>;
 
-    constructor(server: IPCServer, public readonly kind: "bin" | "embedded" = "embedded") {
+    constructor(server: IPCServer, public readonly kind: DiscoveryServerKind = DiscoveryServerKind.Embedded) {
         this.server = server;
 
         // Socket handlers for framework communication

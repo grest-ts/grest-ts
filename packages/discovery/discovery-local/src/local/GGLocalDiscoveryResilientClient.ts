@@ -2,7 +2,7 @@ import {GGLog} from "@grest-ts/logger";
 import {IPCServer} from "@grest-ts/ipc";
 import {GGLocalDiscoveryServer} from "./GGLocalDiscoveryServer";
 import {GGLocalDiscoveryClient, getLocalDiscoveryPort} from "./GGLocalDiscoveryClient";
-import {GGDiscoveryIPC} from "./GGDiscoveryIPC";
+import {GGDiscoveryIPC, DiscoveryServerKind} from "./GGDiscoveryIPC";
 
 export class GGLocalDiscoveryResilientClient extends GGLocalDiscoveryClient {
 
@@ -65,7 +65,7 @@ export class GGLocalDiscoveryResilientClient extends GGLocalDiscoveryClient {
 
             if (!this.seenBin) {
                 const info = await this.client.sendFrameworkRequest(GGDiscoveryIPC.discoveryServer.getServerInfo, undefined);
-                if (info.kind === "bin") this.seenBin = true;
+                if (info.kind === DiscoveryServerKind.Bin) this.seenBin = true;
             }
 
             this.client.onClose(async () => {

@@ -2,9 +2,9 @@ import {IPCServer, IPCClient} from "@grest-ts/ipc";
 import {GGLocatorScope} from "@grest-ts/locator";
 import {GGLocalDiscoveryServer} from "./GGLocalDiscoveryServer";
 import {GGLocalDiscoveryResilientClient} from "./GGLocalDiscoveryResilientClient";
-import {GGDiscoveryIPC} from "./GGDiscoveryIPC";
+import {GGDiscoveryIPC, DiscoveryServerKind} from "./GGDiscoveryIPC";
 
-async function startServer(kind: "bin" | "embedded"): Promise<{server: GGLocalDiscoveryServer, port: number}> {
+async function startServer(kind: DiscoveryServerKind): Promise<{server: GGLocalDiscoveryServer, port: number}> {
     const ipc = new IPCServer(0);
     const server = new GGLocalDiscoveryServer(ipc, kind);
     if (!(await server.start())) throw new Error("bind failed");
@@ -25,11 +25,11 @@ describe("yield protocol", () => {
     });
 
     test("getServerInfo returns kind; requestYield without onYield tears down", async () => {
-        const {server, port} = await startServer("bin");
+        const {server, port} = await startServer(DiscoveryServerKind.Bin);
         const client = new IPCClient(port);
         await client.connect();
         const info = await client.sendFrameworkRequest(GGDiscoveryIPC.discoveryServer.getServerInfo, undefined);
-        expect(info.kind).toBe("bin");
+        expect(info.kind).toBe(DiscoveryServerKind.Bin);
         await client.sendFrameworkRequest(GGDiscoveryIPC.discoveryServer.requestYield, undefined);
         client.disconnect();
         await new Promise(r => setTimeout(r, 100));
@@ -38,7 +38,7 @@ describe("yield protocol", () => {
     });
 
     test("requestYield with onYield invokes the callback instead of default teardown", async () => {
-        const {server, port} = await startServer("embedded");
+        const {server, port} = await startServer(DiscoveryServerKind.Embedded);
         let fired = false;
         server.onYield = async () => { fired = true; await server.teardown(); };
         const client = new IPCClient(port);
@@ -51,7 +51,7 @@ describe("yield protocol", () => {
     });
 
     test("resilient client that connected to a bin never re-bids after the bin dies", async () => {
-        const {server: bin, port} = await startServer("bin");
+        const {server: bin, port} = await startServer(DiscoveryServerKind.Bin);
 
         // Sub-scope with a no-op lifecycle owner so the client constructor
         // (which does setWithLifecycle on GG_DISCOVERY) doesn't throw.

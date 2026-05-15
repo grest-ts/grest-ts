@@ -11,7 +11,7 @@ import {GGLog} from "@grest-ts/logger";
 import {GGLocatorScope} from "@grest-ts/locator";
 import {IPCServer, IPCClient} from "@grest-ts/ipc";
 import {GGLocalDiscoveryServer} from "../local/GGLocalDiscoveryServer";
-import {GGDiscoveryIPC} from "../local/GGDiscoveryIPC";
+import {GGDiscoveryIPC, DiscoveryServerKind} from "../local/GGDiscoveryIPC";
 import {getLocalDiscoveryPort} from "../local/GGLocalDiscoveryClient";
 
 function parsePort(argv: string[]): number {
@@ -30,7 +30,7 @@ async function main(): Promise<void> {
 
     let router: GGLocalDiscoveryServer | undefined;
     for (let i = 0; i < 100; i++) {
-        const candidate = new GGLocalDiscoveryServer(new IPCServer(port), "bin");
+        const candidate = new GGLocalDiscoveryServer(new IPCServer(port), DiscoveryServerKind.Bin);
         if (await candidate.start()) { router = candidate; break; }
         const c = new IPCClient(port);
         try { await c.connect(); await c.sendFrameworkRequest(GGDiscoveryIPC.discoveryServer.requestYield, undefined); } catch { /* holder may have already gone */ }
