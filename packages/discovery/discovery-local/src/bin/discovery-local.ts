@@ -12,11 +12,12 @@ import {GGLocatorScope} from "@grest-ts/locator";
 import {IPCServer, IPCClient} from "@grest-ts/ipc";
 import {GGLocalDiscoveryServer} from "../local/GGLocalDiscoveryServer";
 import {GGDiscoveryIPC} from "../local/GGDiscoveryIPC";
+import {getLocalDiscoveryPort} from "../local/GGLocalDiscoveryClient";
 
 function parsePort(argv: string[]): number {
     const i = argv.indexOf("--port");
     const raw = i >= 0 ? argv[i + 1] : undefined;
-    const port = raw === undefined ? 9000 : Number(raw);
+    const port = raw === undefined ? getLocalDiscoveryPort() : Number(raw);
     if (!Number.isInteger(port) || port <= 0) {
         GGLog.error("discovery-local", `Invalid --port: ${raw}`);
         process.exit(1);

@@ -1,7 +1,7 @@
 import {GGLog} from "@grest-ts/logger";
 import {IPCServer} from "@grest-ts/ipc";
 import {GGLocalDiscoveryServer} from "./GGLocalDiscoveryServer";
-import {GGLocalDiscoveryClient} from "./GGLocalDiscoveryClient";
+import {GGLocalDiscoveryClient, getLocalDiscoveryPort} from "./GGLocalDiscoveryClient";
 import {GGDiscoveryIPC} from "./GGDiscoveryIPC";
 
 export class GGLocalDiscoveryResilientClient extends GGLocalDiscoveryClient {
@@ -13,7 +13,7 @@ export class GGLocalDiscoveryResilientClient extends GGLocalDiscoveryClient {
      *  bid for it again. In-memory only. */
     private seenBin = false;
 
-    constructor(port = 9000) {
+    constructor(port = getLocalDiscoveryPort()) {
         super(port);
     }
 

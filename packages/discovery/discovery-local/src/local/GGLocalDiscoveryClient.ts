@@ -11,6 +11,12 @@ import {SERVER_ERROR} from "@grest-ts/schema";
  */
 export const GG_LOCAL_ROUTER_PORT = "GG_LOCAL_ROUTER_PORT"
 
+/** Default port for the local discovery router. Centralised so a future
+ *  change (env-var override, per-environment isolation) has one hook. */
+export function getLocalDiscoveryPort(): number {
+    return 9000;
+}
+
 export class GGLocalDiscoveryClient extends GGDiscoveryClient {
 
     public override readonly isLocal = true;
