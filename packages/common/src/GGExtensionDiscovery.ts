@@ -3,68 +3,31 @@ import * as fs from 'fs';
 import * as path from 'path';
 import {pathToFileURL} from 'url';
 
-const TYPES_FILE = 'index.d.ts';
-const LOCK_FILE = 'index.d.ts.lock';
-
-const CACHE_START = '/* @cache-start ';
-const CACHE_END = ' @cache-end */';
-
-interface ExtensionCache {
-    lockfileMtime: number;
-    extensions: string[];
-}
-
 /**
- * Discovers extensions by scanning node_modules for packages
- * that follow the convention of having a {name}/index-{name}.ts file.
+ * Discovers extension packages by scanning node_modules + monorepo packages
+ * for a {name}/index-{name}.ts (or compiled .js) entry. Each discovered file
+ * is dynamically imported once per process, triggering its side-effect
+ * registrations (selector extensions, IPC handlers, test components, codegen
+ * builders, …).
  *
- * For example, with name="testkit":
- * - Scans for: testkit/index-testkit.ts
- * - Types dir: node_modules/@types/grest-ts-testkits
- *
- * Generates:
- * - node_modules/@types/grest-ts-{name}s/index.d.ts - For IDE type completion (triple-slash references)
- *
- * Runtime loading is done via dynamic imports of discovered extensions.
+ * Type-level discovery (so consumers' TS sees `declare module` augmentations)
+ * is handled separately by scripts/packager/generate-testkit-extensions.ts —
+ * this class is concerned only with runtime registration.
  */
 export class GGExtensionDiscovery {
 
     private static loadedExtensions = new Set<string>();
 
     private readonly name: string;
-    private readonly typesDir: string;
     private readonly filePattern: string;
 
-    /**
-     * Create a new extension discovery instance.
-     * @param name The extension name (e.g., "testkit", "codegen")
-     */
     constructor(name: string) {
         this.name = name;
-        this.typesDir = `node_modules/@types/grest-ts-${name}s`;
         this.filePattern = `${name}/index-${name}.ts`;
     }
 
     /**
-     * Generate types file for IDE support without loading extensions.
-     * Use this during build/check steps to ensure IDE has proper type completion.
-     */
-    public async generateTypes(): Promise<void> {
-        const cwd = process.cwd();
-        const typesDir = path.join(cwd, this.typesDir);
-        const typesFile = path.join(typesDir, TYPES_FILE);
-
-        const lockfileMtime = this.getLockfileMtime(cwd);
-        const extensions = await this.scan(cwd);
-        this.writeTypesFile(typesFile, extensions, typesDir, lockfileMtime);
-        console.log(`[GG${this.capitalize(this.name)}] Generated types for ${extensions.length} ${this.name}(s)`);
-    }
-
-    /**
-     * Discover and load all extensions.
-     * - Scans for extension packages
-     * - Generates .d.ts file for IDE support
-     * - Dynamically imports extensions for runtime
+     * Discover and dynamically import every extension entry once per process.
      */
     public async load(): Promise<void> {
         if (GGExtensionDiscovery.loadedExtensions.has(this.name)) {
@@ -72,83 +35,9 @@ export class GGExtensionDiscovery {
         }
         GGExtensionDiscovery.loadedExtensions.add(this.name);
 
-        const cwd = process.cwd();
-        const typesDir = path.join(cwd, this.typesDir);
-        const typesFile = path.join(typesDir, TYPES_FILE);
-        const lockFile = path.join(typesDir, LOCK_FILE);
-
-        // Try to acquire lock
-        if (this.acquireLock(lockFile)) {
-            try {
-                await this.discoverAndLoad(cwd, typesFile, typesDir);
-            } finally {
-                this.releaseLock(lockFile);
-            }
-        } else {
-            // Wait for lock to be released, then load from cache
-            await this.waitForLock(lockFile);
-            await this.loadFromCache(typesFile);
-        }
-    }
-
-    private acquireLock(lockFile: string): boolean {
-        try {
-            fs.mkdirSync(path.dirname(lockFile), {recursive: true});
-            fs.writeFileSync(lockFile, String(process.pid), {flag: 'wx'});
-            return true;
-        } catch {
-            return false;
-        }
-    }
-
-    private releaseLock(lockFile: string): void {
-        try {
-            fs.unlinkSync(lockFile);
-        } catch {
-            // Ignore
-        }
-    }
-
-    private async waitForLock(lockFile: string, timeout = 30000): Promise<void> {
-        const start = Date.now();
-        while (Date.now() - start < timeout) {
-            if (!fs.existsSync(lockFile)) {
-                return;
-            }
-            await new Promise(r => setTimeout(r, 50));
-        }
-        // Timeout - try to clean up stale lock
-        this.releaseLock(lockFile);
-    }
-
-    private async discoverAndLoad(cwd: string, typesFile: string, typesDir: string): Promise<void> {
-        const lockfileMtime = this.getLockfileMtime(cwd);
-
-        // Check cache embedded in types file
-        const cached = this.readCache(typesFile);
-        let extensions: string[];
-
-        if (cached && cached.lockfileMtime === lockfileMtime) {
-            extensions = cached.extensions;
-        } else {
-            extensions = await this.scan(cwd);
-            this.writeTypesFile(typesFile, extensions, typesDir, lockfileMtime);
-            console.log(`[GG${this.capitalize(this.name)}] Discovered ${extensions.length} ${this.name}(s)`);
-        }
-
-        // Dynamically import all extensions
+        const extensions = await this.scan(process.cwd());
         for (const extension of extensions) {
             await import(pathToFileURL(extension).href);
-        }
-    }
-
-    private async loadFromCache(typesFile: string): Promise<void> {
-        const cached = this.readCache(typesFile);
-
-        if (cached) {
-            for (const extension of cached.extensions) {
-                await import(pathToFileURL(extension).href);
-            }
         }
     }
 
@@ -243,74 +132,5 @@ export class GGExtensionDiscovery {
         }
 
         return null;
-    }
-
-    private getLockfileMtime(cwd: string): number {
-        const lockfiles = ['pnpm-lock.yaml', 'package-lock.json', 'yarn.lock'];
-
-        // Walk up directories to find lockfile (handles workspaces where lockfile is at root)
-        let dir = cwd;
-        const root = path.parse(dir).root;
-        while (dir !== root) {
-            for (const lockfile of lockfiles) {
-                try {
-                    return fs.statSync(path.join(dir, lockfile)).mtimeMs;
-                } catch {
-                    // File doesn't exist, try next
-                }
-            }
-            dir = path.dirname(dir);
-        }
-        return 0;
-    }
-
-    private readCache(typesFile: string): ExtensionCache | null {
-        try {
-            const content = fs.readFileSync(typesFile, 'utf-8');
-            const startIdx = content.indexOf(CACHE_START);
-            const endIdx = content.indexOf(CACHE_END);
-            if (startIdx === -1 || endIdx === -1) {
-                return null;
-            }
-            const jsonStr = content.slice(startIdx + CACHE_START.length, endIdx).trim();
-            return JSON.parse(jsonStr);
-        } catch {
-            return null;
-        }
-    }
-
-    private writeTypesFile(typesFile: string, extensions: string[], typesDir: string, lockfileMtime: number): void {
-        const lines = [
-            `// Auto-generated by GGExtensionDiscovery (${this.name}) - DO NOT EDIT`,
-            '// TypeScript automatically includes @types/* packages, so no tsconfig changes needed.',
-            ''
-        ];
-
-        for (const extension of extensions) {
-            // Source .ts files can be referenced directly; compiled .js files need their .d.ts counterpart
-            const typesPath = extension.endsWith('.js') ? extension.replace(/\.js$/, '.d.ts') : extension;
-            const relativePath = path.relative(typesDir, typesPath).replace(/\\/g, '/');
-            lines.push(`/// <reference path="${relativePath}" />`);
-        }
-
-        // Embed cache as JSON block comment at end of file (single line so TypeScript ignores it)
-        lines.push('');
-        lines.push(CACHE_START + JSON.stringify({lockfileMtime, extensions}) + CACHE_END);
-        lines.push('');
-
-        fs.mkdirSync(typesDir, {recursive: true});
-        fs.writeFileSync(typesFile, lines.join('\n'));
-
-        // Write package.json to make it a proper @types package
-        const packageJson = {
-            name: `@types/grest-ts-${this.name}s`,
-            version: '1.0.0',
-            types: 'index.d.ts'
-        };
-        fs.writeFileSync(path.join(typesDir, 'package.json'), JSON.stringify(packageJson, null, 2));
-    }
-
-    private capitalize(str: string): string {
-        return str.charAt(0).toUpperCase() + str.slice(1);
     }
 }

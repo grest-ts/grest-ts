@@ -12,7 +12,6 @@ package-lock.json
 !**/jest.config.js
 !exports/node/vitest.d.ts
 !packages-libs/docs/api-docs/dist-ui/**/*.js
-.verdaccio/storage/
 docs-web/src/
 docs-web/build/
 docs-web/.vitepress/cache/

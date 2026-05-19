@@ -5,7 +5,7 @@ import {execSync} from "child_process";
 import path from "path";
 import fg from "fast-glob";
 import fs from "fs";
-import {GGExtensionDiscovery} from "@grest-ts/common";
+import {generateTestkitExtensions} from "#scripts/packager/generate-testkit-extensions";
 
 function cleanupGeneratedFiles() {
     console.log("\n\n--------------------------------------------\n📦 Cleaning up possible typescript generated files...");
@@ -31,24 +31,6 @@ function cleanupGeneratedFiles() {
         }
     }
     console.log(`✅ Cleanup: deleted ${deletedCount} generated file(s)`);
-}
-
-function cleanupGGCaches() {
-    const nodeModulesDirs = fg.sync(path.join(import.meta.dirname, "**/node_modules").replace(/\\/g, "/"), {
-        absolute: true,
-        onlyDirectories: true,
-        ignore: ["**/node_modules/**/node_modules"] // Don't search nested node_modules
-    });
-    const typeFoldersToDelete = ["@types/grest-ts-codegens", "@types/grest-ts-testkits"];
-    for (const nodeModulesDir of nodeModulesDirs) {
-        for (const typeFolder of typeFoldersToDelete) {
-            const folderPath = path.join(nodeModulesDir, typeFolder);
-            if (fs.existsSync(folderPath)) {
-                fs.rmSync(folderPath, {recursive: true, force: true});
-                console.log(`✅ Deleted folder: ${folderPath}`);
-            }
-        }
-    }
 }
 
 function cleanupCaches() {
@@ -95,16 +77,12 @@ function cleanupWindowsNulFile() {
     }
 }
 
-async function typeCheckProject(project: string) {
+function typeCheckProject(project: string) {
     const projectPath = path.join(import.meta.dirname, project);
     if (!fs.existsSync(projectPath)) {
         console.log(`⚠️  Skipping ${project} (not found)`);
         return;
     }
-
-    // Generate testkit types for this project
-    process.chdir(projectPath);
-    await new GGExtensionDiscovery('testkit').generateTypes();
 
     console.log(`\n📦 Type checking ${project}...`);
     try {
@@ -123,22 +101,21 @@ execSync("npm install", {stdio: "inherit", cwd: import.meta.dirname});
 console.log("✅ NPM install completed");
 cleanupGeneratedFiles();
 cleanupCaches();
-cleanupGGCaches();
 cleanupWindowsNulFile();
 
 console.log("\n\n--------------------------------------------\n📦 Running gg config generation (tsconfig, package, vitest config etc...)");
 execSync("npm run generate", {stdio: "inherit", cwd: import.meta.dirname});
 console.log("✅ Config generation completed");
 
-console.log("\n\n--------------------------------------------\n📦 Regenerating extension types for IDE support...");
-await new GGExtensionDiscovery('testkit').generateTypes();
-console.log("✅ Extension types generated");
+console.log("\n\n--------------------------------------------\n📦 Regenerating testkit extension references...");
+generateTestkitExtensions();
+console.log("✅ Extension references generated");
 
 console.log("\n\n--------------------------------------------\n📦 Running type check...");
 execSync("npm run typecheck", {stdio: "inherit", cwd: import.meta.dirname});
 console.log("✅ Type check passed");
 
 console.log("\n\n--------------------------------------------\n📦 Type checking example projects...");
-await typeCheckProject("examples/checklist")
-await typeCheckProject("examples/grest-test")
+typeCheckProject("examples/checklist")
+typeCheckProject("examples/grest-test")
 console.log("\n✅ All example projects passed type check");

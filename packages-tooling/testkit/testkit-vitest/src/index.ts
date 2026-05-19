@@ -1,4 +1,11 @@
 import "./_dedupCheck";
+// Plugin testkit type-augmentations live in ./extensions.d.ts (auto-generated
+// by scripts/packager/generate-testkit-extensions.ts and referenced from
+// package.json `exports.types`). It is included in this package's tsc program
+// via the `src/**/*` include pattern — no runtime import needed here.
+// Runtime registration of those same extensions flows through
+// GGExtensionDiscovery.load() below.
+
 /**
  * Test setup file
  * This file is automatically loaded before tests run to register global utilities.

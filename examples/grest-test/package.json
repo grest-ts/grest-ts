@@ -14,6 +14,7 @@
     "@grest-ts/api-docs": "*"
   },
   "devDependencies": {
+    "@grest-ts/testkit-vitest": "*",
     "@types/node": "^22.15.0",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3"

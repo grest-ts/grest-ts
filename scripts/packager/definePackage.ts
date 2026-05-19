@@ -126,6 +126,19 @@ export interface GGPackage {
     customExports?: Record<string, string>
 
     /**
+     * Override the `types` condition of the main `.` export to point at a
+     * dedicated `.d.ts` file separate from the runtime entry. The `import`
+     * condition still points at the standard entry file (index-node.ts etc.).
+     *
+     * Use this when types come from a different file than runtime, e.g.
+     * generated type-augmentation aggregators. Path must end in `.d.ts`.
+     *
+     * Example: `typesOverride: "./src/extensions.d.ts"` produces
+     *   `"types": "./src/extensions.d.ts", "import": "./src/index-node.ts"`
+     */
+    typesOverride?: string
+
+    /**
      * Custom scripts to add to package.json.
      * These are merged with standard scripts (typecheck, test).
      * e.g. { "benchmark": "tsx src/benchmark.ts" }
