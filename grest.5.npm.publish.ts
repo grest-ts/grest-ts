@@ -13,8 +13,18 @@ function ensureNpmAuth(): void {
     try {
         const whoami = execSync("npm whoami", {stdio: "pipe", timeout: 10000}).toString().trim()
         console.log(`Logged in to npm as: ${whoami}`)
-    } catch {
-        console.error("Not logged in to npm. Run `npm login` first or set NPM_TOKEN.")
+    } catch (e: any) {
+        // `npm whoami` swallows the reason by default; surface it so an
+        // expired/invalid token is obvious instead of a generic "not logged in".
+        const detail = [e?.stdout, e?.stderr].map(b => b?.toString() ?? "").join("").trim()
+        if (/E401|invalid|expire|forbidden/i.test(detail)) {
+            console.error("npm rejected the auth token (likely invalid or EXPIRED). Generate a fresh npm token, update NPM_TOKEN, and retry.")
+        } else if (/ENEEDAUTH|requires you to be logged in/i.test(detail)) {
+            console.error("No npm credentials found. Run `npm login`, or set NPM_TOKEN.")
+        } else {
+            console.error("npm auth check (`npm whoami`) failed. Run `npm login`, or set a valid NPM_TOKEN.")
+        }
+        if (detail) console.error(`\nnpm reported:\n${detail}`)
         process.exit(1)
     }
 }
