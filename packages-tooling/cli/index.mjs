@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { readFileSync, writeFileSync, existsSync, unlinkSync, readdirSync, rmSync } from "fs"
+import { readFileSync, writeFileSync, existsSync, unlinkSync, readdirSync, rmSync, symlinkSync } from "fs"
 import { join, resolve, dirname } from "path"
 import { spawnSync } from "child_process"
 
@@ -9,6 +9,8 @@ const DEP_BLOCKS = ["dependencies", "devDependencies", "peerDependencies"]
 
 const COMMANDS = {
   update: runUpdate,
+  link: runLink,
+  unlink: runUnlink,
   help: runHelp,
 }
 
@@ -44,6 +46,12 @@ Commands:
                       @grest-ts/* peers to your dependencies.
                       Flags:
                         --dry-run   Show what would change without writing.
+  link [path]         Symlink every @grest-ts/* dep to a local grest-ts
+                      checkout (default ../grest-ts) so the project builds and
+                      tests against live source. Links all matched packages at
+                      once; a later 'npm install' reverts the links.
+  unlink              Remove the links and reinstall the @grest-ts/* versions
+                      pinned in package-lock.json.
   help                Show this message.
 `)
 }
@@ -236,6 +244,97 @@ async function runUpdate(args) {
   }
 
   console.log(`\n✓ Updated all @grest-ts/* to ${canonicalRange}`)
+}
+
+async function runLink(args) {
+  const positional = args.filter(a => !a.startsWith("--"))
+  const cwd = process.cwd()
+  if (!existsSync(join(cwd, "package.json"))) {
+    throw new Error(`No package.json found in ${cwd}`)
+  }
+
+  const grestSrc = resolve(cwd, positional[0] || "../grest-ts")
+  const grestPkgPath = join(grestSrc, "package.json")
+  if (!existsSync(grestPkgPath)) {
+    throw new Error(`No grest-ts checkout at ${grestSrc}. Pass its path: grest-ts link <path>`)
+  }
+  const grestRootPkg = readJson(grestPkgPath)
+  if (grestRootPkg.name !== "@grest-ts/framework") {
+    throw new Error(`${grestSrc} is not a grest-ts checkout (its package.json is "${grestRootPkg.name || "unnamed"}", expected "@grest-ts/framework").`)
+  }
+
+  const dirByName = new Map()
+  for (const p of findWorkspacePackages(grestSrc, grestRootPkg)) {
+    const pkg = readJson(p)
+    if (pkg.name && pkg.name.startsWith(GREST_PREFIX)) {
+      dirByName.set(pkg.name, dirname(p))
+    }
+  }
+
+  // Link the full set npm installed under @grest-ts/ — declared deps plus the
+  // transitive peers npm hoisted in — not just the project's declared deps.
+  // A mixed source/registry set loads two copies of a package and breaks
+  // instanceof checks and the framework's runtime dedup.
+  const installedDir = join(cwd, "node_modules", "@grest-ts")
+  if (!existsSync(installedDir)) {
+    throw new Error(`No node_modules/@grest-ts in ${cwd}. Run 'npm install' first.`)
+  }
+  const toLink = []
+  const notFound = []
+  for (const entry of readdirSync(installedDir)) {
+    if (entry.startsWith(".")) continue
+    const name = GREST_PREFIX + entry
+    const dir = dirByName.get(name)
+    if (dir) toLink.push({ name, dir })
+    else notFound.push(name)
+  }
+  if (notFound.length > 0) {
+    console.log(`⚠ Installed but not in ${grestSrc} — staying on the registry build:`)
+    for (const name of notFound) console.log(`  ! ${name}`)
+  }
+  if (toLink.length === 0) {
+    throw new Error(`No installed @grest-ts/* packages exist in ${grestSrc}.`)
+  }
+
+  for (const { name, dir } of toLink) {
+    const linkPath = join(cwd, "node_modules", name)
+    rmSync(linkPath, { recursive: true, force: true })
+    symlinkSync(dir, linkPath)
+    console.log(`  → ${name}  ⇒  ${dir}`)
+  }
+
+  console.log(`\n✓ Linked ${toLink.length} @grest-ts/* package(s) to ${grestSrc}.`)
+  console.log("  For running tests/dev against live source — 'tsc' against linked source is noisy (see README).")
+  console.log("  Any 'npm install' here reverts these links — re-run 'link' afterwards.")
+  console.log("  Run 'grest-ts unlink' to restore the installed versions.")
+}
+
+function runUnlink() {
+  const cwd = process.cwd()
+  if (!existsSync(join(cwd, "package.json"))) {
+    throw new Error(`No package.json found in ${cwd}`)
+  }
+
+  const grestModulesPath = join(cwd, "node_modules", "@grest-ts")
+  if (existsSync(grestModulesPath)) {
+    console.log("Removing node_modules/@grest-ts/ ...")
+    rmSync(grestModulesPath, { recursive: true, force: true })
+  }
+  // Drop npm's install-state lockfile so the reinstall re-resolves @grest-ts
+  // from package-lock.json instead of trusting the now-deleted link state.
+  const hiddenLockPath = join(cwd, "node_modules", ".package-lock.json")
+  if (existsSync(hiddenLockPath)) {
+    console.log("Deleting node_modules/.package-lock.json...")
+    unlinkSync(hiddenLockPath)
+  }
+
+  console.log("Running npm install...")
+  const result = spawnSync("npm install", { stdio: "inherit", shell: true, cwd })
+  if (result.status !== 0) {
+    throw new Error(`npm install exited with code ${result.status}`)
+  }
+
+  console.log("\n✓ Unlinked — @grest-ts/* restored from package-lock.json.")
 }
 
 // ---- helpers ----
