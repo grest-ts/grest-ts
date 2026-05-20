@@ -49,7 +49,7 @@
       "layer": 0,
       "color": "#F28E2B",
       "category": "tooling",
-      "readme": "<!-- GREST-TS-BANNER-START -->\n> Part of the [grest-ts](https://github.com/grest-ts/grest-ts) framework.\n> [Documentation](https://github.com/grest-ts/grest-ts#readme) | [All packages](https://github.com/grest-ts/grest-ts#package-reference)\n<!-- GREST-TS-BANNER-END -->\n\n# @grest-ts/cli\n\nCLI for keeping every `@grest-ts/*` package in your project on the same version. Full guide: [Guide → CLI](@guide/cli).\n\n## Usage\n\n```bash\nnpx @grest-ts/cli update             # bump to \"latest\"\nnpx @grest-ts/cli update 0.0.30      # bump to a specific version\nnpx @grest-ts/cli update next        # bump to a dist-tag\nnpx @grest-ts/cli update --dry-run   # preview only\n```\n\n## Install (optional)\n\n`npx` works without installing anything. To pin a CLI version per-project:\n\n```bash\nnpm install -D @grest-ts/cli\n```\n"
+      "readme": "<!-- GREST-TS-BANNER-START -->\n> Part of the [grest-ts](https://github.com/grest-ts/grest-ts) framework.\n> [Documentation](https://github.com/grest-ts/grest-ts#readme) | [All packages](https://github.com/grest-ts/grest-ts#package-reference)\n<!-- GREST-TS-BANNER-END -->\n\n# @grest-ts/cli\n\nCLI for keeping every `@grest-ts/*` package in your project on the same version. Full guide: [Guide → CLI](@guide/cli).\n\n## Usage\n\n```bash\nnpx @grest-ts/cli update             # bump to \"latest\"\nnpx @grest-ts/cli update 0.0.30      # bump to a specific version\nnpx @grest-ts/cli update next        # bump to a dist-tag\nnpx @grest-ts/cli update --dry-run   # preview only\n```\n\n## Linking a local checkout (development)\n\nWhen working on grest-ts itself, symlink every `@grest-ts/*` package in your project to a local grest-ts checkout so the project runs against live source:\n\n```bash\nnpx @grest-ts/cli link              # links against ../grest-ts\nnpx @grest-ts/cli link ../grest-ts  # explicit checkout path\nnpx @grest-ts/cli unlink            # restore the published versions\n```\n\n`link` replaces every installed `@grest-ts/*` package — declared deps and the transitive peers npm hoisted in — with a symlink to its source. It links all of them at once so you never load two copies of a package. `unlink` removes the links and reinstalls the versions pinned in `package-lock.json`.\n\nThis is for **running** tests and dev servers against live source — vitest and tsx execute the linked `.ts` directly. It is **not** a typecheck tool: `tsc` sees grest-ts source under your project's stricter compiler options, and resolves third-party types from grest-ts's own `node_modules`, so it can report errors that disappear once you `unlink`. A later `npm install` reverts the links — re-run `link` after installing.\n\n## Install (optional)\n\n`npx` works without installing anything. To pin a CLI version per-project:\n\n```bash\nnpm install -D @grest-ts/cli\n```\n"
     },
     {
       "name": "code-generator",
@@ -447,7 +447,7 @@
         "implementation": false,
         "npm": false
       },
-      "layer": 2,
+      "layer": 1,
       "color": "#59A14F",
       "category": "libs",
       "group": "lock",
@@ -531,7 +531,7 @@
         "implementation": false,
         "npm": false
       },
-      "layer": 1,
+      "layer": 0,
       "color": "#59A14F",
       "category": "libs",
       "readme": "<!-- GREST-TS-BANNER-START -->\n> Part of the [grest-ts](https://github.com/grest-ts/grest-ts) framework.\n> [Documentation](https://github.com/grest-ts/grest-ts#readme) | [All packages](https://github.com/grest-ts/grest-ts#package-reference)\n<!-- GREST-TS-BANNER-END -->\n\n"
@@ -1248,10 +1248,6 @@
     },
     {
       "from": "testkit-vitest",
-      "to": "events"
-    },
-    {
-      "from": "testkit-vitest",
       "to": "http"
     },
     {
@@ -1273,10 +1269,6 @@
     {
       "from": "testkit-vitest",
       "to": "metrics"
-    },
-    {
-      "from": "testkit-vitest",
-      "to": "poller"
     },
     {
       "from": "testkit-vitest",

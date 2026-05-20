@@ -1,7 +1,7 @@
 // Generates packages-tooling/testkit/testkit-vitest/src/extensions.d.ts —
 // a pure declaration file containing type-only `import type {} from
-// "<plugin>/testkit"` statements, one per monorepo package that ships a
-// testkit extension.
+// "<plugin>/testkit"` statements, one per published monorepo package that
+// ships a testkit extension.
 //
 // The file is referenced as the `types` condition of testkit-vitest's main
 // export (see grest.package.ts → typesOverride), so any consumer who lists
@@ -23,11 +23,17 @@ const ROOT = resolve(import.meta.dirname, "..", "..")
 const OUTPUT = join(ROOT, "packages-tooling/testkit/testkit-vitest/src/extensions.d.ts")
 const WORKSPACE_ROOTS = ["packages", "packages-libs", "packages-tooling"]
 
-function readPackageName(dir: string): string | null {
+// Skip private (unpublished) packages: testkit-vitest derives its peerDeps from
+// the imports in this generated file, so referencing a private package would add
+// a peerDep on something outside the npm publish set and fail publish validation.
+// Consumers can't install private packages anyway.
+function readPublishedPackageName(dir: string): string | null {
     const pkgPath = join(dir, "package.json")
     if (!existsSync(pkgPath)) return null
     try {
-        return JSON.parse(readFileSync(pkgPath, "utf-8")).name ?? null
+        const pkg = JSON.parse(readFileSync(pkgPath, "utf-8"))
+        if (pkg.private) return null
+        return pkg.name ?? null
     } catch {
         return null
     }
@@ -48,7 +54,7 @@ function findTestkitPackages(): string[] {
 
 function visit(dir: string, found: string[], depth: number): void {
     if (existsSync(join(dir, "testkit/index-testkit.ts"))) {
-        const name = readPackageName(dir)
+        const name = readPublishedPackageName(dir)
         if (name) found.push(name)
     }
     if (depth >= 1) return
