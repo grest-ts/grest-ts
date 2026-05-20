@@ -1,7 +1,7 @@
 {
   "extends": "../../../tsconfig.base.json",
   "compilerOptions": {
-    "types": ["node", "vitest/globals", "@grest-ts/testkit-vitest"]
+    "types": ["node", "vitest/globals", "@grest-ts/testkit-vitest", "@grest-ts/testkit-vitest/unpublished-packages"]
   },
   "include": ["**/*", "../src/**/*"]
 }

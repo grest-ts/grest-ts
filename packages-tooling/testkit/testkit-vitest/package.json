@@ -13,6 +13,10 @@
     "./globalSetup": {
       "types": "./src/globalSetup.ts",
       "import": "./src/globalSetup.ts"
+    },
+    "./unpublished-packages": {
+      "types": "./src/extensions.unpublished-packages.d.ts",
+      "import": "./src/extensions.unpublished-packages.d.ts"
     }
   },
   "files": [
