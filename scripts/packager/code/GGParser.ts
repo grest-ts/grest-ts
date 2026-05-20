@@ -158,7 +158,10 @@ export class GGParser {
         // Find source files and parse imports in parallel
         const [sourceFiles, testkitFiles, vitestFiles, hasTestDir] = await Promise.all([
             existsSync(srcDir)
-                ? fg("**/*.ts", { cwd: srcDir, absolute: true, ignore: ["**/*.test.ts", "**/*.spec.ts"] })
+                // *.unpublished-packages.d.ts intentionally references private packages
+                // (testkit-vitest's unpublished-plugins supplement); excluded so those
+                // imports don't become peerDependencies and break npm publish validation.
+                ? fg("**/*.ts", { cwd: srcDir, absolute: true, ignore: ["**/*.test.ts", "**/*.spec.ts", "**/*.unpublished-packages.d.ts"] })
                 : Promise.resolve([]),
             existsSync(testkitDir)
                 ? fg("**/*.ts", { cwd: testkitDir, absolute: true })
