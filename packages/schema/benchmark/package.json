@@ -1,7 +1,7 @@
 {
   "//": "THIS FILE IS GENERATED - DO NOT EDIT",
   "name": "@grest-ts/schema-benchmark",
-  "version": "0.0.39",
+  "version": "0.0.41",
   "type": "module",
   "license": "MIT",
   "description": "Validation library benchmark suite",
@@ -64,6 +64,6 @@
     "zod": "^4.3.6"
   },
   "peerDependencies": {
-    "@grest-ts/schema": "0.0.39"
+    "@grest-ts/schema": "0.0.41"
   }
 }
