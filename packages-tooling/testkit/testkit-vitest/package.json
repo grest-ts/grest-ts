@@ -1,13 +1,13 @@
 {
   "//": "THIS FILE IS GENERATED - DO NOT EDIT",
   "name": "@grest-ts/testkit-vitest",
-  "version": "0.0.38",
+  "version": "0.0.39",
   "type": "module",
   "license": "MIT",
   "description": "Component testing library integration for vitest",
   "exports": {
     ".": {
-      "types": "./src/index.ts",
+      "types": "./src/extensions.d.ts",
       "import": "./src/index.ts"
     },
     "./globalSetup": {
@@ -50,13 +50,23 @@
     "node": ">=25"
   },
   "peerDependencies": {
-    "@grest-ts/common": "0.0.38",
-    "@grest-ts/discovery": "0.0.38",
-    "@grest-ts/discovery-local": "0.0.38",
-    "@grest-ts/ipc": "0.0.38",
-    "@grest-ts/locator": "0.0.38",
-    "@grest-ts/logger": "0.0.38",
-    "@grest-ts/logger-console": "0.0.38",
-    "@grest-ts/testkit": "0.0.38"
+    "@grest-ts/common": "0.0.39",
+    "@grest-ts/config": "0.0.39",
+    "@grest-ts/db-dynamodb": "0.0.39",
+    "@grest-ts/db-mysql": "0.0.39",
+    "@grest-ts/db-postgre": "0.0.39",
+    "@grest-ts/discovery": "0.0.39",
+    "@grest-ts/discovery-local": "0.0.39",
+    "@grest-ts/events": "0.0.39",
+    "@grest-ts/http": "0.0.39",
+    "@grest-ts/ipc": "0.0.39",
+    "@grest-ts/locator": "0.0.39",
+    "@grest-ts/logger": "0.0.39",
+    "@grest-ts/logger-console": "0.0.39",
+    "@grest-ts/metrics": "0.0.39",
+    "@grest-ts/poller": "0.0.39",
+    "@grest-ts/schema-file": "0.0.39",
+    "@grest-ts/testkit": "0.0.39",
+    "@grest-ts/websocket": "0.0.39"
   }
 }

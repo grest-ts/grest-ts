@@ -8,6 +8,7 @@ import {exec} from "child_process"
 import {promisify} from "util"
 import {readFileSync, readdirSync, existsSync, rmSync, cpSync, mkdirSync, writeFileSync, statSync} from "fs"
 import {join, resolve} from "path"
+import {generateTestkitExtensions} from "#scripts/packager/generate-testkit-extensions"
 
 const execAsync = promisify(exec)
 
@@ -79,9 +80,12 @@ function discoverPackages(): Map<string, DiscoveredPackage> {
     return packages
 }
 
-/** Rewrite a .ts source path to its dist/ compiled equivalent */
+/** Rewrite a .ts (or .d.ts) source path to its dist/ compiled equivalent.
+ *  `.d.ts` inputs are declaration-only and shouldn't have their extension swapped. */
 function toDistPath(tsPath: string, ext: ".js" | ".d.ts"): string {
-    return tsPath.replace(/^\.\//, "./dist/").replace(/\.ts$/, ext)
+    const distPath = tsPath.replace(/^\.\//, "./dist/")
+    if (distPath.endsWith(".d.ts")) return distPath
+    return distPath.replace(/\.ts$/, ext)
 }
 
 /** Rewrite a single export entry (types + import) to point to dist/ */
@@ -161,7 +165,10 @@ function fixImportExtensions(dir: string): void {
     }
 }
 
-/** Copy non-TypeScript assets (.mjs, .cjs, etc.) from src to dist, preserving directory structure */
+/** Copy non-compiled assets (.mjs, .cjs, hand-authored .d.ts, …) from src to
+ *  dist, preserving directory structure. Skips .ts source files (tsc already
+ *  emitted compiled equivalents) but DOES copy .d.ts inputs (tsc reads them
+ *  as declarations but doesn't emit them). */
 function copyNonTsAssets(srcDir: string, distDir: string): void {
     if (!existsSync(srcDir)) return
     for (const entry of readdirSync(srcDir, {withFileTypes: true})) {
@@ -169,10 +176,12 @@ function copyNonTsAssets(srcDir: string, distDir: string): void {
         const distPath = join(distDir, entry.name)
         if (entry.isDirectory()) {
             copyNonTsAssets(srcPath, distPath)
-        } else if (!entry.name.endsWith(".ts")) {
-            if (existsSync(distDir)) {
-                cpSync(srcPath, distPath)
-            }
+            continue
+        }
+        const isCompiledSource = entry.name.endsWith(".ts") && !entry.name.endsWith(".d.ts")
+        if (isCompiledSource) continue
+        if (existsSync(distDir)) {
+            cpSync(srcPath, distPath)
         }
     }
 }
@@ -293,6 +302,10 @@ function assembleNoSourceCodeStaging(name: string, dir: string): void {
 }
 
 async function main() {
+    // Refresh testkit-vitest/src/extensions.d.ts so tsc picks up the current
+    // set of plugin testkit references when compiling testkit-vitest below.
+    generateTestkitExtensions()
+
     const packages = discoverPackages()
     const names = [...packages.keys()].sort()
     const compiledNames = names.filter(n => !packages.get(n)!.noSourceCode)

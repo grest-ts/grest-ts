@@ -16,7 +16,7 @@
     "noUnusedParameters": false,
     "target": "es6",
     "lib": ["esnext"],
-    "types": ["vitest/globals", "grest-ts-testkits"],
+    "types": ["vitest/globals", "@grest-ts/testkit-vitest"],
     "paths": {
       "@newproject/api/*": ["../api/src/*"]
     }

@@ -160,7 +160,7 @@
         "implementation": false,
         "npm": true
       },
-      "layer": 0,
+      "layer": 1,
       "color": "#59A14F",
       "category": "libs",
       "group": "db",
@@ -177,7 +177,7 @@
         "implementation": false,
         "npm": true
       },
-      "layer": 0,
+      "layer": 1,
       "color": "#59A14F",
       "category": "libs",
       "group": "db",
@@ -194,7 +194,7 @@
         "implementation": false,
         "npm": true
       },
-      "layer": 0,
+      "layer": 1,
       "color": "#59A14F",
       "category": "libs",
       "group": "db",
@@ -447,7 +447,7 @@
         "implementation": false,
         "npm": false
       },
-      "layer": 1,
+      "layer": 2,
       "color": "#59A14F",
       "category": "libs",
       "group": "lock",
@@ -531,7 +531,7 @@
         "implementation": false,
         "npm": false
       },
-      "layer": 0,
+      "layer": 1,
       "color": "#59A14F",
       "category": "libs",
       "readme": "<!-- GREST-TS-BANNER-START -->\n> Part of the [grest-ts](https://github.com/grest-ts/grest-ts) framework.\n> [Documentation](https://github.com/grest-ts/grest-ts#readme) | [All packages](https://github.com/grest-ts/grest-ts#package-reference)\n<!-- GREST-TS-BANNER-END -->\n\n"
@@ -1224,11 +1224,35 @@
     },
     {
       "from": "testkit-vitest",
+      "to": "config"
+    },
+    {
+      "from": "testkit-vitest",
+      "to": "db-dynamodb"
+    },
+    {
+      "from": "testkit-vitest",
+      "to": "db-mysql"
+    },
+    {
+      "from": "testkit-vitest",
+      "to": "db-postgre"
+    },
+    {
+      "from": "testkit-vitest",
       "to": "discovery"
     },
     {
       "from": "testkit-vitest",
       "to": "discovery-local"
+    },
+    {
+      "from": "testkit-vitest",
+      "to": "events"
+    },
+    {
+      "from": "testkit-vitest",
+      "to": "http"
     },
     {
       "from": "testkit-vitest",
@@ -1248,7 +1272,23 @@
     },
     {
       "from": "testkit-vitest",
+      "to": "metrics"
+    },
+    {
+      "from": "testkit-vitest",
+      "to": "poller"
+    },
+    {
+      "from": "testkit-vitest",
+      "to": "schema-file"
+    },
+    {
+      "from": "testkit-vitest",
       "to": "testkit"
+    },
+    {
+      "from": "testkit-vitest",
+      "to": "websocket"
     },
     {
       "from": "trace",

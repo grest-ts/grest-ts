@@ -1,4 +1,4 @@
-// Shared utilities for publish scripts (npm and verdaccio).
+// Shared utilities for the npm publish script.
 import {exec} from "child_process"
 import {promisify} from "util"
 import {readFileSync, readdirSync, existsSync} from "fs"

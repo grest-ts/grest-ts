@@ -177,6 +177,29 @@ export class GGPackageBuilder {
             }
         }
 
+        // Optional override: point the `.` entry's `types` condition at a
+        // dedicated `.d.ts` file so it resolves cleanly in source mode (no
+        // `.ts → .d.ts` extension stripping). `import` stays on the runtime
+        // entry. Used by @grest-ts/testkit-vitest for its generated
+        // extensions.d.ts aggregator.
+        if (pkg.config.typesOverride) {
+            const entry = exports["."]
+            if (entry && "types" in entry && "import" in entry) {
+                exports["."] = {types: pkg.config.typesOverride, import: entry.import}
+            } else if (entry) {
+                // Conditional shape (browser/default) — override types in each branch.
+                const overridden: Record<string, any> = {}
+                for (const [cond, value] of Object.entries(entry)) {
+                    if (value && typeof value === "object" && "types" in value && "import" in value) {
+                        overridden[cond] = {types: pkg.config.typesOverride, import: (value as any).import}
+                    } else {
+                        overridden[cond] = value
+                    }
+                }
+                exports["."] = overridden as PackageJsonConditionalExport
+            }
+        }
+
         // Custom exports from config
         if (pkg.config.customExports) {
             for (const [exportPath, filePath] of Object.entries(pkg.config.customExports)) {
