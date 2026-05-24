@@ -280,8 +280,13 @@ if (result.success) {
 const GetUser = new GGContractFunction({
     input: UserIdSchema,
     success: UserSchema,
-    errors: [NOT_FOUND, NOT_AUTHORIZED, FORBIDDEN] // SERVER_ERROR is implicit, VALIDATION_ERROR is implicit in case input is used.
+    errors: [NOT_FOUND, NOT_AUTHORIZED, FORBIDDEN, VALIDATION_ERROR] // VALIDATION_ERROR must be listed explicitly when input is used.
 });
+
+// VALIDATION_ERROR is NOT implicit. The framework auto-throws it on input
+// validation failure, but if it isn't in `errors` the executor can't send it —
+// getResponseSchema rejects the unlisted type and coerces it to SERVER_ERROR,
+// so per-field issue info is lost on the wire. List it whenever the method has `input`.
 
 // Avoid - missing error types
 const GetUser = new GGContractFunction({

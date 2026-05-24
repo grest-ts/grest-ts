@@ -552,7 +552,111 @@ const item = await client.get({id: 1}).orDefault(() => defaultItem)
 
 ---
 
-## 10. Package locations
+## 10. Validation & errors
+
+**The contract is the validator.** Put every field rule in the input schema. The framework validates input *before* your handler runs and auto-throws `VALIDATION_ERROR` with a per-field issue map. Re-checking the same rules in the impl and throwing `BAD_REQUEST` produces a generic, unmapped error — don't do it.
+
+```typescript
+// ❌ Hand-validating in the impl — generic error, no field mapping
+public create = async (input: CreateItemRequest): Promise<Item> => {
+    if (!input.title) throw new BAD_REQUEST()   // unmapped, can't point at `title`
+    ...
+}
+
+// ✅ Rule in the schema — auto VALIDATION_ERROR, mapped to the field
+export const IsCreateItemRequest = IsObject({
+    title: IsString.nonEmpty,
+})
+```
+
+`VALIDATION_ERROR` is field-mapped; `BAD_REQUEST` thrown from an impl is a generic business error. Reserve `BAD_REQUEST` for impl-level business rules that can't live in the schema, not for input shape.
+
+### `VALIDATION_ERROR` must be declared in `errors`
+
+It is **not** implicit. If a method's `errors` list omits `VALIDATION_ERROR`, the framework can't send it — when it tries, `getResponseSchema` rejects the unlisted type and coerces it to `SERVER_ERROR` ("Tried to reply with not listed error code!"), so per-field info is lost on the wire.
+
+```typescript
+// ❌ input present but VALIDATION_ERROR missing → field errors arrive as SERVER_ERROR
+create: {input: IsCreateItemRequest, success: IsItem, errors: [SERVER_ERROR]}
+// ✅
+create: {input: IsCreateItemRequest, success: IsItem, errors: [VALIDATION_ERROR, SERVER_ERROR]}
+```
+
+The same rule applies to every error: an error not in the route's `errors` list is coerced to `SERVER_ERROR`.
+
+### Required must be type-level — `.orUndefined` short-circuits `refine`
+
+When a value is `undefined`, `.orUndefined` returns before the refinement loop runs. So `.orUndefined.refine(isRequired)` never fires — you cannot recover a required constraint with a refine.
+
+```typescript
+// ❌ refine never runs when the value is undefined
+field: IsString.orUndefined.refine(v => v.length > 0, err)
+// ✅ required at the type level
+field: IsString.nonEmpty
+```
+
+If a field's requiredness genuinely differs between create and update, model them as **two schemas** that each match their reality — don't make one schema optional-everywhere and patch with refines.
+
+```typescript
+export const IsCreateItemRequest = IsObject({title: IsString.nonEmpty})
+export const IsUpdateItemRequest = IsObject({title: IsString.nonEmpty.orUndefined})
+```
+
+### Custom per-field messages
+
+`refine()` emits a **single** issue at the schema's own path — there is no zod-style `addIssue({path})` for targeting a sub-field. For a custom message on a pattern check, pass a `GGIssueInvalid` as the second arg to `regex` (replaces the generic "Value does not match required pattern"):
+
+```typescript
+import {IsString, GGIssueInvalid} from "@grest-ts/schema"
+
+const IsSlug = IsString.regex(/^[a-z0-9-]+$/, new GGIssueInvalid("invalid_slug", "Lowercase letters, digits and dashes only"))
+```
+
+### `typeof IsX.infer`, never a parallel interface
+
+Export the inferred type from the validator. Never hand-write a matching `interface` — it drifts from the schema silently.
+
+```typescript
+export const IsItem = IsObject({id: IsUint, title: IsString})
+export type Item = typeof IsItem.infer   // ✅
+// ❌ interface Item { id: number; title: string }  — drifts from IsItem
+```
+
+### Avoid `IsPassword`
+
+`IsPassword` brands its inferred type to `tPassword extends String` (the boxed object type), not primitive `string`, so it's incompatible with `string` in both directions and forces `as unknown as` casts everywhere. Use `IsString.refine(...)` (or `.regex(...)`) with the same rules and a `GGIssueInvalid` message instead.
+
+### Every form-backed entity needs `get({id})`
+
+Expose a `get({id})` endpoint for any entity with a form. `list()`-and-find-client-side is an anti-pattern regardless of collection size: it loads the whole collection, bypasses per-item scoping, and gives no typed `NOT_FOUND`.
+
+### Client-side error handling
+
+- `e.message` is the **error type string** (e.g. `"NOT_FOUND"`) — the `ERROR` constructor calls `super(type)`. The human-readable text is at `e.context.displayMessage`. Use `e?.context?.displayMessage || e?.message` as the fallback.
+- Detect a specific error with the static guard `MyError.is(e)` — this only matches if `MyError` is in that route's `errors` list (otherwise it arrived coerced to `SERVER_ERROR` and won't match).
+
+### New-error checklist
+
+1. `ERROR.define(...)` (or `ERROR.badRequest(...)`) in `errors.ts`.
+2. Confirm the package index re-exports `./errors`.
+3. **Add it to every route's `errors` list that can throw it** — this is the silent fail point; skip it and the error is coerced to `SERVER_ERROR`.
+4. `throw new MyError(...)` server-side; detect with `MyError.is(e)` client-side.
+
+### Schema evolution is a wire-contract migration
+
+Response validation runs on **every outbound payload** (`parseOutputData` → `SERVER_ERROR` "Response validation failed!" on mismatch). Making a field required is therefore a data migration, not a local change:
+
+- Existing stored rows missing the field fail **response** validation on read and surface as `SERVER_ERROR` to the client.
+- Untyped DB writes / fixtures won't compile-error, so backfill seeds explicitly.
+- Tests asserting `BAD_REQUEST` for what is now a schema constraint must be updated to assert `VALIDATION_ERROR` — the schema rejects before the impl runs.
+
+### Single-copy package loading
+
+`@grest-ts/schema` enforces single-copy loading via an internal dedup guard and throws `"[@grest-ts/schema] Duplicate package load detected"` when two copies load in one process — e.g. a consumer symlinks a dependency that ships its own `node_modules/@grest-ts/schema`. Deduplicate the package in your module resolution; two copies break async context, validation, and error identity across the boundary.
+
+---
+
+## 11. Package locations
 
 | What | Package | Import |
 |---|---|---|
@@ -570,7 +674,7 @@ const item = await client.get({id: 1}).orDefault(() => defaultItem)
 
 ---
 
-## 11. Anti-patterns — never generate these
+## 12. Anti-patterns — never generate these
 
 ```typescript
 // ❌ Express / raw HTTP
