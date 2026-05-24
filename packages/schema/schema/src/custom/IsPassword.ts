@@ -1,4 +1,4 @@
-import {GGSchema, Opt} from "../GGSchema";
+import {GGSchema, Opt, Brand} from "../GGSchema";
 import {GGIssuesList} from "../issue/GGIssuesList";
 import {GGIssueInvalid} from "../issue/issues/GGIssueInvalid";
 import {GGSchemaDefinition} from "../Definition";
@@ -27,9 +27,7 @@ export interface PasswordDef extends GGSchemaDefinition {
     readonly strength: PasswordStrength;
 }
 
-interface tPassword extends String {
-    readonly __brand: "password";
-}
+type tPassword = string & Brand<"password">;
 
 export class PasswordSchema<T extends tPassword | undefined | null = tPassword> extends GGSchema<T, PasswordDef> {
     public static readonly typeError = new GGIssueInvalid("password.type", "Value must be a string");
