@@ -622,14 +622,6 @@ export type Item = typeof IsItem.infer   // ✅
 // ❌ interface Item { id: number; title: string }  — drifts from IsItem
 ```
 
-### Avoid `IsPassword`
-
-`IsPassword` brands its inferred type to `tPassword extends String` (the boxed object type), not primitive `string`, so it's incompatible with `string` in both directions and forces `as unknown as` casts everywhere. Use `IsString.refine(...)` (or `.regex(...)`) with the same rules and a `GGIssueInvalid` message instead.
-
-### Every form-backed entity needs `get({id})`
-
-Expose a `get({id})` endpoint for any entity with a form. `list()`-and-find-client-side is an anti-pattern regardless of collection size: it loads the whole collection, bypasses per-item scoping, and gives no typed `NOT_FOUND`.
-
 ### Client-side error handling
 
 - `e.message` is the **error type string** (e.g. `"NOT_FOUND"`) — the `ERROR` constructor calls `super(type)`. The human-readable text is at `e.context.displayMessage`. Use `e?.context?.displayMessage || e?.message` as the fallback.
