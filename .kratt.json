@@ -7,5 +7,6 @@
     {"kind": "bash:setup", "bash": "docker exec -i gg-postgres psql -U postgres -d checklist < examples/checklist/checklist/schema/checklist.postgres.sql"},
     {"kind": "bash:setup", "bash": "docker exec -i gg-postgres psql -U postgres -d blocker < examples/checklist/blocker/schema/blocker.postgres.sql"}
   ],
-  "prBranch": "dev"
+  "prBranch": "dev",
+  "branches": ["dev","release"]
 }

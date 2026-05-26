@@ -552,7 +552,39 @@ const item = await client.get({id: 1}).orDefault(() => defaultItem)
 
 ---
 
-## 10. Package locations
+## 10. Validation & errors
+
+**The contract is the validator.** Put every field rule in the input schema. The framework validates input *before* your handler runs and auto-throws `VALIDATION_ERROR` with a per-field issue map. Re-checking the same rules in the impl and throwing `BAD_REQUEST` produces a generic, unmapped error — don't do it.
+
+```typescript
+// ❌ Hand-validating in the impl — generic error, no field mapping
+public create = async (input: CreateItemRequest): Promise<Item> => {
+    if (!input.title) throw new BAD_REQUEST()   // unmapped, can't point at `title`
+    ...
+}
+
+// ✅ Rule in the schema — auto VALIDATION_ERROR, mapped to the field
+export const IsCreateItemRequest = IsObject({
+    title: IsString.nonEmpty,
+})
+```
+
+**Rules:**
+
+- **Every error must be listed in the route's `errors`** — including `VALIDATION_ERROR`, which is *not* implicit. If `input` is set but `VALIDATION_ERROR` is missing, `getResponseSchema` coerces it to `SERVER_ERROR` on the wire and per-field info is lost. Reserve `BAD_REQUEST` for impl-level business rules, not input shape.
+- **Required is type-level.** `.orUndefined` short-circuits before refines run, so `.orUndefined.refine(isRequired)` never fires. When create/update differ, write two schemas — `IsObject({title: IsString.nonEmpty})` vs `IsObject({title: IsString.nonEmpty.orUndefined})`.
+- **Custom messages:** `refine()` emits one issue at the schema's own path (no `addIssue({path})`). For a pattern message pass a `GGIssueInvalid`: `IsString.regex(/^[a-z0-9-]+$/, new GGIssueInvalid("invalid_slug", "…"))`.
+- **Client error shape:** `e.message` is the type string (`"NOT_FOUND"`); human text is `e.context.displayMessage`. Detect with `MyError.is(e)` — matches only if `MyError` is in that route's `errors` (else it arrived as `SERVER_ERROR`).
+
+**New error:** define in `errors.ts` (`ERROR.define`/`ERROR.badRequest`) → confirm the index re-exports it → **add it to every route's `errors` that can throw it** (the silent fail point) → `throw` server-side, detect with `.is()` client-side.
+
+**Schema change = wire-contract migration.** Response validation runs on every outbound payload, so making a field required breaks reads of existing rows missing it (`SERVER_ERROR` "Response validation failed!"). Backfill seeds (untyped DB writes won't compile-error) and flip `BAD_REQUEST` tests to `VALIDATION_ERROR`.
+
+**Single-copy loading:** `@grest-ts/schema` throws `"Duplicate package load detected"` if two copies load in one process (e.g. a consumer symlinks a dep shipping its own `node_modules/@grest-ts/schema`) — dedupe in module resolution; two copies break async context, validation, and error identity.
+
+---
+
+## 11. Package locations
 
 | What | Package | Import |
 |---|---|---|
@@ -570,7 +602,7 @@ const item = await client.get({id: 1}).orDefault(() => defaultItem)
 
 ---
 
-## 11. Anti-patterns — never generate these
+## 12. Anti-patterns — never generate these
 
 ```typescript
 // ❌ Express / raw HTTP
