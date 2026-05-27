@@ -125,6 +125,12 @@ if (IsStringOrNumber.is(value)) {
 }
 ```
 
+> When no variant matches, a plain `IsUnion` reports a **single generic error at
+> the union's path** — the per-variant issues are tried against throwaway lists
+> and discarded. If you need the failing field's error preserved at its own path
+> (e.g. to map it back onto a form input), use `IsDiscriminated` instead, which
+> validates the selected variant directly.
+
 ### IsDiscriminated
 
 Tagged union validation:

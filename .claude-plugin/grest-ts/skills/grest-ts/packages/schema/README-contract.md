@@ -280,7 +280,7 @@ if (result.success) {
 const GetUser = new GGContractFunction({
     input: UserIdSchema,
     success: UserSchema,
-    errors: [NOT_FOUND, NOT_AUTHORIZED, FORBIDDEN] // SERVER_ERROR is implicit, VALIDATION_ERROR is implicit in case input is used.
+    errors: [NOT_FOUND, NOT_AUTHORIZED, FORBIDDEN, VALIDATION_ERROR] // VALIDATION_ERROR must be listed explicitly when input is used.
 });
 
 // Avoid - missing error types
