@@ -45,7 +45,7 @@
     "localization"
   ],
   "engines": {
-    "node": ">=25"
+    "node": ">=24"
   },
   "dependencies": {
     "i18next": "^25.8.10",

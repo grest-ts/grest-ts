@@ -47,7 +47,7 @@
     "helpers"
   ],
   "engines": {
-    "node": ">=25"
+    "node": ">=24"
   },
   "dependencies": {
     "fast-glob": "^3.3.3"

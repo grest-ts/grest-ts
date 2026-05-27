@@ -41,7 +41,7 @@
     "mysql"
   ],
   "engines": {
-    "node": ">=25"
+    "node": ">=24"
   },
   "dependencies": {
     "sqlstring": "^2.3.3"

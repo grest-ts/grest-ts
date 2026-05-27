@@ -50,7 +50,7 @@
     "dependency-injection"
   ],
   "engines": {
-    "node": ">=25"
+    "node": ">=24"
   },
   "peerDependencies": {
     "@grest-ts/common": "0.0.43",
