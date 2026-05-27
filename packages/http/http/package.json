@@ -53,7 +53,7 @@
     "rest"
   ],
   "engines": {
-    "node": ">=25"
+    "node": ">=24"
   },
   "dependencies": {
     "find-my-way": "^9.4.0"

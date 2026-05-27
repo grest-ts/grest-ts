@@ -46,7 +46,7 @@
     "sql"
   ],
   "engines": {
-    "node": ">=25"
+    "node": ">=24"
   },
   "dependencies": {
     "mysql2": "^3.17.2"

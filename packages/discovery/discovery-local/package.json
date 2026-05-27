@@ -50,7 +50,7 @@
     "development"
   ],
   "engines": {
-    "node": ">=25"
+    "node": ">=24"
   },
   "bin": {
     "discovery-local": "./src/bin/discovery-local.ts"

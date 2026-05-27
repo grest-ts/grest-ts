@@ -51,6 +51,6 @@
     "type-safe"
   ],
   "engines": {
-    "node": ">=25"
+    "node": ">=24"
   }
 }

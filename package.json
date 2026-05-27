@@ -22,7 +22,7 @@
     "testing"
   ],
   "engines": {
-    "node": ">=25"
+    "node": ">=24"
   },
   "imports": {
     "#scripts/*": "./scripts/*"

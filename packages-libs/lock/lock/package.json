@@ -42,7 +42,7 @@
     "concurrency"
   ],
   "engines": {
-    "node": ">=25"
+    "node": ">=24"
   },
   "peerDependencies": {
     "@grest-ts/locator": "0.0.43"

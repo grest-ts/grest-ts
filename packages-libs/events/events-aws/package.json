@@ -40,7 +40,7 @@
     "sqs"
   ],
   "engines": {
-    "node": ">=25"
+    "node": ">=24"
   },
   "dependencies": {
     "@aws-sdk/client-sns": "^3.991.0",
