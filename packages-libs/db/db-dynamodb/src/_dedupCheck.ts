@@ -12,7 +12,7 @@
 const __KEY = Symbol.for("grest-ts:dedup:@grest-ts/db-dynamodb");
 const __slot = globalThis as Record<symbol, unknown>;
 const __existing = __slot[__KEY] as { path: string; version: string } | undefined;
-const __here = { path: import.meta.url, version: "0.0.43" };
+const __here = { path: import.meta.url, version: "0.0.44" };
 // Same path + same version means the same physical package is being
 // re-evaluated by a different ESM runner (e.g. vitest projects share one
 // process but each project has its own module cache). That isn't a true

@@ -10,7 +10,7 @@
       "name": "grest-ts",
       "source": "./grest-ts",
       "description": "Framework conventions, anti-patterns, and per-package reference docs for grest-ts. Activates whenever Claude works in a project that uses @grest-ts/* packages.",
-      "version": "0.0.43",
+      "version": "0.0.44",
       "author": {
         "name": "grest-ts"
       },
