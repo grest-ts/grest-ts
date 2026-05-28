@@ -37,23 +37,26 @@ describe("HTTP request body size limit", () => {
     })
 
     test("chunked body with no Content-Length is still capped by the streaming counter", async () => {
-        // Transfer-Encoding: chunked, so there's no Content-Length to pre-check.
-        // echoSmall caps at 1 KiB; the first 2 KiB chunk must trip the counter.
+        // Transfer-Encoding: chunked, so there's no Content-Length to pre-check;
+        // echoSmall caps at 1 KiB. Send a complete request over the cap and read
+        // the 413 — req.end() avoids leaving an incomplete request that a loaded
+        // server could reset before the client reads the response.
         const base = new URL(urlFor("BodyLimit"))
         const status = await new Promise<number>((resolve, reject) => {
+            let settled = false
+            const finish = <T>(cb: (v: T) => void, v: T) => { if (!settled) { settled = true; cb(v) } }
             const req = http.request({
                 hostname: base.hostname,
-                port: base.port,
+                port: Number(base.port),
                 path: "/api/body-limit/echo-small",
                 method: "POST",
                 headers: {"Content-Type": "application/json", "Transfer-Encoding": "chunked"},
             }, (res) => {
                 res.resume()
-                resolve(res.statusCode!)
-                req.destroy()
+                finish(resolve, res.statusCode!)
             })
-            req.on("error", (e) => reject(e))
-            req.write("x".repeat(2048))
+            req.on("error", (e) => finish(reject, e))
+            req.end("x".repeat(4096))
         })
         expect(status).toBe(413)
     })
