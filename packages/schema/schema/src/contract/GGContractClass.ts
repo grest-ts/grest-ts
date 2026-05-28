@@ -11,6 +11,7 @@ export interface GGContractMethod<Request = any, Response = any, ErrorsUnion ext
     success?: GGSchema<Response>;
     errors?: ErrorsUnion[];
     permission?: GGPermission;
+    maxBodyBytes?: number;
 }
 
 export type GGContractApiDefinition = Record<string, GGContractMethod>
@@ -68,6 +69,9 @@ export class GGContractClass<ContractMethods extends GGContractApiDefinition> {
                         );
                     }
                 }
+            }
+            if (method.maxBodyBytes !== undefined && (!Number.isInteger(method.maxBodyBytes) || method.maxBodyBytes <= 0)) {
+                throw new Error(`Contract ${name}.${methodName}.maxBodyBytes must be a positive integer`);
             }
             Object.freeze(method);
         }

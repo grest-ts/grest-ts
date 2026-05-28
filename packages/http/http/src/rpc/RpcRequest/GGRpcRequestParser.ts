@@ -1,8 +1,10 @@
 import type http from "http";
 import type {HttpMethod} from "@grest-ts/common";
-import {GGContractExecutor, GGContractMethod} from "@grest-ts/schema";
+import {GGContractExecutor, GGContractMethod, PAYLOAD_TOO_LARGE} from "@grest-ts/schema";
 import {ClientHttpRouteToRpcTransformServerConfig, GGHttpRequest, GGHttpTransportMiddleware} from "../../schema/GGHttpSchema";
 import type {GGHttpServerMiddleware} from "../../server/GGHttpSchema.startServer";
+
+export const DEFAULT_MAX_BODY_BYTES = 1024 * 1024;
 
 export class GGRpcRequestParser {
 
@@ -84,10 +86,30 @@ export class GGRpcRequestParser {
         if (isMultipart) {
             throw new Error("Received multipart request on a JSON-only route. Use GGRpc.MULTIPART_POST for routes with file uploads.")
         } else {
+            const maxBytes = this.contract.maxBodyBytes ?? DEFAULT_MAX_BODY_BYTES
+
+            const declared = Number(req.headers['content-length'])
+            if (Number.isFinite(declared) && declared > maxBytes) {
+                throw new PAYLOAD_TOO_LARGE({debugMessage: `Request body of ${declared} bytes exceeds limit of ${maxBytes}`})
+            }
+
             const rawBody: Buffer = await new Promise((resolve, reject) => {
                 const chunks: Buffer[] = []
-                req.on('data', (chunk: Buffer) => chunks.push(chunk))
-                req.on('end', () => resolve(Buffer.concat(chunks)))
+                let total = 0
+                const onData = (chunk: Buffer) => {
+                    total += chunk.length
+                    if (total > maxBytes) {
+                        req.off('data', onData)
+                        req.off('end', onEnd)
+                        req.pause()
+                        reject(new PAYLOAD_TOO_LARGE({debugMessage: `Request body exceeds limit of ${maxBytes} bytes`}))
+                        return
+                    }
+                    chunks.push(chunk)
+                }
+                const onEnd = () => resolve(Buffer.concat(chunks))
+                req.on('data', onData)
+                req.on('end', onEnd)
                 req.on('error', reject)
             });
             if (rawBody && rawBody.length > 0) {
