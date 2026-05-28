@@ -1,8 +1,10 @@
 import type http from "http";
 import type {HttpMethod} from "@grest-ts/common";
-import {GGContractExecutor, GGContractMethod} from "@grest-ts/schema";
+import {GGContractExecutor, GGContractMethod, PAYLOAD_TOO_LARGE} from "@grest-ts/schema";
 import {ClientHttpRouteToRpcTransformServerConfig, GGHttpRequest, GGHttpTransportMiddleware} from "../../schema/GGHttpSchema";
 import type {GGHttpServerMiddleware} from "../../server/GGHttpSchema.startServer";
+
+export const DEFAULT_MAX_BODY_BYTES = 1024 * 1024;
 
 export class GGRpcRequestParser {
 
@@ -84,10 +86,28 @@ export class GGRpcRequestParser {
         if (isMultipart) {
             throw new Error("Received multipart request on a JSON-only route. Use GGRpc.MULTIPART_POST for routes with file uploads.")
         } else {
+            const maxBytes = this.contract.maxBodyBytes ?? DEFAULT_MAX_BODY_BYTES
+
             const rawBody: Buffer = await new Promise((resolve, reject) => {
                 const chunks: Buffer[] = []
-                req.on('data', (chunk: Buffer) => chunks.push(chunk))
-                req.on('end', () => resolve(Buffer.concat(chunks)))
+                let total = 0
+                let over = false
+                req.on('data', (chunk: Buffer) => {
+                    total += chunk.length
+                    // Over the cap: stop buffering (drop what we have so memory
+                    // stays bounded) but keep draining to 'end'. Destroying the
+                    // socket mid-request would surface as a 502 / hang through a
+                    // proxy; a fully-consumed request lets the 413 be delivered.
+                    if (total > maxBytes) {
+                        if (!over) { over = true; chunks.length = 0 }
+                        return
+                    }
+                    chunks.push(chunk)
+                })
+                req.on('end', () => {
+                    if (over) reject(new PAYLOAD_TOO_LARGE({debugMessage: `Request body exceeds limit of ${maxBytes} bytes`}))
+                    else resolve(Buffer.concat(chunks))
+                })
                 req.on('error', reject)
             });
             if (rawBody && rawBody.length > 0) {

@@ -1,7 +1,7 @@
 import {ANY_ERROR, ANY_ERROR_CLS, ERROR, ERROR_JSON, SERVER_ERROR} from "./ERROR";
 import {GGSchema} from "../GGSchema";
 import {GGContractMethod} from "./GGContractClass";
-import {EXISTS, FORBIDDEN, NOT_AUTHORIZED, NOT_FOUND, ROUTE_NOT_FOUND, VALIDATION_ERROR} from "./standardErrors";
+import {EXISTS, FORBIDDEN, NOT_AUTHORIZED, NOT_FOUND, PAYLOAD_TOO_LARGE, ROUTE_NOT_FOUND, VALIDATION_ERROR} from "./standardErrors";
 import {OK} from "./OK";
 import {GGPromise} from "./GGPromise";
 
@@ -48,7 +48,7 @@ export class GGContractExecutor {
         if (type === "OK") {
             return contract.success
 
-        } else if (type === SERVER_ERROR.TYPE) {
+        } else if (type === SERVER_ERROR.TYPE || type === PAYLOAD_TOO_LARGE.TYPE) {
             return undefined;
 
         } else if (type === undefined) {

@@ -48,4 +48,6 @@ export const NOT_FOUND = ERROR.define("NOT_FOUND", 404)
 
 export const EXISTS = ERROR.define("EXISTS", 409)
 
+export const PAYLOAD_TOO_LARGE = ERROR.define("PAYLOAD_TOO_LARGE", 413)
+
 export const ROUTE_NOT_FOUND = ERROR.define("ROUTE_NOT_FOUND", 404)
