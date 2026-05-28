@@ -62,7 +62,7 @@ describe("HTTP request body size limit", () => {
     })
 
     test("per-route maxBodyBytes raises the cap above the default", async () => {
-        const body = jsonOfSize(2 * 1024 * 1024) // 2 MiB: over default (1 MiB), under echoBig (4 MiB)
+        const body = jsonOfSize(1024 * 1024 + 50_000) // over default (1 MiB), under echoBig (4 MiB)
         expect((await postString("api/body-limit/echo-default", body)).status).toBe(413)
         expect((await postString("api/body-limit/echo-big", body)).status).toBe(200)
     })
