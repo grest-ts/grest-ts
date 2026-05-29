@@ -1,4 +1,5 @@
 import {defineSocketContract, webSocketSchema} from "@grest-ts/websocket"
+import {cookie} from "@grest-ts/http"
 import {
     FORBIDDEN,
     GG_NO_PERMISSIONS,
@@ -46,7 +47,7 @@ export const WsCookieApiContract = defineSocketContract("WsCookieApi", {
 // session cookie resolves to no scopes and is rejected at the handshake.
 export const WsCookieApi = webSocketSchema(WsCookieApiContract)
     .path("ws/cookie-test")
-    .useCookie(SESSION)
+    .use(cookie(SESSION))
     .connectPermission(AppPermission.Read)
     .done()
 

@@ -13,7 +13,6 @@ export * from "./socket/GGSocket";
 export * from "./schema/webSocketSchema";
 export * from "./schema/GGWebSocketSchema";
 export * from "./schema/GGWebSocketMiddleware";
-export * from "./schema/cookieHandshakeMiddleware";
 
 // Client
 export * from "./client/GGSocketPool";

@@ -133,7 +133,7 @@ export class GGSocketServer<TContext, Query> {
     private _onConnection = async (ws: WebSocket, req: http.IncomingMessage) => {
         const connectionLabels = {api: this.apiName, path: this.path};
 
-        const context = new GGContext("ws-connection");
+        const context = new GGContext("ws-connection", undefined, true);
         await context.run(async () => {
             GG_TRACE.init()
             GG_WS_CONNECTION.set({

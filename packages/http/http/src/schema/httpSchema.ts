@@ -3,7 +3,6 @@ import {GGHttpCodec, GGHttpSchema} from "./GGHttpSchema";
 import {GGHttpRequest, GGHttpTransportMiddleware} from "./GGHttpSchema";
 import {GGContractApiDefinition, GGContractClass, GGSchema} from "@grest-ts/schema";
 import {GGContextKey} from "@grest-ts/context";
-import {createCookieMiddleware, GGContextKeyForCookie} from "./cookieMiddleware";
 
 /**
  * Create an HTTP API schema builder from a contract.
@@ -53,18 +52,6 @@ class GGHttpSchemaBuilder<TContract extends GGContractApiDefinition, TContext = 
     use<M extends GGHttpTransportMiddleware>(middleware: M): GGHttpSchemaBuilder<TContract, TContext | M> {
         this._middlewares.push(middleware)
         return this as unknown as GGHttpSchemaBuilder<TContract, TContext | M>
-    }
-
-    /**
-     * Bind a cookie context key to the wire. The key is read from the incoming Cookie
-     * (key.get()) and emitted as Set-Cookie when a handler changes it (key.set(token) →
-     * Set-Cookie; key.set(undefined)/"" → Max-Age=0 clear). The cookie's wire name is the
-     * key's name; all write rules (HttpOnly/Secure/SameSite/Path/Domain/Max-Age) live at
-     * the key.set(value, options) call, never here. A route must declare .updatesCookie(key).
-     */
-    useCookie(cookie: GGContextKeyForCookie): this {
-        this._middlewares.push(createCookieMiddleware(cookie))
-        return this
     }
 
     useHeader<Input>(contextKey: GGContextKey<Input>): GGHttpSchemaBuilder<TContract, TContext | Input> {

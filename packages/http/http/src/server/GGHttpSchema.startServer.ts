@@ -131,7 +131,7 @@ function setupRoutes<TContract extends GGContractApiDefinition>(
         const cookieWriteNames = new Set((codec.updatesCookies ?? []).map(k => k.name))
         server.registerRoute(codec.method, pathPrefix + codec.path, async (req: http.IncomingMessage, res: http.ServerResponse): Promise<void> => {
             scope.ensureEntered();
-            return new GGContext("REQ", parentContext).run(async () => {
+            return new GGContext("REQ", parentContext, true).run(async () => {
                 GG_TRACE.init();
                 GG_HTTP_REQUEST.set({port: server.port, method: req.method, path: req.url});
                 GG_COOKIE_WRITES.set(cookieWriteNames);

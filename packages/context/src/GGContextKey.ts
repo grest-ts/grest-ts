@@ -4,6 +4,7 @@ import {GGCodec, GGSchema} from "@grest-ts/schema";
 export interface GGContextMeta<T> {
     description?: string
     defaultValue?: T
+    mutable?: boolean
 }
 
 export class GGContextKey<Type> {
@@ -12,6 +13,7 @@ export class GGContextKey<Type> {
     public readonly schema: GGSchema<Type>
     public readonly description?: string
     public readonly defaultValue?: Type
+    public readonly mutable: boolean
     private codecs: Map<string, GGCodec<any, Type>>
 
     constructor(name: string, schema: GGSchema<Type>, meta?: GGContextMeta<Type>) {
@@ -19,6 +21,7 @@ export class GGContextKey<Type> {
         this.schema = schema;
         this.description = meta?.description
         this.defaultValue = meta?.defaultValue
+        this.mutable = meta?.mutable ?? false
     }
 
     public get(): Type | undefined {
