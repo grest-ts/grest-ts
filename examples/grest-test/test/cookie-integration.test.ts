@@ -47,7 +47,7 @@ describe("cookie integration (real HTTP wire)", () => {
 
     test("me without a cookie sees no session", async () => {
         const res = await fetch(`${baseUrl()}/cookie/me`)
-        const body = await res.json()
+        const body = await res.json() as {success: boolean; data?: {session?: string}}
         expect(body.success).toBe(true)
         expect(body.data?.session).toBeUndefined()
     })
