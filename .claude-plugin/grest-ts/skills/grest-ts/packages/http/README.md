@@ -478,6 +478,131 @@ httpServer.registerCorsHeaders(['x-custom-header'])
 httpServer.registerCorsExposeHeaders(['x-custom-response-header'])
 ```
 
+## Cookies (httpOnly sessions)
+
+An httpOnly session cookie is a value the browser stores and re-sends automatically
+that JavaScript cannot read (so XSS can't steal it). It is **server-minted**: the
+server emits `Set-Cookie`, the browser stores and resends it, and JS never touches it.
+
+A cookie is just a **context key bound to the wire** — same feel as an auth context
+key. Define a `GGContextKeyForCookie` (a `GGContextKey` whose value rides as a cookie),
+bind it with `.useCookie(SESSION)` on the schema, and use `.get()` / `.set()` in handlers:
+
+```typescript
+// shared api/
+import {GGRpc, httpSchema, GGContextKeyForCookie} from "@grest-ts/http"
+
+// The key's name IS the cookie's wire name. No cookie policy in the shared API.
+export const SESSION = new GGContextKeyForCookie("session")
+
+export const AuthApi = httpSchema(AuthContract)
+    .useCookie(SESSION)
+    .pathPrefix("api/auth")
+    .routes({
+        login:  GGRpc.POST("login").updatesCookie(SESSION),   // may write the cookie
+        logout: GGRpc.POST("logout").updatesCookie(SESSION),  // may write (clear)
+        me:     GGRpc.GET("me"),                              // read-only -> no declaration
+    })
+```
+
+```typescript
+export class AuthService {
+    login  = async (input: LoginRequest): Promise<User> => {
+        const {user, token} = await this.verify(input)
+        // Write rules live HERE, at the set site. Safe defaults (HttpOnly, Secure,
+        // SameSite=Lax, Path=/) are applied; pass only what differs:
+        SESSION.set(token, {maxAgeSec: input.remember ? 60*60*24*30 : 60*60})
+        return user
+    }
+    logout = async (): Promise<void> => { SESSION.delete() }           // -> Max-Age=0 clear
+    me     = async (): Promise<User>  => this.fromSession(SESSION.get())  // read the cookie
+}
+```
+
+**Read vs write.** Reading is implicit — `SESSION.get()` works on any route the schema
+`.useCookie`-bound (just like an auth context key). **Writing is explicit**: only a
+route that declared `.updatesCookie(SESSION)` may change the cookie. A handler that
+calls `SESSION.set(...)` on a route that *didn't* declare it is a `SERVER_ERROR`
+(logged, change rolled back), so a deep service function can't silently mint or change
+someone's session — the capability is visible at the API boundary. (Auth context needs
+no such gate: the server only *reads* it from the request; a cookie is *produced* by
+the server.)
+
+**Emit-on-change.** Within a route that may write, `useCookie` emits `Set-Cookie` only
+when the handler **changes** the key versus what arrived: `set(token)` → `Set-Cookie`;
+`delete()` (or `set(undefined)`) → `Max-Age=0` clear; untouched → nothing (read routes
+don't re-emit, and there's no spurious clear when no cookie arrived).
+
+**Write rules live at `.set(value, options)`**, never in the shared API — only the
+cookie's wire name (the key's name, needed to *read* it on every route) is on the
+schema. Options: `httpOnly`, `secure`, `sameSite`, `path`, `domain`, `maxAgeSec`. Safe
+defaults (`HttpOnly`, `Secure`, `SameSite=Lax`, `Path=/`) are applied by the serializer,
+so `set(token)` is safe; pass only deviations. `SameSite=None` forces `Secure`;
+name/path/domain are validated (no CR/LF/`;`). A scoped cookie repeats `path`/`domain`
+on clear so deletion matches:
+
+```typescript
+SESSION.set(token, {path: "/api", domain: ".example.com", sameSite: "none", maxAgeSec: WEEK})
+SESSION.delete({path: "/api", domain: ".example.com"})   // clear must match scope
+```
+
+**Domain scope is a security boundary.** The default is **host-only** (no `Domain`):
+the cookie is sent only to the exact host that set it. `domain: ".example.com"` sends
+it to **every** subdomain, so *any* subdomain — including user-controlled or untrusted
+content — can read it. Never share a parent domain with untrusted subdomains; host
+untrusted/user content on a **separate registrable domain** instead.
+
+**Cross-site cookies.** A `SameSite=Lax` cookie is not sent on cross-site requests.
+For a cross-site setup (browser and API on different sites) use `sameSite: "none"` +
+`secure: true` **and** credentialed CORS on the server (below) with an exact-origin
+allowlist — never a wildcard.
+
+### Credentialed CORS (cross-origin cookies)
+
+Cross-origin cookie requests require the response to echo the **specific** request
+Origin plus `Access-Control-Allow-Credentials: true` — browsers reject the wildcard
+`*` when credentials are involved. Opt in per server (default off keeps the
+permissive `*`):
+
+```typescript
+new GGHttpServer({
+    cors: {
+        origins: ["https://app.example.com"],   // exact list, or (origin) => boolean
+        credentials: true,
+    },
+})
+```
+
+Only an allowlisted Origin is echoed (never `*`), with `Vary: Origin`. Never reflect
+an arbitrary origin with credentials — the allowlist is the gate.
+
+### Client: send cookies
+
+The browser attaches cross-origin cookies only when the caller opts in:
+
+```typescript
+const client = AuthApi.createClient({url: "https://api.example.com", credentials: "include"})
+```
+
+Same-origin calls and the default need nothing.
+
+### WebSocket cookies
+
+First-class WebSocket cookie support (the same `SESSION` key populated from the
+browser's `Cookie` on the WS upgrade, read-only) is planned — see
+`docs/plans/WS_COOKIE_SUPPORT.md`. Until it lands, gate a socket by the session with
+the **ticket pattern**: a cookie-authenticated HTTP endpoint mints a short-lived,
+single-use ticket; the browser opens the socket carrying that ticket on the handshake
+via the existing token transport:
+
+```typescript
+// HTTP: cookie-authenticated endpoint mints a short-lived ticket
+wsTicket = async (): Promise<{ticket: string}> => {
+    const session = SESSION.get()                       // read from the cookie
+    return {ticket: await this.mintTicket(session, {ttlSec: 10, singleUse: true})}
+}
+```
+
 ## HTTP Client
 
 ### Creating Clients
