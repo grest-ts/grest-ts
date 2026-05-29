@@ -3,7 +3,7 @@ import {SESSION} from "../api/CookieTestApi"
 export class CookieTestService {
 
     public login = async (input: {user: string}): Promise<{ok: boolean}> => {
-        SESSION.set(`session-for-${input.user}`)
+        SESSION.set(`session-for-${input.user}`, {maxAgeSec: 3600})   // write rules live here, at the set site
         return {ok: true}
     }
 

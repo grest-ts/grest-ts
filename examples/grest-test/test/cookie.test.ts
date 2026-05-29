@@ -1,8 +1,8 @@
-import {createCookieMiddleware, GG_COOKIE_WRITES} from "@grest-ts/http"
-import {GGContext, GGContextKey} from "@grest-ts/context"
-import {IsString, SERVER_ERROR} from "@grest-ts/schema"
+import {createCookieMiddleware, GGContextKeyForCookie, GG_COOKIE_WRITES} from "@grest-ts/http"
+import {GGContext} from "@grest-ts/context"
+import {SERVER_ERROR} from "@grest-ts/schema"
 
-const key = (name: string) => new GGContextKey<string | undefined>(name, IsString.orUndefined)
+const cookie = (name: string) => new GGContextKeyForCookie(name)
 // `writes` = the context-key names this "route" declared via .updatesCookie(...).
 const inRequest = (writes: string[], fn: () => void) => new GGContext("test").run(() => {
     GG_COOKIE_WRITES.set(new Set(writes))
@@ -12,21 +12,21 @@ const newRes = () => ({headers: {} as Record<string, string | string[]>})
 
 describe("cookie middleware", () => {
 
-    test("parseRequest reads the named cookie into the key", () => {
+    test("parseRequest reads the cookie (named by the key) into the key", () => {
         inRequest([], () => {
-            const k = key("s_parse")
-            const mw = createCookieMiddleware(k, {cookieName: "sid"})
+            const k = cookie("sid")
+            const mw = createCookieMiddleware(k)
             mw.parseRequest!({headers: {cookie: "other=x; sid=abc123; y=z"}})
             expect(k.get()).toBe("abc123")
         })
     })
 
-    test("a declared write emits a hardened Set-Cookie", () => {
-        inRequest(["s_set"], () => {
-            const k = key("s_set")
-            const mw = createCookieMiddleware(k, {cookieName: "sid", maxAgeSec: 3600})
+    test("a declared write with per-mint options emits a hardened Set-Cookie", () => {
+        inRequest(["sid"], () => {
+            const k = cookie("sid")
+            const mw = createCookieMiddleware(k)
             mw.parseRequest!({headers: {}})
-            k.set("token123")
+            k.set("token123", {maxAgeSec: 3600})
             const res = newRes()
             mw.updateResponse!(res)
             expect(res.headers["set-cookie"]).toEqual([
@@ -35,10 +35,21 @@ describe("cookie middleware", () => {
         })
     })
 
+    test("set with no options uses safe defaults", () => {
+        inRequest(["sid"], () => {
+            const k = cookie("sid")
+            const mw = createCookieMiddleware(k)
+            k.set("t")
+            const res = newRes()
+            mw.updateResponse!(res)
+            expect(res.headers["set-cookie"]).toEqual(["sid=t; Path=/; SameSite=Lax; Secure; HttpOnly"])
+        })
+    })
+
     test("unchanged value (read-only handler) emits nothing", () => {
         inRequest([], () => {
-            const k = key("s_noop")
-            const mw = createCookieMiddleware(k, {cookieName: "sid"})
+            const k = cookie("sid")
+            const mw = createCookieMiddleware(k)
             mw.parseRequest!({headers: {cookie: "sid=incoming"}})
             const res = newRes()
             mw.updateResponse!(res)
@@ -48,8 +59,8 @@ describe("cookie middleware", () => {
 
     test("no incoming cookie + untouched emits nothing (no spurious clear)", () => {
         inRequest([], () => {
-            const k = key("s_absent")
-            const mw = createCookieMiddleware(k, {cookieName: "sid"})
+            const k = cookie("sid")
+            const mw = createCookieMiddleware(k)
             mw.parseRequest!({headers: {}})
             const res = newRes()
             mw.updateResponse!(res)
@@ -57,12 +68,12 @@ describe("cookie middleware", () => {
         })
     })
 
-    test("a declared clear emits Max-Age=0 with the same scope", () => {
-        inRequest(["s_clear"], () => {
-            const k = key("s_clear")
-            const mw = createCookieMiddleware(k, {cookieName: "sid", path: "/api", domain: ".example.com"})
+    test("clearing with scoped options emits Max-Age=0 with matching Path/Domain", () => {
+        inRequest(["sid"], () => {
+            const k = cookie("sid")
+            const mw = createCookieMiddleware(k)
             mw.parseRequest!({headers: {cookie: "sid=abc"}})
-            k.set(undefined)
+            k.set(undefined, {path: "/api", domain: ".example.com"})
             const res = newRes()
             mw.updateResponse!(res)
             expect(res.headers["set-cookie"]).toEqual([
@@ -72,24 +83,22 @@ describe("cookie middleware", () => {
     })
 
     test("SameSite=None forces Secure", () => {
-        inRequest(["s_none"], () => {
-            const k = key("s_none")
-            const mw = createCookieMiddleware(k, {cookieName: "sid", sameSite: "none", secure: false})
-            k.set("t")
+        inRequest(["sid"], () => {
+            const k = cookie("sid")
+            const mw = createCookieMiddleware(k)
+            k.set("t", {sameSite: "none", secure: false})
             const res = newRes()
             mw.updateResponse!(res)
-            expect(res.headers["set-cookie"]).toEqual([
-                "sid=t; Path=/; SameSite=None; Secure; HttpOnly",
-            ])
+            expect(res.headers["set-cookie"]).toEqual(["sid=t; Path=/; SameSite=None; Secure; HttpOnly"])
         })
     })
 
     test("multiple cookies append rather than overwrite", () => {
-        inRequest(["s_multi_a", "s_multi_b"], () => {
-            const sid = key("s_multi_a")
-            const csrf = key("s_multi_b")
-            const sidMw = createCookieMiddleware(sid, {cookieName: "sid"})
-            const csrfMw = createCookieMiddleware(csrf, {cookieName: "csrf"})
+        inRequest(["sid", "csrf"], () => {
+            const sid = cookie("sid")
+            const csrf = cookie("csrf")
+            const sidMw = createCookieMiddleware(sid)
+            const csrfMw = createCookieMiddleware(csrf)
             sid.set("a")
             csrf.set("b")
             const res = newRes()
@@ -104,35 +113,35 @@ describe("cookie middleware", () => {
 
     test("malformed percent-encoding does not throw", () => {
         inRequest([], () => {
-            const k = key("s_bad")
-            const mw = createCookieMiddleware(k, {cookieName: "sid"})
+            const k = cookie("sid")
+            const mw = createCookieMiddleware(k)
             expect(() => mw.parseRequest!({headers: {cookie: "sid=%"}})).not.toThrow()
             expect(k.get()).toBe("%")
         })
     })
 
     test("fractional maxAgeSec is truncated", () => {
-        inRequest(["s_frac"], () => {
-            const k = key("s_frac")
-            const mw = createCookieMiddleware(k, {cookieName: "sid", maxAgeSec: 3.9})
-            k.set("t")
+        inRequest(["sid"], () => {
+            const k = cookie("sid")
+            const mw = createCookieMiddleware(k)
+            k.set("t", {maxAgeSec: 3.9})
             const res = newRes()
             mw.updateResponse!(res)
             expect(res.headers["set-cookie"]![0]).toContain("Max-Age=3")
         })
     })
 
-    test("illegal name/path/domain and non-finite maxAge are rejected at construction", () => {
-        expect(() => createCookieMiddleware(key("v1"), {cookieName: "a;b"})).toThrow()
-        expect(() => createCookieMiddleware(key("v2"), {cookieName: "sid", path: "/x\r\nSet-Cookie: y=z"})).toThrow()
-        expect(() => createCookieMiddleware(key("v3"), {cookieName: "sid", domain: "e;vil"})).toThrow()
-        expect(() => createCookieMiddleware(key("v4"), {cookieName: "sid", maxAgeSec: NaN})).toThrow()
+    test("illegal cookie name (construction) and bad set options are rejected", () => {
+        expect(() => cookie("a;b")).toThrow()                                   // wire name validated at construction
+        expect(() => new GGContext("t").run(() => cookie("sid").set("t", {path: "/x\r\ny"}))).toThrow()
+        expect(() => new GGContext("t").run(() => cookie("sid").set("t", {domain: "e;vil"}))).toThrow()
+        expect(() => new GGContext("t").run(() => cookie("sid").set("t", {maxAgeSec: NaN}))).toThrow()
     })
 
-    test("changing a cookie the route did not declare throws SERVER_ERROR and emits nothing", () => {
+    test("changing a cookie the route did not declare throws SERVER_ERROR and rolls back", () => {
         inRequest([], () => {                       // route declared no writes
-            const k = key("s_gate")
-            const mw = createCookieMiddleware(k, {cookieName: "sid"})
+            const k = cookie("sid")
+            const mw = createCookieMiddleware(k)
             mw.parseRequest!({headers: {}})
             k.set("sneaky")
             const res = newRes()

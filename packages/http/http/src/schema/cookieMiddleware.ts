@@ -1,5 +1,5 @@
 import {GGContextKey} from "@grest-ts/context"
-import {IsAny, SERVER_ERROR, type GGSchema} from "@grest-ts/schema"
+import {IsAny, IsString, SERVER_ERROR, type GGSchema} from "@grest-ts/schema"
 import type {GGHttpRequest, GGHttpResponse, GGHttpTransportMiddleware} from "./GGHttpSchema"
 
 /**
@@ -9,19 +9,15 @@ import type {GGHttpRequest, GGHttpResponse, GGHttpTransportMiddleware} from "./G
  */
 export const GG_COOKIE_WRITES = new GGContextKey<Set<string>>("cookie:writes", IsAny as unknown as GGSchema<Set<string>>)
 
+/**
+ * Cookie write rules — passed to GGContextKeyForCookie.set(value, options). These live at
+ * the set site (the server handler that mints the cookie), never in the shared API.
+ */
 export interface CookieOptions {
-    /** Wire name written to Set-Cookie / read from Cookie. Defaults to the context key's name. */
-    cookieName?: string
     httpOnly?: boolean
     secure?: boolean
     sameSite?: "lax" | "strict" | "none"
-    /** URL path scope. Default "/". */
     path?: string
-    /**
-     * Domain scope. Default undefined = host-only (sent only to the exact host that set it).
-     * A parent domain (".example.com") sends the cookie to EVERY subdomain — only set this
-     * when all subdomains are trusted, since any of them can then read it.
-     */
     domain?: string
     maxAgeSec?: number
 }
@@ -36,39 +32,51 @@ function assertCookieSafe(label: string, value: string): void {
 }
 
 /**
- * Binds a context key to an httpOnly cookie. parseRequest reads the incoming Cookie
- * into the key (so handlers read it via key.get()); updateResponse emits Set-Cookie
- * only when a handler CHANGED the key versus what arrived — key.set(token) → Set-Cookie,
- * key.set("" | undefined) / key.delete() → Max-Age=0 clear, untouched → nothing.
- *
- * Browser-safe (string ops only). Wire it via httpSchema(...).useCookie(key, options);
- * the key itself is a standard GGContextKey used everywhere with .get()/.set().
+ * A context key whose value is carried as an httpOnly cookie. It IS a GGContextKey —
+ * read with .get(), and the cookie's wire name is the key's name. The only addition is
+ * that .set(value, options) takes per-write cookie rules (HttpOnly/Secure/SameSite/Path/
+ * Domain/Max-Age). Bind it to the wire with httpSchema(...).useCookie(key); a route must
+ * declare .updatesCookie(key) to be allowed to change it.
  */
-export function createCookieMiddleware(
-    key: GGContextKey<string | undefined>,
-    options: CookieOptions = {}
-): GGHttpTransportMiddleware {
-    const cookieName = options.cookieName ?? key.name
-    const a = {...SAFE_DEFAULTS, ...options}
-    assertCookieSafe("name", cookieName)
-    assertCookieSafe("path", a.path)
-    if (a.domain !== undefined) assertCookieSafe("domain", a.domain)
-    if (a.maxAgeSec !== undefined && !Number.isFinite(a.maxAgeSec)) {
-        throw new Error(`Cookie "${cookieName}": maxAgeSec must be a finite number, got ${a.maxAgeSec}.`)
+export class GGContextKeyForCookie extends GGContextKey<string | undefined> {
+
+    private readonly _options: GGContextKey<CookieOptions | undefined>
+
+    constructor(name: string) {
+        super(name, IsString.orUndefined)
+        assertCookieSafe("name", name)
+        this._options = new GGContextKey<CookieOptions | undefined>(`${name}:cookie-options`, IsAny as unknown as GGSchema<CookieOptions | undefined>)
     }
-    const secure = a.sameSite === "none" ? true : a.secure
-    const sameSite = `${a.sameSite.charAt(0).toUpperCase()}${a.sameSite.slice(1)}`
+
+    public set(value: string | undefined, options?: CookieOptions): void {
+        if (options) {
+            if (options.maxAgeSec !== undefined && !Number.isFinite(options.maxAgeSec)) {
+                throw new Error(`GGContextKeyForCookie("${this.name}").set(): maxAgeSec must be a finite number, got ${options.maxAgeSec}.`)
+            }
+            if (options.path !== undefined) assertCookieSafe("path", options.path)
+            if (options.domain !== undefined) assertCookieSafe("domain", options.domain)
+        }
+        super.set(value)
+        this._options.set(options)
+    }
+
+    /** @internal Read by the cookie binding when emitting Set-Cookie. */
+    public _writeOptions(): CookieOptions | undefined {
+        return this._options.get()
+    }
+}
+
+/**
+ * Binds a GGContextKeyForCookie to the wire. parseRequest reads the incoming Cookie
+ * (named by the key) into the key; updateResponse emits Set-Cookie only when a handler
+ * CHANGED the key versus what arrived — set(token) → Set-Cookie, set(undefined)/""/
+ * delete() → Max-Age=0 clear, untouched → nothing. Changing a cookie whose route did not
+ * declare .updatesCookie(key) is a SERVER_ERROR. Used by httpSchema(...).useCookie(key).
+ */
+export function createCookieMiddleware(key: GGContextKeyForCookie): GGHttpTransportMiddleware {
+    const cookieName = key.name // validated in the key's constructor
     // Snapshot of what arrived, so updateResponse only emits when the handler changed it.
     const inbound = new GGContextKey<string | undefined>(`${key.name}:cookie-inbound`, IsAny as unknown as GGSchema<string | undefined>)
-
-    const attributes = (): string => {
-        let s = `; Path=${a.path}`
-        if (a.domain) s += `; Domain=${a.domain}`
-        s += `; SameSite=${sameSite}`
-        if (secure) s += "; Secure"
-        if (a.httpOnly) s += "; HttpOnly"
-        return s
-    }
 
     return {
         headers: {},
@@ -102,11 +110,15 @@ export function createCookieMiddleware(
             if (current === arrived) return // handler did not change the cookie
             if (!GG_COOKIE_WRITES.get()?.has(key.name)) {
                 key.set(arrived) // reject the change so the error response (catch-path retry) doesn't re-trigger
-                throw new SERVER_ERROR({debugMessage: `Cookie "${cookieName}" (context key "${key.name}") was modified by the handler, but this route did not declare .updatesCookie(<key>). Only routes that declare it may set or clear the cookie.`})
+                throw new SERVER_ERROR({debugMessage: `Cookie "${cookieName}" was modified by the handler, but this route did not declare .updatesCookie(<key>). Only routes that declare it may set or clear the cookie.`})
             }
+            const o = {...SAFE_DEFAULTS, ...key._writeOptions()}
+            const secure = o.sameSite === "none" ? true : o.secure
+            const sameSite = `${o.sameSite.charAt(0).toUpperCase()}${o.sameSite.slice(1)}`
+            const attrs = `; Path=${o.path}${o.domain ? `; Domain=${o.domain}` : ""}; SameSite=${sameSite}${secure ? "; Secure" : ""}${o.httpOnly ? "; HttpOnly" : ""}`
             const line = current
-                ? `${cookieName}=${encodeURIComponent(current)}${a.maxAgeSec !== undefined ? `; Max-Age=${Math.trunc(a.maxAgeSec)}` : ""}${attributes()}`
-                : `${cookieName}=; Max-Age=0${attributes()}`
+                ? `${cookieName}=${encodeURIComponent(current)}${o.maxAgeSec !== undefined ? `; Max-Age=${Math.trunc(o.maxAgeSec)}` : ""}${attrs}`
+                : `${cookieName}=; Max-Age=0${attrs}`
             const existing = res.headers["set-cookie"]
             const arr = existing === undefined ? [] : Array.isArray(existing) ? existing : [existing]
             arr.push(line)

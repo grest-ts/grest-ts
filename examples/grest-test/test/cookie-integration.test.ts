@@ -24,10 +24,11 @@ describe("cookie integration (real HTTP wire)", () => {
         const setCookie = res.headers.getSetCookie()
         await res.text()
         expect(setCookie).toHaveLength(1)
-        expect(setCookie[0]).toMatch(/^sid=session-for-alice/)
+        expect(setCookie[0]).toMatch(/^session=session-for-alice/)
         expect(setCookie[0]).toContain("HttpOnly")
         expect(setCookie[0]).toContain("Secure")
         expect(setCookie[0]).toContain("SameSite=Lax")
+        expect(setCookie[0]).toContain("Max-Age=3600")
     })
 
     test("round-trip: the cookie from login is read back on the next request", async () => {
@@ -68,7 +69,7 @@ describe("cookie integration (real HTTP wire)", () => {
         const setCookie = res.headers.getSetCookie()
         await res.text()
         expect(setCookie).toHaveLength(1)
-        expect(setCookie[0]).toMatch(/^sid=;/)
+        expect(setCookie[0]).toMatch(/^session=;/)
         expect(setCookie[0]).toContain("Max-Age=0")
     })
 

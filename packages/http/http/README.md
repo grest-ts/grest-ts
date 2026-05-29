@@ -485,19 +485,18 @@ that JavaScript cannot read (so XSS can't steal it). It is **server-minted**: th
 server emits `Set-Cookie`, the browser stores and resends it, and JS never touches it.
 
 A cookie is just a **context key bound to the wire** — same feel as an auth context
-key. Define a standard `GGContextKey`, bind it with `.useCookie(...)` on the schema,
-and use plain `.get()`/`.set()` in handlers:
+key. Define a `GGContextKeyForCookie` (a `GGContextKey` whose value rides as a cookie),
+bind it with `.useCookie(SESSION)` on the schema, and use `.get()` / `.set()` in handlers:
 
 ```typescript
 // shared api/
-import {GGRpc, httpSchema} from "@grest-ts/http"
-import {GGContextKey} from "@grest-ts/context"
-import {IsString} from "@grest-ts/schema"
+import {GGRpc, httpSchema, GGContextKeyForCookie} from "@grest-ts/http"
 
-export const SESSION = new GGContextKey<string | undefined>("session", IsString.orUndefined)
+// The key's name IS the cookie's wire name. No cookie policy in the shared API.
+export const SESSION = new GGContextKeyForCookie("session")
 
 export const AuthApi = httpSchema(AuthContract)
-    .useCookie(SESSION, "sid")                  // wire-name optional; defaults to the key name
+    .useCookie(SESSION)
     .pathPrefix("api/auth")
     .routes({
         login:  GGRpc.POST("login").updatesCookie(SESSION),   // may write the cookie
@@ -510,7 +509,9 @@ export const AuthApi = httpSchema(AuthContract)
 export class AuthService {
     login  = async (input: LoginRequest): Promise<User> => {
         const {user, token} = await this.verify(input)
-        SESSION.set(token)                                  // -> Set-Cookie on the response
+        // Write rules live HERE, at the set site. Safe defaults (HttpOnly, Secure,
+        // SameSite=Lax, Path=/) are applied; pass only what differs:
+        SESSION.set(token, {maxAgeSec: input.remember ? 60*60*24*30 : 60*60})
         return user
     }
     logout = async (): Promise<void> => { SESSION.set(undefined) }     // -> Max-Age=0 clear
@@ -522,20 +523,28 @@ export class AuthService {
 `.useCookie`-bound (just like an auth context key). **Writing is explicit**: only a
 route that declared `.updatesCookie(SESSION)` may change the cookie. A handler that
 calls `SESSION.set(...)` on a route that *didn't* declare it is a `SERVER_ERROR`
-(logged), so a deep service function can't silently mint or change someone's session —
-the capability is visible at the API boundary. (Auth context needs no such gate: the
-server only *reads* it from the request; a cookie is *produced* by the server.)
+(logged, change rolled back), so a deep service function can't silently mint or change
+someone's session — the capability is visible at the API boundary. (Auth context needs
+no such gate: the server only *reads* it from the request; a cookie is *produced* by
+the server.)
 
 **Emit-on-change.** Within a route that may write, `useCookie` emits `Set-Cookie` only
 when the handler **changes** the key versus what arrived: `set(token)` → `Set-Cookie`;
 `set(undefined)`/`set("")`/`delete()` → `Max-Age=0` clear; untouched → nothing (read
 routes don't re-emit, and there's no spurious clear when no cookie arrived).
 
-**Attributes** live on the `.useCookie(key, options)` binding (pass a string for just
-the wire-name, or an options object): `cookieName` (default = key name), `httpOnly`
-(default true), `secure` (default true), `sameSite` (default `"lax"`), `path`
-(default `/`), `domain` (default host-only), `maxAgeSec`. `SameSite=None` forces
-`Secure`; name/path/domain are validated (no CR/LF/`;`).
+**Write rules live at `.set(value, options)`**, never in the shared API — only the
+cookie's wire name (the key's name, needed to *read* it on every route) is on the
+schema. Options: `httpOnly`, `secure`, `sameSite`, `path`, `domain`, `maxAgeSec`. Safe
+defaults (`HttpOnly`, `Secure`, `SameSite=Lax`, `Path=/`) are applied by the serializer,
+so `set(token)` is safe; pass only deviations. `SameSite=None` forces `Secure`;
+name/path/domain are validated (no CR/LF/`;`). A scoped cookie repeats `path`/`domain`
+on clear so deletion matches:
+
+```typescript
+SESSION.set(token, {path: "/api", domain: ".example.com", sameSite: "none", maxAgeSec: WEEK})
+SESSION.set(undefined, {path: "/api", domain: ".example.com"})   // clear must match scope
+```
 
 **Domain scope is a security boundary.** The default is **host-only** (no `Domain`):
 the cookie is sent only to the exact host that set it. `domain: ".example.com"` sends
