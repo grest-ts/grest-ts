@@ -1,5 +1,16 @@
 # Handoff: first-class WebSocket cookie support (`@grest-ts/http`)
 
+> **STATUS: IMPLEMENTED (2026-05-29).** Shipped as designed below.
+> - `readCookie` extracted + exported from `cookieMiddleware.ts` (shared HTTP/WS parse).
+> - `GGWebSocketHandshakeContext.upgradeHeaders` added; `GGSocketServer` threads the real
+>   upgrade `req.headers` into it.
+> - `createCookieHandshakeMiddleware(key)` (new `cookieHandshakeMiddleware.ts`) reads the
+>   cookie from `upgradeHeaders` only; `webSocketSchema(...).useCookie(key)` attaches it.
+> - Fixture `WsCookieApi` (reuses the HTTP `SESSION` key) + `WsCookieService`; raw-`ws`
+>   integration tests in `examples/grest-test/test/websocket-cookie-integration.test.ts`
+>   plus `readCookie` unit tests in `cookie.test.ts`.
+> - Documented in `packages/http/websocket/README.md` → "Cookies".
+
 You're picking up the WebSocket half of httpOnly-cookie support. The HTTP half is
 done and merged onto branch `kratt/cookie-support` (commits `feat(http): httpOnly
 session cookies` … through `feat(http): add GGContextKeyForCookie.delete()`). Read
@@ -71,10 +82,66 @@ WS. **No `Set-Cookie` on a WebSocket** — cookies are minted on HTTP login/refr
 ride along on the upgrade. So on WS: parse/read only; the `.set()`/`.delete()`/emit/
 `.updatesCookie` machinery stays HTTP-only.
 
+**Scope: browser-only.** Cookie auth targets browsers (the cookie rides the upgrade
+automatically). Node service-to-service clients keep using bearer tokens / discovery —
+`GGSocketPool.openSocket` does not forward headers to `NodeSocketAdapter` today and we
+are **not** wiring Node-client cookie sending now.
+
+## 3a. DX — what the app developer writes
+
+The win is **zero client-side auth code**: if the user logged in over HTTP (httpOnly
+`SESSION` cookie set), opening a socket just works because the browser auto-attaches the
+cookie to the WS upgrade GET.
+
+```ts
+// shared api/ — one new line, mirroring httpSchema(...).useCookie(SESSION)
+export const SESSION = new GGContextKeyForCookie("session")   // the SAME key as HTTP
+
+export const ChatApi = webSocketSchema(ChatContract)
+    .path("ws/chat")
+    .useCookie(SESSION)           // NEW on the WS builder — read-only
+    .connectPermission(CHAT_USE)  // optional handshake gate
+    .done()
+```
+
+```ts
+// server compose — reuse the existing gate; resolver reads the cookie-derived session
+ChatApi.register(chat.handleConnection, {
+    http: httpServer,
+    permissionResolver: () => scopesFromSession(SESSION.get()),
+})
+// inside handleConnection: const user = userFromSession(SESSION.get())
+```
+
+```ts
+// browser client — nothing auth-related to do
+const client = ChatApi.createClient({ url: "" })   // same-origin
+await client.connect()                              // browser attaches the cookie on upgrade
+```
+
+`SESSION.get()` reads identically on HTTP and WS. Writing stays HTTP-only by
+construction: there is no `Set-Cookie` on a socket, and WS methods are not HTTP routes,
+so `.updatesCookie()` (a `GGRpc.*` route concept) does not exist on WS — `.useCookie()`
+on a WS schema is unambiguously read-only.
+
+**`.useCookie()` does not exist on the WS builder yet** — `GGWebSocketSchemaBuilder`
+(`packages/http/websocket/src/schema/webSocketSchema.ts`) has `.path/.use/.queryOnConnect/
+.connectPermission/.done`. Add `.useCookie(key)` as sugar that pushes the cookie binding
+into `_middlewares`, exactly like `httpSchema(...).useCookie`.
+
+## 3b. Accepted limitation (settled with owner, 2026-05-29)
+
+Sockets are long-lived and identity is **pinned at connect**: `SESSION` is read once at
+handshake, scopes resolved once and cached for the connection's life (the README's
+documented revocation limitation). No mid-stream cookie re-read, no refresh-over-WS, no
+`updateResponse`. Clearing the cookie via HTTP logout fails *new* connects but leaves
+live sockets alone — close them server-side if hard logout is required. This is accepted
+and removes a whole class of work.
+
 ## 4. The core constraint (why it isn't already done)
 
 grest-ts WS auth runs off an **in-band `HANDSHAKE` message** (`msg.data`), not the HTTP
-upgrade headers. In `packages/http/http/websocket/src/server/GGSocketServer.ts`: the
+upgrade headers. In `packages/http/websocket/src/server/GGSocketServer.ts`: the
 `'upgrade'` handler (~line 53) has `req` (with the browser's auto-attached `Cookie`) but
 only uses it for path/query and **discards it**; the handshake context is built from the
 in-band message (~line 264, `const headers = msg.data || {}`). A browser **cannot** put
@@ -86,12 +153,16 @@ handshake context.
 
 1. **Capture upgrade headers.** Where the `'upgrade'`/`connection` handler runs
    (`GGSocketServer.ts` ~53-59), stash `req.headers` so they survive to handshake time.
-2. **Expose them on the handshake context.** Extend `GGWebSocketHandshakeContext`
-   (`packages/http/http/websocket/src/schema/GGWebSocketMiddleware.ts`) with the real
-   upgrade request headers (a new field, or seed `headers` from the upgrade and overlay
-   the in-band message). **For transport headers like `cookie`, the real upgrade header
-   must win** over in-band (the client controls the in-band message and could spoof; it
-   can't forge the browser's `Cookie`).
+2. **Expose them on the handshake context — as a separate field (DECIDED).** Extend
+   `GGWebSocketHandshakeContext`
+   (`packages/http/websocket/src/schema/GGWebSocketMiddleware.ts`) with a new
+   server-only `upgradeHeaders: Record<string,string>` (the real, lowercased
+   `req.headers`). The existing in-band `headers` map is untouched (still the bearer
+   transport). The cookie binding reads **only** `ctx.upgradeHeaders["cookie"]`, so
+   in-band can never spoof the browser cookie — no per-header precedence rule needed.
+   (Rejected the seed-and-overlay alternative: it maximizes HTTP/WS symmetry for
+   hand-written middleware but that symmetry is moot since the cookie binding is
+   framework code; the separate field is unambiguous.)
 3. **WS side of the cookie binding.** Make the cookie binding also implement
    `GGWebSocketMiddleware.parseHandshake(ctx)`: read the cookie (named `key.name`) from
    the upgrade headers, reuse the exact parse logic from `createCookieMiddleware`
@@ -103,23 +174,22 @@ handshake context.
 4. **Connect-time gate.** A WS connect-permission resolver / guard reads `SESSION.get()`
    exactly like an HTTP guard. No new gate machinery — reuse the existing
    `connectPermission` / `permissionResolver` path in
-   `packages/http/http/websocket/src/server/GGWebSocketSchema.startServer.ts`.
+   `packages/http/websocket/src/server/GGWebSocketSchema.startServer.ts`.
 
 ## 6. Files
 
-- `packages/http/http/websocket/src/server/GGSocketServer.ts` — capture + thread upgrade headers.
-- `packages/http/http/websocket/src/schema/GGWebSocketMiddleware.ts` — handshake-context shape + precedence.
+- `packages/http/websocket/src/server/GGSocketServer.ts` — capture + thread upgrade headers.
+- `packages/http/websocket/src/schema/GGWebSocketMiddleware.ts` — handshake-context shape + precedence.
 - `packages/http/http/src/schema/cookieMiddleware.ts` — add `parseHandshake`; share parse logic; keep emit/write-gate HTTP-only.
 - WS schema builder — a `.useCookie(SESSION)` attach path mirroring `httpSchema`.
 
-## 7. The one open decision — FLAG, don't silently pick
+## 7. Decisions (settled with owner, 2026-05-29)
 
-Precedence when both the upgrade header and an in-band header carry `cookie`:
-**real-upgrade-header-wins** (recommended, since only the upgrade carries the browser
-cookie and in-band is client-spoofable) vs. in-band-wins vs. a separate namespace.
-This is the one behavior-changing call (it adds a second header source to a currently
-single-source in-band handshake). Implement real-wins for `cookie`, but surface the
-choice to the owner.
+- **Upgrade-header exposure: separate `upgradeHeaders` field** on the handshake context
+  (not seed-and-overlay of `headers`). The cookie binding reads only `upgradeHeaders`, so
+  the spoofing question is structurally closed — in-band has no `cookie` channel at all.
+- **Browser-only scope.** No Node-client cookie sending (see §3).
+- **Identity pinned at connect.** No refresh / re-read over WS (see §3b).
 
 ## 8. Tests
 
@@ -127,7 +197,8 @@ choice to the owner.
   open a socket with a `Cookie` on the upgrade; assert a guard/handler reads
   `SESSION.get()`. Reuse the `CookieTestApi` `SESSION` key.
 - Connect-gate: socket without the cookie rejected; with a valid cookie accepted.
-- In-band spoofing of `cookie` cannot override the real upgrade `Cookie`.
+- A `cookie` placed in the in-band handshake message is ignored — only the real upgrade
+  `Cookie` (via `upgradeHeaders`) populates `SESSION`.
 - No `Set-Cookie` is ever emitted on a WS upgrade.
 - Run the full sweep via the `run_tests` MCP at the end; keep it green.
 

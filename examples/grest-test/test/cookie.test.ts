@@ -1,4 +1,4 @@
-import {createCookieMiddleware, GGContextKeyForCookie, GG_COOKIE_WRITES} from "@grest-ts/http"
+import {createCookieMiddleware, GGContextKeyForCookie, GG_COOKIE_WRITES, readCookie} from "@grest-ts/http"
 import {GGContext} from "@grest-ts/context"
 import {SERVER_ERROR} from "@grest-ts/schema"
 
@@ -181,5 +181,31 @@ describe("cookie middleware", () => {
             expect(res.headers["set-cookie"]).toBeUndefined()   // nothing emitted
             expect(k.get()).toBeUndefined()                     // change was rolled back
         })
+    })
+})
+
+describe("readCookie (shared HTTP/WS parse)", () => {
+
+    test("extracts the named cookie, ignoring others and surrounding spaces", () => {
+        expect(readCookie("other=x; sid=abc123; y=z", "sid")).toBe("abc123")
+        expect(readCookie("  sid=abc123  ", "sid")).toBe("abc123")
+    })
+
+    test("decodes percent-encoding, falling back to raw on malformed input", () => {
+        expect(readCookie("sid=a%20b", "sid")).toBe("a b")
+        expect(readCookie("sid=%", "sid")).toBe("%")
+    })
+
+    test("returns undefined for missing name or missing header", () => {
+        expect(readCookie("other=x", "sid")).toBeUndefined()
+        expect(readCookie(undefined, "sid")).toBeUndefined()
+        expect(readCookie("", "sid")).toBeUndefined()
+    })
+
+    test("a bare name (sid=) is a present empty string, not absent", () => {
+        // HTTP dirty-tracking depends on "" (a real, empty read) being distinct from
+        // undefined (no cookie) — this guards the extraction against regressing that.
+        expect(readCookie("sid=", "sid")).toBe("")
+        expect(readCookie("a=1; sid=; b=2", "sid")).toBe("")
     })
 })

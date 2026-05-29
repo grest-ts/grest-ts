@@ -1,5 +1,7 @@
 import {GGWebSocketSchema, GGWebSocketContractRuntime} from "./GGWebSocketSchema";
 import {GGWebSocketMiddleware} from "./GGWebSocketMiddleware";
+import {createCookieHandshakeMiddleware} from "./cookieHandshakeMiddleware";
+import {GGContextKeyForCookie} from "@grest-ts/http";
 import {GGContractClass, GGContractClient, GGContractImplementation, GGContractMethod, GGPermission, GGValidator} from "@grest-ts/schema";
 
 /**
@@ -90,6 +92,23 @@ class GGWebSocketSchemaBuilder<
     use<M extends GGWebSocketMiddleware>(middleware: M): GGWebSocketSchemaBuilder<TClientToServer, TServerToClient, TContext | M, TQuery, TClientToServerImpl, TServerToClientImpl> {
         this._middlewares.push(middleware)
         return this as any
+    }
+
+    /**
+     * Bind a cookie context key to the connection, read-only. The cookie (named by the
+     * key) is read from the browser's real upgrade request into the key, so handlers and
+     * the connect gate read key.get() identically to HTTP. The SAME GGContextKeyForCookie
+     * is used on both transports — httpSchema(...).useCookie(SESSION) and
+     * webSocketSchema(...).useCookie(SESSION). There is no Set-Cookie on a WebSocket:
+     * cookies are minted over HTTP and ride the upgrade, so there is no write declaration.
+     *
+     * Handshake middlewares run in registration order, so call .useCookie(...) BEFORE any
+     * .use(mw) whose parseHandshake/process reads the cookie, or that middleware sees the
+     * key still unset.
+     */
+    useCookie(cookie: GGContextKeyForCookie): this {
+        this._middlewares.push(createCookieHandshakeMiddleware(cookie))
+        return this
     }
 
     /**

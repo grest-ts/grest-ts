@@ -76,6 +76,28 @@ export class GGContextKeyForCookie extends GGContextKey<string | undefined> {
 }
 
 /**
+ * Read a single named cookie out of a raw `Cookie` header value. Shared by the HTTP
+ * binding (parseRequest) and the WebSocket binding (parseHandshake). A malformed
+ * percent-encoding (e.g. "sid=%") must not crash — fall back to the raw value.
+ */
+export function readCookie(rawCookieHeader: string | undefined, name: string): string | undefined {
+    if (typeof rawCookieHeader !== "string") return undefined
+    for (const part of rawCookieHeader.split(";")) {
+        const eq = part.indexOf("=")
+        if (eq === -1) continue
+        if (part.slice(0, eq).trim() === name) {
+            const rawValue = part.slice(eq + 1).trim()
+            try {
+                return decodeURIComponent(rawValue)
+            } catch {
+                return rawValue
+            }
+        }
+    }
+    return undefined
+}
+
+/**
  * Binds a GGContextKeyForCookie to the wire. parseRequest reads the incoming Cookie
  * (named by the key) into the key; updateResponse emits Set-Cookie only when a handler
  * CHANGED the key versus what arrived — set(token) → Set-Cookie, set(undefined)/""/
@@ -93,24 +115,10 @@ export function createCookieMiddleware(key: GGContextKeyForCookie): GGHttpTransp
 
         parseRequest(req: GGHttpRequest): void {
             const raw = req.headers?.["cookie"]
-            if (typeof raw !== "string") return
-            for (const part of raw.split(";")) {
-                const eq = part.indexOf("=")
-                if (eq === -1) continue
-                if (part.slice(0, eq).trim() === cookieName) {
-                    const rawValue = part.slice(eq + 1).trim()
-                    // A malformed percent-encoding (e.g. "sid=%") must not crash the request.
-                    let value: string
-                    try {
-                        value = decodeURIComponent(rawValue)
-                    } catch {
-                        value = rawValue
-                    }
-                    inbound.set(value)
-                    key.set(value)
-                    return
-                }
-            }
+            const value = readCookie(typeof raw === "string" ? raw : undefined, cookieName)
+            if (value === undefined) return
+            inbound.set(value)
+            key.set(value)
         },
 
         updateResponse(res: GGHttpResponse): void {

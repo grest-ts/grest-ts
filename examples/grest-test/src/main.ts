@@ -22,6 +22,8 @@ import {LanguageTestApi} from "./api/LanguageTestApi"
 import {MiddlewareTestApi} from "./api/MiddlewareTestApi"
 import {CookieTestApi} from "./api/CookieTestApi"
 import {CookieTestService} from "./services/CookieTestService"
+import {getScopesFromSession, WsCookieApi} from "./api/WsCookieApi"
+import {WsCookieService} from "./services/WsCookieService"
 import {FileUploadTestApi} from "./api/FileUploadTestApi"
 import {BenchmarkApi} from "./api/BenchmarkApi"
 import {ConfigTestService} from "./services/ConfigTestService"
@@ -108,6 +110,10 @@ export class MainRuntime extends GGRuntime {
         // Cookie API — .useCookie(SESSION) on the schema parses the incoming Cookie into
         // the SESSION context key and emits Set-Cookie when a handler changes it.
         CookieTestApi.register(new CookieTestService());
+
+        // WS cookie API — the SAME SESSION key, read from the browser's upgrade Cookie.
+        // connectPermission gates on scopes the resolver derives from that cookie.
+        WsCookieApi.register(new WsCookieService().handleConnection, {permissionResolver: getScopesFromSession});
 
         // WebSocket permission test fixtures.
         const wsPermissionsService = new WsPermissionsService();
