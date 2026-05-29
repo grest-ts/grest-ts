@@ -20,6 +20,8 @@ import {QuerySocketApi} from "./api/QuerySocketApi"
 import {EventsTestApi} from "./api/EventsTestApi"
 import {LanguageTestApi} from "./api/LanguageTestApi"
 import {MiddlewareTestApi} from "./api/MiddlewareTestApi"
+import {CookieTestApi} from "./api/CookieTestApi"
+import {CookieTestService} from "./services/CookieTestService"
 import {FileUploadTestApi} from "./api/FileUploadTestApi"
 import {BenchmarkApi} from "./api/BenchmarkApi"
 import {ConfigTestService} from "./services/ConfigTestService"
@@ -102,6 +104,11 @@ export class MainRuntime extends GGRuntime {
         new GGHttp(httpServer)
             .usePermissions(getTestScopes)
             .http(PermissionsApi, new PermissionsTestService());
+
+        // Cookie API — SESSION is attached as a transport middleware on the schema
+        // (parses the incoming Cookie into context, emits Set-Cookie); routes declare
+        // .setsCookies(SESSION) to be permitted to emit.
+        CookieTestApi.register(new CookieTestService());
 
         // WebSocket permission test fixtures.
         const wsPermissionsService = new WsPermissionsService();

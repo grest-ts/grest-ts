@@ -17,9 +17,31 @@ type AnyWebSocketSchema = {
     connectPermission?: GGPermission;
 };
 
+export interface GGCorsConfig {
+    /**
+     * Allowed cross-origin origins. Either an exact-match list or a predicate.
+     * Only a matching Origin is echoed back — an arbitrary origin is never
+     * reflected (that would be a credential-leak / CSRF hole with credentials on).
+     */
+    origins: string[] | ((origin: string) => boolean);
+    /**
+     * When true, adds Access-Control-Allow-Credentials: true so the browser will
+     * send/store cross-origin cookies. Requires an exact-origin echo (never `*`),
+     * which this enforces by construction.
+     */
+    credentials?: boolean;
+}
+
 export interface GGHttpServerAdapterConfig {
     key?: GGLocatorKey<GGHttpServer>;
     port?: number;
+    /**
+     * Cross-origin policy. Omitted (default) keeps the permissive
+     * `Access-Control-Allow-Origin: *` with no credentials — backward compatible.
+     * When set, switches to allowlisted mode: only an Origin in `origins` is echoed
+     * (never `*`), and `credentials: true` enables cross-origin cookies.
+     */
+    cors?: GGCorsConfig;
     /**
      * If provided, the server listens over HTTPS using this cert+key. Both
      * must be PEM-encoded strings or Buffers. Leaving undefined keeps the
@@ -41,6 +63,7 @@ export class GGHttpServer {
     protected readonly scope: GGLocatorScope;
     protected readonly runtimeName: string;
     private readonly configuredPort: number;
+    private readonly cors?: GGCorsConfig;
 
     private readonly _onStart: Array<() => void> = [];
     private readonly _onTeardown: Array<() => void> = [];
@@ -75,6 +98,7 @@ export class GGHttpServer {
         this.runtimeName = GGLocator.getScope().serviceName;
         this.scope = GGLocator.getScope();
         this.configuredPort = config?.port ?? (process.env.PORT ? Number(process.env.PORT) : 0);
+        this.cors = config?.cors;
 
         GGLocator.getScope().setWithLifecycle(config?.key ?? GG_HTTP_SERVER, this, {
             type: GGLocatorServiceType.HTTP,
@@ -90,14 +114,8 @@ export class GGHttpServer {
             }
             this.activeRequests++;
             try {
-                if (req.headers.origin) { // For browsers
-                    res.setHeader('Access-Control-Allow-Origin', '*');
-                    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
-                    res.setHeader('Access-Control-Allow-Headers', this._corsHeadersCache);
-                    if (this._corsExposeHeadersCache) {
-                        res.setHeader('Access-Control-Expose-Headers', this._corsExposeHeadersCache);
-                    }
-                }
+                const cors = corsResponseHeaders(req.headers.origin, this.cors, this._corsHeadersCache, this._corsExposeHeadersCache);
+                for (const name in cors) res.setHeader(name, cors[name]);
                 if (req.method === 'OPTIONS') {
                     res.writeHead(204);
                     res.end();
@@ -313,3 +331,32 @@ export class GGHttpServer {
 }
 
 export type GGHttpRequestCallback = (req: http.IncomingMessage, res: http.ServerResponse) => Promise<void>;
+
+/**
+ * Computes CORS response headers for a request Origin. Pure (no req/res) so it is
+ * unit-testable. Default (no config) = permissive `*`, no credentials. With config =
+ * allowlisted: only a matching Origin is echoed (never `*`), `credentials` adds
+ * Allow-Credentials, and Vary: Origin is always set so caches key on the origin.
+ */
+export function corsResponseHeaders(
+    origin: string | undefined,
+    cors: GGCorsConfig | undefined,
+    allowHeaders: string,
+    exposeHeaders: string
+): Record<string, string> {
+    if (!origin) return {};
+    const headers: Record<string, string> = {};
+    if (cors) {
+        const allowed = Array.isArray(cors.origins) ? cors.origins.includes(origin) : cors.origins(origin);
+        headers['Vary'] = 'Origin';
+        if (!allowed) return headers;
+        headers['Access-Control-Allow-Origin'] = origin;
+        if (cors.credentials) headers['Access-Control-Allow-Credentials'] = 'true';
+    } else {
+        headers['Access-Control-Allow-Origin'] = '*';
+    }
+    headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, PATCH, DELETE, OPTIONS';
+    headers['Access-Control-Allow-Headers'] = allowHeaders;
+    if (exposeHeaders) headers['Access-Control-Expose-Headers'] = exposeHeaders;
+    return headers;
+}

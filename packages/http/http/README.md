@@ -478,6 +478,104 @@ httpServer.registerCorsHeaders(['x-custom-header'])
 httpServer.registerCorsExposeHeaders(['x-custom-response-header'])
 ```
 
+## Cookies (httpOnly sessions)
+
+`GGCookie` carries an httpOnly session cookie — a value the browser stores and
+re-sends automatically, that JavaScript cannot read (so XSS can't steal it). It is
+**server-minted**: the server emits `Set-Cookie`, the browser stores and resends it,
+and JS never touches it.
+
+Define the cookie once (identity only — attributes ride the `issue()` call), attach
+it to the schema with `.use()` (parses the incoming `Cookie` into context), and
+declare which routes may emit it with `.setsCookies()`:
+
+```typescript
+// shared api/
+import {GGCookie, GGRpc, httpSchema} from "@grest-ts/http"
+
+export const SESSION = new GGCookie("sid")
+
+export const AuthApi = httpSchema(AuthContract)
+    .use(SESSION)                                       // parse incoming Cookie -> context
+    .pathPrefix("api/auth")
+    .routes({
+        login:  GGRpc.POST("login").setsCookies(SESSION),   // permitted to emit Set-Cookie
+        logout: GGRpc.POST("logout").setsCookies(SESSION),
+        me:     GGRpc.GET("me"),                             // only reads -> no declaration
+    })
+```
+
+In the service, read with `.get()`, mint with `.issue()`, clear with `.clear()`:
+
+```typescript
+export class AuthService {
+    login = async (input: LoginRequest): Promise<User> => {
+        const {user, token} = await this.verify(input)
+        SESSION.issue(token, {maxAgeSec: 60 * 60})      // attributes here (per-mint)
+        return user
+    }
+    logout = async (): Promise<void> => { SESSION.clear() }
+    me     = async (): Promise<User>  => this.fromSession(SESSION.get())
+}
+```
+
+Attributes default to safe values — `HttpOnly`, `Secure`, `SameSite=Lax`, `Path=/` —
+and `SameSite=None` forces `Secure`. Override per mint via `issue()` options
+(`{httpOnly, secure, sameSite, path, domain, maxAgeSec}`).
+
+**Strict by design:** calling `issue()`/`clear()` from a route that did not declare
+the cookie via `.setsCookies()` is a `SERVER_ERROR` — minting a cookie is a deliberate
+act and must be declared, like `errors` and `permission`. `issue()`/`clear()` also
+throw if reached in the browser; cookies are server-minted.
+
+### Credentialed CORS (cross-origin cookies)
+
+Cross-origin cookie requests require the response to echo the **specific** request
+Origin plus `Access-Control-Allow-Credentials: true` — browsers reject the wildcard
+`*` when credentials are involved. Opt in per server (default off keeps the
+permissive `*`):
+
+```typescript
+new GGHttpServer({
+    cors: {
+        origins: ["https://app.example.com"],   // exact list, or (origin) => boolean
+        credentials: true,
+    },
+})
+```
+
+Only an allowlisted Origin is echoed (never `*`), with `Vary: Origin`. Never reflect
+an arbitrary origin with credentials — the allowlist is the gate.
+
+### Client: send cookies
+
+The browser attaches cross-origin cookies only when the caller opts in:
+
+```typescript
+const client = AuthApi.createClient({url: "https://api.example.com", credentials: "include"})
+```
+
+Same-origin calls and the default need nothing.
+
+### WebSocket: the cookie ticket pattern
+
+WebSocket auth rides the in-band handshake — the browser can't set custom WS headers
+and the framework doesn't read the upgrade `Cookie`. To gate a socket by the session,
+mint a **short-lived, single-use ticket** from the cookie at a normal HTTP endpoint,
+then carry it on the handshake via the existing token transport:
+
+```typescript
+// HTTP: cookie-authenticated endpoint mints a short-lived ticket
+wsTicket = async (): Promise<{ticket: string}> => {
+    const session = SESSION.get()                       // read from the cookie
+    return {ticket: await this.mintTicket(session, {ttlSec: 10, singleUse: true})}
+}
+```
+
+The browser calls `wsTicket()` (cookie auto-attached), then opens the socket carrying
+the ticket on the handshake — gating the WS by the same session, with no change to
+the WS protocol. Keep the mint endpoint gated like any protected route.
+
 ## HTTP Client
 
 ### Creating Clients

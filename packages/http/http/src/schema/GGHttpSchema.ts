@@ -2,6 +2,7 @@ import {ERROR, ERROR_JSON, GGContractApiDefinition, GGContractClass, GGContractM
 import type {HttpMethod} from "@grest-ts/common";
 import type http from "http";
 import type {GGHttpServerMiddleware} from "../server/GGHttpSchema.startServer";
+import type {GGCookie} from "./GGCookie";
 import type {OpenAPIV3_1} from "openapi-types";
 
 export class GGHttpSchema<TContract extends GGContractApiDefinition, TContext> {
@@ -113,6 +114,13 @@ export interface GGHttpCodec {
      * Use {} if the codec sets no custom response headers.
      */
     readonly responseHeaders: Record<string, GGSchema<string | undefined>>;
+
+    /**
+     * Cookies this route is permitted to emit. Declared via GGRpc.*(...).setsCookies(cookie).
+     * The server gates GGCookie.issue()/clear() on this list — minting a cookie a route
+     * did not declare is a SERVER_ERROR.
+     */
+    readonly declaredCookies?: readonly GGCookie[];
 
     createForClient(config: ClientHttpRouteToRpcTransformClientConfig): ClientHttpRouteToRpcTransformClientCodec
 

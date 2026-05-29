@@ -2,6 +2,7 @@ import {HttpMethod} from "@grest-ts/common"
 import {ClientHttpRouteToRpcTransformClientCodec, ClientHttpRouteToRpcTransformClientConfig, ClientHttpRouteToRpcTransformServerCodec, ClientHttpRouteToRpcTransformServerConfig, GGHttpCodec, GGHttpCodecOpenApiConfig} from "../schema/GGHttpSchema"
 import {GGRpcRequestBuilder} from "./RpcRequest/GGRpcRequestBuilder";
 import {GGRpcResponseParser} from "./RpcResponse/GGRpcResponseParser";
+import type {GGCookie} from "../schema/GGCookie";
 import type {OpenAPIV3_1} from "openapi-types";
 import {GGSchema} from "@grest-ts/schema";
 import {buildRpcSuccessResponses} from "./openApiSuccessResponse";
@@ -28,11 +29,18 @@ class GGHttpRpcCodec implements GGHttpCodec {
     public readonly path: string
     public readonly deprecated: boolean | undefined
     public readonly responseHeaders: Record<string, GGSchema<string | undefined>> = {}
+    public readonly declaredCookies: GGCookie[] = []
 
     constructor(method: HttpMethod, path: string, deprecated?: boolean) {
         this.method = method
         this.path = path
         this.deprecated = deprecated
+    }
+
+    /** Declare cookies this route is permitted to emit. Enables GGCookie.issue()/clear() in the handler. */
+    public setsCookies(...cookies: GGCookie[]): this {
+        this.declaredCookies.push(...cookies)
+        return this
     }
 
     public createForClient(config: ClientHttpRouteToRpcTransformClientConfig): ClientHttpRouteToRpcTransformClientCodec {

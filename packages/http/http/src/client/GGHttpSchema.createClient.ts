@@ -29,6 +29,7 @@ export type GGHttpTransport = (
         headers: Record<string, string>
         body: string | FormData | undefined
         signal: AbortSignal
+        credentials?: "omit" | "same-origin" | "include"
     }
 ) => Promise<Response>
 
@@ -36,6 +37,13 @@ export interface GGHttpClientConfig {
     url?: string;
     timeout?: number;
     noValidation?: boolean
+    /**
+     * Cross-origin credentials mode for the default fetch transport. Default
+     * (unset → fetch's "same-origin") is unchanged; pass "include" so the browser
+     * attaches/stores cross-origin cookies. Ignored by custom transports unless
+     * they read it.
+     */
+    credentials?: "omit" | "same-origin" | "include"
     /**
      * Override the wire-layer call. Defaults to `fetch`. When provided,
      * service discovery is skipped (the transport is presumed to know how
@@ -111,7 +119,8 @@ export function createClient<TContract extends GGContractApiDefinition, TContext
                     method: fetchRequest.method,
                     signal: controller.signal,
                     headers: fetchRequest.headers,
-                    body: fetchRequest.body
+                    body: fetchRequest.body,
+                    credentials: config.credentials
                 }).finally(() => clearTimeout(timeoutId));
                 const resData = await wireFormat.parseResponse(wireResponse);
 
