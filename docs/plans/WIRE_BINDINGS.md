@@ -104,13 +104,22 @@ Immutable-by-default is viable BUT not free:
 `clear()`/`revoke()` is YAGNI for now — ship strict set-once; add `clear()` the day a
 real in-request "unset then re-set" flow needs it.
 
-## 4. Binding home
+## 4. Binding home — `@grest-ts/http`
 
-New small package `@grest-ts/wire` exporting `header`/`cookie`/`aOrB`/`setCookie`.
-Runtime-depends only on `@grest-ts/http`; **type-only** imports the WS middleware/handshake
-types from `@grest-ts/websocket` (so http-only apps don't pull a websocket runtime dep).
-(Alt considered: keep them in `@grest-ts/http` with a structural WS type — leaner but
-fragile. Rejected.)
+`header`/`cookie`/`aOrB`/`setCookie` live in **`@grest-ts/http`** (websocket is a child of
+http; these are transport concepts). http must NOT import `@grest-ts/websocket` (the
+established no-cycle rule). The binding's WS half is typed against a **local structural
+copy** of the handshake context — exactly the pattern already used at
+`packages/http/http/src/server/GGHttpServer.ts:10` (`AnyWebSocketSchema` forward-
+declaration). An object with `parseHandshake(ctx: {headers; upgradeHeaders?; queryArgs})`
+satisfies `GGWebSocketMiddleware` structurally at the `webSocketSchema.use()` call site
+(method-param bivariance).
+
+Consequences: no new package; no cycle; **http-only apps pull zero websocket runtime** —
+the binding's `parseHandshake` is just an uninvoked method referencing only http types
+(`readCookie`, the local handshake shape). The `@grest-ts/wire` package idea is dropped;
+the websocket→http pull was never the concern (ws already depends on http), and http-only
+leanness is preserved by http importing nothing from websocket.
 
 ## 5. Inherent transport edges (document, do NOT guard)
 
@@ -197,3 +206,73 @@ AccountWsCookie.register(account.handleConnection)
   ignores a header, header binding ignores a cookie); `setCookie` without `.setsCookies`
   → invalid-usage error; immutable key re-set → throw; `{mutable:true}` key re-set → ok.
 - Full sweep via `run_tests` after each landing.
+
+## 9. Implementer notes (read these first — you have no prior context)
+
+You are implementing this on branch **`kratt/wire-bindings`** (already cut off
+`kratt/cookie-support`). Breaking changes are fine — migrate grest-ts's own callers; do
+NOT keep back-compat shims. Iterate with `npm test -- --run <path>`; final green via the
+kratt `run_tests { repo: "grest-ts" }` MCP.
+
+**Patterns to mirror (all grest-ts):**
+- `packages/http/http/src/schema/cookieMiddleware.ts` — `readCookie` (reuse it),
+  `createCookieMiddleware` (the read+write+dirty-track you're REPLACING), `GG_COOKIE_WRITES`
+  (declared-writes set; `setCookie` reuses it for the gate).
+- `packages/http/http/src/schema/httpSchema.ts` — `useHeader(key)` (codec mechanism:
+  `key.getCodec("http")`, builds `headers:{[name]:schema}`) and `useCookie`. **Both sugar
+  methods are removed**; their logic moves into `header()`/`cookie()` bindings.
+- `packages/http/websocket/src/schema/cookieHandshakeMiddleware.ts` — WS cookie read
+  (`parseHandshake` off `ctx.upgradeHeaders.cookie`). `cookie()` merges this with the HTTP
+  half into one dual-interface object. Then delete this file.
+- `packages/http/websocket/src/schema/GGWebSocketMiddleware.ts` — `GGWebSocketMiddleware`
+  + `GGWebSocketHandshakeContext` (`headers` = in-band/client-set; `upgradeHeaders?` = real
+  upgrade). `header()` on WS uses `ctx.headers`; `cookie()` uses `ctx.upgradeHeaders`.
+- `packages/http/http/src/schema/GGHttpSchema.ts` — `GGHttpTransportMiddleware`
+  (parseRequest/updateRequest/updateResponse/`headers`/`responseHeaders`) + request/response shapes.
+- (kratt repo, reference only) `packages/vendor/auth/src/wire/TokenTransport.ts` — a
+  hand-rolled dual-transport binding with bearer-prefix handling; the shape `header()` formalizes.
+
+**Binding semantics:**
+- `header(key, {name?, scheme?, schema?})` — server reads the named header (HTTP
+  `req.headers[name]` / WS `ctx.headers[name]`) into `key`; client writes it (HTTP
+  `updateRequest` / WS `updateHandshake`) from `key.get()`. `scheme:"bearer"` strips/adds
+  the `Bearer ` prefix; default = verbatim. `name` defaults to `key.name`.
+- `cookie(key, {name?, schema?})` — server reads ONLY the cookie (HTTP
+  `readCookie(req.headers.cookie,name)` / WS `readCookie(ctx.upgradeHeaders?.cookie,name)`).
+  No client-attach (browser-managed). Strict — never a header. `name` defaults to `key.name`.
+- `setCookie(key, value, options?)` — HTTP-only; record into a per-request writes registry
+  that the binding's `updateResponse` flushes onto `res.headers["set-cookie"]` (reuse the
+  serializer from today's `createCookieMiddleware`). Gated by `.setsCookies(key)` (reuse
+  `GG_COOKIE_WRITES`); undeclared call → `SERVER_ERROR` ("invalid usage"). Never touches `key.get()`.
+
+**Doc generation (must keep working + extend — bindings carry the metadata):**
+- OpenAPI: `packages-libs/docs/openapi/src/toOpenApi.ts` reads `httpSchema.apiMiddlewares`
+  → header params + `permissionToSecurity` (`permissionToSecurity.ts` registers ONLY
+  `BearerAuth`). Bindings must still expose `headers` so header params emit; ADD a cookie
+  param/security representation (cookies are undocumented today — close that gap).
+- AsyncAPI: `packages-libs/docs/asyncapi/src/toAsyncApi.ts` mirrors it for WS (reads
+  `wsSchema.middlewares`, `.headers`, `connectPermission`). Same treatment.
+- `aOrB(...)` merges its children's metadata into an OpenAPI/AsyncAPI OR security list.
+
+**Immutability (landing b):**
+- `packages/context/src/GGContext.ts` stores values in a per-context `Map` keyed by
+  `token.name`; `set` writes the LOCAL map, `get`/`has` walk the parent chain. Set-once =
+  "throw if the LOCAL map already has this key" — child-context shadowing stays legal.
+- `packages/context/src/GGContextKey.ts` — add `{mutable?: boolean}` ctor option; default immutable.
+- Mark trace mutable: `packages/trace/trace/src/GG_TRACE.ts:40`
+  (`new GGContextTraceKey('trace', IsTraceContext, {mutable:true})`) — it re-inits per op.
+- Migrate test re-sets: `examples/grest-test/test/{middleware,language}.test.ts`
+  (shared-scope re-set → fresh context or `clear()`), `permissions-ws.test.ts` (ws-cache test).
+
+**No new package — bindings live in `@grest-ts/http`.** Add `header`/`cookie`/`aOrB`/
+`setCookie` alongside the existing cookie/header code in `packages/http/http/src/schema/`.
+http must NOT import `@grest-ts/websocket`; type the binding's WS half against a **local
+structural** handshake shape, copying the precedent at
+`packages/http/http/src/server/GGHttpServer.ts:10` (`AnyWebSocketSchema`). http-only apps
+then pull zero websocket runtime (the `parseHandshake` method is never invoked and imports
+nothing from websocket).
+
+**Migrate callers:** remove `httpSchema.useCookie/useHeader` + `webSocketSchema.useCookie`;
+replace grest-ts internal uses (`examples/grest-test`: `CookieTestApi`, `WsCookieApi`, …)
+with `.use(cookie(...))`/`.use(header(...))` + `setCookie()`. Delete `GGContextKeyForCookie`
+and all dirty-tracking.
