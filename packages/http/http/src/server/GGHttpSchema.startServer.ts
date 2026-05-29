@@ -91,6 +91,11 @@ function setupRoutes<TContract extends GGContractApiDefinition>(
         const codec: GGHttpCodec = httpSchema.codec[methodName];
         const rhKeys = Object.keys(codec?.responseHeaders ?? {});
         if (rhKeys.length) server.registerCorsExposeHeaders(rhKeys);
+        for (const cookie of codec?.declaredCookies ?? []) {
+            if (!apiMiddlewares.includes(cookie)) {
+                throw new Error(`GGHttpSchema "${httpSchema.name}": route "${methodName}" declares .setsCookies("${cookie.cookieName}") but that cookie is not attached to the schema. Add .use(<cookie>) on the httpSchema(...) builder so its Set-Cookie can be emitted.`);
+            }
+        }
     }
 
     server.onStart(() => {

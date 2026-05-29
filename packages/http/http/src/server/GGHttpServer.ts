@@ -347,7 +347,9 @@ export function corsResponseHeaders(
     if (!origin) return {};
     const headers: Record<string, string> = {};
     if (cors) {
-        const allowed = Array.isArray(cors.origins) ? cors.origins.includes(origin) : cors.origins(origin);
+        // Never reflect the literal "null" origin (sandboxed iframe / file:// / opaque
+        // origins) with credentials — the classic null-origin credential-leak footgun.
+        const allowed = origin !== "null" && (Array.isArray(cors.origins) ? cors.origins.includes(origin) : cors.origins(origin));
         headers['Vary'] = 'Origin';
         if (!allowed) return headers;
         headers['Access-Control-Allow-Origin'] = origin;

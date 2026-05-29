@@ -13,7 +13,7 @@ export function applyResponseMiddleware(
     res: http.ServerResponse,
     middlewares: readonly GGHttpTransportMiddleware[] | undefined
 ): void {
-    if (!middlewares?.length) return;
+    if (!middlewares?.length || res.headersSent) return;
     let response: GGHttpResponse | undefined;
     for (const mw of middlewares) {
         if (!mw.updateResponse) continue;

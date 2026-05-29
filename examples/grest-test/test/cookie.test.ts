@@ -94,4 +94,57 @@ describe("GGCookie", () => {
             expect((err as SERVER_ERROR).getDebugContext()?.debugMessage).toContain("did not declare")
         })
     })
+
+    describe("hardening", () => {
+
+        test("malformed percent-encoding in the cookie value does not throw", () => {
+            inRequest(["sid"], () => {
+                const sid = new GGCookie("sid")
+                expect(() => sid.parseRequest({headers: {cookie: "sid=%"}})).not.toThrow()
+                expect(sid.get()).toBe("%")
+            })
+        })
+
+        test("clear() reuses the definition's Path/Domain so the cookie is actually deletable", () => {
+            inRequest(["sid"], () => {
+                const sid = new GGCookie({cookieName: "sid", path: "/api", domain: ".example.com"})
+                sid.clear()
+                const res = {headers: {} as Record<string, string | string[]>}
+                sid.updateResponse(res)
+                expect(res.headers["set-cookie"]).toEqual([
+                    "sid=; Path=/api; Domain=.example.com; Max-Age=0; SameSite=Lax; Secure; HttpOnly",
+                ])
+            })
+        })
+
+        test("issue() uses the definition's Path", () => {
+            inRequest(["sid"], () => {
+                const sid = new GGCookie({cookieName: "sid", path: "/api"})
+                sid.issue("t")
+                const res = {headers: {} as Record<string, string | string[]>}
+                sid.updateResponse(res)
+                expect(res.headers["set-cookie"]).toEqual([
+                    "sid=t; Path=/api; SameSite=Lax; Secure; HttpOnly",
+                ])
+            })
+        })
+
+        test("non-finite maxAgeSec throws; fractional is truncated", () => {
+            inRequest(["sid"], () => {
+                const sid = new GGCookie("sid")
+                expect(() => sid.issue("t", {maxAgeSec: NaN})).toThrow()
+                expect(() => sid.issue("t", {maxAgeSec: Infinity})).toThrow()
+                sid.issue("t", {maxAgeSec: 3.9})
+                const res = {headers: {} as Record<string, string | string[]>}
+                sid.updateResponse(res)
+                expect(res.headers["set-cookie"]![0]).toContain("Max-Age=3")
+            })
+        })
+
+        test("illegal characters in name/path/domain are rejected at construction", () => {
+            expect(() => new GGCookie("a;b")).toThrow()
+            expect(() => new GGCookie({cookieName: "sid", path: "/x\r\nSet-Cookie: y=z"})).toThrow()
+            expect(() => new GGCookie({cookieName: "sid", domain: "e;vil"})).toThrow()
+        })
+    })
 })

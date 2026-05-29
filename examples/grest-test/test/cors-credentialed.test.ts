@@ -43,6 +43,14 @@ describe("corsResponseHeaders (credentialed CORS)", () => {
             {origins: ["https://app.example.com"], credentials: true}, ALLOW, "")
         expect(h["Access-Control-Allow-Origin"]).not.toBe("*")
     })
+
+    test("the literal null origin is never reflected, even if allowlisted", () => {
+        const h = corsResponseHeaders("null",
+            {origins: ["null"], credentials: true}, ALLOW, "")
+        expect(h["Access-Control-Allow-Origin"]).toBeUndefined()
+        expect(h["Access-Control-Allow-Credentials"]).toBeUndefined()
+        expect(h["Vary"]).toBe("Origin")
+    })
 })
 
 describe("client credentials", () => {

@@ -493,7 +493,9 @@ declare which routes may emit it with `.setsCookies()`:
 // shared api/
 import {GGCookie, GGRpc, httpSchema} from "@grest-ts/http"
 
+// Path/Domain (the cookie's scope) live on the definition; default is host-only.
 export const SESSION = new GGCookie("sid")
+// scoped: new GGCookie({cookieName: "sid", path: "/api", domain: ".example.com"})
 
 export const AuthApi = httpSchema(AuthContract)
     .use(SESSION)                                       // parse incoming Cookie -> context
@@ -511,7 +513,7 @@ In the service, read with `.get()`, mint with `.issue()`, clear with `.clear()`:
 export class AuthService {
     login = async (input: LoginRequest): Promise<User> => {
         const {user, token} = await this.verify(input)
-        SESSION.issue(token, {maxAgeSec: 60 * 60})      // attributes here (per-mint)
+        SESSION.issue(token, {maxAgeSec: 60 * 60})      // per-mint policy: httpOnly/secure/sameSite/maxAgeSec
         return user
     }
     logout = async (): Promise<void> => { SESSION.clear() }
@@ -519,9 +521,22 @@ export class AuthService {
 }
 ```
 
-Attributes default to safe values — `HttpOnly`, `Secure`, `SameSite=Lax`, `Path=/` —
-and `SameSite=None` forces `Secure`. Override per mint via `issue()` options
-(`{httpOnly, secure, sameSite, path, domain, maxAgeSec}`).
+**Scope vs policy.** `path`/`domain` are the cookie's *scope* and live on the
+`GGCookie` definition (`new GGCookie({cookieName, path, domain})`) so `clear()`
+deletes exactly what `issue()` set. The per-mint *policy* — `httpOnly` (default
+true), `secure` (default true), `sameSite` (default `"lax"`), `maxAgeSec` — is passed
+to `issue()`. `SameSite=None` forces `Secure`.
+
+**Domain scope is a security boundary.** The default is **host-only** (no `Domain`):
+the cookie is sent only to the exact host that set it. Setting `domain: ".example.com"`
+sends it to **every** subdomain, so *any* subdomain — including user-controlled or
+untrusted content — can read it. Never share a parent domain with untrusted
+subdomains; host untrusted/user content on a **separate registrable domain** instead.
+
+**Cross-site cookies.** A `SameSite=Lax` cookie is *not* sent on cross-site requests.
+For a cross-site setup (browser and API on different sites) you need
+`sameSite: "none"` + `secure: true` on `issue()` **and** credentialed CORS on the
+server (below) with an exact-origin allowlist — never a wildcard.
 
 **Strict by design:** calling `issue()`/`clear()` from a route that did not declare
 the cookie via `.setsCookies()` is a `SERVER_ERROR` — minting a cookie is a deliberate
