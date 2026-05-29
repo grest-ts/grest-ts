@@ -12,7 +12,6 @@ import {GG_DISCOVERY} from "@grest-ts/discovery";
 import {GGContext, GGContextStore} from "@grest-ts/context";
 import {GG_TRACE} from "@grest-ts/trace";
 import {GG_HTTP_REQUEST} from "./GG_HTTP_REQUEST";
-import {GG_DECLARED_COOKIES} from "../schema/GGCookie";
 import {GG_METRICS} from "@grest-ts/metrics";
 import {GGHttpMetrics} from "./GGHttpMetrics";
 import {GG_HTTP_SERVER} from "./GG_HTTP_SERVER";
@@ -91,11 +90,6 @@ function setupRoutes<TContract extends GGContractApiDefinition>(
         const codec: GGHttpCodec = httpSchema.codec[methodName];
         const rhKeys = Object.keys(codec?.responseHeaders ?? {});
         if (rhKeys.length) server.registerCorsExposeHeaders(rhKeys);
-        for (const cookie of codec?.declaredCookies ?? []) {
-            if (!apiMiddlewares.includes(cookie)) {
-                throw new Error(`GGHttpSchema "${httpSchema.name}": route "${methodName}" declares .setsCookies("${cookie.cookieName}") but that cookie is not attached to the schema. Add .use(<cookie>) on the httpSchema(...) builder so its Set-Cookie can be emitted.`);
-            }
-        }
     }
 
     server.onStart(() => {
@@ -133,13 +127,11 @@ function setupRoutes<TContract extends GGContractApiDefinition>(
             apiMiddlewares: apiMiddlewares,
             serverMiddlewares: config.middlewares
         })
-        const declaredCookieNames = new Set((codec.declaredCookies ?? []).map(c => c.cookieName))
         server.registerRoute(codec.method, pathPrefix + codec.path, async (req: http.IncomingMessage, res: http.ServerResponse): Promise<void> => {
             scope.ensureEntered();
             return new GGContext("REQ", parentContext).run(async () => {
                 GG_TRACE.init();
                 GG_HTTP_REQUEST.set({port: server.port, method: req.method, path: req.url});
-                GG_DECLARED_COOKIES.set(declaredCookieNames);
                 const startTime = performance.now()
                 let rpcResult: ERROR<string, unknown> | OK<unknown>
                 try {

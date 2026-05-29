@@ -1,49 +1,96 @@
-import {GGCookie, GG_DECLARED_COOKIES} from "@grest-ts/http"
-import {GGContext} from "@grest-ts/context"
-import {SERVER_ERROR} from "@grest-ts/schema"
+import {createCookieMiddleware} from "@grest-ts/http"
+import {GGContext, GGContextKey} from "@grest-ts/context"
+import {IsString} from "@grest-ts/schema"
 
-function inRequest(declared: string[], fn: () => void): void {
-    new GGContext("test").run(() => {
-        GG_DECLARED_COOKIES.set(new Set(declared))
-        fn()
+const key = (name: string) => new GGContextKey<string | undefined>(name, IsString.orUndefined)
+const inRequest = (fn: () => void) => new GGContext("test").run(fn)
+const newRes = () => ({headers: {} as Record<string, string | string[]>})
+
+describe("cookie middleware", () => {
+
+    test("parseRequest reads the named cookie into the key", () => {
+        inRequest(() => {
+            const k = key("s_parse")
+            const mw = createCookieMiddleware(k, {cookieName: "sid"})
+            mw.parseRequest!({headers: {cookie: "other=x; sid=abc123; y=z"}})
+            expect(k.get()).toBe("abc123")
+        })
     })
-}
 
-describe("GGCookie", () => {
-
-    test("issue emits Set-Cookie with safe defaults + per-mint maxAge", () => {
-        inRequest(["sid"], () => {
-            const sid = new GGCookie("sid")
-            sid.issue("token123", {maxAgeSec: 3600})
-            const res = {headers: {} as Record<string, string | string[]>}
-            sid.updateResponse(res)
+    test("setting a value emits a hardened Set-Cookie", () => {
+        inRequest(() => {
+            const k = key("s_set")
+            const mw = createCookieMiddleware(k, {cookieName: "sid", maxAgeSec: 3600})
+            mw.parseRequest!({headers: {}})
+            k.set("token123")
+            const res = newRes()
+            mw.updateResponse!(res)
             expect(res.headers["set-cookie"]).toEqual([
-                "sid=token123; Path=/; Max-Age=3600; SameSite=Lax; Secure; HttpOnly",
+                "sid=token123; Max-Age=3600; Path=/; SameSite=Lax; Secure; HttpOnly",
             ])
         })
     })
 
-    test("clear emits Max-Age=0", () => {
-        inRequest(["sid"], () => {
-            const sid = new GGCookie("sid")
-            sid.clear()
-            const res = {headers: {} as Record<string, string | string[]>}
-            sid.updateResponse(res)
+    test("unchanged value (read-only handler) emits nothing", () => {
+        inRequest(() => {
+            const k = key("s_noop")
+            const mw = createCookieMiddleware(k, {cookieName: "sid"})
+            mw.parseRequest!({headers: {cookie: "sid=incoming"}})
+            const res = newRes()
+            mw.updateResponse!(res)
+            expect(res.headers["set-cookie"]).toBeUndefined()
+        })
+    })
+
+    test("no incoming cookie + untouched emits nothing (no spurious clear)", () => {
+        inRequest(() => {
+            const k = key("s_absent")
+            const mw = createCookieMiddleware(k, {cookieName: "sid"})
+            mw.parseRequest!({headers: {}})
+            const res = newRes()
+            mw.updateResponse!(res)
+            expect(res.headers["set-cookie"]).toBeUndefined()
+        })
+    })
+
+    test("clearing (set undefined) when a value arrived emits Max-Age=0 with the same scope", () => {
+        inRequest(() => {
+            const k = key("s_clear")
+            const mw = createCookieMiddleware(k, {cookieName: "sid", path: "/api", domain: ".example.com"})
+            mw.parseRequest!({headers: {cookie: "sid=abc"}})
+            k.set(undefined)
+            const res = newRes()
+            mw.updateResponse!(res)
             expect(res.headers["set-cookie"]).toEqual([
-                "sid=; Path=/; Max-Age=0; SameSite=Lax; Secure; HttpOnly",
+                "sid=; Max-Age=0; Path=/api; Domain=.example.com; SameSite=Lax; Secure; HttpOnly",
+            ])
+        })
+    })
+
+    test("SameSite=None forces Secure", () => {
+        inRequest(() => {
+            const k = key("s_none")
+            const mw = createCookieMiddleware(k, {cookieName: "sid", sameSite: "none", secure: false})
+            k.set("t")
+            const res = newRes()
+            mw.updateResponse!(res)
+            expect(res.headers["set-cookie"]).toEqual([
+                "sid=t; Path=/; SameSite=None; Secure; HttpOnly",
             ])
         })
     })
 
     test("multiple cookies append rather than overwrite", () => {
-        inRequest(["sid", "csrf"], () => {
-            const sid = new GGCookie("sid")
-            const csrf = new GGCookie("csrf")
-            sid.issue("a")
-            csrf.issue("b")
-            const res = {headers: {} as Record<string, string | string[]>}
-            sid.updateResponse(res)
-            csrf.updateResponse(res)
+        inRequest(() => {
+            const sid = key("s_multi_a")
+            const csrf = key("s_multi_b")
+            const sidMw = createCookieMiddleware(sid, {cookieName: "sid"})
+            const csrfMw = createCookieMiddleware(csrf, {cookieName: "csrf"})
+            sid.set("a")
+            csrf.set("b")
+            const res = newRes()
+            sidMw.updateResponse!(res)
+            csrfMw.updateResponse!(res)
             expect(res.headers["set-cookie"]).toEqual([
                 "sid=a; Path=/; SameSite=Lax; Secure; HttpOnly",
                 "csrf=b; Path=/; SameSite=Lax; Secure; HttpOnly",
@@ -51,100 +98,30 @@ describe("GGCookie", () => {
         })
     })
 
-    test("SameSite=None forces Secure", () => {
-        inRequest(["sid"], () => {
-            const sid = new GGCookie("sid")
-            sid.issue("t", {sameSite: "none", secure: false})
-            const res = {headers: {} as Record<string, string | string[]>}
-            sid.updateResponse(res)
-            expect(res.headers["set-cookie"]).toEqual([
-                "sid=t; Path=/; SameSite=None; Secure; HttpOnly",
-            ])
+    test("malformed percent-encoding does not throw", () => {
+        inRequest(() => {
+            const k = key("s_bad")
+            const mw = createCookieMiddleware(k, {cookieName: "sid"})
+            expect(() => mw.parseRequest!({headers: {cookie: "sid=%"}})).not.toThrow()
+            expect(k.get()).toBe("%")
         })
     })
 
-    test("parseRequest reads the named cookie into context", () => {
-        inRequest(["sid"], () => {
-            const sid = new GGCookie("sid")
-            sid.parseRequest({headers: {cookie: "other=x; sid=abc123; foo=y"}})
-            expect(sid.get()).toBe("abc123")
+    test("fractional maxAgeSec is truncated", () => {
+        inRequest(() => {
+            const k = key("s_frac")
+            const mw = createCookieMiddleware(k, {cookieName: "sid", maxAgeSec: 3.9})
+            k.set("t")
+            const res = newRes()
+            mw.updateResponse!(res)
+            expect(res.headers["set-cookie"]![0]).toContain("Max-Age=3")
         })
     })
 
-    test("no intent staged -> updateResponse emits nothing", () => {
-        inRequest(["sid"], () => {
-            const sid = new GGCookie("sid")
-            sid.parseRequest({headers: {cookie: "sid=incoming"}})
-            const res = {headers: {} as Record<string, string | string[]>}
-            sid.updateResponse(res)
-            expect(res.headers["set-cookie"]).toBeUndefined()
-        })
-    })
-
-    test("issue on a route that did not declare the cookie throws SERVER_ERROR", () => {
-        inRequest([], () => {
-            const sid = new GGCookie("sid")
-            let err: unknown
-            try {
-                sid.issue("x")
-            } catch (e) {
-                err = e
-            }
-            expect(err).toBeInstanceOf(SERVER_ERROR)
-            expect((err as SERVER_ERROR).getDebugContext()?.debugMessage).toContain("did not declare")
-        })
-    })
-
-    describe("hardening", () => {
-
-        test("malformed percent-encoding in the cookie value does not throw", () => {
-            inRequest(["sid"], () => {
-                const sid = new GGCookie("sid")
-                expect(() => sid.parseRequest({headers: {cookie: "sid=%"}})).not.toThrow()
-                expect(sid.get()).toBe("%")
-            })
-        })
-
-        test("clear() reuses the definition's Path/Domain so the cookie is actually deletable", () => {
-            inRequest(["sid"], () => {
-                const sid = new GGCookie({cookieName: "sid", path: "/api", domain: ".example.com"})
-                sid.clear()
-                const res = {headers: {} as Record<string, string | string[]>}
-                sid.updateResponse(res)
-                expect(res.headers["set-cookie"]).toEqual([
-                    "sid=; Path=/api; Domain=.example.com; Max-Age=0; SameSite=Lax; Secure; HttpOnly",
-                ])
-            })
-        })
-
-        test("issue() uses the definition's Path", () => {
-            inRequest(["sid"], () => {
-                const sid = new GGCookie({cookieName: "sid", path: "/api"})
-                sid.issue("t")
-                const res = {headers: {} as Record<string, string | string[]>}
-                sid.updateResponse(res)
-                expect(res.headers["set-cookie"]).toEqual([
-                    "sid=t; Path=/api; SameSite=Lax; Secure; HttpOnly",
-                ])
-            })
-        })
-
-        test("non-finite maxAgeSec throws; fractional is truncated", () => {
-            inRequest(["sid"], () => {
-                const sid = new GGCookie("sid")
-                expect(() => sid.issue("t", {maxAgeSec: NaN})).toThrow()
-                expect(() => sid.issue("t", {maxAgeSec: Infinity})).toThrow()
-                sid.issue("t", {maxAgeSec: 3.9})
-                const res = {headers: {} as Record<string, string | string[]>}
-                sid.updateResponse(res)
-                expect(res.headers["set-cookie"]![0]).toContain("Max-Age=3")
-            })
-        })
-
-        test("illegal characters in name/path/domain are rejected at construction", () => {
-            expect(() => new GGCookie("a;b")).toThrow()
-            expect(() => new GGCookie({cookieName: "sid", path: "/x\r\nSet-Cookie: y=z"})).toThrow()
-            expect(() => new GGCookie({cookieName: "sid", domain: "e;vil"})).toThrow()
-        })
+    test("illegal name/path/domain and non-finite maxAge are rejected at construction", () => {
+        expect(() => createCookieMiddleware(key("v1"), {cookieName: "a;b"})).toThrow()
+        expect(() => createCookieMiddleware(key("v2"), {cookieName: "sid", path: "/x\r\nSet-Cookie: y=z"})).toThrow()
+        expect(() => createCookieMiddleware(key("v3"), {cookieName: "sid", domain: "e;vil"})).toThrow()
+        expect(() => createCookieMiddleware(key("v4"), {cookieName: "sid", maxAgeSec: NaN})).toThrow()
     })
 })

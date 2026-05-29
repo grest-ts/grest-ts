@@ -3,7 +3,7 @@ import {SESSION} from "../api/CookieTestApi"
 export class CookieTestService {
 
     public login = async (input: {user: string}): Promise<{ok: boolean}> => {
-        SESSION.issue(`session-for-${input.user}`, {maxAgeSec: 3600})
+        SESSION.set(`session-for-${input.user}`)
         return {ok: true}
     }
 
@@ -12,12 +12,7 @@ export class CookieTestService {
     }
 
     public logout = async (): Promise<{ok: boolean}> => {
-        SESSION.clear()
-        return {ok: true}
-    }
-
-    public badIssue = async (): Promise<{ok: boolean}> => {
-        SESSION.issue("should-not-reach-the-wire")
+        SESSION.set(undefined)
         return {ok: true}
     }
 }

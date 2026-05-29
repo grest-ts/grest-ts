@@ -53,9 +53,17 @@ describe("cookie integration (real HTTP wire)", () => {
     })
 
     test("logout clears the cookie (Max-Age=0)", async () => {
-        const res = await fetch(`${baseUrl()}/cookie/logout`, {
+        const loginRes = await fetch(`${baseUrl()}/cookie/login`, {
             method: "POST",
             headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({user: "dave"}),
+        })
+        const cookie = loginRes.headers.getSetCookie()[0].split(";")[0]
+        await loginRes.text()
+
+        const res = await fetch(`${baseUrl()}/cookie/logout`, {
+            method: "POST",
+            headers: {"Content-Type": "application/json", cookie},
             body: "{}",
         })
         const setCookie = res.headers.getSetCookie()
@@ -65,15 +73,16 @@ describe("cookie integration (real HTTP wire)", () => {
         expect(setCookie[0]).toContain("Max-Age=0")
     })
 
-    test("issuing a cookie a route did not declare is a strict SERVER_ERROR", async () => {
-        const res = await fetch(`${baseUrl()}/cookie/bad-issue`, {
+    test("a read-only request (me, with cookie) does not re-emit Set-Cookie", async () => {
+        const loginRes = await fetch(`${baseUrl()}/cookie/login`, {
             method: "POST",
             headers: {"Content-Type": "application/json"},
-            body: "{}",
+            body: JSON.stringify({user: "carol"}),
         })
-        expect(res.status).toBe(500)
-        const body = await res.json()
-        expect(body).toMatchObject({success: false, type: "SERVER_ERROR"})
-        expect(res.headers.getSetCookie()).toHaveLength(0)
+        const cookie = loginRes.headers.getSetCookie()[0].split(";")[0]
+        await loginRes.text()
+        const meRes = await fetch(`${baseUrl()}/cookie/me`, {headers: {cookie}})
+        await meRes.json()
+        expect(meRes.headers.getSetCookie()).toHaveLength(0)
     })
 })

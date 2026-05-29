@@ -1,7 +1,9 @@
-import {GGCookie, GGRpc, httpSchema} from "@grest-ts/http"
+import {GGRpc, httpSchema} from "@grest-ts/http"
+import {GGContextKey} from "@grest-ts/context"
 import {GGContractClass, GG_NO_PERMISSIONS, IsBoolean, IsObject, IsString, SERVER_ERROR} from "@grest-ts/schema"
 
-export const SESSION = new GGCookie("sid")
+// A standard context key — read via .get(), mint via .set(value), clear via .set(undefined).
+export const SESSION = new GGContextKey<string | undefined>("session", IsString.orUndefined)
 
 export const CookieTestContract = new GGContractClass("CookieTestApi", {
     login: {
@@ -20,20 +22,13 @@ export const CookieTestContract = new GGContractClass("CookieTestApi", {
         errors: [SERVER_ERROR],
         permission: GG_NO_PERMISSIONS,
     },
-    // Intentionally does NOT declare .setsCookies — used to prove the strict guard.
-    badIssue: {
-        success: IsObject({ok: IsBoolean}),
-        errors: [SERVER_ERROR],
-        permission: GG_NO_PERMISSIONS,
-    },
 })
 
 export const CookieTestApi = httpSchema(CookieTestContract)
-    .use(SESSION)
+    .useCookie(SESSION, {cookieName: "sid", maxAgeSec: 3600})
     .pathPrefix("cookie")
     .routes({
-        login: GGRpc.POST("login").setsCookies(SESSION),
+        login: GGRpc.POST("login"),
         me: GGRpc.GET("me"),
-        logout: GGRpc.POST("logout").setsCookies(SESSION),
-        badIssue: GGRpc.POST("bad-issue"),
+        logout: GGRpc.POST("logout"),
     })
