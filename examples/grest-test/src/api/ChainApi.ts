@@ -4,7 +4,7 @@
 
 import {GGRpc, httpSchema} from "@grest-ts/http";
 import {GGContractClass, IsObject, IsString, IsNumber, IsArray, IsBoolean, SERVER_ERROR, VALIDATION_ERROR, GG_NO_PERMISSIONS } from "@grest-ts/schema";
-import {GG_INTL_LOCALE} from "@grest-ts/intl";
+import {intlLocaleHeader} from "@grest-ts/intl";
 
 // ---------------------------------------------------------
 // Type Schemas
@@ -73,7 +73,7 @@ export const ChainApiContract = new GGContractClass("ChainApi", {
 
 export const ChainApi = httpSchema(ChainApiContract)
     .pathPrefix("api/chain")
-    .useHeader(GG_INTL_LOCALE)
+    .use(intlLocaleHeader())
     .routes({
         planTravel: GGRpc.POST("plan-travel"),
         compareDestinations: GGRpc.POST("compare-destinations"),

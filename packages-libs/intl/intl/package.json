@@ -53,6 +53,7 @@
   },
   "peerDependencies": {
     "@grest-ts/context": "0.0.44",
+    "@grest-ts/http": "0.0.44",
     "@grest-ts/locator": "0.0.44",
     "@grest-ts/schema": "0.0.44"
   }

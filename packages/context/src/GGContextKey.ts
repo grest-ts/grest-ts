@@ -1,5 +1,5 @@
 import {GGContextStore} from "./GGContextStore";
-import {GGCodec, GGSchema} from "@grest-ts/schema";
+import {GGSchema} from "@grest-ts/schema";
 
 export interface GGContextMeta<T> {
     description?: string
@@ -14,7 +14,6 @@ export class GGContextKey<Type> {
     public readonly description?: string
     public readonly defaultValue?: Type
     public readonly mutable: boolean
-    private codecs: Map<string, GGCodec<any, Type>>
 
     constructor(name: string, schema: GGSchema<Type>, meta?: GGContextMeta<Type>) {
         this.name = name
@@ -48,18 +47,5 @@ export class GGContextKey<Type> {
             throw new Error(`Context named '${this.name}' is required, but not defined!`);
         }
         return this.get()
-    }
-
-    // ---------------------------------------------
-
-    public addCodec(type: string, codec: GGCodec<any, Type>): void {
-        if (!this.codecs) {
-            this.codecs = new Map()
-        }
-        this.codecs.set(type, codec)
-    }
-
-    public getCodec(type: string): GGCodec<any, Type> | undefined {
-        return this.codecs?.get(type)
     }
 }

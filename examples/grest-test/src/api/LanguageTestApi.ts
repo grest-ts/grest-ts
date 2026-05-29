@@ -1,6 +1,6 @@
 import {GGRpc, httpSchema} from "@grest-ts/http"
 import {GGContractClass, GGContractImplementation, IsNumber, IsObject, IsString, SERVER_ERROR, VALIDATION_ERROR, GG_NO_PERMISSIONS } from "@grest-ts/schema";
-import {GG_INTL_LOCALE} from "@grest-ts/intl";
+import {intlLocaleHeader} from "@grest-ts/intl";
 
 // ---------------------------------------------------------
 // Type Schemas
@@ -35,7 +35,7 @@ export const LanguageTestApiContract = new GGContractClass("LanguageTestApi", {
 export type ILanguageTestApi = GGContractImplementation<typeof LanguageTestApiContract["methods"]>
 export const LanguageTestApi = httpSchema(LanguageTestApiContract)
     .pathPrefix("api/language-test")
-    .useHeader(GG_INTL_LOCALE)
+    .use(intlLocaleHeader())
     .routes({
         echo: GGRpc.POST("echo"),
     })

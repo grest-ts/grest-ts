@@ -3,6 +3,7 @@ import "./_dedupCheck";
 export * from "./schema/GGHttpSchema";
 export * from "./schema/httpSchema";
 export * from "./schema/cookieMiddleware";
+export * from "./schema/headerBinding";
 export * from "./rpc/GGHttpRouteRPC";
 export * from "./rpc/RpcRequest/GGRpcRequestBuilder";
 export * from "./rpc/RpcResponse/GGRpcResponseParser";
