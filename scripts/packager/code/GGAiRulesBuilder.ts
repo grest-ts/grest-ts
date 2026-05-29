@@ -101,7 +101,7 @@ export class GGAiRulesBuilder {
             plugins: [
                 {
                     name: "grest-ts",
-                    source: "./grest-ts",
+                    source: "./.claude-plugin/grest-ts",
                     description: "Framework conventions, anti-patterns, and per-package reference docs for grest-ts. Activates whenever Claude works in a project that uses @grest-ts/* packages.",
                     version,
                     author: {name: "grest-ts"},
