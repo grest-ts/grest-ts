@@ -1,5 +1,5 @@
 import {GGContextKey} from "@grest-ts/context"
-import {IsAny, SERVER_ERROR, type GGSchema} from "@grest-ts/schema"
+import {IsAny, IsString, SERVER_ERROR, type GGSchema} from "@grest-ts/schema"
 import type {GGHttpRequest, GGHttpResponse, GGHttpTransportMiddleware} from "./GGHttpSchema"
 
 /**
@@ -88,6 +88,8 @@ interface WsHandshakeContextLike {
 }
 
 export interface GGCookieBinding extends GGHttpTransportMiddleware {
+    /** The cookie this binding reads, mapped to its value schema — emitted as an `in: cookie` doc param. */
+    readonly cookieParams: Record<string, GGSchema<string | undefined>>
     parseHandshake(ctx: WsHandshakeContextLike): void
 }
 
@@ -99,12 +101,13 @@ export interface GGCookieBinding extends GGHttpTransportMiddleware {
  * .updatesCookie(key); the matching binding flushes it as Set-Cookie (HTTP only — a
  * WebSocket has no response to set a cookie on).
  */
-export function cookie(key: GGContextKey<string | undefined>, opts?: {name?: string}): GGCookieBinding {
+export function cookie(key: GGContextKey<string | undefined>, opts?: {name?: string; schema?: GGSchema<string | undefined>}): GGCookieBinding {
     const cookieName = opts?.name ?? key.name
     assertCookieSafe("name", cookieName)
     return {
         headers: {},
         responseHeaders: {},
+        cookieParams: {[cookieName]: opts?.schema ?? IsString.orUndefined},
         parseRequest(req: GGHttpRequest): void {
             const raw = req.headers?.["cookie"]
             const value = readCookie(typeof raw === "string" ? raw : undefined, cookieName)

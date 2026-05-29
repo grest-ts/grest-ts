@@ -165,6 +165,13 @@ export interface GGHttpTransportMiddleware {
     readonly responseHeaders: Record<string, GGSchema<string | undefined>>;
 
     /**
+     * Cookies this middleware reads, mapped to their value schemas. Emitted as `in: cookie`
+     * parameters in OpenAPI so cookie-bound inputs are documented. Absent for header/plain
+     * middlewares.
+     */
+    readonly cookieParams?: Record<string, GGSchema<string | undefined>>;
+
+    /**
      * Client-side: modify outgoing request (add headers, etc.)
      */
     updateRequest?(req: GGHttpRequest): void;

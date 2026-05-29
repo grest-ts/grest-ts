@@ -32,8 +32,8 @@ export function toOpenApi(
         if (!httpSchema.contract) continue;
         const pathPrefix = "/" + httpSchema.pathPrefix;
 
-        // Split middlewares into security schemes and plain header params
-        const {headerParams, operationSecurity} = buildMiddlewareOpenApi(
+        // Split middlewares into security schemes, plain header params, and cookie params
+        const {headerParams, cookieParams, operationSecurity} = buildMiddlewareOpenApi(
             httpSchema.apiMiddlewares, registry, securitySchemes
         );
 
@@ -48,9 +48,9 @@ export function toOpenApi(
 
             const operation = buildOperation(httpSchema.name, methodName, codec, contract, registry);
 
-            if (headerParams.length > 0) {
+            if (headerParams.length > 0 || cookieParams.length > 0) {
                 const existing = (operation.parameters ?? []) as OpenAPIV3_1.ParameterObject[];
-                operation.parameters = [...headerParams, ...existing];
+                operation.parameters = [...headerParams, ...cookieParams, ...existing];
             }
             if (operationSecurity.length > 0) {
                 operation.security = operationSecurity;
@@ -111,11 +111,25 @@ function buildMiddlewareOpenApi(
     middlewares: readonly GGHttpTransportMiddleware[],
     registry: SchemaRegistry,
     securitySchemes: Map<string, OpenAPIV3_1.SecuritySchemeObject>
-): { headerParams: OpenAPIV3_1.ParameterObject[]; operationSecurity: OpenAPIV3_1.SecurityRequirementObject[] } {
+): { headerParams: OpenAPIV3_1.ParameterObject[]; cookieParams: OpenAPIV3_1.ParameterObject[]; operationSecurity: OpenAPIV3_1.SecurityRequirementObject[] } {
     const headerParams: OpenAPIV3_1.ParameterObject[] = [];
+    const cookieParams: OpenAPIV3_1.ParameterObject[] = [];
     const operationSecurity: OpenAPIV3_1.SecurityRequirementObject[] = [];
 
     for (const mw of middlewares) {
+        for (const [name, schema] of Object.entries(mw.cookieParams ?? {})) {
+            const desc = schema.toSchemaDescription();
+            const resolved = registry.descOrRef(desc);
+            const {description, ...schemaWithoutDescription} = resolved as any;
+            const param: OpenAPIV3_1.ParameterObject = {
+                name,
+                in: 'cookie' as const,
+                required: !desc.optional,
+                schema: schemaWithoutDescription as OpenAPIV3_1.ParameterObject["schema"]
+            };
+            if (description) param.description = description;
+            cookieParams.push(param);
+        }
         for (const [name, schema] of Object.entries(mw.headers)) {
             const desc = schema.toSchemaDescription();
             const format = desc.docs?.format;
@@ -164,7 +178,7 @@ function buildMiddlewareOpenApi(
             }
         }
     }
-    return {headerParams, operationSecurity};
+    return {headerParams, cookieParams, operationSecurity};
 }
 
 /** Convert a human-readable title to a valid security scheme name. e.g. "Bearer token" → "BearerToken" */
