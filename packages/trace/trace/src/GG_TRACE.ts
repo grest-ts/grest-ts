@@ -37,6 +37,6 @@ export class GGContextTraceKey extends GGContextKey<TraceContext> {
     }
 }
 
-export const GG_TRACE = new GGContextTraceKey('trace', IsTraceContext);
+export const GG_TRACE = new GGContextTraceKey('trace', IsTraceContext, {mutable: true});
 
 

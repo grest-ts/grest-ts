@@ -2,6 +2,7 @@ import {ERROR, ERROR_JSON, GGContractApiDefinition, GGContractClass, GGContractM
 import type {HttpMethod} from "@grest-ts/common";
 import type http from "http";
 import type {GGHttpServerMiddleware} from "../server/GGHttpSchema.startServer";
+import type {GGContextKey} from "@grest-ts/context";
 import type {OpenAPIV3_1} from "openapi-types";
 
 export class GGHttpSchema<TContract extends GGContractApiDefinition, TContext> {
@@ -114,6 +115,13 @@ export interface GGHttpCodec {
      */
     readonly responseHeaders: Record<string, GGSchema<string | undefined>>;
 
+    /**
+     * Cookie context keys this route is permitted to modify (set/clear), declared via
+     * GGRpc.*(...).updatesCookie(key). A handler that changes a cookie its route did not
+     * declare is a SERVER_ERROR. Reading a cookie needs no declaration.
+     */
+    readonly updatesCookies?: readonly GGContextKey<string | undefined>[];
+
     createForClient(config: ClientHttpRouteToRpcTransformClientConfig): ClientHttpRouteToRpcTransformClientCodec
 
     createForServer(config: ClientHttpRouteToRpcTransformServerConfig): ClientHttpRouteToRpcTransformServerCodec
@@ -155,6 +163,13 @@ export interface GGHttpTransportMiddleware {
      * Use {} if the middleware sets no custom response headers.
      */
     readonly responseHeaders: Record<string, GGSchema<string | undefined>>;
+
+    /**
+     * Cookies this middleware reads, mapped to their value schemas. Emitted as `in: cookie`
+     * parameters in OpenAPI so cookie-bound inputs are documented. Absent for header/plain
+     * middlewares.
+     */
+    readonly cookieParams?: Record<string, GGSchema<string | undefined>>;
 
     /**
      * Client-side: modify outgoing request (add headers, etc.)

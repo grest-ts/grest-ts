@@ -1,14 +1,16 @@
 import type http from "http";
 import {ERROR, GGContractExecutor, GGContractMethod, GGErrorData, GGSchemaNonJsonDefinition, OK, isNonJsonDef} from "@grest-ts/schema";
-import {ClientHttpRouteToRpcTransformServerConfig} from "@grest-ts/http";
+import {ClientHttpRouteToRpcTransformServerConfig, GGHttpTransportMiddleware, applyResponseMiddleware} from "@grest-ts/http";
 
 export class GGFileDownloadResponseBuilder {
 
     protected readonly contract: GGContractMethod
+    private readonly apiMiddlewares: readonly GGHttpTransportMiddleware[]
     private readonly encodeToRaw: GGSchemaNonJsonDefinition["encodeToRaw"]
 
     constructor(config: ClientHttpRouteToRpcTransformServerConfig) {
         this.contract = config.contract;
+        this.apiMiddlewares = config.apiMiddlewares;
         const def = this.contract.success!.toCompilerDef();
         if (!isNonJsonDef(def)) {
             throw new Error("GGFileDownloadResponseBuilder: output schema must be a non-JSON leaf type (e.g. IsFile).");
@@ -17,6 +19,7 @@ export class GGFileDownloadResponseBuilder {
     }
 
     public sendResponse = async (res: http.ServerResponse, rpcResult: ERROR<string, unknown> | OK<unknown>): Promise<void> => {
+        applyResponseMiddleware(res, this.apiMiddlewares);
         if (rpcResult.success === true) {
             const raw = await this.encodeToRaw(rpcResult.data, "");
             const buffer = Buffer.from(await raw.blob.arrayBuffer());

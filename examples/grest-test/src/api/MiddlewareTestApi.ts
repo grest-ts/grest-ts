@@ -1,6 +1,6 @@
 import {GGHttpRequest, GGHttpTransportMiddleware, GGRpc, httpSchema} from "@grest-ts/http"
 import {GGContractClass, GGContractImplementation, IsBoolean, IsLiteral, IsObject, IsString, SERVER_ERROR, VALIDATION_ERROR, GG_NO_PERMISSIONS } from "@grest-ts/schema";
-import {GG_INTL_LOCALE} from "@grest-ts/intl"
+import {intlLocaleHeader} from "@grest-ts/intl"
 import {GGContextKey} from "@grest-ts/context";
 
 // ============================================================================
@@ -128,7 +128,7 @@ export type IMiddlewareTestApi = GGContractImplementation<typeof MiddlewareTestA
  */
 export const MiddlewareTestApi = httpSchema(MiddlewareTestApiContract)
     .pathPrefix("api/middleware-test")
-    .useHeader(GG_INTL_LOCALE)        // TContext = { locale: string }
+    .use(intlLocaleHeader())
     .use(ClientInfoEffect)            // TContext = { locale: string, clientInfo: ClientInfo }
     .use(FeatureFlagsEffect)          // TContext = { ..., features: FeatureFlags }
     .routes({

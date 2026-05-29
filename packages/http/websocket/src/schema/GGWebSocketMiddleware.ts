@@ -10,9 +10,19 @@ import type {GGSchema} from "@grest-ts/schema";
  */
 export interface GGWebSocketHandshakeContext {
     /**
-     * Headers from the handshake message (client-sent or server-received).
+     * Headers from the in-band handshake message (client-sent or server-received).
+     * This is the client-JS-authored bag — the transport for things like a bearer
+     * token, since a browser cannot set request headers on a WebSocket.
      */
     headers: Record<string, string>;
+    /**
+     * Server-only: the real HTTP upgrade request headers (lowercased). Carries
+     * browser-set headers the in-band `headers` map cannot — notably `cookie`
+     * (a browser auto-attaches it to the upgrade GET; JS cannot read an httpOnly
+     * one to put it in-band). Empty/undefined client-side. The in-band message can
+     * never populate this, so it cannot spoof a browser cookie.
+     */
+    upgradeHeaders?: Record<string, string>;
     /**
      * Query parameters from the WebSocket URL.
      */

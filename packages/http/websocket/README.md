@@ -312,6 +312,59 @@ This is why the interfaces aren't merged: forcing a single interface would make 
 
 The server-side extraction logic here is identical for both transports — that's the common case and the reason this pattern pays off. If your HTTP flow needs per-request behavior that doesn't map to WS (say, modifying the HTTP response body), put those hooks on a separate HTTP-only middleware and apply both.
 
+## Cookies (httpOnly sessions, read-only)
+
+If your app authenticates over HTTP with an httpOnly session cookie (see
+`@grest-ts/http` → "Cookies"), that **same cookie authenticates the socket** with no
+client code: a browser auto-attaches the cookie to the WebSocket upgrade request (it
+can't put an httpOnly cookie into the in-band handshake — JS can't read it). Bind the
+**same** `GGContextKeyForCookie` on the WS schema and read it identically to HTTP.
+
+```typescript
+import {GGContextKeyForCookie} from "@grest-ts/http"
+
+// The SAME key the HTTP schema binds — one key, two transports.
+export const SESSION = new GGContextKeyForCookie("session")
+
+export const ChatApi = webSocketSchema(ChatContract)
+    .path("ws/chat")
+    .useCookie(SESSION)             // read the session cookie off the upgrade
+    .connectPermission(CHAT_USE)    // gate the handshake (see Permissions)
+    .done()
+```
+
+```typescript
+// server: derive scopes / identity from the cookie at handshake
+ChatApi.register(chat.handleConnection, {
+    permissionResolver: () => scopesFromSession(SESSION.get()),
+})
+// in a handler or the connect gate: SESSION.get() === the browser's session cookie
+```
+
+```typescript
+// browser client — nothing auth-related to do; the cookie rides the upgrade
+const client = ChatApi.createClient({url: ""})   // same-origin
+await client.connect()
+```
+
+**Read-only on WS, by construction.** There is no `Set-Cookie` on a WebSocket — cookies
+are minted on HTTP login/refresh and ride the upgrade. So `.useCookie(SESSION)` on a WS
+schema only *reads*; there is no `.updatesCookie` / write-gate (those are `GGRpc.*` HTTP
+route concepts).
+
+**The in-band handshake can't spoof it.** The cookie is read only from the real upgrade
+request headers, never from the client-authored in-band handshake message — so a client
+can't forge another user's session by putting a `cookie` in the handshake payload.
+
+**Identity is pinned at connect.** The cookie is read once at handshake; scopes resolve
+once and are cached for the connection's life (see Permissions → "Revocation, accepted
+limitation"). There is no mid-session cookie re-read or token refresh over the socket.
+Clearing the cookie via HTTP logout fails *new* connects but leaves live sockets open —
+close them server-side if you need a hard logout.
+
+**Node clients** keep using bearer tokens / discovery; cookie auth on the upgrade is a
+browser concern and is not sent by the Node client.
+
 ## Server Setup
 
 ### Connection Handler

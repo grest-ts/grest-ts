@@ -12,6 +12,7 @@ import {GG_DISCOVERY} from "@grest-ts/discovery";
 import {GGContext, GGContextStore} from "@grest-ts/context";
 import {GG_TRACE} from "@grest-ts/trace";
 import {GG_HTTP_REQUEST} from "./GG_HTTP_REQUEST";
+import {GG_COOKIE_WRITES} from "../schema/cookieMiddleware";
 import {GG_METRICS} from "@grest-ts/metrics";
 import {GGHttpMetrics} from "./GGHttpMetrics";
 import {GG_HTTP_SERVER} from "./GG_HTTP_SERVER";
@@ -127,11 +128,13 @@ function setupRoutes<TContract extends GGContractApiDefinition>(
             apiMiddlewares: apiMiddlewares,
             serverMiddlewares: config.middlewares
         })
+        const cookieWriteNames = new Set((codec.updatesCookies ?? []).map(k => k.name))
         server.registerRoute(codec.method, pathPrefix + codec.path, async (req: http.IncomingMessage, res: http.ServerResponse): Promise<void> => {
             scope.ensureEntered();
-            return new GGContext("REQ", parentContext).run(async () => {
+            return new GGContext("REQ", parentContext, true).run(async () => {
                 GG_TRACE.init();
                 GG_HTTP_REQUEST.set({port: server.port, method: req.method, path: req.url});
+                GG_COOKIE_WRITES.set(cookieWriteNames);
                 const startTime = performance.now()
                 let rpcResult: ERROR<string, unknown> | OK<unknown>
                 try {

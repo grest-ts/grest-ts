@@ -6,11 +6,13 @@ export class GGContext {
     public readonly name: string
     private readonly parent: GGContext | undefined
     private readonly values: Map<string, any>
+    private readonly strict: boolean
 
-    constructor(name: string, parent?: GGContext) {
+    constructor(name: string, parent?: GGContext, strict: boolean = false) {
         this.name = name
         this.parent = parent
         this.values = new Map();
+        this.strict = strict
     }
 
     public get<T>(token: GGContextKey<T>): T {
@@ -18,6 +20,9 @@ export class GGContext {
     }
 
     public set<T>(token: GGContextKey<T>, value: T): this {
+        if (this.strict && !token.mutable && this.values.has(token.name)) {
+            throw new Error(`Context key '${token.name}' is already set in this request scope and cannot be re-set. Pass {mutable: true} to GGContextKey if it must be re-set (e.g. trace).`)
+        }
         this.values.set(token.name, value);
         return this;
     }

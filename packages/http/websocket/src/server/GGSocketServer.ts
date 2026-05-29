@@ -133,7 +133,7 @@ export class GGSocketServer<TContext, Query> {
     private _onConnection = async (ws: WebSocket, req: http.IncomingMessage) => {
         const connectionLabels = {api: this.apiName, path: this.path};
 
-        const context = new GGContext("ws-connection");
+        const context = new GGContext("ws-connection", undefined, true);
         await context.run(async () => {
             GG_TRACE.init()
             GG_WS_CONNECTION.set({
@@ -158,8 +158,16 @@ export class GGSocketServer<TContext, Query> {
 
                 const adapter = new NodeSocketAdapter(ws);
 
+                // The real upgrade request headers (lowercased by Node). These carry the
+                // browser's auto-attached Cookie, which the in-band handshake message can't.
+                const upgradeHeaders: Record<string, string> = {};
+                for (const [name, value] of Object.entries(req.headers)) {
+                    if (typeof value === "string") upgradeHeaders[name] = value;
+                    else if (Array.isArray(value)) upgradeHeaders[name] = value.join(", ");
+                }
+
                 // Wait for handshake message with headers
-                const handshakeResult = await this.handleHandshake(context, adapter, queryArgs);
+                const handshakeResult = await this.handleHandshake(context, adapter, queryArgs, upgradeHeaders);
 
                 if (!handshakeResult.success) {
                     GGLog.warn(this, "REJECTED - handshake failed", (handshakeResult as { success: false; error: any }).error);
@@ -246,7 +254,8 @@ export class GGSocketServer<TContext, Query> {
     private async handleHandshake(
         context: GGContext,
         adapter: NodeSocketAdapter,
-        queryArgs: Query
+        queryArgs: Query,
+        upgradeHeaders: Record<string, string>
     ): Promise<{ success: true } | { success: false; error: any }> {
         type HandshakeResult = { success: true } | { success: false; error: any };
         return withTimeout<HandshakeResult>(
@@ -264,6 +273,7 @@ export class GGSocketServer<TContext, Query> {
                                 const headers = msg.data || {};
                                 const handshakeContext: GGWebSocketHandshakeContext = {
                                     headers,
+                                    upgradeHeaders,
                                     queryArgs: queryArgs as Record<string, string>
                                 };
 

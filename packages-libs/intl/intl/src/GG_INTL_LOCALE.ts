@@ -1,6 +1,7 @@
 import {GGContextKey} from "@grest-ts/context";
 import {IsCountry, IsLanguage, IsObject, IsString, tCountry, tLanguage} from "@grest-ts/schema";
 import {IsLocale} from "@grest-ts/schema";
+import type {GGHttpRequest, GGHttpTransportMiddleware} from "@grest-ts/http";
 
 const IsGGIntlLocaleContext = IsObject({
     /** Full locale tag (e.g., "en-US", "en", "zh-Hans-CN") */
@@ -20,7 +21,8 @@ const HeaderType = IsObject({
 export const GG_INTL_LOCALE = new GGContextKey<GGIntlLocaleContext>("GG_INTL_LOCALE", IsGGIntlLocaleContext, {
     description: 'Current locale for internationalization'
 });
-GG_INTL_LOCALE.addCodec("http", HeaderType.codecTo(IsGGIntlLocaleContext, {
+
+const localeCodec = HeaderType.codecTo(IsGGIntlLocaleContext, {
     encode: (value) => {
         const headerValue = value[HEADER_ACCEPT_LANGUAGE];
         if (!headerValue || headerValue === '*' || headerValue.trim() === '') {
@@ -47,7 +49,33 @@ GG_INTL_LOCALE.addCodec("http", HeaderType.codecTo(IsGGIntlLocaleContext, {
         // When encoding back to header, prefer locale, fall back to language
         return {[HEADER_ACCEPT_LANGUAGE]: value.locale ?? value.language};
     }
-}));
+});
+
+/**
+ * Wire binding for GG_INTL_LOCALE: reads the standard Accept-Language request header into
+ * the locale key (server) and writes it back from the key (client). The Accept-Language
+ * value is parsed into {locale, language, country}; a browser sends it automatically.
+ * Bind with httpSchema(...).use(intlLocaleHeader()).
+ */
+export function intlLocaleHeader(): GGHttpTransportMiddleware {
+    return {
+        headers: {[HEADER_ACCEPT_LANGUAGE]: IsString.orUndefined},
+        responseHeaders: {},
+        parseRequest(req: GGHttpRequest): void {
+            const result = localeCodec.encode((req.headers ?? {}) as Record<string, string>);
+            if (result.success) GG_INTL_LOCALE.set(result.value);
+        },
+        updateRequest(req: GGHttpRequest): void {
+            const value = GG_INTL_LOCALE.get();
+            if (value === undefined) return;
+            const result = localeCodec.decode(value);
+            if (result.success) {
+                req.headers = req.headers ?? {};
+                Object.assign(req.headers, result.value);
+            }
+        },
+    };
+}
 
 /**
  * Parses a locale string (e.g., "en-US", "zh-Hans-CN") into components

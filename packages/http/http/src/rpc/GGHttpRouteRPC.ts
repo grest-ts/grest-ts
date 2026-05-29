@@ -2,6 +2,7 @@ import {HttpMethod} from "@grest-ts/common"
 import {ClientHttpRouteToRpcTransformClientCodec, ClientHttpRouteToRpcTransformClientConfig, ClientHttpRouteToRpcTransformServerCodec, ClientHttpRouteToRpcTransformServerConfig, GGHttpCodec, GGHttpCodecOpenApiConfig} from "../schema/GGHttpSchema"
 import {GGRpcRequestBuilder} from "./RpcRequest/GGRpcRequestBuilder";
 import {GGRpcResponseParser} from "./RpcResponse/GGRpcResponseParser";
+import type {GGContextKey} from "@grest-ts/context";
 import type {OpenAPIV3_1} from "openapi-types";
 import {GGSchema} from "@grest-ts/schema";
 import {buildRpcSuccessResponses} from "./openApiSuccessResponse";
@@ -28,11 +29,18 @@ class GGHttpRpcCodec implements GGHttpCodec {
     public readonly path: string
     public readonly deprecated: boolean | undefined
     public readonly responseHeaders: Record<string, GGSchema<string | undefined>> = {}
+    public readonly updatesCookies: GGContextKey<string | undefined>[] = []
 
     constructor(method: HttpMethod, path: string, deprecated?: boolean) {
         this.method = method
         this.path = path
         this.deprecated = deprecated
+    }
+
+    /** Permit this route to set/clear the given cookie context key(s). Reading needs no declaration. */
+    public updatesCookie(...keys: GGContextKey<string | undefined>[]): this {
+        this.updatesCookies.push(...keys)
+        return this
     }
 
     public createForClient(config: ClientHttpRouteToRpcTransformClientConfig): ClientHttpRouteToRpcTransformClientCodec {
