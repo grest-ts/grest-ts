@@ -12,7 +12,7 @@ export class CookieTestService {
     }
 
     public logout = async (): Promise<{ok: boolean}> => {
-        SESSION.set(undefined)
+        SESSION.delete()
         return {ok: true}
     }
 

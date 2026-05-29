@@ -514,7 +514,7 @@ export class AuthService {
         SESSION.set(token, {maxAgeSec: input.remember ? 60*60*24*30 : 60*60})
         return user
     }
-    logout = async (): Promise<void> => { SESSION.set(undefined) }     // -> Max-Age=0 clear
+    logout = async (): Promise<void> => { SESSION.delete() }           // -> Max-Age=0 clear
     me     = async (): Promise<User>  => this.fromSession(SESSION.get())  // read the cookie
 }
 ```
@@ -530,8 +530,8 @@ the server.)
 
 **Emit-on-change.** Within a route that may write, `useCookie` emits `Set-Cookie` only
 when the handler **changes** the key versus what arrived: `set(token)` → `Set-Cookie`;
-`set(undefined)`/`set("")`/`delete()` → `Max-Age=0` clear; untouched → nothing (read
-routes don't re-emit, and there's no spurious clear when no cookie arrived).
+`delete()` (or `set(undefined)`) → `Max-Age=0` clear; untouched → nothing (read routes
+don't re-emit, and there's no spurious clear when no cookie arrived).
 
 **Write rules live at `.set(value, options)`**, never in the shared API — only the
 cookie's wire name (the key's name, needed to *read* it on every route) is on the
@@ -543,7 +543,7 @@ on clear so deletion matches:
 
 ```typescript
 SESSION.set(token, {path: "/api", domain: ".example.com", sameSite: "none", maxAgeSec: WEEK})
-SESSION.set(undefined, {path: "/api", domain: ".example.com"})   // clear must match scope
+SESSION.delete({path: "/api", domain: ".example.com"})   // clear must match scope
 ```
 
 **Domain scope is a security boundary.** The default is **host-only** (no `Domain`):

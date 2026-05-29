@@ -60,6 +60,15 @@ export class GGContextKeyForCookie extends GGContextKey<string | undefined> {
         this._options.set(options)
     }
 
+    /**
+     * Clear the cookie — emits Set-Cookie with Max-Age=0. Pass path/domain to match a
+     * scoped cookie (deletion only works when path+domain match what was set). Equivalent
+     * to set(undefined, options), but reads clearer at logout-style call sites.
+     */
+    public delete(options?: CookieOptions): void {
+        this.set(undefined, options)
+    }
+
     /** @internal Read by the cookie binding when emitting Set-Cookie. */
     public _writeOptions(): CookieOptions | undefined {
         return this._options.get()

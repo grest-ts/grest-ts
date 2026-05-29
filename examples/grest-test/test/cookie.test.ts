@@ -68,6 +68,32 @@ describe("cookie middleware", () => {
         })
     })
 
+    test("delete() clears the cookie (Max-Age=0)", () => {
+        inRequest(["sid"], () => {
+            const k = cookie("sid")
+            const mw = createCookieMiddleware(k)
+            mw.parseRequest!({headers: {cookie: "sid=abc"}})
+            k.delete()
+            const res = newRes()
+            mw.updateResponse!(res)
+            expect(res.headers["set-cookie"]).toEqual(["sid=; Max-Age=0; Path=/; SameSite=Lax; Secure; HttpOnly"])
+        })
+    })
+
+    test("delete({path, domain}) clears a scoped cookie", () => {
+        inRequest(["sid"], () => {
+            const k = cookie("sid")
+            const mw = createCookieMiddleware(k)
+            mw.parseRequest!({headers: {cookie: "sid=abc"}})
+            k.delete({path: "/api", domain: ".example.com"})
+            const res = newRes()
+            mw.updateResponse!(res)
+            expect(res.headers["set-cookie"]).toEqual([
+                "sid=; Max-Age=0; Path=/api; Domain=.example.com; SameSite=Lax; Secure; HttpOnly",
+            ])
+        })
+    })
+
     test("clearing with scoped options emits Max-Age=0 with matching Path/Domain", () => {
         inRequest(["sid"], () => {
             const k = cookie("sid")
