@@ -2,6 +2,7 @@ import {ERROR, ERROR_JSON, GGContractApiDefinition, GGContractClass, GGContractM
 import type {HttpMethod} from "@grest-ts/common";
 import type http from "http";
 import type {GGHttpServerMiddleware} from "../server/GGHttpSchema.startServer";
+import type {GGContextKey} from "@grest-ts/context";
 import type {OpenAPIV3_1} from "openapi-types";
 
 export class GGHttpSchema<TContract extends GGContractApiDefinition, TContext> {
@@ -113,6 +114,13 @@ export interface GGHttpCodec {
      * Use {} if the codec sets no custom response headers.
      */
     readonly responseHeaders: Record<string, GGSchema<string | undefined>>;
+
+    /**
+     * Cookie context keys this route is permitted to modify (set/clear), declared via
+     * GGRpc.*(...).updatesCookie(key). A handler that changes a cookie its route did not
+     * declare is a SERVER_ERROR. Reading a cookie needs no declaration.
+     */
+    readonly updatesCookies?: readonly GGContextKey<string | undefined>[];
 
     createForClient(config: ClientHttpRouteToRpcTransformClientConfig): ClientHttpRouteToRpcTransformClientCodec
 

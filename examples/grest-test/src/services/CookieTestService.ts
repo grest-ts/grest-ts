@@ -15,4 +15,10 @@ export class CookieTestService {
         SESSION.set(undefined)
         return {ok: true}
     }
+
+    // Changes the cookie on a route that did NOT declare .updatesCookie — the binding rejects it.
+    public tamper = async (): Promise<{ok: boolean}> => {
+        SESSION.set("tampered")
+        return {ok: true}
+    }
 }

@@ -1,6 +1,13 @@
 import {GGContextKey} from "@grest-ts/context"
-import {IsAny, type GGSchema} from "@grest-ts/schema"
+import {IsAny, SERVER_ERROR, type GGSchema} from "@grest-ts/schema"
 import type {GGHttpRequest, GGHttpResponse, GGHttpTransportMiddleware} from "./GGHttpSchema"
+
+/**
+ * Per-request set of context-key names the current route is permitted to modify
+ * (declared via GGRpc.*(...).updatesCookie(key)). Populated by the server route
+ * handler; read by the cookie binding to reject undeclared cookie writes.
+ */
+export const GG_COOKIE_WRITES = new GGContextKey<Set<string>>("cookie:writes", IsAny as unknown as GGSchema<Set<string>>)
 
 export interface CookieOptions {
     /** Wire name written to Set-Cookie / read from Cookie. Defaults to the context key's name. */
@@ -91,7 +98,12 @@ export function createCookieMiddleware(
 
         updateResponse(res: GGHttpResponse): void {
             const current = key.get()
-            if (current === inbound.get()) return // handler did not change the cookie
+            const arrived = inbound.get()
+            if (current === arrived) return // handler did not change the cookie
+            if (!GG_COOKIE_WRITES.get()?.has(key.name)) {
+                key.set(arrived) // reject the change so the error response (catch-path retry) doesn't re-trigger
+                throw new SERVER_ERROR({debugMessage: `Cookie "${cookieName}" (context key "${key.name}") was modified by the handler, but this route did not declare .updatesCookie(<key>). Only routes that declare it may set or clear the cookie.`})
+            }
             const line = current
                 ? `${cookieName}=${encodeURIComponent(current)}${a.maxAgeSec !== undefined ? `; Max-Age=${Math.trunc(a.maxAgeSec)}` : ""}${attributes()}`
                 : `${cookieName}=; Max-Age=0${attributes()}`

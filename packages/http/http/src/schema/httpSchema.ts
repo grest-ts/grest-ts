@@ -61,8 +61,9 @@ class GGHttpSchemaBuilder<TContract extends GGContractApiDefinition, TContext = 
      * Set-Cookie; key.set(undefined)/"" → Max-Age=0 clear). The key is a standard
      * GGContextKey used everywhere with .get()/.set() — same feel as auth context keys.
      */
-    useCookie(contextKey: GGContextKey<string | undefined>, options?: CookieOptions): this {
-        this._middlewares.push(createCookieMiddleware(contextKey, options))
+    useCookie(contextKey: GGContextKey<string | undefined>, options?: CookieOptions | string): this {
+        const opts = typeof options === "string" ? {cookieName: options} : options
+        this._middlewares.push(createCookieMiddleware(contextKey, opts))
         return this
     }
 

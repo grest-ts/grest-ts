@@ -497,12 +497,12 @@ import {IsString} from "@grest-ts/schema"
 export const SESSION = new GGContextKey<string | undefined>("session", IsString.orUndefined)
 
 export const AuthApi = httpSchema(AuthContract)
-    .useCookie(SESSION, {cookieName: "sid", maxAgeSec: 60 * 60})
+    .useCookie(SESSION, "sid")                  // wire-name optional; defaults to the key name
     .pathPrefix("api/auth")
     .routes({
-        login:  GGRpc.POST("login"),
-        logout: GGRpc.POST("logout"),
-        me:     GGRpc.GET("me"),
+        login:  GGRpc.POST("login").updatesCookie(SESSION),   // may write the cookie
+        logout: GGRpc.POST("logout").updatesCookie(SESSION),  // may write (clear)
+        me:     GGRpc.GET("me"),                              // read-only -> no declaration
     })
 ```
 
@@ -518,17 +518,24 @@ export class AuthService {
 }
 ```
 
-**Emit-on-change.** `useCookie` parses the incoming `Cookie` into the key and emits
-`Set-Cookie` only when a handler **changes** it versus what arrived: `set(token)` →
-`Set-Cookie`; `set(undefined)`/`set("")`/`delete()` → `Max-Age=0` clear; untouched →
-nothing (read routes don't re-emit, and there's no spurious clear when no cookie
-arrived). A deliberate `.set()` is the only way to emit one — there is no separate
-"this route sets a cookie" declaration to keep in sync.
+**Read vs write.** Reading is implicit — `SESSION.get()` works on any route the schema
+`.useCookie`-bound (just like an auth context key). **Writing is explicit**: only a
+route that declared `.updatesCookie(SESSION)` may change the cookie. A handler that
+calls `SESSION.set(...)` on a route that *didn't* declare it is a `SERVER_ERROR`
+(logged), so a deep service function can't silently mint or change someone's session —
+the capability is visible at the API boundary. (Auth context needs no such gate: the
+server only *reads* it from the request; a cookie is *produced* by the server.)
 
-**Attributes** live on the `.useCookie(key, options)` binding: `cookieName` (default =
-key name), `httpOnly` (default true), `secure` (default true), `sameSite` (default
-`"lax"`), `path` (default `/`), `domain` (default host-only), `maxAgeSec`.
-`SameSite=None` forces `Secure`; name/path/domain are validated (no CR/LF/`;`).
+**Emit-on-change.** Within a route that may write, `useCookie` emits `Set-Cookie` only
+when the handler **changes** the key versus what arrived: `set(token)` → `Set-Cookie`;
+`set(undefined)`/`set("")`/`delete()` → `Max-Age=0` clear; untouched → nothing (read
+routes don't re-emit, and there's no spurious clear when no cookie arrived).
+
+**Attributes** live on the `.useCookie(key, options)` binding (pass a string for just
+the wire-name, or an options object): `cookieName` (default = key name), `httpOnly`
+(default true), `secure` (default true), `sameSite` (default `"lax"`), `path`
+(default `/`), `domain` (default host-only), `maxAgeSec`. `SameSite=None` forces
+`Secure`; name/path/domain are validated (no CR/LF/`;`).
 
 **Domain scope is a security boundary.** The default is **host-only** (no `Domain`):
 the cookie is sent only to the exact host that set it. `domain: ".example.com"` sends
