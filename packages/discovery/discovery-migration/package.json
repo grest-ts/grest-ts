@@ -1,7 +1,7 @@
 {
   "//": "THIS FILE IS GENERATED - DO NOT EDIT",
   "name": "@grest-ts/discovery-migration",
-  "version": "0.0.45",
+  "version": "0.0.46",
   "type": "module",
   "license": "MIT",
   "description": "Migration service discovery implementation for Grest Framework",
@@ -41,7 +41,7 @@
     "node": ">=24"
   },
   "peerDependencies": {
-    "@grest-ts/discovery": "0.0.45",
-    "@grest-ts/logger": "0.0.45"
+    "@grest-ts/discovery": "0.0.46",
+    "@grest-ts/logger": "0.0.46"
   }
 }
