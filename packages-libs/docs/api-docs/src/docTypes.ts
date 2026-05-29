@@ -117,6 +117,13 @@ export interface ContractDoc {
      * intentionally excluded; they live in `auth` to drive different UI.
      */
     headers?: ParamDoc[];
+    /**
+     * Cookies the transport middleware reads (via a cookie() binding). Surfaced so a
+     * reader can see, without any hand-written docs, that e.g. a `session` cookie exists
+     * and how a cookie-based flow (auth, locale) reaches the API. Populated from the
+     * binding's declared cookie name + value schema.
+     */
+    cookies?: ParamDoc[];
     /** WS only — populated when the schema declares `.connectPermission(...)`. */
     connectPermission?: PermissionDoc;
     methods: MethodDoc[];

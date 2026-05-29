@@ -111,6 +111,7 @@ export function buildContractDoc(options: BuildContractDocOptions): ApiDocsDocum
 function buildHttpContract(httpSchema: GGHttpSchema<any, any>, ctx: BuildContext): ContractDoc {
     const auth = extractHttpAuth(httpSchema.apiMiddlewares as readonly GGHttpTransportMiddleware[]);
     const headers = extractHttpHeaders(httpSchema.apiMiddlewares as readonly GGHttpTransportMiddleware[], ctx, httpSchema.name);
+    const cookies = extractCookies(httpSchema.apiMiddlewares as readonly GGHttpTransportMiddleware[], ctx, httpSchema.name);
     const methods: MethodDoc[] = [];
 
     for (const methodName of Object.keys(httpSchema.codec)) {
@@ -127,6 +128,7 @@ function buildHttpContract(httpSchema: GGHttpSchema<any, any>, ctx: BuildContext
         pathPrefix: normalizePath(httpSchema.pathPrefix),
         ...(auth.length > 0 ? {auth} : {}),
         ...(headers.length > 0 ? {headers} : {}),
+        ...(cookies.length > 0 ? {cookies} : {}),
         methods,
     };
 }
@@ -211,6 +213,7 @@ function buildWsContract(wsSchema: GGWebSocketSchema<any, any, any, any, any>, c
     const wsMiddlewares: any[] = (wsSchema as any).middlewares ?? [];
     const auth = extractWsAuth(wsMiddlewares);
     const headers = extractWsHeaders(wsMiddlewares, ctx, wsSchema.name);
+    const cookies = extractCookies(wsMiddlewares, ctx, wsSchema.name);
     const methods: MethodDoc[] = [];
     const contract = wsSchema.contract;
 
@@ -232,6 +235,7 @@ function buildWsContract(wsSchema: GGWebSocketSchema<any, any, any, any, any>, c
         path: "/" + wsSchema.path.replace(/^\/+/, ""),
         ...(auth.length > 0 ? {auth} : {}),
         ...(headers.length > 0 ? {headers} : {}),
+        ...(cookies.length > 0 ? {cookies} : {}),
         ...(connectPermission ? {connectPermission} : {}),
         methods,
     };
@@ -477,6 +481,29 @@ function extractWsHeaders(
             if (!desc) continue;
             const format = desc.docs?.format;
             if (authSchemeFromFormat(format) !== undefined) continue;
+            out.push(toHeaderParam(name, schema, desc, ctx, contractName));
+        }
+    }
+    return out;
+}
+
+// ── Cookies ────────────────────────────────────────────────────────────
+//
+// cookie() bindings (HTTP and WS share the same binding object) expose their
+// read cookie as `cookieParams: {name → value schema}`. Surfaced as its own
+// section so a cookie-based flow — e.g. an `access` session cookie — is visible
+// in the docs without anyone writing prose about it.
+
+function extractCookies(
+    middlewares: readonly {cookieParams?: Record<string, GGSchema<any>>}[],
+    ctx: BuildContext,
+    contractName: string,
+): ParamDoc[] {
+    const out: ParamDoc[] = [];
+    for (const mw of middlewares) {
+        for (const [name, schema] of Object.entries(mw.cookieParams ?? {})) {
+            const desc = schema.toSchemaDescription?.();
+            if (!desc) continue;
             out.push(toHeaderParam(name, schema, desc, ctx, contractName));
         }
     }

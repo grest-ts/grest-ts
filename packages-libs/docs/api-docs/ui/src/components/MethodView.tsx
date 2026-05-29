@@ -70,6 +70,22 @@ export function MethodView({contract, method, doc, highlightType, usageIndex}: P
                 </Section>
             )}
 
+            {contract.cookies && contract.cookies.length > 0 && (
+                <Section title="Cookies">
+                    <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 font-mono text-[13px] leading-6">
+                        {contract.cookies.map(c => (
+                            <div key={c.name} className="flex items-baseline gap-2">
+                                <span className="text-purple-700">Cookie: {c.name}</span>
+                                {!c.required && <span className="text-gray-400">?</span>}
+                                <span className="text-gray-500">:</span>
+                                <InlineRef schemaRef={c.schema} doc={doc} highlightType={highlightType} />
+                                {c.description && <span className="text-gray-400 italic ml-2">  // {c.description}</span>}
+                            </div>
+                        ))}
+                    </div>
+                </Section>
+            )}
+
             {/* Request — params and body */}
             {(method.pathParams?.length || method.queryParams?.length || method.requestBody || method.wsInput) ? (
                 <Section title={requestSectionTitle(method)}>

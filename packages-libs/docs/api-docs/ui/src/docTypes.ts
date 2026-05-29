@@ -35,6 +35,8 @@ export interface ContractDoc {
     auth?: AuthDoc[];
     /** Non-auth transport headers declared by middleware (bearer/api-key live in `auth`). */
     headers?: ParamDoc[];
+    /** Cookies the transport middleware reads, via a cookie() binding (name + value schema). */
+    cookies?: ParamDoc[];
     /** WS only — populated when the schema declares `.connectPermission(...)`. */
     connectPermission?: PermissionDoc;
     methods: MethodDoc[];
