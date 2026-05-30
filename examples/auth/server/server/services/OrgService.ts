@@ -21,12 +21,12 @@ export class OrgService implements GGContractImplementation<typeof OrgApiContrac
         }
         const org = this.table.get(request.orgId)
         if (!org) throw new FORBIDDEN({displayMessage: "Org not found"})
-        const {accessToken: orgToken, accessExpiresAt: orgTokenExpiresAt} = await this.orgTokenEngine.issueAccess(
+        const {accessToken, accessExpiresAt} = await this.orgTokenEngine.issueAccess(
             user.id,
             [OrgPermission.ORG_MEMBER],
             {orgId: request.orgId},
         )
-        return {orgToken, orgTokenExpiresAt, org}
+        return {accessToken, accessExpiresAt, ...org}
     }
 
     public orgInfo = async (): Promise<Org> => {
