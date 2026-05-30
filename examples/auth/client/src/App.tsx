@@ -99,9 +99,9 @@ export function App() {
 
     function applyAuthResult(res: AuthResponse) {
         session.start(res)
-        setUser(res.user)
+        setUser(res.data)
         setPerms(parseJwtPermissions(res.access.token))
-        setNewEmail(res.user.email)
+        setNewEmail(res.data.email)
     }
 
     async function quickStart(username: string) {

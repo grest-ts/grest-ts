@@ -24,7 +24,7 @@ describe("AuthToken — access", () => {
     test("issue → verifyAccess round-trips subject + typed permissions", async () => {
         const auth = permToken()
         const pair = await auth.issue("user-1", [Perm.Read, Perm.Write], {})
-        const payload = await auth.verifyAccess(pair.accessToken)
+        const payload = await auth.verifyAccess(pair.access.token)
         expect(payload.sub).toBe("user-1")
         expect(payload.permissions).toEqual([Perm.Read, Perm.Write])
         expect(payload.exp).toBeGreaterThan(payload.iat)
@@ -40,7 +40,7 @@ describe("AuthToken — access", () => {
             refreshTtlMs: 60_000,
         })
         const pair = await auth.issue("user-1", [Perm.Read], {orgId: "org-9", admin: true})
-        const payload = await auth.verifyAccess(pair.accessToken)
+        const payload = await auth.verifyAccess(pair.access.token)
         expect(payload.orgId).toBe("org-9")
         expect(payload.admin).toBe(true)
         expect(payload.permissions).toEqual([Perm.Read])
@@ -49,7 +49,7 @@ describe("AuthToken — access", () => {
     test("tampered token is rejected as TOKEN_INVALID", async () => {
         const auth = permToken()
         const pair = await auth.issue("user-1", [Perm.Read], {})
-        const tampered = pair.accessToken.slice(0, -3) + "xyz"
+        const tampered = pair.access.token.slice(0, -3) + "xyz"
         await expect(auth.verifyAccess(tampered)).rejects.toBeInstanceOf(AuthError)
         await expect(auth.verifyAccess(tampered)).rejects.toMatchObject({code: "TOKEN_INVALID"})
     })
@@ -57,7 +57,7 @@ describe("AuthToken — access", () => {
     test("expired access token is rejected as TOKEN_EXPIRED", async () => {
         const auth = permToken({accessTtlMs: -1000})
         const pair = await auth.issue("user-1", [Perm.Read], {})
-        await expect(auth.verifyAccess(pair.accessToken)).rejects.toMatchObject({code: "TOKEN_EXPIRED"})
+        await expect(auth.verifyAccess(pair.access.token)).rejects.toMatchObject({code: "TOKEN_EXPIRED"})
     })
 })
 
@@ -65,7 +65,7 @@ describe("AuthToken — permissions bridge to grest-ts", () => {
     test("permissionsChecker uses satisfies() for string / allOf / anyOf", async () => {
         const auth = permToken()
         const pair = await auth.issue("user-1", [Perm.Read, Perm.Write], {})
-        const payload = await auth.verifyAccess(pair.accessToken)
+        const payload = await auth.verifyAccess(pair.access.token)
         const checker = permissionsChecker(payload.permissions)
         expect(checker.has(Perm.Read)).toBe(true)
         expect(checker.has(Perm.Admin)).toBe(false)
@@ -79,21 +79,21 @@ describe("AuthToken — refresh", () => {
     test("refresh re-resolves permissions for a fresh access token", async () => {
         const auth = permToken()
         const pair = await auth.issue("user-1", [Perm.Read], {})
-        const next = await auth.refresh(pair.refreshToken, async () => ({permissions: [Perm.Read, Perm.Admin], claims: {}}))
-        const payload = await auth.verifyAccess(next.accessToken)
+        const next = await auth.refresh(pair.refresh.token, async () => ({permissions: [Perm.Read, Perm.Admin], claims: {}}))
+        const payload = await auth.verifyAccess(next.access.token)
         expect(payload.permissions).toEqual([Perm.Read, Perm.Admin])
-        expect(next.refreshToken).not.toBe(pair.refreshToken)
+        expect(next.refresh.token).not.toBe(pair.refresh.token)
     })
 
     test("replaying a rotated token is reuse: REFRESH_REUSE, and the whole family is burned", async () => {
         const auth = permToken()
         const pair = await auth.issue("user-1", [Perm.Read], {})
-        const child = await auth.refresh(pair.refreshToken, async () => ({permissions: [Perm.Read], claims: {}}))
+        const child = await auth.refresh(pair.refresh.token, async () => ({permissions: [Perm.Read], claims: {}}))
         // Re-presenting the spent parent trips reuse detection.
-        await expect(auth.refresh(pair.refreshToken, async () => ({permissions: [Perm.Read], claims: {}})))
+        await expect(auth.refresh(pair.refresh.token, async () => ({permissions: [Perm.Read], claims: {}})))
             .rejects.toMatchObject({code: "REFRESH_REUSE"})
         // ...which severs the whole lineage — the live child is revoked too.
-        await expect(auth.refresh(child.refreshToken, async () => ({permissions: [Perm.Read], claims: {}})))
+        await expect(auth.refresh(child.refresh.token, async () => ({permissions: [Perm.Read], claims: {}})))
             .rejects.toMatchObject({code: "REFRESH_INVALID"})
     })
 
@@ -101,11 +101,11 @@ describe("AuthToken — refresh", () => {
         const auth = permToken()
         const sessionA = await auth.issue("user-1", [Perm.Read], {})
         const sessionB = await auth.issue("user-1", [Perm.Read], {})
-        await auth.refresh(sessionA.refreshToken, async () => ({permissions: [Perm.Read], claims: {}}))
-        await expect(auth.refresh(sessionA.refreshToken, async () => ({permissions: [Perm.Read], claims: {}})))
+        await auth.refresh(sessionA.refresh.token, async () => ({permissions: [Perm.Read], claims: {}}))
+        await expect(auth.refresh(sessionA.refresh.token, async () => ({permissions: [Perm.Read], claims: {}})))
             .rejects.toMatchObject({code: "REFRESH_REUSE"})
-        const bNext = await auth.refresh(sessionB.refreshToken, async () => ({permissions: [Perm.Read], claims: {}}))
-        expect(await auth.verifyAccess(bNext.accessToken)).toMatchObject({sub: "user-1"})
+        const bNext = await auth.refresh(sessionB.refresh.token, async () => ({permissions: [Perm.Read], claims: {}}))
+        expect(await auth.verifyAccess(bNext.access.token)).toMatchObject({sub: "user-1"})
     })
 
     test("unknown refresh token is rejected", async () => {
@@ -117,15 +117,15 @@ describe("AuthToken — refresh", () => {
     test("expired refresh token is rejected", async () => {
         const auth = permToken({refreshTtlMs: -1000})
         const pair = await auth.issue("user-1", [Perm.Read], {})
-        await expect(auth.refresh(pair.refreshToken, async () => ({permissions: [Perm.Read], claims: {}})))
+        await expect(auth.refresh(pair.refresh.token, async () => ({permissions: [Perm.Read], claims: {}})))
             .rejects.toMatchObject({code: "REFRESH_INVALID"})
     })
 
     test("revoke invalidates the refresh token", async () => {
         const auth = permToken()
         const pair = await auth.issue("user-1", [Perm.Read], {})
-        await auth.revoke(pair.refreshToken)
-        await expect(auth.refresh(pair.refreshToken, async () => ({permissions: [Perm.Read], claims: {}})))
+        await auth.revoke(pair.refresh.token)
+        await expect(auth.refresh(pair.refresh.token, async () => ({permissions: [Perm.Read], claims: {}})))
             .rejects.toMatchObject({code: "REFRESH_INVALID"})
     })
 
@@ -135,7 +135,7 @@ describe("AuthToken — refresh", () => {
         const second = await auth.issue("user-1", [Perm.Read], {})
         await auth.revokeAll("user-1")
         for (const pair of [first, second]) {
-            await expect(auth.refresh(pair.refreshToken, async () => ({permissions: [Perm.Read], claims: {}})))
+            await expect(auth.refresh(pair.refresh.token, async () => ({permissions: [Perm.Read], claims: {}})))
                 .rejects.toMatchObject({code: "REFRESH_INVALID"})
         }
     })
@@ -144,9 +144,9 @@ describe("AuthToken — refresh", () => {
         const auth = permToken()
         const pair = await auth.issue("user-1", [Perm.Read], {})
         const boom = new Error("transient DB error")
-        await expect(auth.refresh(pair.refreshToken, async () => { throw boom })).rejects.toBe(boom)
-        const next = await auth.refresh(pair.refreshToken, async () => ({permissions: [Perm.Write], claims: {}}))
-        const payload = await auth.verifyAccess(next.accessToken)
+        await expect(auth.refresh(pair.refresh.token, async () => { throw boom })).rejects.toBe(boom)
+        const next = await auth.refresh(pair.refresh.token, async () => ({permissions: [Perm.Write], claims: {}}))
+        const payload = await auth.verifyAccess(next.access.token)
         expect(payload.permissions).toEqual([Perm.Write])
     })
 })
@@ -167,7 +167,7 @@ describe("AuthToken — audience", () => {
         const userAuth = audienceToken("kratt-user")
         const orgAuth = audienceToken("kratt-org")
         const pair = await userAuth.issue("user-1", [Perm.Read], {})
-        await expect(orgAuth.verifyAccess(pair.accessToken))
+        await expect(orgAuth.verifyAccess(pair.access.token))
             .rejects.toMatchObject({code: "TOKEN_INVALID"})
     })
 })
@@ -185,9 +185,9 @@ describe("AuthToken — access-only (no store)", () => {
     test("issueAccess mints a verifiable access token with no refresh counterpart", async () => {
         const auth = accessOnlyToken()
         const access = await auth.issueAccess("user-1", [Perm.Read, Perm.Write], {})
-        expect(access).not.toHaveProperty("refreshToken")
-        expect(access.accessExpiresAt).toBeGreaterThan(Date.now())
-        const payload = await auth.verifyAccess(access.accessToken)
+        expect(access).not.toHaveProperty("refresh")
+        expect(access.access.expiresAt).toBeGreaterThan(Date.now())
+        const payload = await auth.verifyAccess(access.access.token)
         expect(payload.sub).toBe("user-1")
         expect(payload.permissions).toEqual([Perm.Read, Perm.Write])
     })
@@ -203,7 +203,7 @@ describe("AuthToken — access-only (no store)", () => {
     test("issueAccess also works when a store IS configured (store untouched)", async () => {
         const auth = permToken()
         const access = await auth.issueAccess("user-1", [Perm.Write], {})
-        const payload = await auth.verifyAccess(access.accessToken)
+        const payload = await auth.verifyAccess(access.access.token)
         expect(payload.permissions).toEqual([Perm.Write])
     })
 })

@@ -85,14 +85,14 @@ class FakeKey implements TokenKey {
 
 // ---- Helpers ----
 
-function makeAccess(token: string, expires: number): DerivedTokenResult<unknown> {
-    return {access: {token, expires}, data: undefined}
+function makeAccess(token: string, expiresAt: number): DerivedTokenResult<unknown> {
+    return {access: {token, expiresAt}, data: undefined}
 }
 
-function makePair(token: string, expires: number, refreshToken?: string): TokenPair {
+function makePair(token: string, expiresAt: number, refreshToken?: string): TokenPair {
     return {
-        access: {token, expires},
-        ...(refreshToken ? {refresh: {token: refreshToken, expires: expires + 604_800_000}} : {}),
+        access: {token, expiresAt},
+        ...(refreshToken ? {refresh: {token: refreshToken, expiresAt: expiresAt + 604_800_000}} : {}),
     }
 }
 

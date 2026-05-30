@@ -1,5 +1,6 @@
 import {GGRpc, httpSchema} from "@grest-ts/http"
-import {ERROR, EXISTS, GGContractClass, IsEmail, IsNumber, IsObject, IsString, NOT_AUTHORIZED, SERVER_ERROR, VALIDATION_ERROR, GG_NO_PERMISSIONS} from "@grest-ts/schema"
+import {ERROR, EXISTS, GGContractClass, IsEmail, IsObject, IsString, NOT_AUTHORIZED, SERVER_ERROR, VALIDATION_ERROR, GG_NO_PERMISSIONS} from "@grest-ts/schema"
+import {IsGGAuthTokensResult} from "@grest-ts/auth"
 
 const IsUserId = IsString.brand("UserId")
 
@@ -22,15 +23,7 @@ export const IsLoginRequest = IsObject({
 })
 export type LoginRequest = typeof IsLoginRequest.infer
 
-const IsTokenGroup = (title: string) => IsObject({
-    token: IsString.docs({title: `${title} token (JWT)`}),
-    expires: IsNumber.docs({title: `${title} token expiry (ms epoch)`}),
-})
-
-export const IsTokenPairResponse = IsObject({
-    access: IsTokenGroup("Access"),
-    refresh: IsTokenGroup("Refresh"),
-})
+export const IsTokenPairResponse = IsGGAuthTokensResult
 export type TokenPairResponse = typeof IsTokenPairResponse.infer
 
 export const IsAuthResponse = IsTokenPairResponse.extend({

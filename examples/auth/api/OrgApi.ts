@@ -8,11 +8,13 @@ export const IsSelectOrgRequest = IsObject({
 })
 export type SelectOrgRequest = typeof IsSelectOrgRequest.infer
 
+const IsOrgAccess = IsObject({
+    token: IsString,
+    expiresAt: IsNumber,
+})
+
 export const IsSelectOrgResponse = IsObject({
-    access: IsObject({
-        token: IsString.docs({title: "Org access token (JWT)", description: "Pass as x-org-token header"}),
-        expires: IsNumber.docs({title: "Org token expiry (ms epoch)"}),
-    }),
+    access: IsOrgAccess,
     data: IsOrg,
 })
 export type SelectOrgResponse = typeof IsSelectOrgResponse.infer

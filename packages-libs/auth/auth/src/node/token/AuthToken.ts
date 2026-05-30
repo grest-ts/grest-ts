@@ -1,22 +1,14 @@
 import {createHash, randomBytes} from "node:crypto"
-import {IsArray, IsObject, type GGSchema, IsTimestampMs, IsString} from "@grest-ts/schema"
+import {IsArray, IsObject, type GGSchema} from "@grest-ts/schema"
 import {AuthError} from "../errors"
 import type {SigningStrategy} from "../signing/SigningStrategy"
 import {IsRefreshTokenRecord, type RefreshTokenStore} from "../refresh/RefreshTokenStore"
+export {IsGGRefreshToken, IsGGRefreshTokenData, IsGGAccessToken, IsGGAccessTokenData, IsGGAuthTokenResult, IsGGAuthTokensResult} from "../../shared/tokenSchemas"
+export type {GGAuthTokenResult, GGAuthTokensResult} from "../../shared/tokenSchemas"
+import {IsGGAccessTokenData, IsGGRefreshTokenData, IsGGAuthTokensResult, IsGGAuthTokenResult, IsGGRefreshToken} from "../../shared/tokenSchemas"
+import type {GGAuthTokensResult, GGAuthTokenResult} from "../../shared/tokenSchemas"
 
 export type NoClaims = Record<string, never>
-
-export const IsRefreshToken = IsString.nonEmpty.brand("GGAuth.refreshToken")
-export const IsGGRefreshTokenData = IsObject({token: IsRefreshToken, expiresAt: IsTimestampMs}).brand("GGAuth.refreshTokenData")
-
-export const IsGGAccessToken = IsString.nonEmpty.brand("GGAuth.accessToken")
-export const IsGGAccessTokenData = IsObject({token: IsGGAccessToken, expiresAt: IsTimestampMs}).brand("GGAuth.accessTokenData")
-
-export const IsGGAuthTokenResult = IsObject({access: IsGGAccessTokenData})
-export type GGAuthTokenResult = typeof IsGGAuthTokenResult.infer
-
-export const IsGGAuthTokensResult = IsObject({access: IsGGAccessTokenData, refresh: IsGGRefreshTokenData})
-export type GGAuthTokensResult = typeof IsGGAuthTokensResult.infer
 
 export type AccessPayload<P extends string, C extends object> = C & {
     sub: string

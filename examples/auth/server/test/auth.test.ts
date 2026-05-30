@@ -32,7 +32,7 @@ describe("Registration", () => {
         const result = await ctx.auth
             .register(aliceData)
             .toMatchObject({
-                user: {username: "alice", email: "alice@example.com"},
+                data: {username: "alice", email: "alice@example.com"},
                 access: {token: expect.any(String)},
                 refresh: {token: expect.any(String)},
             })
@@ -63,7 +63,7 @@ describe("Login", () => {
     test("returns JWT on success", async () => {
         const result = await ctx.auth
             .login(aliceData)
-            .toMatchObject({user: {username: aliceData.username}})
+            .toMatchObject({data: {username: aliceData.username}})
         expect(result.access.token).toMatch(/^ey/)
     })
 })

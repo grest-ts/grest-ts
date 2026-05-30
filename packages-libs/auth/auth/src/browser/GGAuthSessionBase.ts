@@ -176,7 +176,7 @@ export class BaseAuthSession<D extends DerivedMap> {
 
     start(pair: TokenPair): void {
         const next: SharedTokens = {
-            root: {accessToken: pair.access.token, accessExpiresAt: pair.access.expires},
+            root: {accessToken: pair.access.token, accessExpiresAt: pair.access.expiresAt},
             refreshToken: this.config.storage === "cookie" ? undefined : pair.refresh?.token,
         }
         this.commitShared(next)
@@ -251,7 +251,7 @@ export class BaseAuthSession<D extends DerivedMap> {
             }
 
             const next: SharedTokens = {
-                root: {accessToken: result.access.token, accessExpiresAt: result.access.expires},
+                root: {accessToken: result.access.token, accessExpiresAt: result.access.expiresAt},
                 refreshToken: this.config.storage === "cookie"
                     ? undefined
                     : (result.refresh?.token ?? this.shared?.refreshToken),
@@ -268,7 +268,7 @@ export class BaseAuthSession<D extends DerivedMap> {
         const pk = stableKey(params)
 
         const existing = entry.pool.get(pk)
-        if (existing && existing.result.access.expires > this.ports.clock.now() + this.config.clockSkewMs) {
+        if (existing && existing.result.access.expiresAt > this.ports.clock.now() + this.config.clockSkewMs) {
             entry.active = pk
             cfg.key.set(existing.result.access.token)
             this.notifyListeners()
@@ -348,7 +348,7 @@ export class BaseAuthSession<D extends DerivedMap> {
         if (!entry?.active) return false
         const poolEntry = entry.pool.get(entry.active)
         if (!poolEntry) return true
-        return poolEntry.result.access.expires <= this.ports.clock.now() + this.config.clockSkewMs
+        return poolEntry.result.access.expiresAt <= this.ports.clock.now() + this.config.clockSkewMs
     }
 
     ensureActiveDerivedFresh(key: string): Promise<void> {

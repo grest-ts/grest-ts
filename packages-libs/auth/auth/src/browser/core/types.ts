@@ -1,7 +1,7 @@
 export interface AccessOnly { accessToken: string; accessExpiresAt: number }
 export interface TokenPair {
-    access: {token: string; expires: number}
-    refresh?: {token: string; expires: number}
+    access: {token: string; expiresAt: number}
+    refresh?: {token: string; expiresAt: number}
 }
 
 export interface TokenKey {
@@ -11,7 +11,7 @@ export interface TokenKey {
 }
 
 export interface DerivedTokenResult<D = unknown> {
-    access: {token: string; expires: number}
+    access: {token: string; expiresAt: number}
     data: D
 }
 
