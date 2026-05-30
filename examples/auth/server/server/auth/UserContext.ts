@@ -1,11 +1,10 @@
-import {GGHttpServerMiddleware} from "@grest-ts/http"
-import {GGWebSocketMiddleware} from "@grest-ts/websocket"
+import {GGTransportMiddleware} from "@grest-ts/context"
 import {NOT_AUTHORIZED} from "@grest-ts/schema"
 import {AuthGuard} from "@grest-ts/auth"
 import {UserContext, UserPermission, tUserId} from "../../../api/auth/UserAuth"
 import {UserService} from "../services/UserService"
 
-export class UserContextMiddleware implements GGHttpServerMiddleware, GGWebSocketMiddleware {
+export class UserContextMiddleware implements GGTransportMiddleware {
     constructor(
         private readonly userService: UserService,
         private readonly userGuard: AuthGuard<UserPermission>,

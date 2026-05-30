@@ -1,7 +1,7 @@
 import {GGContextKey} from "@grest-ts/context";
+import type {GGInbound, GGOutbound, GGTransportMiddleware} from "@grest-ts/context";
 import {IsCountry, IsLanguage, IsObject, IsString, tCountry, tLanguage} from "@grest-ts/schema";
 import {IsLocale} from "@grest-ts/schema";
-import type {GGHttpRequest, GGHttpTransportMiddleware} from "@grest-ts/http";
 
 const IsGGIntlLocaleContext = IsObject({
     /** Full locale tag (e.g., "en-US", "en", "zh-Hans-CN") */
@@ -57,22 +57,19 @@ const localeCodec = HeaderType.codecTo(IsGGIntlLocaleContext, {
  * value is parsed into {locale, language, country}; a browser sends it automatically.
  * Bind with httpSchema(...).use(intlLocaleHeader()).
  */
-export function intlLocaleHeader(): GGHttpTransportMiddleware {
+export function intlLocaleHeader(): GGTransportMiddleware {
     return {
         headers: {[HEADER_ACCEPT_LANGUAGE]: IsString.orUndefined},
         responseHeaders: {},
-        parseRequest(req: GGHttpRequest): void {
-            const result = localeCodec.encode((req.headers ?? {}) as Record<string, string>);
+        parse(inbound: GGInbound): void {
+            const result = localeCodec.encode(inbound.headers as Record<string, string>);
             if (result.success) GG_INTL_LOCALE.set(result.value);
         },
-        updateRequest(req: GGHttpRequest): void {
+        update(outbound: GGOutbound): void {
             const value = GG_INTL_LOCALE.get();
             if (value === undefined) return;
             const result = localeCodec.decode(value);
-            if (result.success) {
-                req.headers = req.headers ?? {};
-                Object.assign(req.headers, result.value);
-            }
+            if (result.success) Object.assign(outbound.headers, result.value);
         },
     };
 }

@@ -11,7 +11,7 @@ import * as http from "http"
 import WebSocket from "ws"
 import {GGContext} from "@grest-ts/context"
 import {GG_TEST_RUNNER, GGTest} from "@grest-ts/testkit"
-import {cookie} from "@grest-ts/http"
+import {GGCookie} from "@grest-ts/http"
 import {MainRuntime} from "../src/main"
 import {SESSION} from "../src/api/CookieTestApi"
 
@@ -19,26 +19,26 @@ describe("ws cookie binding (unit)", () => {
 
     const inContext = (fn: () => void) => new GGContext("ws-cookie-unit").run(fn)
 
-    test("parseHandshake reads the cookie from the upgrade headers into the key", () => {
+    test("parse reads the cookie from the upgrade Cookie header into the key", () => {
         inContext(() => {
-            const mw = cookie(SESSION)
-            mw.parseHandshake!({headers: {}, upgradeHeaders: {cookie: "other=x; session=abc123; y=z"}, queryArgs: {}})
+            const mw = GGCookie.middleware(SESSION)
+            mw.parse!({headers: {}, query: {}, cookie: "other=x; session=abc123; y=z"})
             expect(SESSION.get()).toBe("abc123")
         })
     })
 
-    test("a cookie present only in the in-band handshake message is ignored (no spoof)", () => {
+    test("a cookie absent from inbound.cookie (in-band only) is never read (no spoof)", () => {
         inContext(() => {
-            const mw = cookie(SESSION)
-            mw.parseHandshake!({headers: {cookie: "session=spoofed"}, upgradeHeaders: {}, queryArgs: {}})
+            const mw = GGCookie.middleware(SESSION)
+            mw.parse!({headers: {cookie: "session=spoofed"}, query: {}})
             expect(SESSION.get()).toBeUndefined()
         })
     })
 
     test("no cookie → the key stays undefined", () => {
         inContext(() => {
-            const mw = cookie(SESSION)
-            mw.parseHandshake!({headers: {}, upgradeHeaders: {}, queryArgs: {}})
+            const mw = GGCookie.middleware(SESSION)
+            mw.parse!({headers: {}, query: {}})
             expect(SESSION.get()).toBeUndefined()
         })
     })

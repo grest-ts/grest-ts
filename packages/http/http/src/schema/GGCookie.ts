@@ -1,6 +1,5 @@
-import {GGContextKey} from "@grest-ts/context"
+import {GGContextKey, type GGInbound, type GGResponse, type GGTransportMiddleware} from "@grest-ts/context"
 import {IsAny, IsString, SERVER_ERROR, type GGSchema} from "@grest-ts/schema"
-import type {GGHttpRequest, GGHttpResponse, GGHttpTransportMiddleware} from "./GGHttpSchema"
 
 /**
  * Per-request set of context-key names the current route is permitted to write a cookie
@@ -36,41 +35,27 @@ interface PendingCookie {
     options?: CookieOptions
 }
 
-interface WsHandshakeContextLike {
-    headers: Record<string, string>
-    upgradeHeaders?: Record<string, string>
-    queryArgs: Record<string, string>
-}
-
-export interface GGCookieBinding extends GGHttpTransportMiddleware {
-    /** The cookie this binding reads, mapped to its value schema — emitted as an `in: cookie` doc param. */
-    readonly cookieParams: Record<string, GGSchema<string | undefined>>
-    parseHandshake(ctx: WsHandshakeContextLike): void
-}
-
 export class GGCookie {
 
     /**
      * Bind a context key to a cookie, read-only on the wire. Reads ONLY the named cookie —
-     * never a header — from the incoming HTTP Cookie (parseRequest) or the real WS upgrade
-     * Cookie (parseHandshake), into key.get(). The cookie's wire name defaults to the key's
-     * name. To write the cookie, call setCookie(key, …) from a route that declared
-     * .updatesCookie(key); the matching binding flushes it as Set-Cookie (HTTP only — a
-     * WebSocket has no response to set a cookie on).
+     * never a header — from the inbound Cookie header into key.get(). For HTTP that is the
+     * request Cookie; for WebSocket the real upgrade Cookie (the runtime fills inbound.cookie
+     * from there, never from the spoofable in-band message). The cookie's wire name defaults
+     * to the key's name. To write the cookie, call setCookie(key, …) from a route that
+     * declared .updatesCookie(key); the matching binding flushes it as Set-Cookie (HTTP only —
+     * a WebSocket has no response to set a cookie on).
      */
-    public static middleware(key: GGContextKey<string | undefined>, opts?: {name?: string; schema?: GGSchema<string | undefined>}): GGCookieBinding {
+    public static middleware(key: GGContextKey<string | undefined>, opts?: {name?: string; schema?: GGSchema<string | undefined>}): GGTransportMiddleware {
         const cookieName = opts?.name ?? key.name
         _assertCookieSafe("name", cookieName)
         return {
-            headers: {},
-            responseHeaders: {},
             cookieParams: {[cookieName]: opts?.schema ?? IsString.orUndefined},
-            parseRequest(req: GGHttpRequest): void {
-                const raw = req.headers?.["cookie"]
-                const value = _readCookie(typeof raw === "string" ? raw : undefined, cookieName)
+            parse(inbound: GGInbound): void {
+                const value = _readCookie(inbound.cookie, cookieName)
                 if (value !== undefined) key.set(value)
             },
-            updateResponse(res: GGHttpResponse): void {
+            respond(res: GGResponse): void {
                 const pending = GG_COOKIE_PENDING.get()?.get(key.name)
                 if (pending === undefined) return
                 const line = _serializeSetCookie(cookieName, pending.value, pending.options)
@@ -78,10 +63,6 @@ export class GGCookie {
                 const arr = existing === undefined ? [] : Array.isArray(existing) ? existing : [existing]
                 arr.push(line)
                 res.headers["set-cookie"] = arr
-            },
-            parseHandshake(ctx: WsHandshakeContextLike): void {
-                const value = _readCookie(ctx.upgradeHeaders?.["cookie"], cookieName)
-                if (value !== undefined) key.set(value)
             },
         }
     }
@@ -131,8 +112,7 @@ function _assertCookieSafe(label: string, value: string): void {
 }
 
 /**
- * Read a single named cookie out of a raw `Cookie` header value. Shared by the HTTP
- * binding (parseRequest) and the WebSocket binding (parseHandshake). A malformed
+ * Read a single named cookie out of a raw `Cookie` header value. A malformed
  * percent-encoding (e.g. "sid=%") must not crash — fall back to the raw value.
  */
 function _readCookie(rawCookieHeader: string | undefined, name: string): string | undefined {

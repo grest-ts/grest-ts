@@ -7,7 +7,7 @@
  */
 
 import {GG_TEST_RUNNER, GGTest} from "@grest-ts/testkit"
-import {GGWebSocketMiddleware} from "@grest-ts/websocket"
+import {GGTransportMiddleware} from "@grest-ts/context"
 import {MainRuntime} from "../src/main"
 import {ClientTestSocketApi} from "../src/api/ClientTestSocketApi"
 import {AuthedSocketApi} from "../src/api/AuthedSocketApi"
@@ -167,9 +167,9 @@ describe("WebSocket createClient (production client)", () => {
     describe("config.middlewares — extra client-side middlewares merged with schema's", () => {
 
         test("static-token middleware supplies header without a GGContext.run() wrapper", async () => {
-            const StaticToken: GGWebSocketMiddleware = {
-                updateHandshake(ctx) {
-                    ctx.headers["authorization"] = "Bearer secret-alice"
+            const StaticToken: GGTransportMiddleware = {
+                update(outbound) {
+                    outbound.headers["authorization"] = "Bearer secret-alice"
                 },
             }
 
@@ -188,9 +188,9 @@ describe("WebSocket createClient (production client)", () => {
         })
 
         test("invalid token from extra middleware: server's NOT_AUTHORIZED surfaces typed on client", async () => {
-            const BadToken: GGWebSocketMiddleware = {
-                updateHandshake(ctx) {
-                    ctx.headers["authorization"] = "Bearer wrong"
+            const BadToken: GGTransportMiddleware = {
+                update(outbound) {
+                    outbound.headers["authorization"] = "Bearer wrong"
                 },
             }
 
@@ -213,9 +213,9 @@ describe("WebSocket createClient (production client)", () => {
             // that the default shouldRetry rejects NOT_AUTHORIZED: the scheduleReconnect path only
             // fires after a successful initial connect + drop, so this test focuses on predicate
             // classification via the direct connect() throw (which initial-connect does not retry).
-            const BadToken: GGWebSocketMiddleware = {
-                updateHandshake(ctx) {
-                    ctx.headers["authorization"] = "Bearer wrong"
+            const BadToken: GGTransportMiddleware = {
+                update(outbound) {
+                    outbound.headers["authorization"] = "Bearer wrong"
                 },
             }
 

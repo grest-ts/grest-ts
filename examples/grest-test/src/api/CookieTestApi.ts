@@ -1,9 +1,9 @@
-import {GGRpc, httpSchema, cookie} from "@grest-ts/http"
+import {GGRpc, httpSchema, GGCookie} from "@grest-ts/http"
 import {GGContextKey} from "@grest-ts/context"
 import {GGContractClass, GG_NO_PERMISSIONS, IsBoolean, IsObject, IsString, SERVER_ERROR} from "@grest-ts/schema"
 
-// A plain context key, bound to a cookie via cookie(SESSION). Read via .get(); write via
-// setCookie(SESSION, value, options?). The key's name ("session") is the cookie's wire name.
+// A plain context key, bound to a cookie via GGCookie.middleware(SESSION). Read via .get(); write via
+// GGCookie.setCookie(SESSION, value, options?). The key's name ("session") is the cookie's wire name.
 export const SESSION = new GGContextKey<string | undefined>("session", IsString.orUndefined)
 
 export const CookieTestContract = new GGContractClass("CookieTestApi", {
@@ -32,7 +32,7 @@ export const CookieTestContract = new GGContractClass("CookieTestApi", {
 })
 
 export const CookieTestApi = httpSchema(CookieTestContract)
-    .use(cookie(SESSION))
+    .use(GGCookie.middleware(SESSION))
     .pathPrefix("cookie")
     .routes({
         login: GGRpc.POST("login").updatesCookie(SESSION),

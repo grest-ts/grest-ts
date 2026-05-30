@@ -32,7 +32,7 @@ import {
 import {GGWebSocketSchema} from "../schema/GGWebSocketSchema"
 import {GGSocketPool} from "./GGSocketPool"
 import {GGSocket} from "../socket/GGSocket"
-import {GGWebSocketMiddleware} from "../schema/GGWebSocketMiddleware"
+import type {GGTransportMiddleware} from "@grest-ts/context";
 import {GGWsLogMode} from "./GGWsLogMode"
 
 export interface GGHeartbeatConfig {
@@ -84,7 +84,7 @@ export interface GGWebSocketClientConfig<TQuery = undefined> {
      * requiring callers to set up a GGContext around connect(). Manual
      * header manipulation is intentionally not exposed — middleware is the API.
      */
-    middlewares?: GGWebSocketMiddleware[]
+    middlewares?: GGTransportMiddleware[]
     /**
      * Default timeout in ms for request/response outgoing calls. Defaults to 30 000.
      * Fire-and-forget methods ignore this.

@@ -27,22 +27,22 @@ function setup() {
 }
 
 describe("http wiring", () => {
-    test("client updateRequest attaches the bearer header", async () => {
+    test("client update attaches the bearer header", async () => {
         const {engine, tokenKey, wire} = setup()
         const pair = await engine.issue("u1", [Perm.Read], {})
         new GGContext("client").run(() => {
-            tokenKey.set(pair.accessToken)
-            const req: {headers?: Record<string, string | string[]>} = {}
-            wire.updateRequest!(req)
-            expect(req.headers?.["authorization"]).toBe(`Bearer ${pair.accessToken}`)
+            tokenKey.set(pair.access.token)
+            const outbound = {headers: {} as Record<string, string>}
+            wire.update!(outbound)
+            expect(outbound.headers["authorization"]).toBe(`Bearer ${pair.access.token}`)
         })
     })
 
-    test("server: parseRequest → middleware verifies → payload + scopes", async () => {
+    test("server: parse → middleware verifies → payload + scopes", async () => {
         const {engine, wire, binding} = setup()
         const pair = await engine.issue("u1", [Perm.Read, Perm.Write], {})
         await new GGContext("server").run(async () => {
-            wire.parseRequest!({headers: {"authorization": `Bearer ${pair.accessToken}`}})
+            wire.parse!({headers: {"authorization": `Bearer ${pair.access.token}`}, query: {}})
             await binding.httpMiddleware().process()
             const payload = binding.payload()
             expect(payload?.sub).toBe("u1")
@@ -71,7 +71,7 @@ describe("http wiring", () => {
     test("present-but-invalid token → NOT_AUTHORIZED (AuthError mapped)", async () => {
         const {wire, binding} = setup()
         await new GGContext("server").run(async () => {
-            wire.parseRequest!({headers: {"authorization": "Bearer not.a.jwt"}})
+            wire.parse!({headers: {"authorization": "Bearer not.a.jwt"}, query: {}})
             await expect(binding.httpMiddleware().process()).rejects.toBeInstanceOf(NOT_AUTHORIZED)
         })
     })
@@ -89,7 +89,7 @@ describe("http wiring", () => {
         const binding = new AuthGuard(engine, orgKey)
         const pair = await engine.issue("u1", [Perm.Write], {})
         await new GGContext("server").run(async () => {
-            wire.parseRequest!({headers: {"x-org-token": pair.accessToken}})
+            wire.parse!({headers: {"x-org-token": pair.access.token}, query: {}})
             await binding.httpMiddleware().process()
             expect(binding.payload()?.permissions).toEqual([Perm.Write])
         })

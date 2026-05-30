@@ -13,7 +13,7 @@ function inContext<T>(fn: () => Promise<T>): Promise<T> {
 
 describe('auth-freshness HTTP gate', () => {
 
-    it('recover runs before updateRequest reads the key, so the header carries the fresh value', async () => {
+    it('recover runs before update reads the key, so the header carries the fresh value', async () => {
         await inContext(async () => {
             const callOrder: string[] = []
 
@@ -35,12 +35,11 @@ describe('auth-freshness HTTP gate', () => {
                         key: TOKEN_KEY,
                         headers: {'x-token': IsString.orUndefined},
                         responseHeaders: {},
-                        updateRequest(req) {
-                            callOrder.push('updateRequest')
+                        update(outbound) {
+                            callOrder.push('update')
                             const val = TOKEN_KEY.get()
                             if (val !== undefined) {
-                                req.headers = req.headers ?? {}
-                                req.headers['x-token'] = val
+                                outbound.headers['x-token'] = val
                             }
                         },
                     },
@@ -49,12 +48,12 @@ describe('auth-freshness HTTP gate', () => {
 
             const request = await builder.createRequest(undefined)
 
-            expect(callOrder).toEqual(['recover', 'updateRequest'])
+            expect(callOrder).toEqual(['recover', 'update'])
             expect(request.headers['x-token']).toBe('fresh-token')
         })
     })
 
-    it('no controller — updateRequest fires normally and reads whatever the key holds', async () => {
+    it('no controller — update fires normally and reads whatever the key holds', async () => {
         await inContext(async () => {
             TOKEN_KEY.set('current-token')
 
@@ -66,11 +65,10 @@ describe('auth-freshness HTTP gate', () => {
                         key: TOKEN_KEY,
                         headers: {'x-token': IsString.orUndefined},
                         responseHeaders: {},
-                        updateRequest(req) {
+                        update(outbound) {
                             const val = TOKEN_KEY.get()
                             if (val !== undefined) {
-                                req.headers = req.headers ?? {}
-                                req.headers['x-token'] = val
+                                outbound.headers['x-token'] = val
                             }
                         },
                     },
@@ -97,9 +95,8 @@ describe('auth-freshness HTTP gate', () => {
                         key: TOKEN_KEY,
                         headers: {'x-token': IsString.orUndefined},
                         responseHeaders: {},
-                        updateRequest(req) {
-                            req.headers = req.headers ?? {}
-                            req.headers['x-token'] = TOKEN_KEY.get() ?? ''
+                        update(outbound) {
+                            outbound.headers['x-token'] = TOKEN_KEY.get() ?? ''
                         },
                     },
                 ],
@@ -112,7 +109,7 @@ describe('auth-freshness HTTP gate', () => {
 
     it('middleware without a key is unaffected', async () => {
         await inContext(async () => {
-            const updateRequest = vi.fn()
+            const update = vi.fn()
 
             const builder = new GGRpcRequestBuilder('GET', '/test', {
                 pathPrefix: '/',
@@ -121,13 +118,13 @@ describe('auth-freshness HTTP gate', () => {
                     {
                         headers: {},
                         responseHeaders: {},
-                        updateRequest,
+                        update,
                     },
                 ],
             })
 
             await builder.createRequest(undefined)
-            expect(updateRequest).toHaveBeenCalledTimes(1)
+            expect(update).toHaveBeenCalledTimes(1)
         })
     })
 })

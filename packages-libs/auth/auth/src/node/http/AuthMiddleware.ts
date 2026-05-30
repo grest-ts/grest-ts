@@ -1,16 +1,14 @@
 import {NOT_AUTHORIZED} from "@grest-ts/schema"
-import type {GGContextKey} from "@grest-ts/context"
-import type {GGHttpServerMiddleware} from "@grest-ts/http"
-import type {GGWebSocketMiddleware} from "@grest-ts/websocket"
+import type {GGContextKey, GGTransportMiddleware} from "@grest-ts/context"
 import {AuthError} from "../errors"
 import type {AuthToken, AccessPayload} from "../token/AuthToken"
 
-// Verifies the raw token a wire binding (header()) parsed into the key and publishes the
-// payload. Backs both wires: as a GGHttpServerMiddleware (HTTP) and a GGWebSocketMiddleware
-// (WS handshake); the binding's parseRequest/parseHandshake already placed the raw token in
-// the key. Fail-closed by default (missing → NOT_AUTHORIZED); present-but-invalid is always
-// NOT_AUTHORIZED. required:false lets a missing secondary token through.
-export class AuthMiddleware<P extends string, C extends object> implements GGHttpServerMiddleware, GGWebSocketMiddleware {
+// Verifies the raw token a wire binding (GGHeader.middleware) parsed into the key and
+// publishes the payload. Backs both HTTP and WS handshake wires; the binding's parse
+// already placed the raw token in the key. Fail-closed by default (missing →
+// NOT_AUTHORIZED); present-but-invalid is always NOT_AUTHORIZED. required:false lets a
+// missing secondary token through.
+export class AuthMiddleware<P extends string, C extends object> implements GGTransportMiddleware {
 
     constructor(
         private readonly engine: AuthToken<P, C>,

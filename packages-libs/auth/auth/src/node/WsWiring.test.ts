@@ -27,22 +27,22 @@ function setup() {
 }
 
 describe("ws wiring", () => {
-    test("client updateHandshake attaches the bearer token in-band (same wire as HTTP)", async () => {
+    test("client update attaches the bearer token in-band (same wire as HTTP)", async () => {
         const {engine, tokenKey, wire} = setup()
         const pair = await engine.issue("u1", [Perm.Read], {})
         new GGContext("client").run(() => {
-            tokenKey.set(pair.accessToken)
-            const ctx = {headers: {} as Record<string, string>, queryArgs: {}}
-            wire.updateHandshake(ctx)
-            expect(ctx.headers["authorization"]).toBe(`Bearer ${pair.accessToken}`)
+            tokenKey.set(pair.access.token)
+            const outbound = {headers: {} as Record<string, string>}
+            wire.update!(outbound)
+            expect(outbound.headers["authorization"]).toBe(`Bearer ${pair.access.token}`)
         })
     })
 
-    test("server: parseHandshake → wsMiddleware verifies → payload + scopes", async () => {
+    test("server: parse → wsMiddleware verifies → payload + scopes", async () => {
         const {engine, wire, binding} = setup()
         const pair = await engine.issue("u1", [Perm.Read, Perm.Write], {})
         await new GGContext("server").run(async () => {
-            wire.parseHandshake({headers: {"authorization": `Bearer ${pair.accessToken}`}, queryArgs: {}})
+            wire.parse!({headers: {"authorization": `Bearer ${pair.access.token}`}, query: {}})
             await binding.wsMiddleware().process()
             const payload = binding.payload()
             expect(payload?.sub).toBe("u1")
@@ -70,7 +70,7 @@ describe("ws wiring", () => {
     test("present-but-invalid token → NOT_AUTHORIZED", async () => {
         const {wire, binding} = setup()
         await new GGContext("server").run(async () => {
-            wire.parseHandshake({headers: {"authorization": "Bearer not.a.jwt"}, queryArgs: {}})
+            wire.parse!({headers: {"authorization": "Bearer not.a.jwt"}, query: {}})
             await expect(binding.wsMiddleware().process()).rejects.toBeInstanceOf(NOT_AUTHORIZED)
         })
     })
@@ -80,9 +80,9 @@ describe("ws wiring", () => {
         const wire = orgKey.wire
         new GGContext("client").run(() => {
             orgKey.set("org-token-value")
-            const ctx = {headers: {} as Record<string, string>, queryArgs: {}}
-            wire.updateHandshake(ctx)
-            expect(ctx.headers["x-org-token"]).toBe("org-token-value")
+            const outbound = {headers: {} as Record<string, string>}
+            wire.update!(outbound)
+            expect(outbound.headers["x-org-token"]).toBe("org-token-value")
         })
     })
 })

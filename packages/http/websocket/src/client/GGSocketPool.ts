@@ -1,11 +1,10 @@
 import {GGSocket} from '../socket/GGSocket';
-import {GGWebSocketHandshakeContext, GGWebSocketMiddleware} from "../schema/GGWebSocketMiddleware";
 import {SocketAdapter} from "../socket/SocketAdapter";
 import {GG_WS_CONNECTION} from "../server/GG_WS_CONNECTION";
 import {Message, MessageType} from "../socket/SocketMessage";
 import {GGContractExecutor, GGValidator, SERVER_ERROR} from "@grest-ts/schema";
 import {withTimeout} from "@grest-ts/common";
-import {GGContext, GGContextKeySynchronizer, GGContextStore} from "@grest-ts/context";
+import {GGContext, GGContextKeySynchronizer, GGContextStore, type GGOutbound, type GGTransportMiddleware} from "@grest-ts/context";
 import {GG_TRACE} from "@grest-ts/trace";
 import {getDefaultAdapter} from "../adapter/getDefaultAdapter";
 
@@ -14,7 +13,7 @@ export interface GGSocketPoolConfig<Query> {
     path: string,
     query?: Query
     queryValidator?: GGValidator<Query>
-    middlewares?: readonly GGWebSocketMiddleware[]
+    middlewares?: readonly GGTransportMiddleware[]
 }
 
 /**
@@ -119,30 +118,25 @@ export class GGSocketPool {
     }
 
     /**
-     * Build headers from middlewares' updateHandshake()
+     * Build handshake headers from middlewares' update()
      */
     private static buildHeaders(config: GGSocketPoolConfig<any>): Record<string, string> {
         if (!config.middlewares) {
             return {};
         }
 
-        const handshakeContext: GGWebSocketHandshakeContext = {
-            headers: {},
-            queryArgs: (config.query as Record<string, string>) ?? {}
-        };
-
+        const outbound: GGOutbound = {headers: {}};
         for (const middleware of config.middlewares) {
-            middleware.updateHandshake?.(handshakeContext);
+            middleware.update?.(outbound);
         }
-
-        return handshakeContext.headers;
+        return outbound.headers;
     }
 
     /**
      * Await GGContextKeySynchronizer.waitFor for each middleware that carries a key.
      * Must be called before reading middleware keys to ensure fresh values.
      */
-    private static async gateMiddlewares(middlewares: readonly GGWebSocketMiddleware[] | undefined): Promise<void> {
+    private static async gateMiddlewares(middlewares: readonly GGTransportMiddleware[] | undefined): Promise<void> {
         if (!middlewares) return;
         for (const mw of middlewares) {
             if (mw.key) await GGContextKeySynchronizer.waitFor(mw.key);

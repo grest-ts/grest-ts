@@ -1,4 +1,5 @@
-import {GGRpc, GGHttpRequest, GGHttpTransportMiddleware, httpSchema} from "@grest-ts/http"
+import {GGRpc, httpSchema} from "@grest-ts/http"
+import {GGContextKey, GGInbound, GGOutbound, GGTransportMiddleware} from "@grest-ts/context"
 import {
     GG_ANY_PERMISSION,
     GG_NO_PERMISSIONS,
@@ -10,7 +11,6 @@ import {
     NOT_AUTHORIZED,
     SERVER_ERROR,
 } from "@grest-ts/schema"
-import {GGContextKey} from "@grest-ts/context"
 
 /**
  * App-specific scope catalog. Following plan §1 — projects centralize permission
@@ -36,21 +36,21 @@ export const GG_TEST_SCOPES = new GGContextKey<string[]>("test-scopes", IsArray(
  * Empty header / no header → no identity (null resolver result → NOT_AUTHORIZED
  * for non-public methods).
  */
-export const TestAuthMiddleware: GGHttpTransportMiddleware = {
+export const TestAuthMiddleware: GGTransportMiddleware = {
     headers: {
         "x-test-scopes": IsString.orUndefined.docs({description: "Comma-separated scopes for permission tests"}),
     },
     responseHeaders: {},
-    parseRequest(req: GGHttpRequest): void {
-        const raw = req.headers?.["x-test-scopes"]
+    parse(inbound: GGInbound): void {
+        const raw = inbound.headers["x-test-scopes"]
         if (typeof raw === "string" && raw.length > 0) {
             GG_TEST_SCOPES.set(raw.split(",").map(s => s.trim()).filter(Boolean))
         }
     },
-    updateRequest(req: GGHttpRequest): void {
+    update(outbound: GGOutbound): void {
         const scopes = GG_TEST_SCOPES.get()
         if (scopes && scopes.length > 0) {
-            req.headers!["x-test-scopes"] = scopes.join(",")
+            outbound.headers["x-test-scopes"] = scopes.join(",")
         }
     },
 }

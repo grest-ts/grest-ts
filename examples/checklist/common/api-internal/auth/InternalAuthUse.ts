@@ -1,4 +1,4 @@
-import {GGHttpRequest, GGHttpTransportMiddleware} from "@grest-ts/http"
+import {GGInbound, GGOutbound, GGTransportMiddleware} from "@grest-ts/context"
 import {GGLocatorKey} from "@grest-ts/locator";
 import {Brand, IsBearerToken} from "@grest-ts/schema";
 
@@ -14,7 +14,7 @@ export const GG_INTERNAL_AUTH_TOKEN = new GGLocatorKey<tInternalAuthToken>('inte
  * Validates service token and trusts user headers from parent service.
  * Uses noValidation=true so no handler is required.
  */
-export const InternalAuthUse: GGHttpTransportMiddleware = {
+export const InternalAuthUse: GGTransportMiddleware = {
 
     headers: {
         "authorization": IsBearerToken.docs({
@@ -24,15 +24,15 @@ export const InternalAuthUse: GGHttpTransportMiddleware = {
     },
     responseHeaders: {},
 
-    updateRequest(req: GGHttpRequest): void {
+    update(outbound: GGOutbound): void {
         const internal = GG_INTERNAL_AUTH_TOKEN.tryGet();
         if (internal) {
-            req.headers["authorization"] = `Bearer ${internal}`;
+            outbound.headers["authorization"] = `Bearer ${internal}`;
         }
     },
 
-    parseRequest(req: { headers: Record<string, string | string[]> }): void {
-        const authHeader = req.headers['authorization'];
+    parse(inbound: GGInbound): void {
+        const authHeader = inbound.headers['authorization'];
         if (!authHeader || typeof authHeader !== 'string') {
             throw new Error('No authorization header');
         }

@@ -1,12 +1,12 @@
 import type {HttpMethod} from "@grest-ts/common";
 import {GGContractMethod} from "@grest-ts/schema";
-import {ClientHttpRouteToRpcTransformClientConfig, GGHttpFetchRequest, GGHttpTransportMiddleware} from "../../schema/GGHttpSchema";
-import {GGContextKeySynchronizer} from "@grest-ts/context";
+import {ClientHttpRouteToRpcTransformClientConfig, GGHttpFetchRequest} from "../../schema/GGHttpSchema";
+import {GGContextKeySynchronizer, type GGTransportMiddleware} from "@grest-ts/context";
 
 export class GGRpcRequestBuilder {
 
     public readonly contract: GGContractMethod
-    public readonly middlewares: readonly GGHttpTransportMiddleware[]
+    public readonly middlewares: readonly GGTransportMiddleware[]
     public readonly method: HttpMethod;
     public readonly pathTemplate: string;
     public readonly pathParams: string[];
@@ -47,7 +47,7 @@ export class GGRpcRequestBuilder {
         for (const mw of this.middlewares ?? []) {
             if (mw.key) await GGContextKeySynchronizer.waitFor(mw.key)
         }
-        this.middlewares?.forEach(mw => mw.updateRequest?.(result))
+        this.middlewares?.forEach(mw => mw.update?.(result))
         return result
     }
 

@@ -1,10 +1,10 @@
-import {clearCookie, setCookie} from "@grest-ts/http"
+import {GGCookie} from "@grest-ts/http"
 import {SESSION} from "../api/CookieTestApi"
 
 export class CookieTestService {
 
     public login = async (input: {user: string}): Promise<{ok: boolean}> => {
-        setCookie(SESSION, `session-for-${input.user}`, {maxAgeSec: 3600})   // write rules live here, at the set site
+        GGCookie.setCookie(SESSION, `session-for-${input.user}`, {maxAgeSec: 3600})   // write rules live here, at the set site
         return {ok: true}
     }
 
@@ -13,13 +13,13 @@ export class CookieTestService {
     }
 
     public logout = async (): Promise<{ok: boolean}> => {
-        clearCookie(SESSION)
+        GGCookie.clearCookie(SESSION)
         return {ok: true}
     }
 
     // Writes the cookie on a route that did NOT declare .updatesCookie — setCookie rejects it.
     public tamper = async (): Promise<{ok: boolean}> => {
-        setCookie(SESSION, "tampered")
+        GGCookie.setCookie(SESSION, "tampered")
         return {ok: true}
     }
 }

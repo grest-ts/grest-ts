@@ -1,7 +1,7 @@
-import {GGHttpRequest, GGHttpTransportMiddleware, GGRpc, httpSchema} from "@grest-ts/http"
+import {GGRpc, httpSchema} from "@grest-ts/http"
 import {GGContractClass, GGContractImplementation, IsBoolean, IsLiteral, IsObject, IsString, SERVER_ERROR, VALIDATION_ERROR, GG_NO_PERMISSIONS } from "@grest-ts/schema";
 import {intlLocaleHeader} from "@grest-ts/intl"
-import {GGContextKey} from "@grest-ts/context";
+import {GGContextKey, GGInbound, GGOutbound, GGTransportMiddleware} from "@grest-ts/context";
 
 // ============================================================================
 // Effects - Define request parsing and context extraction
@@ -23,23 +23,23 @@ export const GG_CLIENT_INFO = new GGContextKey<ClientInfo>('clientInfo', IsObjec
 /**
  * Effect that extracts client info from custom headers
  */
-export const ClientInfoEffect: GGHttpTransportMiddleware = {
+export const ClientInfoEffect: GGTransportMiddleware = {
     headers: {
         'x-client-version':  IsString.orUndefined.docs({description: "Client application version"}),
         'x-client-platform': IsLiteral("web", "ios", "android").orUndefined.docs({description: "Client platform"}),
     },
     responseHeaders: {},
-    updateRequest(req: GGHttpRequest): void {
+    update(outbound: GGOutbound): void {
         const info = GG_CLIENT_INFO.get();
         if (info) {
-            req.headers['x-client-version'] = info.version;
-            req.headers['x-client-platform'] = info.platform;
+            outbound.headers['x-client-version'] = info.version;
+            outbound.headers['x-client-platform'] = info.platform;
         }
     },
-    parseRequest(req: { headers: Record<string, string | string[]> }): void {
+    parse(inbound: GGInbound): void {
         GG_CLIENT_INFO.set({
-            version: String(req.headers['x-client-version']) ?? 'unknown',
-            platform: (req.headers['x-client-platform'] ?? 'web') as 'web' | 'ios' | 'android'
+            version: String(inbound.headers['x-client-version']) ?? 'unknown',
+            platform: (inbound.headers['x-client-platform'] ?? 'web') as 'web' | 'ios' | 'android'
         });
     }
 }
@@ -60,17 +60,17 @@ export const GG_FEATURE_FLAGS = new GGContextKey<FeatureFlags>('features', IsObj
 /**
  * Effect that extracts feature flags from header
  */
-export const FeatureFlagsEffect: GGHttpTransportMiddleware = {
+export const FeatureFlagsEffect: GGTransportMiddleware = {
     headers: {
         'x-feature-flags': IsString.orUndefined.docs({description: "JSON-encoded feature flags object"}),
     },
     responseHeaders: {},
-    updateRequest(req: GGHttpRequest): void {
+    update(outbound: GGOutbound): void {
         const val = GG_FEATURE_FLAGS.get();
-        req.headers['x-feature-flags'] = val ? JSON.stringify(val) : "";
+        outbound.headers['x-feature-flags'] = val ? JSON.stringify(val) : "";
     },
-    parseRequest(req: { headers: Record<string, string | string[]> }): void {
-        const data = String(req.headers['x-feature-flags']);
+    parse(inbound: GGInbound): void {
+        const data = String(inbound.headers['x-feature-flags']);
         const raw = data ? JSON.parse(data) : {};
         GG_FEATURE_FLAGS.set({
             darkMode: raw.darkMode ?? false,

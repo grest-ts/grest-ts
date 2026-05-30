@@ -109,8 +109,8 @@ export class MainRuntime extends GGRuntime {
             .usePermissions(getTestScopes)
             .http(PermissionsApi, new PermissionsTestService());
 
-        // Cookie API — cookie(SESSION) on the schema parses the incoming Cookie into the
-        // SESSION key; handlers emit Set-Cookie via setCookie(SESSION, …).
+        // Cookie API — GGCookie.middleware(SESSION) on the schema parses the incoming Cookie
+        // into the SESSION key; handlers emit Set-Cookie via GGCookie.setCookie(SESSION, …).
         CookieTestApi.register(new CookieTestService());
 
         // WS cookie API — the SAME SESSION key, read from the browser's upgrade Cookie.

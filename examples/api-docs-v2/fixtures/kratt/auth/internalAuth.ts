@@ -1,6 +1,4 @@
-import {GGContextKey} from "@grest-ts/context"
-import type {GGHttpRequest} from "@grest-ts/http"
-import type {GGWebSocketHandshakeContext, GGWebSocketMiddleware} from "@grest-ts/websocket"
+import {GGContextKey, type GGInbound, type GGOutbound, type GGTransportMiddleware} from "@grest-ts/context"
 import {IsString, type GGSchema} from "@grest-ts/schema"
 import {GG_USER_TOKEN, GG_ORG_TOKEN} from "./AuthContext"
 
@@ -20,17 +18,16 @@ class InternalTokenTransport extends GGContextKey<tInternalToken> {
     readonly headers: Record<string, GGSchema<string | undefined>> = {"x-internal-token": IsString.orUndefined}
     readonly responseHeaders: Record<string, GGSchema<string | undefined>> = {}
 
-    updateRequest(req: GGHttpRequest): void {
+    update(outbound: GGOutbound): void {
         const token = GG_INTERNAL_TOKEN.get()
         if (token) {
-            req.headers = req.headers ?? {}
-            req.headers["x-internal-token"] = token
+            outbound.headers["x-internal-token"] = token
         }
     }
 
-    parseRequest(req: GGHttpRequest): void {
-        const header = req.headers?.["x-internal-token"]
-        if (header && typeof header === "string") {
+    parse(inbound: GGInbound): void {
+        const header = inbound.headers["x-internal-token"]
+        if (header) {
             GG_INTERNAL_TOKEN.set(header as tInternalToken)
         }
     }
@@ -43,28 +40,28 @@ export const GG_INTERNAL_TOKEN = new InternalTokenTransport("internalToken", IsI
  * HTTP pattern (`.use(GG_USER_TOKEN).use(GG_ORG_TOKEN)`) but uses the WS
  * handshake headers map instead of HTTP request headers.
  *
- *   Browser  ──updateHandshake──>  reads GG_USER_TOKEN/GG_ORG_TOKEN from the
- *                                  ambient browser context, writes tokens
- *                                  into the handshake header map.
- *   Server   ──parseHandshake──>   reads the tokens back into GG_USER_TOKEN /
- *                                  GG_ORG_TOKEN on the WS connection context.
+ *   Browser  ──update──>  reads GG_USER_TOKEN/GG_ORG_TOKEN from the
+ *                          ambient browser context, writes tokens
+ *                          into the handshake header map.
+ *   Server   ──parse──>    reads the tokens back into GG_USER_TOKEN /
+ *                          GG_ORG_TOKEN on the WS connection context.
  *
  * Pure transport — no decryption, no validation. socket-server attaches a
  * separate validation middleware that reads the context tokens, decrypts
  * them via TokenService, and sets the higher-level payload keys.
  */
-export class SocketAuthHeaderMiddleware implements GGWebSocketMiddleware {
+export class SocketAuthHeaderMiddleware implements GGTransportMiddleware {
 
-    updateHandshake(ctx: GGWebSocketHandshakeContext): void {
+    update(outbound: GGOutbound): void {
         const user = GG_USER_TOKEN.get()
         const org = GG_ORG_TOKEN.get()
-        if (user) ctx.headers["x-user-token"] = user
-        if (org)  ctx.headers["x-org-token"]  = org
+        if (user) outbound.headers["x-user-token"] = user
+        if (org)  outbound.headers["x-org-token"]  = org
     }
 
-    parseHandshake(ctx: GGWebSocketHandshakeContext): void {
-        const user = ctx.headers["x-user-token"]
-        const org = ctx.headers["x-org-token"]
+    parse(inbound: GGInbound): void {
+        const user = inbound.headers["x-user-token"]
+        const org = inbound.headers["x-org-token"]
         if (user) GG_USER_TOKEN.set(user as never)
         if (org)  GG_ORG_TOKEN.set(org as never)
     }

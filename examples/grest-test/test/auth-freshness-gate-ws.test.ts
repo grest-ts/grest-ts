@@ -86,7 +86,7 @@ async function connectAndGetHandshakeHeaders(
 
 describe('WS auth-freshness gate', () => {
 
-    it('recover runs before updateHandshake, so the handshake carries the fresh token', async () => {
+    it('recover runs before update, so the handshake carries the fresh token', async () => {
         await inContext(async () => {
             const callOrder: string[] = []
 
@@ -106,21 +106,21 @@ describe('WS auth-freshness gate', () => {
                 middlewares: [
                     {
                         key: WS_TOKEN,
-                        updateHandshake(ctx) {
-                            callOrder.push('updateHandshake')
+                        update(outbound) {
+                            callOrder.push('update')
                             const val = WS_TOKEN.get()
-                            if (val !== undefined) ctx.headers['x-ws-token'] = val
+                            if (val !== undefined) outbound.headers['x-ws-token'] = val
                         },
                     },
                 ],
             })
 
-            expect(callOrder).toEqual(['recover', 'updateHandshake'])
+            expect(callOrder).toEqual(['recover', 'update'])
             expect(headers['x-ws-token']).toBe('fresh-ws-token')
         })
     })
 
-    it('no controller — updateHandshake fires normally and reads whatever the key holds', async () => {
+    it('no controller — update fires normally and reads whatever the key holds', async () => {
         await inContext(async () => {
             WS_TOKEN.set('current-ws-token')
 
@@ -130,9 +130,9 @@ describe('WS auth-freshness gate', () => {
                 middlewares: [
                     {
                         key: WS_TOKEN,
-                        updateHandshake(ctx) {
+                        update(outbound) {
                             const val = WS_TOKEN.get()
-                            if (val !== undefined) ctx.headers['x-ws-token'] = val
+                            if (val !== undefined) outbound.headers['x-ws-token'] = val
                         },
                     },
                 ],
@@ -155,9 +155,9 @@ describe('WS auth-freshness gate', () => {
                 middlewares: [
                     {
                         key: WS_TOKEN,
-                        updateHandshake(ctx) {
+                        update(outbound) {
                             const val = WS_TOKEN.get()
-                            if (val !== undefined) ctx.headers['x-ws-token'] = val
+                            if (val !== undefined) outbound.headers['x-ws-token'] = val
                         },
                     },
                 ],
@@ -169,15 +169,15 @@ describe('WS auth-freshness gate', () => {
 
     it('middleware without a key is unaffected', async () => {
         await inContext(async () => {
-            const updateHandshake = vi.fn()
+            const update = vi.fn()
 
             await connectAndGetHandshakeHeaders({
                 domain: 'ws://localhost',
                 path: '/test',
-                middlewares: [{updateHandshake}],
+                middlewares: [{update}],
             })
 
-            expect(updateHandshake).toHaveBeenCalledTimes(1)
+            expect(update).toHaveBeenCalledTimes(1)
         })
     })
 

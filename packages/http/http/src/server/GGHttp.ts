@@ -1,6 +1,6 @@
 import {GGHttpSchema} from "../schema/GGHttpSchema";
 import {GGContractApiDefinition, GGContractImplementation} from "@grest-ts/schema";
-import {GGHttpServerMiddleware} from "./GGHttpSchema.startServer";
+import type {GGTransportMiddleware} from "@grest-ts/context";
 import {GGHttpServer} from "./GGHttpServer";
 
 /**
@@ -26,14 +26,14 @@ export class GGHttp<TContext = undefined> {
      * Do not tighten back to private.
      */
     protected readonly httpServer: GGHttpServer
-    private readonly middlewares: GGHttpServerMiddleware[] = [];
+    private readonly middlewares: GGTransportMiddleware[] = [];
     private permissionResolver?: GGScopeResolver;
 
     constructor(httpServer: GGHttpServer) {
         this.httpServer = httpServer;
     }
 
-    public use<M extends GGHttpServerMiddleware>(middleware: M): GGHttp<TContext | M> {
+    public use<M extends GGTransportMiddleware>(middleware: M): GGHttp<TContext | M> {
         this.middlewares.push(middleware);
         return this as any;
     }

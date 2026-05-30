@@ -9,7 +9,7 @@ import {ClientHttpRouteToRpcTransformServerCodec, GGHttpCodec, GGHttpSchema} fro
 import {describePermission, ERROR, FORBIDDEN, GG_NO_PERMISSIONS, GGContractApiDefinition, GGContractImplementation, GGContractMethod, GGPermissionChecker, NOT_AUTHORIZED, OK, satisfies, SERVER_ERROR} from "@grest-ts/schema";
 import {HttpMethod} from "@grest-ts/common";
 import {GG_DISCOVERY} from "@grest-ts/discovery";
-import {GGContext, GGContextStore} from "@grest-ts/context";
+import {GGContext, GGContextStore, type GGTransportMiddleware} from "@grest-ts/context";
 import {GG_TRACE} from "@grest-ts/trace";
 import {GG_HTTP_REQUEST} from "./GG_HTTP_REQUEST";
 import {GG_COOKIE_WRITES} from "../schema/GGCookie";
@@ -29,17 +29,13 @@ export interface GGHttpSchemaConfig {
     /**
      * Additional middlewares to apply to all routes.
      */
-    middlewares?: GGHttpServerMiddleware[];
+    middlewares?: GGTransportMiddleware[];
     /**
      * Optional scope resolver. When set, the gate calls it once per request,
      * populates GG_PERMISSIONS, and rejects requests whose contract permission
      * is not satisfied by the resolved scopes.
      */
     permissionResolver?: GGScopeResolver;
-}
-
-export interface GGHttpServerMiddleware {
-    process?(): Promise<void>
 }
 
 declare module "../schema/GGHttpSchema" {
@@ -82,8 +78,8 @@ function setupRoutes<TContract extends GGContractApiDefinition>(
     const parentContext = GGContextStore.tryGetContext();
 
     for (const mw of apiMiddlewares) {
-        const hKeys = Object.keys(mw.headers);
-        const rhKeys = Object.keys(mw.responseHeaders);
+        const hKeys = Object.keys(mw.headers ?? {});
+        const rhKeys = Object.keys(mw.responseHeaders ?? {});
         if (hKeys.length) server.registerCorsHeaders(hKeys);
         if (rhKeys.length) server.registerCorsExposeHeaders(rhKeys);
     }
@@ -125,8 +121,7 @@ function setupRoutes<TContract extends GGContractApiDefinition>(
         // build request mapping
         const requestParser: ClientHttpRouteToRpcTransformServerCodec = codec.createForServer({
             contract: contractFunctionSchema,
-            apiMiddlewares: apiMiddlewares,
-            serverMiddlewares: config.middlewares
+            middlewares: [...apiMiddlewares, ...(config.middlewares ?? [])]
         })
         const cookieWriteNames = new Set((codec.updatesCookies ?? []).map(k => k.name))
         server.registerRoute(codec.method, pathPrefix + codec.path, async (req: http.IncomingMessage, res: http.ServerResponse): Promise<void> => {

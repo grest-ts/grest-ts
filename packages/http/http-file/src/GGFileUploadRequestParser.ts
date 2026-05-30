@@ -1,16 +1,25 @@
 import type http from "http";
 import type {HttpMethod} from "@grest-ts/common";
 import {GGContractExecutor, GGContractMethod, GGSchemaBinaryData} from "@grest-ts/schema";
-import {ClientHttpRouteToRpcTransformServerConfig, GGHttpRequest, GGHttpTransportMiddleware, GGHttpServerMiddleware} from "@grest-ts/http";
+import {ClientHttpRouteToRpcTransformServerConfig} from "@grest-ts/http";
+import type {GGInbound, GGTransportMiddleware} from "@grest-ts/context";
 import Busboy from "busboy";
 
 type NonJsonDecoder = (raw: GGSchemaBinaryData) => Promise<unknown>;
 
+function flatten(src: Record<string, string | string[] | undefined>): Record<string, string | undefined> {
+    const out: Record<string, string | undefined> = {}
+    for (const key in src) {
+        const value = src[key]
+        out[key] = Array.isArray(value) ? value[0] : value
+    }
+    return out
+}
+
 export class GGFileUploadRequestParser {
 
     protected readonly contract: GGContractMethod
-    private readonly apiMiddlewares: readonly GGHttpTransportMiddleware[]
-    private readonly serverMiddlewares: readonly GGHttpServerMiddleware[]
+    private readonly middlewares: readonly GGTransportMiddleware[]
     private readonly decoderMap: Map<string, NonJsonDecoder>
 
     constructor(
@@ -19,8 +28,7 @@ export class GGFileUploadRequestParser {
         config: ClientHttpRouteToRpcTransformServerConfig
     ) {
         this.contract = config.contract
-        this.apiMiddlewares = config.apiMiddlewares
-        this.serverMiddlewares = config.serverMiddlewares
+        this.middlewares = config.middlewares
         this.decoderMap = this.contract.input?.collectNonJsonDecoders() ?? new Map()
     }
 
@@ -28,11 +36,15 @@ export class GGFileUploadRequestParser {
         const url = req.url || '/'
         const qIndex = url.indexOf('?')
         const queryArgs = this.parseQueryString(qIndex === -1 ? '' : url.substring(qIndex + 1))
-        if (this.apiMiddlewares?.length > 0) {
-            const mwQuery: GGHttpRequest = {headers: req.headers, queryArgs: queryArgs}
-            this.apiMiddlewares?.forEach(mw => mw.parseRequest?.(mwQuery))
+        if (this.middlewares.length > 0) {
+            const inbound: GGInbound = {
+                headers: flatten(req.headers),
+                cookie: typeof req.headers.cookie === "string" ? req.headers.cookie : undefined,
+                query: flatten(queryArgs)
+            }
+            for (const mw of this.middlewares) mw.parse?.(inbound)
+            for (const mw of this.middlewares) await mw.process?.()
         }
-        for (const mw of this.serverMiddlewares ?? []) await mw.process?.();
 
         const input = await this.parseMultipartBody(req);
         return GGContractExecutor.parseInput(this.contract.input, input);

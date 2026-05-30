@@ -17,16 +17,15 @@ import {GGSocket, GGSocketLogger, GGSocketMetrics} from "../socket/GGSocket";
 import {GGLocator, GGLocatorScope} from "@grest-ts/locator";
 import {GG_METRICS} from "@grest-ts/metrics";
 import {withTimeout} from "@grest-ts/common";
-import {GGContext} from "@grest-ts/context";
+import {GGContext, type GGInbound, type GGTransportMiddleware} from "@grest-ts/context";
 import {GG_DISCOVERY} from "@grest-ts/discovery";
-import {GGWebSocketHandshakeContext, GGWebSocketMiddleware} from "../schema/GGWebSocketMiddleware";
 import {GGHttpServer} from "@grest-ts/http";
 
 export interface GGSocketServerConfig<TContext, Query> {
     path: string;
     apiName: string;
     queryValidator?: GGValidator<Query>;
-    middlewares: readonly GGWebSocketMiddleware[];
+    middlewares: readonly GGTransportMiddleware[];
 }
 
 /**
@@ -82,7 +81,7 @@ export class GGSocketServer<TContext, Query> {
     private readonly http: GGHttpServer;
     public readonly path: string;
     private readonly apiName: string;
-    private readonly middlewares: readonly GGWebSocketMiddleware[];
+    private readonly middlewares: readonly GGTransportMiddleware[];
     private readonly queryValidator: GGValidator<Query>;
 
     private readonly activeSockets: Set<GGSocket> = new Set();
@@ -158,16 +157,13 @@ export class GGSocketServer<TContext, Query> {
 
                 const adapter = new NodeSocketAdapter(ws);
 
-                // The real upgrade request headers (lowercased by Node). These carry the
-                // browser's auto-attached Cookie, which the in-band handshake message can't.
-                const upgradeHeaders: Record<string, string> = {};
-                for (const [name, value] of Object.entries(req.headers)) {
-                    if (typeof value === "string") upgradeHeaders[name] = value;
-                    else if (Array.isArray(value)) upgradeHeaders[name] = value.join(", ");
-                }
+                // The cookie from the real upgrade request — a browser auto-attaches it to the
+                // upgrade GET, but cannot set it on the in-band handshake message, so this is the
+                // only spoof-proof source for a WebSocket cookie.
+                const cookie = typeof req.headers.cookie === "string" ? req.headers.cookie : undefined;
 
                 // Wait for handshake message with headers
-                const handshakeResult = await this.handleHandshake(context, adapter, queryArgs, upgradeHeaders);
+                const handshakeResult = await this.handleHandshake(context, adapter, queryArgs, cookie);
 
                 if (!handshakeResult.success) {
                     GGLog.warn(this, "REJECTED - handshake failed", (handshakeResult as { success: false; error: any }).error);
@@ -255,7 +251,7 @@ export class GGSocketServer<TContext, Query> {
         context: GGContext,
         adapter: NodeSocketAdapter,
         queryArgs: Query,
-        upgradeHeaders: Record<string, string>
+        cookie: string | undefined
     ): Promise<{ success: true } | { success: false; error: any }> {
         type HandshakeResult = { success: true } | { success: false; error: any };
         return withTimeout<HandshakeResult>(
@@ -269,19 +265,13 @@ export class GGSocketServer<TContext, Query> {
                         adapter.offMessage(onMessage);
                         context.run(async () => {
                             try {
-                                // Build handshake context from headers
-                                const headers = msg.data || {};
-                                const handshakeContext: GGWebSocketHandshakeContext = {
-                                    headers,
-                                    upgradeHeaders,
-                                    queryArgs: queryArgs as Record<string, string>
+                                const inbound: GGInbound = {
+                                    headers: msg.data || {},
+                                    cookie,
+                                    query: queryArgs as Record<string, string>
                                 };
-
-                                // Run middlewares
-                                for (const middleware of this.middlewares) {
-                                    middleware.parseHandshake?.(handshakeContext);
-                                    await middleware.process?.();
-                                }
+                                for (const middleware of this.middlewares) middleware.parse?.(inbound);
+                                for (const middleware of this.middlewares) await middleware.process?.();
                                 resolve({success: true});
                             } catch (error: any) {
                                 const errorJson = error instanceof ERROR

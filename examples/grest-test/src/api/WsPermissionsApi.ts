@@ -1,7 +1,5 @@
 import {
     defineSocketContract,
-    GGWebSocketHandshakeContext,
-    GGWebSocketMiddleware,
     webSocketSchema,
 } from "@grest-ts/websocket"
 import {
@@ -14,7 +12,7 @@ import {
     NOT_AUTHORIZED,
     SERVER_ERROR,
 } from "@grest-ts/schema"
-import {GGContextKey} from "@grest-ts/context"
+import {GGContextKey, GGInbound, GGOutbound, GGTransportMiddleware} from "@grest-ts/context"
 import {AppPermission} from "./PermissionsApi"
 
 /**
@@ -28,17 +26,17 @@ export const WS_CLIENT_SCOPES = new GGContextKey<string[]>("wsClientScopes", IsA
  */
 export const WS_SERVER_SCOPES = new GGContextKey<string[]>("wsServerScopes", IsArray(IsString))
 
-export const WsTestAuthMiddleware: GGWebSocketMiddleware = {
+export const WsTestAuthMiddleware: GGTransportMiddleware = {
     // Client → puts scopes header on the handshake message.
-    updateHandshake(ctx: GGWebSocketHandshakeContext): void {
+    update(outbound: GGOutbound): void {
         const scopes = WS_CLIENT_SCOPES.get()
         if (scopes && scopes.length > 0) {
-            ctx.headers["x-test-scopes"] = scopes.join(",")
+            outbound.headers["x-test-scopes"] = scopes.join(",")
         }
     },
     // Server → reads the header, populates WS_SERVER_SCOPES.
-    parseHandshake(ctx: GGWebSocketHandshakeContext): void {
-        const raw = ctx.headers["x-test-scopes"]
+    parse(inbound: GGInbound): void {
+        const raw = inbound.headers["x-test-scopes"]
         if (typeof raw === "string" && raw.length > 0) {
             WS_SERVER_SCOPES.set(raw.split(",").map(s => s.trim()).filter(Boolean))
         }

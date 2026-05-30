@@ -5,7 +5,7 @@
 
 import type {GGSocket} from "../socket/GGSocket"
 import {GGWebSocketSchema} from "../schema/GGWebSocketSchema";
-import {GGWebSocketMiddleware} from "../schema/GGWebSocketMiddleware";
+import type {GGTransportMiddleware} from "@grest-ts/context";
 import {GGSocketServer} from "./GGSocketServer";
 import {GGLocator} from "@grest-ts/locator";
 import {WebSocketIncoming, WebSocketOutgoing} from "../socket/WebSocketTypes";
@@ -21,7 +21,7 @@ export interface WebSocketSchemaConfig {
     /**
      * Additional middlewares to apply to all connections.
      */
-    middlewares?: GGWebSocketMiddleware[];
+    middlewares?: GGTransportMiddleware[];
     /**
      * Optional scope resolver. When set, the gate runs at handshake (to check
      * `.connectPermission(...)` if declared) and on every clientToServer
@@ -79,7 +79,7 @@ GGWebSocketSchema.prototype.startServer = function (
     // and rejects the handshake with a typed NOT_AUTHORIZED/FORBIDDEN if the
     // connectPermission doesn't hold. The throw is caught by handleHandshake
     // and surfaced to the client as a HANDSHAKE_ERR — not a silent disconnect.
-    const middlewares: GGWebSocketMiddleware[] = [...this.middlewares, ...(config?.middlewares ?? [])]
+    const middlewares: GGTransportMiddleware[] = [...this.middlewares, ...(config?.middlewares ?? [])]
     if (permissionResolver) {
         middlewares.push({
             async process() {

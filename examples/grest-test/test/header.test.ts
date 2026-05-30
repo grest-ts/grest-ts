@@ -1,17 +1,18 @@
-import {header} from "@grest-ts/http"
+import {GGHeader} from "@grest-ts/http"
 import {GGContext, GGContextKey} from "@grest-ts/context"
 import {IsString} from "@grest-ts/schema"
 
 const key = (name: string) => new GGContextKey<string | undefined>(name, IsString.orUndefined)
 const inContext = (fn: () => void) => new GGContext("test").run(fn)
-const newReq = (headers: Record<string, string | string[]> = {}) => ({headers})
+const inbound = (headers: Record<string, string | undefined> = {}) => ({headers, query: {}})
+const outbound = () => ({headers: {} as Record<string, string>})
 
 describe("header binding", () => {
 
-    test("parseRequest reads the named header (verbatim) into the key", () => {
+    test("parse reads the named header (verbatim) into the key", () => {
         inContext(() => {
             const k = key("x-token")
-            header(k).parseRequest!(newReq({"x-token": "abc123"}))
+            GGHeader.middleware(k).parse!(inbound({"x-token": "abc123"}))
             expect(k.get()).toBe("abc123")
         })
     })
@@ -19,7 +20,7 @@ describe("header binding", () => {
     test("the wire name defaults to the key name, lowercased", () => {
         inContext(() => {
             const k = key("X-Locale")
-            header(k).parseRequest!(newReq({"x-locale": "en-US"}))
+            GGHeader.middleware(k).parse!(inbound({"x-locale": "en-US"}))
             expect(k.get()).toBe("en-US")
         })
     })
@@ -27,7 +28,7 @@ describe("header binding", () => {
     test("a custom name decouples the header from the key name", () => {
         inContext(() => {
             const k = key("token")
-            header(k, {name: "authorization"}).parseRequest!(newReq({authorization: "raw"}))
+            GGHeader.middleware(k, {name: "authorization"}).parse!(inbound({authorization: "raw"}))
             expect(k.get()).toBe("raw")
         })
     })
@@ -35,8 +36,8 @@ describe("header binding", () => {
     test("scheme:bearer strips the Bearer prefix on read", () => {
         inContext(() => {
             const k = key("token")
-            const mw = header(k, {name: "authorization", scheme: "bearer"})
-            mw.parseRequest!(newReq({authorization: "Bearer tok-42"}))
+            const mw = GGHeader.middleware(k, {name: "authorization", scheme: "bearer"})
+            mw.parse!(inbound({authorization: "Bearer tok-42"}))
             expect(k.get()).toBe("tok-42")
         })
     })
@@ -45,9 +46,9 @@ describe("header binding", () => {
         inContext(() => {
             const k = key("token")
             k.set("tok-42")
-            const req = newReq()
-            header(k, {name: "authorization", scheme: "bearer"}).updateRequest!(req)
-            expect(req.headers["authorization"]).toBe("Bearer tok-42")
+            const out = outbound()
+            GGHeader.middleware(k, {name: "authorization", scheme: "bearer"}).update!(out)
+            expect(out.headers["authorization"]).toBe("Bearer tok-42")
         })
     })
 
@@ -55,51 +56,43 @@ describe("header binding", () => {
         inContext(() => {
             const k = key("x-token")
             k.set("plain")
-            const req = newReq()
-            const mw = header(k)
-            mw.updateRequest!(req)
-            expect(req.headers["x-token"]).toBe("plain")
+            const out = outbound()
+            const mw = GGHeader.middleware(k)
+            mw.update!(out)
+            expect(out.headers["x-token"]).toBe("plain")
             const k2 = key("x-token")
-            mw.parseRequest!(req)
+            mw.parse!(inbound(out.headers))
             expect(k2.get()).toBe("plain")
         })
     })
 
-    test("updateRequest writes nothing when the key is unset", () => {
+    test("update writes nothing when the key is unset", () => {
         inContext(() => {
             const k = key("x-token")
-            const req = newReq()
-            header(k).updateRequest!(req)
-            expect(req.headers["x-token"]).toBeUndefined()
+            const out = outbound()
+            GGHeader.middleware(k).update!(out)
+            expect(out.headers["x-token"]).toBeUndefined()
         })
     })
 
     test("a missing header leaves the key unset", () => {
         inContext(() => {
             const k = key("x-token")
-            header(k).parseRequest!(newReq({}))
+            GGHeader.middleware(k).parse!(inbound({}))
             expect(k.get()).toBeUndefined()
         })
     })
 
-    test("an array header value reads the first element", () => {
-        inContext(() => {
-            const k = key("x-token")
-            header(k).parseRequest!(newReq({"x-token": ["first", "second"]}))
-            expect(k.get()).toBe("first")
-        })
-    })
-
-    test("WS: parseHandshake reads the in-band header; updateHandshake writes it", () => {
+    test("WS: parse reads the handshake header; update writes it", () => {
         inContext(() => {
             const k = key("token")
-            const mw = header(k, {name: "authorization", scheme: "bearer"})
-            mw.parseHandshake({headers: {authorization: "Bearer ws-tok"}, queryArgs: {}})
+            const mw = GGHeader.middleware(k, {name: "authorization", scheme: "bearer"})
+            mw.parse!(inbound({authorization: "Bearer ws-tok"}))
             expect(k.get()).toBe("ws-tok")
 
-            const ctx = {headers: {} as Record<string, string>, queryArgs: {}}
-            mw.updateHandshake(ctx)
-            expect(ctx.headers["authorization"]).toBe("Bearer ws-tok")
+            const out = outbound()
+            mw.update!(out)
+            expect(out.headers["authorization"]).toBe("Bearer ws-tok")
         })
     })
 })

@@ -1,10 +1,19 @@
 import type http from "http";
 import type {HttpMethod} from "@grest-ts/common";
 import {GGContractExecutor, GGContractMethod, PAYLOAD_TOO_LARGE} from "@grest-ts/schema";
-import {ClientHttpRouteToRpcTransformServerConfig, GGHttpRequest, GGHttpTransportMiddleware} from "../../schema/GGHttpSchema";
-import type {GGHttpServerMiddleware} from "../../server/GGHttpSchema.startServer";
+import type {GGInbound, GGTransportMiddleware} from "@grest-ts/context";
+import {ClientHttpRouteToRpcTransformServerConfig} from "../../schema/GGHttpSchema";
 
 export const DEFAULT_MAX_BODY_BYTES = 1024 * 1024;
+
+function flatten(src: Record<string, string | string[] | undefined>): Record<string, string | undefined> {
+    const out: Record<string, string | undefined> = {}
+    for (const key in src) {
+        const value = src[key]
+        out[key] = Array.isArray(value) ? value[0] : value
+    }
+    return out
+}
 
 export class GGRpcRequestParser {
 
@@ -12,8 +21,7 @@ export class GGRpcRequestParser {
     private readonly pathParams: string[];
     private readonly hasBody: boolean;
     protected readonly contract: GGContractMethod
-    private readonly apiMiddlewares: readonly GGHttpTransportMiddleware[]
-    private readonly serverMiddlewares: readonly GGHttpServerMiddleware[]
+    private readonly middlewares: readonly GGTransportMiddleware[]
 
     constructor(
         method: HttpMethod,
@@ -24,19 +32,22 @@ export class GGRpcRequestParser {
         this.pathParams = (pathTemplate.match(/:(\w+)/g) || []).map(m => m.slice(1))
         this.hasBody = method === "POST" || method === "PUT" || method === "PATCH"
         this.contract = config.contract
-        this.apiMiddlewares = config.apiMiddlewares
-        this.serverMiddlewares = config.serverMiddlewares
+        this.middlewares = config.middlewares
     }
 
     public parseRequest = async (req: http.IncomingMessage): Promise<unknown> => {
         const url = req.url || '/'
         const qIndex = url.indexOf('?')
         const queryArgs = this.parseQueryString(qIndex === -1 ? '' : url.substring(qIndex + 1))
-        if (this.apiMiddlewares?.length > 0) {
-            const mwQuery: GGHttpRequest = {headers: req.headers, queryArgs: queryArgs}
-            this.apiMiddlewares?.forEach(mw => mw.parseRequest?.(mwQuery))
+        if (this.middlewares.length > 0) {
+            const inbound: GGInbound = {
+                headers: flatten(req.headers),
+                cookie: typeof req.headers.cookie === "string" ? req.headers.cookie : undefined,
+                query: flatten(queryArgs)
+            }
+            for (const mw of this.middlewares) mw.parse?.(inbound)
+            for (const mw of this.middlewares) await mw.process?.()
         }
-        for (const mw of this.serverMiddlewares ?? []) await mw.process?.();
 
         let input: unknown;
         if (this.hasBody) {

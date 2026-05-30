@@ -1,5 +1,5 @@
 import {GGContextKey} from "@grest-ts/context"
-import {cookie, header} from "@grest-ts/http"
+import {GGCookie, GGHeader} from "@grest-ts/http"
 import {defineSocketContract} from "@grest-ts/websocket"
 import {GGContractClass, GGContractClient, GGContractImplementation, GG_NO_PERMISSIONS, IsObject, IsString, NOT_AUTHORIZED, SERVER_ERROR} from "@grest-ts/schema"
 
@@ -11,10 +11,10 @@ export const LOCALE = new GGContextKey<string | undefined>("locale", IsString.or
 
 // Four bindings over those two keys. header vs cookie is the ONLY thing that differs —
 // each binding works on both HTTP and WebSocket via a single .use(...).
-export const accessViaHeader = header(ACCESS, {name: "authorization", scheme: "bearer"})
-export const accessViaCookie = cookie(ACCESS, {name: "access"})
-export const localeViaHeader = header(LOCALE, {name: "x-locale"})
-export const localeViaCookie = cookie(LOCALE, {name: "locale"})
+export const accessViaHeader = GGHeader.middleware(ACCESS, {name: "authorization", scheme: "bearer"})
+export const accessViaCookie = GGCookie.middleware(ACCESS, {name: "access"})
+export const localeViaHeader = GGHeader.middleware(LOCALE, {name: "x-locale"})
+export const localeViaCookie = GGCookie.middleware(LOCALE, {name: "locale"})
 
 // One logical contract, reused verbatim across all four wirings. Distinct names only so
 // routing/discovery can tell the four registrations apart on one server.
