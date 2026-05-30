@@ -1,21 +1,30 @@
 import {GGTestContext} from "@grest-ts/testkit"
 import "@grest-ts/http/testkit"
-import {GG_USER_AUTH_TOKEN, tUserAuthToken} from "../../api/auth/UserAuth"
+import {USER_TOKEN} from "../../api/auth/UserAuth"
+import {ORG_TOKEN} from "../../api/auth/OrgAuth"
 import {AuthPublicApi, LoginRequest, RegisterRequest} from "../../api/AuthPublicApi"
 import {Raw} from "@grest-ts/schema"
 
 export class TestContext extends GGTestContext {
     public async register(data: Raw<RegisterRequest>) {
         const result = await this.callOn(AuthPublicApi).register(data)
-        this.setLoggedIn(result.token)
+        this.setLoggedIn(result.accessToken)
     }
 
     public async login(data: Raw<LoginRequest>) {
         const result = await this.callOn(AuthPublicApi).login(data)
-        this.setLoggedIn(result.token)
+        this.setLoggedIn(result.accessToken)
     }
 
-    public setLoggedIn(token: tUserAuthToken) {
-        this.set(GG_USER_AUTH_TOKEN, token)
+    public setLoggedIn(accessToken: string) {
+        this.set(USER_TOKEN, accessToken)
+    }
+
+    public setOrgToken(orgToken: string) {
+        this.set(ORG_TOKEN, orgToken)
+    }
+
+    public clearOrgToken() {
+        this.set(ORG_TOKEN, undefined)
     }
 }

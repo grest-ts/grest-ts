@@ -1,6 +1,6 @@
 import {GGRpc, httpSchema} from "@grest-ts/http"
 import {GGContractClass, IsEmail, IsObject, IsString, NOT_AUTHORIZED, NOT_FOUND, SERVER_ERROR, VALIDATION_ERROR, GG_NO_PERMISSIONS} from "@grest-ts/schema"
-import {GG_USER_AUTH_TOKEN} from "./auth/UserAuth"
+import {USER_TOKEN_WIRE} from "./auth/UserAuth"
 
 const IsUserId = IsString.brand("UserId")
 
@@ -31,7 +31,7 @@ export const UserApiContract = new GGContractClass("UserApi", {
 
 export const UserApi = httpSchema(UserApiContract)
     .pathPrefix("api/users")
-    .use(GG_USER_AUTH_TOKEN)
+    .use(USER_TOKEN_WIRE)
     .routes({
         me: GGRpc.GET("me"),
         updateProfile: GGRpc.PUT("profile"),

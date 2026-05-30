@@ -2,7 +2,6 @@ import {GGRpc, httpSchema} from "@grest-ts/http"
 import {ERROR, EXISTS, GGContractClass, IsEmail, IsObject, IsString, SERVER_ERROR, VALIDATION_ERROR, GG_NO_PERMISSIONS} from "@grest-ts/schema"
 
 const IsUserId = IsString.brand("UserId")
-const IsUserAuthToken = IsString.brand("UserAuthToken")
 
 export const IsUser = IsObject({
     id: IsUserId,
@@ -24,7 +23,8 @@ export const IsLoginRequest = IsObject({
 export type LoginRequest = typeof IsLoginRequest.infer
 
 export const IsAuthResponse = IsObject({
-    token: IsUserAuthToken,
+    accessToken: IsString.docs({title: "JWT access token"}),
+    refreshToken: IsString.docs({title: "JWT refresh token"}),
     user: IsUser,
 })
 export type AuthResponse = typeof IsAuthResponse.infer

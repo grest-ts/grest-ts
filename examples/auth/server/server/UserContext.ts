@@ -1,18 +1,21 @@
-import {GGContextKey} from "@grest-ts/context"
 import {GGHttpServerMiddleware} from "@grest-ts/http"
 import {GGWebSocketMiddleware} from "@grest-ts/websocket"
 import {NOT_AUTHORIZED} from "@grest-ts/schema"
-import {GG_USER_AUTH_TOKEN, IsUser, User} from "../../api/auth/UserAuth"
+import {AuthGuard} from "@grest-ts/auth"
+import {UserContext, UserPermission, tUserId} from "../../api/auth/UserAuth"
 import {UserService} from "./services/UserService"
 
-export const UserContext = new GGContextKey<User>("userData", IsUser)
-
 export class UserContextMiddleware implements GGHttpServerMiddleware, GGWebSocketMiddleware {
-    constructor(private readonly userService: UserService) {}
+    constructor(
+        private readonly userService: UserService,
+        private readonly userGuard: AuthGuard<UserPermission>,
+    ) {}
 
     async process(): Promise<void> {
-        const user = await this.userService.getUserByToken(GG_USER_AUTH_TOKEN.get())
-        if (!user) throw new NOT_AUTHORIZED({debugMessage: "User not found for token"})
+        const payload = this.userGuard.payload()
+        if (!payload) throw new NOT_AUTHORIZED({debugMessage: "No user token payload"})
+        const user = await this.userService.getUserById(payload.sub as tUserId)
+        if (!user) throw new NOT_AUTHORIZED({debugMessage: "User not found"})
         UserContext.set(user)
     }
 }

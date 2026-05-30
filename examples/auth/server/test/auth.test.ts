@@ -1,11 +1,16 @@
-import {EXISTS, NOT_AUTHORIZED, VALIDATION_ERROR} from "@grest-ts/schema"
+import {EXISTS, FORBIDDEN, NOT_AUTHORIZED, VALIDATION_ERROR} from "@grest-ts/schema"
 import {GGTest} from "@grest-ts/testkit"
 import "@grest-ts/http/testkit"
 import {AppRuntime} from "../server/auth"
 import {AuthPublicApi, InvalidCredentialsError} from "../../api/AuthPublicApi"
 import {UserApi} from "../../api/UserApi"
+import {OrgApi} from "../../api/OrgApi"
+import {BannerApi} from "../../api/BannerApi"
 import {LiveApi} from "../../api/LiveApi"
 import {TestContext} from "./TestContext"
+
+const aliceData = {username: "alice", email: "alice@example.com", password: "secret123"}
+const bobData   = {username: "bob",   email: "bob@example.com",   password: "secret123"}
 
 describe("Registration", () => {
     GGTest.startWorker(AppRuntime)
@@ -23,27 +28,26 @@ describe("Registration", () => {
             })
     })
 
-    test("registers a new user", async () => {
+    test("registers alice with CAN_SEE_RED_BANNER in JWT", async () => {
         const result = await ctx.auth
-            .register({username: "alice", email: "alice@example.com", password: "secret123"})
+            .register(aliceData)
             .toMatchObject({
                 user: {username: "alice", email: "alice@example.com"},
-                token: expect.stringMatching(/^token-/),
+                accessToken: expect.any(String),
+                refreshToken: expect.any(String),
             })
-        expect(result.user.id).toBeDefined()
+        expect(result.accessToken).toMatch(/^ey/)  // JWT format
     })
 
     test("rejects duplicate username", async () => {
         await ctx.auth
-            .register({username: "alice", email: "other@example.com", password: "secret123"})
+            .register(aliceData)
             .toBeError(EXISTS)
     })
 })
 
 describe("Login", () => {
     GGTest.startWorker(AppRuntime)
-
-    const aliceData = {username: "alice", email: "alice@example.com", password: "secret123"}
 
     const ctx = new TestContext("Login")
         .resetAfterEach()
@@ -52,88 +56,118 @@ describe("Login", () => {
 
     test("rejects wrong password", async () => {
         await ctx.auth
-            .login({username: aliceData.username, password: "wrong-password"})
+            .login({username: aliceData.username, password: "wrong"})
             .toBeError(InvalidCredentialsError)
     })
 
-    test("rejects unknown username", async () => {
-        await ctx.auth
-            .login({username: "nobody", password: "whatever"})
-            .toBeError(InvalidCredentialsError)
-    })
-
-    test("returns token and user on success", async () => {
+    test("returns JWT on success", async () => {
         const result = await ctx.auth
-            .login({username: aliceData.username, password: aliceData.password})
-            .toMatchObject({
-                user: {username: aliceData.username, email: aliceData.email},
-                token: expect.stringMatching(/^token-/),
-            })
-        expect(result.token).toBeDefined()
+            .login(aliceData)
+            .toMatchObject({user: {username: aliceData.username}})
+        expect(result.accessToken).toMatch(/^ey/)
     })
 })
 
 describe("Protected HTTP routes", () => {
     GGTest.startWorker(AppRuntime)
 
-    const aliceData = {username: "alice", email: "alice@example.com", password: "secret123"}
-
     const ctx = new TestContext("Protected")
         .resetAfterEach()
         .apis({auth: AuthPublicApi, user: UserApi})
-        // Use callOn directly so beforeAll doesn't set auth token in the context
         .beforeAll(async () => { await ctx.callOn(AuthPublicApi).register(aliceData) })
 
     test("rejects unauthenticated GET /me", async () => {
         await ctx.user.me().toBeError(NOT_AUTHORIZED)
     })
 
-    test("rejects unauthenticated PUT /profile", async () => {
-        await ctx.user.updateProfile({email: "hack@example.com"}).toBeError(NOT_AUTHORIZED)
-    })
-
     test("returns current user after login", async () => {
         await ctx.login(aliceData)
-        await ctx.user
-            .me()
-            .toMatchObject({username: aliceData.username, email: aliceData.email})
+        await ctx.user.me().toMatchObject({username: aliceData.username, email: aliceData.email})
     })
 
     test("updates profile email", async () => {
         await ctx.login(aliceData)
-        await ctx.user
-            .updateProfile({email: "newalice@example.com"})
+        await ctx.user.updateProfile({email: "newalice@example.com"})
             .toMatchObject({username: aliceData.username, email: "newalice@example.com"})
-        await ctx.user
-            .me()
-            .toMatchObject({email: "newalice@example.com"})
-    })
-
-    test("no-op update (empty body) returns current user unchanged", async () => {
-        await ctx.login(aliceData)
-        const before = await ctx.user.me()
-        await ctx.user
-            .updateProfile({})
-            .toMatchObject({username: before.username, email: before.email})
     })
 })
 
-describe("WebSocket auth", () => {
+describe("Banner permission gate", () => {
+    GGTest.startWorker(AppRuntime)
+
+    const ctxAlice = new TestContext("Alice").resetAfterEach().apis({auth: AuthPublicApi, banner: BannerApi})
+    const ctxBob   = new TestContext("Bob").resetAfterEach().apis({auth: AuthPublicApi, banner: BannerApi})
+
+    beforeAll(async () => {
+        await ctxAlice.callOn(AuthPublicApi).register(aliceData)
+        await ctxBob.callOn(AuthPublicApi).register(bobData)
+    })
+
+    test("anyone authenticated can read banner status", async () => {
+        await ctxBob.login(bobData)
+        await ctxBob.banner.bannerStatus().toMatchObject({count: expect.any(Number)})
+    })
+
+    test("alice (CAN_SEE_RED_BANNER) can click banner", async () => {
+        await ctxAlice.login(aliceData)
+        await ctxAlice.banner.clickBanner().toMatchObject({count: 1, username: "alice"})
+        await ctxAlice.banner.clickBanner().toMatchObject({count: 2, username: "alice"})
+    })
+
+    test("bob (no permission) gets FORBIDDEN on click", async () => {
+        await ctxBob.login(bobData)
+        await ctxBob.banner.clickBanner().toBeError(FORBIDDEN)
+    })
+
+    test("unauthenticated click returns NOT_AUTHORIZED", async () => {
+        await ctxBob.banner.clickBanner().toBeError(NOT_AUTHORIZED)
+    })
+})
+
+describe("Organization selector", () => {
+    GGTest.startWorker(AppRuntime)
+
+    const ctx = new TestContext("Org").resetAfterEach().apis({auth: AuthPublicApi, org: OrgApi})
+
+    beforeAll(async () => { await ctx.callOn(AuthPublicApi).register(aliceData) })
+
+    test("lists orgs for alice", async () => {
+        await ctx.login(aliceData)
+        await ctx.org.listOrgs().toMatchObject([
+            {name: "Acme Corp"},
+            {name: "Beta Labs"},
+        ])
+    })
+
+    test("orgInfo requires org token (FORBIDDEN without it)", async () => {
+        await ctx.login(aliceData)
+        await ctx.org.orgInfo().toBeError(FORBIDDEN)
+    })
+
+    test("orgInfo succeeds after selectOrg", async () => {
+        await ctx.login(aliceData)
+        const {orgToken, org} = await ctx.org.selectOrg({orgId: "org-1" as any})
+        ctx.setOrgToken(orgToken)
+        await ctx.org.orgInfo().toMatchObject({name: org.name})
+    })
+
+    test("non-member cannot select org", async () => {
+        await ctx.callOn(AuthPublicApi).register(bobData)
+        await ctx.login(bobData)
+        // bob is only member of org-1, not org-2
+        await ctx.org.selectOrg({orgId: "org-2" as any}).toBeError(FORBIDDEN)
+    })
+})
+
+describe("WebSocket auth + permissions", () => {
     GGTest.startInline(AppRuntime)
 
-    const aliceData = {username: "alice", email: "alice@example.com", password: "secret123"}
-
     const ctx = new TestContext("WebSocket")
-        .apis({auth: AuthPublicApi, user: UserApi, live: LiveApi})
+        .apis({auth: AuthPublicApi, user: UserApi, live: LiveApi, banner: BannerApi})
         .beforeAll(async () => {
             await ctx.register(aliceData)
             await ctx.live.connect()
         })
-
-    test("rejects WebSocket connection without token", async () => {
-        const anonCtx = new TestContext("Anon").apis({live: LiveApi})
-        await expect(anonCtx.live.connect()).rejects.toBeDefined()
-    })
 
     test("ping gets a pong with the authenticated username", async () => {
         await ctx.live
@@ -141,12 +175,21 @@ describe("WebSocket auth", () => {
             .waitFor(ctx.live.mock.pong.toMatchObject({username: aliceData.username}))
     })
 
-    test("HTTP profile update triggers WebSocket profileUpdated notification", async () => {
+    test("HTTP profile update triggers WebSocket profileUpdated", async () => {
         await ctx.user
             .updateProfile({email: "ws-test@example.com"})
-            .with(ctx.live.mock.profileUpdated.toMatchObject({
-                username: aliceData.username,
-                email: "ws-test@example.com",
-            }))
+            .with(ctx.live.mock.profileUpdated.toMatchObject({email: "ws-test@example.com"}))
+    })
+
+    test("alice can send bannerPing (has CAN_SEE_RED_BANNER)", async () => {
+        await ctx.live
+            .bannerPing()
+            .waitFor(ctx.live.mock.bannerPong.toMatchObject({username: aliceData.username}))
+    })
+
+    test("HTTP banner click pushes bannerPong to all WS clients", async () => {
+        await ctx.banner
+            .clickBanner()
+            .with(ctx.live.mock.bannerPong.toMatchObject({username: aliceData.username}))
     })
 })

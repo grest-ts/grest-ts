@@ -35,7 +35,6 @@ export default defineConfig({
         ],
     },
     optimizeDeps: {
-        // Also scan the shared server contracts so Vite discovers all transitive deps.
         entries: [
             "index.html",
             "../../api/**/*.ts",
