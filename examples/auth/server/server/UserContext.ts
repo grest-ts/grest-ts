@@ -2,7 +2,7 @@ import {GGContextKey} from "@grest-ts/context"
 import {GGHttpServerMiddleware} from "@grest-ts/http"
 import {GGWebSocketMiddleware} from "@grest-ts/websocket"
 import {NOT_AUTHORIZED} from "@grest-ts/schema"
-import {GG_USER_AUTH_TOKEN, IsUser, User} from "../common/api/auth/UserAuth"
+import {GG_USER_AUTH_TOKEN, IsUser, User} from "../../api/auth/UserAuth"
 import {UserService} from "./services/UserService"
 
 export const UserContext = new GGContextKey<User>("userData", IsUser)

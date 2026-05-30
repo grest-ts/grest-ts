@@ -1,8 +1,8 @@
 import {GGContext, GG_CONTEXT_STORAGE} from "@grest-ts/context"
-import {AuthPublicApi} from "../../server/common/api/AuthPublicApi"
-import {UserApi} from "../../server/common/api/UserApi"
-import {LiveApi} from "../../server/common/api/LiveApi"
-import {GG_USER_AUTH_TOKEN, tUserAuthToken} from "../../server/common/api/auth/UserAuth"
+import {AuthPublicApi} from "../../api/AuthPublicApi"
+import {UserApi} from "../../api/UserApi"
+import {LiveApi} from "../../api/LiveApi"
+import {GG_USER_AUTH_TOKEN, tUserAuthToken} from "../../api/auth/UserAuth"
 
 // Initialize a persistent global browser context so GGContextKey works outside Node.js AsyncLocalStorage.
 // This is safe for single-user browser apps — the context is one global shared store.

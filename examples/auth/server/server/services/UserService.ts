@@ -1,7 +1,7 @@
 import {EXISTS, GGContractImplementation, NOT_AUTHORIZED} from "@grest-ts/schema"
-import {AuthPublicApiContract, InvalidCredentialsError, RegisterRequest, LoginRequest, AuthResponse} from "../../common/api/AuthPublicApi"
-import {UserApiContract, UpdateProfileRequest} from "../../common/api/UserApi"
-import {tUserAuthToken, tUserId, User} from "../../common/api/auth/UserAuth"
+import {AuthPublicApiContract, InvalidCredentialsError, RegisterRequest, LoginRequest, AuthResponse} from "../../../api/AuthPublicApi"
+import {UserApiContract, UpdateProfileRequest} from "../../../api/UserApi"
+import {tUserAuthToken, tUserId, User} from "../../../api/auth/UserAuth"
 import {UserContext} from "../UserContext"
 
 interface UserRecord extends User {

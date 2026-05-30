@@ -2,9 +2,9 @@ import {EXISTS, NOT_AUTHORIZED, VALIDATION_ERROR} from "@grest-ts/schema"
 import {GGTest} from "@grest-ts/testkit"
 import "@grest-ts/http/testkit"
 import {AppRuntime} from "../server/auth"
-import {AuthPublicApi, InvalidCredentialsError} from "../common/api/AuthPublicApi"
-import {UserApi} from "../common/api/UserApi"
-import {LiveApi} from "../common/api/LiveApi"
+import {AuthPublicApi, InvalidCredentialsError} from "../../api/AuthPublicApi"
+import {UserApi} from "../../api/UserApi"
+import {LiveApi} from "../../api/LiveApi"
 import {TestContext} from "./TestContext"
 
 describe("Registration", () => {

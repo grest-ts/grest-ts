@@ -1,7 +1,7 @@
 import {GGContractClient, GGContractImplementation} from "@grest-ts/schema"
 import {WebSocketIncoming, WebSocketOutgoing} from "@grest-ts/websocket"
-import {LiveApiContract} from "../../common/api/LiveApi"
-import {User, tUserId} from "../../common/api/auth/UserAuth"
+import {LiveApiContract} from "../../../api/LiveApi"
+import {User, tUserId} from "../../../api/auth/UserAuth"
 import {UserContext} from "../UserContext"
 import {UserService} from "./UserService"
 

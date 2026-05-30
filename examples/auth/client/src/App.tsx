@@ -1,8 +1,8 @@
 import React, {useEffect, useRef, useState} from "react"
 import {authApi, clearAuthToken, createLiveClient, setAuthToken, userApi} from "./api"
-import type {User} from "../../server/common/api/auth/UserAuth"
+import type {User} from "../../api/auth/UserAuth"
 import type {GGWebSocketClient} from "@grest-ts/websocket"
-import type {tUserAuthToken} from "../../server/common/api/auth/UserAuth"
+import type {tUserAuthToken} from "../../api/auth/UserAuth"
 
 // ─── types ───────────────────────────────────────────────────────────────────
 

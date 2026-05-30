@@ -38,7 +38,7 @@ export default defineConfig({
         // Also scan the shared server contracts so Vite discovers all transitive deps.
         entries: [
             "index.html",
-            "../../server/common/**/*.ts",
+            "../../api/**/*.ts",
         ],
         include: [
             "@grest-ts/common",

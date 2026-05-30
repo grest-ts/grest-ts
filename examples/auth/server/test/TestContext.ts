@@ -1,7 +1,7 @@
 import {GGTestContext} from "@grest-ts/testkit"
 import "@grest-ts/http/testkit"
-import {GG_USER_AUTH_TOKEN, tUserAuthToken} from "../common/api/auth/UserAuth"
-import {AuthPublicApi, LoginRequest, RegisterRequest} from "../common/api/AuthPublicApi"
+import {GG_USER_AUTH_TOKEN, tUserAuthToken} from "../../api/auth/UserAuth"
+import {AuthPublicApi, LoginRequest, RegisterRequest} from "../../api/AuthPublicApi"
 import {Raw} from "@grest-ts/schema"
 
 export class TestContext extends GGTestContext {

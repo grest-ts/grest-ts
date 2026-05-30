@@ -4,7 +4,6 @@
     "types": ["node", "vitest/globals", "@grest-ts/testkit-vitest", "@grest-ts/testkit-vitest/unpublished-packages"]
   },
   "include": [
-    "common/**/*.ts",
     "server/**/*.ts",
     "test/**/*.ts"
   ]
