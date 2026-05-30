@@ -34,6 +34,7 @@ export * from "./server/GGHttp";
 export * from "./server/GGHttpServer";
 export * from "./server/GG_HTTP_SERVER";
 export * from "./server/applyResponseMiddleware";
+export * from "./server/applyRequestMiddleware";
 
 // Client
 export * from "./client/GGHttpSchema.createClient";

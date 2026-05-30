@@ -1,19 +1,11 @@
 import type http from "http";
 import type {HttpMethod} from "@grest-ts/common";
 import {GGContractExecutor, GGContractMethod, PAYLOAD_TOO_LARGE} from "@grest-ts/schema";
-import type {GGInbound, GGTransportMiddleware} from "@grest-ts/context";
+import type {GGTransportMiddleware} from "@grest-ts/context";
 import {ClientHttpRouteToRpcTransformServerConfig} from "../../schema/GGHttpSchema";
+import {applyRequestMiddleware} from "../../server/applyRequestMiddleware";
 
 export const DEFAULT_MAX_BODY_BYTES = 1024 * 1024;
-
-function flatten(src: Record<string, string | string[] | undefined>): Record<string, string | undefined> {
-    const out: Record<string, string | undefined> = {}
-    for (const key in src) {
-        const value = src[key]
-        out[key] = Array.isArray(value) ? value[0] : value
-    }
-    return out
-}
 
 export class GGRpcRequestParser {
 
@@ -39,15 +31,7 @@ export class GGRpcRequestParser {
         const url = req.url || '/'
         const qIndex = url.indexOf('?')
         const queryArgs = this.parseQueryString(qIndex === -1 ? '' : url.substring(qIndex + 1))
-        if (this.middlewares.length > 0) {
-            const inbound: GGInbound = {
-                headers: flatten(req.headers),
-                cookie: typeof req.headers.cookie === "string" ? req.headers.cookie : undefined,
-                query: flatten(queryArgs)
-            }
-            for (const mw of this.middlewares) mw.parse?.(inbound)
-            for (const mw of this.middlewares) await mw.process?.()
-        }
+        await applyRequestMiddleware(req, queryArgs, this.middlewares)
 
         let input: unknown;
         if (this.hasBody) {

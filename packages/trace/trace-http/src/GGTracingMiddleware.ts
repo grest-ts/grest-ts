@@ -19,7 +19,6 @@ export const GGTracingMiddleware: GGTransportMiddleware = {
         [HEADER_PARENT_SPAN_ID]: IsString.orUndefined.docs({description: "Parent span ID"}),
         [HEADER_ROOT_START_TS]:  IsString.orUndefined.docs({description: "Timestamp (ms) when the root context was created"}),
     },
-    responseHeaders: {},
 
     update(outbound: GGOutbound): void {
         const trace = GG_TRACE.get()

@@ -60,7 +60,6 @@ const localeCodec = HeaderType.codecTo(IsGGIntlLocaleContext, {
 export function intlLocaleHeader(): GGTransportMiddleware {
     return {
         headers: {[HEADER_ACCEPT_LANGUAGE]: IsString.orUndefined},
-        responseHeaders: {},
         parse(inbound: GGInbound): void {
             const result = localeCodec.encode(inbound.headers as Record<string, string>);
             if (result.success) GG_INTL_LOCALE.set(result.value);
