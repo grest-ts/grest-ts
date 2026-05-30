@@ -1,5 +1,5 @@
 import "./_dedupCheck";
-export {GGAuthSession as AuthSession} from "./browser/GGAuthSession"
+export {GGAuthSession} from "./browser/GGAuthSession"
 export {DerivedToken} from "./browser/GGAuthSessionBase"
 export type {AuthSessionConfig} from "./browser/GGAuthSession"
 export type {

@@ -1,5 +1,5 @@
 import {GG_CONTEXT_STORAGE, GGContext} from "@grest-ts/context"
-import {AuthSession} from "@grest-ts/auth"
+import {GGAuthSession} from "@grest-ts/auth"
 import {AuthPublicApi} from "../../api/AuthPublicApi"
 import {UserApi} from "../../api/UserApi"
 import {OrgApi} from "../../api/OrgApi"
@@ -24,7 +24,7 @@ export const api = {
     }
 }
 
-export const session = new AuthSession({
+export const session = new GGAuthSession({
     key: USER_TOKEN,
     refresh: (refreshToken: string | undefined) => {
         return api.authApi.refresh({refreshToken: refreshToken!})

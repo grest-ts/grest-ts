@@ -1,12 +1,13 @@
 /// <reference lib="dom" />
 import {NOT_AUTHORIZED} from "@grest-ts/schema"
 import {GGContextKeySynchronizer, type GGContextKey} from "@grest-ts/context"
-import {BaseAuthSession as GGAuthSessionBase} from "./GGAuthSessionBase"
+import {BaseAuthSession} from "./GGAuthSessionBase"
 import {systemClock} from "./core/systemClock"
 import {localStorageSharedCache} from "./core/localStorageCache"
 import {webLocksLock} from "./core/webLocksLock"
 import {browserScheduler} from "./core/browserScheduler"
-import type {DerivedConfig, DerivedMap, TokenKey, TokenPair} from "./core/types"
+import type {DerivedConfig, DerivedMap, SessionState, TokenKey, TokenPair} from "./core/types"
+import type {DerivedToken} from "./GGAuthSessionBase"
 
 export interface AuthSessionConfig<D extends DerivedMap = {}> {
     refresh: (refreshToken?: string) => Promise<TokenPair>
@@ -20,9 +21,13 @@ export interface AuthSessionConfig<D extends DerivedMap = {}> {
     isFatalRefreshError?: (err: unknown) => boolean
 }
 
-export class GGAuthSession<D extends DerivedMap = {}> extends GGAuthSessionBase<D> {
+export class GGAuthSession<D extends DerivedMap = {}> {
+    private readonly _session: BaseAuthSession<D>
+
+    readonly derived: {[K in keyof D]: DerivedToken<Parameters<D[K]["mint"]>[0]>}
+
     constructor(config: AuthSessionConfig<D>) {
-        super(
+        this._session = new BaseAuthSession<D>(
             {
                 refresh: config.refresh,
                 key: config.key,
@@ -41,19 +46,30 @@ export class GGAuthSession<D extends DerivedMap = {}> extends GGAuthSessionBase<
             },
         )
 
+        this.derived = this._session.derived
+
         GGContextKeySynchronizer.provide(config.key as unknown as GGContextKey<string | undefined>, {
-            isStale: () => this.isRootStale(),
-            recover: () => this.ensureFresh(),
+            isStale: () => this._session.isRootStale(),
+            recover: () => this._session.ensureFresh(),
         })
 
         for (const [key, d] of Object.entries(config.derived ?? {})) {
             const derived = d as DerivedConfig<unknown>
             GGContextKeySynchronizer.provide(derived.key as unknown as GGContextKey<string | undefined>, {
-                isStale: () => this.isDerivedStale(key),
-                recover: () => this.ensureActiveDerivedFresh(key),
+                isStale: () => this._session.isDerivedStale(key),
+                recover: () => this._session.ensureActiveDerivedFresh(key),
             })
         }
     }
+
+    start(pair: TokenPair): void { this._session.start(pair) }
+    logout(): void { this._session.logout() }
+    init(): Promise<void> { return this._session.init() }
+    getState(): SessionState { return this._session.getState() }
+    subscribe(listener: () => void): () => void { return this._session.subscribe(listener) }
+    onRefreshed(cb: () => void): () => void { return this._session.onRefreshed(cb) }
+    onLogout(cb: () => void): () => void { return this._session.onLogout(cb) }
+    getAccessToken(opts?: {awaitRefresh?: boolean}): Promise<string | undefined> {
+        return this._session.getAccessToken(opts)
+    }
 }
-
-
