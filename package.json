@@ -5,7 +5,7 @@
   "private": true,
   "type": "module",
   "license": "MIT",
-  "description": "grest-ts is a TypeScript framework for building services around contracts — typed API definitions that serve as the single source of truth between client, server, and tests. Define your contract once, implement it, and test it with a single line — no mocking infrastructure, no HTTP plumbing, no test rewrites when you refactor.",
+  "description": "grest-ts is a TypeScript framework for building services around contracts \u2014 typed API definitions that serve as the single source of truth between client, server, and tests. Define your contract once, implement it, and test it with a single line \u2014 no mocking infrastructure, no HTTP plumbing, no test rewrites when you refactor.",
   "repository": {
     "type": "git",
     "url": "https://github.com/grest-ts/grest-ts.git"
@@ -49,7 +49,8 @@
     "packages/http/*",
     "packages/logger/*",
     "packages/schema/*",
-    "packages/trace/*"
+    "packages/trace/*",
+    "examples/auth-client"
   ],
   "scripts": {
     "generate": "tsx grest.package.ts",

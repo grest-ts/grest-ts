@@ -1,0 +1,17 @@
+{
+  "name": "@auth-example/server",
+  "version": "1.0.0",
+  "description": "Auth example for grest-ts — registration, login, token-based HTTP and WebSocket auth",
+  "type": "module",
+  "scripts": {
+    "build": "tsc --noEmit",
+    "start": "tsx server/auth.ts",
+    "test": "npx --no vitest run"
+  },
+  "devDependencies": {
+    "@grest-ts/testkit-vitest": "*",
+    "@types/node": "^22.15.0",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3"
+  }
+}

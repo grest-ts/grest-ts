@@ -8,9 +8,11 @@ definePackage({
     dependenciesGraphOut: "./docs/DEPENDENCIES.md",
     vitestWorkspaceExtraEntries: [
         'examples/checklist',
-        'examples/grest-test'
+        'examples/grest-test',
+        'examples/auth'
     ],
     workspaceExtraEntries: [
+        'examples/auth-client',
         'docs-web',
         'packages-tooling/create-starter/template/api',
         'packages-tooling/create-starter/template/server',
