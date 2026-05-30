@@ -9,7 +9,7 @@ import {GG_USER_AUTH_TOKEN, tUserAuthToken} from "../../server/common/api/auth/U
 const browserContext = new GGContext("browser")
 GG_CONTEXT_STORAGE.enterWith(browserContext)
 
-// Same-origin clients — Vite proxy forwards these paths to the auth server (port 4000 by default).
+// Same-origin clients — Vite proxy forwards these paths to the auth server (port 4600 by default).
 export const authApi = AuthPublicApi.createClient({url: ""})
 export const userApi = UserApi.createClient({url: ""})
 export const liveApi = LiveApi.createClient({
