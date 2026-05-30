@@ -9,12 +9,16 @@ import {GG_USER_AUTH_TOKEN, tUserAuthToken} from "../../server/common/api/auth/U
 const browserContext = new GGContext("browser")
 GG_CONTEXT_STORAGE.enterWith(browserContext)
 
-// Same-origin clients — Vite proxy forwards these paths to the auth server (port 4600 by default).
+const WS_URL = window.location.origin.replace(/^http/, "ws")
+
+// Same-origin clients — Vite proxy forwards /pub, /api, /ws to the auth server (port 4600).
 export const authApi = AuthPublicApi.createClient({url: ""})
 export const userApi = UserApi.createClient({url: ""})
-export const liveApi = LiveApi.createClient({
-    url: `${window.location.origin.replace(/^http/, "ws")}`,
-})
+
+// Create a fresh WebSocket client each time — a disconnected client can't reconnect.
+export function createLiveClient() {
+    return LiveApi.createClient({url: WS_URL})
+}
 
 export function setAuthToken(token: tUserAuthToken): void {
     GG_USER_AUTH_TOKEN.set(token)

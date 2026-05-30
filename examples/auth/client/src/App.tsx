@@ -1,242 +1,397 @@
 import React, {useEffect, useRef, useState} from "react"
-import {authApi, clearAuthToken, liveApi, setAuthToken, userApi} from "./api"
+import {authApi, clearAuthToken, createLiveClient, setAuthToken, userApi} from "./api"
 import type {User} from "../../server/common/api/auth/UserAuth"
-import type {LivePongEvent, ProfileUpdatedEvent} from "../../server/common/api/LiveApi"
 import type {GGWebSocketClient} from "@grest-ts/websocket"
 import type {tUserAuthToken} from "../../server/common/api/auth/UserAuth"
 
-type View = "login" | "register"
+// ─── types ───────────────────────────────────────────────────────────────────
 
-const style = {
-    container: {maxWidth: 560, margin: "40px auto", fontFamily: "monospace", padding: "0 16px"},
-    card: {border: "1px solid #ccc", borderRadius: 4, padding: 20, marginBottom: 16},
-    row: {display: "flex", gap: 8, marginBottom: 8},
-    input: {flex: 1, padding: "6px 8px", fontFamily: "monospace", border: "1px solid #aaa", borderRadius: 2},
-    btn: {padding: "6px 14px", fontFamily: "monospace", cursor: "pointer", border: "1px solid #666", borderRadius: 2, background: "#f5f5f5"},
-    primary: {background: "#333", color: "#fff", border: "1px solid #333"},
-    danger: {background: "#900", color: "#fff", border: "1px solid #900"},
-    error: {color: "#c00", fontSize: 13, marginBottom: 8},
-    success: {color: "#060", fontSize: 13, marginBottom: 8},
-    label: {fontSize: 12, marginBottom: 4, display: "block", color: "#555"},
-    section: {marginBottom: 12},
-    log: {fontSize: 12, background: "#f9f9f9", border: "1px solid #eee", padding: 8, maxHeight: 120, overflowY: "auto" as const},
-    tabs: {display: "flex", gap: 0, marginBottom: 16},
-    tab: {padding: "6px 18px", cursor: "pointer", border: "1px solid #ccc", borderBottom: "none", background: "#f5f5f5"},
-    activeTab: {background: "#fff", fontWeight: "bold"},
+type WsEntry = {time: string; event: string; data: unknown}
+type ReqResult = {method: string; path: string; status: "ok" | "err"; body: unknown}
+
+// ─── tiny helpers ─────────────────────────────────────────────────────────────
+
+function now() {
+    return new Date().toLocaleTimeString([], {hour: "2-digit", minute: "2-digit", second: "2-digit"})
 }
 
+function Code({children}: {children: React.ReactNode}) {
+    return (
+        <pre style={{
+            margin: 0, padding: "10px 12px", background: "#1e1e1e", color: "#d4d4d4",
+            fontSize: 12, borderRadius: 4, overflowX: "auto", fontFamily: "monospace",
+        }}>
+            {children}
+        </pre>
+    )
+}
+
+function Badge({label, color}: {label: string; color: string}) {
+    return (
+        <span style={{
+            fontSize: 10, fontWeight: "bold", padding: "2px 6px",
+            borderRadius: 3, background: color, color: "#fff", marginRight: 6,
+        }}>
+            {label}
+        </span>
+    )
+}
+
+function Section({n, title, children}: {n: number; title: string; children: React.ReactNode}) {
+    return (
+        <div style={{marginBottom: 24}}>
+            <div style={{display: "flex", alignItems: "center", gap: 10, marginBottom: 12}}>
+                <span style={{
+                    width: 24, height: 24, borderRadius: "50%", background: "#333", color: "#fff",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    fontSize: 12, fontWeight: "bold", flexShrink: 0,
+                }}>
+                    {n}
+                </span>
+                <span style={{fontWeight: "bold", fontSize: 14}}>{title}</span>
+            </div>
+            <div style={{
+                border: "1px solid #e0e0e0", borderRadius: 6, padding: 16,
+                background: "#fafafa",
+            }}>
+                {children}
+            </div>
+        </div>
+    )
+}
+
+const btn: React.CSSProperties = {
+    padding: "6px 12px", fontSize: 12, fontFamily: "monospace",
+    cursor: "pointer", border: "1px solid #bbb", borderRadius: 4,
+    background: "#fff", whiteSpace: "nowrap",
+}
+const btnPrimary: React.CSSProperties = {...btn, background: "#2563eb", color: "#fff", border: "1px solid #2563eb"}
+const btnDanger: React.CSSProperties = {...btn, background: "#dc2626", color: "#fff", border: "1px solid #dc2626"}
+const btnWarning: React.CSSProperties = {...btn, background: "#d97706", color: "#fff", border: "1px solid #d97706"}
+const btnGreen: React.CSSProperties = {...btn, background: "#16a34a", color: "#fff", border: "1px solid #16a34a"}
+const input: React.CSSProperties = {
+    padding: "6px 8px", fontSize: 12, fontFamily: "monospace",
+    border: "1px solid #ccc", borderRadius: 4, background: "#fff",
+}
+
+// ─── app ──────────────────────────────────────────────────────────────────────
+
 export function App() {
+    // auth state
     const [user, setUser] = useState<User | null>(null)
-    const [view, setView] = useState<View>("login")
-
-    const [loginUsername, setLoginUsername] = useState("alice")
-    const [loginPassword, setLoginPassword] = useState("secret123")
-
-    const [regUsername, setRegUsername] = useState("")
+    const [token, setToken] = useState<string | null>(null)
+    const [authView, setAuthView] = useState<"login" | "register">("login")
+    const [loginUser, setLoginUser] = useState("alice")
+    const [loginPass, setLoginPass] = useState("secret123")
+    const [regUser, setRegUser] = useState("")
     const [regEmail, setRegEmail] = useState("")
-    const [regPassword, setRegPassword] = useState("")
+    const [regPass, setRegPass] = useState("")
+    const [authError, setAuthError] = useState("")
 
-    const [profileEmail, setProfileEmail] = useState("")
-    const [msg, setMsg] = useState<{type: "ok" | "err"; text: string} | null>(null)
+    // request explorer state
+    const [newEmail, setNewEmail] = useState("")
+    const [lastReq, setLastReq] = useState<ReqResult | null>(null)
 
+    // websocket state
     const [wsConnected, setWsConnected] = useState(false)
-    const [pongs, setPongs] = useState<LivePongEvent[]>([])
-    const [profileEvents, setProfileEvents] = useState<ProfileUpdatedEvent[]>([])
+    const [wsLog, setWsLog] = useState<WsEntry[]>([])
     const wsRef = useRef<GGWebSocketClient<any, any> | null>(null)
+    const wsLogRef = useRef<HTMLDivElement>(null)
 
-    function flash(type: "ok" | "err", text: string) {
-        setMsg({type, text})
-        setTimeout(() => setMsg(null), 4000)
+    useEffect(() => {
+        wsLogRef.current?.scrollTo(0, wsLogRef.current.scrollHeight)
+    }, [wsLog])
+
+    useEffect(() => () => { wsRef.current?.disconnect() }, [])
+
+    function addWsEntry(event: string, data: unknown) {
+        setWsLog(prev => [...prev.slice(-49), {time: now(), event, data}])
     }
+
+    // ── auth handlers ──────────────────────────────────────────────────────────
 
     async function handleLogin(e: React.FormEvent) {
         e.preventDefault()
-        const res = await authApi.login({username: loginUsername, password: loginPassword}).asResult()
-        if (!res.success) { flash("err", `Login failed: ${res.type}`); return }
-        setAuthToken(res.data.token as tUserAuthToken)
+        setAuthError("")
+        const res = await authApi.login({username: loginUser, password: loginPass}).asResult()
+        if (!res.success) { setAuthError(`${res.type}`); return }
+        const t = res.data.token as tUserAuthToken
+        setAuthToken(t)
+        setToken(t)
         setUser(res.data.user)
-        setProfileEmail(res.data.user.email)
-        flash("ok", `Welcome back, ${res.data.user.username}!`)
+        setNewEmail(res.data.user.email)
     }
 
     async function handleRegister(e: React.FormEvent) {
         e.preventDefault()
+        setAuthError("")
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const res = await authApi.register({username: regUsername, email: regEmail as any, password: regPassword}).asResult()
-        if (!res.success) { flash("err", `Registration failed: ${res.type}`); return }
-        setAuthToken(res.data.token as tUserAuthToken)
+        const res = await authApi.register({username: regUser, email: regEmail as any, password: regPass}).asResult()
+        if (!res.success) { setAuthError(`${res.type}`); return }
+        const t = res.data.token as tUserAuthToken
+        setAuthToken(t)
+        setToken(t)
         setUser(res.data.user)
-        setProfileEmail(res.data.user.email)
-        flash("ok", `Welcome, ${res.data.user.username}!`)
-    }
-
-    async function handleUpdateProfile(e: React.FormEvent) {
-        e.preventDefault()
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const res = await userApi.updateProfile({email: profileEmail as any}).asResult()
-        if (!res.success) { flash("err", `Update failed: ${res.type}`); return }
-        setUser(res.data)
-        flash("ok", "Profile updated")
+        setNewEmail(res.data.user.email)
     }
 
     function handleLogout() {
         clearAuthToken()
         setUser(null)
+        setToken(null)
+        setLastReq(null)
         wsRef.current?.disconnect()
         wsRef.current = null
         setWsConnected(false)
-        setPongs([])
-        setProfileEvents([])
-        flash("ok", "Logged out")
+        setWsLog([])
     }
 
-    async function handleConnectWs() {
+    // ── request handlers ───────────────────────────────────────────────────────
+
+    async function callMe() {
+        const res = await userApi.me().asResult()
+        setLastReq({
+            method: "GET", path: "/api/users/me",
+            status: res.success ? "ok" : "err",
+            body: res.success ? res.data : {error: res.type},
+        })
+    }
+
+    async function callMeNoToken() {
+        const saved = token as tUserAuthToken
+        clearAuthToken()
+        const res = await userApi.me().asResult()
+        setAuthToken(saved)
+        setLastReq({
+            method: "GET", path: "/api/users/me  (no Authorization header)",
+            status: "err",
+            body: res.success ? res.data : {error: res.type, statusCode: 401},
+        })
+    }
+
+    async function callUpdateProfile(e: React.FormEvent) {
+        e.preventDefault()
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const res = await userApi.updateProfile({email: newEmail as any}).asResult()
+        if (res.success) setUser(res.data)
+        setLastReq({
+            method: "PUT", path: "/api/users/profile",
+            status: res.success ? "ok" : "err",
+            body: res.success ? res.data : {error: res.type},
+        })
+    }
+
+    // ── websocket handlers ─────────────────────────────────────────────────────
+
+    async function connectWs() {
         if (wsRef.current) return
-        const client = liveApi
+        const client = createLiveClient()
         wsRef.current = client
         try {
             await client.connect(({incoming}) => {
                 setWsConnected(true)
+                addWsEntry("connected", {info: "WebSocket handshake authenticated with Bearer token"})
                 incoming.on({
-                    pong: async (data) => { setPongs(prev => [...prev.slice(-9), data]) },
-                    profileUpdated: async (data) => { setProfileEvents(prev => [...prev.slice(-9), data]) },
+                    pong: async (data) => addWsEntry("pong ←", data),
+                    profileUpdated: async (data) => addWsEntry("profileUpdated ←", data),
                 })
             })
         } catch {
-            flash("err", "WebSocket connection failed (auth required)")
+            addWsEntry("error", {info: "Connection rejected — token missing or invalid"})
             wsRef.current = null
         }
     }
 
-    function handlePing() {
+    function disconnectWs() {
+        wsRef.current?.disconnect()
+        wsRef.current = null
+        setWsConnected(false)
+        addWsEntry("disconnected", {})
+    }
+
+    function ping() {
+        addWsEntry("ping →", {info: "sending ping to server..."})
         wsRef.current?.outgoing.ping()
     }
 
-    useEffect(() => {
-        return () => { wsRef.current?.disconnect() }
-    }, [])
+    // ── render: anonymous ──────────────────────────────────────────────────────
 
     if (!user) {
         return (
-            <div style={style.container}>
-                <h2 style={{marginBottom: 20}}>grest-ts Auth Example</h2>
-                <div style={style.tabs}>
-                    {(["login", "register"] as View[]).map(v => (
-                        <div key={v} style={{...style.tab, ...(view === v ? style.activeTab : {})}}
-                            onClick={() => setView(v)}>
-                            {v === "login" ? "Login" : "Register"}
-                        </div>
+            <div style={{maxWidth: 480, margin: "48px auto", padding: "0 16px", fontFamily: "system-ui, sans-serif"}}>
+                <h2 style={{fontSize: 20, marginBottom: 4}}>grest-ts auth demo</h2>
+                <p style={{fontSize: 13, color: "#666", marginBottom: 24}}>
+                    Register or login to explore HTTP auth and live WebSocket events.
+                </p>
+
+                <div style={{display: "flex", gap: 0, marginBottom: 0}}>
+                    {(["login", "register"] as const).map(v => (
+                        <button key={v} onClick={() => { setAuthView(v); setAuthError("") }}
+                            style={{
+                                ...btn, borderRadius: "4px 4px 0 0",
+                                borderBottom: authView === v ? "1px solid #fafafa" : "1px solid #e0e0e0",
+                                background: authView === v ? "#fafafa" : "#f0f0f0",
+                                fontWeight: authView === v ? "bold" : "normal",
+                            }}>
+                            {v}
+                        </button>
                     ))}
                 </div>
-                {msg && <div style={msg.type === "ok" ? style.success : style.error}>{msg.text}</div>}
-
-                {view === "login" ? (
-                    <div style={style.card}>
-                        <form onSubmit={handleLogin}>
-                            <div style={style.section}>
-                                <label style={style.label}>Username</label>
-                                <div style={style.row}>
-                                    <input style={style.input} value={loginUsername}
-                                        onChange={e => setLoginUsername(e.target.value)} placeholder="alice" />
-                                </div>
+                <div style={{border: "1px solid #e0e0e0", borderRadius: "0 4px 4px 4px", padding: 20, background: "#fafafa"}}>
+                    {authView === "login" ? (
+                        <form onSubmit={handleLogin} style={{display: "flex", flexDirection: "column", gap: 10}}>
+                            <input style={{...input, width: "100%", boxSizing: "border-box"}}
+                                placeholder="username" value={loginUser} onChange={e => setLoginUser(e.target.value)} />
+                            <input style={{...input, width: "100%", boxSizing: "border-box"}}
+                                type="password" placeholder="password" value={loginPass}
+                                onChange={e => setLoginPass(e.target.value)} />
+                            {authError && <div style={{color: "#dc2626", fontSize: 12}}>{authError}</div>}
+                            <button style={btnPrimary} type="submit">Login →</button>
+                            <div style={{fontSize: 11, color: "#888"}}>
+                                No account? Try: register as "alice" / "alice@example.com" / "secret123"
                             </div>
-                            <div style={style.section}>
-                                <label style={style.label}>Password</label>
-                                <div style={style.row}>
-                                    <input style={style.input} type="password" value={loginPassword}
-                                        onChange={e => setLoginPassword(e.target.value)} placeholder="secret123" />
-                                </div>
-                            </div>
-                            <button style={{...style.btn, ...style.primary}} type="submit">Login</button>
                         </form>
-                    </div>
-                ) : (
-                    <div style={style.card}>
-                        <form onSubmit={handleRegister}>
-                            <div style={style.section}>
-                                <label style={style.label}>Username (3-20 chars)</label>
-                                <div style={style.row}>
-                                    <input style={style.input} value={regUsername}
-                                        onChange={e => setRegUsername(e.target.value)} placeholder="alice" />
-                                </div>
-                            </div>
-                            <div style={style.section}>
-                                <label style={style.label}>Email</label>
-                                <div style={style.row}>
-                                    <input style={style.input} type="email" value={regEmail}
-                                        onChange={e => setRegEmail(e.target.value)} placeholder="alice@example.com" />
-                                </div>
-                            </div>
-                            <div style={style.section}>
-                                <label style={style.label}>Password</label>
-                                <div style={style.row}>
-                                    <input style={style.input} type="password" value={regPassword}
-                                        onChange={e => setRegPassword(e.target.value)} placeholder="secret123" />
-                                </div>
-                            </div>
-                            <button style={{...style.btn, ...style.primary}} type="submit">Register</button>
+                    ) : (
+                        <form onSubmit={handleRegister} style={{display: "flex", flexDirection: "column", gap: 10}}>
+                            <input style={{...input, width: "100%", boxSizing: "border-box"}}
+                                placeholder="username (3–20 chars)" value={regUser}
+                                onChange={e => setRegUser(e.target.value)} />
+                            <input style={{...input, width: "100%", boxSizing: "border-box"}}
+                                type="email" placeholder="email" value={regEmail}
+                                onChange={e => setRegEmail(e.target.value)} />
+                            <input style={{...input, width: "100%", boxSizing: "border-box"}}
+                                type="password" placeholder="password" value={regPass}
+                                onChange={e => setRegPass(e.target.value)} />
+                            {authError && <div style={{color: "#dc2626", fontSize: 12}}>{authError}</div>}
+                            <button style={btnPrimary} type="submit">Register →</button>
                         </form>
-                    </div>
-                )}
+                    )}
+                </div>
             </div>
         )
     }
 
+    // ── render: authenticated ──────────────────────────────────────────────────
+
     return (
-        <div style={style.container}>
-            <div style={{display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20}}>
-                <h2 style={{margin: 0}}>grest-ts Auth Example</h2>
-                <button style={{...style.btn, ...style.danger}} onClick={handleLogout}>Logout</button>
+        <div style={{maxWidth: 600, margin: "32px auto", padding: "0 16px", fontFamily: "system-ui, sans-serif"}}>
+            <div style={{display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 24}}>
+                <h2 style={{margin: 0, fontSize: 18}}>grest-ts auth demo</h2>
+                <button style={btnDanger} onClick={handleLogout}>Logout</button>
             </div>
 
-            {msg && <div style={msg.type === "ok" ? style.success : style.error}>{msg.text}</div>}
-
-            {/* Profile section */}
-            <div style={style.card}>
-                <h3 style={{marginTop: 0}}>Profile — {user.username}</h3>
-                <div style={{marginBottom: 12, fontSize: 13, color: "#555"}}>
-                    id: {user.id} &nbsp; email: {user.email}
+            {/* ── 1. Session ── */}
+            <Section n={1} title="Active session">
+                <div style={{display: "flex", alignItems: "center", gap: 8, marginBottom: 10}}>
+                    <span style={{
+                        width: 8, height: 8, borderRadius: "50%", background: "#16a34a",
+                        display: "inline-block", flexShrink: 0,
+                    }} />
+                    <span style={{fontSize: 13}}>
+                        Signed in as <strong>{user.username}</strong> &nbsp;
+                        <span style={{color: "#888"}}>{user.email}</span>
+                    </span>
                 </div>
-                <form onSubmit={handleUpdateProfile}>
-                    <label style={style.label}>Update email</label>
-                    <div style={style.row}>
-                        <input style={style.input} type="email" value={profileEmail}
-                            onChange={e => setProfileEmail(e.target.value)} />
-                        <button style={{...style.btn, ...style.primary}} type="submit">Save</button>
-                    </div>
+                <div style={{fontSize: 11, color: "#888", marginBottom: 6}}>Bearer token (sent in Authorization header on every protected request)</div>
+                <Code>{token}</Code>
+            </Section>
+
+            {/* ── 2. HTTP requests ── */}
+            <Section n={2} title="HTTP requests">
+                <div style={{display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 16}}>
+                    <button style={btnGreen} onClick={callMe}>
+                        <Badge label="GET" color="#16a34a" />
+                        /api/users/me
+                    </button>
+                    <button style={btnWarning} onClick={callMeNoToken}>
+                        <Badge label="GET" color="#d97706" />
+                        /api/users/me  — no token
+                    </button>
+                </div>
+
+                <form onSubmit={callUpdateProfile}
+                    style={{display: "flex", gap: 8, alignItems: "center", marginBottom: 16}}>
+                    <Badge label="PUT" color="#7c3aed" />
+                    <span style={{fontSize: 12, color: "#555", whiteSpace: "nowrap"}}>/api/users/profile</span>
+                    <input style={{...input, flex: 1}} type="email" placeholder="new email"
+                        value={newEmail} onChange={e => setNewEmail(e.target.value)} />
+                    <button style={{...btn, background: "#7c3aed", color: "#fff", border: "1px solid #7c3aed"}}
+                        type="submit">
+                        Save
+                    </button>
                 </form>
-            </div>
 
-            {/* WebSocket section */}
-            <div style={style.card}>
-                <h3 style={{marginTop: 0}}>
-                    Live WebSocket {wsConnected
-                        ? <span style={{color: "#060", fontSize: 12}}> ● connected</span>
-                        : <span style={{color: "#999", fontSize: 12}}> ○ disconnected</span>}
-                </h3>
-                <div style={style.row}>
-                    <button style={style.btn} onClick={handleConnectWs} disabled={wsConnected}>Connect</button>
-                    <button style={style.btn} onClick={handlePing} disabled={!wsConnected}>Ping</button>
+                {lastReq ? (
+                    <div>
+                        <div style={{
+                            fontSize: 11, marginBottom: 6, display: "flex", alignItems: "center", gap: 6,
+                        }}>
+                            <Badge label={lastReq.method} color={lastReq.method === "GET" ? "#1d4ed8" : "#7c3aed"} />
+                            <code style={{fontSize: 11}}>{lastReq.path}</code>
+                            <span style={{
+                                marginLeft: "auto", fontSize: 11, fontWeight: "bold",
+                                color: lastReq.status === "ok" ? "#16a34a" : "#dc2626",
+                            }}>
+                                {lastReq.status === "ok" ? "200 OK" : "401 NOT_AUTHORIZED"}
+                            </span>
+                        </div>
+                        <Code>{JSON.stringify(lastReq.body, null, 2)}</Code>
+                    </div>
+                ) : (
+                    <div style={{fontSize: 12, color: "#aaa"}}>— click a request button to see the response —</div>
+                )}
+            </Section>
+
+            {/* ── 3. WebSocket ── */}
+            <Section n={3} title={
+                `WebSocket  ws/live  — same token, real-time events` +
+                (wsConnected ? "  ●" : "  ○")
+            }>
+                <div style={{display: "flex", gap: 8, marginBottom: 12, alignItems: "center"}}>
+                    {!wsConnected ? (
+                        <button style={btnPrimary} onClick={connectWs}>Connect</button>
+                    ) : (
+                        <>
+                            <button style={btnDanger} onClick={disconnectWs}>Disconnect</button>
+                            <button style={btn} onClick={ping}>Ping →</button>
+                        </>
+                    )}
+                    <span style={{fontSize: 11, color: "#888"}}>
+                        {wsConnected
+                            ? "Token was verified during WS handshake. Try Save on profile — watch the event appear here."
+                            : "Connect to open an authenticated WS channel on the same token."}
+                    </span>
                 </div>
 
-                <label style={{...style.label, marginTop: 12}}>Pong responses</label>
-                <div style={style.log}>
-                    {pongs.length === 0
-                        ? <span style={{color: "#aaa"}}>— press Ping after connecting —</span>
-                        : pongs.map((p, i) => (
-                            <div key={i}>pong from {p.username} @ {new Date(p.timestamp).toLocaleTimeString()}</div>
-                        ))}
+                <div ref={wsLogRef} style={{
+                    height: 180, overflowY: "auto",
+                    background: "#1e1e1e", borderRadius: 4, padding: "8px 10px",
+                    fontSize: 12, fontFamily: "monospace",
+                }}>
+                    {wsLog.length === 0 ? (
+                        <span style={{color: "#555"}}>— no events yet —</span>
+                    ) : (
+                        wsLog.map((e, i) => (
+                            <div key={i} style={{marginBottom: 3, display: "flex", gap: 10}}>
+                                <span style={{color: "#6b7280", flexShrink: 0}}>{e.time}</span>
+                                <span style={{
+                                    color: e.event.includes("←") ? "#86efac"
+                                        : e.event.includes("→") ? "#93c5fd"
+                                        : e.event === "connected" ? "#4ade80"
+                                        : e.event === "error" ? "#f87171"
+                                        : "#e5e7eb",
+                                    flexShrink: 0,
+                                }}>
+                                    {e.event}
+                                </span>
+                                <span style={{color: "#d1d5db", wordBreak: "break-all"}}>
+                                    {JSON.stringify(e.data)}
+                                </span>
+                            </div>
+                        ))
+                    )}
                 </div>
-
-                <label style={{...style.label, marginTop: 12}}>Profile update notifications</label>
-                <div style={style.log}>
-                    {profileEvents.length === 0
-                        ? <span style={{color: "#aaa"}}>— save profile while connected to see events —</span>
-                        : profileEvents.map((e, i) => (
-                            <div key={i}>{e.username} email → {e.email}</div>
-                        ))}
-                </div>
-            </div>
+            </Section>
         </div>
     )
 }
