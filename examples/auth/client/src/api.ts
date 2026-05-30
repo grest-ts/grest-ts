@@ -34,7 +34,7 @@ export const session = new GGAuthSession({
             key: ORG_TOKEN,
             mint: async ({orgId}: { orgId: string }) => {
                 const res = await api.orgApi.selectOrg({orgId: orgId as any})
-                return {accessToken: res.orgToken, accessExpiresAt: res.orgTokenExpiresAt}
+                return {accessToken: res.orgToken, accessExpiresAt: res.orgTokenExpiresAt, ...res.org}
             },
         },
     },

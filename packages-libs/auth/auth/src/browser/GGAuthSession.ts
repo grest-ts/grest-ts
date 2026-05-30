@@ -6,7 +6,7 @@ import {systemClock} from "./core/systemClock"
 import {localStorageSharedCache} from "./core/localStorageCache"
 import {webLocksLock} from "./core/webLocksLock"
 import {browserScheduler} from "./core/browserScheduler"
-import type {DerivedConfig, DerivedMap, SessionState, TokenKey, TokenPair} from "./core/types"
+import type {DerivedConfig, DerivedMap, DerivedParams, DerivedResult, SessionState, TokenKey, TokenPair} from "./core/types"
 import type {DerivedToken} from "./GGAuthSessionBase"
 
 export interface AuthSessionConfig<D extends DerivedMap = {}> {
@@ -24,7 +24,7 @@ export interface AuthSessionConfig<D extends DerivedMap = {}> {
 export class GGAuthSession<D extends DerivedMap = {}> {
     private readonly _session: BaseAuthSession<D>
 
-    readonly derived: {[K in keyof D]: DerivedToken<Parameters<D[K]["mint"]>[0]>}
+    readonly derived: {[K in keyof D]: DerivedToken<DerivedParams<D[K]>, DerivedResult<D[K]>>}
 
     constructor(config: AuthSessionConfig<D>) {
         this._session = new BaseAuthSession<D>(

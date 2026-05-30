@@ -4,29 +4,27 @@ import type {
     CorePorts,
     DerivedConfig,
     DerivedMap,
+    DerivedParams,
+    DerivedResult,
     SessionState,
     SharedTokens,
     TokenPair,
 } from "./core/types"
 
-export class DerivedToken<P> {
-    constructor(private readonly base: BaseAuthSession<any>, private readonly key: string) {}
+export class DerivedToken<P, T extends AccessOnly = AccessOnly> {
+    constructor(
+        private readonly _select: (params: P) => Promise<void>,
+        private readonly _clear: () => void,
+        private readonly _get: () => T | undefined,
+    ) {}
 
-    select(params: P): Promise<void> {
-        return this.base.selectDerived(this.key, params)
-    }
-
-    clear(): void {
-        this.base.clearDerived(this.key)
-    }
-
-    get(): string | undefined {
-        return this.base.getDerived(this.key)
-    }
+    select(params: P): Promise<void> { return this._select(params) }
+    clear(): void { this._clear() }
+    get(): T | undefined { return this._get() }
 }
 
 interface DerivedEntry {
-    pool: Map<string, { params: unknown; token: AccessOnly }>
+    pool: Map<string, { params: unknown; token: unknown }>
     active: string | undefined
 }
 
@@ -56,10 +54,10 @@ export class BaseAuthSession<D extends DerivedMap> {
 
     private readonly derivedState = new Map<string, DerivedEntry>()
 
-    readonly derived: { [K in keyof D]: DerivedToken<Parameters<D[K]["mint"]>[0]> }
+    readonly derived: {[K in keyof D]: DerivedToken<DerivedParams<D[K]>, DerivedResult<D[K]>>}
 
-    private get derivedCfgMap(): Record<string, DerivedConfig<any>> {
-        return (this.config.derived ?? {}) as Record<string, DerivedConfig<any>>
+    private get derivedCfgMap(): Record<string, DerivedConfig<any, any>> {
+        return (this.config.derived ?? {}) as Record<string, DerivedConfig<any, any>>
     }
 
     constructor(config: CoreConfig<D>, ports: CorePorts) {
@@ -67,10 +65,14 @@ export class BaseAuthSession<D extends DerivedMap> {
         this.ports = ports
 
         const derivedMap = config.derived ?? ({} as D)
-        const handles = {} as { [K in keyof D]: DerivedToken<Parameters<D[K]["mint"]>[0]> }
+        const handles = {} as {[K in keyof D]: DerivedToken<DerivedParams<D[K]>, DerivedResult<D[K]>>}
         for (const key of Object.keys(derivedMap) as (keyof D & string)[]) {
             this.derivedState.set(key, {pool: new Map(), active: undefined})
-            handles[key] = new DerivedToken<Parameters<D[typeof key]["mint"]>[0]>(this, key) as any
+            handles[key] = new DerivedToken(
+                (params) => this.selectDerived(key, params),
+                () => this.clearDerived(key),
+                () => this.getDerived(key) as DerivedResult<D[typeof key]> | undefined,
+            ) as any
         }
         this.derived = handles
 
@@ -181,10 +183,10 @@ export class BaseAuthSession<D extends DerivedMap> {
         }
     }
 
-    async ensureFresh(): Promise<void> {
+    ensureFresh(): Promise<void> {
         if (this.inflightRefresh) return this.inflightRefresh
         const now = this.ports.clock.now()
-        if (this.shared && this.shared.root.accessExpiresAt > now + this.config.refreshLeadMs) return
+        if (this.shared && this.shared.root.accessExpiresAt > now + this.config.refreshLeadMs) return Promise.resolve()
         return this.refreshNow()
     }
 
@@ -245,7 +247,7 @@ export class BaseAuthSession<D extends DerivedMap> {
         })
     }
 
-    async selectDerived(key: string, params: unknown): Promise<void> {
+    selectDerived(key: string, params: unknown): Promise<void> {
         const cfg = this.derivedCfgMap[key]
         if (!cfg) throw new Error(`No derived config for "${key}"`)
 
@@ -253,11 +255,11 @@ export class BaseAuthSession<D extends DerivedMap> {
         const pk = stableKey(params)
 
         const existing = entry.pool.get(pk)
-        if (existing && existing.token.accessExpiresAt > this.ports.clock.now() + this.config.clockSkewMs) {
+        if (existing && (existing.token as AccessOnly).accessExpiresAt > this.ports.clock.now() + this.config.clockSkewMs) {
             entry.active = pk
-            cfg.key.set(existing.token.accessToken)
+            cfg.key.set((existing.token as AccessOnly).accessToken)
             this.notifyListeners()
-            return
+            return Promise.resolve()
         }
 
         const inflightKey = key + "\0" + pk
@@ -283,20 +285,22 @@ export class BaseAuthSession<D extends DerivedMap> {
         const cfg = this.derivedCfgMap[key]
         if (cfg) cfg.key.set(undefined)
         const entry = this.derivedState.get(key)
-        if (entry) entry.active = undefined
+        if (entry) {
+            entry.active = undefined
+        }
         this.notifyListeners()
     }
 
-    getDerived(key: string): string | undefined {
+    getDerived(key: string): unknown {
         const entry = this.derivedState.get(key)
         if (!entry?.active) return undefined
-        return entry.pool.get(entry.active)?.token.accessToken
+        return entry.pool.get(entry.active)?.token
     }
 
-    async remintActiveDerived(key: string): Promise<void> {
+    remintActiveDerived(key: string): Promise<void> {
         const cfg = this.derivedCfgMap[key]
         const entry = this.derivedState.get(key)
-        if (!cfg || !entry?.active) return
+        if (!cfg || !entry?.active) return Promise.resolve()
 
         const pk = entry.active
         const inflightKey = key + "\0" + pk
@@ -304,7 +308,7 @@ export class BaseAuthSession<D extends DerivedMap> {
         if (existing) return existing
 
         const poolEntry = entry.pool.get(pk)
-        if (!poolEntry) return
+        if (!poolEntry) return Promise.resolve()
 
         const promise = (async () => {
             const token = await cfg.mint(poolEntry.params)
@@ -319,9 +323,9 @@ export class BaseAuthSession<D extends DerivedMap> {
         return promise
     }
 
-    async getAccessToken(opts?: {awaitRefresh?: boolean}): Promise<string | undefined> {
-        if (opts?.awaitRefresh ?? true) await this.ensureFresh()
-        return this.config.key.get()
+    getAccessToken(opts?: {awaitRefresh?: boolean}): Promise<string | undefined> {
+        if (opts?.awaitRefresh ?? true) return this.ensureFresh().then(() => this.config.key.get())
+        return Promise.resolve(this.config.key.get())
     }
 
     isRootStale(): boolean {
@@ -333,13 +337,13 @@ export class BaseAuthSession<D extends DerivedMap> {
         if (!entry?.active) return false
         const poolEntry = entry.pool.get(entry.active)
         if (!poolEntry) return true
-        return poolEntry.token.accessExpiresAt <= this.ports.clock.now() + this.config.clockSkewMs
+        return (poolEntry.token as AccessOnly).accessExpiresAt <= this.ports.clock.now() + this.config.clockSkewMs
     }
 
-    async ensureActiveDerivedFresh(key: string): Promise<void> {
+    ensureActiveDerivedFresh(key: string): Promise<void> {
         const entry = this.derivedState.get(key)
-        if (!entry?.active) return
-        if (!this.isDerivedStale(key)) return
+        if (!entry?.active) return Promise.resolve()
+        if (!this.isDerivedStale(key)) return Promise.resolve()
         return this.remintActiveDerived(key)
     }
 

@@ -7,8 +7,11 @@ export interface TokenKey {
     set(token: string | undefined): void
 }
 
-export interface DerivedConfig<P = void> { key: TokenKey; mint: (params: P) => Promise<AccessOnly> }
-export type DerivedMap = Record<string, DerivedConfig<any>>
+export interface DerivedConfig<P = void, T extends AccessOnly = AccessOnly> { key: TokenKey; mint: (params: P) => Promise<T> }
+export type DerivedMap = Record<string, DerivedConfig<any, any>>
+// Extracts P and T from a specific DerivedConfig without losing them through the DerivedMap constraint.
+export type DerivedParams<C> = C extends DerivedConfig<infer P, any> ? P : never
+export type DerivedResult<C> = C extends DerivedConfig<any, infer T> ? T : never
 
 export type SessionStatus = "anonymous" | "restoring" | "authenticated" | "expired"
 export interface SessionState { status: SessionStatus; refreshing: boolean; degraded: boolean }
