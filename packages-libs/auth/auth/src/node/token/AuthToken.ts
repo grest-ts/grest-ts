@@ -3,9 +3,7 @@ import {IsArray, IsObject, type GGSchema} from "@grest-ts/schema"
 import {AuthError} from "../errors"
 import type {SigningStrategy} from "../signing/SigningStrategy"
 import {IsRefreshTokenRecord, type RefreshTokenStore} from "../refresh/RefreshTokenStore"
-export {IsGGRefreshToken, IsGGRefreshTokenData, IsGGAccessToken, IsGGAccessTokenData, IsGGAuthTokenResult, IsGGAuthTokensResult} from "../../shared/tokenSchemas"
-export type {GGAuthTokenResult, GGAuthTokensResult} from "../../shared/tokenSchemas"
-import {IsGGAccessTokenData, IsGGRefreshTokenData, IsGGAuthTokensResult, IsGGAuthTokenResult, IsGGRefreshToken} from "../../shared/tokenSchemas"
+import {IsGGAccessTokenData, IsGGRefreshTokenData} from "../../shared/tokenSchemas"
 import type {GGAuthTokensResult, GGAuthTokenResult} from "../../shared/tokenSchemas"
 
 export type NoClaims = Record<string, never>

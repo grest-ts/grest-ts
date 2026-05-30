@@ -11,7 +11,7 @@ import type {DerivedToken} from "./GGAuthSessionBase"
 
 export interface GGTokenSessionConfig {
     refresh: (token: {refreshToken: string}) => Promise<TokenPair>
-    localStorageKey?: string
+    localStorageKey: string
 }
 
 export interface GGCookieSessionConfig {
@@ -48,7 +48,7 @@ export class GGAuthSession<D extends DerivedMap = {}> {
             (token) => config.refresh({refreshToken: token!}),
             "localStorage",
             undefined,
-            config.localStorageKey ?? "auth.session",
+            config.localStorageKey,
         )
     }
 
