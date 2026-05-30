@@ -10,8 +10,6 @@ import type {AccessOnly, DerivedConfig, DerivedMap, DerivedParams, DerivedResult
 import type {DerivedToken} from "./GGAuthSessionBase"
 
 export interface GGAuthSessionOptions {
-    storage?: "localStorage" | "cookie"
-    logout?: () => Promise<void>
     cacheKey?: string
     refreshLeadMs?: number
     clockSkewMs?: number
@@ -22,17 +20,40 @@ export class GGAuthSession<D extends DerivedMap = {}> {
     private _session: BaseAuthSession<D> | null = null
     private readonly _rootKey: TokenKey
     private readonly _refresh: (refreshToken?: string) => Promise<TokenPair>
+    private readonly _logout: (() => Promise<void>) | undefined
+    private readonly _storage: "localStorage" | "cookie"
     private readonly _options: GGAuthSessionOptions
     private readonly _derivedConfigs: Record<string, {key: TokenKey; mint: (params: unknown) => Promise<AccessOnly>}> = {}
 
-    constructor(
+    private constructor(
         key: TokenKey,
         refresh: (refreshToken?: string) => Promise<TokenPair>,
-        options?: GGAuthSessionOptions,
+        storage: "localStorage" | "cookie",
+        logout: (() => Promise<void>) | undefined,
+        options: GGAuthSessionOptions,
     ) {
         this._rootKey = key
         this._refresh = refresh
-        this._options = options ?? {}
+        this._storage = storage
+        this._logout = logout
+        this._options = options
+    }
+
+    static withToken(
+        key: TokenKey,
+        refresh: (token: string) => Promise<TokenPair>,
+        options?: GGAuthSessionOptions,
+    ): GGAuthSession {
+        return new GGAuthSession(key, (token) => refresh(token!), "localStorage", undefined, options ?? {})
+    }
+
+    static withCookie(
+        key: TokenKey,
+        refresh: () => Promise<TokenPair>,
+        logout: () => Promise<void>,
+        options?: GGAuthSessionOptions,
+    ): GGAuthSession {
+        return new GGAuthSession(key, () => refresh(), "cookie", logout, options ?? {})
     }
 
     public addDerived<N extends string, P, T extends AccessOnly>(
@@ -56,8 +77,8 @@ export class GGAuthSession<D extends DerivedMap = {}> {
                 refresh: this._refresh,
                 key: this._rootKey,
                 derived,
-                storage: this._options.storage ?? "localStorage",
-                logout: this._options.logout,
+                storage: this._storage,
+                logout: this._logout,
                 refreshLeadMs: this._options.refreshLeadMs ?? 60_000,
                 clockSkewMs: this._options.clockSkewMs ?? 10_000,
                 isFatalRefreshError: this._options.isFatalRefreshError ?? ((e) => e instanceof NOT_AUTHORIZED),
