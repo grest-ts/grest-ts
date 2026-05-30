@@ -9,10 +9,10 @@ definePackage({
     vitestWorkspaceExtraEntries: [
         'examples/checklist',
         'examples/grest-test',
-        'examples/auth'
+        'examples/auth/server'
     ],
     workspaceExtraEntries: [
-        'examples/auth-client',
+        'examples/auth/client',
         'docs-web',
         'packages-tooling/create-starter/template/api',
         'packages-tooling/create-starter/template/server',

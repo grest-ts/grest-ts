@@ -26,7 +26,7 @@ export default defineConfig({
       'packages/trace/trace-http',
       'examples/checklist',
       'examples/grest-test',
-      'examples/auth'
+      'examples/auth/server'
     ]
   }
 })

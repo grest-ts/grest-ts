@@ -1,9 +1,9 @@
 import React, {useEffect, useRef, useState} from "react"
 import {authApi, clearAuthToken, liveApi, setAuthToken, userApi} from "./api"
-import type {User} from "../../auth/common/api/auth/UserAuth"
-import type {LivePongEvent, ProfileUpdatedEvent} from "../../auth/common/api/LiveApi"
+import type {User} from "../../server/common/api/auth/UserAuth"
+import type {LivePongEvent, ProfileUpdatedEvent} from "../../server/common/api/LiveApi"
 import type {GGWebSocketClient} from "@grest-ts/websocket"
-import type {tUserAuthToken} from "../../auth/common/api/auth/UserAuth"
+import type {tUserAuthToken} from "../../server/common/api/auth/UserAuth"
 
 type View = "login" | "register"
 

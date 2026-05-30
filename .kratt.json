@@ -5,7 +5,9 @@
     {"kind": "bash:setup", "bash": "docker exec -i gg-postgres psql -U postgres -c 'CREATE DATABASE checklist;'"},
     {"kind": "bash:setup", "bash": "docker exec -i gg-postgres psql -U postgres -c 'CREATE DATABASE blocker;'"},
     {"kind": "bash:setup", "bash": "docker exec -i gg-postgres psql -U postgres -d checklist < examples/checklist/checklist/schema/checklist.postgres.sql"},
-    {"kind": "bash:setup", "bash": "docker exec -i gg-postgres psql -U postgres -d blocker < examples/checklist/blocker/schema/blocker.postgres.sql"}
+    {"kind": "bash:setup", "bash": "docker exec -i gg-postgres psql -U postgres -d blocker < examples/checklist/blocker/schema/blocker.postgres.sql"},
+    {"kind": "backend", "name": "auth", "bash": "PORT=4000 npm start", "dir": "examples/auth/server", "port": 4000, "healthcheck": true, "expose": "auth"},
+    {"kind": "frontend", "name": "auth-client", "bash": "npm run dev", "dir": "examples/auth/client", "port": 3001, "expose": true}
   ],
   "prBranch": "dev",
   "branches": ["dev","release"]

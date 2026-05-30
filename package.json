@@ -50,7 +50,7 @@
     "packages/logger/*",
     "packages/schema/*",
     "packages/trace/*",
-    "examples/auth-client"
+    "examples/auth/client"
   ],
   "scripts": {
     "generate": "tsx grest.package.ts",
