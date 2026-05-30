@@ -500,9 +500,11 @@ export const UserContext = new GGContextKey<AuthUser>("userData", IsAuthUser)
 
 ```typescript
 // Set in middleware
-export class UserAuthMiddleware implements GGHttpTransportMiddleware {
-    parseRequest(req: GGHttpRequest): void {
-        const user = this.verifyToken(req.headers["authorization"])
+import {GGInbound, GGTransportMiddleware} from "@grest-ts/context"
+
+export class UserAuthMiddleware implements GGTransportMiddleware {
+    parse(inbound: GGInbound): void {
+        const user = this.verifyToken(inbound.headers["authorization"])
         UserContext.set(user)
     }
 }

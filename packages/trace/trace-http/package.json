@@ -47,7 +47,7 @@
     "node": ">=24"
   },
   "peerDependencies": {
-    "@grest-ts/http": "0.0.48",
+    "@grest-ts/context": "0.0.48",
     "@grest-ts/schema": "0.0.48",
     "@grest-ts/trace": "0.0.48"
   }

@@ -59,7 +59,6 @@
     "@grest-ts/context": "0.0.48",
     "@grest-ts/http": "0.0.48",
     "@grest-ts/schema": "0.0.48",
-    "@grest-ts/websocket": "0.0.48",
     "bcrypt": "^6.0.0"
   },
   "devDependencies": {
