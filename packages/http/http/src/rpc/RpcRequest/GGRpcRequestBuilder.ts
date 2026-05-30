@@ -1,6 +1,7 @@
 import type {HttpMethod} from "@grest-ts/common";
 import {GGContractMethod} from "@grest-ts/schema";
 import {ClientHttpRouteToRpcTransformClientConfig, GGHttpFetchRequest, GGHttpTransportMiddleware} from "../../schema/GGHttpSchema";
+import {GGContextKeySynchronizer} from "@grest-ts/context";
 
 export class GGRpcRequestBuilder {
 
@@ -26,7 +27,7 @@ export class GGRpcRequestBuilder {
         this.hasBody = method === "POST" || method === "PUT" || method === "PATCH"
     }
 
-    public createRequest = (data: unknown): GGHttpFetchRequest => {
+    public createRequest = async (data: unknown): Promise<GGHttpFetchRequest> => {
         let result: GGHttpFetchRequest;
         if (this.hasBody) {
             result = {
@@ -42,6 +43,9 @@ export class GGRpcRequestBuilder {
                 headers: {},
                 body: undefined
             }
+        }
+        for (const mw of this.middlewares ?? []) {
+            if (mw.key) await GGContextKeySynchronizer.waitFor(mw.key)
         }
         this.middlewares?.forEach(mw => mw.updateRequest?.(result))
         return result

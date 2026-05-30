@@ -40,6 +40,7 @@ export function header(key: GGContextKey<string | undefined>, opts?: {name?: str
     }
     const wrap = (value: string): string => bearer ? `${BEARER}${value}` : value
     return {
+        key,
         headers: {[name]: opts?.schema ?? IsString.orUndefined},
         responseHeaders: {},
         parseRequest(req: GGHttpRequest): void {

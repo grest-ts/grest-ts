@@ -1,4 +1,5 @@
 import type {GGSchema} from "@grest-ts/schema";
+import type {GGContextKey} from "@grest-ts/context";
 
 /**
  * WebSocket-specific middleware interface.
@@ -45,6 +46,14 @@ export interface GGWebSocketMiddleware {
      * }
      */
     readonly headers?: Record<string, GGSchema<string | undefined>>;
+
+    /**
+     * The context key this middleware reads when writing handshake headers.
+     * When set, GGSocketPool awaits GGContextKeySynchronizer.waitFor(key) before
+     * calling updateHandshake, so the key holds a fresh value at read time.
+     * header() bindings already carry this; custom middlewares may set it too.
+     */
+    readonly key?: GGContextKey<string | undefined>;
 
     /**
      * Client-side: Add headers to the handshake message before sending.

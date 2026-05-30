@@ -143,6 +143,13 @@ export interface GGHttpCodec {
 
 export interface GGHttpTransportMiddleware {
     /**
+     * When set, `GGContextKeySynchronizer.waitFor(key)` is called before `updateRequest`
+     * so the key value is guaranteed fresh on every outgoing request. Header bindings
+     * populate this automatically; other middlewares leave it absent.
+     */
+    readonly key?: GGContextKey<string | undefined>;
+
+    /**
      * Request headers this middleware reads or writes, mapped to their value schemas.
      * Keys are header names; values describe the header value format for validation and docs.
      * Used for CORS Access-Control-Allow-Headers and OpenAPI parameter docs.
