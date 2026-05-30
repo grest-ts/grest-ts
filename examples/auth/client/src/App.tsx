@@ -108,6 +108,33 @@ export function App() {
         setWsLog(prev => [...prev.slice(-49), {time: now(), event, data}])
     }
 
+    // ── quick-start presets ────────────────────────────────────────────────────
+
+    async function quickStart(username: string) {
+        setAuthError("")
+        const email = `${username}@example.com`
+        const password = "secret123"
+
+        // Try register first (works on a fresh server); fall back to login if user exists.
+        const reg = await authApi.register({username, email: email as any, password}).asResult()
+        if (reg.success) {
+            const t = reg.data.token as tUserAuthToken
+            setAuthToken(t); setToken(t); setUser(reg.data.user); setNewEmail(reg.data.user.email)
+            return
+        }
+        if (reg.type === "EXISTS") {
+            const log = await authApi.login({username, password}).asResult()
+            if (log.success) {
+                const t = log.data.token as tUserAuthToken
+                setAuthToken(t); setToken(t); setUser(log.data.user); setNewEmail(log.data.user.email)
+                return
+            }
+            setAuthError(`${log.type}`)
+            return
+        }
+        setAuthError(`${reg.type}`)
+    }
+
     // ── auth handlers ──────────────────────────────────────────────────────────
 
     async function handleLogin(e: React.FormEvent) {
@@ -221,9 +248,35 @@ export function App() {
             <div style={{maxWidth: 480, margin: "48px auto", padding: "0 16px", fontFamily: "system-ui, sans-serif"}}>
                 <h2 style={{fontSize: 20, marginBottom: 4}}>grest-ts auth demo</h2>
                 <p style={{fontSize: 13, color: "#666", marginBottom: 24}}>
-                    Register or login to explore HTTP auth and live WebSocket events.
+                    Explore HTTP auth and live WebSocket events.
                 </p>
 
+                {/* ── quick-start ── */}
+                <div style={{
+                    border: "1px solid #e0e0e0", borderRadius: 6, padding: 16,
+                    background: "#fafafa", marginBottom: 20,
+                }}>
+                    <div style={{fontSize: 11, color: "#888", marginBottom: 10, textTransform: "uppercase", letterSpacing: 1}}>
+                        Quick start — one click
+                    </div>
+                    <div style={{display: "flex", gap: 8}}>
+                        {["alice", "bob", "carol"].map(name => (
+                            <button key={name} onClick={() => quickStart(name)}
+                                style={{
+                                    ...btnPrimary,
+                                    fontSize: 13, padding: "8px 20px", borderRadius: 5,
+                                }}>
+                                {name}
+                            </button>
+                        ))}
+                    </div>
+                    <div style={{fontSize: 11, color: "#aaa", marginTop: 8}}>
+                        Registers on first use, logs in automatically on repeat visits. Password: secret123
+                    </div>
+                    {authError && <div style={{color: "#dc2626", fontSize: 12, marginTop: 8}}>{authError}</div>}
+                </div>
+
+                {/* ── manual form ── */}
                 <div style={{display: "flex", gap: 0, marginBottom: 0}}>
                     {(["login", "register"] as const).map(v => (
                         <button key={v} onClick={() => { setAuthView(v); setAuthError("") }}
@@ -232,14 +285,15 @@ export function App() {
                                 borderBottom: authView === v ? "1px solid #fafafa" : "1px solid #e0e0e0",
                                 background: authView === v ? "#fafafa" : "#f0f0f0",
                                 fontWeight: authView === v ? "bold" : "normal",
+                                color: "#888", fontSize: 11,
                             }}>
-                            {v}
+                            {v} manually
                         </button>
                     ))}
                 </div>
-                <div style={{border: "1px solid #e0e0e0", borderRadius: "0 4px 4px 4px", padding: 20, background: "#fafafa"}}>
+                <div style={{border: "1px solid #e0e0e0", borderRadius: "0 4px 4px 4px", padding: 16, background: "#fafafa"}}>
                     {authView === "login" ? (
-                        <form onSubmit={handleLogin} style={{display: "flex", flexDirection: "column", gap: 10}}>
+                        <form onSubmit={handleLogin} style={{display: "flex", flexDirection: "column", gap: 8}}>
                             <input style={{...input, width: "100%", boxSizing: "border-box"}}
                                 placeholder="username" value={loginUser} onChange={e => setLoginUser(e.target.value)} />
                             <input style={{...input, width: "100%", boxSizing: "border-box"}}
@@ -247,12 +301,9 @@ export function App() {
                                 onChange={e => setLoginPass(e.target.value)} />
                             {authError && <div style={{color: "#dc2626", fontSize: 12}}>{authError}</div>}
                             <button style={btnPrimary} type="submit">Login →</button>
-                            <div style={{fontSize: 11, color: "#888"}}>
-                                No account? Try: register as "alice" / "alice@example.com" / "secret123"
-                            </div>
                         </form>
                     ) : (
-                        <form onSubmit={handleRegister} style={{display: "flex", flexDirection: "column", gap: 10}}>
+                        <form onSubmit={handleRegister} style={{display: "flex", flexDirection: "column", gap: 8}}>
                             <input style={{...input, width: "100%", boxSizing: "border-box"}}
                                 placeholder="username (3–20 chars)" value={regUser}
                                 onChange={e => setRegUser(e.target.value)} />
