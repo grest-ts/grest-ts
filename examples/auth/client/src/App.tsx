@@ -100,7 +100,7 @@ export function App() {
     function applyAuthResult(res: AuthResponse) {
         session.start(res)
         setUser(res.user)
-        setPerms(parseJwtPermissions(res.accessToken))
+        setPerms(parseJwtPermissions(res.access.token))
         setNewEmail(res.user.email)
     }
 

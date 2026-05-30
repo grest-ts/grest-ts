@@ -22,11 +22,14 @@ export const IsLoginRequest = IsObject({
 })
 export type LoginRequest = typeof IsLoginRequest.infer
 
+const IsTokenGroup = (title: string) => IsObject({
+    token: IsString.docs({title: `${title} token (JWT)`}),
+    expires: IsNumber.docs({title: `${title} token expiry (ms epoch)`}),
+})
+
 export const IsTokenPairResponse = IsObject({
-    accessToken: IsString.docs({title: "JWT access token"}),
-    refreshToken: IsString.docs({title: "JWT refresh token"}),
-    accessExpiresAt: IsNumber.docs({title: "Access token expiry (ms epoch)"}),
-    refreshExpiresAt: IsNumber.docs({title: "Refresh token expiry (ms epoch)"}),
+    access: IsTokenGroup("Access"),
+    refresh: IsTokenGroup("Refresh"),
 })
 export type TokenPairResponse = typeof IsTokenPairResponse.infer
 

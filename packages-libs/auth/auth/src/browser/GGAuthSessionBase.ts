@@ -176,8 +176,8 @@ export class BaseAuthSession<D extends DerivedMap> {
 
     start(pair: TokenPair): void {
         const next: SharedTokens = {
-            root: {accessToken: pair.accessToken, accessExpiresAt: pair.accessExpiresAt},
-            refreshToken: this.config.storage === "cookie" ? undefined : pair.refreshToken,
+            root: {accessToken: pair.access.token, accessExpiresAt: pair.access.expires},
+            refreshToken: this.config.storage === "cookie" ? undefined : pair.refresh?.token,
         }
         this.commitShared(next)
     }
@@ -251,10 +251,10 @@ export class BaseAuthSession<D extends DerivedMap> {
             }
 
             const next: SharedTokens = {
-                root: {accessToken: result.accessToken, accessExpiresAt: result.accessExpiresAt},
+                root: {accessToken: result.access.token, accessExpiresAt: result.access.expires},
                 refreshToken: this.config.storage === "cookie"
                     ? undefined
-                    : (result.refreshToken ?? this.shared?.refreshToken),
+                    : (result.refresh?.token ?? this.shared?.refreshToken),
             }
             this.commitShared(next)
         })

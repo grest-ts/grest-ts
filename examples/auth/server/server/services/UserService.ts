@@ -1,11 +1,18 @@
 import {EXISTS, GGContractImplementation, NOT_AUTHORIZED, NOT_FOUND} from "@grest-ts/schema"
-import {AuthError, AuthToken} from "@grest-ts/auth"
+import {AuthError, AuthToken, TokenPair as ServerTokenPair} from "@grest-ts/auth"
 import {AuthPublicApiContract, InvalidCredentialsError, RegisterRequest, LoginRequest, RefreshRequest, AuthResponse, TokenPairResponse} from "../../../api/AuthPublicApi"
 import {UserApiContract, UpdateProfileRequest} from "../../../api/UserApi"
 import {UserContext, UserPermission, tUserId, User} from "../../../api/auth/UserAuth"
 import {UserTable} from "../tables/UserTable"
 
 const BANNER_USERS = new Set(["alice", "carol"])
+
+function toTokenPairResponse(pair: ServerTokenPair): TokenPairResponse {
+    return {
+        access: {token: pair.accessToken, expires: pair.accessExpiresAt},
+        refresh: {token: pair.refreshToken, expires: pair.refreshExpiresAt},
+    }
+}
 
 export class UserService implements GGContractImplementation<typeof AuthPublicApiContract["methods"]>,
     GGContractImplementation<typeof UserApiContract["methods"]> {
@@ -26,28 +33,23 @@ export class UserService implements GGContractImplementation<typeof AuthPublicAp
             ...request,
             permissions: BANNER_USERS.has(request.username) ? [UserPermission.CAN_UPDATE_RED_BANNER_COUNTER] : []
         })
-        return {
-            ...(await this.tokenEngine.issue(record.id, record.permissions, {})),
-            user: record
-        }
+        return {...toTokenPairResponse(await this.tokenEngine.issue(record.id, record.permissions, {})), user: record}
     }
 
     public login = async (request: LoginRequest): Promise<AuthResponse> => {
         const record = this.table.findByUsername(request.username)
         if (!record || record.password !== request.password) throw new InvalidCredentialsError()
-        return {
-            ...(await this.tokenEngine.issue(record.id, record.permissions, {})),
-            user: record
-        }
+        return {...toTokenPairResponse(await this.tokenEngine.issue(record.id, record.permissions, {})), user: record}
     }
 
     public refresh = async ({refreshToken}: RefreshRequest): Promise<TokenPairResponse> => {
         try {
-            return await this.tokenEngine.refresh(refreshToken, async (subject) => {
+            const pair = await this.tokenEngine.refresh(refreshToken, async (subject) => {
                 const record = this.table.getRecord(subject as tUserId)
                 if (!record) throw new NOT_AUTHORIZED()
                 return {permissions: record.permissions, claims: {}}
             })
+            return toTokenPairResponse(pair)
         } catch (err) {
             if (err instanceof AuthError) throw new NOT_AUTHORIZED({debugMessage: err.code})
             throw err

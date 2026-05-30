@@ -1,5 +1,8 @@
 export interface AccessOnly { accessToken: string; accessExpiresAt: number }
-export interface TokenPair extends AccessOnly { refreshToken?: string; refreshExpiresAt?: number }
+export interface TokenPair {
+    access: {token: string; expires: number}
+    refresh?: {token: string; expires: number}
+}
 
 export interface TokenKey {
     name: string

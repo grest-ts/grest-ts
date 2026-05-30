@@ -8,12 +8,12 @@ import {Raw} from "@grest-ts/schema"
 export class TestContext extends GGTestContext {
     public async register(data: Raw<RegisterRequest>) {
         const result = await this.callOn(AuthPublicApi).register(data)
-        this.setLoggedIn(result.accessToken)
+        this.setLoggedIn(result.access.token)
     }
 
     public async login(data: Raw<LoginRequest>) {
         const result = await this.callOn(AuthPublicApi).login(data)
-        this.setLoggedIn(result.accessToken)
+        this.setLoggedIn(result.access.token)
     }
 
     public setLoggedIn(accessToken: string) {

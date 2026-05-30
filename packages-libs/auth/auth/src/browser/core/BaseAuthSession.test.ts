@@ -89,8 +89,11 @@ function makeAccess(token: string, expires: number): DerivedTokenResult<unknown>
     return {access: {token, expires}, data: undefined}
 }
 
-function makePair(accessToken: string, accessExpiresAt: number, refreshToken?: string): TokenPair {
-    return {accessToken, accessExpiresAt, refreshToken}
+function makePair(token: string, expires: number, refreshToken?: string): TokenPair {
+    return {
+        access: {token, expires},
+        ...(refreshToken ? {refresh: {token: refreshToken, expires: expires + 604_800_000}} : {}),
+    }
 }
 
 type TestDerived = {
@@ -662,7 +665,7 @@ describe("AuthSession — GGContextKeySynchronizer.provide wiring", () => {
 
             GGAuthSession.withToken(rootSlot, {refresh: vi.fn()})
                 .addDerived("org", orgSlot, {mint: vi.fn()})
-                .start({accessToken: "at", accessExpiresAt: 0, refreshToken: "rt"}) // triggers _getSession
+                .start(makePair("at", 0, "rt")) // triggers _getSession
 
             expect(provideSpy).toHaveBeenCalledTimes(2)
 
@@ -700,7 +703,7 @@ describe("AuthSession — GGContextKeySynchronizer.provide wiring", () => {
 
         try {
             GGAuthSession.withToken(new FakeKey(), {refresh: vi.fn()})
-                .start({accessToken: "at", accessExpiresAt: 0, refreshToken: "rt"}) // triggers _getSession
+                .start(makePair("at", 0, "rt")) // triggers _getSession
             expect(provideSpy).toHaveBeenCalledTimes(1)
         } finally {
             provideSpy.mockRestore()
@@ -727,7 +730,7 @@ describe("AuthSession — GGContextKeySynchronizer.provide wiring", () => {
             const orgSlot = new FakeKey()
             GGAuthSession.withToken(new FakeKey(), {refresh: vi.fn()})
                 .addDerived("org", orgSlot, {mint: vi.fn()})
-                .start({accessToken: "at", accessExpiresAt: 0, refreshToken: "rt"}) // triggers _getSession
+                .start(makePair("at", 0, "rt")) // triggers _getSession
 
             const rootCtrl = capturedControllers[0]
             const orgCtrl = capturedControllers[1]
