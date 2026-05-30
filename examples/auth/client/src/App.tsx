@@ -1,5 +1,5 @@
 import React, {useEffect, useRef, useState} from "react"
-import {authApi, bannerApi, createLiveClient, orgApi, session, userApi} from "./api"
+import {api, session} from "./api"
 import type {User} from "../../api/auth/UserAuth"
 import type {Org} from "../../api/auth/OrgAuth"
 import type {AuthResponse} from "../../api/AuthPublicApi"
@@ -8,14 +8,14 @@ import type {BannerPongEvent, LivePongEvent, ProfileUpdatedEvent} from "../../ap
 
 // ─── tiny helpers ─────────────────────────────────────────────────────────────
 
-type WsEntry = {time: string; event: string; data: unknown}
-type ReqResult = {method: string; path: string; status: "ok" | "err"; body: unknown}
+type WsEntry = { time: string; event: string; data: unknown }
+type ReqResult = { method: string; path: string; status: "ok" | "err"; body: unknown }
 
 function now() {
     return new Date().toLocaleTimeString([], {hour: "2-digit", minute: "2-digit", second: "2-digit"})
 }
 
-function Code({children}: {children: React.ReactNode}) {
+function Code({children}: { children: React.ReactNode }) {
     return (
         <pre style={{margin: 0, padding: "10px 12px", background: "#1e1e1e", color: "#d4d4d4", fontSize: 12, borderRadius: 4, overflowX: "auto", fontFamily: "monospace"}}>
             {children}
@@ -23,11 +23,11 @@ function Code({children}: {children: React.ReactNode}) {
     )
 }
 
-function Badge({label, color}: {label: string; color: string}) {
+function Badge({label, color}: { label: string; color: string }) {
     return <span style={{fontSize: 10, fontWeight: "bold", padding: "2px 6px", borderRadius: 3, background: color, color: "#fff", marginRight: 6}}>{label}</span>
 }
 
-function Section({n, title, children}: {n: number; title: string; children: React.ReactNode}) {
+function Section({n, title, children}: { n: number; title: string; children: React.ReactNode }) {
     return (
         <div style={{marginBottom: 20}}>
             <div style={{display: "flex", alignItems: "center", gap: 10, marginBottom: 10}}>
@@ -41,32 +41,30 @@ function Section({n, title, children}: {n: number; title: string; children: Reac
 
 const btn: React.CSSProperties = {padding: "6px 12px", fontSize: 12, fontFamily: "monospace", cursor: "pointer", border: "1px solid #bbb", borderRadius: 4, background: "#fff", whiteSpace: "nowrap"}
 const btnPrimary: React.CSSProperties = {...btn, background: "#2563eb", color: "#fff", border: "1px solid #2563eb"}
-const btnDanger:  React.CSSProperties = {...btn, background: "#dc2626", color: "#fff", border: "1px solid #dc2626"}
+const btnDanger: React.CSSProperties = {...btn, background: "#dc2626", color: "#fff", border: "1px solid #dc2626"}
 const btnWarning: React.CSSProperties = {...btn, background: "#d97706", color: "#fff", border: "1px solid #d97706"}
-const btnGreen:   React.CSSProperties = {...btn, background: "#16a34a", color: "#fff", border: "1px solid #16a34a"}
-const btnPurple:  React.CSSProperties = {...btn, background: "#7c3aed", color: "#fff", border: "1px solid #7c3aed"}
+const btnGreen: React.CSSProperties = {...btn, background: "#16a34a", color: "#fff", border: "1px solid #16a34a"}
+const btnPurple: React.CSSProperties = {...btn, background: "#7c3aed", color: "#fff", border: "1px solid #7c3aed"}
 const input: React.CSSProperties = {padding: "6px 8px", fontSize: 12, fontFamily: "monospace", border: "1px solid #ccc", borderRadius: 4, background: "#fff"}
 
 // ─── app ──────────────────────────────────────────────────────────────────────
 
 export function App() {
-    const [user, setUser]           = useState<User | null>(null)
-    const [token, setToken]         = useState<string | null>(null)
-    const [permissions, setPerms]   = useState<string[]>([])
-    const [selectedOrg, setSelOrg]  = useState<Org | null>(null)
+    const [user, setUser] = useState<User | null>(null)
+    const [permissions, setPerms] = useState<string[]>([])
 
-    const [authView, setAuthView]   = useState<"login" | "register">("login")
+    const [authView, setAuthView] = useState<"login" | "register">("login")
     const [loginUser, setLoginUser] = useState("alice")
     const [loginPass, setLoginPass] = useState("secret123")
-    const [regUser, setRegUser]     = useState("")
-    const [regEmail, setRegEmail]   = useState("")
-    const [regPass, setRegPass]     = useState("")
+    const [regUser, setRegUser] = useState("")
+    const [regEmail, setRegEmail] = useState("")
+    const [regPass, setRegPass] = useState("")
     const [authError, setAuthError] = useState("")
 
-    const [newEmail, setNewEmail]   = useState("")
-    const [lastReq, setLastReq]     = useState<ReqResult | null>(null)
+    const [newEmail, setNewEmail] = useState("")
+    const [lastReq, setLastReq] = useState<ReqResult | null>(null)
 
-    const [orgList, setOrgList]     = useState<Org[]>([])
+    const [orgList, setOrgList] = useState<Org[]>([])
     const [bannerCount, setBannerCount] = useState(0)
 
     const [wsConnected, setWsConnected] = useState(false)
@@ -74,15 +72,23 @@ export function App() {
     const wsRef = useRef<GGWebSocketClient<any, any> | null>(null)
     const wsLogRef = useRef<HTMLDivElement>(null)
 
-    useEffect(() => { wsLogRef.current?.scrollTo(0, wsLogRef.current.scrollHeight) }, [wsLog])
-    useEffect(() => () => { wsRef.current?.disconnect() }, [])
+    useEffect(() => {
+        wsLogRef.current?.scrollTo(0, wsLogRef.current.scrollHeight)
+    }, [wsLog])
+    useEffect(() => () => {
+        wsRef.current?.disconnect()
+    }, [])
 
     // Clear all local state when the session ends (logout, expiry, cross-tab logout).
     useEffect(() => session.onLogout(() => {
-        setUser(null); setToken(null); setPerms([]); setSelOrg(null)
-        setOrgList([]); setBannerCount(0)
-        wsRef.current?.disconnect(); wsRef.current = null
-        setWsConnected(false); setWsLog([])
+        setUser(null);
+        setPerms([]);
+        setOrgList([]);
+        setBannerCount(0)
+        wsRef.current?.disconnect();
+        wsRef.current = null
+        setWsConnected(false);
+        setWsLog([])
     }), [])
 
     function addWsEntry(event: string, data: unknown) {
@@ -93,7 +99,6 @@ export function App() {
 
     function applyAuthResult(res: AuthResponse) {
         session.start(res)
-        setToken(res.accessToken)
         setUser(res.user)
         setPerms(parseJwtPermissions(res.accessToken))
         setNewEmail(res.user.email)
@@ -103,11 +108,17 @@ export function App() {
         setAuthError("")
         const email = `${username}@example.com`
         const password = "secret123"
-        const reg = await authApi.register({username, email: email as any, password}).asResult()
-        if (reg.success) { applyAuthResult(reg.data); return }
+        const reg = await api.authApi.register({username, email: email as any, password}).asResult()
+        if (reg.success) {
+            applyAuthResult(reg.data);
+            return
+        }
         if (reg.type === "EXISTS") {
-            const log = await authApi.login({username, password}).asResult()
-            if (log.success) { applyAuthResult(log.data); return }
+            const log = await api.authApi.login({username, password}).asResult()
+            if (log.success) {
+                applyAuthResult(log.data);
+                return
+            }
             setAuthError(`${log.type}`)
             return
         }
@@ -115,16 +126,24 @@ export function App() {
     }
 
     async function handleLogin(e: React.FormEvent) {
-        e.preventDefault(); setAuthError("")
-        const res = await authApi.login({username: loginUser, password: loginPass}).asResult()
-        if (!res.success) { setAuthError(res.type); return }
+        e.preventDefault();
+        setAuthError("")
+        const res = await api.authApi.login({username: loginUser, password: loginPass}).asResult()
+        if (!res.success) {
+            setAuthError(res.type);
+            return
+        }
         applyAuthResult(res.data)
     }
 
     async function handleRegister(e: React.FormEvent) {
-        e.preventDefault(); setAuthError("")
-        const res = await authApi.register({username: regUser, email: regEmail as any, password: regPass}).asResult()
-        if (!res.success) { setAuthError(res.type); return }
+        e.preventDefault();
+        setAuthError("")
+        const res = await api.authApi.register({username: regUser, email: regEmail as any, password: regPass}).asResult()
+        if (!res.success) {
+            setAuthError(res.type);
+            return
+        }
         applyAuthResult(res.data)
     }
 
@@ -136,54 +155,60 @@ export function App() {
     // ── org helpers ────────────────────────────────────────────────────────────
 
     async function loadOrgs() {
-        const res = await orgApi.listOrgs().asResult()
+        const res = await api.orgApi.listOrgs().asResult()
         if (res.success) setOrgList(res.data)
     }
 
     async function selectOrg(org: Org) {
         await session.derived.org.select({orgId: org.id})
-        setSelOrg(org)
     }
 
     function deselectOrg() {
         session.derived.org.clear()
-        setSelOrg(null)
     }
 
     // ── HTTP request helpers ───────────────────────────────────────────────────
 
     async function callMe() {
-        const res = await userApi.me().asResult()
-        setLastReq({method: "GET", path: "/api/users/me", status: res.success ? "ok" : "err",
-            body: res.success ? res.data : {error: res.type}})
+        const res = await api.userApi.me().asResult()
+        setLastReq({
+            method: "GET", path: "/api/users/me", status: res.success ? "ok" : "err",
+            body: res.success ? res.data : {error: res.type}
+        })
     }
 
     async function callOrgInfo() {
-        const res = await orgApi.orgInfo().asResult()
-        setLastReq({method: "GET", path: "/api/orgs/info", status: res.success ? "ok" : "err",
-            body: res.success ? res.data : {error: res.type}})
+        const res = await api.orgApi.orgInfo().asResult()
+        setLastReq({
+            method: "GET", path: "/api/orgs/info", status: res.success ? "ok" : "err",
+            body: res.success ? res.data : {error: res.type}
+        })
     }
 
     async function callUpdateProfile(e: React.FormEvent) {
         e.preventDefault()
-        const res = await userApi.updateProfile({email: newEmail as any}).asResult()
+        const res = await api.userApi.updateProfile({email: newEmail as any}).asResult()
         if (res.success) setUser(res.data)
-        setLastReq({method: "PUT", path: "/api/users/profile", status: res.success ? "ok" : "err",
-            body: res.success ? res.data : {error: res.type}})
+        setLastReq({
+            method: "PUT", path: "/api/users/profile", status: res.success ? "ok" : "err",
+            body: res.success ? res.data : {error: res.type}
+        })
     }
 
     async function callClickBanner() {
-        const res = await bannerApi.clickBanner().asResult()
+        const res = await api.bannerApi.clickBanner().asResult()
         if (res.success) setBannerCount(res.data.count)
-        setLastReq({method: "POST", path: "/api/banner/click", status: res.success ? "ok" : "err",
-            body: res.success ? res.data : {error: res.type}})
+        setLastReq({
+            method: "POST", path: "/api/banner/click", status: res.success ? "ok" : "err",
+            body: res.success ? res.data : {error: res.type}
+        })
     }
 
     // ── websocket helpers ──────────────────────────────────────────────────────
 
     async function connectWs() {
         if (wsRef.current) return
-        const client = createLiveClient()
+        const client = api.createLiveClient()
         wsRef.current = client
         try {
             await client.connect(({incoming}) => {
@@ -205,11 +230,16 @@ export function App() {
     }
 
     function disconnectWs() {
-        wsRef.current?.disconnect(); wsRef.current = null
-        setWsConnected(false); addWsEntry("disconnected", {})
+        wsRef.current?.disconnect();
+        wsRef.current = null
+        setWsConnected(false);
+        addWsEntry("disconnected", {})
     }
 
-    function ping() { addWsEntry("ping →", {}); wsRef.current?.outgoing.ping() }
+    function ping() {
+        addWsEntry("ping →", {});
+        wsRef.current?.outgoing.ping()
+    }
 
     function bannerPingWs() {
         addWsEntry("bannerPing →", {info: "sending bannerPing (requires CAN_SEE_RED_BANNER)..."})
@@ -247,8 +277,11 @@ export function App() {
 
                 <div style={{display: "flex", gap: 0, marginBottom: 0}}>
                     {(["login", "register"] as const).map(v => (
-                        <button key={v} onClick={() => { setAuthView(v); setAuthError("") }}
-                            style={{...btn, borderRadius: "4px 4px 0 0", borderBottom: authView === v ? "1px solid #fafafa" : "1px solid #e0e0e0", background: authView === v ? "#fafafa" : "#f0f0f0", fontWeight: authView === v ? "bold" : "normal", color: "#888", fontSize: 11}}>
+                        <button key={v} onClick={() => {
+                            setAuthView(v);
+                            setAuthError("")
+                        }}
+                                style={{...btn, borderRadius: "4px 4px 0 0", borderBottom: authView === v ? "1px solid #fafafa" : "1px solid #e0e0e0", background: authView === v ? "#fafafa" : "#f0f0f0", fontWeight: authView === v ? "bold" : "normal", color: "#888", fontSize: 11}}>
                             {v} manually
                         </button>
                     ))}
@@ -256,16 +289,16 @@ export function App() {
                 <div style={{border: "1px solid #e0e0e0", borderRadius: "0 4px 4px 4px", padding: 14, background: "#fafafa"}}>
                     {authView === "login" ? (
                         <form onSubmit={handleLogin} style={{display: "flex", flexDirection: "column", gap: 8}}>
-                            <input style={{...input, width: "100%", boxSizing: "border-box"}} placeholder="username" value={loginUser} onChange={e => setLoginUser(e.target.value)} />
-                            <input style={{...input, width: "100%", boxSizing: "border-box"}} type="password" placeholder="password" value={loginPass} onChange={e => setLoginPass(e.target.value)} />
+                            <input style={{...input, width: "100%", boxSizing: "border-box"}} placeholder="username" value={loginUser} onChange={e => setLoginUser(e.target.value)}/>
+                            <input style={{...input, width: "100%", boxSizing: "border-box"}} type="password" placeholder="password" value={loginPass} onChange={e => setLoginPass(e.target.value)}/>
                             {authError && <div style={{color: "#dc2626", fontSize: 12}}>{authError}</div>}
                             <button style={btnPrimary} type="submit">Login →</button>
                         </form>
                     ) : (
                         <form onSubmit={handleRegister} style={{display: "flex", flexDirection: "column", gap: 8}}>
-                            <input style={{...input, width: "100%", boxSizing: "border-box"}} placeholder="username (3–20 chars)" value={regUser} onChange={e => setRegUser(e.target.value)} />
-                            <input style={{...input, width: "100%", boxSizing: "border-box"}} type="email" placeholder="email" value={regEmail} onChange={e => setRegEmail(e.target.value)} />
-                            <input style={{...input, width: "100%", boxSizing: "border-box"}} type="password" placeholder="password" value={regPass} onChange={e => setRegPass(e.target.value)} />
+                            <input style={{...input, width: "100%", boxSizing: "border-box"}} placeholder="username (3–20 chars)" value={regUser} onChange={e => setRegUser(e.target.value)}/>
+                            <input style={{...input, width: "100%", boxSizing: "border-box"}} type="email" placeholder="email" value={regEmail} onChange={e => setRegEmail(e.target.value)}/>
+                            <input style={{...input, width: "100%", boxSizing: "border-box"}} type="password" placeholder="password" value={regPass} onChange={e => setRegPass(e.target.value)}/>
                             {authError && <div style={{color: "#dc2626", fontSize: 12}}>{authError}</div>}
                             <button style={btnPrimary} type="submit">Register →</button>
                         </form>
@@ -287,30 +320,28 @@ export function App() {
             {/* 1 — Session */}
             <Section n={1} title="Active session">
                 <div style={{display: "flex", alignItems: "center", gap: 8, marginBottom: 8}}>
-                    <span style={{width: 7, height: 7, borderRadius: "50%", background: "#16a34a", display: "inline-block"}} />
+                    <span style={{width: 7, height: 7, borderRadius: "50%", background: "#16a34a", display: "inline-block"}}/>
                     <span style={{fontSize: 13}}><strong>{user.username}</strong> &nbsp;<span style={{color: "#888"}}>{user.email}</span></span>
                 </div>
                 <div style={{fontSize: 11, color: "#888", marginBottom: 4}}>
                     Permissions in JWT: {permissions.length === 0 ? <em style={{color: "#aaa"}}>none</em> : permissions.map(p => (
-                        <span key={p} style={{background: "#16a34a", color: "#fff", fontSize: 10, padding: "1px 6px", borderRadius: 3, marginRight: 4}}>{p}</span>
-                    ))}
+                    <span key={p} style={{background: "#16a34a", color: "#fff", fontSize: 10, padding: "1px 6px", borderRadius: 3, marginRight: 4}}>{p}</span>
+                ))}
                 </div>
-                <div style={{fontSize: 11, color: "#888", marginBottom: 6}}>Bearer token (auto-refreshes via AuthSession)</div>
-                <Code>{token}</Code>
             </Section>
 
             {/* 2 — Org selector */}
             <Section n={2} title="Organization selector (derived token)">
-                {selectedOrg ? (
+                {session.derived.org.get() ? (
                     <div>
                         <div style={{display: "flex", alignItems: "center", gap: 10, marginBottom: 10}}>
-                            <span style={{width: 7, height: 7, borderRadius: "50%", background: "#7c3aed", display: "inline-block"}} />
-                            <strong style={{fontSize: 13}}>{selectedOrg.name}</strong>
-                            <span style={{fontSize: 11, color: "#888"}}>{selectedOrg.description}</span>
+                            <span style={{width: 7, height: 7, borderRadius: "50%", background: "#7c3aed", display: "inline-block"}}/>
+                            <strong style={{fontSize: 13}}>{session.derived.org.get().name}</strong>
+                            <span style={{fontSize: 11, color: "#888"}}>{session.derived.org.description}</span>
                             <button style={{...btn, fontSize: 11}} onClick={deselectOrg}>Deselect</button>
                         </div>
                         <button style={btnPurple} onClick={callOrgInfo} type="button">
-                            <Badge label="GET" color="#7c3aed" />/api/orgs/info
+                            <Badge label="GET" color="#7c3aed"/>/api/orgs/info
                         </button>
                         <span style={{fontSize: 11, color: "#888", marginLeft: 8}}>requires ORG_MEMBER in org token</span>
                     </div>
@@ -361,7 +392,7 @@ export function App() {
                 </div>
                 <div style={{display: "flex", gap: 8}}>
                     <button style={hasBannerPerm ? btnGreen : btnWarning} onClick={callClickBanner}>
-                        <Badge label="POST" color={hasBannerPerm ? "#16a34a" : "#d97706"} />
+                        <Badge label="POST" color={hasBannerPerm ? "#16a34a" : "#d97706"}/>
                         /api/banner/click
                     </button>
                 </div>
@@ -371,19 +402,19 @@ export function App() {
             <Section n={4} title="HTTP requests">
                 <div style={{display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 12}}>
                     <button style={btnGreen} onClick={callMe}>
-                        <Badge label="GET" color="#16a34a" />/api/users/me
+                        <Badge label="GET" color="#16a34a"/>/api/users/me
                     </button>
                 </div>
                 <form onSubmit={callUpdateProfile} style={{display: "flex", gap: 8, alignItems: "center", marginBottom: 12}}>
-                    <Badge label="PUT" color="#7c3aed" />
+                    <Badge label="PUT" color="#7c3aed"/>
                     <span style={{fontSize: 12, color: "#555", whiteSpace: "nowrap"}}>/api/users/profile</span>
-                    <input style={{...input, flex: 1}} type="email" placeholder="new email" value={newEmail} onChange={e => setNewEmail(e.target.value)} />
+                    <input style={{...input, flex: 1}} type="email" placeholder="new email" value={newEmail} onChange={e => setNewEmail(e.target.value)}/>
                     <button style={{...btn, background: "#7c3aed", color: "#fff", border: "1px solid #7c3aed"}} type="submit">Save</button>
                 </form>
                 {lastReq ? (
                     <div>
                         <div style={{fontSize: 11, marginBottom: 6, display: "flex", alignItems: "center", gap: 6}}>
-                            <Badge label={lastReq.method} color={lastReq.status === "ok" ? "#1d4ed8" : "#dc2626"} />
+                            <Badge label={lastReq.method} color={lastReq.status === "ok" ? "#1d4ed8" : "#dc2626"}/>
                             <code style={{fontSize: 11}}>{lastReq.path}</code>
                             <span style={{marginLeft: "auto", fontSize: 11, fontWeight: "bold", color: lastReq.status === "ok" ? "#16a34a" : "#dc2626"}}>
                                 {lastReq.status === "ok" ? "200 OK" : "401/403"}

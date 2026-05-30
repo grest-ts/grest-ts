@@ -1,4 +1,4 @@
-import {GGContext, GG_CONTEXT_STORAGE} from "@grest-ts/context"
+import {GG_CONTEXT_STORAGE, GGContext} from "@grest-ts/context"
 import {AuthSession} from "@grest-ts/auth"
 import {AuthPublicApi} from "../../api/AuthPublicApi"
 import {UserApi} from "../../api/UserApi"
@@ -12,28 +12,31 @@ import {ORG_TOKEN} from "../../api/auth/OrgAuth"
 const browserContext = new GGContext("browser")
 GG_CONTEXT_STORAGE.enterWith(browserContext)
 
-const WS_URL = window.location.origin.replace(/^http/, "ws")
-
-// Same-origin clients — Vite proxy forwards /pub, /api, /ws to the auth server (port 4600).
-export const authApi = AuthPublicApi.createClient({url: ""})
-export const userApi = UserApi.createClient({url: ""})
-export const orgApi = OrgApi.createClient({url: ""})
-export const bannerApi = BannerApi.createClient({url: ""})
-
-export function createLiveClient() {
-    return LiveApi.createClient({url: WS_URL})
+const URL = ""; // Same-origin clients — Vite proxy forwards /pub, /api, /ws to the auth server (port 4600).
+const WS_URL = window.location.origin.replace(/^http/, "ws");
+export const api = {
+    authApi: AuthPublicApi.createClient({url: URL}),
+    userApi: UserApi.createClient({url: URL}),
+    orgApi: OrgApi.createClient({url: URL}),
+    bannerApi: BannerApi.createClient({url: URL}),
+    createLiveClient: () => {
+        return LiveApi.createClient({url: WS_URL})
+    }
 }
 
 export const session = new AuthSession({
     key: USER_TOKEN,
-    refresh: (refreshToken: string | undefined) => authApi.refresh({refreshToken: refreshToken!}),
+    refresh: (refreshToken: string | undefined) => {
+        return api.authApi.refresh({refreshToken: refreshToken!})
+    },
     derived: {
         org: {
             key: ORG_TOKEN,
-            mint: async ({orgId}: {orgId: string}) => {
-                const res = await orgApi.selectOrg({orgId: orgId as any})
+            mint: async ({orgId}: { orgId: string }) => {
+                const res = await api.orgApi.selectOrg({orgId: orgId as any})
                 return {accessToken: res.orgToken, accessExpiresAt: res.orgTokenExpiresAt}
             },
         },
     },
 })
+
