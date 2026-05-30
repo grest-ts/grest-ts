@@ -12,7 +12,7 @@ export const USER_TOKEN_WIRE = GGHeader.middleware(USER_TOKEN, {name: "authoriza
 
 // Permissions embedded in the user JWT at issue time.
 export enum UserPermission {
-    CAN_SEE_RED_BANNER = "CAN_SEE_RED_BANNER",
+    CAN_UPDATE_RED_BANNER_COUNTER = "CAN_UPDATE_RED_BANNER_COUNTER",
 }
 export const IsUserPermission = IsEnum(UserPermission)
 

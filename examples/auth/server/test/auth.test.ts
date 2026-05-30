@@ -1,7 +1,7 @@
 import {EXISTS, FORBIDDEN, NOT_AUTHORIZED, VALIDATION_ERROR} from "@grest-ts/schema"
 import {GGTest} from "@grest-ts/testkit"
 import "@grest-ts/http/testkit"
-import {AppRuntime} from "../server/auth"
+import {AppRuntime} from "../server/AppRuntime"
 import {AuthPublicApi, InvalidCredentialsError} from "../../api/AuthPublicApi"
 import {UserApi} from "../../api/UserApi"
 import {OrgApi} from "../../api/OrgApi"

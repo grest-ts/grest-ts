@@ -15,11 +15,11 @@ export const BannerApiContract = new GGContractClass("BannerApi", {
         errors: [NOT_AUTHORIZED, SERVER_ERROR],
         permission: GG_NO_PERMISSIONS,
     },
-    // Increments click counter. Requires CAN_SEE_RED_BANNER.
+    // Increments click counter. Requires permission.
     clickBanner: {
         success: IsBannerState,
         errors: [NOT_AUTHORIZED, FORBIDDEN, SERVER_ERROR],
-        permission: UserPermission.CAN_SEE_RED_BANNER,
+        permission: UserPermission.CAN_UPDATE_RED_BANNER_COUNTER,
     },
 })
 

@@ -28,7 +28,7 @@ export const LiveApiContract = defineSocketContract("LiveApi", {
         },
         // Only users with CAN_SEE_RED_BANNER can send bannerPing.
         bannerPing: {
-            permission: UserPermission.CAN_SEE_RED_BANNER,
+            permission: UserPermission.CAN_UPDATE_RED_BANNER_COUNTER,
             errors: [NOT_AUTHORIZED, FORBIDDEN, SERVER_ERROR],
         },
     },

@@ -19,7 +19,14 @@ export const ACCESS_TOKEN = new GGContextKey("accessToken", IsAccessToken)
 export const USER = new GGContextKey("user", IsUser)   // verified principal — the middleware sets this after verify
 
 // server
-const auth = new GGAuth({key: ACCESS_TOKEN, user: USER, toUser: (p) => ({id: p.subject as UserId, roles: p.permissions}), secret: SECRET, permission: IsEnum(Role), store})
+const auth = new GGAuth({
+  key: ACCESS_TOKEN, 
+  user: USER, 
+  toUser: (p) => ({id: p.subject as UserId, roles: p.permissions}), 
+  secret: SECRET, 
+  permission: IsEnum(Role), 
+  store
+})
 
 // client (browser)
 const session = new GGAuthSession({key: ACCESS_TOKEN, refresh: api.auth.refresh})

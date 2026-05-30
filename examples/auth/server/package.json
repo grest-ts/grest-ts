@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "build": "tsc --noEmit",
-    "start": "tsx server/auth.ts",
+    "start": "tsx server/AppRuntime.ts",
     "test": "npx --no vitest run"
   },
   "devDependencies": {

@@ -1,8 +1,8 @@
 import {GGHttpServerMiddleware} from "@grest-ts/http"
 import {GGWebSocketMiddleware} from "@grest-ts/websocket"
 import {AuthGuard} from "@grest-ts/auth"
-import {OrgContext, OrgClaims, OrgPermission} from "../../api/auth/OrgAuth"
-import {OrgService} from "./services/OrgService"
+import {OrgContext, OrgClaims, OrgPermission} from "../../../api/auth/OrgAuth"
+import {OrgService} from "../services/OrgService"
 
 export class OrgContextMiddleware implements GGHttpServerMiddleware, GGWebSocketMiddleware {
     constructor(
