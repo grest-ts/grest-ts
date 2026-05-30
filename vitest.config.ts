@@ -8,6 +8,7 @@ export default defineConfig({
   test: {
     globals: true,
     projects: [
+      'packages-libs/auth/auth',
       'packages-libs/docs/api-docs',
       'packages-libs/docs/asyncapi',
       'packages-libs/docs/openapi',

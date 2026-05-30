@@ -36,6 +36,23 @@
       "readme": "<!-- GREST-TS-BANNER-START -->\n> Part of the [grest-ts](https://github.com/grest-ts/grest-ts) framework.\n> [Documentation](https://github.com/grest-ts/grest-ts#readme) | [All packages](https://github.com/grest-ts/grest-ts#package-reference)\n<!-- GREST-TS-BANNER-END -->\n\n# @grest-ts/asyncapi\n\n> **Optional package** — generates AsyncAPI 3.0 specs from your grest-ts WebSocket schemas and serves AsyncAPI Studio (the standard interactive viewer).\n\n## Features\n\n- **`toAsyncApi()`** — pure function, no side effects; safe in CI/build scripts for static spec export\n- **`GGAsyncApiDocs`** — serves `GET /asyncapi.json` and `GET /asyncapi-docs` (AsyncAPI Studio); schemas auto-collected from the server\n- **All four message patterns covered** — request/response, fire-and-forget, server push, and server-initiated request/response\n- **Bearer / API-key handshake auth** — middleware headers with `format: \"bearer\"` or `format: \"api-key\"` become AsyncAPI `securitySchemes` automatically\n- **Named schemas** — every `.docs({title})` schema is extracted to `components/schemas` and reused via `$ref` across messages\n- **Symmetric error reporting** — every `errors:[…]` entry becomes its own typed reply message so the spec lists every possible response shape\n- **Same `.docs()` passthrough as @grest-ts/openapi** — title, description, example, examples, deprecated all flow into the spec\n\n## Installation\n\n```bash\nnpm install @grest-ts/asyncapi\n```\n\nThe package depends on `@grest-ts/openapi` for the schema converter, so you do not need to install both manually if you only want AsyncAPI — `npm install @grest-ts/asyncapi` brings everything.\n\n## Usage\n\n### Serve docs alongside your WebSocket APIs\n\n`GGAsyncApiDocs.register()` mirrors the `MyApi.register()` pattern — pass `http` explicitly, or omit it to use the default `GGHttpServer` from the locator.\n\n```typescript\nimport {GGAsyncApiDocs} from \"@grest-ts/asyncapi\";\nimport {GGHttpServer} from \"@grest-ts/http\";\nimport {ChatApi, NotificationApi} from \"@myapp/api\";\n\nconst server = new GGHttpServer();\nChatApi.register(chatHandler);\nNotificationApi.register(notificationHandler);\n\nGGAsyncApiDocs.register({\n    http: server,                   // optional — falls back to locator default\n    title: \"My WebSocket APIs\",\n    version: \"1.0.0\",\n    description: \"Chat and notification events\",\n    specPath: \"/asyncapi.json\",\n    docsPath: \"/asyncapi-docs\"\n});\n// GET /asyncapi.json   → AsyncAPI 3.0 spec\n// GET /asyncapi-docs   → AsyncAPI Studio (sidebar deep links via /asyncapi-docs/* are also handled)\n```\n\n### Explicit schema list\n\nWhen you want to document schemas that are not registered on this server (e.g. a docs-only build, or sharing a common bundle), pass them in directly:\n\n```typescript\nGGAsyncApiDocs.register({\n    http: server,\n    schemas: [ChatApiSchema, NotificationApiSchema],\n    title: \"WebSocket Showcase\",\n    specPath: \"/asyncapi.json\",\n    docsPath: \"/asyncapi-docs\",\n    eager: true   // build spec at construction time (default: lazy on first request)\n});\n```\n\n### Export spec to a file (CI/scripts)\n\n```typescript\nimport {toAsyncApi} from \"@grest-ts/asyncapi\";\nimport {writeFileSync} from \"fs\";\n\nconst spec = toAsyncApi([ChatApiSchema, NotificationApiSchema], {\n    title: \"My WebSocket APIs\",\n    version: \"2.0.0\",\n    servers: {\n        production: {host: \"api.example.com\", protocol: \"wss\"}\n    }\n});\nwriteFileSync(\"asyncapi.json\", JSON.stringify(spec, null, 2));\n```\n\n### Multi-spec switcher (`registerGroups`)\n\nWhen one service exposes WebSocket APIs that consumers want to browse separately, register them as named groups. The studio is rendered with a small custom dropdown above it; switching the dropdown re-renders the studio with the chosen spec.\n\n```typescript\nGGAsyncApiDocs.registerGroups({\n    groups: {\n        \"Chat\":          [ChatApiSchema],\n        \"Notifications\": [NotificationApiSchema],\n    },\n    title: \"MyOrg Events\",\n    specPathPrefix: \"/asyncapi\",\n    docsPath: \"/asyncapi-docs\",\n    primary: \"Chat\",\n})\n```\n\nGroup names get kebab-cased into URL slugs. Because the AsyncAPI react-component does not have a native multi-spec switcher, the dropdown is rendered inside the page template (no public API around it).\n\nFor mixed HTTP + WebSocket setups, see [`@grest-ts/api-docs`](@pkg/api-docs) — it builds a unified shell that handles both protocols in one page.\n\n## Message patterns\n\n`@grest-ts/websocket` contracts can describe four interaction patterns; `toAsyncApi()` emits each one with the right `action` / `reply` shape:\n\n| Contract shape | AsyncAPI emission |\n|---|---|\n| `clientToServer` with `success` and/or `errors` | `action: send` + `reply` listing success and each error message |\n| `clientToServer` with no `success` and no `errors` | `action: send` (fire-and-forget; no reply block) |\n| `serverToClient` with `input` only | `action: receive` (server push; no reply block) |\n| `serverToClient` with `success`/`errors` | `action: receive` + `reply` (server-initiated request/response) |\n\nEvery message gets a stable id (`<ChannelName>_<methodName>[_request|_response|_error_<TYPE>]`) so spec consumers can deep-link to a particular interaction.\n\n## Auth\n\nWhen a WebSocket schema uses a middleware whose header schema declares `.docs({format: \"bearer\"})` (or `\"api-key\"`), the converter:\n\n1. Adds the corresponding entry to `components.securitySchemes` (using the header's `.docs({title})` if you provided one — defaults to `BearerAuth` / `ApiKeyAuth`).\n2. Attaches a security requirement to every operation on that channel.\n\n```typescript\nimport {IsBearerToken} from \"@grest-ts/schema\";\n\nexport const ChatAuth = {\n    headers: {\n        \"authorization\": IsBearerToken.docs({description: \"JWT access token for the chat channel\"})\n    }\n};\n\nexport const ChatApiSchema = webSocketSchema(ChatContract)\n    .path(\"ws/chat\")\n    .use(ChatAuth)\n    .done();\n```\n\nPlain (non-security) handshake headers are emitted under the channel's `bindings.ws.headers` schema instead.\n\n## Schema → JSON Schema mapping\n\nThe schema converter is shared with `@grest-ts/openapi` — the same `.docs({title, description, example, examples, deprecated})` annotations and `.default(value)` values flow into both specs. See the [@grest-ts/openapi mapping table](@pkg/openapi#schema-json-schema-mapping) for the full list.\n\nA handful of post-processing steps adapt the output to AsyncAPI 3.0 conventions: `discriminator: {propertyName: \"x\"}` collapses to the plain string `\"x\"`, and `additionalProperties: false` is stripped from message payloads since it adds noise without value in documentation.\n"
     },
     {
+      "name": "auth",
+      "description": "Authentication library for Node.js and browser — JWT signing, IdP strategies, HTTP/WS guards, and client-side session management",
+      "flags": {
+        "node": true,
+        "browser": true,
+        "testkit": false,
+        "hidden": false,
+        "implementation": false,
+        "npm": false
+      },
+      "layer": 0,
+      "color": "#59A14F",
+      "category": "libs",
+      "group": "auth",
+      "readme": "<!-- GREST-TS-BANNER-START -->\n> Part of the [grest-ts](https://github.com/grest-ts/grest-ts) framework.\n> [Documentation](https://github.com/grest-ts/grest-ts#readme) | [All packages](https://github.com/grest-ts/grest-ts#package-reference)\n<!-- GREST-TS-BANNER-END -->\n\n"
+    },
+    {
       "name": "cli",
       "description": "CLI for managing grest-ts in a project (atomic version updates, etc.)",
       "flags": {
@@ -160,7 +177,7 @@
         "implementation": false,
         "npm": true
       },
-      "layer": 1,
+      "layer": 0,
       "color": "#59A14F",
       "category": "libs",
       "group": "db",
@@ -177,7 +194,7 @@
         "implementation": false,
         "npm": true
       },
-      "layer": 1,
+      "layer": 0,
       "color": "#59A14F",
       "category": "libs",
       "group": "db",
@@ -194,7 +211,7 @@
         "implementation": false,
         "npm": true
       },
-      "layer": 1,
+      "layer": 0,
       "color": "#59A14F",
       "category": "libs",
       "group": "db",
@@ -779,6 +796,22 @@
       "to": "websocket"
     },
     {
+      "from": "auth",
+      "to": "context"
+    },
+    {
+      "from": "auth",
+      "to": "http"
+    },
+    {
+      "from": "auth",
+      "to": "schema"
+    },
+    {
+      "from": "auth",
+      "to": "websocket"
+    },
+    {
       "from": "code-generator",
       "to": "common"
     },
@@ -1228,31 +1261,11 @@
     },
     {
       "from": "testkit-vitest",
-      "to": "config"
-    },
-    {
-      "from": "testkit-vitest",
-      "to": "db-dynamodb"
-    },
-    {
-      "from": "testkit-vitest",
-      "to": "db-mysql"
-    },
-    {
-      "from": "testkit-vitest",
-      "to": "db-postgre"
-    },
-    {
-      "from": "testkit-vitest",
       "to": "discovery"
     },
     {
       "from": "testkit-vitest",
       "to": "discovery-local"
-    },
-    {
-      "from": "testkit-vitest",
-      "to": "http"
     },
     {
       "from": "testkit-vitest",
@@ -1272,19 +1285,7 @@
     },
     {
       "from": "testkit-vitest",
-      "to": "metrics"
-    },
-    {
-      "from": "testkit-vitest",
-      "to": "schema-file"
-    },
-    {
-      "from": "testkit-vitest",
       "to": "testkit"
-    },
-    {
-      "from": "testkit-vitest",
-      "to": "websocket"
     },
     {
       "from": "trace",

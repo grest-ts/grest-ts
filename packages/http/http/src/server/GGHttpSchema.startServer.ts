@@ -12,7 +12,7 @@ import {GG_DISCOVERY} from "@grest-ts/discovery";
 import {GGContext, GGContextStore} from "@grest-ts/context";
 import {GG_TRACE} from "@grest-ts/trace";
 import {GG_HTTP_REQUEST} from "./GG_HTTP_REQUEST";
-import {GG_COOKIE_WRITES} from "../schema/cookieMiddleware";
+import {GG_COOKIE_WRITES} from "../schema/GGCookie";
 import {GG_METRICS} from "@grest-ts/metrics";
 import {GGHttpMetrics} from "./GGHttpMetrics";
 import {GG_HTTP_SERVER} from "./GG_HTTP_SERVER";

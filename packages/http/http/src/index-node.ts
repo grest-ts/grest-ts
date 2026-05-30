@@ -18,8 +18,8 @@ export * from "./server/GG_PERMISSIONS";
 // API Schema
 export * from "./schema/GGHttpSchema";
 export * from "./schema/httpSchema";
-export * from "./schema/cookieMiddleware";
-export * from "./schema/headerBinding";
+export * from "./schema/GGCookie";
+export * from "./schema/GGHeader";
 export * from "./rpc/GGHttpRouteRPC";
 export * from "./rpc/openApiSuccessResponse";
 export * from "./rpc/openApiHelpers";
