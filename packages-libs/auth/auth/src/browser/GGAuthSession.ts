@@ -9,11 +9,14 @@ import {browserScheduler} from "./core/browserScheduler"
 import type {AccessOnly, DerivedConfig, DerivedMap, DerivedParams, DerivedResult, SessionState, TokenKey, TokenPair} from "./core/types"
 import type {DerivedToken} from "./GGAuthSessionBase"
 
-export interface GGAuthSessionOptions {
-    cacheKey?: string
-    refreshLeadMs?: number
-    clockSkewMs?: number
-    isFatalRefreshError?: (err: unknown) => boolean
+export interface GGTokenSessionConfig {
+    refresh: (token: string) => Promise<TokenPair>
+    localStorageKey?: string
+}
+
+export interface GGCookieSessionConfig {
+    refresh: () => Promise<TokenPair>
+    logout: () => Promise<void>
 }
 
 export class GGAuthSession<D extends DerivedMap = {}> {
@@ -22,7 +25,7 @@ export class GGAuthSession<D extends DerivedMap = {}> {
     private readonly _refresh: (refreshToken?: string) => Promise<TokenPair>
     private readonly _logout: (() => Promise<void>) | undefined
     private readonly _storage: "localStorage" | "cookie"
-    private readonly _options: GGAuthSessionOptions
+    private readonly _cacheKey: string
     private readonly _derivedConfigs: Record<string, {key: TokenKey; mint: (params: unknown) => Promise<AccessOnly>}> = {}
 
     private constructor(
@@ -30,38 +33,35 @@ export class GGAuthSession<D extends DerivedMap = {}> {
         refresh: (refreshToken?: string) => Promise<TokenPair>,
         storage: "localStorage" | "cookie",
         logout: (() => Promise<void>) | undefined,
-        options: GGAuthSessionOptions,
+        cacheKey: string,
     ) {
         this._rootKey = key
         this._refresh = refresh
         this._storage = storage
         this._logout = logout
-        this._options = options
+        this._cacheKey = cacheKey
     }
 
-    static withToken(
-        key: TokenKey,
-        refresh: (token: string) => Promise<TokenPair>,
-        options?: GGAuthSessionOptions,
-    ): GGAuthSession {
-        return new GGAuthSession(key, (token) => refresh(token!), "localStorage", undefined, options ?? {})
+    static withToken(key: TokenKey, config: GGTokenSessionConfig): GGAuthSession {
+        return new GGAuthSession(
+            key,
+            (token) => config.refresh(token!),
+            "localStorage",
+            undefined,
+            config.localStorageKey ?? "auth.session",
+        )
     }
 
-    static withCookie(
-        key: TokenKey,
-        refresh: () => Promise<TokenPair>,
-        logout: () => Promise<void>,
-        options?: GGAuthSessionOptions,
-    ): GGAuthSession {
-        return new GGAuthSession(key, () => refresh(), "cookie", logout, options ?? {})
+    static withCookie(key: TokenKey, config: GGCookieSessionConfig): GGAuthSession {
+        return new GGAuthSession(key, () => config.refresh(), "cookie", config.logout, "auth.session")
     }
 
     public addDerived<N extends string, P, T extends AccessOnly>(
         name: N,
         key: TokenKey,
-        mint: (params: P) => Promise<T>,
+        config: {mint: (params: P) => Promise<T>},
     ): GGAuthSession<D & {[K in N]: DerivedConfig<P, T>}> {
-        this._derivedConfigs[name] = {key, mint: mint as (params: unknown) => Promise<AccessOnly>}
+        this._derivedConfigs[name] = {key, mint: config.mint as (params: unknown) => Promise<AccessOnly>}
         return this as unknown as GGAuthSession<D & {[K in N]: DerivedConfig<P, T>}>
     }
 
@@ -79,14 +79,14 @@ export class GGAuthSession<D extends DerivedMap = {}> {
                 derived,
                 storage: this._storage,
                 logout: this._logout,
-                refreshLeadMs: this._options.refreshLeadMs ?? 60_000,
-                clockSkewMs: this._options.clockSkewMs ?? 10_000,
-                isFatalRefreshError: this._options.isFatalRefreshError ?? ((e) => e instanceof NOT_AUTHORIZED),
+                refreshLeadMs: 60_000,
+                clockSkewMs: 10_000,
+                isFatalRefreshError: (e) => e instanceof NOT_AUTHORIZED,
             },
             {
                 clock: systemClock,
                 lock: webLocksLock(),
-                cache: localStorageSharedCache(this._options.cacheKey ?? "auth.session"),
+                cache: localStorageSharedCache(this._cacheKey),
                 scheduler: browserScheduler(),
             },
         )

@@ -25,9 +25,12 @@ export const api = {
     }
 }
 
-export const session = GGAuthSession.withToken(USER_TOKEN, (token) => api.authApi.refresh({refreshToken: token}))
-    .addDerived("org", ORG_TOKEN, async (data: SelectOrgRequest) => {
+export const session = GGAuthSession.withToken(USER_TOKEN, {
+    refresh: async (token) => api.authApi.refresh({refreshToken: token}),
+}).addDerived("org", ORG_TOKEN, {
+    mint: async (data: SelectOrgRequest) => {
         const res = await api.orgApi.selectOrg(data)
         return {accessToken: res.orgToken, accessExpiresAt: res.orgTokenExpiresAt, ...res.org}
-    })
+    },
+})
 
