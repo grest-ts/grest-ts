@@ -1,4 +1,5 @@
 import {GGContext, GG_CONTEXT_STORAGE} from "@grest-ts/context"
+import {AuthSession} from "@grest-ts/auth"
 import {AuthPublicApi} from "../../api/AuthPublicApi"
 import {UserApi} from "../../api/UserApi"
 import {OrgApi} from "../../api/OrgApi"
@@ -16,23 +17,23 @@ const WS_URL = window.location.origin.replace(/^http/, "ws")
 // Same-origin clients — Vite proxy forwards /pub, /api, /ws to the auth server (port 4600).
 export const authApi = AuthPublicApi.createClient({url: ""})
 export const userApi = UserApi.createClient({url: ""})
-export const orgApi  = OrgApi.createClient({url: ""})
+export const orgApi = OrgApi.createClient({url: ""})
 export const bannerApi = BannerApi.createClient({url: ""})
 
 export function createLiveClient() {
     return LiveApi.createClient({url: WS_URL})
 }
 
-export function setAuthToken(token: string): void {
-    USER_TOKEN.set(token)
-}
-export function clearAuthToken(): void {
-    USER_TOKEN.delete()
-}
-
-export function setOrgToken(token: string): void {
-    ORG_TOKEN.set(token)
-}
-export function clearOrgToken(): void {
-    ORG_TOKEN.delete()
-}
+export const session = new AuthSession({
+    key: USER_TOKEN,
+    refresh: (refreshToken: string | undefined) => authApi.refresh({refreshToken: refreshToken!}),
+    derived: {
+        org: {
+            key: ORG_TOKEN,
+            mint: async ({orgId}: {orgId: string}) => {
+                const res = await orgApi.selectOrg({orgId: orgId as any})
+                return {accessToken: res.orgToken, accessExpiresAt: res.orgTokenExpiresAt}
+            },
+        },
+    },
+})

@@ -1,6 +1,7 @@
 import "./_dedupCheck";
 export {GGAuthSession as AuthSession} from "./browser/GGAuthSession"
-export {DerivedToken} from "./browser/core/BaseAuthSession"
+export {DerivedToken} from "./browser/GGAuthSessionBase"
+export type {AuthSessionConfig} from "./browser/GGAuthSession"
 export type {
     AccessOnly,
     TokenPair,
@@ -10,5 +11,4 @@ export type {
     SessionStatus,
     SessionState,
     SharedTokens,
-    AuthSessionConfig,
 } from "./browser/core/types"

@@ -4,7 +4,8 @@
     "lib": ["ES2022", "DOM"],
     "jsx": "react-jsx",
     "types": ["node"],
-    "moduleResolution": "Bundler"
+    "moduleResolution": "Bundler",
+    "customConditions": ["browser"]
   },
   "include": ["src/**/*.ts", "src/**/*.tsx"]
 }

@@ -15,7 +15,7 @@ export function webLocksLock(): CrossTabLock {
     return {
         withLock<T>(_name: string, fn: () => Promise<T>): Promise<T> {
             const next: Promise<T> = tail.then(() => fn())
-            tail = next.then(() => undefined, () => undefined)
+            tail = next.then((): void => undefined, (): void => undefined)
             return next
         },
     }

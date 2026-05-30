@@ -26,6 +26,7 @@ export default defineConfig({
     // resolve.dedupe so all paths in the module graph share one copy.
     resolve: {
         dedupe: [
+            "@grest-ts/auth",
             "@grest-ts/common",
             "@grest-ts/context",
             "@grest-ts/schema",
@@ -40,6 +41,7 @@ export default defineConfig({
             "../../api/**/*.ts",
         ],
         include: [
+            "@grest-ts/auth",
             "@grest-ts/common",
             "@grest-ts/context",
             "@grest-ts/schema",

@@ -1,7 +1,8 @@
 import React, {useEffect, useRef, useState} from "react"
-import {authApi, bannerApi, clearAuthToken, clearOrgToken, createLiveClient, orgApi, setAuthToken, setOrgToken, userApi} from "./api"
+import {authApi, bannerApi, createLiveClient, orgApi, session, userApi} from "./api"
 import type {User} from "../../api/auth/UserAuth"
 import type {Org} from "../../api/auth/OrgAuth"
+import type {AuthResponse} from "../../api/AuthPublicApi"
 import type {GGWebSocketClient} from "@grest-ts/websocket"
 import type {BannerPongEvent, LivePongEvent, ProfileUpdatedEvent} from "../../api/LiveApi"
 
@@ -76,18 +77,26 @@ export function App() {
     useEffect(() => { wsLogRef.current?.scrollTo(0, wsLogRef.current.scrollHeight) }, [wsLog])
     useEffect(() => () => { wsRef.current?.disconnect() }, [])
 
+    // Clear all local state when the session ends (logout, expiry, cross-tab logout).
+    useEffect(() => session.onLogout(() => {
+        setUser(null); setToken(null); setPerms([]); setSelOrg(null)
+        setOrgList([]); setBannerCount(0)
+        wsRef.current?.disconnect(); wsRef.current = null
+        setWsConnected(false); setWsLog([])
+    }), [])
+
     function addWsEntry(event: string, data: unknown) {
         setWsLog(prev => [...prev.slice(-49), {time: now(), event, data}])
     }
 
     // ── auth helpers ───────────────────────────────────────────────────────────
 
-    function applyAuthResult(accessToken: string, u: User, perms: string[]) {
-        setAuthToken(accessToken)
-        setToken(accessToken)
-        setUser(u)
-        setPerms(perms)
-        setNewEmail(u.email)
+    function applyAuthResult(res: AuthResponse) {
+        session.start(res)
+        setToken(res.accessToken)
+        setUser(res.user)
+        setPerms(parseJwtPermissions(res.accessToken))
+        setNewEmail(res.user.email)
     }
 
     async function quickStart(username: string) {
@@ -95,19 +104,10 @@ export function App() {
         const email = `${username}@example.com`
         const password = "secret123"
         const reg = await authApi.register({username, email: email as any, password}).asResult()
-        if (reg.success) {
-            // Parse permissions from JWT payload (middle base64 segment)
-            const perms = parseJwtPermissions(reg.data.accessToken)
-            applyAuthResult(reg.data.accessToken, reg.data.user, perms)
-            return
-        }
+        if (reg.success) { applyAuthResult(reg.data); return }
         if (reg.type === "EXISTS") {
             const log = await authApi.login({username, password}).asResult()
-            if (log.success) {
-                const perms = parseJwtPermissions(log.data.accessToken)
-                applyAuthResult(log.data.accessToken, log.data.user, perms)
-                return
-            }
+            if (log.success) { applyAuthResult(log.data); return }
             setAuthError(`${log.type}`)
             return
         }
@@ -118,24 +118,19 @@ export function App() {
         e.preventDefault(); setAuthError("")
         const res = await authApi.login({username: loginUser, password: loginPass}).asResult()
         if (!res.success) { setAuthError(res.type); return }
-        const perms = parseJwtPermissions(res.data.accessToken)
-        applyAuthResult(res.data.accessToken, res.data.user, perms)
+        applyAuthResult(res.data)
     }
 
     async function handleRegister(e: React.FormEvent) {
         e.preventDefault(); setAuthError("")
         const res = await authApi.register({username: regUser, email: regEmail as any, password: regPass}).asResult()
         if (!res.success) { setAuthError(res.type); return }
-        const perms = parseJwtPermissions(res.data.accessToken)
-        applyAuthResult(res.data.accessToken, res.data.user, perms)
+        applyAuthResult(res.data)
     }
 
     function handleLogout() {
-        clearAuthToken(); clearOrgToken()
-        setUser(null); setToken(null); setPerms([]); setSelOrg(null)
-        setOrgList([]); setBannerCount(0)
-        wsRef.current?.disconnect(); wsRef.current = null
-        setWsConnected(false); setWsLog([])
+        session.logout()
+        // onLogout listener handles state cleanup
     }
 
     // ── org helpers ────────────────────────────────────────────────────────────
@@ -145,15 +140,14 @@ export function App() {
         if (res.success) setOrgList(res.data)
     }
 
-    async function selectOrg(orgId: string) {
-        const res = await orgApi.selectOrg({orgId: orgId as any}).asResult()
-        if (!res.success) return
-        setOrgToken(res.data.orgToken)
-        setSelOrg(res.data.org)
+    async function selectOrg(org: Org) {
+        await session.derived.org.select({orgId: org.id})
+        setSelOrg(org)
     }
 
     function deselectOrg() {
-        clearOrgToken(); setSelOrg(null)
+        session.derived.org.clear()
+        setSelOrg(null)
     }
 
     // ── HTTP request helpers ───────────────────────────────────────────────────
@@ -162,15 +156,6 @@ export function App() {
         const res = await userApi.me().asResult()
         setLastReq({method: "GET", path: "/api/users/me", status: res.success ? "ok" : "err",
             body: res.success ? res.data : {error: res.type}})
-    }
-
-    async function callMeNoToken() {
-        const saved = token!
-        clearAuthToken()
-        const res = await userApi.me().asResult()
-        setAuthToken(saved)
-        setLastReq({method: "GET", path: "/api/users/me  (no token)", status: "err",
-            body: {error: res.success ? "unexpected ok" : res.type, statusCode: 401}})
     }
 
     async function callOrgInfo() {
@@ -231,7 +216,7 @@ export function App() {
         wsRef.current?.outgoing.bannerPing()
     }
 
-    const hasBannerPerm = permissions.includes("CAN_SEE_RED_BANNER")
+    const hasBannerPerm = permissions.includes("CAN_UPDATE_RED_BANNER_COUNTER")
 
     // ── anonymous view ─────────────────────────────────────────────────────────
 
@@ -255,7 +240,7 @@ export function App() {
                         ))}
                     </div>
                     <div style={{fontSize: 11, color: "#aaa"}}>
-                        alice + carol get <strong>CAN_SEE_RED_BANNER</strong> · bob doesn't · password: secret123
+                        alice + carol get <strong>CAN_UPDATE_RED_BANNER_COUNTER</strong> · bob doesn't · password: secret123
                     </div>
                     {authError && <div style={{color: "#dc2626", fontSize: 12, marginTop: 8}}>{authError}</div>}
                 </div>
@@ -310,7 +295,7 @@ export function App() {
                         <span key={p} style={{background: "#16a34a", color: "#fff", fontSize: 10, padding: "1px 6px", borderRadius: 3, marginRight: 4}}>{p}</span>
                     ))}
                 </div>
-                <div style={{fontSize: 11, color: "#888", marginBottom: 6}}>Bearer token</div>
+                <div style={{fontSize: 11, color: "#888", marginBottom: 6}}>Bearer token (auto-refreshes via AuthSession)</div>
                 <Code>{token}</Code>
             </Section>
 
@@ -339,7 +324,7 @@ export function App() {
                                 <button style={btn} onClick={loadOrgs}>Load my orgs</button>
                             ) : (
                                 orgList.map(org => (
-                                    <button key={org.id} style={btnPurple} onClick={() => selectOrg(org.id)}>
+                                    <button key={org.id} style={btnPurple} onClick={() => selectOrg(org)}>
                                         {org.name}
                                     </button>
                                 ))
@@ -347,7 +332,7 @@ export function App() {
                         </div>
                         {orgList.length > 0 && (
                             <div style={{fontSize: 11, color: "#888"}}>
-                                Click an org to receive an org-scoped JWT (x-org-token header)
+                                Click an org to receive an org-scoped JWT (x-org-token header) via AuthSession derived token pool
                             </div>
                         )}
                     </div>
@@ -355,7 +340,7 @@ export function App() {
             </Section>
 
             {/* 3 — Red banner */}
-            <Section n={3} title="Red banner — permission gate: CAN_SEE_RED_BANNER">
+            <Section n={3} title="Red banner — permission gate: CAN_UPDATE_RED_BANNER_COUNTER">
                 <div style={{
                     background: "#fecaca", border: "2px solid #ef4444", borderRadius: 6,
                     padding: "12px 16px", marginBottom: 12, display: "flex", alignItems: "center", gap: 12,
@@ -365,8 +350,8 @@ export function App() {
                         <div style={{fontWeight: "bold", fontSize: 13}}>Red Banner</div>
                         <div style={{fontSize: 12, color: "#666"}}>
                             {hasBannerPerm
-                                ? "You have CAN_SEE_RED_BANNER — clicking is allowed"
-                                : "You don't have CAN_SEE_RED_BANNER — clicking will return FORBIDDEN"}
+                                ? "You have CAN_UPDATE_RED_BANNER_COUNTER — clicking is allowed"
+                                : "You don't have CAN_UPDATE_RED_BANNER_COUNTER — clicking will return FORBIDDEN"}
                         </div>
                     </div>
                     <div style={{textAlign: "right"}}>
@@ -387,9 +372,6 @@ export function App() {
                 <div style={{display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 12}}>
                     <button style={btnGreen} onClick={callMe}>
                         <Badge label="GET" color="#16a34a" />/api/users/me
-                    </button>
-                    <button style={btnWarning} onClick={callMeNoToken}>
-                        <Badge label="GET" color="#d97706" />/api/users/me — no token
                     </button>
                 </div>
                 <form onSubmit={callUpdateProfile} style={{display: "flex", gap: 8, alignItems: "center", marginBottom: 12}}>
@@ -429,7 +411,7 @@ export function App() {
                         </>
                     )}
                     <span style={{fontSize: 11, color: "#888"}}>
-                        {wsConnected ? "bannerPing requires CAN_SEE_RED_BANNER — gated by the framework, not app code" : "Connect with user JWT via Authorization header"}
+                        {wsConnected ? "bannerPing requires CAN_UPDATE_RED_BANNER_COUNTER — gated by the framework, not app code" : "Connect with user JWT via Authorization header"}
                     </span>
                 </div>
                 <div ref={wsLogRef} style={{height: 180, overflowY: "auto", background: "#1e1e1e", borderRadius: 4, padding: "8px 10px", fontSize: 12, fontFamily: "monospace"}}>

@@ -1,6 +1,6 @@
-import {EXISTS, GGContractImplementation, NOT_FOUND} from "@grest-ts/schema"
-import {AuthToken} from "@grest-ts/auth"
-import {AuthPublicApiContract, InvalidCredentialsError, RegisterRequest, LoginRequest, AuthResponse} from "../../../api/AuthPublicApi"
+import {EXISTS, GGContractImplementation, NOT_AUTHORIZED, NOT_FOUND} from "@grest-ts/schema"
+import {AuthError, AuthToken} from "@grest-ts/auth"
+import {AuthPublicApiContract, InvalidCredentialsError, RegisterRequest, LoginRequest, RefreshRequest, AuthResponse, TokenPairResponse} from "../../../api/AuthPublicApi"
 import {UserApiContract, UpdateProfileRequest} from "../../../api/UserApi"
 import {UserContext, UserPermission, tUserId, User} from "../../../api/auth/UserAuth"
 import {UserTable} from "../tables/UserTable"
@@ -38,6 +38,19 @@ export class UserService implements GGContractImplementation<typeof AuthPublicAp
         return {
             ...(await this.tokenEngine.issue(record.id, record.permissions, {})),
             user: record
+        }
+    }
+
+    public refresh = async ({refreshToken}: RefreshRequest): Promise<TokenPairResponse> => {
+        try {
+            return await this.tokenEngine.refresh(refreshToken, async (subject) => {
+                const record = this.table.getRecord(subject as tUserId)
+                if (!record) throw new NOT_AUTHORIZED()
+                return {permissions: record.permissions, claims: {}}
+            })
+        } catch (err) {
+            if (err instanceof AuthError) throw new NOT_AUTHORIZED({debugMessage: err.code})
+            throw err
         }
     }
 

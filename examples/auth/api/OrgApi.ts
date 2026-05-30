@@ -1,5 +1,5 @@
 import {GGRpc, httpSchema} from "@grest-ts/http"
-import {FORBIDDEN, GGContractClass, IsArray, IsObject, IsString, NOT_AUTHORIZED, SERVER_ERROR, GG_NO_PERMISSIONS} from "@grest-ts/schema"
+import {FORBIDDEN, GGContractClass, IsArray, IsNumber, IsObject, IsString, NOT_AUTHORIZED, SERVER_ERROR, GG_NO_PERMISSIONS} from "@grest-ts/schema"
 import {USER_TOKEN_WIRE} from "./auth/UserAuth"
 import {IsOrg, IsOrgId, ORG_TOKEN_WIRE, OrgPermission} from "./auth/OrgAuth"
 
@@ -10,6 +10,7 @@ export type SelectOrgRequest = typeof IsSelectOrgRequest.infer
 
 export const IsSelectOrgResponse = IsObject({
     orgToken: IsString.docs({title: "Org access token (JWT)", description: "Pass as x-org-token header"}),
+    orgTokenExpiresAt: IsNumber.docs({title: "Org token expiry (ms epoch)"}),
     org: IsOrg,
 })
 export type SelectOrgResponse = typeof IsSelectOrgResponse.infer
