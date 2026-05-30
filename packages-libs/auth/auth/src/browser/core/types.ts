@@ -14,9 +14,16 @@ export type DerivedParams<C> = C extends DerivedConfig<infer P, any> ? P : never
 export type DerivedResult<C> = C extends DerivedConfig<any, infer T> ? T : never
 
 export type SessionStatus = "anonymous" | "restoring" | "authenticated" | "expired"
-export interface SessionState { status: SessionStatus; refreshing: boolean; degraded: boolean }
+export interface SessionState {
+    status: SessionStatus;
+    refreshing: boolean;
+    degraded: boolean
+}
 
-export interface SharedTokens { refreshToken?: string; root: AccessOnly }
+export interface SharedTokens {
+    refreshToken?: string;
+    root: AccessOnly
+}
 
 export interface Clock { now(): number }
 export interface CrossTabLock { withLock<T>(name: string, fn: () => Promise<T>): Promise<T> }

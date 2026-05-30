@@ -62,14 +62,35 @@ export class GGAuthSession<D extends DerivedMap = {}> {
         }
     }
 
-    start(pair: TokenPair): void { this._session.start(pair) }
-    logout(): void { this._session.logout() }
-    init(): Promise<void> { return this._session.init() }
-    getState(): SessionState { return this._session.getState() }
-    subscribe(listener: () => void): () => void { return this._session.subscribe(listener) }
-    onRefreshed(cb: () => void): () => void { return this._session.onRefreshed(cb) }
-    onLogout(cb: () => void): () => void { return this._session.onLogout(cb) }
-    getAccessToken(opts?: {awaitRefresh?: boolean}): Promise<string | undefined> {
+    public start(pair: TokenPair): void {
+        this._session.start(pair)
+    }
+
+    public logout(): void {
+        this._session.logout()
+    }
+
+    public init(): Promise<void> {
+        return this._session.init()
+    }
+
+    public getState(): SessionState {
+        return this._session.getState()
+    }
+
+    public subscribe(listener: () => void): () => void {
+        return this._session.subscribe(listener)
+    }
+
+    public onRefreshed(cb: () => void): () => void {
+        return this._session.onRefreshed(cb)
+    }
+
+    public onLogout(cb: () => void): () => void {
+        return this._session.onLogout(cb)
+    }
+
+    public getAccessToken(opts?: {awaitRefresh?: boolean}): Promise<string | undefined> {
         return this._session.getAccessToken(opts)
     }
 }
