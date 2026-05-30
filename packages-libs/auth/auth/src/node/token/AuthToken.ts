@@ -1,26 +1,22 @@
 import {createHash, randomBytes} from "node:crypto"
-import {IsArray, IsObject, type GGSchema} from "@grest-ts/schema"
+import {IsArray, IsObject, type GGSchema, IsTimestampMs, IsString} from "@grest-ts/schema"
 import {AuthError} from "../errors"
 import type {SigningStrategy} from "../signing/SigningStrategy"
 import {IsRefreshTokenRecord, type RefreshTokenStore} from "../refresh/RefreshTokenStore"
 
 export type NoClaims = Record<string, never>
 
-export interface TokenPair {
-    accessToken: string
-    refreshToken: string
-    /** ms epoch. */
-    accessExpiresAt: number
-    /** ms epoch. */
-    refreshExpiresAt: number
-}
+export const IsRefreshToken = IsString.nonEmpty.brand("GGAuth.refreshToken")
+export const IsGGRefreshTokenData = IsObject({token: IsRefreshToken, expiresAt: IsTimestampMs}).brand("GGAuth.refreshTokenData")
 
-/** What `issueAccess` returns: an access token with no refresh counterpart. */
-export interface AccessOnly {
-    accessToken: string
-    /** ms epoch. */
-    accessExpiresAt: number
-}
+export const IsGGAccessToken = IsString.nonEmpty.brand("GGAuth.accessToken")
+export const IsGGAccessTokenData = IsObject({token: IsGGAccessToken, expiresAt: IsTimestampMs}).brand("GGAuth.accessTokenData")
+
+export const IsGGAuthTokenResult = IsObject({access: IsGGAccessTokenData})
+export type GGAuthTokenResult = typeof IsGGAuthTokenResult.infer
+
+export const IsGGAuthTokensResult = IsObject({access: IsGGAccessTokenData, refresh: IsGGRefreshTokenData})
+export type GGAuthTokensResult = typeof IsGGAuthTokensResult.infer
 
 export type AccessPayload<P extends string, C extends object> = C & {
     sub: string
@@ -80,15 +76,17 @@ export class AuthToken<P extends string, C extends object = NoClaims> {
         this.randomToken = options.randomToken ?? (() => randomBytes(32).toString("base64url"))
     }
 
-    public issue = async (subject: string, permissions: P[], claims: C): Promise<TokenPair> => {
+    public issue = async (subject: string, permissions: P[], claims: C): Promise<GGAuthTokensResult> => {
         return await this.mint(subject, this.permissions.parse(permissions), this.claims.parse(claims), this.randomToken())
     }
 
     // Mint an access token with no refresh token and no store write. For a secondary/scoped
     // kind re-minted behind a primary token (e.g. an org token), where rotation is the primary
     // token's job. Works with or without a store configured.
-    public issueAccess = async (subject: string, permissions: P[], claims: C): Promise<AccessOnly> => {
-        return await this.signAccess(subject, this.permissions.parse(permissions), this.claims.parse(claims), this.now())
+    public issueAccess = async (subject: string, permissions: P[], claims: C): Promise<GGAuthTokenResult> => {
+        return {
+            access: await this.signAccess(subject, this.permissions.parse(permissions), this.claims.parse(claims), this.now())
+        }
     }
 
     public verifyAccess = async (accessToken: string): Promise<AccessPayload<P, C>> => {
@@ -116,7 +114,7 @@ export class AuthToken<P extends string, C extends object = NoClaims> {
     public refresh = async (
         refreshToken: string,
         resolve: (subject: string) => Promise<RefreshedGrant<P, C>>,
-    ): Promise<TokenPair> => {
+    ): Promise<GGAuthTokensResult> => {
         const store = this.requireStore()
         const hash = this.hash(refreshToken)
         const record = await store.find(hash)
@@ -151,10 +149,10 @@ export class AuthToken<P extends string, C extends object = NoClaims> {
         await this.requireStore().revokeForSubject(subject)
     }
 
-    private mint = async (subject: string, permissions: P[], claims: C, familyId: string): Promise<TokenPair> => {
+    private mint = async (subject: string, permissions: P[], claims: C, familyId: string): Promise<GGAuthTokensResult> => {
         const store = this.requireStore()
         const nowMs = this.now()
-        const {accessToken, accessExpiresAt} = await this.signAccess(subject, permissions, claims, nowMs)
+        const accessToken = await this.signAccess(subject, permissions, claims, nowMs)
         const refreshExpiresAt = nowMs + this.refreshTtlMs
         const refreshToken = this.randomToken()
         await store.save(IsRefreshTokenRecord.parse({
@@ -164,20 +162,26 @@ export class AuthToken<P extends string, C extends object = NoClaims> {
             createdAt: nowMs,
             expiresAt: refreshExpiresAt,
         }))
-        return {accessToken, refreshToken, accessExpiresAt, refreshExpiresAt}
+        return {
+            access: accessToken,
+            refresh: IsGGRefreshTokenData.parse({
+                token: refreshToken,
+                expiresAt: refreshExpiresAt
+            })
+        }
     }
 
-    private signAccess = async (subject: string, permissions: P[], claims: C, nowMs: number): Promise<AccessOnly> => {
-        const accessExpiresAt = nowMs + this.accessTtlMs
-        const accessToken = await this.signer.sign({
+    private signAccess = async (subject: string, permissions: P[], claims: C, nowMs: number): Promise<typeof IsGGAccessTokenData.infer> => {
+        const expiresAt = nowMs + this.accessTtlMs
+        const token = await this.signer.sign({
             ...(claims as object),
             ...(this.audience !== undefined ? {aud: this.audience} : {}),
             sub: subject,
             permissions,
             iat: Math.floor(nowMs / 1000),
-            exp: Math.floor(accessExpiresAt / 1000),
+            exp: Math.floor(expiresAt / 1000),
         })
-        return {accessToken, accessExpiresAt}
+        return IsGGAccessTokenData.parse({token, expiresAt})
     }
 
     private requireStore = (): RefreshTokenStore => {

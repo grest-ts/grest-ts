@@ -34,7 +34,7 @@ export const IsTokenPairResponse = IsObject({
 export type TokenPairResponse = typeof IsTokenPairResponse.infer
 
 export const IsAuthResponse = IsTokenPairResponse.extend({
-    user: IsUser,
+    data: IsUser,
 })
 export type AuthResponse = typeof IsAuthResponse.infer
 

@@ -10,7 +10,7 @@ export type {RefreshTokenRecord, RefreshTokenStore} from "./node/refresh/Refresh
 export {InMemoryRefreshTokenStore} from "./node/refresh/InMemoryRefreshTokenStore"
 
 export {AuthToken} from "./node/token/AuthToken"
-export type {AccessOnly, AccessPayload, AuthTokenOptions, NoClaims, RefreshedGrant, TokenPair} from "./node/token/AuthToken"
+export type {GGAuthTokenResult, AccessPayload, AuthTokenOptions, NoClaims, RefreshedGrant, GGAuthTokensResult} from "./node/token/AuthToken"
 
 export {permissionsChecker} from "./node/permissions"
 
