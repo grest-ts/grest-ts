@@ -7,6 +7,7 @@ import {BannerApi} from "../../api/BannerApi"
 import {LiveApi} from "../../api/LiveApi"
 import {USER_TOKEN} from "../../api/auth/UserAuth"
 import {ORG_TOKEN} from "../../api/auth/OrgAuth"
+import type {SelectOrgRequest} from "../../api/OrgApi"
 
 // Initialize a persistent global browser context so GGContextKey works outside Node.js AsyncLocalStorage.
 const browserContext = new GGContext("browser")
@@ -24,19 +25,9 @@ export const api = {
     }
 }
 
-export const session = new GGAuthSession({
-    key: USER_TOKEN,
-    refresh: (refreshToken: string | undefined) => {
-        return api.authApi.refresh({refreshToken: refreshToken!})
-    },
-    derived: {
-        org: {
-            key: ORG_TOKEN,
-            mint: async ({orgId}: { orgId: string }) => {
-                const res = await api.orgApi.selectOrg({orgId: orgId as any})
-                return {accessToken: res.orgToken, accessExpiresAt: res.orgTokenExpiresAt, ...res.org}
-            },
-        },
-    },
-})
+export const session = new GGAuthSession(USER_TOKEN, (refreshToken) => api.authApi.refresh({refreshToken: refreshToken!}))
+    .addDerived("org", ORG_TOKEN, async (data: SelectOrgRequest) => {
+        const res = await api.orgApi.selectOrg(data)
+        return {accessToken: res.orgToken, accessExpiresAt: res.orgTokenExpiresAt, ...res.org}
+    })
 

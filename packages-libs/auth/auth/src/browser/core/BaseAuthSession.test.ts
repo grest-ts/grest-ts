@@ -660,11 +660,9 @@ describe("AuthSession — GGContextKeySynchronizer.provide wiring", () => {
             const rootSlot = new FakeKey()
             const orgSlot = new FakeKey()
 
-            new GGAuthSession({
-                refresh: vi.fn(),
-                key: rootSlot,
-                derived: {org: {key: orgSlot, mint: vi.fn()}},
-            })
+            new GGAuthSession(rootSlot, vi.fn())
+                .addDerived("org", orgSlot, vi.fn())
+                .start({accessToken: "at", accessExpiresAt: 0, refreshToken: "rt"}) // triggers _getSession
 
             expect(provideSpy).toHaveBeenCalledTimes(2)
 
@@ -701,7 +699,8 @@ describe("AuthSession — GGContextKeySynchronizer.provide wiring", () => {
         })
 
         try {
-            new GGAuthSession({refresh: vi.fn(), key: new FakeKey()})
+            new GGAuthSession(new FakeKey(), vi.fn())
+                .start({accessToken: "at", accessExpiresAt: 0, refreshToken: "rt"}) // triggers _getSession
             expect(provideSpy).toHaveBeenCalledTimes(1)
         } finally {
             provideSpy.mockRestore()
@@ -726,11 +725,9 @@ describe("AuthSession — GGContextKeySynchronizer.provide wiring", () => {
 
         try {
             const orgSlot = new FakeKey()
-            new GGAuthSession({
-                refresh: vi.fn(),
-                key: new FakeKey(),
-                derived: {org: {key: orgSlot, mint: vi.fn()}},
-            })
+            new GGAuthSession(new FakeKey(), vi.fn())
+                .addDerived("org", orgSlot, vi.fn())
+                .start({accessToken: "at", accessExpiresAt: 0, refreshToken: "rt"}) // triggers _getSession
 
             const rootCtrl = capturedControllers[0]
             const orgCtrl = capturedControllers[1]

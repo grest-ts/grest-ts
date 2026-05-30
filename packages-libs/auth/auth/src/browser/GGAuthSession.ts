@@ -6,14 +6,11 @@ import {systemClock} from "./core/systemClock"
 import {localStorageSharedCache} from "./core/localStorageCache"
 import {webLocksLock} from "./core/webLocksLock"
 import {browserScheduler} from "./core/browserScheduler"
-import type {DerivedConfig, DerivedMap, DerivedParams, DerivedResult, SessionState, TokenKey, TokenPair} from "./core/types"
+import type {AccessOnly, DerivedConfig, DerivedMap, DerivedParams, DerivedResult, SessionState, TokenKey, TokenPair} from "./core/types"
 import type {DerivedToken} from "./GGAuthSessionBase"
 
-export interface AuthSessionConfig<D extends DerivedMap = {}> {
-    refresh: (refreshToken?: string) => Promise<TokenPair>
-    key: TokenKey
-    derived?: D
-    refreshKeyStorage?: "localStorage" | "cookie"
+export interface GGAuthSessionOptions {
+    storage?: "localStorage" | "cookie"
     logout?: () => Promise<void>
     cacheKey?: string
     refreshLeadMs?: number
@@ -22,75 +19,105 @@ export interface AuthSessionConfig<D extends DerivedMap = {}> {
 }
 
 export class GGAuthSession<D extends DerivedMap = {}> {
-    private readonly _session: BaseAuthSession<D>
+    private _session: BaseAuthSession<D> | null = null
+    private readonly _rootKey: TokenKey
+    private readonly _refresh: (refreshToken?: string) => Promise<TokenPair>
+    private readonly _options: GGAuthSessionOptions
+    private readonly _derivedConfigs: Record<string, {key: TokenKey; mint: (params: unknown) => Promise<AccessOnly>}> = {}
 
-    readonly derived: {[K in keyof D]: DerivedToken<DerivedParams<D[K]>, DerivedResult<D[K]>>}
+    constructor(
+        key: TokenKey,
+        refresh: (refreshToken?: string) => Promise<TokenPair>,
+        options?: GGAuthSessionOptions,
+    ) {
+        this._rootKey = key
+        this._refresh = refresh
+        this._options = options ?? {}
+    }
 
-    constructor(config: AuthSessionConfig<D>) {
+    public addDerived<N extends string, P, T extends AccessOnly>(
+        name: N,
+        key: TokenKey,
+        mint: (params: P) => Promise<T>,
+    ): GGAuthSession<D & {[K in N]: DerivedConfig<P, T>}> {
+        this._derivedConfigs[name] = {key, mint: mint as (params: unknown) => Promise<AccessOnly>}
+        return this as unknown as GGAuthSession<D & {[K in N]: DerivedConfig<P, T>}>
+    }
+
+    private _getSession(): BaseAuthSession<D> {
+        if (this._session) return this._session
+
+        const derived = Object.fromEntries(
+            Object.entries(this._derivedConfigs).map(([name, {key, mint}]) => [name, {key, mint}]),
+        ) as unknown as D
+
         this._session = new BaseAuthSession<D>(
             {
-                refresh: config.refresh,
-                key: config.key,
-                derived: config.derived,
-                storage: config.refreshKeyStorage ?? "localStorage",
-                logout: config.logout,
-                refreshLeadMs: config.refreshLeadMs ?? 60_000,
-                clockSkewMs: config.clockSkewMs ?? 10_000,
-                isFatalRefreshError: config.isFatalRefreshError ?? ((e) => e instanceof NOT_AUTHORIZED),
+                refresh: this._refresh,
+                key: this._rootKey,
+                derived,
+                storage: this._options.storage ?? "localStorage",
+                logout: this._options.logout,
+                refreshLeadMs: this._options.refreshLeadMs ?? 60_000,
+                clockSkewMs: this._options.clockSkewMs ?? 10_000,
+                isFatalRefreshError: this._options.isFatalRefreshError ?? ((e) => e instanceof NOT_AUTHORIZED),
             },
             {
                 clock: systemClock,
                 lock: webLocksLock(),
-                cache: localStorageSharedCache(config.cacheKey ?? "auth.session"),
+                cache: localStorageSharedCache(this._options.cacheKey ?? "auth.session"),
                 scheduler: browserScheduler(),
             },
         )
 
-        this.derived = this._session.derived
-
-        GGContextKeySynchronizer.provide(config.key as unknown as GGContextKey<string | undefined>, {
-            isStale: () => this._session.isRootStale(),
-            recover: () => this._session.ensureFresh(),
+        GGContextKeySynchronizer.provide(this._rootKey as unknown as GGContextKey<string | undefined>, {
+            isStale: () => this._session!.isRootStale(),
+            recover: () => this._session!.ensureFresh(),
         })
 
-        for (const [key, d] of Object.entries(config.derived ?? {})) {
-            const derived = d as DerivedConfig<unknown>
-            GGContextKeySynchronizer.provide(derived.key as unknown as GGContextKey<string | undefined>, {
-                isStale: () => this._session.isDerivedStale(key),
-                recover: () => this._session.ensureActiveDerivedFresh(key),
+        for (const [name, {key}] of Object.entries(this._derivedConfigs)) {
+            GGContextKeySynchronizer.provide(key as unknown as GGContextKey<string | undefined>, {
+                isStale: () => this._session!.isDerivedStale(name),
+                recover: () => this._session!.ensureActiveDerivedFresh(name),
             })
         }
+
+        return this._session
+    }
+
+    get derived(): {[K in keyof D]: DerivedToken<DerivedParams<D[K]>, DerivedResult<D[K]>>} {
+        return this._getSession().derived
     }
 
     public start(pair: TokenPair): void {
-        this._session.start(pair)
+        this._getSession().start(pair)
     }
 
     public logout(): void {
-        this._session.logout()
+        this._getSession().logout()
     }
 
     public init(): Promise<void> {
-        return this._session.init()
+        return this._getSession().init()
     }
 
     public getState(): SessionState {
-        return this._session.getState()
+        return this._getSession().getState()
     }
 
     public subscribe(listener: () => void): () => void {
-        return this._session.subscribe(listener)
+        return this._getSession().subscribe(listener)
     }
 
     public onRefreshed(cb: () => void): () => void {
-        return this._session.onRefreshed(cb)
+        return this._getSession().onRefreshed(cb)
     }
 
     public onLogout(cb: () => void): () => void {
-        return this._session.onLogout(cb)
+        return this._getSession().onLogout(cb)
     }
 
     public getAccessToken(opts?: {awaitRefresh?: boolean}): Promise<string | undefined> {
-        return this._session.getAccessToken(opts)
+        return this._getSession().getAccessToken(opts)
     }
 }

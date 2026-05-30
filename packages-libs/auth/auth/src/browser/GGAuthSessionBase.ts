@@ -11,16 +11,29 @@ import type {
     TokenPair,
 } from "./core/types"
 
-export class DerivedToken<P, T extends AccessOnly = AccessOnly> {
-    constructor(
-        private readonly _select: (params: P) => Promise<void>,
-        private readonly _clear: () => void,
-        private readonly _get: () => T | undefined,
-    ) {}
+// Data fields of T that aren't part of the token bookkeeping.
+type DerivedData<T extends AccessOnly> = Partial<Omit<T, keyof AccessOnly>>
 
-    select(params: P): Promise<void> { return this._select(params) }
-    clear(): void { this._clear() }
-    get(): T | undefined { return this._get() }
+// Public handle for a derived token slot. Methods drive the lifecycle;
+// data properties proxy the current active result's fields.
+export type DerivedToken<P, T extends AccessOnly = AccessOnly> = {
+    select(params: P): Promise<void>
+    clear(): void
+    get(): T | undefined
+} & DerivedData<T>
+
+function makeDerivedToken<P, T extends AccessOnly>(
+    _select: (params: P) => Promise<void>,
+    _clear: () => void,
+    _get: () => T | undefined,
+): DerivedToken<P, T> {
+    const methods = {select: _select, clear: _clear, get: _get}
+    return new Proxy(methods as object, {
+        get(target, prop) {
+            if (prop in target) return (target as Record<string, unknown>)[prop as string]
+            return _get()?.[prop as keyof T]
+        },
+    }) as unknown as DerivedToken<P, T>
 }
 
 interface DerivedEntry {
@@ -68,7 +81,7 @@ export class BaseAuthSession<D extends DerivedMap> {
         const handles = {} as {[K in keyof D]: DerivedToken<DerivedParams<D[K]>, DerivedResult<D[K]>>}
         for (const key of Object.keys(derivedMap) as (keyof D & string)[]) {
             this.derivedState.set(key, {pool: new Map(), active: undefined})
-            handles[key] = new DerivedToken(
+            handles[key] = makeDerivedToken(
                 (params) => this.selectDerived(key, params),
                 () => this.clearDerived(key),
                 () => this.getDerived(key) as DerivedResult<D[typeof key]> | undefined,
@@ -285,9 +298,7 @@ export class BaseAuthSession<D extends DerivedMap> {
         const cfg = this.derivedCfgMap[key]
         if (cfg) cfg.key.set(undefined)
         const entry = this.derivedState.get(key)
-        if (entry) {
-            entry.active = undefined
-        }
+        if (entry) entry.active = undefined
         this.notifyListeners()
     }
 
