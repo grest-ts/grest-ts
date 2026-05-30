@@ -26,7 +26,7 @@ export class OrgService implements GGContractImplementation<typeof OrgApiContrac
             [OrgPermission.ORG_MEMBER],
             {orgId: request.orgId},
         )
-        return {accessToken, accessExpiresAt, ...org}
+        return {access: {token: accessToken, expires: accessExpiresAt}, data: org}
     }
 
     public orgInfo = async (): Promise<Org> => {

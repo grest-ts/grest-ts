@@ -147,8 +147,8 @@ describe("Organization selector", () => {
     test("orgInfo succeeds after selectOrg", async () => {
         await ctx.login(aliceData)
         const res = await ctx.org.selectOrg({orgId: "org-1" as any})
-        ctx.setOrgToken(res.accessToken)
-        await ctx.org.orgInfo().toMatchObject({name: res.name})
+        ctx.setOrgToken(res.access.token)
+        await ctx.org.orgInfo().toMatchObject({name: res.data.name})
     })
 
     test("non-member cannot select org", async () => {

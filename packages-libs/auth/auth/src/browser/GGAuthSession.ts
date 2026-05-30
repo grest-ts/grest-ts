@@ -6,7 +6,7 @@ import {systemClock} from "./core/systemClock"
 import {localStorageSharedCache} from "./core/localStorageCache"
 import {webLocksLock} from "./core/webLocksLock"
 import {browserScheduler} from "./core/browserScheduler"
-import type {AccessOnly, DerivedConfig, DerivedMap, DerivedParams, DerivedResult, SessionState, TokenKey, TokenPair} from "./core/types"
+import type {DerivedConfig, DerivedData, DerivedMap, DerivedParams, DerivedTokenResult, SessionState, TokenKey, TokenPair} from "./core/types"
 import type {DerivedToken} from "./GGAuthSessionBase"
 
 export interface GGTokenSessionConfig {
@@ -26,7 +26,7 @@ export class GGAuthSession<D extends DerivedMap = {}> {
     private readonly _logout: (() => Promise<void>) | undefined
     private readonly _storage: "localStorage" | "cookie"
     private readonly _cacheKey: string
-    private readonly _derivedConfigs: Record<string, {key: TokenKey; mint: (params: unknown) => Promise<AccessOnly>}> = {}
+    private readonly _derivedConfigs: Record<string, {key: TokenKey; mint: (params: unknown) => Promise<DerivedTokenResult<unknown>>}> = {}
 
     private constructor(
         key: TokenKey,
@@ -56,13 +56,13 @@ export class GGAuthSession<D extends DerivedMap = {}> {
         return new GGAuthSession(key, () => config.refresh(), "cookie", config.logout, "auth.session")
     }
 
-    public addDerived<N extends string, P, T extends AccessOnly>(
+    public addDerived<N extends string, P, DData>(
         name: N,
         key: TokenKey,
-        config: {mint: (params: P) => Promise<T>},
-    ): GGAuthSession<D & {[K in N]: DerivedConfig<P, T>}> {
-        this._derivedConfigs[name] = {key, mint: config.mint as (params: unknown) => Promise<AccessOnly>}
-        return this as unknown as GGAuthSession<D & {[K in N]: DerivedConfig<P, T>}>
+        config: {mint: (params: P) => Promise<DerivedTokenResult<DData>>},
+    ): GGAuthSession<D & {[K in N]: DerivedConfig<P, DData>}> {
+        this._derivedConfigs[name] = {key, mint: config.mint as (params: unknown) => Promise<DerivedTokenResult<unknown>>}
+        return this as unknown as GGAuthSession<D & {[K in N]: DerivedConfig<P, DData>}>
     }
 
     private _getSession(): BaseAuthSession<D> {
@@ -106,7 +106,7 @@ export class GGAuthSession<D extends DerivedMap = {}> {
         return this._session
     }
 
-    get derived(): {[K in keyof D]: DerivedToken<DerivedParams<D[K]>, DerivedResult<D[K]>>} {
+    get derived(): {[K in keyof D]: DerivedToken<DerivedParams<D[K]>, DerivedData<D[K]>>} {
         return this._getSession().derived
     }
 

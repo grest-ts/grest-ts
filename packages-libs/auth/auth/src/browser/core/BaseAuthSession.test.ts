@@ -10,12 +10,12 @@ import type {
     CrossTabLock,
     DerivedConfig,
     DerivedMap,
+    DerivedTokenResult,
     Scheduler,
     SharedCache,
     SharedTokens,
     TokenPair,
     TokenKey,
-    AccessOnly,
 } from "./types"
 
 // ---- Fakes ----
@@ -85,8 +85,8 @@ class FakeKey implements TokenKey {
 
 // ---- Helpers ----
 
-function makeAccess(accessToken: string, accessExpiresAt: number): AccessOnly {
-    return {accessToken, accessExpiresAt}
+function makeAccess(token: string, expires: number): DerivedTokenResult<unknown> {
+    return {access: {token, expires}, data: undefined}
 }
 
 function makePair(accessToken: string, accessExpiresAt: number, refreshToken?: string): TokenPair {
