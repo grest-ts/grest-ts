@@ -23,6 +23,6 @@ export const api = {
     }
 }
 
-export const session = GGAuthSession.withToken(USER_TOKEN, {refresh: api.authApi.refresh})
+export const session = GGAuthSession.withToken(USER_TOKEN, {refresh: api.authApi.refresh, localStorageKey: "auth"})
     .addDerived("org", ORG_TOKEN, {mint: api.orgApi.selectOrg})
 
