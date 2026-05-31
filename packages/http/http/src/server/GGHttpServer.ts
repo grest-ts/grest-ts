@@ -6,6 +6,8 @@ import {GG_HTTP_SERVER} from "./GG_HTTP_SERVER";
 import {GGLog} from "@grest-ts/logger";
 import findMyWay, {HTTPMethod} from "find-my-way";
 import type {GGHttpSchema} from "../schema/GGHttpSchema";
+import {GGWireContextKey} from "../schema/GGWireContextKey";
+import "../schema/GGWireContextKey.node";
 import {describePermission, GG_NO_PERMISSIONS, GGContractMethod, GGPermission} from "@grest-ts/schema";
 // Forward declaration — actual type lives in @grest-ts/websocket to avoid circular dep.
 // GGHttpServer only stores the array; callers cast as needed.
@@ -283,12 +285,32 @@ export class GGHttpServer {
         }
     }
 
+    private _checkWiresImplemented(): void {
+        const missing: string[] = [];
+        for (const schema of this._registeredSchemas) {
+            for (const mw of schema.apiMiddlewares) {
+                if (mw instanceof GGWireContextKey && mw.isSmart && !mw.hasHandler()) {
+                    missing.push(`  ${schema.name}  uses wire "${mw.name}"`);
+                }
+            }
+        }
+        if (missing.length > 0) {
+            throw new Error(
+                `GGHttpServer: these schemas .use() a smart wire that was never implemented on this ` +
+                `runtime:\n\n` +
+                missing.join("\n") +
+                `\n\nFix: call \`${"<WIRE>"}.define(...).create(deps)\` in compose() before the server starts.`
+            );
+        }
+    }
+
     public registerRoute(method: HttpMethod, path: string, handler: GGHttpRequestCallback): void {
         this.router.on(method as HTTPMethod, path, handler as unknown as findMyWay.Handler<findMyWay.HTTPVersion.V1>);
     }
 
     public async start(): Promise<void> {
         Object.freeze(this._registeredSchemas);
+        this._checkWiresImplemented();
         this._checkPermissionsAtStart();
         this._port = await new Promise((resolve) => {
             this.httpServer.listen(this.configuredPort, '0.0.0.0', () => {

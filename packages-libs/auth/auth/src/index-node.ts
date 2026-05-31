@@ -14,10 +14,6 @@ export type {GGAuthTokenResult, AccessPayload, AuthTokenOptions, NoClaims, Refre
 
 export {permissionsChecker} from "./node/permissions"
 
-export {AuthGuard} from "./node/http/AuthGuard"
-export type {AuthGuardOptions} from "./node/http/AuthGuard"
-export {scopeResolver} from "./node/http/scopeResolver"
-
 export {GoogleIdp} from "./node/idp/idp/google/GoogleIdp"
 export type {GoogleIdpOptions} from "./node/idp/idp/google/GoogleIdp"
 export {OidcIdp} from "./node/idp/OidcIdp"

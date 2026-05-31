@@ -52,6 +52,11 @@ export interface GGTransportMiddleware {
     parse?(inbound: GGInbound): void;
     /** Server: async validation after all parsing is done. Throwing rejects the request/connection. */
     process?(): Promise<void>;
+    /**
+     * Server: drop any ephemeral inbound value after process() and before the handler runs.
+     * A smart wire clears its raw credential here so handlers read undefined, never the token.
+     */
+    clear?(): void;
     /** Server: write response headers (set-cookie etc.). */
     respond?(response: GGResponse): void;
 }

@@ -11,9 +11,9 @@ export const LOCALE = new GGContextKey<string | undefined>("locale", IsString.or
 
 // Four bindings over those two keys. header vs cookie is the ONLY thing that differs —
 // each binding works on both HTTP and WebSocket via a single .use(...).
-export const accessViaHeader = GGHeader.middleware(ACCESS, {name: "authorization", scheme: "bearer"})
+export const accessViaHeader = new GGHeader("authorization", ACCESS, {scheme: "bearer"})
 export const accessViaCookie = GGCookie.middleware(ACCESS, {name: "access"})
-export const localeViaHeader = GGHeader.middleware(LOCALE, {name: "x-locale"})
+export const localeViaHeader = new GGHeader("x-locale", LOCALE)
 export const localeViaCookie = GGCookie.middleware(LOCALE, {name: "locale"})
 
 // One logical contract, reused verbatim across all four wirings. Distinct names only so

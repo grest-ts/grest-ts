@@ -10,6 +10,8 @@ import {describePermission, ERROR, FORBIDDEN, GG_NO_PERMISSIONS, GGContractApiDe
 import {HttpMethod} from "@grest-ts/common";
 import {GG_DISCOVERY} from "@grest-ts/discovery";
 import {GGContext, GGContextStore, type GGTransportMiddleware} from "@grest-ts/context";
+import {GGWireContextKey} from "../schema/GGWireContextKey";
+import "../schema/GGWireContextKey.node";
 import {GG_TRACE} from "@grest-ts/trace";
 import {GG_HTTP_REQUEST} from "./GG_HTTP_REQUEST";
 import {GG_COOKIE_WRITES} from "../schema/GGCookie";
@@ -77,6 +79,23 @@ function setupRoutes<TContract extends GGContractApiDefinition>(
     const scope = GGLocator.getScope();
     const parentContext = GGContextStore.tryGetContext();
 
+    // Smart wires on the schema ARE the scope resolver: identity is verified in their process()
+    // (already run by the request pipeline), and each wire's permissions() yields the caller's
+    // grants. An explicit .usePermissions(...) still wins if one was passed.
+    const smartWires = apiMiddlewares.filter(
+        (mw): mw is GGWireContextKey<any> => mw instanceof GGWireContextKey && mw.isSmart
+    );
+    const permissionResolver: GGScopeResolver | undefined =
+        config.permissionResolver ?? (smartWires.length > 0
+            ? async () => {
+                const scopes = new Set<string>();
+                for (const wire of smartWires) {
+                    for (const p of await wire.permissions()) scopes.add(p);
+                }
+                return scopes;
+            }
+            : undefined);
+
     for (const mw of apiMiddlewares) {
         const hKeys = Object.keys(mw.headers ?? {});
         const rhKeys = Object.keys(mw.responseHeaders ?? {});
@@ -103,7 +122,7 @@ function setupRoutes<TContract extends GGContractApiDefinition>(
     // @TODO This is not really used and only for testkit so it would register implementation of the contract... Not cool
     httpSchema.contract.implement(implementation);
 
-    if (config.permissionResolver) server._markResolverWired(httpSchema);
+    if (permissionResolver) server._markResolverWired(httpSchema);
 
     for (const methodName in httpSchema.codec) {
         // Wire format.
@@ -135,8 +154,8 @@ function setupRoutes<TContract extends GGContractApiDefinition>(
                 try {
                     const rpcInput = await requestParser.parseRequest(req)
                     try {
-                        if (config.permissionResolver) {
-                            const scopes = await config.permissionResolver()
+                        if (permissionResolver) {
+                            const scopes = await permissionResolver()
                             if (scopes != null) GG_PERMISSIONS.set(new GGPermissionChecker(scopes))
                             const required = contractFunctionSchema.permission
                             if (required !== undefined && required !== GG_NO_PERMISSIONS) {

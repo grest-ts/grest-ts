@@ -21,6 +21,7 @@ export async function applyRequestMiddleware(
     };
     for (const mw of middlewares) mw.parse?.(inbound);
     for (const mw of middlewares) await mw.process?.();
+    for (const mw of middlewares) mw.clear?.();
 }
 
 function flatten(src: Record<string, string | string[] | undefined>): Record<string, string | undefined> {

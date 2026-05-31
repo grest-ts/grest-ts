@@ -12,7 +12,7 @@ describe("header binding", () => {
     test("parse reads the named header (verbatim) into the key", () => {
         inContext(() => {
             const k = key("x-token")
-            GGHeader.middleware(k).parse!(inbound({"x-token": "abc123"}))
+            new GGHeader(k.name, k).parse(inbound({"x-token": "abc123"}))
             expect(k.get()).toBe("abc123")
         })
     })
@@ -20,7 +20,7 @@ describe("header binding", () => {
     test("the wire name defaults to the key name, lowercased", () => {
         inContext(() => {
             const k = key("X-Locale")
-            GGHeader.middleware(k).parse!(inbound({"x-locale": "en-US"}))
+            new GGHeader(k.name, k).parse(inbound({"x-locale": "en-US"}))
             expect(k.get()).toBe("en-US")
         })
     })
@@ -28,7 +28,7 @@ describe("header binding", () => {
     test("a custom name decouples the header from the key name", () => {
         inContext(() => {
             const k = key("token")
-            GGHeader.middleware(k, {name: "authorization"}).parse!(inbound({authorization: "raw"}))
+            new GGHeader("authorization", k).parse(inbound({authorization: "raw"}))
             expect(k.get()).toBe("raw")
         })
     })
@@ -36,8 +36,8 @@ describe("header binding", () => {
     test("scheme:bearer strips the Bearer prefix on read", () => {
         inContext(() => {
             const k = key("token")
-            const mw = GGHeader.middleware(k, {name: "authorization", scheme: "bearer"})
-            mw.parse!(inbound({authorization: "Bearer tok-42"}))
+            const mw = new GGHeader("authorization", k, {scheme: "bearer"})
+            mw.parse(inbound({authorization: "Bearer tok-42"}))
             expect(k.get()).toBe("tok-42")
         })
     })
@@ -47,7 +47,7 @@ describe("header binding", () => {
             const k = key("token")
             k.set("tok-42")
             const out = outbound()
-            GGHeader.middleware(k, {name: "authorization", scheme: "bearer"}).update!(out)
+            new GGHeader("authorization", k, {scheme: "bearer"}).update(out)
             expect(out.headers["authorization"]).toBe("Bearer tok-42")
         })
     })
@@ -57,11 +57,11 @@ describe("header binding", () => {
             const k = key("x-token")
             k.set("plain")
             const out = outbound()
-            const mw = GGHeader.middleware(k)
-            mw.update!(out)
+            const mw = new GGHeader(k.name, k)
+            mw.update(out)
             expect(out.headers["x-token"]).toBe("plain")
             const k2 = key("x-token")
-            mw.parse!(inbound(out.headers))
+            mw.parse(inbound(out.headers))
             expect(k2.get()).toBe("plain")
         })
     })
@@ -70,7 +70,7 @@ describe("header binding", () => {
         inContext(() => {
             const k = key("x-token")
             const out = outbound()
-            GGHeader.middleware(k).update!(out)
+            new GGHeader(k.name, k).update(out)
             expect(out.headers["x-token"]).toBeUndefined()
         })
     })
@@ -78,7 +78,7 @@ describe("header binding", () => {
     test("a missing header leaves the key unset", () => {
         inContext(() => {
             const k = key("x-token")
-            GGHeader.middleware(k).parse!(inbound({}))
+            new GGHeader(k.name, k).parse(inbound({}))
             expect(k.get()).toBeUndefined()
         })
     })
@@ -86,12 +86,12 @@ describe("header binding", () => {
     test("WS: parse reads the handshake header; update writes it", () => {
         inContext(() => {
             const k = key("token")
-            const mw = GGHeader.middleware(k, {name: "authorization", scheme: "bearer"})
-            mw.parse!(inbound({authorization: "Bearer ws-tok"}))
+            const mw = new GGHeader("authorization", k, {scheme: "bearer"})
+            mw.parse(inbound({authorization: "Bearer ws-tok"}))
             expect(k.get()).toBe("ws-tok")
 
             const out = outbound()
-            mw.update!(out)
+            mw.update(out)
             expect(out.headers["authorization"]).toBe("Bearer ws-tok")
         })
     })

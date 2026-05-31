@@ -19,6 +19,8 @@ export * from "./server/GG_PERMISSIONS";
 export * from "./schema/GGHttpSchema";
 export * from "./schema/httpSchema";
 export * from "./schema/GGCookie";
+export * from "./schema/GGWireContextKey";
+export * from "./schema/GGWireContextKey.node";
 export * from "./schema/GGHeader";
 export * from "./rpc/GGHttpRouteRPC";
 export * from "./rpc/openApiSuccessResponse";
@@ -44,3 +46,4 @@ export * from "./server/GGHttpSchema.startServer";
 // Extensions
 import "./client/GGHttpSchema.createClient";
 import "./server/GGHttpSchema.startServer";
+import "./schema/GGWireContextKey.node";

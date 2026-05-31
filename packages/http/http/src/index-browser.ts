@@ -3,6 +3,7 @@ import "./_dedupCheck";
 export * from "./schema/GGHttpSchema";
 export * from "./schema/httpSchema";
 export * from "./schema/GGCookie";
+export * from "./schema/GGWireContextKey";
 export * from "./schema/GGHeader";
 export * from "./rpc/GGHttpRouteRPC";
 export * from "./rpc/RpcRequest/GGRpcRequestBuilder";

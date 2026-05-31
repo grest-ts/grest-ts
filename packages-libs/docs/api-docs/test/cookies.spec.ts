@@ -40,7 +40,7 @@ describe("buildContractDoc — cookie surfacing", () => {
         const C = new GGContractClass("HeaderOnly", {
             me: {success: IsString, errors: [SERVER_ERROR], permission: GG_NO_PERMISSIONS},
         });
-        const Api = httpSchema(C as any).pathPrefix("h").use(GGHeader.middleware(SESSION, {name: "x-access"})).routes({me: GGRpc.GET("me")});
+        const Api = httpSchema(C as any).pathPrefix("h").use(new GGHeader("x-access", SESSION)).routes({me: GGRpc.GET("me")});
         const doc = buildContractDoc({title: "T", groups: {default: {http: [Api]}}});
         const c = findContract(doc, "HeaderOnly");
         expect(c?.cookies ?? []).toEqual([]);
