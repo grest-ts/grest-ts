@@ -1,5 +1,6 @@
 import {describe, it, expect, vi} from 'vitest'
-import {GGContext, GGContextKey, GGContextKeySynchronizer} from '@grest-ts/context'
+import {GGContext, GGContextKey} from '@grest-ts/context'
+import {GGContextKeySynchronizer} from '@grest-ts/http'
 import {GGRpcRequestBuilder} from '@grest-ts/http'
 import {IsString, SERVER_ERROR} from '@grest-ts/schema'
 

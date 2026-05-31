@@ -1,6 +1,6 @@
 import {describe, it, expect, vi} from 'vitest'
-import {GGContext} from './GGContext'
-import {GGContextKey} from './GGContextKey'
+import {GGContext} from '@grest-ts/context'
+import {GGContextKey} from '@grest-ts/context'
 import {GGContextKeySynchronizer} from './GGContextKeySynchronizer'
 import {IsString} from '@grest-ts/schema'
 

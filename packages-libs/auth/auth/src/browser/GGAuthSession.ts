@@ -1,6 +1,7 @@
 /// <reference lib="dom" />
 import {NOT_AUTHORIZED} from "@grest-ts/schema"
-import {GGContextKeySynchronizer, type GGContextKey} from "@grest-ts/context"
+import {type GGContextKey} from "@grest-ts/context"
+import {GGContextKeySynchronizer} from "@grest-ts/http"
 import {BaseAuthSession} from "./GGAuthSessionBase"
 import {systemClock} from "./core/systemClock"
 import {localStorageSharedCache} from "./core/localStorageCache"

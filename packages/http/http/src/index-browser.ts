@@ -10,6 +10,7 @@ export * from "./rpc/RpcRequest/GGRpcRequestBuilder";
 export * from "./rpc/RpcResponse/GGRpcResponseParser";
 
 // Client
+export * from "./client/GGContextKeySynchronizer";
 export * from "./client/GGHttpSchema.createClient";
 
 // Extensions

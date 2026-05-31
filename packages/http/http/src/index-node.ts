@@ -39,6 +39,7 @@ export * from "./server/applyResponseMiddleware";
 export * from "./server/applyRequestMiddleware";
 
 // Client
+export * from "./client/GGContextKeySynchronizer";
 export * from "./client/GGHttpSchema.createClient";
 export * from "./server/GGHttpSchema.startServer";
 

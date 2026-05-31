@@ -1,4 +1,4 @@
-import {GGContextKey} from "./GGContextKey"
+import {GGContextKey} from "@grest-ts/context"
 import {IsAny, type GGSchema} from "@grest-ts/schema"
 
 export interface GGKeyController {

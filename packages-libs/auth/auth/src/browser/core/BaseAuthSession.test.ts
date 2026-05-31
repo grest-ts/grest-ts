@@ -1,6 +1,6 @@
 import {describe, test, expect, vi} from "vitest"
 import {NOT_AUTHORIZED} from "@grest-ts/schema"
-import {GGContextKeySynchronizer} from "@grest-ts/context"
+import {GGContextKeySynchronizer} from "@grest-ts/http"
 import {BaseAuthSession} from "../GGAuthSessionBase"
 import {GGAuthSession} from "../GGAuthSession"
 import type {

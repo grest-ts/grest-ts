@@ -1,7 +1,8 @@
 import type {HttpMethod} from "@grest-ts/common";
 import {GGContractMethod} from "@grest-ts/schema";
 import {ClientHttpRouteToRpcTransformClientConfig, GGHttpFetchRequest} from "../../schema/GGHttpSchema";
-import {GGContextKeySynchronizer, type GGTransportMiddleware} from "@grest-ts/context";
+import {type GGTransportMiddleware} from "@grest-ts/context";
+import {GGContextKeySynchronizer} from "../../client/GGContextKeySynchronizer";
 
 export class GGRpcRequestBuilder {
 
