@@ -271,10 +271,14 @@ export class GGSocketServer<TContext, Query> {
                                     query: queryArgs as Record<string, string>
                                 };
                                 for (const middleware of this.middlewares) middleware.parse?.(inbound);
-                                for (const middleware of this.middlewares) await middleware.process?.();
-                                // Drop ephemeral raw credentials before the connection opens; the durable
-                                // principal a smart wire minted persists on the connection context.
-                                for (const middleware of this.middlewares) middleware.clear?.();
+                                // Drop ephemeral raw credentials before the connection opens (and even
+                                // when a process() rejects the handshake); the durable principal a smart
+                                // wire minted persists on the connection context.
+                                try {
+                                    for (const middleware of this.middlewares) await middleware.process?.();
+                                } finally {
+                                    for (const middleware of this.middlewares) middleware.clear?.();
+                                }
                                 resolve({success: true});
                             } catch (error: any) {
                                 const errorJson = error instanceof ERROR

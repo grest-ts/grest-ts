@@ -20,8 +20,14 @@ export async function applyRequestMiddleware(
         query: flatten(queryArgs)
     };
     for (const mw of middlewares) mw.parse?.(inbound);
-    for (const mw of middlewares) await mw.process?.();
-    for (const mw of middlewares) mw.clear?.();
+    // finally: a rejecting process() (e.g. anonymous → NOT_AUTHORIZED) must still drop every
+    // ephemeral credential — including those an earlier wire already parsed — so no raw token
+    // outlives the failed request in context.
+    try {
+        for (const mw of middlewares) await mw.process?.();
+    } finally {
+        for (const mw of middlewares) mw.clear?.();
+    }
 }
 
 function flatten(src: Record<string, string | string[] | undefined>): Record<string, string | undefined> {
