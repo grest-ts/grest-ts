@@ -1,7 +1,8 @@
 import {GGHttp, GGHttpServer} from "@grest-ts/http"
 import {GGRuntime} from "@grest-ts/runtime"
-import {WireOrgScopedApi, WirePublicApi, WireUserApi} from "./api/WireAuthApi"
+import {WireLiveApi, WireOrgScopedApi, WirePublicApi, WireUserApi} from "./api/WireAuthApi"
 import {ORG_TOKEN_WIRE_HANDLER, USER_TOKEN_WIRE_HANDLER, WireOrgService, WirePublicService, WireUserService} from "./WireAuthService"
+import {WireLiveService} from "./WireLiveService"
 
 export class WireAuthRuntime extends GGRuntime {
     public static readonly NAME = "wire-auth"
@@ -20,6 +21,9 @@ export class WireAuthRuntime extends GGRuntime {
             .http(WireUserApi, userService)
             .http(WirePublicApi, new WirePublicService())
             .http(WireOrgScopedApi, orgService)
+
+        // WS uses the same USER_TOKEN_WIRE; no config — the schema's wire is the resolver.
+        WireLiveApi.register(new WireLiveService().handleConnection)
     }
 }
 

@@ -272,6 +272,9 @@ export class GGSocketServer<TContext, Query> {
                                 };
                                 for (const middleware of this.middlewares) middleware.parse?.(inbound);
                                 for (const middleware of this.middlewares) await middleware.process?.();
+                                // Drop ephemeral raw credentials before the connection opens; the durable
+                                // principal a smart wire minted persists on the connection context.
+                                for (const middleware of this.middlewares) middleware.clear?.();
                                 resolve({success: true});
                             } catch (error: any) {
                                 const errorJson = error instanceof ERROR

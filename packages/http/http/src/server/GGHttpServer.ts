@@ -295,13 +295,32 @@ export class GGHttpServer {
         }
     }
 
+    /** Smart wires + permission surfaces for every registered HTTP and WebSocket schema. */
+    private _wireSurfaces(): {name: string; wires: GGWireContextKey<any>[]; perms: {label: string; permission: GGPermission | undefined}[]}[] {
+        const isSmart = (mw: unknown): mw is GGWireContextKey<any> => mw instanceof GGWireContextKey && mw.isSmart;
+        const out: {name: string; wires: GGWireContextKey<any>[]; perms: {label: string; permission: GGPermission | undefined}[]}[] = [];
+        for (const schema of this._registeredSchemas) {
+            const methods = schema.contract?.methods ?? {};
+            out.push({
+                name: schema.name,
+                wires: schema.apiMiddlewares.filter(isSmart),
+                perms: Object.keys(methods).map(n => ({label: `${schema.name}.${n}`, permission: (methods[n] as GGContractMethod).permission})),
+            });
+        }
+        for (const ws of this._registeredWebSocketSchemas) {
+            const methods = ws.contract.clientToServer.methods;
+            const perms = Object.keys(methods).map(n => ({label: `${ws.name}.${n}`, permission: methods[n].permission}));
+            if (ws.connectPermission !== undefined) perms.push({label: `${ws.name} (connectPermission)`, permission: ws.connectPermission});
+            out.push({name: ws.name, wires: (ws.middlewares as unknown[]).filter(isSmart), perms});
+        }
+        return out;
+    }
+
     private _checkWiresImplemented(): void {
         const missing: string[] = [];
-        for (const schema of this._registeredSchemas) {
-            for (const mw of schema.apiMiddlewares) {
-                if (mw instanceof GGWireContextKey && mw.isSmart && !mw.hasHandler()) {
-                    missing.push(`  ${schema.name}  uses wire "${mw.name}"`);
-                }
+        for (const surface of this._wireSurfaces()) {
+            for (const wire of surface.wires) {
+                if (!wire.hasHandler()) missing.push(`  ${surface.name}  uses wire "${wire.name}"`);
             }
         }
         if (missing.length > 0) {
@@ -314,12 +333,6 @@ export class GGHttpServer {
         }
     }
 
-    private _smartWiresOf(schema: GGHttpSchema<any, any>): GGWireContextKey<any>[] {
-        return schema.apiMiddlewares.filter(
-            (mw): mw is GGWireContextKey<any> => mw instanceof GGWireContextKey && mw.isSmart
-        );
-    }
-
     /**
      * Build the permissionString → owningWire index across every schema's smart wires and validate:
      *  - a permission string is owned by at most one wire (a collision is a config bug → crash);
@@ -328,9 +341,10 @@ export class GGHttpServer {
      * Strings not owned by any wire are out of scope here (manual resolvers / usePermissions own them).
      */
     private _checkWirePermissions(): void {
+        const surfaces = this._wireSurfaces();
         const owningWire = new Map<string, GGWireContextKey<any>>();
-        for (const schema of this._registeredSchemas) {
-            for (const wire of this._smartWiresOf(schema)) {
+        for (const surface of surfaces) {
+            for (const wire of surface.wires) {
                 for (const perm of wire.permissionStrings()) {
                     const existing = owningWire.get(perm);
                     if (existing && existing !== wire) {
@@ -344,19 +358,17 @@ export class GGHttpServer {
             }
         }
 
-        for (const schema of this._registeredSchemas) {
-            const wiresHere = new Set(this._smartWiresOf(schema));
-            const methods = schema.contract?.methods ?? {};
-            for (const name of Object.keys(methods)) {
-                const required = (methods[name] as GGContractMethod).permission;
-                if (required === undefined) continue;
-                for (const leaf of leafPermissions(required)) {
+        for (const surface of surfaces) {
+            const wiresHere = new Set(surface.wires);
+            for (const {label, permission} of surface.perms) {
+                if (permission === undefined) continue;
+                for (const leaf of leafPermissions(permission)) {
                     const wire = owningWire.get(leaf);
                     if (wire && !wiresHere.has(wire)) {
                         throw new Error(
-                            `GGHttpServer: ${schema.name}.${name} requires permission "${leaf}" owned by wire ` +
-                            `"${wire.name}", but that wire is not .use()d on ${schema.name}.\n\nFix: add ` +
-                            `.use(<the wire>) to ${schema.name}.`
+                            `GGHttpServer: ${label} requires permission "${leaf}" owned by wire ` +
+                            `"${wire.name}", but that wire is not .use()d on ${surface.name}.\n\nFix: add ` +
+                            `.use(<the wire>) to ${surface.name}.`
                         );
                     }
                 }

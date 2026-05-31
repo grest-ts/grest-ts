@@ -1,4 +1,4 @@
-import {callOn, GGTest} from "@grest-ts/testkit"
+import {callOn, GG_TEST_RUNNER, GGTest} from "@grest-ts/testkit"
 import {GGContext} from "@grest-ts/context"
 import {GGLocatorScope} from "@grest-ts/locator"
 import {GGHeader} from "@grest-ts/http"
@@ -7,7 +7,7 @@ import {WireAuthRuntime} from "../src/WireAuthRuntime"
 import {WireAuthMissingCreateRuntime} from "../src/WireAuthMissingCreateRuntime"
 import {WireAuthDuplicatePermRuntime} from "../src/WireAuthDuplicatePermRuntime"
 import {WireAuthBadOwningRuntime} from "../src/WireAuthBadOwningRuntime"
-import {IsWirePermission, ORG_TOKEN_WIRE, USER_TOKEN_WIRE, WireOrgScopedApi, WirePublicApi, WireUserApi} from "../src/api/WireAuthApi"
+import {IsWirePermission, ORG_TOKEN_WIRE, USER_TOKEN_WIRE, WireLiveApi, WireOrgScopedApi, WirePublicApi, WireUserApi} from "../src/api/WireAuthApi"
 
 function asUser(token: string): GGContext {
     const scope = new GGContext("wire-auth-test")
@@ -145,5 +145,59 @@ describe("multi-wire — startup guardrails", () => {
         const msg = await expectStartToThrow(WireAuthBadOwningRuntime)
         expect(msg).toContain("WireBadOwning.needsOrg")
         expect(msg).toMatch(/x-org-token/)
+    })
+})
+
+describe("smart wire — WebSocket", () => {
+
+    GGTest.startWorker(WireAuthRuntime)
+
+    const urlFor = (name: string) => GG_TEST_RUNNER.get().discoveryServer.getRoutingUrl(name)
+
+    function wsAsUser<R>(token: string, fn: () => Promise<R>): Promise<R> {
+        const scope = new GGContext("wire-ws-test")
+        scope.set(USER_TOKEN_WIRE, token)
+        return scope.run(fn)
+    }
+
+    test("anonymous handshake is rejected at the wire", async () => {
+        const client = WireLiveApi.createClient({url: urlFor("WireLiveApi")})
+        await expect(client.connect()).rejects.toMatchObject({type: "NOT_AUTHORIZED"})
+    })
+
+    test("authenticated message reads the durable principal minted at handshake", async () => {
+        await wsAsUser("alice", async () => {
+            const client = WireLiveApi.createClient({url: urlFor("WireLiveApi")})
+            await client.connect()
+            try {
+                expect(await client.outgoing.whoami()).toBe("alice")
+            } finally {
+                await client.disconnect()
+            }
+        })
+    })
+
+    test("per-message gate: ADMIN holder can adminPing", async () => {
+        await wsAsUser("alice", async () => {
+            const client = WireLiveApi.createClient({url: urlFor("WireLiveApi")})
+            await client.connect()
+            try {
+                expect(await client.outgoing.adminPing()).toBe("admin-pong")
+            } finally {
+                await client.disconnect()
+            }
+        })
+    })
+
+    test("per-message gate: non-holder gets FORBIDDEN", async () => {
+        await wsAsUser("bob", async () => {
+            const client = WireLiveApi.createClient({url: urlFor("WireLiveApi")})
+            await client.connect()
+            try {
+                await expect(client.outgoing.adminPing()).rejects.toMatchObject({type: "FORBIDDEN"})
+            } finally {
+                await client.disconnect()
+            }
+        })
     })
 })

@@ -1,5 +1,6 @@
 import {GGRpc, GGHeader, httpSchema} from "@grest-ts/http"
-import {FORBIDDEN, GGContractClass, GG_NO_PERMISSIONS, IsArray, IsEnum, IsObject, IsString, NOT_AUTHORIZED, SERVER_ERROR} from "@grest-ts/schema"
+import {defineSocketContract, webSocketSchema} from "@grest-ts/websocket"
+import {FORBIDDEN, GGContractClass, GGContractClient, GGContractImplementation, GG_NO_PERMISSIONS, IsArray, IsEnum, IsObject, IsString, NOT_AUTHORIZED, SERVER_ERROR} from "@grest-ts/schema"
 
 export enum WirePermission {
     ADMIN = "WIRE_ADMIN",
@@ -84,3 +85,22 @@ export const WireOrgScopedApi = httpSchema(WireOrgScopedApiContract)
     .routes({
         orgInfo: GGRpc.GET("info"),
     })
+
+// ---- WebSocket smart-wire schema: the user wire authenticates at handshake; per-message gate ----
+export const WireLiveApiContract = defineSocketContract("WireLiveApi", {
+    clientToServer: {
+        // Anyone authenticated (the wire is required-or-throw at handshake) can call.
+        whoami: {success: IsString, errors: [NOT_AUTHORIZED, SERVER_ERROR], permission: GG_NO_PERMISSIONS},
+        // Per-message gate: needs the user wire's ADMIN permission.
+        adminPing: {success: IsString, errors: [NOT_AUTHORIZED, FORBIDDEN, SERVER_ERROR], permission: WirePermission.ADMIN},
+    },
+    serverToClient: {},
+})
+
+export const WireLiveApi = webSocketSchema(WireLiveApiContract)
+    .path("ws/wire-live")
+    .use(USER_TOKEN_WIRE)
+    .done()
+
+export type WireLiveIncoming = GGContractImplementation<typeof WireLiveApiContract.methods["clientToServer"]>
+export type WireLiveOutgoing = GGContractClient<typeof WireLiveApiContract.methods["serverToClient"]>
