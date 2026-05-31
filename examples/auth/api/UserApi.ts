@@ -1,14 +1,6 @@
 import {GGRpc, httpSchema} from "@grest-ts/http"
-import {GGContractClass, IsEmail, IsObject, IsString, NOT_AUTHORIZED, NOT_FOUND, SERVER_ERROR, VALIDATION_ERROR, GG_NO_PERMISSIONS} from "@grest-ts/schema"
-import {USER_TOKEN_WIRE} from "./auth/UserAuth"
-
-const IsUserId = IsString.brand("UserId")
-
-export const IsUser = IsObject({
-    id: IsUserId,
-    username: IsString,
-    email: IsString,
-})
+import {GGContractClass, IsEmail, IsObject, NOT_AUTHORIZED, NOT_FOUND, SERVER_ERROR, VALIDATION_ERROR, GG_NO_PERMISSIONS} from "@grest-ts/schema"
+import {USER_TOKEN_WIRE, IsUser} from "./auth/UserAuth"
 
 export const IsUpdateProfileRequest = IsObject({
     email: IsEmail.orUndefined.docs({title: "New email address", example: "newalice@example.com"}),

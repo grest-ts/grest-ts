@@ -1,5 +1,5 @@
 import {GGRpc, httpSchema} from "@grest-ts/http"
-import {FORBIDDEN, GGContractClass, IsArray, IsNumber, IsObject, IsString, NOT_AUTHORIZED, SERVER_ERROR, GG_NO_PERMISSIONS} from "@grest-ts/schema"
+import {FORBIDDEN, GGContractClass, IsArray, IsNumber, IsObject, IsString, NOT_AUTHORIZED, NOT_FOUND, SERVER_ERROR, GG_NO_PERMISSIONS} from "@grest-ts/schema"
 import {USER_TOKEN_WIRE} from "./auth/UserAuth"
 import {IsOrg, IsOrgId, ORG_TOKEN_WIRE, OrgPermission} from "./auth/OrgAuth"
 
@@ -49,7 +49,7 @@ export const OrgApi = httpSchema(OrgApiContract)
 export const OrgScopedApiContract = new GGContractClass("OrgScopedApi", {
     orgInfo: {
         success: IsOrg,
-        errors: [NOT_AUTHORIZED, FORBIDDEN, SERVER_ERROR],
+        errors: [NOT_AUTHORIZED, FORBIDDEN, NOT_FOUND, SERVER_ERROR],
         permission: OrgPermission.ORG_MEMBER,
     },
 })

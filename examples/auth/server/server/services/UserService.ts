@@ -2,7 +2,8 @@ import {EXISTS, GGContractImplementation, NOT_AUTHORIZED, NOT_FOUND} from "@gres
 import {AuthError, AuthToken} from "@grest-ts/auth"
 import {AuthPublicApiContract, InvalidCredentialsError, RegisterRequest, LoginRequest, RefreshRequest, AuthResponse, TokenPairResponse} from "../../../api/AuthPublicApi"
 import {UserApiContract, UpdateProfileRequest} from "../../../api/UserApi"
-import {USER_DATA, UserPermission, tUserId, User} from "../../../api/auth/UserAuth"
+import {UserPermission, tUserId, User} from "../../../api/auth/UserAuth"
+import {USER_DATA} from "../auth/UserAuthHandler"
 import {UserTable} from "../tables/UserTable"
 
 const BANNER_USERS = new Set(["alice", "carol"])

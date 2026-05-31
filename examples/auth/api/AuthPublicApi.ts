@@ -1,14 +1,7 @@
 import {GGRpc, httpSchema} from "@grest-ts/http"
 import {ERROR, EXISTS, GGContractClass, IsEmail, IsObject, IsString, NOT_AUTHORIZED, SERVER_ERROR, VALIDATION_ERROR, GG_NO_PERMISSIONS} from "@grest-ts/schema"
 import {IsGGAuthTokensResult} from "@grest-ts/auth"
-
-const IsUserId = IsString.brand("UserId")
-
-export const IsUser = IsObject({
-    id: IsUserId,
-    username: IsString,
-    email: IsString,
-})
+import {IsUser} from "./auth/UserAuth"
 
 export const IsRegisterRequest = IsObject({
     username: IsString.minLength(3).maxLength(20).docs({title: "Username", example: "alice"}),

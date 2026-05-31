@@ -1,6 +1,7 @@
 import React, {useEffect, useRef, useState} from "react"
 import {api, session} from "./api"
 import type {User} from "../../api/auth/UserAuth"
+import {UserPermission} from "../../api/auth/UserAuth"
 import type {Org} from "../../api/auth/OrgAuth"
 import type {AuthResponse} from "../../api/AuthPublicApi"
 import type {GGWebSocketClient} from "@grest-ts/websocket"
@@ -51,7 +52,6 @@ const input: React.CSSProperties = {padding: "6px 8px", fontSize: 12, fontFamily
 
 export function App() {
     const [user, setUser] = useState<User | null>(null)
-    const [permissions, setPerms] = useState<string[]>([])
 
     const [authView, setAuthView] = useState<"login" | "register">("login")
     const [loginUser, setLoginUser] = useState("alice")
@@ -82,7 +82,6 @@ export function App() {
     // Clear all local state when the session ends (logout, expiry, cross-tab logout).
     useEffect(() => session.onLogout(() => {
         setUser(null);
-        setPerms([]);
         setOrgList([]);
         setBannerCount(0)
         wsRef.current?.disconnect();
@@ -100,7 +99,6 @@ export function App() {
     function applyAuthResult(res: AuthResponse) {
         session.start(res)
         setUser(res.data)
-        setPerms(parseJwtPermissions(res.access.token))
         setNewEmail(res.data.email)
     }
 
@@ -178,9 +176,9 @@ export function App() {
     }
 
     async function callOrgInfo() {
-        const res = await api.orgApi.orgInfo().asResult()
+        const res = await api.orgScopedApi.orgInfo().asResult()
         setLastReq({
-            method: "GET", path: "/api/orgs/info", status: res.success ? "ok" : "err",
+            method: "GET", path: "/api/org/info", status: res.success ? "ok" : "err",
             body: res.success ? res.data : {error: res.type}
         })
     }
@@ -246,7 +244,7 @@ export function App() {
         wsRef.current?.outgoing.bannerPing()
     }
 
-    const hasBannerPerm = permissions.includes("CAN_UPDATE_RED_BANNER_COUNTER")
+    const hasBannerPerm = session.hasPermission(UserPermission.CAN_UPDATE_RED_BANNER_COUNTER)
 
     // ── anonymous view ─────────────────────────────────────────────────────────
 
@@ -324,7 +322,7 @@ export function App() {
                     <span style={{fontSize: 13}}><strong>{user.username}</strong> &nbsp;<span style={{color: "#888"}}>{user.email}</span></span>
                 </div>
                 <div style={{fontSize: 11, color: "#888", marginBottom: 4}}>
-                    Permissions in JWT: {permissions.length === 0 ? <em style={{color: "#aaa"}}>none</em> : permissions.map(p => (
+                    Permissions in JWT: {session.permissions.length === 0 ? <em style={{color: "#aaa"}}>none</em> : session.permissions.map(p => (
                     <span key={p} style={{background: "#16a34a", color: "#fff", fontSize: 10, padding: "1px 6px", borderRadius: 3, marginRight: 4}}>{p}</span>
                 ))}
                 </div>
@@ -467,11 +465,3 @@ export function App() {
 
 // ── helpers ────────────────────────────────────────────────────────────────────
 
-function parseJwtPermissions(token: string): string[] {
-    try {
-        const payload = JSON.parse(atob(token.split(".")[1]))
-        return Array.isArray(payload.permissions) ? payload.permissions : []
-    } catch {
-        return []
-    }
-}

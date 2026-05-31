@@ -1,19 +1,19 @@
 import {GGContextKey} from "@grest-ts/context"
-import {IsArray, NOT_AUTHORIZED} from "@grest-ts/schema"
-import {ORG_TOKEN_WIRE, ORG_DATA, IsOrgPermission, OrgPermission} from "../../../api/auth/OrgAuth"
-import {OrgService} from "../services/OrgService"
+import {deepFreeze} from "@grest-ts/common"
+import type {OrgService} from "../services/OrgService"
+import {ORG_TOKEN_WIRE, IsOrgUser} from "../../../api/auth/OrgAuth"
 
-const ORG_PERMS = new GGContextKey<OrgPermission[]>("orgPerms", IsArray(IsOrgPermission))
+// Durable principal — server-only. The membership (OrgUser), not the shared Org, owns the
+// permissions. Maps straight from the verified token (orgId claim + permissions); org details are
+// fetched on demand by handlers. Deep-frozen so it can't be mutated to escalate.
+export const ORG_USER = new GGContextKey("orgUser", IsOrgUser)
 
 // Org wire is required-or-throw wherever it's .use()d (only OrgScopedApi). No optional branch:
-// if the org token is missing/invalid, process() throws and the request fails at the wire.
+// if the org token is missing/invalid, verifyOrgToken throws and the request fails at the wire.
 export const ORG_TOKEN_WIRE_HANDLER = ORG_TOKEN_WIRE.define((orgs: OrgService) => ({
     process: async () => {
         const payload = await orgs.verifyOrgToken(ORG_TOKEN_WIRE.get())
-        const org = orgs.getOrgById(payload.orgId)
-        if (!org) throw new NOT_AUTHORIZED({debugMessage: "Org not found"})
-        ORG_DATA.set(org)
-        ORG_PERMS.set(payload.permissions)
+        ORG_USER.set(deepFreeze({orgId: payload.orgId, permissions: payload.permissions}))
     },
-    permissions: async () => ORG_PERMS.get()!,
+    permissions: async () => ORG_USER.get()!.permissions,
 }))

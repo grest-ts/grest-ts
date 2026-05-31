@@ -1,9 +1,10 @@
-import {FORBIDDEN, GGContractImplementation, NOT_AUTHORIZED} from "@grest-ts/schema"
+import {FORBIDDEN, GGContractImplementation, NOT_AUTHORIZED, NOT_FOUND} from "@grest-ts/schema"
 import {AuthError, AuthToken} from "@grest-ts/auth"
 import {OrgApiContract, SelectOrgRequest, SelectOrgResponse} from "../../../api/OrgApi"
 import {OrgScopedApiContract} from "../../../api/OrgApi"
-import {ORG_DATA, OrgClaims, OrgPermission, tOrgId, Org} from "../../../api/auth/OrgAuth"
-import {USER_DATA} from "../../../api/auth/UserAuth"
+import {OrgClaims, OrgPermission, Org} from "../../../api/auth/OrgAuth"
+import {ORG_USER} from "../auth/OrgAuthHandler"
+import {USER_DATA} from "../auth/UserAuthHandler"
 import {OrgTable} from "../tables/OrgTable"
 
 export class OrgService implements GGContractImplementation<typeof OrgApiContract["methods"]>,
@@ -28,11 +29,9 @@ export class OrgService implements GGContractImplementation<typeof OrgApiContrac
     }
 
     public orgInfo = async (): Promise<Org> => {
-        return ORG_DATA.get()!
-    }
-
-    public getOrgById(orgId: tOrgId): Org | undefined {
-        return this.table.get(orgId)
+        const org = this.table.get(ORG_USER.get()!.orgId)
+        if (!org) throw new NOT_FOUND()
+        return org
     }
 
     // Called by ORG_TOKEN_WIRE's server handler during process().

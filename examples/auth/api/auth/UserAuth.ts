@@ -1,6 +1,5 @@
 import {GGHeader} from "@grest-ts/http"
-import {GGContextKey} from "@grest-ts/context"
-import {IsEnum, IsObject, IsString} from "@grest-ts/schema"
+import {IsArray, IsEnum, IsObject, IsString} from "@grest-ts/schema"
 
 // Permissions this wire can grant. Strings must be globally unique across all wires —
 // a duplicate against another wire is a startup crash (Rule 6).
@@ -16,6 +15,7 @@ export const IsUser = IsObject({
     id: IsUserId,
     username: IsString,
     email: IsString,
+    permissions: IsArray(IsUserPermission)
 })
 export type User = typeof IsUser.infer
 
@@ -25,6 +25,3 @@ export type User = typeof IsUser.infer
 // Server behaviour is attached once via .define() (see server/auth/UserAuthHandler.ts);
 // the client value/refresh via .defineClient() (see client/src/auth.ts).
 export const USER_TOKEN_WIRE = new GGHeader("authorization", {scheme: "bearer", permissions: IsUserPermission})
-
-// DURABLE identity the wire produces. Handlers read this; they never see the raw token.
-export const USER_DATA = new GGContextKey<User>("userData", IsUser)

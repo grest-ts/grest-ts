@@ -149,7 +149,8 @@ handler code.
   through the handler). For values where absent → undefined is acceptable.
 - **Smart** — `new GGHeader(name, {scheme})`. Requires `.define()` (server) and/or
   `.defineClient()` (client). The wire key holds the raw inbound value, **ephemeral**, and
-  the handler transforms it into a separate durable key (`USER_DATA`).
+  the handler transforms it into a durable principal key (`USER_DATA`, server-side, carrying
+  identity + permissions, deep-frozen — see Mechanics).
 - "Generate-if-absent" (trace ids, defaults) is **smart, library-provided** — it has an
   implementation; you just didn't write it. The dumb/smart split is unchanged by it.
 
@@ -294,6 +295,22 @@ not build.
 - **`GGHeader`/`GGCookie` extend `GGWireContextKey extends GGContextKey`.** Dumb form wraps
   a passed-in key; smart form *is* the (ephemeral) key. Both attach via one `.use()` on the
   http schema and (structurally) the ws schema. `GGResponseHeader` is the server-set mirror.
+- **The durable principal is server-only, one key, deep-frozen — shaped to the domain.** A smart
+  wire's durable result is read only by server handlers/services — never the client — so it lives
+  next to the `.define()` in `server/auth/`, NOT in the shared `api/` contract. One key carries
+  identity + permissions (no separate perms key); `permissions()` reads off it; it is
+  **deep-frozen** on `set()` (minted inside `process()` from a verified token) so a handler can't
+  mutate permissions to escalate — immutable by construction, not per-handler discipline. The
+  example freezes explicitly via `deepFreeze` (`@grest-ts/common`); ideally the framework does this
+  automatically for smart-wire durable keys.
+  - **Model the entity that actually OWNS the permission — don't bolt perms onto a shared entity
+    or invent a structural wrapper.** A *user* owns user-level capabilities, so `USER_DATA` **is**
+    the `User` (permissions on `IsUser`, sourced from the user record). An *org* does NOT own
+    `ORG_MEMBER` — the *membership* does — so model `IsOrgUser {orgId, permissions}`, a domain
+    entity parallel to `IsUser`, and `ORG_USER` **is** the `OrgUser`. The shared `Org` stays
+    permission-free; `orgInfo` fetches it fresh by `orgId` (membership stays normalized — it holds
+    `orgId`, not an org snapshot). Both durable keys end up symmetric: each is the domain entity
+    that owns its permissions.
 - **Augmentation, env-split.** `define`/`process`/`permissions` (inbound) shipped from the
   node entry; `defineClient`/`value`/`isStale`/`recover` (outbound) shipped from the browser
   entry; **node ships both** (it's a client too). Follow the existing precedent
@@ -318,13 +335,52 @@ not build.
   behavior change (the per-request concern is dropped per Security §1). `@grest-ts/context`
   returns to being just context primitives. It becomes the engine behind `defineClient`'s
   `isStale`/`recover`.
+- **`defineClient` is the typed successor to `GGContextKeySynchronizer.provide({isStale,
+  recover})` — and `GGAuthSession` calls it ITSELF.** `GGAuthSession` already owns the client
+  token lifecycle (localStorage persistence, cross-tab refresh dedup via web locks, proactive
+  scheduled refresh, status state-machine, derived tokens) and already self-registers
+  `{isStale, recover}` with the synchronizer per token — and it already holds the wire refs it
+  needs (`withToken(USER_TOKEN_WIRE)`, `addDerived("org", ORG_TOKEN_WIRE)`). So the smallest,
+  cleanest change is: the session swaps its internal `GGContextKeySynchronizer.provide(key, …)`
+  for `wire.defineClient({value, isStale, recover})` on the wires it owns. **There is no
+  app-level `defineClient` in the session case** — the whole client auth setup is the
+  `GGAuthSession.withToken(…).addDerived(…)` chain. `grep USER_TOKEN_WIRE` still lands on
+  `.withToken(USER_TOKEN_WIRE)`, which IS the client-binding site. `GGAuthSession` therefore
+  *is* the library helper we'd otherwise ship (`bearerSession`) — no separate adapter needed.
+  - `wire.defineClient(handler)` stays a public, explicit API for the **no-session case** (e.g.
+    a static API key: `WIRE.defineClient({value: () => KEY})`). Freeze-once means the session
+    and the app must not both call it on the same wire — the session owns it exclusively.
+  - **`value()` is sync** (last-known token) while **`isStale()`/`recover()` are async**; the
+    synchronizer runs the async pair via `waitFor` *before* the outbound read calls `value()`,
+    so the split needs no new concept.
+  - The wire stays typed only to the header string; the rich `GGAuthTokensResult` typing lives
+    in the session. Do NOT hand-roll `value`/`isStale`/`recover` against a bare context key —
+    that drops persistence / cross-tab / proactive-refresh / status and re-introduces the
+    anonymous-session `atob` throw.
+- **Client permission checks — typesafe, sourced from the wires' enums (UX only).** Because the
+  wire carries its permission enum (`GGHeader<P>` from `{permissions: IsUserPermission}`) and the
+  session is built from wires, the session can infer the permission union at the type level:
+  `withToken(USER_TOKEN_WIRE)` → `P = UserPermission`, each `addDerived(ORG_TOKEN_WIRE)` adds its
+  enum. Surface:
+  - `session.hasPermission(p)` — `p` typed to the union of all the session's wires' enums; a
+    non-member is a compile error. **Single-arg only** — multi is plain code
+    (`hasPermission(A) && hasPermission(B)`); no variadic (a combinator mini-language —
+    `hasPermission(or(A,B))` — can come later, but plain `&&`/`||` covers it).
+  - `session.permissions` — the current granted list (union-typed) for enumeration/display.
+  - Runtime: decode the `permissions` claim across the active tokens (root + active derived) and
+    test membership. Global-unique permission strings (Rule 6) mean no source disambiguation.
+    Reactivity is the existing `session.subscribe()`.
+  - **UX ONLY — never a security boundary.** The client decodes its own (forgeable) JWT; the
+    server re-verifies the signature and re-runs the wire `permissions()` + per-method gate on
+    every call. `hasPermission` decides "render the button," nothing more.
 
 ### Tests
 - Unit: each wire extracts from its (only its) source; dumb=ambient/optional,
   smart=ephemeral/required; ephemeral key read post-`clear()` → `undefined` (not a throw);
   `define` twice → throw; `create` twice **in one GGLocator scope** → throw (a fresh
   scope — new runtime, restart — may `create` again); duplicate permission string across two
-  wires → throw at startup; doc metadata emitted (header params + cookie security).
+  wires → throw at startup; smart wire's durable principal is deep-frozen (mutating
+  `.permissions` throws); doc metadata emitted (header params + cookie security).
 - Integration: authed schema rejects anonymous (throw at wire); public (wire-less) schema
   serves anonymous; per-method `permission` gate; **multi-wire AND** — method requiring a
   `UserPermission` + an `OrgPermission` passes only when both wires grant; node
@@ -341,6 +397,8 @@ a. **Single-token `USER_TOKEN_WIRE`, HTTP only, end-to-end** — `GGHeader`/`GGR
 b. **Multi-wire** — add `ORG_TOKEN_WIRE`: the `permissionString → owningWire` index,
    duplicate-string startup crash, AND-across-sources gate, and the derived/minted org token
    on the client.
-c. **WebSocket** — `GGCookie` + the wire model over the ws schema; per-message permission
-   gate. Relocate `GGContextKeySynchronizer` → `@grest-ts/http` lands with the client work
-   (wherever `defineClient` is first needed).
+c. **Client + WebSocket** — `defineClient` (public API, for the no-session case) + rework
+   `GGAuthSession` to call `wire.defineClient(...)` internally on the wires it already holds
+   (swapping its `GGContextKeySynchronizer.provide` calls), so app client setup is just the
+   `withToken(…).addDerived(…)` chain; relocate `GGContextKeySynchronizer` → `@grest-ts/http`;
+   then `GGCookie` + the wire model over the ws schema with per-message permission gate.

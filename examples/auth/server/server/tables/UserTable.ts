@@ -26,7 +26,7 @@ export class UserTable {
 
     public get(id: tUserId): User | undefined {
         const r = this.users.get(id)
-        return r ? {id: r.id, username: r.username, email: r.email} : undefined
+        return r ? {id: r.id, username: r.username, email: r.email, permissions: r.permissions} : undefined
     }
 
     public update(id: tUserId, patch: Partial<Pick<UserRecord, "email">>): UserRecord | undefined {

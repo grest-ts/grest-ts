@@ -1,6 +1,5 @@
 import {GGHeader} from "@grest-ts/http"
-import {GGContextKey} from "@grest-ts/context"
-import {IsEnum, IsObject, IsString} from "@grest-ts/schema"
+import {IsArray, IsEnum, IsObject, IsString} from "@grest-ts/schema"
 
 // Org permissions — distinct strings from UserPermission (global uniqueness, Rule 6).
 export enum OrgPermission {
@@ -19,14 +18,19 @@ export type tOrgId = typeof IsOrgId.infer
 export const IsOrg = IsObject({
     id: IsOrgId,
     name: IsString,
-    description: IsString,
+    description: IsString
 })
 export type Org = typeof IsOrg.infer
+
+// The user's membership in an org. An Org doesn't own permissions; an OrgUser does — ORG_MEMBER
+// is scoped to this membership. Holds orgId (not the org snapshot — org details are fetched fresh).
+export const IsOrgUser = IsObject({
+    orgId: IsOrgId,
+    permissions: IsArray(IsOrgPermission),
+})
+export type OrgUser = typeof IsOrgUser.infer
 
 // SMART wire: parses `x-org-token: <jwt>` (no bearer scheme — a custom header). Like the user
 // wire it is required-or-throw on any schema that .use()s it — which is why org-scoped routes
 // live on their own schema (OrgScopedApi), separate from the routes that mint the org token.
 export const ORG_TOKEN_WIRE = new GGHeader("x-org-token", {permissions: IsOrgPermission})
-
-// DURABLE selected-org the wire produces.
-export const ORG_DATA = new GGContextKey<Org>("orgData", IsOrg)

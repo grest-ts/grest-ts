@@ -1,6 +1,6 @@
 import {GGContractImplementation} from "@grest-ts/schema"
 import {BannerApiContract, BannerState} from "../../../api/BannerApi"
-import {USER_DATA} from "../../../api/auth/UserAuth"
+import {USER_DATA} from "../auth/UserAuthHandler"
 
 export class BannerService implements GGContractImplementation<typeof BannerApiContract["methods"]> {
     private count = 0
