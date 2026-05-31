@@ -5,12 +5,25 @@ import {GGHeader} from "@grest-ts/http"
 import {afterEach} from "vitest"
 import {WireAuthRuntime} from "../src/WireAuthRuntime"
 import {WireAuthMissingCreateRuntime} from "../src/WireAuthMissingCreateRuntime"
-import {IsWirePermission, USER_TOKEN_WIRE, WirePublicApi, WireUserApi} from "../src/api/WireAuthApi"
+import {WireAuthDuplicatePermRuntime} from "../src/WireAuthDuplicatePermRuntime"
+import {WireAuthBadOwningRuntime} from "../src/WireAuthBadOwningRuntime"
+import {IsWirePermission, ORG_TOKEN_WIRE, USER_TOKEN_WIRE, WireOrgScopedApi, WirePublicApi, WireUserApi} from "../src/api/WireAuthApi"
 
 function asUser(token: string): GGContext {
     const scope = new GGContext("wire-auth-test")
     scope.set(USER_TOKEN_WIRE, token)
     return scope
+}
+
+async function expectStartToThrow(runtime: any): Promise<string> {
+    let caught: unknown
+    try {
+        await GGTest.startInline(runtime)
+    } catch (e) {
+        caught = e
+    }
+    expect(caught).toBeDefined()
+    return (caught as Error).message ?? String(caught)
 }
 
 describe("single-token wire — HTTP end-to-end", () => {
@@ -83,5 +96,54 @@ describe("single-token wire — define/create lifecycle", () => {
             reg.create({})
             expect(() => reg.create({})).toThrow(/once per runtime/)
         })
+    })
+})
+
+describe("multi-wire — AND across sources", () => {
+
+    GGTest.startInline(WireAuthRuntime)
+
+    let scope: GGContext | undefined
+    afterEach(() => {
+        scope?.reset()
+        scope = undefined
+    })
+
+    function asUserAndOrg(userToken: string, orgToken: string): GGContext {
+        const s = new GGContext("wire-multi-test")
+        s.set(USER_TOKEN_WIRE, userToken)
+        s.set(ORG_TOKEN_WIRE, orgToken)
+        return s
+    }
+
+    test("passes only when BOTH wires resolve (user authn + org membership)", async () => {
+        scope = asUserAndOrg("alice", "org-1")
+        expect(await callOn(WireOrgScopedApi, scope).orgInfo()).toBe("org:org-1")
+    })
+
+    test("missing org token → rejected at the org wire (NOT_AUTHORIZED)", async () => {
+        scope = asUser("alice")
+        await expect(callOn(WireOrgScopedApi, scope).orgInfo()).rejects.toThrow(/NOT_AUTHORIZED/)
+    })
+
+    test("missing user token → rejected at the user wire (NOT_AUTHORIZED)", async () => {
+        scope = new GGContext("wire-multi-test")
+        scope.set(ORG_TOKEN_WIRE, "org-1")
+        await expect(callOn(WireOrgScopedApi, scope).orgInfo()).rejects.toThrow(/NOT_AUTHORIZED/)
+    })
+})
+
+describe("multi-wire — startup guardrails", () => {
+
+    test("two wires owning the same permission string → startup crash", async () => {
+        const msg = await expectStartToThrow(WireAuthDuplicatePermRuntime)
+        expect(msg).toMatch(/WIRE_ADMIN/)
+        expect(msg).toMatch(/globally unique/)
+    })
+
+    test("method requires a wire-owned permission whose wire isn't .use()d → startup crash", async () => {
+        const msg = await expectStartToThrow(WireAuthBadOwningRuntime)
+        expect(msg).toContain("WireBadOwning.needsOrg")
+        expect(msg).toMatch(/x-org-token/)
     })
 })

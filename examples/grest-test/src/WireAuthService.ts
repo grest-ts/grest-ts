@@ -1,7 +1,7 @@
 import {GGContextKey} from "@grest-ts/context"
 import {deepFreeze} from "@grest-ts/common"
-import {NOT_AUTHORIZED} from "@grest-ts/schema"
-import {IsWireUser, USER_TOKEN_WIRE, WirePermission, WireUser} from "./api/WireAuthApi"
+import {IsArray, IsObject, IsString, NOT_AUTHORIZED} from "@grest-ts/schema"
+import {IsOrgWirePermission, IsWireUser, ORG_TOKEN_WIRE, OrgWirePermission, USER_TOKEN_WIRE, WirePermission, WireUser} from "./api/WireAuthApi"
 
 // Durable principal — server-only, minted inside process() and deep-frozen so a handler
 // can't mutate permissions to escalate.
@@ -34,4 +34,25 @@ export const USER_TOKEN_WIRE_HANDLER = USER_TOKEN_WIRE.define((users: WireUserSe
         USER_DATA.set(deepFreeze(users.verify(USER_TOKEN_WIRE.get())))
     },
     permissions: async () => USER_DATA.get()!.permissions,
+}))
+
+// ---- org wire (second source) ----------------------------------------------------------------
+const IsOrgMembership = IsObject({orgId: IsString, permissions: IsArray(IsOrgWirePermission)})
+export const ORG_USER = new GGContextKey("wireTestOrgUser", IsOrgMembership)
+
+export class WireOrgService {
+    // The "token" is just the orgId; any present token grants ORG_MEMBER for that org.
+    public verify(token: string | undefined): {orgId: string; permissions: OrgWirePermission[]} {
+        if (!token) throw new NOT_AUTHORIZED({debugMessage: "Missing org token"})
+        return {orgId: token, permissions: [OrgWirePermission.ORG_MEMBER]}
+    }
+
+    public orgInfo = async (): Promise<string> => `org:${ORG_USER.get()!.orgId}`
+}
+
+export const ORG_TOKEN_WIRE_HANDLER = ORG_TOKEN_WIRE.define((orgs: WireOrgService) => ({
+    process: async () => {
+        ORG_USER.set(deepFreeze(orgs.verify(ORG_TOKEN_WIRE.get())))
+    },
+    permissions: async () => ORG_USER.get()!.permissions,
 }))

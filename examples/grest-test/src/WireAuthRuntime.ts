@@ -1,7 +1,7 @@
 import {GGHttp, GGHttpServer} from "@grest-ts/http"
 import {GGRuntime} from "@grest-ts/runtime"
-import {WirePublicApi, WireUserApi} from "./api/WireAuthApi"
-import {USER_TOKEN_WIRE_HANDLER, WirePublicService, WireUserService} from "./WireAuthService"
+import {WireOrgScopedApi, WirePublicApi, WireUserApi} from "./api/WireAuthApi"
+import {ORG_TOKEN_WIRE_HANDLER, USER_TOKEN_WIRE_HANDLER, WireOrgService, WirePublicService, WireUserService} from "./WireAuthService"
 
 export class WireAuthRuntime extends GGRuntime {
     public static readonly NAME = "wire-auth"
@@ -9,14 +9,17 @@ export class WireAuthRuntime extends GGRuntime {
     protected compose(): void {
         const server = new GGHttpServer()
         const userService = new WireUserService()
+        const orgService = new WireOrgService()
 
-        // Bind the wire's deps into THIS runtime's scope. No usePermissions / no resolver list —
-        // the schema carries the wire, the gate reads its permissions().
+        // Bind each wire's deps into THIS runtime's scope. No usePermissions / no resolver list —
+        // the schema carries the wires, the gate reads their permissions() (AND across sources).
         USER_TOKEN_WIRE_HANDLER.create(userService)
+        ORG_TOKEN_WIRE_HANDLER.create(orgService)
 
         new GGHttp(server)
             .http(WireUserApi, userService)
             .http(WirePublicApi, new WirePublicService())
+            .http(WireOrgScopedApi, orgService)
     }
 }
 

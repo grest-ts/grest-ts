@@ -19,6 +19,16 @@ type AnyWebSocketSchema = {
     connectPermission?: GGPermission;
 };
 
+/** Flatten a permission expression to its leaf scope strings (allOf/anyOf collapse to their members). */
+function leafPermissions(p: GGPermission): string[] {
+    if (typeof p === "string") return [p];
+    if (p !== null && typeof p === "object") {
+        if ("allOf" in p) return (p as {allOf: readonly GGPermission[]}).allOf.flatMap(leafPermissions);
+        if ("anyOf" in p) return (p as {anyOf: readonly GGPermission[]}).anyOf.flatMap(leafPermissions);
+    }
+    return [];
+}
+
 export interface GGCorsConfig {
     /**
      * Allowed cross-origin origins. Either an exact-match list or a predicate.
@@ -304,12 +314,63 @@ export class GGHttpServer {
         }
     }
 
+    private _smartWiresOf(schema: GGHttpSchema<any, any>): GGWireContextKey<any>[] {
+        return schema.apiMiddlewares.filter(
+            (mw): mw is GGWireContextKey<any> => mw instanceof GGWireContextKey && mw.isSmart
+        );
+    }
+
+    /**
+     * Build the permissionString → owningWire index across every schema's smart wires and validate:
+     *  - a permission string is owned by at most one wire (a collision is a config bug → crash);
+     *  - every method permission that names a wire-owned string has that wire on its own schema's
+     *    chain (else the gate could never satisfy it → crash).
+     * Strings not owned by any wire are out of scope here (manual resolvers / usePermissions own them).
+     */
+    private _checkWirePermissions(): void {
+        const owningWire = new Map<string, GGWireContextKey<any>>();
+        for (const schema of this._registeredSchemas) {
+            for (const wire of this._smartWiresOf(schema)) {
+                for (const perm of wire.permissionStrings()) {
+                    const existing = owningWire.get(perm);
+                    if (existing && existing !== wire) {
+                        throw new Error(
+                            `GGHttpServer: permission string "${perm}" is declared by two different wires ` +
+                            `("${existing.name}" and "${wire.name}"). Permission strings must be globally unique across wires.`
+                        );
+                    }
+                    owningWire.set(perm, wire);
+                }
+            }
+        }
+
+        for (const schema of this._registeredSchemas) {
+            const wiresHere = new Set(this._smartWiresOf(schema));
+            const methods = schema.contract?.methods ?? {};
+            for (const name of Object.keys(methods)) {
+                const required = (methods[name] as GGContractMethod).permission;
+                if (required === undefined) continue;
+                for (const leaf of leafPermissions(required)) {
+                    const wire = owningWire.get(leaf);
+                    if (wire && !wiresHere.has(wire)) {
+                        throw new Error(
+                            `GGHttpServer: ${schema.name}.${name} requires permission "${leaf}" owned by wire ` +
+                            `"${wire.name}", but that wire is not .use()d on ${schema.name}.\n\nFix: add ` +
+                            `.use(<the wire>) to ${schema.name}.`
+                        );
+                    }
+                }
+            }
+        }
+    }
+
     public registerRoute(method: HttpMethod, path: string, handler: GGHttpRequestCallback): void {
         this.router.on(method as HTTPMethod, path, handler as unknown as findMyWay.Handler<findMyWay.HTTPVersion.V1>);
     }
 
     public async start(): Promise<void> {
         Object.freeze(this._registeredSchemas);
+        this._checkWirePermissions();
         this._checkWiresImplemented();
         this._checkPermissionsAtStart();
         this._port = await new Promise((resolve) => {

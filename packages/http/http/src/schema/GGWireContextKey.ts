@@ -61,4 +61,13 @@ export abstract class GGWireContextKey<P extends string = never>
     public clear(): void {
         if (this.isSmart && this.has()) this.delete()
     }
+
+    /** The permission strings this wire owns (its enum literals). Empty for dumb / permission-less wires. */
+    public permissionStrings(): readonly string[] {
+        const def = this.permissionSchema?.def as {type?: string; values?: readonly unknown[]} | undefined
+        if (def?.type === "literal" && Array.isArray(def.values)) {
+            return def.values.map(String)
+        }
+        return []
+    }
 }

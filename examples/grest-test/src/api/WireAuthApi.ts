@@ -59,3 +59,28 @@ export const WirePublicApi = httpSchema(WirePublicApiContract)
     .routes({
         ping: GGRpc.GET("ping"),
     })
+
+// ---- second wire (org-like), for multi-wire AND-across-sources -------------------------------
+export enum OrgWirePermission {
+    ORG_MEMBER = "WIRE_ORG_MEMBER",
+}
+export const IsOrgWirePermission = IsEnum(OrgWirePermission)
+
+export const ORG_TOKEN_WIRE = new GGHeader("x-org-token", {permissions: IsOrgWirePermission})
+
+export const WireOrgScopedApiContract = new GGContractClass("WireOrgScopedApi", {
+    // Requires the org membership permission (from ORG_TOKEN_WIRE); the user wire still authenticates.
+    orgInfo: {
+        success: IsString,
+        errors: [NOT_AUTHORIZED, FORBIDDEN, SERVER_ERROR],
+        permission: OrgWirePermission.ORG_MEMBER,
+    },
+})
+
+export const WireOrgScopedApi = httpSchema(WireOrgScopedApiContract)
+    .pathPrefix("api/wire-org")
+    .use(USER_TOKEN_WIRE)
+    .use(ORG_TOKEN_WIRE)
+    .routes({
+        orgInfo: GGRpc.GET("info"),
+    })
