@@ -32,7 +32,7 @@ export const CookieTestContract = new GGContractClass("CookieTestApi", {
 })
 
 export const CookieTestApi = httpSchema(CookieTestContract)
-    .use(GGCookie.middleware(SESSION))
+    .use(new GGCookie(SESSION.name, SESSION))
     .pathPrefix("cookie")
     .routes({
         login: GGRpc.POST("login").updatesCookie(SESSION),

@@ -1,5 +1,6 @@
-import {GGContextKey, type GGInbound, type GGResponse, type GGTransportMiddleware} from "@grest-ts/context"
+import {GGContextKey, type GGInbound, type GGResponse} from "@grest-ts/context"
 import {IsAny, IsString, SERVER_ERROR, type GGSchema} from "@grest-ts/schema"
+import {GGWireContextKey, type GGWireSmartOptions} from "./GGWireContextKey"
 
 /**
  * Per-request set of context-key names the current route is permitted to write a cookie
@@ -35,36 +36,42 @@ interface PendingCookie {
     options?: CookieOptions
 }
 
-export class GGCookie {
+/**
+ * A cookie bound to a context key.
+ *
+ *   // dumb: ambient — the named cookie's value lands in the passed key, no implementation needed.
+ *   const SESSION_WIRE = new GGCookie("session_id", SESSION)
+ *
+ * Reads ONLY the named cookie — never a header — from the inbound Cookie header into the key.
+ * For HTTP that is the request Cookie; for WebSocket the real upgrade Cookie (the runtime fills
+ * inbound.cookie from there, never from the spoofable in-band message). The cookie name is the
+ * first constructor argument (case-sensitive — unlike a header it is not lowercased). To write
+ * the cookie, call GGCookie.setCookie(key, …) from a route that declared .updatesCookie(key);
+ * this wire flushes it as Set-Cookie (HTTP only — a WebSocket has no response to set a cookie on).
+ */
+export class GGCookie<P extends string = never> extends GGWireContextKey<P> {
 
-    /**
-     * Bind a context key to a cookie, read-only on the wire. Reads ONLY the named cookie —
-     * never a header — from the inbound Cookie header into key.get(). For HTTP that is the
-     * request Cookie; for WebSocket the real upgrade Cookie (the runtime fills inbound.cookie
-     * from there, never from the spoofable in-band message). The cookie's wire name defaults
-     * to the key's name. To write the cookie, call setCookie(key, …) from a route that
-     * declared .updatesCookie(key); the matching binding flushes it as Set-Cookie (HTTP only —
-     * a WebSocket has no response to set a cookie on).
-     */
-    public static middleware(key: GGContextKey<string | undefined>, opts?: {name?: string; schema?: GGSchema<string | undefined>}): GGTransportMiddleware {
-        const cookieName = opts?.name ?? key.name
-        _assertCookieSafe("name", cookieName)
-        return {
-            cookieParams: {[cookieName]: opts?.schema ?? IsString.orUndefined},
-            parse(inbound: GGInbound): void {
-                const value = _readCookie(inbound.cookie, cookieName)
-                if (value !== undefined) key.set(value)
-            },
-            respond(res: GGResponse): void {
-                const pending = GG_COOKIE_PENDING.get()?.get(key.name)
-                if (pending === undefined) return
-                const line = _serializeSetCookie(cookieName, pending.value, pending.options)
-                const existing = res.headers["set-cookie"]
-                const arr = existing === undefined ? [] : Array.isArray(existing) ? existing : [existing]
-                arr.push(line)
-                res.headers["set-cookie"] = arr
-            },
-        }
+    public readonly cookieParams: Record<string, GGSchema<string | undefined>>
+
+    constructor(name: string, keyOrOptions: GGContextKey<string | undefined> | GGWireSmartOptions<P>) {
+        super(name, keyOrOptions)
+        _assertCookieSafe("name", this.name)
+        this.cookieParams = {[this.name]: IsString.orUndefined}
+    }
+
+    public parse(inbound: GGInbound): void {
+        const value = _readCookie(inbound.cookie, this.name)
+        if (value !== undefined) this.target.set(value)
+    }
+
+    public respond(res: GGResponse): void {
+        const pending = GG_COOKIE_PENDING.get()?.get(this.target.name)
+        if (pending === undefined) return
+        const line = _serializeSetCookie(this.name, pending.value, pending.options)
+        const existing = res.headers["set-cookie"]
+        const arr = existing === undefined ? [] : Array.isArray(existing) ? existing : [existing]
+        arr.push(line)
+        res.headers["set-cookie"] = arr
     }
 
     /**

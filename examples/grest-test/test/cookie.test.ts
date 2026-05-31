@@ -17,7 +17,7 @@ describe("cookie binding", () => {
     test("parse reads the cookie (named by the key) into the key", () => {
         inRequest([], () => {
             const k = key("sid")
-            const mw = GGCookie.middleware(k)
+            const mw = new GGCookie(k.name, k)
             mw.parse!(inbound("other=x; sid=abc123; y=z"))
             expect(k.get()).toBe("abc123")
         })
@@ -26,7 +26,7 @@ describe("cookie binding", () => {
     test("a declared write with per-mint options emits a hardened Set-Cookie", () => {
         inRequest(["sid"], () => {
             const k = key("sid")
-            const mw = GGCookie.middleware(k)
+            const mw = new GGCookie(k.name, k)
             mw.parse!(inbound())
             GGCookie.setCookie(k, "token123", {maxAgeSec: 3600})
             const res = newRes()
@@ -40,7 +40,7 @@ describe("cookie binding", () => {
     test("set with no options uses safe defaults", () => {
         inRequest(["sid"], () => {
             const k = key("sid")
-            const mw = GGCookie.middleware(k)
+            const mw = new GGCookie(k.name, k)
             GGCookie.setCookie(k, "t")
             const res = newRes()
             mw.respond!(res)
@@ -51,7 +51,7 @@ describe("cookie binding", () => {
     test("read-only handler (no setCookie) emits nothing", () => {
         inRequest([], () => {
             const k = key("sid")
-            const mw = GGCookie.middleware(k)
+            const mw = new GGCookie(k.name, k)
             mw.parse!(inbound("sid=incoming"))
             const res = newRes()
             mw.respond!(res)
@@ -62,7 +62,7 @@ describe("cookie binding", () => {
     test("no incoming cookie + no setCookie emits nothing (no spurious clear)", () => {
         inRequest([], () => {
             const k = key("sid")
-            const mw = GGCookie.middleware(k)
+            const mw = new GGCookie(k.name, k)
             mw.parse!(inbound())
             const res = newRes()
             mw.respond!(res)
@@ -73,7 +73,7 @@ describe("cookie binding", () => {
     test("clearCookie() clears the cookie (Max-Age=0)", () => {
         inRequest(["sid"], () => {
             const k = key("sid")
-            const mw = GGCookie.middleware(k)
+            const mw = new GGCookie(k.name, k)
             mw.parse!(inbound("sid=abc"))
             GGCookie.clearCookie(k)
             const res = newRes()
@@ -85,7 +85,7 @@ describe("cookie binding", () => {
     test("clearCookie({path, domain}) clears a scoped cookie", () => {
         inRequest(["sid"], () => {
             const k = key("sid")
-            const mw = GGCookie.middleware(k)
+            const mw = new GGCookie(k.name, k)
             mw.parse!(inbound("sid=abc"))
             GGCookie.clearCookie(k, {path: "/api", domain: ".example.com"})
             const res = newRes()
@@ -99,7 +99,7 @@ describe("cookie binding", () => {
     test("setCookie(undefined) with scoped options emits Max-Age=0 with matching Path/Domain", () => {
         inRequest(["sid"], () => {
             const k = key("sid")
-            const mw = GGCookie.middleware(k)
+            const mw = new GGCookie(k.name, k)
             mw.parse!(inbound("sid=abc"))
             GGCookie.setCookie(k, undefined, {path: "/api", domain: ".example.com"})
             const res = newRes()
@@ -113,7 +113,7 @@ describe("cookie binding", () => {
     test("SameSite=None forces Secure", () => {
         inRequest(["sid"], () => {
             const k = key("sid")
-            const mw = GGCookie.middleware(k)
+            const mw = new GGCookie(k.name, k)
             GGCookie.setCookie(k, "t", {sameSite: "none", secure: false})
             const res = newRes()
             mw.respond!(res)
@@ -125,8 +125,8 @@ describe("cookie binding", () => {
         inRequest(["sid", "csrf"], () => {
             const sid = key("sid")
             const csrf = key("csrf")
-            const sidMw = GGCookie.middleware(sid)
-            const csrfMw = GGCookie.middleware(csrf)
+            const sidMw = new GGCookie(sid.name, sid)
+            const csrfMw = new GGCookie(csrf.name, csrf)
             GGCookie.setCookie(sid, "a")
             GGCookie.setCookie(csrf, "b")
             const res = newRes()
@@ -142,7 +142,7 @@ describe("cookie binding", () => {
     test("a custom wire name decouples the cookie name from the key name", () => {
         inRequest(["sid"], () => {
             const k = key("sid")
-            const mw = GGCookie.middleware(k, {name: "session_id"})
+            const mw = new GGCookie("session_id", k)
             mw.parse!(inbound("session_id=abc"))
             expect(k.get()).toBe("abc")
             GGCookie.setCookie(k, "new")
@@ -155,7 +155,7 @@ describe("cookie binding", () => {
     test("malformed percent-encoding does not throw", () => {
         inRequest([], () => {
             const k = key("sid")
-            const mw = GGCookie.middleware(k)
+            const mw = new GGCookie(k.name, k)
             expect(() => mw.parse!(inbound("sid=%"))).not.toThrow()
             expect(k.get()).toBe("%")
         })
@@ -164,7 +164,7 @@ describe("cookie binding", () => {
     test("fractional maxAgeSec is truncated", () => {
         inRequest(["sid"], () => {
             const k = key("sid")
-            const mw = GGCookie.middleware(k)
+            const mw = new GGCookie(k.name, k)
             GGCookie.setCookie(k, "t", {maxAgeSec: 3.9})
             const res = newRes()
             mw.respond!(res)
@@ -173,7 +173,7 @@ describe("cookie binding", () => {
     })
 
     test("illegal cookie name (binding) and bad setCookie options are rejected", () => {
-        expect(() => GGCookie.middleware(key("a;b"))).toThrow()                                              // wire name validated at bind
+        expect(() => new GGCookie(key("a;b").name, key("a;b"))).toThrow()                                    // wire name validated at bind
         expect(() => inRequest(["sid"], () => GGCookie.setCookie(key("sid"), "t", {path: "/x\r\ny"}))).toThrow()
         expect(() => inRequest(["sid"], () => GGCookie.setCookie(key("sid"), "t", {domain: "e;vil"}))).toThrow()
         expect(() => inRequest(["sid"], () => GGCookie.setCookie(key("sid"), "t", {maxAgeSec: NaN}))).toThrow()
@@ -182,7 +182,7 @@ describe("cookie binding", () => {
     test("setCookie on a route that did not declare .updatesCookie throws SERVER_ERROR", () => {
         inRequest([], () => {                       // route declared no writes
             const k = key("sid")
-            const mw = GGCookie.middleware(k)
+            const mw = new GGCookie(k.name, k)
             mw.parse!(inbound())
             let err: unknown
             try {

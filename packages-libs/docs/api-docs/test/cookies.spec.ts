@@ -20,7 +20,7 @@ describe("buildContractDoc — cookie surfacing", () => {
         const C = new GGContractClass("CookieHttp", {
             me: {success: IsString, errors: [NOT_AUTHORIZED, SERVER_ERROR], permission: GG_NO_PERMISSIONS},
         });
-        const Api = httpSchema(C as any).pathPrefix("acct").use(GGCookie.middleware(SESSION)).routes({me: GGRpc.GET("me")});
+        const Api = httpSchema(C as any).pathPrefix("acct").use(new GGCookie(SESSION.name, SESSION)).routes({me: GGRpc.GET("me")});
         const doc = buildContractDoc({title: "T", groups: {default: {http: [Api]}}});
         const c = findContract(doc, "CookieHttp");
         expect(c?.cookies?.map(x => x.name)).toEqual(["access"]);
@@ -31,7 +31,7 @@ describe("buildContractDoc — cookie surfacing", () => {
         const C = new GGContractClass("CookieNamed", {
             me: {success: IsString, errors: [SERVER_ERROR], permission: GG_NO_PERMISSIONS},
         });
-        const Api = httpSchema(C as any).pathPrefix("acct2").use(GGCookie.middleware(SESSION, {name: "sid"})).routes({me: GGRpc.GET("me")});
+        const Api = httpSchema(C as any).pathPrefix("acct2").use(new GGCookie("sid", SESSION)).routes({me: GGRpc.GET("me")});
         const doc = buildContractDoc({title: "T", groups: {default: {http: [Api]}}});
         expect(findContract(doc, "CookieNamed")?.cookies?.map(x => x.name)).toEqual(["sid"]);
     });
@@ -52,7 +52,7 @@ describe("buildContractDoc — cookie surfacing", () => {
             clientToServer: {whoami: {success: IsString, errors: [SERVER_ERROR], permission: GG_NO_PERMISSIONS}},
             serverToClient: {},
         });
-        const Api = webSocketSchema(C).path("ws/acct").use(GGCookie.middleware(SESSION)).done();
+        const Api = webSocketSchema(C).path("ws/acct").use(new GGCookie(SESSION.name, SESSION)).done();
         const doc = buildContractDoc({title: "T", groups: {default: {ws: [Api]}}});
         expect(findContract(doc, "CookieWs")?.cookies?.map(x => x.name)).toEqual(["access"]);
     });

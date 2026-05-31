@@ -47,7 +47,7 @@ export const WsCookieApiContract = defineSocketContract("WsCookieApi", {
 // session cookie resolves to no scopes and is rejected at the handshake.
 export const WsCookieApi = webSocketSchema(WsCookieApiContract)
     .path("ws/cookie-test")
-    .use(GGCookie.middleware(SESSION))
+    .use(new GGCookie(SESSION.name, SESSION))
     .connectPermission(AppPermission.Read)
     .done()
 

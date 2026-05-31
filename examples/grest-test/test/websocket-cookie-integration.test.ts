@@ -21,7 +21,7 @@ describe("ws cookie binding (unit)", () => {
 
     test("parse reads the cookie from the upgrade Cookie header into the key", () => {
         inContext(() => {
-            const mw = GGCookie.middleware(SESSION)
+            const mw = new GGCookie(SESSION.name, SESSION)
             mw.parse!({headers: {}, query: {}, cookie: "other=x; session=abc123; y=z"})
             expect(SESSION.get()).toBe("abc123")
         })
@@ -29,7 +29,7 @@ describe("ws cookie binding (unit)", () => {
 
     test("a cookie absent from inbound.cookie (in-band only) is never read (no spoof)", () => {
         inContext(() => {
-            const mw = GGCookie.middleware(SESSION)
+            const mw = new GGCookie(SESSION.name, SESSION)
             mw.parse!({headers: {cookie: "session=spoofed"}, query: {}})
             expect(SESSION.get()).toBeUndefined()
         })
@@ -37,7 +37,7 @@ describe("ws cookie binding (unit)", () => {
 
     test("no cookie → the key stays undefined", () => {
         inContext(() => {
-            const mw = GGCookie.middleware(SESSION)
+            const mw = new GGCookie(SESSION.name, SESSION)
             mw.parse!({headers: {}, query: {}})
             expect(SESSION.get()).toBeUndefined()
         })
