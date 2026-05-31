@@ -1,5 +1,16 @@
 import {GGContextKey, type GGTransportMiddleware} from "@grest-ts/context"
 import {IsString, type GGSchema} from "@grest-ts/schema"
+import {GGContextKeySynchronizer} from "../client/GGContextKeySynchronizer"
+
+/** Client/outbound behaviour for a smart wire: the last-known value plus an optional refresh gate. */
+export interface GGWireClientHandler {
+    /** Sync — the last-known credential to attach outbound. */
+    value: () => string | undefined
+    /** Async — true when value() is stale and recover() should run before the next outbound read. */
+    isStale?: () => boolean
+    /** Async — refresh the credential; run by the synchronizer's waitFor before value() is read. */
+    recover?: () => Promise<void>
+}
 
 export interface GGWireSmartOptions<P extends string = never> {
     scheme?: "bearer"
@@ -55,6 +66,33 @@ export abstract class GGWireContextKey<P extends string = never>
             this.target = this
             this.key = this
         }
+    }
+
+    private _clientValue?: () => string | undefined
+    private _clientDefined = false
+
+    /**
+     * Attach the client/outbound behaviour: the value to send and an optional refresh gate.
+     * Freeze-once. The no-session case calls this directly (`WIRE.defineClient({value: () => KEY})`);
+     * GGAuthSession calls it internally on the wires it holds.
+     */
+    public defineClient(handler: GGWireClientHandler): void {
+        if (this._clientDefined) {
+            throw new Error(`Wire "${this.name}" already has .defineClient() — it can only be defined once.`)
+        }
+        this._clientDefined = true
+        this._clientValue = handler.value
+        if (handler.isStale || handler.recover) {
+            GGContextKeySynchronizer.provide(this, {
+                isStale: handler.isStale ?? (() => false),
+                recover: handler.recover ?? (async () => {}),
+            })
+        }
+    }
+
+    /** Outbound value to attach: the defineClient value() if set, else the ambient key value. */
+    public outboundValue(): string | undefined {
+        return this._clientValue ? this._clientValue() : this.target.get()
     }
 
     /** Drop the ephemeral raw credential after process(); ambient (dumb) wires keep their value. */

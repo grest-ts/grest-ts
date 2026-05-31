@@ -41,7 +41,7 @@ export class GGHeader<P extends string = never> extends GGWireContextKey<P> {
     }
 
     public update(outbound: GGOutbound): void {
-        const value = this.target.get()
+        const value = this.outboundValue()
         if (value !== undefined) outbound.headers[this.wireName] = this.wrap(value)
     }
 }

@@ -9,8 +9,10 @@ export {IsRefreshTokenRecord} from "./node/refresh/RefreshTokenStore"
 export type {RefreshTokenRecord, RefreshTokenStore} from "./node/refresh/RefreshTokenStore"
 export {InMemoryRefreshTokenStore} from "./node/refresh/InMemoryRefreshTokenStore"
 
-export {AuthToken, IsGGRefreshToken, IsGGRefreshTokenData, IsGGAccessToken, IsGGAccessTokenData, IsGGAuthTokenResult, IsGGAuthTokensResult} from "./node/token/AuthToken"
-export type {GGAuthTokenResult, AccessPayload, AuthTokenOptions, NoClaims, RefreshedGrant, GGAuthTokensResult} from "./node/token/AuthToken"
+export {AuthToken} from "./node/token/AuthToken"
+export type {AccessPayload, AuthTokenOptions, NoClaims, RefreshedGrant} from "./node/token/AuthToken"
+export {IsGGRefreshToken, IsGGRefreshTokenData, IsGGAccessToken, IsGGAccessTokenData, IsGGAuthTokenResult, IsGGAuthTokensResult} from "./shared/tokenSchemas"
+export type {GGAuthTokenResult, GGAuthTokensResult} from "./shared/tokenSchemas"
 
 export {permissionsChecker} from "./node/permissions"
 

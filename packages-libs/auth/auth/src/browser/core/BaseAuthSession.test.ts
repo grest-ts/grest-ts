@@ -1,6 +1,7 @@
 import {describe, test, expect, vi} from "vitest"
-import {NOT_AUTHORIZED} from "@grest-ts/schema"
-import {GGContextKeySynchronizer} from "@grest-ts/http"
+import {NOT_AUTHORIZED, IsLiteral} from "@grest-ts/schema"
+import {GGContextKeySynchronizer, GGHeader} from "@grest-ts/http"
+import {GGContext} from "@grest-ts/context"
 import {BaseAuthSession} from "../GGAuthSessionBase"
 import {GGAuthSession} from "../GGAuthSession"
 import type {
@@ -11,10 +12,9 @@ import type {
     DerivedConfig,
     DerivedMap,
     DerivedTokenResult,
+    GGTokenPair,
     Scheduler,
     SharedCache,
-    SharedTokens,
-    TokenPair,
     TokenKey,
 } from "./types"
 
@@ -37,20 +37,20 @@ class FakeLock implements CrossTabLock {
 }
 
 class FakeSharedCache implements SharedCache {
-    private value: SharedTokens | undefined = undefined
-    private readonly listeners = new Set<(v: SharedTokens | undefined) => void>()
-    private activeWriter: ((v: SharedTokens | undefined) => void) | undefined = undefined
+    private value: GGTokenPair | undefined = undefined
+    private readonly listeners = new Set<(v: GGTokenPair | undefined) => void>()
+    private activeWriter: ((v: GGTokenPair | undefined) => void) | undefined = undefined
 
     read() { return this.value }
 
-    write(v: SharedTokens | undefined): void {
+    write(v: GGTokenPair | undefined): void {
         this.value = v
         for (const l of this.listeners) {
             if (l !== this.activeWriter) l(v)
         }
     }
 
-    subscribe(cb: (v: SharedTokens | undefined) => void): () => void {
+    subscribe(cb: (v: GGTokenPair | undefined) => void): () => void {
         this.listeners.add(cb)
         return () => this.listeners.delete(cb)
     }
@@ -89,7 +89,7 @@ function makeAccess(token: string, expiresAt: number): DerivedTokenResult<unknow
     return {access: {token, expiresAt}, data: undefined}
 }
 
-function makePair(token: string, expiresAt: number, refreshToken?: string): TokenPair {
+function makePair(token: string, expiresAt: number, refreshToken?: string): GGTokenPair {
     return {
         access: {token, expiresAt},
         ...(refreshToken ? {refresh: {token: refreshToken, expiresAt: expiresAt + 604_800_000}} : {}),
@@ -120,7 +120,7 @@ function makeSession<D extends DerivedMap = {}>(overrides: {
     cache?: FakeSharedCache
     scheduler?: FakeScheduler
     slot?: FakeKey
-    refreshResult?: TokenPair
+    refreshResult?: GGTokenPair
     storage?: "localStorage" | "cookie"
 } = {}): SessionSetup<D> {
     const clock = overrides.clock ?? new FakeClock()
@@ -156,8 +156,8 @@ describe("start() — localStorage", () => {
         expect(session.getState().status).toBe("authenticated")
         expect(slot.get()).toBe("at-root-1")
         const cached = cache.read()
-        expect(cached?.root.accessToken).toBe("at-root-1")
-        expect(cached?.refreshToken).toBe("rt-1")
+        expect(cached?.access.token).toBe("at-root-1")
+        expect(cached?.refresh?.token).toBe("rt-1")
     })
 })
 
@@ -204,9 +204,9 @@ describe("cross-tab single-flight via lock + cache re-check", () => {
         const slot1 = new FakeKey()
         const slot2 = new FakeKey()
 
-        let resolveRefresh!: (v: TokenPair) => void
+        let resolveRefresh!: (v: GGTokenPair) => void
         const refreshFn = vi.fn().mockImplementation(
-            () => new Promise<TokenPair>(r => { resolveRefresh = r })
+            () => new Promise<GGTokenPair>(r => { resolveRefresh = r })
         )
 
         const cfg = (slot: FakeKey): CoreConfig => ({
@@ -439,8 +439,8 @@ describe("cookie mode", () => {
         session.start(makePair("at-1", 3_000_000, "rt-server"))
 
         const cached = cache.read()
-        expect(cached?.refreshToken).toBeUndefined()
-        expect(cached?.root.accessToken).toBe("at-1")
+        expect(cached?.refresh?.token).toBeUndefined()
+        expect(cached?.access.token).toBe("at-1")
     })
 
     test("cookie mode init with no cache → calls refresh with undefined", async () => {
@@ -640,44 +640,41 @@ describe("ensureActiveDerivedFresh()", () => {
 })
 
 describe("AuthSession — GGContextKeySynchronizer.provide wiring", () => {
+    // The session schedules a proactive refresh on start(); fake timers keep that scheduled
+    // callback from firing after the test (which would hit the mock refresh + unstubbed globals).
+    const okPair = () => makePair("at2", 9_999_999_999, "rt2")
+    const okDerived = () => ({access: {token: "org-tok", expiresAt: 9_999_999_999}, data: {}})
+
     test("constructing AuthSession with root + one derived calls provide twice", () => {
         const provideSpy = vi.spyOn(GGContextKeySynchronizer, "provide").mockImplementation(() => undefined)
 
-        const fakeStorage = {
-            getItem: vi.fn().mockReturnValue(null),
-            setItem: vi.fn(),
-            removeItem: vi.fn(),
-        }
-        vi.stubGlobal("localStorage", fakeStorage)
-        vi.stubGlobal("window", {
-            addEventListener: vi.fn(),
-            removeEventListener: vi.fn(),
-        })
-        vi.stubGlobal("document", {
-            addEventListener: vi.fn(),
-            removeEventListener: vi.fn(),
-            visibilityState: "visible",
-        })
+        vi.useFakeTimers()
+        vi.stubGlobal("localStorage", {getItem: vi.fn().mockReturnValue(null), setItem: vi.fn(), removeItem: vi.fn()})
+        vi.stubGlobal("window", {addEventListener: vi.fn(), removeEventListener: vi.fn()})
+        vi.stubGlobal("document", {addEventListener: vi.fn(), removeEventListener: vi.fn(), visibilityState: "visible"})
 
         try {
-            const rootSlot = new FakeKey()
-            const orgSlot = new FakeKey()
+            const rootWire = new GGHeader("authorization-t1", {scheme: "bearer", permissions: IsLiteral("p1")})
+            const orgWire = new GGHeader("x-org-t1", {permissions: IsLiteral("p2")})
 
-            GGAuthSession.withToken(rootSlot, {refresh: vi.fn()})
-                .addDerived("org", orgSlot, {mint: vi.fn()})
-                .start(makePair("at", 0, "rt")) // triggers _getSession
+            new GGContext("test").run(() => {
+                GGAuthSession.withToken(rootWire, {refresh: vi.fn().mockResolvedValue(okPair()), localStorageKey: "test"})
+                    .addDerived("org", orgWire, {mint: vi.fn().mockResolvedValue(okDerived())})
+                    .start(makePair("at", 0, "rt")) // triggers _getSession
 
-            expect(provideSpy).toHaveBeenCalledTimes(2)
+                expect(provideSpy).toHaveBeenCalledTimes(2)
 
-            const [firstCall, secondCall] = provideSpy.mock.calls
-            expect(firstCall[0]).toBe(rootSlot)
-            expect(typeof firstCall[1].isStale).toBe("function")
-            expect(typeof firstCall[1].recover).toBe("function")
-            expect(secondCall[0]).toBe(orgSlot)
-            expect(typeof secondCall[1].isStale).toBe("function")
-            expect(typeof secondCall[1].recover).toBe("function")
+                const [firstCall, secondCall] = provideSpy.mock.calls
+                expect(firstCall[0]).toBe(rootWire)
+                expect(typeof firstCall[1].isStale).toBe("function")
+                expect(typeof firstCall[1].recover).toBe("function")
+                expect(secondCall[0]).toBe(orgWire)
+                expect(typeof secondCall[1].isStale).toBe("function")
+                expect(typeof secondCall[1].recover).toBe("function")
+            })
         } finally {
             provideSpy.mockRestore()
+            vi.useRealTimers()
             vi.unstubAllGlobals()
         }
     })
@@ -685,65 +682,61 @@ describe("AuthSession — GGContextKeySynchronizer.provide wiring", () => {
     test("constructing AuthSession with no derived calls provide once", () => {
         const provideSpy = vi.spyOn(GGContextKeySynchronizer, "provide").mockImplementation(() => undefined)
 
-        const fakeStorage = {
-            getItem: vi.fn().mockReturnValue(null),
-            setItem: vi.fn(),
-            removeItem: vi.fn(),
-        }
-        vi.stubGlobal("localStorage", fakeStorage)
-        vi.stubGlobal("window", {
-            addEventListener: vi.fn(),
-            removeEventListener: vi.fn(),
-        })
-        vi.stubGlobal("document", {
-            addEventListener: vi.fn(),
-            removeEventListener: vi.fn(),
-            visibilityState: "visible",
-        })
+        vi.useFakeTimers()
+        vi.stubGlobal("localStorage", {getItem: vi.fn().mockReturnValue(null), setItem: vi.fn(), removeItem: vi.fn()})
+        vi.stubGlobal("window", {addEventListener: vi.fn(), removeEventListener: vi.fn()})
+        vi.stubGlobal("document", {addEventListener: vi.fn(), removeEventListener: vi.fn(), visibilityState: "visible"})
 
         try {
-            GGAuthSession.withToken(new FakeKey(), {refresh: vi.fn()})
-                .start(makePair("at", 0, "rt")) // triggers _getSession
-            expect(provideSpy).toHaveBeenCalledTimes(1)
+            const rootWire = new GGHeader("authorization-t2", {scheme: "bearer", permissions: IsLiteral("p1")})
+            new GGContext("test").run(() => {
+                GGAuthSession.withToken(rootWire, {refresh: vi.fn().mockResolvedValue(okPair()), localStorageKey: "test"})
+                    .start(makePair("at", 0, "rt")) // triggers _getSession
+                expect(provideSpy).toHaveBeenCalledTimes(1)
+            })
         } finally {
             provideSpy.mockRestore()
+            vi.useRealTimers()
             vi.unstubAllGlobals()
         }
     })
 
-    test("isStale controller reflects session state correctly", () => {
+    test("isStale controller reflects session state correctly", async () => {
         const capturedControllers: Array<{isStale: () => boolean; recover: () => Promise<void>}> = []
         const provideSpy = vi.spyOn(GGContextKeySynchronizer, "provide").mockImplementation((_key, ctrl) => {
             capturedControllers.push(ctrl)
         })
 
-        const fakeStorage = {
-            getItem: vi.fn().mockReturnValue(null),
-            setItem: vi.fn(),
-            removeItem: vi.fn(),
-        }
-        vi.stubGlobal("localStorage", fakeStorage)
+        vi.useFakeTimers()
+        vi.stubGlobal("localStorage", {getItem: vi.fn().mockReturnValue(null), setItem: vi.fn(), removeItem: vi.fn()})
         vi.stubGlobal("window", {addEventListener: vi.fn(), removeEventListener: vi.fn()})
         vi.stubGlobal("document", {addEventListener: vi.fn(), removeEventListener: vi.fn(), visibilityState: "visible"})
 
         try {
-            const orgSlot = new FakeKey()
-            GGAuthSession.withToken(new FakeKey(), {refresh: vi.fn()})
-                .addDerived("org", orgSlot, {mint: vi.fn()})
-                .start(makePair("at", 0, "rt")) // triggers _getSession
+            const rootWire = new GGHeader("authorization-t3", {scheme: "bearer", permissions: IsLiteral("p1")})
+            const orgWire = new GGHeader("x-org-t3", {permissions: IsLiteral("p2")})
 
-            const rootCtrl = capturedControllers[0]
-            const orgCtrl = capturedControllers[1]
+            await new GGContext("test").run(async () => {
+                GGAuthSession.withToken(rootWire, {refresh: vi.fn().mockResolvedValue(okPair()), localStorageKey: "test"})
+                    .addDerived("org", orgWire, {mint: vi.fn().mockResolvedValue(okDerived())})
+                    .start(makePair("at", 0, "rt")) // triggers _getSession
 
-            // No tokens yet — root is stale, derived is not stale (no active selection)
-            expect(rootCtrl.isStale()).toBe(true)
-            expect(orgCtrl.isStale()).toBe(false)
+                const rootCtrl = capturedControllers[0]
+                const orgCtrl = capturedControllers[1]
 
-            // recover is a callable that returns a promise
-            expect(typeof rootCtrl.recover).toBe("function")
-            expect(rootCtrl.recover()).toBeInstanceOf(Promise)
+                // root token expiresAt=0 is stale; derived has no active selection → not stale
+                expect(rootCtrl.isStale()).toBe(true)
+                expect(orgCtrl.isStale()).toBe(false)
+
+                expect(typeof rootCtrl.recover).toBe("function")
+                const rec = rootCtrl.recover()
+                expect(rec).toBeInstanceOf(Promise)
+                // Drain the refresh before unstubbing globals so its tail doesn't reject unhandled.
+                await rec
+            })
         } finally {
             provideSpy.mockRestore()
+            vi.useRealTimers()
             vi.unstubAllGlobals()
         }
     })

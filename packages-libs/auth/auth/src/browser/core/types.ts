@@ -1,5 +1,6 @@
-export interface AccessOnly { accessToken: string; accessExpiresAt: number }
-export interface TokenPair {
+// The one canonical token shape — used by AuthToken returns, the API contract, the session's
+// in-memory + localStorage storage, and the wire's outbound value(). Zero transforms between them.
+export interface GGTokenPair {
     access: {token: string; expiresAt: number}
     refresh?: {token: string; expiresAt: number}
 }
@@ -28,22 +29,17 @@ export interface SessionState {
     degraded: boolean
 }
 
-export interface SharedTokens {
-    refreshToken?: string;
-    root: AccessOnly
-}
-
 export interface Clock { now(): number }
 export interface CrossTabLock { withLock<T>(name: string, fn: () => Promise<T>): Promise<T> }
 export interface SharedCache {
-    read(): SharedTokens | undefined
-    write(v: SharedTokens | undefined): void
-    subscribe(cb: (v: SharedTokens | undefined) => void): () => void
+    read(): GGTokenPair | undefined
+    write(v: GGTokenPair | undefined): void
+    subscribe(cb: (v: GGTokenPair | undefined) => void): () => void
 }
 export interface Scheduler { schedule(delayMs: number, fn: () => void): () => void; onWake(cb: () => void): () => void }
 
 export interface CoreConfig<D extends DerivedMap = {}> {
-    refresh: (refreshToken?: string) => Promise<TokenPair>
+    refresh: (refreshToken?: string) => Promise<GGTokenPair>
     key: TokenKey
     derived?: D
     storage: "localStorage" | "cookie"

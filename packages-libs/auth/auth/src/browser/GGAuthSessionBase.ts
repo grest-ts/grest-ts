@@ -6,9 +6,8 @@ import type {
     DerivedMap,
     DerivedParams,
     DerivedTokenResult,
+    GGTokenPair,
     SessionState,
-    SharedTokens,
-    TokenPair,
 } from "./core/types"
 
 // Data fields of D proxied as optional properties on the DerivedToken handle.
@@ -54,7 +53,7 @@ export class BaseAuthSession<D extends DerivedMap> {
     protected readonly config: CoreConfig<D>
     protected readonly ports: CorePorts
 
-    private shared: SharedTokens | undefined = undefined
+    private shared: GGTokenPair | undefined = undefined
     private state: SessionState = {status: "anonymous", refreshing: false, degraded: false}
     private inflightRefresh: Promise<void> | null = null
     private readonly inflightDerivedMint = new Map<string, Promise<void>>()
@@ -117,7 +116,7 @@ export class BaseAuthSession<D extends DerivedMap> {
         const now = this.ports.clock.now()
 
         if (this.config.storage === "cookie") {
-            if (!cached?.root) {
+            if (!cached?.access) {
                 this.setState({status: "restoring", refreshing: false, degraded: false})
                 this.notifyListeners()
                 try {
@@ -133,7 +132,7 @@ export class BaseAuthSession<D extends DerivedMap> {
             this.adoptRoot(cached)
             this.setState({...this.state, status: "restoring"})
             this.notifyListeners()
-            if (cached.root.accessExpiresAt <= now + this.config.clockSkewMs) {
+            if (cached.access.expiresAt <= now + this.config.clockSkewMs) {
                 try {
                     await this.ensureFresh()
                 } catch {
@@ -149,7 +148,7 @@ export class BaseAuthSession<D extends DerivedMap> {
             return
         }
 
-        if (!cached?.root) {
+        if (!cached?.access) {
             this.setState({status: "anonymous", refreshing: false, degraded: false})
             this.notifyListeners()
             return
@@ -159,7 +158,7 @@ export class BaseAuthSession<D extends DerivedMap> {
         this.setState({...this.state, status: "restoring"})
         this.notifyListeners()
 
-        if (cached.root.accessExpiresAt <= now + this.config.clockSkewMs) {
+        if (cached.access.expiresAt <= now + this.config.clockSkewMs) {
             try {
                 await this.ensureFresh()
             } catch {
@@ -174,10 +173,11 @@ export class BaseAuthSession<D extends DerivedMap> {
         }
     }
 
-    start(pair: TokenPair): void {
-        const next: SharedTokens = {
-            root: {accessToken: pair.access.token, accessExpiresAt: pair.access.expiresAt},
-            refreshToken: this.config.storage === "cookie" ? undefined : pair.refresh?.token,
+    start(pair: GGTokenPair): void {
+        // The pair IS the canonical stored shape — store it directly, no field-rename transform.
+        const next: GGTokenPair = {
+            access: pair.access,
+            refresh: this.config.storage === "cookie" ? undefined : pair.refresh,
         }
         this.commitShared(next)
     }
@@ -199,7 +199,7 @@ export class BaseAuthSession<D extends DerivedMap> {
     ensureFresh(): Promise<void> {
         if (this.inflightRefresh) return this.inflightRefresh
         const now = this.ports.clock.now()
-        if (this.shared && this.shared.root.accessExpiresAt > now + this.config.refreshLeadMs) return Promise.resolve()
+        if (this.shared && this.shared.access.expiresAt > now + this.config.refreshLeadMs) return Promise.resolve()
         return this.refreshNow()
     }
 
@@ -222,14 +222,14 @@ export class BaseAuthSession<D extends DerivedMap> {
 
             if (
                 cached != null &&
-                cached.root.accessExpiresAt > now + this.config.clockSkewMs &&
-                cached.root.accessToken !== this.shared?.root.accessToken
+                cached.access.expiresAt > now + this.config.clockSkewMs &&
+                cached.access.token !== this.shared?.access.token
             ) {
                 this.adoptRoot(cached)
                 return
             }
 
-            if (this.shared && this.shared.root.accessExpiresAt > now + this.config.refreshLeadMs) {
+            if (this.shared && this.shared.access.expiresAt > now + this.config.refreshLeadMs) {
                 return
             }
 
@@ -238,7 +238,7 @@ export class BaseAuthSession<D extends DerivedMap> {
                 throw new Error("No refresh token")
             }
 
-            let result: TokenPair
+            let result: GGTokenPair
             try {
                 result = await this.config.refresh(this.currentRefreshToken())
             } catch (e) {
@@ -250,11 +250,11 @@ export class BaseAuthSession<D extends DerivedMap> {
                 throw e
             }
 
-            const next: SharedTokens = {
-                root: {accessToken: result.access.token, accessExpiresAt: result.access.expiresAt},
-                refreshToken: this.config.storage === "cookie"
+            const next: GGTokenPair = {
+                access: result.access,
+                refresh: this.config.storage === "cookie"
                     ? undefined
-                    : (result.refresh?.token ?? this.shared?.refreshToken),
+                    : (result.refresh ?? this.shared?.refresh),
             }
             this.commitShared(next)
         })
@@ -340,7 +340,7 @@ export class BaseAuthSession<D extends DerivedMap> {
     }
 
     isRootStale(): boolean {
-        return !this.shared || this.shared.root.accessExpiresAt <= this.ports.clock.now() + this.config.clockSkewMs
+        return !this.shared || this.shared.access.expiresAt <= this.ports.clock.now() + this.config.clockSkewMs
     }
 
     isDerivedStale(key: string): boolean {
@@ -358,17 +358,17 @@ export class BaseAuthSession<D extends DerivedMap> {
         return this.remintActiveDerived(key)
     }
 
-    private adoptRoot(s: SharedTokens): void {
+    private adoptRoot(s: GGTokenPair): void {
         this.shared = s
-        this.config.key.set(s.root.accessToken)
+        this.config.key.set(s.access.token)
         this.setState({status: "authenticated", refreshing: false, degraded: false})
         this.scheduleNextRefresh()
         this.notifyListeners()
     }
 
-    private commitShared(s: SharedTokens): void {
+    private commitShared(s: GGTokenPair): void {
         this.shared = s
-        this.config.key.set(s.root.accessToken)
+        this.config.key.set(s.access.token)
         this.cacheWrite(s)
         this.setState({status: "authenticated", refreshing: this.state.refreshing, degraded: false})
         this.scheduleNextRefresh()
@@ -376,7 +376,7 @@ export class BaseAuthSession<D extends DerivedMap> {
         this.notifyListeners()
     }
 
-    private cacheWrite(v: SharedTokens | undefined): void {
+    private cacheWrite(v: GGTokenPair | undefined): void {
         this.writing = true
         try {
             this.ports.cache.write(v)
@@ -389,7 +389,7 @@ export class BaseAuthSession<D extends DerivedMap> {
         this.cancelNextRefresh()
         if (!this.shared) return
         const now = this.ports.clock.now()
-        const delay = Math.max(0, this.shared.root.accessExpiresAt - this.config.refreshLeadMs - now)
+        const delay = Math.max(0, this.shared.access.expiresAt - this.config.refreshLeadMs - now)
         this.cancelScheduled = this.ports.scheduler.schedule(delay, () => void this.ensureFresh())
     }
 
@@ -414,7 +414,7 @@ export class BaseAuthSession<D extends DerivedMap> {
         this.notifyListeners()
     }
 
-    private onCrossTab(incoming: SharedTokens | undefined): void {
+    private onCrossTab(incoming: GGTokenPair | undefined): void {
         if (this.writing) return
         if (!incoming) {
             this.shared = undefined
@@ -426,18 +426,18 @@ export class BaseAuthSession<D extends DerivedMap> {
             this.notifyListeners()
             return
         }
-        if (incoming.root.accessToken !== this.shared?.root.accessToken) {
+        if (incoming.access.token !== this.shared?.access.token) {
             this.adoptRoot(incoming)
             this.fireRefreshed()
         }
     }
 
     private currentRefreshToken(): string | undefined {
-        return this.config.storage === "cookie" ? undefined : this.shared?.refreshToken
+        return this.config.storage === "cookie" ? undefined : this.shared?.refresh?.token
     }
 
     private canRefresh(): boolean {
-        return this.config.storage === "cookie" ? true : !!this.shared?.refreshToken
+        return this.config.storage === "cookie" ? true : !!this.shared?.refresh?.token
     }
 
     private clearRootWire(): void {

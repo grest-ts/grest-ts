@@ -1,37 +1,55 @@
 /// <reference lib="dom" />
 import {NOT_AUTHORIZED} from "@grest-ts/schema"
-import {type GGContextKey} from "@grest-ts/context"
-import {GGContextKeySynchronizer} from "@grest-ts/http"
+import {GGWireContextKey} from "@grest-ts/http"
 import {BaseAuthSession} from "./GGAuthSessionBase"
 import {systemClock} from "./core/systemClock"
 import {localStorageSharedCache} from "./core/localStorageCache"
 import {webLocksLock} from "./core/webLocksLock"
 import {browserScheduler} from "./core/browserScheduler"
-import type {DerivedConfig, DerivedData, DerivedMap, DerivedParams, DerivedTokenResult, SessionState, TokenKey, TokenPair} from "./core/types"
+import type {DerivedConfig, DerivedData, DerivedMap, DerivedParams, DerivedTokenResult, GGTokenPair, SessionState} from "./core/types"
 import type {DerivedToken} from "./GGAuthSessionBase"
 
+// A credential wire carrying its permission enum P — withToken/addDerived take these directly,
+// so the session infers its permission union (Perm) from the wires it holds.
+type Wire<P extends string> = GGWireContextKey<P>
+
 export interface GGTokenSessionConfig {
-    refresh: (token: {refreshToken: string}) => Promise<TokenPair>
+    refresh: (token: {refreshToken: string}) => Promise<GGTokenPair>
     localStorageKey: string
 }
 
 export interface GGCookieSessionConfig {
-    refresh: () => Promise<TokenPair>
+    refresh: () => Promise<GGTokenPair>
     logout: () => Promise<void>
 }
 
-export class GGAuthSession<D extends DerivedMap = {}> {
+// UX-only: decode the (forgeable) JWT's `permissions` claim. The server re-verifies on every call.
+function decodePermissions(token: string | undefined): string[] {
+    if (!token) return []
+    try {
+        const seg = token.split(".")[1]
+        if (!seg) return []
+        const json = atob(seg.replace(/-/g, "+").replace(/_/g, "/"))
+        const payload = JSON.parse(json) as {permissions?: unknown}
+        return Array.isArray(payload.permissions) ? payload.permissions.map(String) : []
+    } catch {
+        return []
+    }
+}
+
+export class GGAuthSession<D extends DerivedMap = {}, Perm extends string = never> {
     private _session: BaseAuthSession<D> | null = null
-    private readonly _rootKey: TokenKey
-    private readonly _refresh: (refreshToken?: string) => Promise<TokenPair>
+    private readonly _rootKey: Wire<Perm>
+    private readonly _refresh: (refreshToken?: string) => Promise<GGTokenPair>
     private readonly _logout: (() => Promise<void>) | undefined
     private readonly _storage: "localStorage" | "cookie"
     private readonly _cacheKey: string
-    private readonly _derivedConfigs: Record<string, {key: TokenKey; mint: (params: unknown) => Promise<DerivedTokenResult<unknown>>}> = {}
+    private readonly _derivedConfigs: Record<string, {key: Wire<string>; mint: (params: unknown) => Promise<DerivedTokenResult<unknown>>}> = {}
+    private _identity: unknown = undefined
 
     private constructor(
-        key: TokenKey,
-        refresh: (refreshToken?: string) => Promise<TokenPair>,
+        key: Wire<Perm>,
+        refresh: (refreshToken?: string) => Promise<GGTokenPair>,
         storage: "localStorage" | "cookie",
         logout: (() => Promise<void>) | undefined,
         cacheKey: string,
@@ -43,8 +61,8 @@ export class GGAuthSession<D extends DerivedMap = {}> {
         this._cacheKey = cacheKey
     }
 
-    static withToken(key: TokenKey, config: GGTokenSessionConfig): GGAuthSession {
-        return new GGAuthSession(
+    static withToken<WP extends string>(key: Wire<WP>, config: GGTokenSessionConfig): GGAuthSession<{}, WP> {
+        return new GGAuthSession<{}, WP>(
             key,
             (token) => config.refresh({refreshToken: token!}),
             "localStorage",
@@ -53,17 +71,17 @@ export class GGAuthSession<D extends DerivedMap = {}> {
         )
     }
 
-    static withCookie(key: TokenKey, config: GGCookieSessionConfig): GGAuthSession {
-        return new GGAuthSession(key, () => config.refresh(), "cookie", config.logout, undefined)
+    static withCookie<WP extends string>(key: Wire<WP>, config: GGCookieSessionConfig): GGAuthSession<{}, WP> {
+        return new GGAuthSession<{}, WP>(key, () => config.refresh(), "cookie", config.logout, "")
     }
 
-    public addDerived<N extends string, P, DData>(
+    public addDerived<N extends string, Par, DData, WP extends string>(
         name: N,
-        key: TokenKey,
-        config: {mint: (params: P) => Promise<DerivedTokenResult<DData>>},
-    ): GGAuthSession<D & {[K in N]: DerivedConfig<P, DData>}> {
+        key: Wire<WP>,
+        config: {mint: (params: Par) => Promise<DerivedTokenResult<DData>>},
+    ): GGAuthSession<D & {[K in N]: DerivedConfig<Par, DData>}, Perm | WP> {
         this._derivedConfigs[name] = {key, mint: config.mint as (params: unknown) => Promise<DerivedTokenResult<unknown>>}
-        return this as unknown as GGAuthSession<D & {[K in N]: DerivedConfig<P, DData>}>
+        return this as unknown as GGAuthSession<D & {[K in N]: DerivedConfig<Par, DData>}, Perm | WP>
     }
 
     private _getSession(): BaseAuthSession<D> {
@@ -92,13 +110,18 @@ export class GGAuthSession<D extends DerivedMap = {}> {
             },
         )
 
-        GGContextKeySynchronizer.provide(this._rootKey as unknown as GGContextKey<string | undefined>, {
+        // The session configures the wires itself — defineClient is the typed successor to the
+        // GGContextKeySynchronizer.provide() it used to call. value() reads the token the engine
+        // stored; isStale/recover gate the outbound read so a stale token refreshes before send.
+        this._rootKey.defineClient({
+            value: () => this._rootKey.get(),
             isStale: () => this._session!.isRootStale(),
             recover: () => this._session!.ensureFresh(),
         })
 
         for (const [name, {key}] of Object.entries(this._derivedConfigs)) {
-            GGContextKeySynchronizer.provide(key as unknown as GGContextKey<string | undefined>, {
+            key.defineClient({
+                value: () => key.get(),
                 isStale: () => this._session!.isDerivedStale(name),
                 recover: () => this._session!.ensureActiveDerivedFresh(name),
             })
@@ -111,11 +134,13 @@ export class GGAuthSession<D extends DerivedMap = {}> {
         return this._getSession().derived
     }
 
-    public start(pair: TokenPair): void {
+    public start(pair: GGTokenPair & {data?: unknown}): void {
+        this._identity = pair.data
         this._getSession().start(pair)
     }
 
     public logout(): void {
+        this._identity = undefined
         this._getSession().logout()
     }
 
@@ -125,6 +150,48 @@ export class GGAuthSession<D extends DerivedMap = {}> {
 
     public getState(): SessionState {
         return this._getSession().getState()
+    }
+
+    public isLoggedIn(): boolean {
+        return this.getState().status === "authenticated"
+    }
+
+    /**
+     * Convenience: authenticate then store the resulting tokens. The session is transport-agnostic
+     * and is not wired to a login endpoint here — the app calls its typed `api.<auth>.login(...)`
+     * and passes the result to start(). Provided for the credential-login shape; configure a handler
+     * to use it directly.
+     */
+    public login(_credentials: unknown): Promise<void> {
+        throw new Error("GGAuthSession.login: no login handler configured — call your typed auth client's login(...) and pass the result to session.start(...).")
+    }
+
+    /** The identity captured from the last start() (e.g. the login response's `data`). */
+    public get(): any {
+        return this._identity
+    }
+
+    /** All granted permissions across the active tokens (root + active derived). UX only. */
+    public get permissions(): Perm[] {
+        const out = new Set<string>()
+        for (const token of this._activeTokens()) {
+            for (const p of decodePermissions(token)) out.add(p)
+        }
+        return [...out] as Perm[]
+    }
+
+    /** Typed to the union of the session's wires' permission enums. UX gate only — server re-checks. */
+    public hasPermission(permission: Perm): boolean {
+        for (const token of this._activeTokens()) {
+            if (decodePermissions(token).includes(permission)) return true
+        }
+        return false
+    }
+
+    private _activeTokens(): (string | undefined)[] {
+        const tokens: (string | undefined)[] = [this._rootKey.get()]
+        for (const {key} of Object.values(this._derivedConfigs)) tokens.push(key.get())
+        return tokens
     }
 
     public subscribe(listener: () => void): () => void {
