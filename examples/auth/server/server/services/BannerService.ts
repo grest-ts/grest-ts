@@ -1,6 +1,6 @@
 import {GGContractImplementation} from "@grest-ts/schema"
 import {BannerApiContract, BannerState} from "../../../api/BannerApi"
-import {UserContext} from "../../../api/auth/UserAuth"
+import {USER_DATA} from "../../../api/auth/UserAuth"
 
 export class BannerService implements GGContractImplementation<typeof BannerApiContract["methods"]> {
     private count = 0
@@ -15,7 +15,7 @@ export class BannerService implements GGContractImplementation<typeof BannerApiC
 
     public clickBanner = async (): Promise<BannerState> => {
         this.count++
-        this.lastUsername = UserContext.get()!.username
+        this.lastUsername = USER_DATA.get()!.username
         const state: BannerState = {count: this.count, username: this.lastUsername}
         this.onClicked?.(state)
         return state

@@ -4,7 +4,7 @@ import "@grest-ts/http/testkit"
 import {AppRuntime} from "../server/AppRuntime"
 import {AuthPublicApi, InvalidCredentialsError} from "../../api/AuthPublicApi"
 import {UserApi} from "../../api/UserApi"
-import {OrgApi} from "../../api/OrgApi"
+import {OrgApi, OrgScopedApi} from "../../api/OrgApi"
 import {BannerApi} from "../../api/BannerApi"
 import {LiveApi} from "../../api/LiveApi"
 import {TestContext} from "./TestContext"
@@ -127,7 +127,7 @@ describe("Banner permission gate", () => {
 describe("Organization selector", () => {
     GGTest.startWorker(AppRuntime)
 
-    const ctx = new TestContext("Org").resetAfterEach().apis({auth: AuthPublicApi, org: OrgApi})
+    const ctx = new TestContext("Org").resetAfterEach().apis({auth: AuthPublicApi, org: OrgApi, orgScoped: OrgScopedApi})
 
     beforeAll(async () => { await ctx.callOn(AuthPublicApi).register(aliceData) })
 
@@ -139,16 +139,18 @@ describe("Organization selector", () => {
         ])
     })
 
-    test("orgInfo requires org token (FORBIDDEN without it)", async () => {
+    // Rule 1: ORG_TOKEN_WIRE is required on OrgScopedApi. Missing org token = authn failure
+    // at the wire → NOT_AUTHORIZED (was FORBIDDEN under the old optional-org permission gate).
+    test("orgInfo requires org token (NOT_AUTHORIZED without it)", async () => {
         await ctx.login(aliceData)
-        await ctx.org.orgInfo().toBeError(FORBIDDEN)
+        await ctx.orgScoped.orgInfo().toBeError(NOT_AUTHORIZED)
     })
 
     test("orgInfo succeeds after selectOrg", async () => {
         await ctx.login(aliceData)
         const res = await ctx.org.selectOrg({orgId: "org-1" as any})
         ctx.setOrgToken(res.access.token)
-        await ctx.org.orgInfo().toMatchObject({name: res.data.name})
+        await ctx.orgScoped.orgInfo().toMatchObject({name: res.data.name})
     })
 
     test("non-member cannot select org", async () => {

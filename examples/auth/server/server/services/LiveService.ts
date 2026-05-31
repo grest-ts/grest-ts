@@ -2,7 +2,7 @@ import {GGContractImplementation} from "@grest-ts/schema"
 import {WebSocketIncoming} from "@grest-ts/websocket"
 import {LiveApiContract} from "../../../api/LiveApi"
 import {BannerState} from "../../../api/BannerApi"
-import {User, UserContext} from "../../../api/auth/UserAuth"
+import {User, USER_DATA} from "../../../api/auth/UserAuth"
 import {UserService} from "./UserService"
 import {BannerService} from "./BannerService"
 import {ConnectionTable, OutgoingConnection} from "../tables/ConnectionTable"
@@ -18,16 +18,16 @@ export class LiveService {
     }
 
     public handleConnection = (incoming: IncomingHandler, outgoing: OutgoingConnection): void => {
-        const user = UserContext.get()!
+        const user = USER_DATA.get()!
         this.connections.add(user.id, outgoing)
 
         incoming.on({
             ping: async (): Promise<void> => {
-                outgoing.pong({username: UserContext.get()!.username, timestamp: Date.now()})
+                outgoing.pong({username: USER_DATA.get()!.username, timestamp: Date.now()})
             },
             // Permission already gated by the framework — only CAN_SEE_RED_BANNER reaches here.
             bannerPing: async (): Promise<void> => {
-                this.broadcastBannerPong({count: 0, username: UserContext.get()!.username})
+                this.broadcastBannerPong({count: 0, username: USER_DATA.get()!.username})
             },
         })
 

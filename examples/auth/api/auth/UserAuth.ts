@@ -2,15 +2,8 @@ import {GGHeader} from "@grest-ts/http"
 import {GGContextKey} from "@grest-ts/context"
 import {IsEnum, IsObject, IsString} from "@grest-ts/schema"
 
-// Raw token context key — populated by USER_TOKEN_WIRE when parsing the Authorization header.
-// Pass to AuthGuard; in tests use this.set(USER_TOKEN, accessToken).
-export const USER_TOKEN = new GGContextKey<string | undefined>("user", IsString.orUndefined)
-
-// Wire binding — attach to API schemas with .use(USER_TOKEN_WIRE).
-// Parses Authorization: Bearer <token> on HTTP and WS upgrade.
-export const USER_TOKEN_WIRE = GGHeader.middleware(USER_TOKEN, {name: "authorization", scheme: "bearer"})
-
-// Permissions embedded in the user JWT at issue time.
+// Permissions this wire can grant. Strings must be globally unique across all wires —
+// a duplicate against another wire is a startup crash (Rule 6).
 export enum UserPermission {
     CAN_UPDATE_RED_BANNER_COUNTER = "CAN_UPDATE_RED_BANNER_COUNTER",
 }
@@ -26,5 +19,12 @@ export const IsUser = IsObject({
 })
 export type User = typeof IsUser.infer
 
-// Set by UserContextMiddleware after JWT verification. Read by handlers via UserContext.get().
-export const UserContext = new GGContextKey<User>("userData", IsUser)
+// SMART wire: parses `Authorization: Bearer <jwt>`. Ephemeral — the raw token is readable
+// only inside the server handler's process(), then cleared before the handler runs. Owns the
+// UserPermission set (used for routing per-method `permission` + startup validation).
+// Server behaviour is attached once via .define() (see server/auth/UserAuthHandler.ts);
+// the client value/refresh via .defineClient() (see client/src/auth.ts).
+export const USER_TOKEN_WIRE = new GGHeader("authorization", {scheme: "bearer", permissions: IsUserPermission})
+
+// DURABLE identity the wire produces. Handlers read this; they never see the raw token.
+export const USER_DATA = new GGContextKey<User>("userData", IsUser)

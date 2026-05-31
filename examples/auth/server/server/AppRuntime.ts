@@ -1,17 +1,17 @@
 import {GGRuntime} from "@grest-ts/runtime"
 import {GGHttp, GGHttpServer} from "@grest-ts/http"
-import {AuthToken, AuthGuard, HmacSigner, InMemoryRefreshTokenStore, scopeResolver} from "@grest-ts/auth"
+import {AuthToken, HmacSigner, InMemoryRefreshTokenStore} from "@grest-ts/auth"
 import {IsObject} from "@grest-ts/schema"
 
 import {AuthPublicApi} from "../../api/AuthPublicApi"
 import {UserApi} from "../../api/UserApi"
-import {OrgApi} from "../../api/OrgApi"
+import {OrgApi, OrgScopedApi} from "../../api/OrgApi"
 import {BannerApi} from "../../api/BannerApi"
 import {LiveApi} from "../../api/LiveApi"
-import {USER_TOKEN, IsUserPermission, UserPermission} from "../../api/auth/UserAuth"
-import {ORG_TOKEN, IsOrgPermission, IsOrgId, OrgPermission, OrgClaims} from "../../api/auth/OrgAuth"
-import {UserContextMiddleware} from "./auth/UserContext"
-import {OrgContextMiddleware} from "./auth/OrgContext"
+import {IsUserPermission, UserPermission} from "../../api/auth/UserAuth"
+import {IsOrgPermission, IsOrgId, OrgPermission, OrgClaims} from "../../api/auth/OrgAuth"
+import {USER_TOKEN_WIRE_HANDLER} from "./auth/UserAuthHandler"
+import {ORG_TOKEN_WIRE_HANDLER} from "./auth/OrgAuthHandler"
 import {UserService} from "./services/UserService"
 import {OrgService} from "./services/OrgService"
 import {BannerService} from "./services/BannerService"
@@ -25,62 +25,43 @@ export class AppRuntime extends GGRuntime {
     protected compose(): void {
         const server = new GGHttpServer()
 
-        // ── User auth engine (JWT with refresh) ──────────────────────────────
         const userTokenEngine = new AuthToken<UserPermission>({
             signer: new HmacSigner(SECRET),
             store: new InMemoryRefreshTokenStore(),
             permission: IsUserPermission as any,
-            accessTtlMs: 60 * 60 * 1000,       // 1 hour
-            refreshTtlMs: 7 * 24 * 60 * 60 * 1000,  // 7 days
+            accessTtlMs: 60 * 60 * 1000,
+            refreshTtlMs: 7 * 24 * 60 * 60 * 1000,
         })
-        const userGuard = new AuthGuard(userTokenEngine, USER_TOKEN)
-
-        // ── Org auth engine (access-only derived token) ───────────────────────
         const orgTokenEngine = new AuthToken<OrgPermission, OrgClaims>({
             signer: new HmacSigner(SECRET + "-org"),
             permission: IsOrgPermission as any,
             claims: IsObject({orgId: IsOrgId}) as any,
-            accessTtlMs: 8 * 60 * 60 * 1000,   // 8 hours
-            refreshTtlMs: 0,                     // not used — access-only
+            accessTtlMs: 8 * 60 * 60 * 1000,
+            refreshTtlMs: 0,
         })
-        const orgGuard = new AuthGuard(orgTokenEngine, ORG_TOKEN, {required: false})
 
-        // ── Scope resolver: unions permissions from both token kinds ──────────
-        const resolver = scopeResolver([userGuard, orgGuard])
-
-        // ── Services ─────────────────────────────────────────────────────────
         const userService = new UserService(userTokenEngine)
         const orgService = new OrgService(orgTokenEngine)
         const bannerService = new BannerService()
         const liveService = new LiveService(userService, bannerService)
 
-        const userContextMiddleware = new UserContextMiddleware(userService, userGuard)
-        const orgContextMiddleware = new OrgContextMiddleware(orgService, orgGuard)
+        // Bind the wires' deps into THIS runtime's scope. Once per runtime (a fresh test
+        // worker / restart gets its own scope and may create again). No middleware chains,
+        // no scopeResolver, no usePermissions — the schemas already carry the wires, and
+        // startup refuses to serve a .use()d wire that was never created.
+        USER_TOKEN_WIRE_HANDLER.create(userService)
+        ORG_TOKEN_WIRE_HANDLER.create(orgService)
 
-        // ── HTTP: public routes ───────────────────────────────────────────────
         new GGHttp(server)
-            .http(AuthPublicApi, userService)
-
-        // ── HTTP: protected routes (user + optional org) ──────────────────────
-        new GGHttp(server)
-            .use(userGuard.httpMiddleware())
-            .use(orgGuard.httpMiddleware())
-            .use(userContextMiddleware)
-            .use(orgContextMiddleware)
-            .usePermissions(resolver)
+            .http(AuthPublicApi, userService)   // no wire → public
             .http(UserApi, userService)
             .http(OrgApi, orgService)
+            .http(OrgScopedApi, orgService)
             .http(BannerApi, bannerService)
 
-        // ── WebSocket: same token, same permission resolver ───────────────────
-        LiveApi.register(liveService.handleConnection, {
-            middlewares: [
-                userGuard.wsMiddleware(),
-                orgGuard.wsMiddleware(),
-                userContextMiddleware,
-            ],
-            permissionResolver: resolver,
-        })
+        // The schema knows USER_TOKEN_WIRE; per-message permission gates come from the
+        // contract. No explicit middleware/resolver list.
+        LiveApi.register(liveService.handleConnection)
     }
 }
 

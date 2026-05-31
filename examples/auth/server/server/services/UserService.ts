@@ -2,7 +2,7 @@ import {EXISTS, GGContractImplementation, NOT_AUTHORIZED, NOT_FOUND} from "@gres
 import {AuthError, AuthToken} from "@grest-ts/auth"
 import {AuthPublicApiContract, InvalidCredentialsError, RegisterRequest, LoginRequest, RefreshRequest, AuthResponse, TokenPairResponse} from "../../../api/AuthPublicApi"
 import {UserApiContract, UpdateProfileRequest} from "../../../api/UserApi"
-import {UserContext, UserPermission, tUserId, User} from "../../../api/auth/UserAuth"
+import {USER_DATA, UserPermission, tUserId, User} from "../../../api/auth/UserAuth"
 import {UserTable} from "../tables/UserTable"
 
 const BANNER_USERS = new Set(["alice", "carol"])
@@ -56,11 +56,11 @@ export class UserService implements GGContractImplementation<typeof AuthPublicAp
     }
 
     public me = async (): Promise<User> => {
-        return UserContext.get()!
+        return USER_DATA.get()!
     }
 
     public updateProfile = async (request: UpdateProfileRequest): Promise<User> => {
-        const record = this.table.update(UserContext.get().id, {email: request.email})
+        const record = this.table.update(USER_DATA.get().id, {email: request.email})
         if (!record) throw new NOT_FOUND()
         this.onProfileUpdated?.(record)
         return record
@@ -68,5 +68,17 @@ export class UserService implements GGContractImplementation<typeof AuthPublicAp
 
     public getUserById(id: tUserId): User | undefined {
         return this.table.get(id)
+    }
+
+    // Called by USER_TOKEN_WIRE's server handler during process() to turn the raw bearer
+    // token into a verified payload (subject + permissions).
+    public verifyAccessToken = async (token: string | undefined) => {
+        if (!token) throw new NOT_AUTHORIZED({debugMessage: "Missing bearer token"})
+        try {
+            return await this.tokenEngine.verifyAccess(token)
+        } catch (err) {
+            if (err instanceof AuthError) throw new NOT_AUTHORIZED({debugMessage: err.code})
+            throw err
+        }
     }
 }
