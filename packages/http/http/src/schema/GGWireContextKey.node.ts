@@ -4,7 +4,30 @@
  * (permissions). Node-only — keeps @grest-ts/locator out of the browser bundle.
  */
 import {GGLocator, GGLocatorKey} from "@grest-ts/locator"
+import type {GGTransportMiddleware} from "@grest-ts/context"
 import {GGWireContextKey} from "./GGWireContextKey"
+
+/**
+ * The scope resolver a set of wired middlewares contributes: the union of each smart wire's
+ * permissions() (each wire's process() already authenticated-or-threw). Returns undefined when no
+ * smart wire is present — the schema is then ungated unless a manual resolver is supplied. Shared
+ * by the HTTP and WebSocket register paths so the derivation lives in exactly one place.
+ */
+export function deriveWireScopeResolver(
+    middlewares: readonly GGTransportMiddleware[],
+): (() => Promise<ReadonlySet<string>>) | undefined {
+    const smartWires = middlewares.filter(
+        (mw): mw is GGWireContextKey<any> => mw instanceof GGWireContextKey && mw.isSmart,
+    )
+    if (smartWires.length === 0) return undefined
+    return async () => {
+        const scopes = new Set<string>()
+        for (const wire of smartWires) {
+            for (const p of await wire.permissions()) scopes.add(p)
+        }
+        return scopes
+    }
+}
 
 export interface GGWireServerHandler<P extends string = string> {
     /** Verify the raw credential and mint the durable principal. Throws to reject the request. */

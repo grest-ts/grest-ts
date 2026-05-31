@@ -10,7 +10,7 @@ import {GGSocketServer} from "./GGSocketServer";
 import {GGLocator} from "@grest-ts/locator";
 import {WebSocketIncoming, WebSocketOutgoing} from "../socket/WebSocketTypes";
 import {describePermission, FORBIDDEN, GG_NO_PERMISSIONS, GGPermissionChecker, GGPromise, NOT_AUTHORIZED, satisfies} from "@grest-ts/schema";
-import {GG_HTTP_SERVER, GG_PERMISSIONS, GGHttpServer, GGScopeResolver, GGWireContextKey} from "@grest-ts/http";
+import {deriveWireScopeResolver, GG_HTTP_SERVER, GG_PERMISSIONS, GGHttpServer, GGScopeResolver} from "@grest-ts/http";
 
 export interface WebSocketSchemaConfig {
     /**
@@ -74,19 +74,8 @@ GGWebSocketSchema.prototype.startServer = function (
     // Smart wires on the schema ARE the scope resolver — same model as HTTP. Each wire's
     // process() (run at handshake) mints its durable principal; permissions() yields the
     // caller's grants. An explicit config.permissionResolver still wins.
-    const smartWires = this.middlewares.filter(
-        (mw): mw is GGWireContextKey<any> => mw instanceof GGWireContextKey && mw.isSmart
-    )
     const permissionResolver: GGScopeResolver | undefined =
-        config.permissionResolver ?? (smartWires.length > 0
-            ? async () => {
-                const scopes = new Set<string>()
-                for (const wire of smartWires) {
-                    for (const p of await wire.permissions()) scopes.add(p)
-                }
-                return scopes
-            }
-            : undefined)
+        config.permissionResolver ?? deriveWireScopeResolver(this.middlewares)
 
     if (permissionResolver) http._markResolverWired(this)
 

@@ -68,8 +68,7 @@ export abstract class GGWireContextKey<P extends string = never>
         }
     }
 
-    private _clientValue?: () => string | undefined
-    private _clientDefined = false
+    private _clientHandler?: GGWireClientHandler
 
     /**
      * Attach the client/outbound behaviour: the value to send and an optional refresh gate.
@@ -77,11 +76,10 @@ export abstract class GGWireContextKey<P extends string = never>
      * GGAuthSession calls it internally on the wires it holds.
      */
     public defineClient(handler: GGWireClientHandler): void {
-        if (this._clientDefined) {
+        if (this._clientHandler) {
             throw new Error(`Wire "${this.name}" already has .defineClient() — it can only be defined once.`)
         }
-        this._clientDefined = true
-        this._clientValue = handler.value
+        this._clientHandler = handler
         if (handler.isStale || handler.recover) {
             GGContextKeySynchronizer.provide(this, {
                 isStale: handler.isStale ?? (() => false),
@@ -92,7 +90,7 @@ export abstract class GGWireContextKey<P extends string = never>
 
     /** Outbound value to attach: the defineClient value() if set, else the ambient key value. */
     public outboundValue(): string | undefined {
-        return this._clientValue ? this._clientValue() : this.target.get()
+        return this._clientHandler ? this._clientHandler.value() : this.target.get()
     }
 
     /** Drop the ephemeral raw credential after process(); ambient (dumb) wires keep their value. */

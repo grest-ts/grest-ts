@@ -173,19 +173,20 @@ export class GGAuthSession<D extends DerivedMap = {}, Perm extends string = neve
 
     /** All granted permissions across the active tokens (root + active derived). UX only. */
     public get permissions(): Perm[] {
-        const out = new Set<string>()
-        for (const token of this._activeTokens()) {
-            for (const p of decodePermissions(token)) out.add(p)
-        }
-        return [...out] as Perm[]
+        return [...this._grantedPermissions()] as Perm[]
     }
 
     /** Typed to the union of the session's wires' permission enums. UX gate only — server re-checks. */
     public hasPermission(permission: Perm): boolean {
+        return this._grantedPermissions().has(permission)
+    }
+
+    private _grantedPermissions(): Set<string> {
+        const out = new Set<string>()
         for (const token of this._activeTokens()) {
-            if (decodePermissions(token).includes(permission)) return true
+            for (const p of decodePermissions(token)) out.add(p)
         }
-        return false
+        return out
     }
 
     private _activeTokens(): (string | undefined)[] {

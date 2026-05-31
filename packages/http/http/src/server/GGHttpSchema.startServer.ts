@@ -10,8 +10,7 @@ import {describePermission, ERROR, FORBIDDEN, GG_NO_PERMISSIONS, GGContractApiDe
 import {HttpMethod} from "@grest-ts/common";
 import {GG_DISCOVERY} from "@grest-ts/discovery";
 import {GGContext, GGContextStore, type GGTransportMiddleware} from "@grest-ts/context";
-import {GGWireContextKey} from "../schema/GGWireContextKey";
-import "../schema/GGWireContextKey.node";
+import {deriveWireScopeResolver} from "../schema/GGWireContextKey.node";
 import {GG_TRACE} from "@grest-ts/trace";
 import {GG_HTTP_REQUEST} from "./GG_HTTP_REQUEST";
 import {GG_COOKIE_WRITES} from "../schema/GGCookie";
@@ -79,22 +78,10 @@ function setupRoutes<TContract extends GGContractApiDefinition>(
     const scope = GGLocator.getScope();
     const parentContext = GGContextStore.tryGetContext();
 
-    // Smart wires on the schema ARE the scope resolver: identity is verified in their process()
-    // (already run by the request pipeline), and each wire's permissions() yields the caller's
-    // grants. An explicit .usePermissions(...) still wins if one was passed.
-    const smartWires = apiMiddlewares.filter(
-        (mw): mw is GGWireContextKey<any> => mw instanceof GGWireContextKey && mw.isSmart
-    );
+    // Smart wires on the schema ARE the scope resolver (each wire's process() already verified
+    // identity, permissions() yields the grants). An explicit .usePermissions(...) still wins.
     const permissionResolver: GGScopeResolver | undefined =
-        config.permissionResolver ?? (smartWires.length > 0
-            ? async () => {
-                const scopes = new Set<string>();
-                for (const wire of smartWires) {
-                    for (const p of await wire.permissions()) scopes.add(p);
-                }
-                return scopes;
-            }
-            : undefined);
+        config.permissionResolver ?? deriveWireScopeResolver(apiMiddlewares);
 
     for (const mw of apiMiddlewares) {
         const hKeys = Object.keys(mw.headers ?? {});
