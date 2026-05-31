@@ -10,7 +10,7 @@ import {ORG_TOKEN_WIRE} from "../../api/auth/OrgAuth"
 // Initialize a persistent global browser context so GGContextKey works outside Node.js AsyncLocalStorage.
 GG_CONTEXT_STORAGE.enterWith(new GGContext("browser"))
 
-const URL = {url: URL}; // Same-origin clients — Vite proxy forwards /pub, /api, /ws to the auth server (port 4600).
+const URL = {url: ""}; // Same-origin clients — Vite proxy forwards /pub, /api, /ws to the auth server (port 4600).
 const WS_URL = {url: window.location.origin.replace(/^http/, "ws")};
 export const api = {
     authApi: AuthPublicApi.createClient(URL),

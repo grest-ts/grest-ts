@@ -1,10 +1,20 @@
 # Plan: unified wire layer (`GGHeader` / `GGCookie` + context keys)
 
-Status: DESIGN IN PROGRESS (2026-05-31), branch `kratt/middleware-v2`. Replaces the
+Status: BUILD-READY SPEC (2026-05-31), branch `kratt/middleware-v2`. Replaces the
 earlier `WIRE_BINDINGS.md` design entirely — that one treated "auth is not a property of
 the wire; bindings are just middlewares." This one is the opposite where it matters:
 **smart wires are first-class, required, ephemeral, and must be implemented or the runtime
 throws.** Same single-`.use()` ergonomics; stronger guarantees.
+
+> **This is a one-way rewrite. No back-compat, no shims, no deprecated aliases.** The end
+> state must read as if written from scratch for the wire model — see "What this replaces"
+> and "Canonical token representation" below. Both are mandatory, not cleanup-for-later.
+>
+> **The acceptance target is executable.** `examples/auth` is already fully written in the
+> target style and intentionally does **not** compile (the framework APIs below don't exist
+> yet). It is the spec made concrete: **the build is done when `examples/auth` compiles with
+> no changes to its app code, and `run_tests {repo: "grest-ts"}` is green.** When the example
+> and the spec disagree, the example is what the author wants — reconcile toward it.
 
 Two things drive every decision below:
 
@@ -38,9 +48,9 @@ const MySomeOtherSchema = XXXX
     .use(TRACE_ID_WIRE)
     .use(USER_TOKEN_WIRE)
 
-// BACKEND  ---------------------------------
-// Somewhere in backend commons.
-export const USER_DATA = new GGContextKey("userData", IsAuthUser)   // plain key — the durable result
+// BACKEND (server-side only — lives next to the .define(), NEVER in the shared api/) ----------
+// USER_DATA IS the domain entity (the User), which owns its permissions. Deep-frozen on set().
+export const USER_DATA = new GGContextKey("userData", IsUser)   // the durable result
 const UserTokenWireHandler = USER_TOKEN_WIRE.define((users: MyUsersService) => ({ // .define can only be called once, next ones throw hard.
     process: async () => {
         USER_DATA.set(await users.verifyAccessToken(USER_TOKEN_WIRE.get()))
@@ -62,20 +72,17 @@ USER_TOKEN_WIRE.define(() => ({ /* ... */ })).create()
 new GGHttp().use(USER_TOKEN_WIRE) // NOT NEEDED — the schema already knows. Optional: it just enforces implementation at startup.
 
 // frontend  ---------------------------------
-const UserTokenWireHandler = USER_TOKEN_WIRE.defineClient((session) => ({
-    value: () => session.get()?.accessToken,
-    isStale: () => {
-        const s = session.get();
-        return !!s && jwtExpired(s.accessToken)
-    },
-    recover: async () => session.set(await auth.refresh({refreshToken: session.get()!.refreshToken})),
-}))
-UserTokenWireHandler.create(session);  // once. `session` MUST be an async-context store, not a captured object (see Security §1).
+// The app does NOT hand-write defineClient. GGAuthSession owns the token lifecycle and
+// configures the wires it holds ITSELF (it already self-registers refresh; see Client below):
+const session = GGAuthSession
+    .withToken(USER_TOKEN_WIRE, {refresh: api.auth.refresh})        // → calls USER_TOKEN_WIRE.defineClient(...) internally
+    .addDerived("org", ORG_TOKEN_WIRE, {mint: api.org.selectOrg})   // → calls ORG_TOKEN_WIRE.defineClient(...) internally
 
-// the client knows about USER_TOKEN_WIRE from the schema already — we check implementation existence early.
+session.hasPermission(UserPermission.X)   // typesafe (union of the session's wires' enums), UX-only
 
-// Shorthand for the common single-instance case
-USER_TOKEN_WIRE.defineClient(() => ({ /* ... */ })).create();
+// defineClient is the underlying primitive — hand-written ONLY for the no-session case (a static
+// API key, a service-to-service identity). The session is the common path.
+USER_TOKEN_WIRE.defineClient({value: () => API_KEY})
 ```
 
 > Naming note: the verbs are **`define`** (server/inbound) and **`defineClient`**
@@ -147,10 +154,12 @@ handler code.
 - **Dumb** — `new GGHeader(name, KEY)`. The context key is the argument, so there's
   nothing to implement; the value lands in the key, set-if-present, **ambient** (persists
   through the handler). For values where absent → undefined is acceptable.
-- **Smart** — `new GGHeader(name, {scheme})`. Requires `.define()` (server) and/or
-  `.defineClient()` (client). The wire key holds the raw inbound value, **ephemeral**, and
-  the handler transforms it into a durable principal key (`USER_DATA`, server-side, carrying
-  identity + permissions, deep-frozen — see Mechanics).
+- **Smart** — `new GGHeader(name, {scheme?, permissions?})`, typed `GGHeader<P>` where `P` is
+  the permission enum (`permissions: IsUserPermission`). Requires `.define()` (server) and/or
+  `.defineClient()` (client). The wire key holds the raw inbound value, **ephemeral**, and the
+  handler transforms it into a durable key that **is** the domain entity owning the permissions
+  (`USER_DATA`, server-side, deep-frozen — see Mechanics). The `permissions` enum drives the
+  per-method gate routing + startup validation (Rule 6) and the client's typed `hasPermission`.
 - "Generate-if-absent" (trace ids, defaults) is **smart, library-provided** — it has an
   implementation; you just didn't write it. The dumb/smart split is unchanged by it.
 
@@ -205,6 +214,79 @@ during implementation; examples today show only a single value.)
 
 ---
 
+## What this replaces — delete it, don't wrap it
+
+One-way migration. Delete the old machinery; do not alias or keep it "just in case". The wire
+model is a strict superset of what these did, so every one has a direct replacement.
+
+**`@grest-ts/auth` (node) — the guard/middleware/resolver layer → `.define()` + the framework:**
+- `node/http/AuthGuard.ts` (`AuthGuard`) — engine+key+payload coupling → the wire's `.define()`
+  verifies and sets the durable key; the engine is passed to `.create(engine/service)`.
+- `node/http/AuthMiddleware.ts` (`AuthMiddleware`) — verify-into-context middleware → `process()`.
+- `node/http/scopeResolver.ts` (`scopeResolver`) — permission union across guards → per-wire
+  `permissions()` + the framework's `permissionString → owningWire` index (Rule 6).
+- Remove all three from `index-node.ts`. Only `node/HttpWiring.test.ts` imports them — delete or
+  rewrite that test against the wire model.
+
+**`@grest-ts/http` — the static factory form of the bindings → the class IS the key:**
+- `GGHeader.middleware(key, opts)` and `GGCookie.middleware(key, opts)` static factories →
+  `new GGHeader(...)` / `new GGCookie(...)`. Migrate every caller: `examples/grest-test`
+  (`header.test.ts`, `cookie.test.ts`, `src/api/CookieTestApi.ts`, `src/api/WsCookieApi.ts`),
+  `packages-libs/docs/api-docs/test/cookies.spec.ts`, and `packages-libs/auth/.../node/wire.ts`.
+
+**`@grest-ts/context` → `@grest-ts/http`:** move `GGContextKeySynchronizer` + `GGKeyController`
+(see Implementation notes); drop the context `index-*` re-exports.
+
+**App-level context-middleware classes** — the `class X implements GGTransportMiddleware { process }`
+that parses a token into a derived context (`UserContextMiddleware` & friends). Already gone from
+`examples/auth`; the same pattern lives in `examples/checklist` (`UserContext.ts`) and the
+`examples/api-docs-v2` fixtures — convert to `.define()` (or delete) as those examples are migrated.
+
+**Keep (do not delete):** `GGTransportMiddleware` (the one unified interface — `GGHeader`/`GGCookie`
+implement it; the old `GGHttp*Middleware`/`GGWebSocketMiddleware` named types already don't exist),
+`AuthToken` (the JWT engine — but collapse its token shapes, next section), and `GGAuthSession`
+(reworked to self-configure wires).
+
+---
+
+## Canonical token representation — one shape, end to end, zero transforms
+
+This is the duplication the author specifically wants eliminated. `@grest-ts/auth` currently models
+"a token / a pair / a refresh token" **seven** ways with **nine** transform sites between them:
+
+- node returns — `GGAuthTokenResult {access}`, `GGAuthTokensResult {access, refresh}` — nested,
+  branded, `.access.token` / `.access.expiresAt` (ms).
+- browser — `TokenPair {access:{token,expiresAt}, refresh?}`, `AccessOnly {accessToken,
+  accessExpiresAt}` (**flat, renamed**), `SharedTokens {root: AccessOnly, refreshToken?}`,
+  `DerivedTokenResult {access, data}`.
+- verified — `AccessPayload {sub, permissions, iat, exp, ...claims}` (the decoded JWT).
+
+The transforms (`GGAuthSessionBase.ts`) are pure field-renaming churn: `TokenPair → SharedTokens`
+(maps `.access.token → .accessToken`, `.access.expiresAt → .accessExpiresAt`, `.refresh.token →
+.refreshToken`), `SharedTokens → key.set(.root.accessToken)`, `DerivedTokenResult → key.set`, and
+localStorage JSON round-trip. The root cause is the **node `.access.token` (nested) vs browser
+`.accessToken` (flat)** split.
+
+**Mandate:**
+- **One canonical pair schema**, defined once, used by all of: `AuthToken.issue`/`refresh` returns,
+  the API contract success schema (`AuthPublicApi`), `GGAuthSession` in-memory + localStorage
+  storage, and what the wire's `value()` reads. So the refresh API response **is** the session's
+  stored shape with **zero** mapping — the loop we already closed by hand in `recover()`.
+- **Use the nested branded shape as canonical** (it's already the contract/result form):
+  `{access: {token, expiresAtMs}, refresh?: {token, expiresAtMs}}`. **Delete `TokenPair`,
+  `AccessOnly`, `SharedTokens`** as separate types — the session stores the canonical shape
+  directly (localStorage is a 1:1 JSON round-trip of it, no renaming).
+- **`AccessPayload` (decoded JWT) is the ONE legitimately-different shape** — it's claims, not the
+  wire token. Keep it. After this collapse the only surviving transforms are **sign** (claims →
+  JWT) and **verify** (JWT → `AccessPayload`); both are unavoidable crypto boundaries.
+- **Make the unit explicit: `expiresAtMs` (milliseconds) everywhere.** Today `expiresAt` is ms but
+  JWT `exp`/`iat` are seconds; the seconds↔ms conversion must live ONLY at the sign/verify boundary,
+  named so nobody double-divides.
+- Same rule applies beyond tokens: no parallel re-representations of one concept with mapping code
+  between them. If two shapes describe the same thing, there should be one shape.
+
+---
+
 ## Security invariants (fail loud, never silently leak)
 
 These are the things to **test against and fight**, not just hope hold:
@@ -252,10 +334,11 @@ These are the things to **test against and fight**, not just hope hold:
 - **Response-header read on the client** — leaning "not supported; use the body."
   `ETag`/`If-None-Match` conditional GETs are the one genuine HTTP case with no body slot;
   decide whether that's a `result.meta` affordance or out of scope.
-- **`create` typed deps** — bare `USER_TOKEN_WIRE.create(users)` is runtime-checked only;
-  capturing `const H = USER_TOKEN_WIRE.define(...)` and calling `H.create(users)` is
-  compile-checked. The example uses the captured form to keep the type check; the bare form
-  stays available for the shorthand single-instance case.
+- **`deepFreeze` of the durable principal: framework-automatic vs explicit.** The example calls
+  `deepFreeze` by hand; ideally the framework freezes a smart wire's durable value on `set()`. If
+  automatic, it must **clone-then-freeze** — never freeze a caller-owned structure (the example's
+  `UserTable.get()` shares the record's `permissions` array by reference, so an in-place freeze
+  would freeze the table's array). Decide automatic-vs-explicit during step (a).
 
 ---
 
@@ -266,12 +349,12 @@ grest-ts's own callers, no back-compat shims. Iterate with `npm test -- --run <p
 final green via the kratt `run_tests { repo: "grest-ts" }` MCP.
 
 **Substrate already in place** (verify, don't rebuild): `GGContextKey` is already
-immutable-by-default with `{mutable:true}` opt-in, and `GG_TRACE` is already the mutable
-one. The unified `GGTransportMiddleware` (`parse`/`process`/`respond`/`update` +
-`GGInbound`/`GGOutbound`/`GGResponse`) from `MIDDLEWARE_REWRITE.md` has landed and is what
-the auth example uses today (`GGHeader.middleware(KEY, opts)`). This plan is phase 2 on top
-of it: the smart-wire object model. So sequencing step (a) is mostly migrate-the-3-tests,
-not build.
+immutable-by-default with `{mutable:true}` opt-in, `GG_TRACE` is already the mutable one, and
+the unified `GGTransportMiddleware` (`parse`/`process`/`respond`/`update` +
+`GGInbound`/`GGOutbound`/`GGResponse`) has landed. `GGHeader`/`GGCookie` exist today only as the
+static `.middleware(...)` factory — this plan turns them into the wire **class** and deletes the
+factory (see "What this replaces"). Step (a) is a real build (the smart-wire lifecycle), not test
+migration. `deepFreeze` already exists in `@grest-ts/common`.
 
 ### Foundations carried over from the deleted `WIRE_BINDINGS.md` (still valid, reused here)
 - **Immutable-by-default `GGContextKey` is the basis of ephemeral/no-leak.** Set-once
@@ -402,3 +485,15 @@ c. **Client + WebSocket** — `defineClient` (public API, for the no-session cas
    (swapping its `GGContextKeySynchronizer.provide` calls), so app client setup is just the
    `withToken(…).addDerived(…)` chain; relocate `GGContextKeySynchronizer` → `@grest-ts/http`;
    then `GGCookie` + the wire model over the ws schema with per-message permission gate.
+
+**Cross-cutting, not a separate phase:**
+- **Deletions happen as each layer lands** (not a cleanup pass): the moment `.define()` replaces
+  `AuthGuard`/`AuthMiddleware`/`scopeResolver`, delete them; the moment `new GGHeader` works,
+  delete `GGHeader.middleware` and migrate its callers. Don't leave both alive.
+- **Collapse the token shapes during the `GGAuthSession` rework (step c)** — that's where the
+  `TokenPair`/`AccessOnly`/`SharedTokens` duplication lives. Land the canonical shape there and
+  thread it back through `AuthToken` returns + the `AuthPublicApi` contract so there are zero
+  field-rename transforms left (see "Canonical token representation").
+- **Definition of done:** `examples/auth` compiles unchanged + `run_tests` green + no `.middleware(`
+  factory, no `AuthGuard`/`AuthMiddleware`/`scopeResolver`, no `TokenPair`/`AccessOnly`/`SharedTokens`
+  left in the tree.
