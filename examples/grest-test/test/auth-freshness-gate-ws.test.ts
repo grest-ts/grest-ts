@@ -1,10 +1,7 @@
 import {describe, it, expect, vi, beforeEach} from 'vitest'
-import {GGContext, GGContextKey} from '@grest-ts/context'
-import {GGContextKeySynchronizer} from '@grest-ts/http'
+import {GGContext} from '@grest-ts/context'
+import {GGHeader} from '@grest-ts/http'
 import {GGSocketPool} from '@grest-ts/websocket'
-import {IsString} from '@grest-ts/schema'
-
-const WS_TOKEN = new GGContextKey<string | undefined>('ws-gate-test:token', IsString.orUndefined)
 
 const DELIM = ':'
 const HANDSHAKE = 'h'
@@ -91,29 +88,18 @@ describe('WS auth-freshness gate', () => {
         await inContext(async () => {
             const callOrder: string[] = []
 
-            WS_TOKEN.set('stale-ws-token')
-
-            GGContextKeySynchronizer.provide(WS_TOKEN, {
+            const tokenWire = new GGHeader('x-ws-token')
+            tokenWire.set('stale-ws-token')
+            tokenWire.defineClient({
+                value: () => { callOrder.push('update'); return tokenWire.get() },
                 isStale: () => true,
-                recover: async () => {
-                    callOrder.push('recover')
-                    WS_TOKEN.set('fresh-ws-token')
-                },
+                recover: async () => { callOrder.push('recover'); tokenWire.set('fresh-ws-token') },
             })
 
             const headers = await connectAndGetHandshakeHeaders({
                 domain: 'ws://localhost',
                 path: '/test',
-                middlewares: [
-                    {
-                        key: WS_TOKEN,
-                        update(outbound) {
-                            callOrder.push('update')
-                            const val = WS_TOKEN.get()
-                            if (val !== undefined) outbound.headers['x-ws-token'] = val
-                        },
-                    },
-                ],
+                middlewares: [tokenWire],
             })
 
             expect(callOrder).toEqual(['recover', 'update'])
@@ -121,22 +107,15 @@ describe('WS auth-freshness gate', () => {
         })
     })
 
-    it('no controller — update fires normally and reads whatever the key holds', async () => {
+    it('no controller — update reads whatever the wire holds', async () => {
         await inContext(async () => {
-            WS_TOKEN.set('current-ws-token')
+            const tokenWire = new GGHeader('x-ws-token')
+            tokenWire.set('current-ws-token')
 
             const headers = await connectAndGetHandshakeHeaders({
                 domain: 'ws://localhost',
                 path: '/test',
-                middlewares: [
-                    {
-                        key: WS_TOKEN,
-                        update(outbound) {
-                            const val = WS_TOKEN.get()
-                            if (val !== undefined) outbound.headers['x-ws-token'] = val
-                        },
-                    },
-                ],
+                middlewares: [tokenWire],
             })
 
             expect(headers['x-ws-token']).toBe('current-ws-token')
@@ -146,29 +125,22 @@ describe('WS auth-freshness gate', () => {
     it('not stale — recover is never called', async () => {
         await inContext(async () => {
             const recover = vi.fn().mockResolvedValue(undefined)
-            WS_TOKEN.set('good-ws-token')
 
-            GGContextKeySynchronizer.provide(WS_TOKEN, {isStale: () => false, recover})
+            const tokenWire = new GGHeader('x-ws-token')
+            tokenWire.set('good-ws-token')
+            tokenWire.defineClient({value: () => tokenWire.get(), isStale: () => false, recover})
 
             await connectAndGetHandshakeHeaders({
                 domain: 'ws://localhost',
                 path: '/test',
-                middlewares: [
-                    {
-                        key: WS_TOKEN,
-                        update(outbound) {
-                            const val = WS_TOKEN.get()
-                            if (val !== undefined) outbound.headers['x-ws-token'] = val
-                        },
-                    },
-                ],
+                middlewares: [tokenWire],
             })
 
             expect(recover).not.toHaveBeenCalled()
         })
     })
 
-    it('middleware without a key is unaffected', async () => {
+    it('a non-wire middleware is unaffected', async () => {
         await inContext(async () => {
             const update = vi.fn()
 

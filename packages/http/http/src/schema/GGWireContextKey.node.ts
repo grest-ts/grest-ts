@@ -85,6 +85,10 @@ declare module "./GGWireContextKey" {
         permissions(): Promise<readonly string[]>
         /** @internal startup validation — true once .create() has run on the current runtime scope. */
         hasHandler(): boolean
+        /** @internal true once .define() has run — distinguishes verified wires from ambient ones. */
+        isDefined(): boolean
+        /** Drop the ephemeral raw credential after process(); ambient wires keep their value. */
+        clear(): void
     }
 }
 
@@ -93,7 +97,6 @@ GGWireContextKey.prototype.define = function (factory) {
         throw new Error(`Wire "${this.name}" already has .define() — it can only be defined once.`)
     }
     FACTORIES.set(this, factory)
-    this.isSmart = true
     return new GGWireHandlerRegistration(this, factory as any)
 }
 

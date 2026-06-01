@@ -1,10 +1,7 @@
 import {describe, it, expect, vi} from 'vitest'
-import {GGContext, GGContextKey} from '@grest-ts/context'
-import {GGContextKeySynchronizer} from '@grest-ts/http'
-import {GGRpcRequestBuilder} from '@grest-ts/http'
-import {IsString, SERVER_ERROR} from '@grest-ts/schema'
-
-const TOKEN_KEY = new GGContextKey<string | undefined>('auth-gate-test:token', IsString.orUndefined)
+import {GGContext} from '@grest-ts/context'
+import {GGHeader, GGRpcRequestBuilder} from '@grest-ts/http'
+import {SERVER_ERROR} from '@grest-ts/schema'
 
 const minimalContract = {errors: [SERVER_ERROR]}
 
@@ -14,37 +11,22 @@ function inContext<T>(fn: () => Promise<T>): Promise<T> {
 
 describe('auth-freshness HTTP gate', () => {
 
-    it('recover runs before update reads the key, so the header carries the fresh value', async () => {
+    it('recover runs before update reads the wire, so the header carries the fresh value', async () => {
         await inContext(async () => {
             const callOrder: string[] = []
 
-            TOKEN_KEY.set('stale-token')
-
-            GGContextKeySynchronizer.provide(TOKEN_KEY, {
+            const tokenWire = new GGHeader('x-token')
+            tokenWire.set('stale-token')
+            tokenWire.defineClient({
+                value: () => { callOrder.push('update'); return tokenWire.get() },
                 isStale: () => true,
-                recover: async () => {
-                    callOrder.push('recover')
-                    TOKEN_KEY.set('fresh-token')
-                },
+                recover: async () => { callOrder.push('recover'); tokenWire.set('fresh-token') },
             })
 
             const builder = new GGRpcRequestBuilder('GET', '/test', {
                 pathPrefix: '/',
                 contract: minimalContract,
-                middlewares: [
-                    {
-                        key: TOKEN_KEY,
-                        headers: {'x-token': IsString.orUndefined},
-                        responseHeaders: {},
-                        update(outbound) {
-                            callOrder.push('update')
-                            const val = TOKEN_KEY.get()
-                            if (val !== undefined) {
-                                outbound.headers['x-token'] = val
-                            }
-                        },
-                    },
-                ],
+                middlewares: [tokenWire],
             })
 
             const request = await builder.createRequest(undefined)
@@ -54,26 +36,15 @@ describe('auth-freshness HTTP gate', () => {
         })
     })
 
-    it('no controller — update fires normally and reads whatever the key holds', async () => {
+    it('no controller — update reads whatever the wire holds', async () => {
         await inContext(async () => {
-            TOKEN_KEY.set('current-token')
+            const tokenWire = new GGHeader('x-token')
+            tokenWire.set('current-token')
 
             const builder = new GGRpcRequestBuilder('GET', '/test', {
                 pathPrefix: '/',
                 contract: minimalContract,
-                middlewares: [
-                    {
-                        key: TOKEN_KEY,
-                        headers: {'x-token': IsString.orUndefined},
-                        responseHeaders: {},
-                        update(outbound) {
-                            const val = TOKEN_KEY.get()
-                            if (val !== undefined) {
-                                outbound.headers['x-token'] = val
-                            }
-                        },
-                    },
-                ],
+                middlewares: [tokenWire],
             })
 
             const request = await builder.createRequest(undefined)
@@ -84,23 +55,15 @@ describe('auth-freshness HTTP gate', () => {
     it('not stale — recover is never called', async () => {
         await inContext(async () => {
             const recover = vi.fn().mockResolvedValue(undefined)
-            TOKEN_KEY.set('good-token')
 
-            GGContextKeySynchronizer.provide(TOKEN_KEY, {isStale: () => false, recover})
+            const tokenWire = new GGHeader('x-token')
+            tokenWire.set('good-token')
+            tokenWire.defineClient({value: () => tokenWire.get(), isStale: () => false, recover})
 
             const builder = new GGRpcRequestBuilder('GET', '/test', {
                 pathPrefix: '/',
                 contract: minimalContract,
-                middlewares: [
-                    {
-                        key: TOKEN_KEY,
-                        headers: {'x-token': IsString.orUndefined},
-                        responseHeaders: {},
-                        update(outbound) {
-                            outbound.headers['x-token'] = TOKEN_KEY.get() ?? ''
-                        },
-                    },
-                ],
+                middlewares: [tokenWire],
             })
 
             await builder.createRequest(undefined)
@@ -108,7 +71,7 @@ describe('auth-freshness HTTP gate', () => {
         })
     })
 
-    it('middleware without a key is unaffected', async () => {
+    it('a non-wire middleware is unaffected', async () => {
         await inContext(async () => {
             const update = vi.fn()
 

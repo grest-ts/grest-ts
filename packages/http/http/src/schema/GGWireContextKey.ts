@@ -29,7 +29,6 @@ const WIRE_SCHEMA = IsString.orUndefined
 export abstract class GGWireContextKey extends GGContextKey<string | undefined> implements GGTransportMiddleware {
 
     public readonly wireName: string
-    public isSmart = false
 
     protected constructor(name: string) {
         super(name, WIRE_SCHEMA)
@@ -59,10 +58,5 @@ export abstract class GGWireContextKey extends GGContextKey<string | undefined> 
     /** Outbound value to attach: the defineClient value() if set, else the ambient wire value. */
     public outboundValue(): string | undefined {
         return this._clientHandler ? this._clientHandler.value() : this.get()
-    }
-
-    /** Drop the ephemeral raw credential after process(); ambient wires keep their value. */
-    public clear(): void {
-        if (this.isSmart && this.has()) this.delete()
     }
 }
