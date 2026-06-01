@@ -32,7 +32,7 @@ export abstract class GGWireContextKey extends GGContextKey<string | undefined> 
      */
     public defineClient(handler: GGWireClientHandler): void {
         if (this._clientHandler) {
-            throw new Error(`Wire "${this.name}" already has .defineClient() — it can only be defined once.`)
+            throw new Error(`Wire "${this.name}" already has .defineClient() - it can only be defined once.`)
         }
         this._clientHandler = handler
         if (handler.isStale || handler.recover) {
