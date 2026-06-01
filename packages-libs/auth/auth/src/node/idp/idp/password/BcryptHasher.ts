@@ -1,15 +1,21 @@
-import bcrypt from "bcrypt"
+import {createRequire} from "node:module"
 import type {PasswordHasher} from "./PasswordHasher"
+
+// bcrypt is a native module: importing it eagerly runs its node-gyp binding
+// loader at module-eval, which crashes when this file is bundled (ESM) into a
+// service that never hashes a password. Load it on first use instead.
+let bcrypt: typeof import("bcrypt")
+const lib = (): typeof import("bcrypt") => bcrypt ??= createRequire(import.meta.url)("bcrypt")
 
 export class BcryptHasher implements PasswordHasher {
 
     constructor(private readonly rounds: number = 10) {}
 
     public hash = (password: string): Promise<string> => {
-        return bcrypt.hash(password, this.rounds)
+        return lib().hash(password, this.rounds)
     }
 
     public verify = (password: string, hash: string): Promise<boolean> => {
-        return bcrypt.compare(password, hash)
+        return lib().compare(password, hash)
     }
 }
