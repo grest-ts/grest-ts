@@ -36,7 +36,7 @@ export class GGHeader extends GGWireContextKey {
     }
 
     public update(outbound: GGOutbound): void {
-        const value = this.outboundValue()
+        const value = this.get()
         if (value !== undefined) {
             outbound.headers[this.wireName] = (this.scheme === "bearer" ? `${BEARER}${value}` : value)
         }

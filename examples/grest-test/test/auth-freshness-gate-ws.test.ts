@@ -84,16 +84,14 @@ async function connectAndGetHandshakeHeaders(
 
 describe('WS auth-freshness gate', () => {
 
-    it('recover runs before update, so the handshake carries the fresh token', async () => {
+    it('recover runs before the outbound read, so the handshake carries the fresh token', async () => {
         await inContext(async () => {
-            const callOrder: string[] = []
-
             const tokenWire = new GGHeader('x-ws-token')
             tokenWire.set('stale-ws-token')
+            const recover = vi.fn(async () => { tokenWire.set('fresh-ws-token') })
             tokenWire.defineClient({
-                value: () => { callOrder.push('update'); return tokenWire.get() },
                 isStale: () => true,
-                recover: async () => { callOrder.push('recover'); tokenWire.set('fresh-ws-token') },
+                recover,
             })
 
             const headers = await connectAndGetHandshakeHeaders({
@@ -102,7 +100,7 @@ describe('WS auth-freshness gate', () => {
                 middlewares: [tokenWire],
             })
 
-            expect(callOrder).toEqual(['recover', 'update'])
+            expect(recover).toHaveBeenCalledTimes(1)
             expect(headers['x-ws-token']).toBe('fresh-ws-token')
         })
     })
@@ -128,7 +126,7 @@ describe('WS auth-freshness gate', () => {
 
             const tokenWire = new GGHeader('x-ws-token')
             tokenWire.set('good-ws-token')
-            tokenWire.defineClient({value: () => tokenWire.get(), isStale: () => false, recover})
+            tokenWire.defineClient({isStale: () => false, recover})
 
             await connectAndGetHandshakeHeaders({
                 domain: 'ws://localhost',

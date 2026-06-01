@@ -2,13 +2,11 @@ import {GGContextKey, type GGTransportMiddleware} from "@grest-ts/context"
 import {IsString} from "@grest-ts/schema"
 import {GGContextKeySynchronizer} from "../client/GGContextKeySynchronizer"
 
-/** Client/outbound behaviour for a smart wire: the last-known value plus an optional refresh gate. */
+/** Outbound freshness gate for a smart wire. The outbound value is always the wire's own context value. */
 export interface GGWireClientHandler {
-    /** Sync — the last-known credential to attach outbound. */
-    value: () => string | undefined
-    /** Async — true when value() is stale and recover() should run before the next outbound read. */
+    /** Async — true when the wire value is stale and recover() should run before the next outbound read. */
     isStale?: () => boolean
-    /** Async — refresh the credential; run by the synchronizer's waitFor before value() is read. */
+    /** Async — refresh the credential into the wire (via key.set); run by the synchronizer's waitFor before the outbound read. */
     recover?: () => Promise<void>
 }
 
@@ -38,8 +36,8 @@ export abstract class GGWireContextKey extends GGContextKey<string | undefined> 
     private _clientHandler?: GGWireClientHandler
 
     /**
-     * Attach the client/outbound behaviour: the value to send and an optional refresh gate.
-     * Freeze-once. The no-session case calls this directly (`WIRE.defineClient({value: () => KEY})`);
+     * Attach the outbound freshness gate. Freeze-once. The outbound value is always the wire's
+     * context value; this only registers an isStale/recover gate that refreshes it before the read.
      * GGAuthSession calls it internally on the wires it holds.
      */
     public defineClient(handler: GGWireClientHandler): void {
@@ -53,10 +51,5 @@ export abstract class GGWireContextKey extends GGContextKey<string | undefined> 
                 recover: handler.recover ?? (async () => {}),
             })
         }
-    }
-
-    /** Outbound value to attach: the defineClient value() if set, else the ambient wire value. */
-    public outboundValue(): string | undefined {
-        return this._clientHandler ? this._clientHandler.value() : this.get()
     }
 }

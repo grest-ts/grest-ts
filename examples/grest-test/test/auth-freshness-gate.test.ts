@@ -11,16 +11,14 @@ function inContext<T>(fn: () => Promise<T>): Promise<T> {
 
 describe('auth-freshness HTTP gate', () => {
 
-    it('recover runs before update reads the wire, so the header carries the fresh value', async () => {
+    it('recover runs before the outbound read, so the header carries the fresh value', async () => {
         await inContext(async () => {
-            const callOrder: string[] = []
-
             const tokenWire = new GGHeader('x-token')
             tokenWire.set('stale-token')
+            const recover = vi.fn(async () => { tokenWire.set('fresh-token') })
             tokenWire.defineClient({
-                value: () => { callOrder.push('update'); return tokenWire.get() },
                 isStale: () => true,
-                recover: async () => { callOrder.push('recover'); tokenWire.set('fresh-token') },
+                recover,
             })
 
             const builder = new GGRpcRequestBuilder('GET', '/test', {
@@ -31,7 +29,7 @@ describe('auth-freshness HTTP gate', () => {
 
             const request = await builder.createRequest(undefined)
 
-            expect(callOrder).toEqual(['recover', 'update'])
+            expect(recover).toHaveBeenCalledTimes(1)
             expect(request.headers['x-token']).toBe('fresh-token')
         })
     })
@@ -58,7 +56,7 @@ describe('auth-freshness HTTP gate', () => {
 
             const tokenWire = new GGHeader('x-token')
             tokenWire.set('good-token')
-            tokenWire.defineClient({value: () => tokenWire.get(), isStale: () => false, recover})
+            tokenWire.defineClient({isStale: () => false, recover})
 
             const builder = new GGRpcRequestBuilder('GET', '/test', {
                 pathPrefix: '/',

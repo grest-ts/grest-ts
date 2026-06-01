@@ -109,17 +109,15 @@ export class GGAuthSession<D extends DerivedMap = {}> {
         )
 
         // The session configures the wires itself — defineClient is the typed successor to the
-        // GGContextKeySynchronizer.provide() it used to call. value() reads the token the engine
-        // stored; isStale/recover gate the outbound read so a stale token refreshes before send.
+        // GGContextKeySynchronizer.provide() it used to call. The engine stores the token in the
+        // wire; isStale/recover gate the outbound read so a stale token refreshes before send.
         this._rootKey.defineClient({
-            value: () => this._rootKey.get(),
             isStale: () => this._session!.isRootStale(),
             recover: () => this._session!.ensureFresh(),
         })
 
         for (const [name, {key}] of Object.entries(this._derivedConfigs)) {
             key.defineClient({
-                value: () => key.get(),
                 isStale: () => this._session!.isDerivedStale(name),
                 recover: () => this._session!.ensureActiveDerivedFresh(name),
             })
