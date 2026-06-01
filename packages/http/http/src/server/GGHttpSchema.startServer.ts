@@ -70,17 +70,15 @@ function setupRoutes<TContract extends GGContractApiDefinition>(
     const scope = GGLocator.getScope();
     const parentContext = GGContextStore.tryGetContext();
 
-    // Smart wires on the schema ARE the scope resolver (each wire's process() already verified
-    // identity, permissions() yields the grants).
-    const wires = apiMiddlewares.filter((mw): mw is GGWireContextKey => {
-        return mw instanceof GGWireContextKey && mw.hasPermissions()
-    }) // @TODO Should filter to only those wires that actually provide permissions.
-
+    const middlewaresWithPermissions: GGWireContextKey[] = []
     for (const mw of apiMiddlewares) {
         const hKeys = Object.keys(mw.headers ?? {});
         const rhKeys = Object.keys(mw.responseHeaders ?? {});
         if (hKeys.length) server.registerCorsHeaders(hKeys);
         if (rhKeys.length) server.registerCorsExposeHeaders(rhKeys);
+        if (mw instanceof GGWireContextKey && mw.hasPermissions()) {
+            middlewaresWithPermissions.push(mw);
+        }
     }
     for (const methodName in httpSchema.codec) {
         const codec: GGHttpCodec = httpSchema.codec[methodName];
@@ -133,8 +131,8 @@ function setupRoutes<TContract extends GGContractApiDefinition>(
                     const rpcInput = await requestParser.parseRequest(req)
                     try {
                         const scopes = new Set<string>() // @TODO Is Set really good for most cases here? Every request making a Set does not seem optimal.
-                        for (let i = 0; i < wires.length; i++) {
-                            const permissions = await wires[i].permissions();
+                        for (let i = 0; i < middlewaresWithPermissions.length; i++) {
+                            const permissions = await middlewaresWithPermissions[i].permissions();
                             for (let p = 0; p < permissions.length; p++) {
                                 scopes.add(permissions[p])
                             }
