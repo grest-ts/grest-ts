@@ -112,7 +112,7 @@ GGWebSocketSchema.prototype.startServer = function (
                     socket.registerHandler({
                         path: `${schemaName}.${methodName}`,
                         handler: (data: any) => {
-                            permissionsChecker.assertScopes(schemaName, methodName, scopesOnConnection, required)
+                            permissionsChecker.assertGrants(schemaName, methodName, scopesOnConnection, required)
                             return inner(data)
                         }
                     });
