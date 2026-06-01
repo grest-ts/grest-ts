@@ -4,10 +4,14 @@ import {_registerRpcServerCodecFactory} from "./rpc/GGHttpRouteRPC";
 import {GGRpcResponseBuilder} from "./rpc/RpcResponse/GGRpcResponseBuilder";
 import {GGRpcRequestParser} from "./rpc/RpcRequest/GGRpcRequestParser";
 
-_registerRpcServerCodecFactory((method, path, config) => ({
-    parseRequest: new GGRpcRequestParser(method, path, config).parseRequest,
-    sendResponse: new GGRpcResponseBuilder(config).sendResponse
-}));
+_registerRpcServerCodecFactory((method, path, config) => {
+    const parser = new GGRpcRequestParser(method, path, config);
+    return {
+        readRequest: parser.readRequest,
+        validateInput: parser.validateInput,
+        sendResponse: new GGRpcResponseBuilder(config).sendResponse
+    };
+});
 
 // Metrics
 export * from "./server/GGHttpMetrics";

@@ -23,14 +23,17 @@ export class GGFileUploadRequestParser {
         this.decoderMap = this.contract.input?.collectNonJsonDecoders() ?? new Map()
     }
 
-    public parseRequest = async (req: http.IncomingMessage): Promise<unknown> => {
+    public readRequest = async (req: http.IncomingMessage): Promise<unknown> => {
         const url = req.url || '/'
         const qIndex = url.indexOf('?')
         const queryArgs = this.parseQueryString(qIndex === -1 ? '' : url.substring(qIndex + 1))
         await applyRequestMiddleware(req, queryArgs, this.middlewares)
 
-        const input = await this.parseMultipartBody(req);
-        return GGContractExecutor.parseInput(this.contract.input, input);
+        return await this.parseMultipartBody(req);
+    }
+
+    public validateInput = (rawInput: unknown): unknown => {
+        return GGContractExecutor.parseInput(this.contract.input, rawInput);
     }
 
     private parseQueryString(rawQuery: string): Record<string, string | string[]> {

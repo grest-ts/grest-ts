@@ -9,6 +9,7 @@ import {
     IsString,
     NOT_AUTHORIZED,
     SERVER_ERROR,
+    VALIDATION_ERROR,
 } from "@grest-ts/schema"
 
 /**
@@ -88,7 +89,7 @@ export const PermissionsApiContract = new GGContractClass("PermissionsApi", {
     checksInside: {
         input: IsObject({label: IsString}),
         success: IsObject({label: IsString, branch: IsString}),
-        errors: [NOT_AUTHORIZED, FORBIDDEN, SERVER_ERROR],
+        errors: [NOT_AUTHORIZED, FORBIDDEN, VALIDATION_ERROR, SERVER_ERROR],
         permission: {anyOf: [AppPermission.Admin, AppPermission.Owner]},
     },
 })

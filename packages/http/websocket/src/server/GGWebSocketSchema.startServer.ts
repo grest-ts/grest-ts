@@ -11,7 +11,6 @@ import {GGLocator} from "@grest-ts/locator";
 import {WebSocketIncoming, WebSocketOutgoing} from "../socket/WebSocketTypes";
 import {GG_HTTP_SERVER, GGHttpServer} from "@grest-ts/http";
 import {GGHttpPermissionsChecker} from "@grest-ts/http";
-import {GGPromise} from "@grest-ts/schema";
 
 export interface WebSocketSchemaConfig {
     /**
@@ -113,11 +112,7 @@ GGWebSocketSchema.prototype.startServer = function (
                     socket.registerHandler({
                         path: `${schemaName}.${methodName}`,
                         handler: (data: any) => {
-                            try {
-                                permissionsChecker.assertScopes(schemaName, methodName, scopesOnConnection, required)
-                            } catch (error) {
-                                return new GGPromise(Promise.resolve(error))
-                            }
+                            permissionsChecker.assertScopes(schemaName, methodName, scopesOnConnection, required)
                             return inner(data)
                         }
                     });

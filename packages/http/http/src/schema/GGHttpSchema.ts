@@ -62,7 +62,8 @@ export interface ClientHttpRouteToRpcTransformServerConfig {
 }
 
 export interface ClientHttpRouteToRpcTransformServerCodec {
-    parseRequest: (req: http.IncomingMessage) => Promise<unknown>,
+    readRequest: (req: http.IncomingMessage) => Promise<unknown>,
+    validateInput: (rawInput: unknown) => unknown,
     sendResponse: (res: http.ServerResponse, rpcResult: ERROR<string, unknown> | OK<unknown>) => Promise<void>
 }
 

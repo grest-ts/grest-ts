@@ -125,10 +125,10 @@ function setupRoutes<TContract extends GGContractApiDefinition>(
                 const startTime = performance.now()
                 let rpcResult: ERROR<string, unknown> | OK<unknown>
                 try {
-                    const rpcInput = await requestParser.parseRequest(req)
+                    const rawInput = await requestParser.readRequest(req)
+                    await permissionsChecker.assert(httpSchema.name, methodName, contractFunctionSchema.permission)
                     try {
-                        await permissionsChecker.assert(httpSchema.name, methodName, contractFunctionSchema.permission)
-                        rpcResult = {success: true, type: "OK", data: await implFn(rpcInput)}
+                        rpcResult = {success: true, type: "OK", data: await implFn(requestParser.validateInput(rawInput))}
                         // GGLog.debug(httpSchema, "Response", rpcResult) // This is very slow to log this (like 3x performance loss)
                     } catch (error: unknown) {
                         rpcResult = ERROR.fromUnknown(error);

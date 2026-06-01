@@ -27,24 +27,28 @@ export class GGRpcRequestParser {
         this.middlewares = config.middlewares
     }
 
-    public parseRequest = async (req: http.IncomingMessage): Promise<unknown> => {
+    // Resolve identity (run the wire pipeline) and extract the raw, unvalidated input.
+    // Validation is deferred to validateInput so the permission gate can run in between.
+    public readRequest = async (req: http.IncomingMessage): Promise<unknown> => {
         const url = req.url || '/'
         const qIndex = url.indexOf('?')
         const queryArgs = this.parseQueryString(qIndex === -1 ? '' : url.substring(qIndex + 1))
         await applyRequestMiddleware(req, queryArgs, this.middlewares)
 
-        let input: unknown;
         if (this.hasBody) {
-            input = await this.parseBody(req);
+            return await this.parseBody(req);
         } else if (this.pathParams.length > 0) {
-            input = {
+            return {
                 ...this.extractPathParams(qIndex === -1 ? url : url.substring(0, qIndex)),
                 ...queryArgs
             };
         } else {
-            input = queryArgs;
+            return queryArgs;
         }
-        return GGContractExecutor.parseInput(this.contract.input, input);
+    }
+
+    public validateInput = (rawInput: unknown): unknown => {
+        return GGContractExecutor.parseInput(this.contract.input, rawInput);
     }
 
     private parseQueryString(rawQuery: string): Record<string, string | string[]> {
