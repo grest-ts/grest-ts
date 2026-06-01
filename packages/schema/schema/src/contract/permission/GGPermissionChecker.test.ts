@@ -89,6 +89,21 @@ describe("GGPermissionChecker.satisfies", () => {
     });
 });
 
+describe("GGPermissionChecker.describePermission", () => {
+    it("describes constants, strings, and flat combinators", () => {
+        expect(GGPermissionChecker.describePermission(GG_NO_PERMISSIONS)).toBe("GG_NO_PERMISSIONS");
+        expect(GGPermissionChecker.describePermission(GG_ANY_PERMISSION)).toBe("GG_ANY_PERMISSION");
+        expect(GGPermissionChecker.describePermission("items:read")).toBe('"items:read"');
+        expect(GGPermissionChecker.describePermission({allOf: ["a", "b"]})).toBe('allOf("a", "b")');
+        expect(GGPermissionChecker.describePermission({anyOf: ["a", "b"]})).toBe('anyOf("a", "b")');
+    });
+
+    it("recurses into nested combinators without losing `this`", () => {
+        const nested: GGPermission = {anyOf: [{allOf: ["a", "b"]}, "c"]};
+        expect(GGPermissionChecker.describePermission(nested)).toBe('anyOf(allOf("a", "b"), "c")');
+    });
+});
+
 describe("GGPermissionChecker.validatePermission", () => {
 
     describe("accepts well-formed trees", () => {

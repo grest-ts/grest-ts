@@ -11,6 +11,7 @@ import {GGLocator} from "@grest-ts/locator";
 import {WebSocketIncoming, WebSocketOutgoing} from "../socket/WebSocketTypes";
 import {GG_HTTP_SERVER, GGHttpServer} from "@grest-ts/http";
 import {GGHttpPermissionsChecker} from "@grest-ts/http";
+import {GGPromise} from "@grest-ts/schema";
 
 export interface WebSocketSchemaConfig {
     /**
@@ -65,6 +66,14 @@ GGWebSocketSchema.prototype.startServer = function (
     const connectPermission = this.connectPermission
     const permissionsChecker = new GGHttpPermissionsChecker(this.middlewares);
     const middlewares: GGTransportMiddleware[] = [...this.middlewares, ...(config?.middlewares ?? [])]
+    // Gate the handshake: resolve scopes and assert connectPermission here so a failed
+    // permission (or a throwing resolver) rejects the handshake. onConnection runs after
+    // HANDSHAKE_OK, so a check there can't reject — it only re-snapshots scopes per-message.
+    middlewares.push({
+        async process() {
+            await permissionsChecker.assert(schemaName, "", connectPermission)
+        },
+    })
 
     // @TODO We might want some lookup here based on path/middlewares etc. If I use same socket for multiple paths, we need to reuse also same GGSocketServer.
     const socketServer = new GGSocketServer(http, {
@@ -104,7 +113,11 @@ GGWebSocketSchema.prototype.startServer = function (
                     socket.registerHandler({
                         path: `${schemaName}.${methodName}`,
                         handler: (data: any) => {
-                            permissionsChecker.assertScopes(schemaName, methodName, scopesOnConnection, required)
+                            try {
+                                permissionsChecker.assertScopes(schemaName, methodName, scopesOnConnection, required)
+                            } catch (error) {
+                                return new GGPromise(Promise.resolve(error))
+                            }
                             return inner(data)
                         }
                     });

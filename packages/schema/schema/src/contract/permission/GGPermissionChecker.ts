@@ -28,8 +28,8 @@ export class GGPermissionChecker {
         if (p === GG_NO_PERMISSIONS) return "GG_NO_PERMISSIONS";
         if (p === GG_ANY_PERMISSION) return "GG_ANY_PERMISSION";
         if (typeof p === "string") return JSON.stringify(p);
-        if ("allOf" in p) return `allOf(${p.allOf.map(this.describePermission).join(", ")})`;
-        if ("anyOf" in p) return `anyOf(${p.anyOf.map(this.describePermission).join(", ")})`;
+        if ("allOf" in p) return `allOf(${p.allOf.map(c => this.describePermission(c)).join(", ")})`;
+        if ("anyOf" in p) return `anyOf(${p.anyOf.map(c => this.describePermission(c)).join(", ")})`;
         return String(p);
     }
 

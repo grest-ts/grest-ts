@@ -7,6 +7,7 @@ definePackage({
     keywords: ["http", "server", "client", "rest"],
     targets: {node: true, browser: true},
     extendsTestKit: true,
+    hasTests: true,
     dependencies: {
         "find-my-way": "^9.4.0"
     }
