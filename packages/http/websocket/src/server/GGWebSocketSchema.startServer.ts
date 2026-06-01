@@ -10,7 +10,7 @@ import {GGSocketServer} from "./GGSocketServer";
 import {GGLocator} from "@grest-ts/locator";
 import {WebSocketIncoming, WebSocketOutgoing} from "../socket/WebSocketTypes";
 import {describePermission, FORBIDDEN, GG_NO_PERMISSIONS, GGPromise, IsAny, satisfies} from "@grest-ts/schema";
-import {deriveWireScopeResolver, GG_HTTP_SERVER, GGHttpServer} from "@grest-ts/http";
+import {GG_HTTP_SERVER, GGHttpServer, GGWireContextKey} from "@grest-ts/http";
 
 const HANDSHAKE_SCOPES = new GGContextKey<ReadonlySet<string>>("ws:handshake-scopes", IsAny as any);
 
@@ -69,7 +69,7 @@ GGWebSocketSchema.prototype.startServer = function (
     // Smart wires on the schema ARE the scope resolver — same model as HTTP. Each wire's
     // process() (run at handshake) mints its durable principal; permissions() yields the
     // caller's grants.
-    const resolveScopes = deriveWireScopeResolver(this.middlewares)
+    const wires = this.middlewares.filter((mw): mw is GGWireContextKey => mw instanceof GGWireContextKey)
 
     // Permission gate as a handshake middleware: runs after user middlewares
     // (so identity is already in context), resolves scopes, caches them on
@@ -80,7 +80,13 @@ GGWebSocketSchema.prototype.startServer = function (
     const middlewares: GGTransportMiddleware[] = [...this.middlewares, ...(config?.middlewares ?? [])]
     middlewares.push({
         async process() {
-            const scopes = await resolveScopes()
+            const scopes = new Set<string>()
+            for (let i = 0; i < wires.length; i++) {
+                const permissions = await wires[i].permissions()
+                for (let p = 0; p < permissions.length; p++) {
+                    scopes.add(permissions[p])
+                }
+            }
             HANDSHAKE_SCOPES.set(scopes)
             if (connectPermission !== undefined && connectPermission !== GG_NO_PERMISSIONS && !satisfies(connectPermission, scopes)) {
                 throw new FORBIDDEN({
