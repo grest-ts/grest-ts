@@ -21,20 +21,6 @@ export interface GGCookieSessionConfig {
     logout: () => Promise<void>
 }
 
-// UX-only: decode the (forgeable) JWT's `permissions` claim. The server re-verifies on every call.
-function decodePermissions(token: string | undefined): string[] {
-    if (!token) return []
-    try {
-        const seg = token.split(".")[1]
-        if (!seg) return []
-        const json = atob(seg.replace(/-/g, "+").replace(/_/g, "/"))
-        const payload = JSON.parse(json) as {permissions?: unknown}
-        return Array.isArray(payload.permissions) ? payload.permissions.map(String) : []
-    } catch {
-        return []
-    }
-}
-
 export class GGAuthSession<D extends DerivedMap = {}> {
     private _session: BaseAuthSession<D> | null = null
     private readonly _rootKey: Wire
@@ -45,7 +31,9 @@ export class GGAuthSession<D extends DerivedMap = {}> {
     private readonly _derivedConfigs: Record<string, {key: Wire; mint: (params: unknown) => Promise<DerivedTokenResult<unknown>>}> = {}
     private _identity: unknown = undefined
 
-    private constructor(
+    // Protected (not private) + `new this` in the factories so an app can subclass to add its
+    // own helpers (e.g. hasPermission over get()) — see examples/auth/client/src/api.ts.
+    protected constructor(
         key: Wire,
         refresh: (refreshToken?: string) => Promise<GGTokenPair>,
         storage: "localStorage" | "cookie",
@@ -60,7 +48,7 @@ export class GGAuthSession<D extends DerivedMap = {}> {
     }
 
     static withToken(key: Wire, config: GGTokenSessionConfig): GGAuthSession<{}> {
-        return new GGAuthSession<{}>(
+        return new this(
             key,
             (token) => config.refresh({refreshToken: token!}),
             "localStorage",
@@ -70,7 +58,7 @@ export class GGAuthSession<D extends DerivedMap = {}> {
     }
 
     static withCookie(key: Wire, config: GGCookieSessionConfig): GGAuthSession<{}> {
-        return new GGAuthSession<{}>(key, () => config.refresh(), "cookie", config.logout, "")
+        return new this(key, () => config.refresh(), "cookie", config.logout, "")
     }
 
     public addDerived<N extends string, Par, DData>(
@@ -91,7 +79,14 @@ export class GGAuthSession<D extends DerivedMap = {}> {
 
         this._session = new BaseAuthSession<D>(
             {
-                refresh: this._refresh,
+                // Capture the re-resolved identity `data` the refresh response carries, so the
+                // client's identity/permissions stay current without ever decoding the token.
+                refresh: async (token) => {
+                    const result = await this._refresh(token)
+                    const data = (result as {data?: unknown}).data
+                    if (data !== undefined) this._identity = data
+                    return result
+                },
                 key: this._rootKey,
                 derived,
                 storage: this._storage,
@@ -162,33 +157,17 @@ export class GGAuthSession<D extends DerivedMap = {}> {
         throw new Error("GGAuthSession.login: no login handler configured — call your typed auth client's login(...) and pass the result to session.start(...).")
     }
 
-    /** The identity captured from the last start() (e.g. the login response's `data`). */
+    /**
+     * The identity captured from the last start() / refresh response `data`. Permission gates
+     * are intentionally NOT on the session — the session can't read the opaque access token, and
+     * permission shape is app-specific. Subclass and read this to add your own UX gate, e.g.:
+     *
+     *   class AppSession extends GGAuthSession<{org: DerivedConfig<SelectOrgRequest, Org>}> {
+     *     hasPermission(p: UserPermission) { return (this.get() as User)?.permissions.includes(p) }
+     *   }
+     */
     public get(): any {
         return this._identity
-    }
-
-    /** All granted permissions across the active tokens (root + active derived). UX only. */
-    public get permissions(): string[] {
-        return [...this._grantedPermissions()]
-    }
-
-    /** UX gate only — server re-checks. */
-    public hasPermission(permission: string): boolean {
-        return this._grantedPermissions().has(permission)
-    }
-
-    private _grantedPermissions(): Set<string> {
-        const out = new Set<string>()
-        for (const token of this._activeTokens()) {
-            for (const p of decodePermissions(token)) out.add(p)
-        }
-        return out
-    }
-
-    private _activeTokens(): (string | undefined)[] {
-        const tokens: (string | undefined)[] = [this._rootKey.get()]
-        for (const {key} of Object.values(this._derivedConfigs)) tokens.push(key.get())
-        return tokens
     }
 
     public subscribe(listener: () => void): () => void {

@@ -7,7 +7,7 @@ export type {RefreshTokenRecord, RefreshTokenStore} from "./node/refresh/Refresh
 export {InMemoryRefreshTokenStore} from "./node/refresh/InMemoryRefreshTokenStore"
 
 export {GGAuthToken} from "./node/token/GGAuthToken"
-export type {GGAccessPayload, GGAuthTokenOptions, GGNoClaims, GGRefreshedGrant} from "./node/token/GGAuthToken"
+export type {GGAccessPayload, GGAuthTokenOptions} from "./node/token/GGAuthToken"
 export {IsGGRefreshToken, IsGGRefreshTokenData, IsGGAccessToken, IsGGAccessTokenData, IsGGAuthTokenResult, IsGGAuthTokensResult} from "./shared/tokenSchemas"
 export type {GGAuthTokenResult, GGAuthTokensResult} from "./shared/tokenSchemas"
 

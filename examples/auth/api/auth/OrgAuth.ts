@@ -11,11 +11,12 @@ export const IsOrgPermission = IsEnum(OrgPermission)
 export const IsOrgId = IsString.brand("OrgId")
 export type tOrgId = typeof IsOrgId.infer
 
+// Display snapshot of an org. Deliberately has NO permissions — an Org doesn't own them, a
+// membership (OrgUser) does. This is the response `data`; the token carries the OrgUser.
 export const IsOrg = IsObject({
     id: IsOrgId,
     name: IsString,
     description: IsString,
-    permissions: IsOrgPermission
 })
 export type Org = typeof IsOrg.infer
 

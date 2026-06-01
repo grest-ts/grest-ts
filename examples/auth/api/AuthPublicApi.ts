@@ -46,7 +46,7 @@ export const AuthPublicApiContract = new GGContractClass("AuthPublicApi", {
     },
     refresh: {
         input: IsRefreshRequest,
-        success: IsTokenPairResponse,
+        success: IsAuthResponse,
         errors: [NOT_AUTHORIZED, SERVER_ERROR],
         permission: GG_NO_PERMISSIONS,
     },

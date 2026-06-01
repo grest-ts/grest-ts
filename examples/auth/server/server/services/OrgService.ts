@@ -1,7 +1,7 @@
 import {FORBIDDEN, GGContractImplementation, NOT_AUTHORIZED, NOT_FOUND} from "@grest-ts/schema"
 import {GGAuthToken} from "@grest-ts/auth"
 import {OrgApiContract, OrgScopedApiContract, SelectOrgRequest, SelectOrgResponse} from "../../../api/OrgApi"
-import {Org} from "../../../api/auth/OrgAuth"
+import {Org, OrgPermission, OrgUser} from "../../../api/auth/OrgAuth"
 import {ORG_USER} from "../auth/OrgAuthHandler"
 import {USER_DATA} from "../auth/UserAuthHandler"
 import {OrgTable} from "../tables/OrgTable"
@@ -10,7 +10,7 @@ export class OrgService implements GGContractImplementation<typeof OrgApiContrac
     GGContractImplementation<typeof OrgScopedApiContract["methods"]> {
     private readonly table = new OrgTable()
 
-    constructor(private readonly orgTokenEngine: GGAuthToken<Org>) {
+    constructor(private readonly orgTokenEngine: GGAuthToken<OrgUser>) {
     }
 
     public listOrgs = async (): Promise<Org[]> => {
@@ -24,8 +24,11 @@ export class OrgService implements GGContractImplementation<typeof OrgApiContrac
         }
         const org = this.table.get(request.orgId)
         if (!org) throw new FORBIDDEN({displayMessage: "Org not found"})
+        // Token carries the OrgUser principal (orgId + membership permissions); the response
+        // `data` carries the Org snapshot for display. Membership grants ORG_MEMBER.
+        const orgUser: OrgUser = {orgId: org.id, permissions: [OrgPermission.ORG_MEMBER]}
         return {
-            ...(await this.orgTokenEngine.issueAccess(user.id, org)),
+            ...(await this.orgTokenEngine.issueAccess(user.id, orgUser)),
             data: org
         }
     }

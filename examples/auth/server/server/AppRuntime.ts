@@ -6,8 +6,8 @@ import {UserApi} from "../../api/UserApi"
 import {OrgApi, OrgScopedApi} from "../../api/OrgApi"
 import {BannerApi} from "../../api/BannerApi"
 import {LiveApi} from "../../api/LiveApi"
-import {IsUser} from "../../api/auth/UserAuth"
-import {IsOrg} from "../../api/auth/OrgAuth"
+import {IsUserClaims} from "../../api/auth/UserAuth"
+import {IsOrgUser} from "../../api/auth/OrgAuth"
 import {USER_TOKEN_WIRE_HANDLER} from "./auth/UserAuthHandler"
 import {ORG_TOKEN_WIRE_HANDLER} from "./auth/OrgAuthHandler"
 import {UserService} from "./services/UserService"
@@ -26,13 +26,13 @@ export class AppRuntime extends GGRuntime {
         const userTokenEngine = new GGAuthToken({
             signer: new HmacSigner(SECRET),
             store: new InMemoryRefreshTokenStore(),
-            claimSchema: IsUser,
+            claimSchema: IsUserClaims,
             accessTtlMs: 60 * 60 * 1000,
             refreshTtlMs: 7 * 24 * 60 * 60 * 1000,
         })
         const orgTokenEngine = new GGAuthToken({
             signer: new HmacSigner(SECRET + "-org"),
-            claimSchema: IsOrg,
+            claimSchema: IsOrgUser,
             accessTtlMs: 8 * 60 * 60 * 1000,
             refreshTtlMs: 0,
         })

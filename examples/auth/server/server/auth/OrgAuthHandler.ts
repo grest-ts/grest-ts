@@ -12,8 +12,8 @@ export const ORG_USER = new GGContextKey("orgUser", IsOrgUser)
 // if the org token is missing/invalid, verifyOrgToken throws and the request fails at the wire.
 export const ORG_TOKEN_WIRE_HANDLER = ORG_TOKEN_WIRE.define((orgs: OrgService) => ({
     process: async () => {
-        const payload = await orgs.verifyOrgToken(ORG_TOKEN_WIRE.get())
-        ORG_USER.set(deepFreeze({orgId: payload.orgId, permissions: payload.permissions}))
+        const {data} = await orgs.verifyOrgToken(ORG_TOKEN_WIRE.get())
+        ORG_USER.set(deepFreeze({orgId: data.orgId, permissions: data.permissions}))
     },
     permissions: async () => ORG_USER.get()!.permissions,
 }))

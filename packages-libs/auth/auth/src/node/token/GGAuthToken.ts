@@ -17,7 +17,7 @@ export interface GGAuthTokenOptions<C extends object> {
     signer: SigningStrategy
     // Omit for an access-only kind (issueAccess + verifyAccess only); required by issue/refresh/revoke.
     store?: RefreshTokenStore
-    // Validates non-permission claims; omit for a permissions-only token.
+    // Validates the app claims carried under `data`; omit for a token with no claims.
     claimSchema?: GGSchema<C>
     accessTtlMs: number
     refreshTtlMs: number
@@ -27,7 +27,8 @@ export interface GGAuthTokenOptions<C extends object> {
     randomToken?: () => string
 }
 
-// Generic over permission `P` and claims `C`, and unaware of org/global/tenant.
+// Generic over the app claims `C`; unaware of org/global/tenant. Claims are opaque to
+// the engine — it signs them under `data` and re-validates them on verify, nothing more.
 // A dependency between kinds (e.g. org-token-requires-user-token) is app code
 // calling verifyAccess before issue — never modelled here.
 export class GGAuthToken<C extends object> {
@@ -72,9 +73,9 @@ export class GGAuthToken<C extends object> {
         if (this.audience !== undefined && payload["aud"] !== this.audience) {
             throw new NOT_AUTHORIZED({debugMessage: "TOKEN_INVALID: wrong audience"})
         }
-        const claims = this.claims.parse(payload)
+        const claims = this.claims.parse(payload["data"])
         return {
-            data: claims,
+            data: Object.freeze(claims),
             sub,
             iat: Number(payload["iat"]),
             exp: Number(payload["exp"]),
@@ -83,11 +84,11 @@ export class GGAuthToken<C extends object> {
 
     // Redeem a refresh token for a fresh pair; the presented token is rotated out (marked
     // spent, same family carried to the child). Re-presenting an already-spent token is
-    // reuse — the whole lineage is revoked. `resolve` re-derives permissions/claims so
-    // changes take effect on refresh, not just re-login.
+    // reuse — the whole lineage is revoked. `resolve` re-derives the claims so changes
+    // take effect on refresh, not just re-login.
     public refresh = async (
         refreshToken: string,
-        resolve: (subject: string) => Promise<C>,
+        resolve: (subject: string) => Promise<C | undefined>,
     ): Promise<GGAuthTokensResult> => {
         const store = this.requireStore()
         const hash = this.hash(refreshToken)
@@ -120,8 +121,8 @@ export class GGAuthToken<C extends object> {
         await this.requireStore().revoke(this.hash(refreshToken))
     }
 
-    public revokeAll = async (subject: GGAuthSubject): Promise<void> => {
-        await this.requireStore().revokeForSubject(subject)
+    public revokeAll = async (subject: string | GGAuthSubject): Promise<void> => {
+        await this.requireStore().revokeForSubject(subject as GGAuthSubject)
     }
 
     private mint = async (subject: GGAuthSubject, claims: C, familyId: string): Promise<GGAuthTokensResult> => {
@@ -160,7 +161,7 @@ export class GGAuthToken<C extends object> {
 
     private requireStore = (): RefreshTokenStore => {
         if (!this.store) {
-            throw new Error("AuthToken has no RefreshTokenStore: issue/refresh/revoke require one. Use issueAccess for access-only token kinds.")
+            throw new Error("GGAuthToken has no RefreshTokenStore: issue/refresh/revoke require one. Use issueAccess for access-only token kinds.")
         }
         return this.store
     }

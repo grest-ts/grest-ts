@@ -1,8 +1,8 @@
 import {EXISTS, GGContractImplementation, NOT_AUTHORIZED, NOT_FOUND} from "@grest-ts/schema"
 import {GGAuthToken} from "@grest-ts/auth"
-import {AuthPublicApiContract, AuthResponse, InvalidCredentialsError, LoginRequest, RefreshRequest, RegisterRequest, TokenPairResponse} from "../../../api/AuthPublicApi"
+import {AuthPublicApiContract, AuthResponse, InvalidCredentialsError, LoginRequest, RefreshRequest, RegisterRequest} from "../../../api/AuthPublicApi"
 import {UpdateProfileRequest, UserApiContract} from "../../../api/UserApi"
-import {tUserId, User, UserPermission} from "../../../api/auth/UserAuth"
+import {tUserId, User, UserClaims, UserPermission} from "../../../api/auth/UserAuth"
 import {USER_DATA} from "../auth/UserAuthHandler"
 import {UserTable} from "../tables/UserTable"
 
@@ -14,7 +14,7 @@ export class UserService implements GGContractImplementation<typeof AuthPublicAp
     private readonly table = new UserTable()
     private onProfileUpdated: ((user: User) => void) | undefined
 
-    constructor(private readonly tokenEngine: GGAuthToken<User>) {
+    constructor(private readonly tokenEngine: GGAuthToken<UserClaims>) {
     }
 
     public setOnProfileUpdatedCallback(cb: (user: User) => void): void {
@@ -27,8 +27,9 @@ export class UserService implements GGContractImplementation<typeof AuthPublicAp
             ...request,
             permissions: BANNER_USERS.has(request.username) ? [UserPermission.CAN_UPDATE_RED_BANNER_COUNTER] : []
         })
+        // Token carries only the authz claims; the response `data` is the full profile.
         return {
-            ...(await this.tokenEngine.issue(record.id, record)),
+            ...(await this.tokenEngine.issue(record.id, {permissions: record.permissions})),
             data: record
         }
     }
@@ -37,15 +38,18 @@ export class UserService implements GGContractImplementation<typeof AuthPublicAp
         const record = this.table.findByUsername(request.username)
         if (!record || record.password !== request.password) throw new InvalidCredentialsError()
         return {
-            ...(await this.tokenEngine.issue(record.id, record)),
+            ...(await this.tokenEngine.issue(record.id, {permissions: record.permissions})),
             data: record
         }
     }
 
-    public refresh = async ({refreshToken}: RefreshRequest): Promise<TokenPairResponse> => {
-        return await this.tokenEngine.refresh(refreshToken, async (subject) => {
-            return this.table.getRecord(subject as tUserId)
+    public refresh = async ({refreshToken}: RefreshRequest): Promise<AuthResponse> => {
+        let user: User | undefined
+        const tokens = await this.tokenEngine.refresh(refreshToken, async (subject) => {
+            user = this.table.get(subject as tUserId)
+            return user ? {permissions: user.permissions} : undefined
         })
+        return {...tokens, data: user!}
     }
 
     public me = async (): Promise<User> => {
