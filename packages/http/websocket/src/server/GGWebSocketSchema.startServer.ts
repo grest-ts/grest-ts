@@ -12,7 +12,7 @@ import {WebSocketIncoming, WebSocketOutgoing} from "../socket/WebSocketTypes";
 import {describePermission, FORBIDDEN, GG_NO_PERMISSIONS, GGPromise, IsAny, satisfies} from "@grest-ts/schema";
 import {GG_HTTP_SERVER, GGHttpServer, GGWireContextKey} from "@grest-ts/http";
 
-const HANDSHAKE_SCOPES = new GGContextKey<ReadonlySet<string>>("ws:handshake-scopes", IsAny as any);
+const HANDSHAKE_SCOPES = new GGContextKey<Array<readonly string[]>>("ws:handshake-scopes", IsAny as any);
 
 export interface WebSocketSchemaConfig {
     /**
@@ -69,7 +69,7 @@ GGWebSocketSchema.prototype.startServer = function (
     // Smart wires on the schema ARE the scope resolver — same model as HTTP. Each wire's
     // process() (run at handshake) mints its durable principal; permissions() yields the
     // caller's grants.
-    const wires = this.middlewares.filter((mw): mw is GGWireContextKey => mw instanceof GGWireContextKey)
+    const wires = this.middlewares.filter((mw): mw is GGWireContextKey => mw instanceof GGWireContextKey && mw.hasPermissions())
 
     // Permission gate as a handshake middleware: runs after user middlewares
     // (so identity is already in context), resolves scopes, caches them on
@@ -80,12 +80,9 @@ GGWebSocketSchema.prototype.startServer = function (
     const middlewares: GGTransportMiddleware[] = [...this.middlewares, ...(config?.middlewares ?? [])]
     middlewares.push({
         async process() {
-            const scopes = new Set<string>()
+            const scopes: Array<readonly string[]> = []
             for (let i = 0; i < wires.length; i++) {
-                const permissions = await wires[i].permissions()
-                for (let p = 0; p < permissions.length; p++) {
-                    scopes.add(permissions[p])
-                }
+                scopes.push(await wires[i].permissions())
             }
             HANDSHAKE_SCOPES.set(scopes)
             if (connectPermission !== undefined && connectPermission !== GG_NO_PERMISSIONS && !satisfies(connectPermission, scopes)) {
@@ -112,7 +109,7 @@ GGWebSocketSchema.prototype.startServer = function (
         // HANDSHAKE_SCOPES for the lifetime of this connection. Capture them into a
         // closure so per-message handlers gate without re-resolving — a 10-year-old
         // socket keeps the scopes it was issued at handshake, never re-fetched.
-        const cachedScopes: ReadonlySet<string> = HANDSHAKE_SCOPES.get()
+        const cachedScopes: Array<readonly string[]> = HANDSHAKE_SCOPES.get()
 
         const incoming: any = {
             on(handlers: any) {

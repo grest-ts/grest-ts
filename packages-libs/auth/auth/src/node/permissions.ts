@@ -1,7 +1,7 @@
 import {GGPermissionChecker} from "@grest-ts/schema"
 
 // Wrap held permissions in grest-ts's GGPermissionChecker so allOf/anyOf gate checks
-// work. The lib carries permissions as the Set<string> grest-ts speaks; no own algebra.
+// work. grest-ts speaks scopes as an array of per-source arrays; the lib holds one source.
 export function permissionsChecker(permissions: Iterable<string>): GGPermissionChecker {
-    return new GGPermissionChecker(new Set(permissions))
+    return new GGPermissionChecker([[...permissions]])
 }

@@ -2,8 +2,8 @@ import {describe, expect, it} from "vitest";
 import {GG_ANY_PERMISSION, GG_NO_PERMISSIONS} from "./GGPermission";
 import {satisfies} from "./satisfies";
 
-const empty = new Set<string>();
-const set = (...s: string[]) => new Set(s);
+const empty: string[][] = [];
+const set = (...s: string[]) => [s];
 
 describe("satisfies", () => {
 

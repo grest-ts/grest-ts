@@ -2,9 +2,9 @@ import {GGPermission} from "./GGPermission";
 import {satisfies} from "./satisfies";
 
 export class GGPermissionChecker {
-    public readonly scopes: ReadonlySet<string>
+    public readonly scopes: Array<readonly string[]>
 
-    constructor(scopes: ReadonlySet<string>) {
+    constructor(scopes: Array<readonly string[]>) {
         this.scopes = scopes
         Object.freeze(this)
     }
