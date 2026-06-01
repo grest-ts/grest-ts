@@ -8,21 +8,22 @@ import type {GGTransportMiddleware} from "@grest-ts/context"
 import {GGWireContextKey} from "./GGWireContextKey"
 
 /**
- * The scope resolver a set of wired middlewares contributes: the union of each smart wire's
- * permissions() (each wire's process() already authenticated-or-threw). Returns undefined when no
- * smart wire is present — the schema is then ungated unless a manual resolver is supplied. Shared
- * by the HTTP and WebSocket register paths so the derivation lives in exactly one place.
+ * The scope resolver a set of wired middlewares contributes: the union of each wire's
+ * permissions() (each verified wire's process() already authenticated-or-threw; ambient wires
+ * have no handler and contribute nothing). Returns undefined when no wire is present — the schema
+ * is then ungated unless a manual resolver is supplied. Shared by the HTTP and WebSocket register
+ * paths so the derivation lives in exactly one place.
  */
 export function deriveWireScopeResolver(
     middlewares: readonly GGTransportMiddleware[],
 ): (() => Promise<ReadonlySet<string>>) | undefined {
-    const smartWires = middlewares.filter(
-        (mw): mw is GGWireContextKey => mw instanceof GGWireContextKey && mw.isSmart,
+    const wires = middlewares.filter(
+        (mw): mw is GGWireContextKey => mw instanceof GGWireContextKey,
     )
-    if (smartWires.length === 0) return undefined
+    if (wires.length === 0) return undefined
     return async () => {
         const scopes = new Set<string>()
-        for (const wire of smartWires) {
+        for (const wire of wires) {
             for (const p of await wire.permissions()) scopes.add(p)
         }
         return scopes
@@ -38,6 +39,11 @@ export interface GGWireServerHandler {
 
 const HANDLER_KEYS = new WeakMap<GGWireContextKey, GGLocatorKey<GGWireServerHandler>>()
 const FACTORIES = new WeakMap<GGWireContextKey, unknown>()
+
+/** True once .define() has run on this wire — distinguishes verified wires from ambient ones. */
+export function wireIsDefined(wire: GGWireContextKey): boolean {
+    return FACTORIES.has(wire)
+}
 
 function handlerKeyFor(wire: GGWireContextKey): GGLocatorKey<GGWireServerHandler> {
     let key = HANDLER_KEYS.get(wire)
@@ -85,8 +91,6 @@ declare module "./GGWireContextKey" {
         permissions(): Promise<readonly string[]>
         /** @internal startup validation — true once .create() has run on the current runtime scope. */
         hasHandler(): boolean
-        /** @internal true once .define() has run — distinguishes verified wires from ambient ones. */
-        isDefined(): boolean
         /** Drop the ephemeral raw credential after process(); ambient wires keep their value. */
         clear(): void
     }
@@ -101,16 +105,20 @@ GGWireContextKey.prototype.define = function (factory) {
 }
 
 GGWireContextKey.prototype.process = async function () {
-    if (!this.isSmart) return
+    if (!this.hasHandler()) return
     await resolveHandler(this).process()
 }
 
 GGWireContextKey.prototype.permissions = async function () {
-    if (!this.isSmart) return []
+    if (!this.hasHandler()) return []
     const handler = resolveHandler(this)
     return handler.permissions ? await handler.permissions() : []
 }
 
 GGWireContextKey.prototype.hasHandler = function () {
     return handlerKeyFor(this).has()
+}
+
+GGWireContextKey.prototype.clear = function () {
+    if (this.hasHandler() && this.has()) this.delete()
 }

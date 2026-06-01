@@ -109,8 +109,6 @@ function setupRoutes<TContract extends GGContractApiDefinition>(
     // @TODO This is not really used and only for testkit so it would register implementation of the contract... Not cool
     httpSchema.contract.implement(implementation);
 
-    if (permissionResolver) server._markResolverWired(httpSchema);
-
     for (const methodName in httpSchema.codec) {
         // Wire format.
         const codec: GGHttpCodec = httpSchema.codec[methodName]

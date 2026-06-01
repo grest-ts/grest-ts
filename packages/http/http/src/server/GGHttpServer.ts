@@ -6,9 +6,8 @@ import {GG_HTTP_SERVER} from "./GG_HTTP_SERVER";
 import {GGLog} from "@grest-ts/logger";
 import findMyWay, {HTTPMethod} from "find-my-way";
 import type {GGHttpSchema} from "../schema/GGHttpSchema";
-import {GGWireContextKey} from "../schema/GGWireContextKey";
 import "../schema/GGWireContextKey.node";
-import {describePermission, GG_NO_PERMISSIONS, GGContractMethod, GGPermission} from "@grest-ts/schema";
+import {GGContractMethod, GGPermission} from "@grest-ts/schema";
 // Forward declaration — actual type lives in @grest-ts/websocket to avoid circular dep.
 // GGHttpServer only stores the array; callers cast as needed.
 type AnyWebSocketSchema = {
@@ -18,9 +17,6 @@ type AnyWebSocketSchema = {
     middlewares: readonly unknown[];
     connectPermission?: GGPermission;
 };
-
-/** Smart wires of one registered schema (HTTP route set or WS contract). */
-type WireSurface = {name: string; wires: GGWireContextKey[]};
 
 export interface GGCorsConfig {
     /**
@@ -213,123 +209,12 @@ export class GGHttpServer {
         this._registeredWebSocketSchemas.push(schema);
     }
 
-    private readonly _schemasWithResolver = new Set<object>();
-
-    /** @internal Called by HTTP / WS register paths when a scope resolver is wired. */
-    public _markResolverWired(schema: object): void {
-        this._schemasWithResolver.add(schema);
-    }
-
-    private _checkPermissionsAtStart(): void {
-        type Surface = {label: string; permission: GGPermission | undefined; resolverWired: boolean};
-        const surfaces: Surface[] = [];
-
-        for (const schema of this._registeredSchemas) {
-            const resolverWired = this._schemasWithResolver.has(schema);
-            const methods = schema.contract?.methods ?? {};
-            for (const name of Object.keys(methods)) {
-                surfaces.push({
-                    label: `${schema.name}.${name}`,
-                    permission: (methods[name] as GGContractMethod).permission,
-                    resolverWired,
-                });
-            }
-        }
-        for (const ws of this._registeredWebSocketSchemas) {
-            const resolverWired = this._schemasWithResolver.has(ws);
-            const methods = ws.contract.clientToServer.methods;
-            for (const name of Object.keys(methods)) {
-                surfaces.push({
-                    label: `${ws.name}.${name}`,
-                    permission: methods[name].permission,
-                    resolverWired,
-                });
-            }
-            if (ws.connectPermission !== undefined) {
-                surfaces.push({
-                    label: `${ws.name} (connectPermission)`,
-                    permission: ws.connectPermission,
-                    resolverWired,
-                });
-            }
-        }
-
-        let strict = false;
-        const undeclared: Surface[] = [];
-        const orphaned: Surface[] = [];
-        for (const s of surfaces) {
-            if (s.permission !== undefined || s.resolverWired) strict = true;
-            if (s.permission === undefined) undeclared.push(s);
-            else if (s.permission !== GG_NO_PERMISSIONS && !s.resolverWired) orphaned.push(s);
-        }
-        if (!strict) return;
-
-        if (undeclared.length > 0) {
-            const lines = undeclared.map(s => `  ${s.label}`).join("\n");
-            throw new Error(
-                `GGHttpServer: permission strict mode is active on this server ` +
-                `(at least one route declares a permission or has .usePermissions(...) wired), ` +
-                `but the following routes have no \`permission\` declared:\n\n` +
-                lines +
-                `\n\nFix: declare \`permission\` on every route — use \`GG_NO_PERMISSIONS\` for intentionally public ones.`
-            );
-        }
-        if (orphaned.length > 0) {
-            const lines = orphaned.map(s =>
-                `  ${s.label}   requires ${describePermission(s.permission)}`
-            ).join("\n");
-            throw new Error(
-                `GGHttpServer: these routes declare non-public permissions but their schema was ` +
-                `registered without a scope resolver:\n\n` +
-                lines +
-                `\n\nFix: call \`.usePermissions(yourResolver)\` on the GGHttp chain (or pass ` +
-                `\`permissionResolver\` to the WS schema config) before registering these routes.`
-            );
-        }
-    }
-
-    /** Smart wires for every registered HTTP and WebSocket schema. */
-    private _wireSurfaces(): WireSurface[] {
-        const isSmart = (mw: unknown): mw is GGWireContextKey => mw instanceof GGWireContextKey && mw.isSmart;
-        const out: WireSurface[] = [];
-        for (const schema of this._registeredSchemas) {
-            out.push({
-                name: schema.name,
-                wires: schema.apiMiddlewares.filter(isSmart),
-            });
-        }
-        for (const ws of this._registeredWebSocketSchemas) {
-            out.push({name: ws.name, wires: (ws.middlewares as unknown[]).filter(isSmart)});
-        }
-        return out;
-    }
-
-    private _checkWiresImplemented(surfaces: WireSurface[]): void {
-        const missing: string[] = [];
-        for (const surface of surfaces) {
-            for (const wire of surface.wires) {
-                if (!wire.hasHandler()) missing.push(`  ${surface.name}  uses wire "${wire.name}"`);
-            }
-        }
-        if (missing.length > 0) {
-            throw new Error(
-                `GGHttpServer: these schemas .use() a smart wire that was never implemented on this ` +
-                `runtime:\n\n` +
-                missing.join("\n") +
-                `\n\nFix: call \`${"<WIRE>"}.define(...).create(deps)\` in compose() before the server starts.`
-            );
-        }
-    }
-
     public registerRoute(method: HttpMethod, path: string, handler: GGHttpRequestCallback): void {
         this.router.on(method as HTTPMethod, path, handler as unknown as findMyWay.Handler<findMyWay.HTTPVersion.V1>);
     }
 
     public async start(): Promise<void> {
         Object.freeze(this._registeredSchemas);
-        const wireSurfaces = this._wireSurfaces();
-        this._checkWiresImplemented(wireSurfaces);
-        this._checkPermissionsAtStart();
         this._port = await new Promise((resolve) => {
             this.httpServer.listen(this.configuredPort, '0.0.0.0', () => {
                 const port = (this.httpServer.address() as any).port;

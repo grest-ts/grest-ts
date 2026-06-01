@@ -77,8 +77,6 @@ GGWebSocketSchema.prototype.startServer = function (
     const permissionResolver: GGScopeResolver | undefined =
         config.permissionResolver ?? deriveWireScopeResolver(this.middlewares)
 
-    if (permissionResolver) http._markResolverWired(this)
-
     // Permission gate as a handshake middleware: runs after user middlewares
     // (so identity is already in context), resolves scopes, sets GG_PERMISSIONS,
     // and rejects the handshake with a typed NOT_AUTHORIZED/FORBIDDEN if the
