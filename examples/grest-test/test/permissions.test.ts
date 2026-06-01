@@ -94,7 +94,7 @@ describe.shuffle("permissions / HTTP gate", () => {
         })
     })
 
-    describe("GG_PERMISSIONS visible in handler for sub-checks", () => {
+    describe("durable principal visible in handler for sub-checks", () => {
         test("admin scope → admin branch", async () => {
             scope = withScopes(AppPermission.Admin)
             const out = await callOn(PermissionsApi, scope).checksInside({label: "x"})

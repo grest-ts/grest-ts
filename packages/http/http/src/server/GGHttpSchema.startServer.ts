@@ -6,7 +6,7 @@
 import http from "http";
 import {GGLocator} from "@grest-ts/locator";
 import {ClientHttpRouteToRpcTransformServerCodec, GGHttpCodec, GGHttpSchema} from "../schema/GGHttpSchema";
-import {describePermission, ERROR, FORBIDDEN, GG_NO_PERMISSIONS, GGContractApiDefinition, GGContractImplementation, GGContractMethod, GGPermissionChecker, OK, satisfies, SERVER_ERROR} from "@grest-ts/schema";
+import {describePermission, ERROR, FORBIDDEN, GG_NO_PERMISSIONS, GGContractApiDefinition, GGContractImplementation, GGContractMethod, OK, satisfies, SERVER_ERROR} from "@grest-ts/schema";
 import {HttpMethod} from "@grest-ts/common";
 import {GG_DISCOVERY} from "@grest-ts/discovery";
 import {GGContext, GGContextStore, type GGTransportMiddleware} from "@grest-ts/context";
@@ -19,7 +19,6 @@ import {GGHttpMetrics} from "./GGHttpMetrics";
 import {GG_HTTP_SERVER} from "./GG_HTTP_SERVER";
 import {GGHttpServer} from "./GGHttpServer";
 import {GGLog} from "@grest-ts/logger";
-import {GG_PERMISSIONS} from "./GG_PERMISSIONS";
 
 export interface GGHttpSchemaConfig {
     /**
@@ -132,7 +131,6 @@ function setupRoutes<TContract extends GGContractApiDefinition>(
                     const rpcInput = await requestParser.parseRequest(req)
                     try {
                         const scopes = await resolveScopes()
-                        GG_PERMISSIONS.set(new GGPermissionChecker(scopes))
                         const required = contractFunctionSchema.permission
                         if (required !== undefined && required !== GG_NO_PERMISSIONS && !satisfies(required, scopes)) {
                             throw new FORBIDDEN({

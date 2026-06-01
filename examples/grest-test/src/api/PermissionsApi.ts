@@ -37,7 +37,7 @@ export const TEST_RESOLVER_THROW_SCOPE = "__test:throw__"
  */
 // Durable scopes minted in process() — read by permissions() AFTER the ephemeral
 // credential has been cleared (the HTTP gate resolves scopes once clear() has run).
-const TEST_SCOPES_DATA = new GGContextKey<string[]>("test-scopes-data", IsArray(IsString))
+export const TEST_SCOPES_DATA = new GGContextKey<string[]>("test-scopes-data", IsArray(IsString))
 
 export const TEST_SCOPES_WIRE = new GGHeader("x-test-scopes")
 export const TEST_SCOPES_WIRE_HANDLER = TEST_SCOPES_WIRE.define(() => ({
@@ -84,7 +84,7 @@ export const PermissionsApiContract = new GGContractClass("PermissionsApi", {
         errors: [NOT_AUTHORIZED, FORBIDDEN, SERVER_ERROR],
         permission: {anyOf: [{allOf: [AppPermission.Read, AppPermission.Write]}, AppPermission.Admin]},
     },
-    // Handler does its own sub-check via GG_PERMISSIONS.
+    // Handler does its own sub-check by reading the durable principal the wire minted.
     checksInside: {
         input: IsObject({label: IsString}),
         success: IsObject({label: IsString, branch: IsString}),

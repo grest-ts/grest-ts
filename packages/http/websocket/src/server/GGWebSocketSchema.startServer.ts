@@ -5,12 +5,14 @@
 
 import type {GGSocket} from "../socket/GGSocket"
 import {GGWebSocketSchema} from "../schema/GGWebSocketSchema";
-import type {GGTransportMiddleware} from "@grest-ts/context";
+import {GGContextKey, type GGTransportMiddleware} from "@grest-ts/context";
 import {GGSocketServer} from "./GGSocketServer";
 import {GGLocator} from "@grest-ts/locator";
 import {WebSocketIncoming, WebSocketOutgoing} from "../socket/WebSocketTypes";
-import {describePermission, FORBIDDEN, GG_NO_PERMISSIONS, GGPermissionChecker, GGPromise, satisfies} from "@grest-ts/schema";
-import {deriveWireScopeResolver, GG_HTTP_SERVER, GG_PERMISSIONS, GGHttpServer} from "@grest-ts/http";
+import {describePermission, FORBIDDEN, GG_NO_PERMISSIONS, GGPromise, IsAny, satisfies} from "@grest-ts/schema";
+import {deriveWireScopeResolver, GG_HTTP_SERVER, GGHttpServer} from "@grest-ts/http";
+
+const HANDSHAKE_SCOPES = new GGContextKey<ReadonlySet<string>>("ws:handshake-scopes", IsAny as any);
 
 export interface WebSocketSchemaConfig {
     /**
@@ -70,15 +72,16 @@ GGWebSocketSchema.prototype.startServer = function (
     const resolveScopes = deriveWireScopeResolver(this.middlewares)
 
     // Permission gate as a handshake middleware: runs after user middlewares
-    // (so identity is already in context), resolves scopes, sets GG_PERMISSIONS,
-    // and rejects the handshake with a typed FORBIDDEN if the connectPermission
-    // doesn't hold. The throw is caught by handleHandshake and surfaced to the
-    // client as a HANDSHAKE_ERR — not a silent disconnect.
+    // (so identity is already in context), resolves scopes, caches them on
+    // HANDSHAKE_SCOPES for onConnection, and rejects the handshake with a typed
+    // FORBIDDEN if the connectPermission doesn't hold. The throw is caught by
+    // handleHandshake and surfaced to the client as a HANDSHAKE_ERR — not a
+    // silent disconnect.
     const middlewares: GGTransportMiddleware[] = [...this.middlewares, ...(config?.middlewares ?? [])]
     middlewares.push({
         async process() {
             const scopes = await resolveScopes()
-            GG_PERMISSIONS.set(new GGPermissionChecker(scopes))
+            HANDSHAKE_SCOPES.set(scopes)
             if (connectPermission !== undefined && connectPermission !== GG_NO_PERMISSIONS && !satisfies(connectPermission, scopes)) {
                 throw new FORBIDDEN({
                     debugMessage: `${schemaName} connection requires ${describePermission(connectPermission)} — caller scopes did not satisfy`,
@@ -99,11 +102,11 @@ GGWebSocketSchema.prototype.startServer = function (
         const clientToServerContract = contract.clientToServer
         const serverToClientContract = contract.serverToClient
 
-        // Handshake middleware (above) resolved scopes and populated GG_PERMISSIONS
-        // for the lifetime of this connection. Capture them into a closure so
-        // per-message handlers gate without re-resolving — a 10-year-old socket
-        // keeps the scopes it was issued at handshake, never re-fetched.
-        const cachedScopes: ReadonlySet<string> = GG_PERMISSIONS.get().scopes
+        // Handshake middleware (above) resolved scopes and cached them on
+        // HANDSHAKE_SCOPES for the lifetime of this connection. Capture them into a
+        // closure so per-message handlers gate without re-resolving — a 10-year-old
+        // socket keeps the scopes it was issued at handshake, never re-fetched.
+        const cachedScopes: ReadonlySet<string> = HANDSHAKE_SCOPES.get()
 
         const incoming: any = {
             on(handlers: any) {
