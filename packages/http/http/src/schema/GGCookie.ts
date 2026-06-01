@@ -49,11 +49,11 @@ interface PendingCookie {
  * the cookie, call GGCookie.setCookie(key, …) from a route that declared .updatesCookie(key);
  * this wire flushes it as Set-Cookie (HTTP only — a WebSocket has no response to set a cookie on).
  */
-export class GGCookie<P extends string = never> extends GGWireContextKey<P> {
+export class GGCookie extends GGWireContextKey {
 
     public readonly cookieParams: Record<string, GGSchema<string | undefined>>
 
-    constructor(name: string, keyOrOptions: GGContextKey<string | undefined> | GGWireSmartOptions<P>) {
+    constructor(name: string, keyOrOptions: GGContextKey<string | undefined> | GGWireSmartOptions) {
         super(name, keyOrOptions)
         _assertCookieSafe("name", this.name)
         this.cookieParams = {[this.name]: IsString.orUndefined}

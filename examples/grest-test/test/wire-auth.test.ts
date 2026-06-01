@@ -5,25 +5,12 @@ import {GGHeader} from "@grest-ts/http"
 import {afterEach} from "vitest"
 import {WireAuthRuntime} from "../src/WireAuthRuntime"
 import {WireAuthMissingCreateRuntime} from "../src/WireAuthMissingCreateRuntime"
-import {WireAuthDuplicatePermRuntime} from "../src/WireAuthDuplicatePermRuntime"
-import {WireAuthBadOwningRuntime} from "../src/WireAuthBadOwningRuntime"
-import {IsWirePermission, ORG_TOKEN_WIRE, USER_TOKEN_WIRE, WireLiveApi, WireOrgScopedApi, WirePublicApi, WireUserApi} from "../src/api/WireAuthApi"
+import {ORG_TOKEN_WIRE, USER_TOKEN_WIRE, WireLiveApi, WireOrgScopedApi, WirePublicApi, WireUserApi} from "../src/api/WireAuthApi"
 
 function asUser(token: string): GGContext {
     const scope = new GGContext("wire-auth-test")
     scope.set(USER_TOKEN_WIRE, token)
     return scope
-}
-
-async function expectStartToThrow(runtime: any): Promise<string> {
-    let caught: unknown
-    try {
-        await GGTest.startInline(runtime)
-    } catch (e) {
-        caught = e
-    }
-    expect(caught).toBeDefined()
-    return (caught as Error).message ?? String(caught)
 }
 
 describe("single-token wire — HTTP end-to-end", () => {
@@ -84,13 +71,13 @@ describe("single-token wire — startup enforcement", () => {
 describe("single-token wire — define/create lifecycle", () => {
 
     test(".define() twice on the same wire throws", () => {
-        const wire = new GGHeader("x-ut-define", {permissions: IsWirePermission})
+        const wire = new GGHeader("x-ut-define", {})
         wire.define(() => ({process: async () => {}}))
         expect(() => wire.define(() => ({process: async () => {}}))).toThrow(/only be defined once/)
     })
 
     test(".create() twice in one runtime scope throws", () => {
-        const wire = new GGHeader("x-ut-create", {permissions: IsWirePermission})
+        const wire = new GGHeader("x-ut-create", {})
         const reg = wire.define((_deps: object) => ({process: async () => {}}))
         new GGLocatorScope("wire-create-unit").run(() => {
             reg.create({})
@@ -130,21 +117,6 @@ describe("multi-wire — AND across sources", () => {
         scope = new GGContext("wire-multi-test")
         scope.set(ORG_TOKEN_WIRE, "org-1")
         await expect(callOn(WireOrgScopedApi, scope).orgInfo()).rejects.toThrow(/NOT_AUTHORIZED/)
-    })
-})
-
-describe("multi-wire — startup guardrails", () => {
-
-    test("two wires owning the same permission string → startup crash", async () => {
-        const msg = await expectStartToThrow(WireAuthDuplicatePermRuntime)
-        expect(msg).toMatch(/WIRE_ADMIN/)
-        expect(msg).toMatch(/globally unique/)
-    })
-
-    test("method requires a wire-owned permission whose wire isn't .use()d → startup crash", async () => {
-        const msg = await expectStartToThrow(WireAuthBadOwningRuntime)
-        expect(msg).toContain("WireBadOwning.needsOrg")
-        expect(msg).toMatch(/x-org-token/)
     })
 })
 

@@ -1,7 +1,7 @@
 import {GGHeader} from "@grest-ts/http"
 import {IsArray, IsEnum, IsObject, IsString} from "@grest-ts/schema"
 
-// Org permissions — distinct strings from UserPermission (global uniqueness, Rule 6).
+// Org permissions, carried on the durable org membership principal.
 export enum OrgPermission {
     ORG_MEMBER = "ORG_MEMBER",
 }
@@ -33,4 +33,4 @@ export type OrgUser = typeof IsOrgUser.infer
 // SMART wire: parses `x-org-token: <jwt>` (no bearer scheme — a custom header). Like the user
 // wire it is required-or-throw on any schema that .use()s it — which is why org-scoped routes
 // live on their own schema (OrgScopedApi), separate from the routes that mint the org token.
-export const ORG_TOKEN_WIRE = new GGHeader("x-org-token", {permissions: IsOrgPermission})
+export const ORG_TOKEN_WIRE = new GGHeader("x-org-token", {})

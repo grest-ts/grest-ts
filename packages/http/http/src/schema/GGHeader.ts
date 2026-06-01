@@ -8,18 +8,18 @@ const BEARER = "Bearer "
  * A request header bound to a context key.
  *
  *   // smart: the wire IS the ephemeral key; requires .define() server-side.
- *   const USER_TOKEN_WIRE = new GGHeader("authorization", {scheme: "bearer", permissions: IsUserPermission})
+ *   const USER_TOKEN_WIRE = new GGHeader("authorization", {scheme: "bearer"})
  *
  *   // dumb: ambient — parsed value lands in the passed key, no implementation needed.
  *   const CLIENT_VERSION_WIRE = new GGHeader("x-client-version", CLIENT_VERSION)
  */
-export class GGHeader<P extends string = never> extends GGWireContextKey<P> {
+export class GGHeader extends GGWireContextKey {
 
     public readonly headers: Record<string, GGSchema<string | undefined>>
 
     constructor(
         name: string,
-        keyOrOptions: GGContextKey<string | undefined> | GGWireSmartOptions<P>,
+        keyOrOptions: GGContextKey<string | undefined> | GGWireSmartOptions,
         dumbOptions?: GGWireDumbOptions,
     ) {
         super(name, keyOrOptions, dumbOptions)

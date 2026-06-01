@@ -16,7 +16,7 @@ export type WireUser = typeof IsWireUser.infer
 
 // Smart wire: `Authorization: Bearer <token>`. Ephemeral — the raw token is readable only
 // inside the server handler's process(), then cleared before the handler runs.
-export const USER_TOKEN_WIRE = new GGHeader("authorization", {scheme: "bearer", permissions: IsWirePermission})
+export const USER_TOKEN_WIRE = new GGHeader("authorization", {scheme: "bearer"})
 
 export const WireUserApiContract = new GGContractClass("WireUserApi", {
     me: {
@@ -67,7 +67,7 @@ export enum OrgWirePermission {
 }
 export const IsOrgWirePermission = IsEnum(OrgWirePermission)
 
-export const ORG_TOKEN_WIRE = new GGHeader("x-org-token", {permissions: IsOrgWirePermission})
+export const ORG_TOKEN_WIRE = new GGHeader("x-org-token", {})
 
 export const WireOrgScopedApiContract = new GGContractClass("WireOrgScopedApi", {
     // Requires the org membership permission (from ORG_TOKEN_WIRE); the user wire still authenticates.

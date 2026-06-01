@@ -1,5 +1,5 @@
 import {describe, test, expect, vi} from "vitest"
-import {NOT_AUTHORIZED, IsLiteral} from "@grest-ts/schema"
+import {NOT_AUTHORIZED} from "@grest-ts/schema"
 import {GGContextKeySynchronizer, GGHeader} from "@grest-ts/http"
 import {GGContext} from "@grest-ts/context"
 import {BaseAuthSession} from "../GGAuthSessionBase"
@@ -654,8 +654,8 @@ describe("AuthSession — GGContextKeySynchronizer.provide wiring", () => {
         vi.stubGlobal("document", {addEventListener: vi.fn(), removeEventListener: vi.fn(), visibilityState: "visible"})
 
         try {
-            const rootWire = new GGHeader("authorization-t1", {scheme: "bearer", permissions: IsLiteral("p1")})
-            const orgWire = new GGHeader("x-org-t1", {permissions: IsLiteral("p2")})
+            const rootWire = new GGHeader("authorization-t1", {scheme: "bearer"})
+            const orgWire = new GGHeader("x-org-t1", {})
 
             new GGContext("test").run(() => {
                 GGAuthSession.withToken(rootWire, {refresh: vi.fn().mockResolvedValue(okPair()), localStorageKey: "test"})
@@ -688,7 +688,7 @@ describe("AuthSession — GGContextKeySynchronizer.provide wiring", () => {
         vi.stubGlobal("document", {addEventListener: vi.fn(), removeEventListener: vi.fn(), visibilityState: "visible"})
 
         try {
-            const rootWire = new GGHeader("authorization-t2", {scheme: "bearer", permissions: IsLiteral("p1")})
+            const rootWire = new GGHeader("authorization-t2", {scheme: "bearer"})
             new GGContext("test").run(() => {
                 GGAuthSession.withToken(rootWire, {refresh: vi.fn().mockResolvedValue(okPair()), localStorageKey: "test"})
                     .start(makePair("at", 0, "rt")) // triggers _getSession
@@ -713,8 +713,8 @@ describe("AuthSession — GGContextKeySynchronizer.provide wiring", () => {
         vi.stubGlobal("document", {addEventListener: vi.fn(), removeEventListener: vi.fn(), visibilityState: "visible"})
 
         try {
-            const rootWire = new GGHeader("authorization-t3", {scheme: "bearer", permissions: IsLiteral("p1")})
-            const orgWire = new GGHeader("x-org-t3", {permissions: IsLiteral("p2")})
+            const rootWire = new GGHeader("authorization-t3", {scheme: "bearer"})
+            const orgWire = new GGHeader("x-org-t3", {})
 
             await new GGContext("test").run(async () => {
                 GGAuthSession.withToken(rootWire, {refresh: vi.fn().mockResolvedValue(okPair()), localStorageKey: "test"})

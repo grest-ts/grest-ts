@@ -9,9 +9,7 @@ import {browserScheduler} from "./core/browserScheduler"
 import type {DerivedConfig, DerivedData, DerivedMap, DerivedParams, DerivedTokenResult, GGTokenPair, SessionState} from "./core/types"
 import type {DerivedToken} from "./GGAuthSessionBase"
 
-// A credential wire carrying its permission enum P — withToken/addDerived take these directly,
-// so the session infers its permission union (Perm) from the wires it holds.
-type Wire<P extends string> = GGWireContextKey<P>
+type Wire = GGWireContextKey
 
 export interface GGTokenSessionConfig {
     refresh: (token: {refreshToken: string}) => Promise<GGTokenPair>
@@ -37,18 +35,18 @@ function decodePermissions(token: string | undefined): string[] {
     }
 }
 
-export class GGAuthSession<D extends DerivedMap = {}, Perm extends string = never> {
+export class GGAuthSession<D extends DerivedMap = {}> {
     private _session: BaseAuthSession<D> | null = null
-    private readonly _rootKey: Wire<Perm>
+    private readonly _rootKey: Wire
     private readonly _refresh: (refreshToken?: string) => Promise<GGTokenPair>
     private readonly _logout: (() => Promise<void>) | undefined
     private readonly _storage: "localStorage" | "cookie"
     private readonly _cacheKey: string
-    private readonly _derivedConfigs: Record<string, {key: Wire<string>; mint: (params: unknown) => Promise<DerivedTokenResult<unknown>>}> = {}
+    private readonly _derivedConfigs: Record<string, {key: Wire; mint: (params: unknown) => Promise<DerivedTokenResult<unknown>>}> = {}
     private _identity: unknown = undefined
 
     private constructor(
-        key: Wire<Perm>,
+        key: Wire,
         refresh: (refreshToken?: string) => Promise<GGTokenPair>,
         storage: "localStorage" | "cookie",
         logout: (() => Promise<void>) | undefined,
@@ -61,8 +59,8 @@ export class GGAuthSession<D extends DerivedMap = {}, Perm extends string = neve
         this._cacheKey = cacheKey
     }
 
-    static withToken<WP extends string>(key: Wire<WP>, config: GGTokenSessionConfig): GGAuthSession<{}, WP> {
-        return new GGAuthSession<{}, WP>(
+    static withToken(key: Wire, config: GGTokenSessionConfig): GGAuthSession<{}> {
+        return new GGAuthSession<{}>(
             key,
             (token) => config.refresh({refreshToken: token!}),
             "localStorage",
@@ -71,17 +69,17 @@ export class GGAuthSession<D extends DerivedMap = {}, Perm extends string = neve
         )
     }
 
-    static withCookie<WP extends string>(key: Wire<WP>, config: GGCookieSessionConfig): GGAuthSession<{}, WP> {
-        return new GGAuthSession<{}, WP>(key, () => config.refresh(), "cookie", config.logout, "")
+    static withCookie(key: Wire, config: GGCookieSessionConfig): GGAuthSession<{}> {
+        return new GGAuthSession<{}>(key, () => config.refresh(), "cookie", config.logout, "")
     }
 
-    public addDerived<N extends string, Par, DData, WP extends string>(
+    public addDerived<N extends string, Par, DData>(
         name: N,
-        key: Wire<WP>,
+        key: Wire,
         config: {mint: (params: Par) => Promise<DerivedTokenResult<DData>>},
-    ): GGAuthSession<D & {[K in N]: DerivedConfig<Par, DData>}, Perm | WP> {
+    ): GGAuthSession<D & {[K in N]: DerivedConfig<Par, DData>}> {
         this._derivedConfigs[name] = {key, mint: config.mint as (params: unknown) => Promise<DerivedTokenResult<unknown>>}
-        return this as unknown as GGAuthSession<D & {[K in N]: DerivedConfig<Par, DData>}, Perm | WP>
+        return this as unknown as GGAuthSession<D & {[K in N]: DerivedConfig<Par, DData>}>
     }
 
     private _getSession(): BaseAuthSession<D> {
@@ -172,12 +170,12 @@ export class GGAuthSession<D extends DerivedMap = {}, Perm extends string = neve
     }
 
     /** All granted permissions across the active tokens (root + active derived). UX only. */
-    public get permissions(): Perm[] {
-        return [...this._grantedPermissions()] as Perm[]
+    public get permissions(): string[] {
+        return [...this._grantedPermissions()]
     }
 
-    /** Typed to the union of the session's wires' permission enums. UX gate only — server re-checks. */
-    public hasPermission(permission: Perm): boolean {
+    /** UX gate only — server re-checks. */
+    public hasPermission(permission: string): boolean {
         return this._grantedPermissions().has(permission)
     }
 

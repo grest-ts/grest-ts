@@ -17,7 +17,7 @@ export function deriveWireScopeResolver(
     middlewares: readonly GGTransportMiddleware[],
 ): (() => Promise<ReadonlySet<string>>) | undefined {
     const smartWires = middlewares.filter(
-        (mw): mw is GGWireContextKey<any> => mw instanceof GGWireContextKey && mw.isSmart,
+        (mw): mw is GGWireContextKey => mw instanceof GGWireContextKey && mw.isSmart,
     )
     if (smartWires.length === 0) return undefined
     return async () => {
@@ -29,17 +29,17 @@ export function deriveWireScopeResolver(
     }
 }
 
-export interface GGWireServerHandler<P extends string = string> {
+export interface GGWireServerHandler {
     /** Verify the raw credential and mint the durable principal. Throws to reject the request. */
     process: () => Promise<void>
     /** The caller's grants from this wire — read off the durable principal minted in process(). */
-    permissions?: () => Promise<readonly P[]>
+    permissions?: () => Promise<readonly string[]>
 }
 
-const HANDLER_KEYS = new WeakMap<GGWireContextKey<any>, GGLocatorKey<GGWireServerHandler>>()
-const FACTORIES = new WeakMap<GGWireContextKey<any>, unknown>()
+const HANDLER_KEYS = new WeakMap<GGWireContextKey, GGLocatorKey<GGWireServerHandler>>()
+const FACTORIES = new WeakMap<GGWireContextKey, unknown>()
 
-function handlerKeyFor(wire: GGWireContextKey<any>): GGLocatorKey<GGWireServerHandler> {
+function handlerKeyFor(wire: GGWireContextKey): GGLocatorKey<GGWireServerHandler> {
     let key = HANDLER_KEYS.get(wire)
     if (!key) {
         key = new GGLocatorKey<GGWireServerHandler>(`wire:${wire.name}`)
@@ -48,7 +48,7 @@ function handlerKeyFor(wire: GGWireContextKey<any>): GGLocatorKey<GGWireServerHa
     return key
 }
 
-function resolveHandler(wire: GGWireContextKey<any>): GGWireServerHandler {
+function resolveHandler(wire: GGWireContextKey): GGWireServerHandler {
     const handler = handlerKeyFor(wire).tryGet()
     if (!handler) {
         throw new Error(`Wire "${wire.name}" is used but not implemented — call ${wire.name}.define(...).create(deps) in compose().`)
@@ -60,10 +60,10 @@ function resolveHandler(wire: GGWireContextKey<any>): GGWireServerHandler {
  * Binds the verification handler's deps into one runtime's locator scope. Returned by
  * `.define()`; `.create(deps)` runs once per scope (a fresh worker / restart gets its own).
  */
-export class GGWireHandlerRegistration<Deps, P extends string> {
+export class GGWireHandlerRegistration<Deps> {
     constructor(
-        private readonly wire: GGWireContextKey<P>,
-        private readonly factory: (deps: Deps) => GGWireServerHandler<P>,
+        private readonly wire: GGWireContextKey,
+        private readonly factory: (deps: Deps) => GGWireServerHandler,
     ) {}
 
     public create(deps: Deps): void {
@@ -76,13 +76,13 @@ export class GGWireHandlerRegistration<Deps, P extends string> {
 }
 
 declare module "./GGWireContextKey" {
-    interface GGWireContextKey<P extends string> {
+    interface GGWireContextKey {
         /** Attach the server-side verification handler. Process-global, frozen once — a second call throws. */
-        define<Deps>(factory: (deps: Deps) => GGWireServerHandler<P>): GGWireHandlerRegistration<Deps, P>
+        define<Deps>(factory: (deps: Deps) => GGWireServerHandler): GGWireHandlerRegistration<Deps>
         /** @internal server pipeline hook — verify the credential and mint the durable principal. */
         process(): Promise<void>
         /** @internal permission-gate hook — the caller's grants from this wire. */
-        permissions(): Promise<readonly P[]>
+        permissions(): Promise<readonly string[]>
         /** @internal startup validation — true once .create() has run on the current runtime scope. */
         hasHandler(): boolean
     }
