@@ -1,6 +1,6 @@
 import {type GGSchema, IsObject, NOT_AUTHORIZED} from "@grest-ts/schema"
 import type {SigningStrategy} from "../signing/SigningStrategy"
-import {GGAuthSubject, GGAuthTokenResult, IsGGAccessTokenData} from "../../shared/tokenSchemas"
+import {GGAccessTokenData, GGAuthSubject, IsGGAccessTokenData} from "../../shared/tokenSchemas"
 
 export type GGAccessPayload<C extends object> = {
     data: C
@@ -41,13 +41,11 @@ export class GGAuthAccessToken<C extends object> {
         this.now = options.now ?? Date.now
     }
 
-    public issueAccess = async (subject: string | GGAuthSubject, claims: C): Promise<GGAuthTokenResult> => {
-        return {
-            access: await this.signAccess(subject as GGAuthSubject, claims, this.now())
-        }
+    public issue = async (subject: string | GGAuthSubject, claims: C): Promise<GGAccessTokenData> => {
+        return await this._sign(subject as GGAuthSubject, claims, this.now())
     }
 
-    public verifyAccess = async (accessToken: string): Promise<GGAccessPayload<C>> => {
+    public verify = async (accessToken: string): Promise<GGAccessPayload<C>> => {
         const payload = await this.signer.verify(accessToken)
         const sub = payload["sub"]
         if (typeof sub !== "string") throw new NOT_AUTHORIZED({debugMessage: "TOKEN_INVALID: missing sub"})
@@ -65,7 +63,7 @@ export class GGAuthAccessToken<C extends object> {
 
     // Parses the claims then signs. Public so GGAuthRefreshToken can mint the access half of a
     // rotating pair through the same code path.
-    public signAccess = async (subject: GGAuthSubject, claims: C, nowMs: number): Promise<typeof IsGGAccessTokenData.infer> => {
+    public _sign = async (subject: GGAuthSubject, claims: C, nowMs: number): Promise<GGAccessTokenData> => {
         const expiresAt = nowMs + this.accessTtlMs
         const token = await this.signer.sign({
             data: this.claims.parse(claims),

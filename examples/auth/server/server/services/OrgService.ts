@@ -28,7 +28,7 @@ export class OrgService implements GGContractImplementation<typeof OrgApiContrac
         // `data` carries the Org snapshot for display. Membership grants ORG_MEMBER.
         const orgUser: OrgUser = {orgId: org.id, permissions: [OrgPermission.ORG_MEMBER]}
         return {
-            ...(await this.orgTokenEngine.issueAccess(user.id, orgUser)),
+            access: await this.orgTokenEngine.issue(user.id, orgUser),
             data: org
         }
     }
@@ -42,6 +42,6 @@ export class OrgService implements GGContractImplementation<typeof OrgApiContrac
     // Called by ORG_TOKEN_WIRE's server handler during process().
     public verifyOrgToken = async (token: string | undefined) => {
         if (!token) throw new NOT_AUTHORIZED({debugMessage: "Missing org token"})
-        return await this.orgTokenEngine.verifyAccess(token)
+        return await this.orgTokenEngine.verify(token)
     }
 }

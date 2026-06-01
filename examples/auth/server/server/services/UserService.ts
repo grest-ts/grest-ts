@@ -29,7 +29,7 @@ export class UserService implements GGContractImplementation<typeof AuthPublicAp
         })
         // Token carries only the authz claims; the response `data` is the full profile.
         return {
-            ...(await this.tokenEngine.issue(record.id, {permissions: record.permissions})),
+            tokens: await this.tokenEngine.issue(record.id, {permissions: record.permissions}),
             data: record
         }
     }
@@ -38,7 +38,7 @@ export class UserService implements GGContractImplementation<typeof AuthPublicAp
         const record = this.table.findByUsername(request.username)
         if (!record || record.password !== request.password) throw new InvalidCredentialsError()
         return {
-            ...(await this.tokenEngine.issue(record.id, {permissions: record.permissions})),
+            tokens: await this.tokenEngine.issue(record.id, {permissions: record.permissions}),
             data: record
         }
     }
@@ -49,7 +49,7 @@ export class UserService implements GGContractImplementation<typeof AuthPublicAp
             user = this.table.get(subject as tUserId)
             return user ? {permissions: user.permissions} : undefined
         })
-        return {...tokens, data: user!}
+        return {tokens, data: user!}
     }
 
     public me = async (): Promise<User> => {
@@ -71,6 +71,6 @@ export class UserService implements GGContractImplementation<typeof AuthPublicAp
     // token into a verified payload (subject + permissions).
     public verifyAccessToken = async (token: string | undefined) => {
         if (!token) throw new NOT_AUTHORIZED({debugMessage: "Missing bearer token"})
-        return await this.tokenEngine.verifyAccess(token)
+        return await this.tokenEngine.access.verify(token)
     }
 }

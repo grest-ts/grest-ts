@@ -1,5 +1,5 @@
 import {GGRpc, httpSchema} from "@grest-ts/http"
-import {ERROR, EXISTS, GGContractClass, IsEmail, IsObject, IsString, NOT_AUTHORIZED, SERVER_ERROR, VALIDATION_ERROR, GG_NO_PERMISSIONS} from "@grest-ts/schema"
+import {ERROR, EXISTS, GG_NO_PERMISSIONS, GGContractClass, IsEmail, IsObject, IsString, NOT_AUTHORIZED, SERVER_ERROR, VALIDATION_ERROR} from "@grest-ts/schema"
 import {IsGGAuthTokensResult} from "@grest-ts/auth"
 import {IsUser} from "./auth/UserAuth"
 
@@ -19,7 +19,8 @@ export type LoginRequest = typeof IsLoginRequest.infer
 export const IsTokenPairResponse = IsGGAuthTokensResult
 export type TokenPairResponse = typeof IsTokenPairResponse.infer
 
-export const IsAuthResponse = IsTokenPairResponse.extend({
+export const IsAuthResponse = IsObject({
+    tokens: IsTokenPairResponse,
     data: IsUser,
 })
 export type AuthResponse = typeof IsAuthResponse.infer
