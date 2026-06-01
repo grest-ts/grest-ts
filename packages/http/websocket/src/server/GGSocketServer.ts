@@ -85,7 +85,7 @@ export class GGSocketServer<TContext, Query> {
     private readonly queryValidator: GGValidator<Query>;
 
     private readonly activeSockets: Set<GGSocket> = new Set();
-    private readonly onConnectionHandlers: Array<(socket: GGSocket, query: Query) => void> = [];
+    private readonly onConnectionHandlers: Array<(socket: GGSocket, query: Query) => Promise<void>> = [];
 
     // Capture context at construction - WebSocket events lose AsyncLocalStorage context
     private readonly scope: GGLocatorScope;
@@ -125,7 +125,7 @@ export class GGSocketServer<TContext, Query> {
             });
     }
 
-    public onConnection(handler: (socket: GGSocket, query: Query) => void): void {
+    public onConnection(handler: (socket: GGSocket, query: Query) => Promise<void>): void {
         this.onConnectionHandlers.push(handler);
     }
 
@@ -201,7 +201,7 @@ export class GGSocketServer<TContext, Query> {
                 // Run connection handlers inside the connectionScope so they can access context
                 for (const handler of this.onConnectionHandlers) {
                     try {
-                        handler(socket, queryArgs);
+                        await handler(socket, queryArgs);
                     } catch (error) {
                         GGLog.error(this, error);
                     }

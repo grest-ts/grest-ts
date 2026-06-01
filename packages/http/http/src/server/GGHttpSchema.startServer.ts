@@ -6,7 +6,7 @@
 import http from "http";
 import {GGLocator} from "@grest-ts/locator";
 import {ClientHttpRouteToRpcTransformServerCodec, GGHttpCodec, GGHttpSchema} from "../schema/GGHttpSchema";
-import {describePermission, ERROR, FORBIDDEN, GG_NO_PERMISSIONS, GGContractApiDefinition, GGContractImplementation, GGContractMethod, OK, satisfies, SERVER_ERROR} from "@grest-ts/schema";
+import {ERROR, GGContractApiDefinition, GGContractImplementation, GGContractMethod, OK, SERVER_ERROR} from "@grest-ts/schema";
 import {HttpMethod} from "@grest-ts/common";
 import {GG_DISCOVERY} from "@grest-ts/discovery";
 import {GGContext, GGContextStore, type GGTransportMiddleware} from "@grest-ts/context";
@@ -18,7 +18,7 @@ import {GGHttpMetrics} from "./GGHttpMetrics";
 import {GG_HTTP_SERVER} from "./GG_HTTP_SERVER";
 import {GGHttpServer} from "./GGHttpServer";
 import {GGLog} from "@grest-ts/logger";
-import {GGWireContextKey} from "../schema/GGWireContextKey";
+import {GGHttpPermissionsChecker} from "../schema/GGHttpPermissionsChecker";
 
 export interface GGHttpSchemaConfig {
     /**
@@ -70,15 +70,12 @@ function setupRoutes<TContract extends GGContractApiDefinition>(
     const scope = GGLocator.getScope();
     const parentContext = GGContextStore.tryGetContext();
 
-    const middlewaresWithPermissions: GGWireContextKey[] = []
+    const permissionsChecker = new GGHttpPermissionsChecker(apiMiddlewares);
     for (const mw of apiMiddlewares) {
         const hKeys = Object.keys(mw.headers ?? {});
         const rhKeys = Object.keys(mw.responseHeaders ?? {});
         if (hKeys.length) server.registerCorsHeaders(hKeys);
         if (rhKeys.length) server.registerCorsExposeHeaders(rhKeys);
-        if (mw instanceof GGWireContextKey && mw.hasPermissions()) {
-            middlewaresWithPermissions.push(mw);
-        }
     }
     for (const methodName in httpSchema.codec) {
         const codec: GGHttpCodec = httpSchema.codec[methodName];
@@ -130,16 +127,7 @@ function setupRoutes<TContract extends GGContractApiDefinition>(
                 try {
                     const rpcInput = await requestParser.parseRequest(req)
                     try {
-                        const scopes: Array<readonly string[]> = [];
-                        for (let i = 0; i < middlewaresWithPermissions.length; i++) {
-                            scopes.push(await middlewaresWithPermissions[i].permissions())
-                        }
-                        const required = contractFunctionSchema.permission
-                        if (required !== undefined && required !== GG_NO_PERMISSIONS && !satisfies(required, scopes)) {
-                            throw new FORBIDDEN({
-                                debugMessage: `${httpSchema.name}.${methodName} requires ${describePermission(required)} — caller scopes did not satisfy`
-                            })
-                        }
+                        await permissionsChecker.assert(httpSchema.name, methodName, contractFunctionSchema.permission)
                         rpcResult = {success: true, type: "OK", data: await implFn(rpcInput)}
                         // GGLog.debug(httpSchema, "Response", rpcResult) // This is very slow to log this (like 3x performance loss)
                     } catch (error: unknown) {

@@ -5,14 +5,12 @@
 
 import type {GGSocket} from "../socket/GGSocket"
 import {GGWebSocketSchema} from "../schema/GGWebSocketSchema";
-import {GGContextKey, type GGTransportMiddleware} from "@grest-ts/context";
+import {type GGTransportMiddleware} from "@grest-ts/context";
 import {GGSocketServer} from "./GGSocketServer";
 import {GGLocator} from "@grest-ts/locator";
 import {WebSocketIncoming, WebSocketOutgoing} from "../socket/WebSocketTypes";
-import {describePermission, FORBIDDEN, GG_NO_PERMISSIONS, GGPromise, IsAny, satisfies} from "@grest-ts/schema";
-import {GG_HTTP_SERVER, GGHttpServer, GGWireContextKey} from "@grest-ts/http";
-
-const HANDSHAKE_SCOPES = new GGContextKey<Array<readonly string[]>>("ws:handshake-scopes", IsAny as any);
+import {GG_HTTP_SERVER, GGHttpServer} from "@grest-ts/http";
+import {GGHttpPermissionsChecker} from "@grest-ts/http";
 
 export interface WebSocketSchemaConfig {
     /**
@@ -65,33 +63,8 @@ GGWebSocketSchema.prototype.startServer = function (
     http._registerWebSocketSchema(this as any);
 
     const connectPermission = this.connectPermission
-
-    // Smart wires on the schema ARE the scope resolver — same model as HTTP. Each wire's
-    // process() (run at handshake) mints its durable principal; permissions() yields the
-    // caller's grants.
-    const wires = this.middlewares.filter((mw): mw is GGWireContextKey => mw instanceof GGWireContextKey && mw.hasPermissions())
-
-    // Permission gate as a handshake middleware: runs after user middlewares
-    // (so identity is already in context), resolves scopes, caches them on
-    // HANDSHAKE_SCOPES for onConnection, and rejects the handshake with a typed
-    // FORBIDDEN if the connectPermission doesn't hold. The throw is caught by
-    // handleHandshake and surfaced to the client as a HANDSHAKE_ERR — not a
-    // silent disconnect.
+    const permissionsChecker = new GGHttpPermissionsChecker(this.middlewares);
     const middlewares: GGTransportMiddleware[] = [...this.middlewares, ...(config?.middlewares ?? [])]
-    middlewares.push({
-        async process() {
-            const scopes: Array<readonly string[]> = []
-            for (let i = 0; i < wires.length; i++) {
-                scopes.push(await wires[i].permissions())
-            }
-            HANDSHAKE_SCOPES.set(scopes)
-            if (connectPermission !== undefined && connectPermission !== GG_NO_PERMISSIONS && !satisfies(connectPermission, scopes)) {
-                throw new FORBIDDEN({
-                    debugMessage: `${schemaName} connection requires ${describePermission(connectPermission)} — caller scopes did not satisfy`,
-                })
-            }
-        },
-    })
 
     // @TODO We might want some lookup here based on path/middlewares etc. If I use same socket for multiple paths, we need to reuse also same GGSocketServer.
     const socketServer = new GGSocketServer(http, {
@@ -101,16 +74,10 @@ GGWebSocketSchema.prototype.startServer = function (
         queryValidator: this.queryValidator,
     });
 
-    socketServer.onConnection((socket: GGSocket, queryArgs: any) => {
+    socketServer.onConnection(async (socket: GGSocket, queryArgs: any): Promise<void> => {
         const clientToServerContract = contract.clientToServer
         const serverToClientContract = contract.serverToClient
-
-        // Handshake middleware (above) resolved scopes and cached them on
-        // HANDSHAKE_SCOPES for the lifetime of this connection. Capture them into a
-        // closure so per-message handlers gate without re-resolving — a 10-year-old
-        // socket keeps the scopes it was issued at handshake, never re-fetched.
-        const cachedScopes: Array<readonly string[]> = HANDSHAKE_SCOPES.get()
-
+        const scopesOnConnection = await permissionsChecker.assert(schemaName, "", connectPermission)
         const incoming: any = {
             on(handlers: any) {
                 const impl: Record<string, any> = {};
@@ -134,20 +101,12 @@ GGWebSocketSchema.prototype.startServer = function (
                     const methodDef = clientToServerContract.methods[methodName] as any
                     const required = methodDef.permission
                     const inner = (incomingInstance as any)[methodName]
-                    const requiresGate = required !== undefined && required !== GG_NO_PERMISSIONS
-                    const wrapped = !requiresGate
-                        ? inner
-                        : (data: any) => {
-                            if (!satisfies(required, cachedScopes)) {
-                                return new GGPromise(Promise.resolve(new FORBIDDEN({
-                                    debugMessage: `${schemaName}.${methodName} requires ${describePermission(required)} — caller scopes did not satisfy`
-                                })))
-                            }
-                            return inner(data)
-                        }
                     socket.registerHandler({
                         path: `${schemaName}.${methodName}`,
-                        handler: wrapped
+                        handler: (data: any) => {
+                            permissionsChecker.assertScopes(schemaName, methodName, scopesOnConnection, required)
+                            return inner(data)
+                        }
                     });
                 }
             }

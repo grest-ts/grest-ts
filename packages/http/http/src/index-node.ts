@@ -3,6 +3,7 @@ import "./_dedupCheck";
 import {_registerRpcServerCodecFactory} from "./rpc/GGHttpRouteRPC";
 import {GGRpcResponseBuilder} from "./rpc/RpcResponse/GGRpcResponseBuilder";
 import {GGRpcRequestParser} from "./rpc/RpcRequest/GGRpcRequestParser";
+
 _registerRpcServerCodecFactory((method, path, config) => ({
     parseRequest: new GGRpcRequestParser(method, path, config).parseRequest,
     sendResponse: new GGRpcResponseBuilder(config).sendResponse
@@ -36,6 +37,7 @@ export * from "./server/GGHttpServer";
 export * from "./server/GG_HTTP_SERVER";
 export * from "./server/applyResponseMiddleware";
 export * from "./server/applyRequestMiddleware";
+export * from "./schema/GGHttpPermissionsChecker";
 
 // Client
 export * from "./client/GGContextKeySynchronizer";
