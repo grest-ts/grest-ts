@@ -14,8 +14,6 @@ export type {AccessPayload, AuthTokenOptions, NoClaims, RefreshedGrant} from "./
 export {IsGGRefreshToken, IsGGRefreshTokenData, IsGGAccessToken, IsGGAccessTokenData, IsGGAuthTokenResult, IsGGAuthTokensResult} from "./shared/tokenSchemas"
 export type {GGAuthTokenResult, GGAuthTokensResult} from "./shared/tokenSchemas"
 
-export {permissionsChecker} from "./node/permissions"
-
 export {GoogleIdp} from "./node/idp/idp/google/GoogleIdp"
 export type {GoogleIdpOptions} from "./node/idp/idp/google/GoogleIdp"
 export {OidcIdp} from "./node/idp/OidcIdp"

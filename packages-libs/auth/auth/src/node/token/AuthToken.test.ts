@@ -1,6 +1,6 @@
 import {describe, test, expect} from "vitest"
 import {IsBoolean, IsEnum, IsObject, IsString} from "@grest-ts/schema"
-import {AuthError, AuthToken, HmacSigner, InMemoryRefreshTokenStore, IsRefreshTokenRecord, permissionsChecker} from "../../index-node"
+import {AuthError, AuthToken, HmacSigner, InMemoryRefreshTokenStore, IsRefreshTokenRecord} from "../../index-node"
 
 enum Perm {
     Read = "read",
@@ -58,20 +58,6 @@ describe("AuthToken — access", () => {
         const auth = permToken({accessTtlMs: -1000})
         const pair = await auth.issue("user-1", [Perm.Read], {})
         await expect(auth.verifyAccess(pair.access.token)).rejects.toMatchObject({code: "TOKEN_EXPIRED"})
-    })
-})
-
-describe("AuthToken — permissions bridge to grest-ts", () => {
-    test("permissionsChecker uses satisfies() for string / allOf / anyOf", async () => {
-        const auth = permToken()
-        const pair = await auth.issue("user-1", [Perm.Read, Perm.Write], {})
-        const payload = await auth.verifyAccess(pair.access.token)
-        const checker = permissionsChecker(payload.permissions)
-        expect(checker.has(Perm.Read)).toBe(true)
-        expect(checker.has(Perm.Admin)).toBe(false)
-        expect(checker.has({allOf: [Perm.Read, Perm.Write]})).toBe(true)
-        expect(checker.has({allOf: [Perm.Read, Perm.Admin]})).toBe(false)
-        expect(checker.has({anyOf: [Perm.Admin, Perm.Read]})).toBe(true)
     })
 })
 
