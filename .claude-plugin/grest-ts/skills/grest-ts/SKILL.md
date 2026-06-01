@@ -631,6 +631,7 @@ Read these only when you need package-specific detail (exact API, options, advan
 
 - **@grest-ts/api-docs** — `packages/api-docs/README.md`
 - **@grest-ts/asyncapi** — `packages/asyncapi/README.md`
+- **@grest-ts/auth** — `packages/auth/README.md`
 - **@grest-ts/cli** — `packages/cli/README.md`
 - **@grest-ts/common** — `packages/common/README.md`
 - **@grest-ts/config** — `packages/config/README-extending.md`, `packages/config/README.md`

@@ -44,7 +44,7 @@
         "testkit": false,
         "hidden": false,
         "implementation": false,
-        "npm": false
+        "npm": true
       },
       "layer": 0,
       "color": "#59A14F",
