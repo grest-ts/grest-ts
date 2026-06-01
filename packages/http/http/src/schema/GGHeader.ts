@@ -1,5 +1,5 @@
 import {type GGContextKey, type GGInbound, type GGOutbound} from "@grest-ts/context"
-import {IsString, type GGSchema} from "@grest-ts/schema"
+import {type GGSchema, IsString} from "@grest-ts/schema"
 import {GGWireContextKey, type GGWireDumbOptions, type GGWireSmartOptions} from "./GGWireContextKey"
 
 const BEARER = "Bearer "
@@ -26,22 +26,21 @@ export class GGHeader<P extends string = never> extends GGWireContextKey<P> {
         this.headers = {[this.wireName]: IsString.orUndefined}
     }
 
-    private unwrap(raw: string | undefined): string | undefined {
-        if (raw === undefined) return undefined
-        return this.scheme === "bearer" && raw.startsWith(BEARER) ? raw.slice(BEARER.length) : raw
-    }
-
-    private wrap(value: string): string {
-        return this.scheme === "bearer" ? `${BEARER}${value}` : value
-    }
-
     public parse(inbound: GGInbound): void {
-        const value = this.unwrap(inbound.headers[this.wireName])
-        if (value !== undefined) this.target.set(value)
+        const raw = inbound.headers[this.wireName];
+        if (raw === undefined) {
+            return undefined
+        }
+        const value = this.scheme === "bearer" && raw.startsWith(BEARER) ? raw.slice(BEARER.length) : raw
+        if (value !== undefined) {
+            this.target.set(value)
+        }
     }
 
     public update(outbound: GGOutbound): void {
         const value = this.outboundValue()
-        if (value !== undefined) outbound.headers[this.wireName] = this.wrap(value)
+        if (value !== undefined) {
+            outbound.headers[this.wireName] = (this.scheme === "bearer" ? `${BEARER}${value}` : value)
+        }
     }
 }
