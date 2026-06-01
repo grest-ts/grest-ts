@@ -13,7 +13,7 @@ class TestWire extends GGWireContextKey {
         return this.grants !== null;
     }
 
-    public async permissions(): Promise<readonly string[]> {
+    public async getGrantedPermissions(): Promise<readonly string[]> {
         return this.grants ?? [];
     }
 }
@@ -90,20 +90,20 @@ describe("GGHttpPermissionsChecker", () => {
         const checker = new GGHttpPermissionsChecker([]);
 
         it("passes when scopes satisfy the requirement", () => {
-            expect(() => checker.assertScopes("Api", "method", [["x"]], "x")).not.toThrow();
+            expect(() => checker.assertGrants("Api", "method", [["x"]], "x")).not.toThrow();
         });
 
         it("throws FORBIDDEN when scopes do not satisfy", () => {
-            expect(() => checker.assertScopes("Api", "method", [["x"]], "y")).toThrow(FORBIDDEN);
+            expect(() => checker.assertGrants("Api", "method", [["x"]], "y")).toThrow(FORBIDDEN);
         });
 
         it("throws FORBIDDEN when scopes are undefined and a real permission is required", () => {
-            expect(() => checker.assertScopes("Api", "method", undefined, "y")).toThrow(FORBIDDEN);
+            expect(() => checker.assertGrants("Api", "method", undefined, "y")).toThrow(FORBIDDEN);
         });
 
         it("debug message includes schema.method and the described requirement", () => {
             try {
-                checker.assertScopes("Api", "method", [["x"]], "y");
+                checker.assertGrants("Api", "method", [["x"]], "y");
                 expect.unreachable();
             } catch (e) {
                 expect(e).toBeInstanceOf(FORBIDDEN);
@@ -114,7 +114,7 @@ describe("GGHttpPermissionsChecker", () => {
 
         it("omits the dot when method is empty (WS connect gate)", () => {
             try {
-                checker.assertScopes("Api", "", undefined, "y");
+                checker.assertGrants("Api", "", undefined, "y");
                 expect.unreachable();
             } catch (e) {
                 expect((e as InstanceType<typeof FORBIDDEN>).getDebugContext()?.debugMessage).toContain("Api requires");

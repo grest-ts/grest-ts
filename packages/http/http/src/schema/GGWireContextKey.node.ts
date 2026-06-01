@@ -75,7 +75,7 @@ declare module "./GGWireContextKey" {
         hasPermissions(): boolean;
 
         /** @internal permission-gate hook — the caller's grants from this wire. */
-        permissions(): Promise<readonly string[]>
+        getGrantedPermissions(): Promise<readonly string[]>
 
         /** @internal startup validation — true once .create() has run on the current runtime scope. */
         hasHandler(): boolean
@@ -104,7 +104,7 @@ GGWireContextKey.prototype.hasPermissions = function (): boolean {
     return !!handler.permissions
 }
 
-GGWireContextKey.prototype.permissions = async function () {
+GGWireContextKey.prototype.getGrantedPermissions = async function () {
     if (!this.hasHandler()) return []
     const handler = resolveHandler(this)
     return handler.permissions ? await handler.permissions() : []

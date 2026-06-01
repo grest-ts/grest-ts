@@ -18,14 +18,14 @@ export class GGHttpPermissionsChecker {
     public async assert(schema: string, method: string, required: GGPermission): Promise<ReadonlyArray<ReadonlyArray<string>>> {
         const scopes: Array<readonly string[]> = [];
         for (let i = 0; i < this.middlewaresWithPermissions.length; i++) {
-            scopes.push(await this.middlewaresWithPermissions[i].permissions())
+            scopes.push(await this.middlewaresWithPermissions[i].getGrantedPermissions())
         }
-        this.assertScopes(schema, method, scopes, required)
+        this.assertGrants(schema, method, scopes, required)
         return Object.freeze(scopes) as readonly string[][]
     }
 
-    public assertScopes(schema: string, method: string, scopes: undefined | ReadonlyArray<ReadonlyArray<string>>, required: GGPermission): void {
-        if (!GGPermissionChecker.satisfies(required, scopes)) {
+    public assertGrants(schema: string, method: string, granted: undefined | ReadonlyArray<ReadonlyArray<string>>, required: GGPermission): void {
+        if (!GGPermissionChecker.satisfies(required, granted)) {
             throw new FORBIDDEN({
                 debugMessage: `${schema + (method ? "." + method : "")} requires ${GGPermissionChecker.describePermission(required)} — caller scopes did not satisfy`
             })

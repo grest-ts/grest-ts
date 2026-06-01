@@ -4,21 +4,21 @@ const MAX_DEPTH = 3;
 
 export class GGPermissionChecker {
 
-    public static satisfies(required: GGPermission, scopes: undefined | ReadonlyArray<ReadonlyArray<string>>): boolean {
+    public static satisfies(required: GGPermission, granted: undefined | ReadonlyArray<ReadonlyArray<string>>): boolean {
         if (required === GG_NO_PERMISSIONS || required === undefined) return true
-        if (required === GG_ANY_PERMISSION) return scopes?.length > 0
+        if (required === GG_ANY_PERMISSION) return granted?.length > 0
         if (typeof required === "string") {
-            if (scopes === undefined || scopes.length === 0) return false;
-            for (let i = 0; i < scopes.length; i++) {
-                if (scopes[i].indexOf(required) >= 0) {
+            if (granted === undefined || granted.length === 0) return false;
+            for (let i = 0; i < granted.length; i++) {
+                if (granted[i].indexOf(required) >= 0) {
                     return true;
                 }
             }
             return false
         }
         if (required && typeof required === "object") {
-            if ("allOf" in required) return required.allOf.every(p => this.satisfies(p, scopes))
-            if ("anyOf" in required) return required.anyOf.some(p => this.satisfies(p, scopes))
+            if ("allOf" in required) return required.allOf.every(p => this.satisfies(p, granted))
+            if ("anyOf" in required) return required.anyOf.some(p => this.satisfies(p, granted))
         }
         return false
     }
