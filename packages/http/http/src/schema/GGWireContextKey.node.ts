@@ -71,6 +71,9 @@ declare module "./GGWireContextKey" {
         /** @internal server pipeline hook — verify the credential and mint the durable principal. */
         process(): Promise<void>
 
+        /** @internal If wire is handling permissions **/
+        hasPermissions(): boolean;
+
         /** @internal permission-gate hook — the caller's grants from this wire. */
         permissions(): Promise<readonly string[]>
 
@@ -93,6 +96,12 @@ GGWireContextKey.prototype.define = function (factory) {
 GGWireContextKey.prototype.process = async function () {
     if (!this.hasHandler()) return
     await resolveHandler(this).process()
+}
+
+GGWireContextKey.prototype.hasPermissions = function (): boolean {
+    if (!this.hasHandler()) return false
+    const handler = resolveHandler(this)
+    return !!handler.permissions
 }
 
 GGWireContextKey.prototype.permissions = async function () {

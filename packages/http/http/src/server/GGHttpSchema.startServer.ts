@@ -72,7 +72,9 @@ function setupRoutes<TContract extends GGContractApiDefinition>(
 
     // Smart wires on the schema ARE the scope resolver (each wire's process() already verified
     // identity, permissions() yields the grants).
-    const wires = apiMiddlewares.filter((mw): mw is GGWireContextKey => mw instanceof GGWireContextKey) // @TODO Should filter to only those wires that actually provide permissions.
+    const wires = apiMiddlewares.filter((mw): mw is GGWireContextKey => {
+        return mw instanceof GGWireContextKey && mw.hasPermissions()
+    }) // @TODO Should filter to only those wires that actually provide permissions.
 
     for (const mw of apiMiddlewares) {
         const hKeys = Object.keys(mw.headers ?? {});
