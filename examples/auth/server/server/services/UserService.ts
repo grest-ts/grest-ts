@@ -1,8 +1,8 @@
 import {EXISTS, GGContractImplementation, NOT_AUTHORIZED, NOT_FOUND} from "@grest-ts/schema"
-import {AuthToken} from "@grest-ts/auth"
-import {AuthPublicApiContract, InvalidCredentialsError, RegisterRequest, LoginRequest, RefreshRequest, AuthResponse, TokenPairResponse} from "../../../api/AuthPublicApi"
-import {UserApiContract, UpdateProfileRequest} from "../../../api/UserApi"
-import {UserPermission, tUserId, User} from "../../../api/auth/UserAuth"
+import {GGAuthToken} from "@grest-ts/auth"
+import {AuthPublicApiContract, AuthResponse, InvalidCredentialsError, LoginRequest, RefreshRequest, RegisterRequest, TokenPairResponse} from "../../../api/AuthPublicApi"
+import {UpdateProfileRequest, UserApiContract} from "../../../api/UserApi"
+import {tUserId, User, UserPermission} from "../../../api/auth/UserAuth"
 import {USER_DATA} from "../auth/UserAuthHandler"
 import {UserTable} from "../tables/UserTable"
 
@@ -14,7 +14,7 @@ export class UserService implements GGContractImplementation<typeof AuthPublicAp
     private readonly table = new UserTable()
     private onProfileUpdated: ((user: User) => void) | undefined
 
-    constructor(private readonly tokenEngine: AuthToken<UserPermission>) {
+    constructor(private readonly tokenEngine: GGAuthToken<User>) {
     }
 
     public setOnProfileUpdatedCallback(cb: (user: User) => void): void {
@@ -28,7 +28,7 @@ export class UserService implements GGContractImplementation<typeof AuthPublicAp
             permissions: BANNER_USERS.has(request.username) ? [UserPermission.CAN_UPDATE_RED_BANNER_COUNTER] : []
         })
         return {
-            ...(await this.tokenEngine.issue(record.id, record.permissions, {})),
+            ...(await this.tokenEngine.issue(record.id, record)),
             data: record
         }
     }
@@ -37,16 +37,14 @@ export class UserService implements GGContractImplementation<typeof AuthPublicAp
         const record = this.table.findByUsername(request.username)
         if (!record || record.password !== request.password) throw new InvalidCredentialsError()
         return {
-            ...(await this.tokenEngine.issue(record.id, record.permissions, {})),
+            ...(await this.tokenEngine.issue(record.id, record)),
             data: record
         }
     }
 
     public refresh = async ({refreshToken}: RefreshRequest): Promise<TokenPairResponse> => {
         return await this.tokenEngine.refresh(refreshToken, async (subject) => {
-            const record = this.table.getRecord(subject as tUserId)
-            if (!record) throw new NOT_AUTHORIZED()
-            return {permissions: record.permissions, claims: {}}
+            return this.table.getRecord(subject as tUserId)
         })
     }
 

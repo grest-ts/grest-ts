@@ -46,7 +46,7 @@ describe("AuthToken — access", () => {
             signer: new HmacSigner("secret-secret-secret-secret-secret"),
             store: new InMemoryRefreshTokenStore(),
             permission: IsPerm,
-            claims: IsObject({orgId: IsString, admin: IsBoolean}),
+            claimSchema: IsObject({orgId: IsString, admin: IsBoolean}),
             accessTtlMs: 60_000,
             refreshTtlMs: 60_000,
         })

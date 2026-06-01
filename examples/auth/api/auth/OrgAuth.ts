@@ -11,16 +11,11 @@ export const IsOrgPermission = IsEnum(OrgPermission)
 export const IsOrgId = IsString.brand("OrgId")
 export type tOrgId = typeof IsOrgId.infer
 
-export const IsOrgClaims = IsObject({
-    orgId: IsOrgId,
-    permissions: IsOrgPermission
-})
-export type OrgClaims = typeof IsOrgClaims.infer
-
 export const IsOrg = IsObject({
     id: IsOrgId,
     name: IsString,
-    description: IsString
+    description: IsString,
+    permissions: IsOrgPermission
 })
 export type Org = typeof IsOrg.infer
 

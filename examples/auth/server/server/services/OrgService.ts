@@ -1,8 +1,7 @@
 import {FORBIDDEN, GGContractImplementation, NOT_AUTHORIZED, NOT_FOUND} from "@grest-ts/schema"
-import {AuthToken} from "@grest-ts/auth"
-import {OrgApiContract, SelectOrgRequest, SelectOrgResponse} from "../../../api/OrgApi"
-import {OrgScopedApiContract} from "../../../api/OrgApi"
-import {OrgClaims, OrgPermission, Org} from "../../../api/auth/OrgAuth"
+import {GGAuthToken} from "@grest-ts/auth"
+import {OrgApiContract, OrgScopedApiContract, SelectOrgRequest, SelectOrgResponse} from "../../../api/OrgApi"
+import {Org} from "../../../api/auth/OrgAuth"
 import {ORG_USER} from "../auth/OrgAuthHandler"
 import {USER_DATA} from "../auth/UserAuthHandler"
 import {OrgTable} from "../tables/OrgTable"
@@ -11,7 +10,8 @@ export class OrgService implements GGContractImplementation<typeof OrgApiContrac
     GGContractImplementation<typeof OrgScopedApiContract["methods"]> {
     private readonly table = new OrgTable()
 
-    constructor(private readonly orgTokenEngine: AuthToken<OrgPermission, OrgClaims>) {}
+    constructor(private readonly orgTokenEngine: GGAuthToken<Org>) {
+    }
 
     public listOrgs = async (): Promise<Org[]> => {
         return this.table.getForUser(USER_DATA.get()!.username)
@@ -24,8 +24,10 @@ export class OrgService implements GGContractImplementation<typeof OrgApiContrac
         }
         const org = this.table.get(request.orgId)
         if (!org) throw new FORBIDDEN({displayMessage: "Org not found"})
-        const {access} = await this.orgTokenEngine.issueAccess(user.id, [OrgPermission.ORG_MEMBER], {orgId: request.orgId})
-        return {access, data: org}
+        return {
+            ...(await this.orgTokenEngine.issueAccess(user.id, org)),
+            data: org
+        }
     }
 
     public orgInfo = async (): Promise<Org> => {
