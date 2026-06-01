@@ -1,6 +1,6 @@
 import {describe, test, expect} from "vitest"
 import {IsBoolean, IsEnum, IsObject, IsString, NOT_AUTHORIZED} from "@grest-ts/schema"
-import {AuthToken, HmacSigner, InMemoryRefreshTokenStore, IsRefreshTokenRecord} from "../../index-node"
+import {GGAuthToken, HmacSigner, InMemoryRefreshTokenStore, IsRefreshTokenRecord} from "../../index-node"
 
 enum Perm {
     Read = "read",
@@ -22,7 +22,7 @@ async function expectAuthError(p: Promise<unknown>, code: string): Promise<void>
 }
 
 function permToken(overrides: {accessTtlMs?: number; refreshTtlMs?: number} = {}) {
-    return new AuthToken({
+    return new GGAuthToken({
         signer: new HmacSigner("unit-test-secret-which-is-long-enough"),
         store: new InMemoryRefreshTokenStore(),
         permission: IsPerm,
@@ -42,7 +42,7 @@ describe("AuthToken — access", () => {
     })
 
     test("extra claims (C) ride along, opaque to the engine", async () => {
-        const auth = new AuthToken({
+        const auth = new GGAuthToken({
             signer: new HmacSigner("secret-secret-secret-secret-secret"),
             store: new InMemoryRefreshTokenStore(),
             permission: IsPerm,
@@ -142,7 +142,7 @@ describe("AuthToken — refresh", () => {
 
 describe("AuthToken — audience", () => {
     function audienceToken(audience: string) {
-        return new AuthToken({
+        return new GGAuthToken({
             signer: new HmacSigner("unit-test-secret-which-is-long-enough"),
             store: new InMemoryRefreshTokenStore(),
             permission: IsPerm,
@@ -162,7 +162,7 @@ describe("AuthToken — audience", () => {
 
 describe("AuthToken — access-only (no store)", () => {
     function accessOnlyToken() {
-        return new AuthToken({
+        return new GGAuthToken({
             signer: new HmacSigner("unit-test-secret-which-is-long-enough"),
             permission: IsPerm,
             accessTtlMs: 15 * 60 * 1000,

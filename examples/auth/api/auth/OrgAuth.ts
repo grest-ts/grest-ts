@@ -5,15 +5,17 @@ import {IsArray, IsEnum, IsObject, IsString} from "@grest-ts/schema"
 export enum OrgPermission {
     ORG_MEMBER = "ORG_MEMBER",
 }
-export const IsOrgPermission = IsEnum(OrgPermission)
 
-// Claims carried inside the org JWT alongside permissions.
-export interface OrgClaims {
-    orgId: tOrgId
-}
+export const IsOrgPermission = IsEnum(OrgPermission)
 
 export const IsOrgId = IsString.brand("OrgId")
 export type tOrgId = typeof IsOrgId.infer
+
+export const IsOrgClaims = IsObject({
+    orgId: IsOrgId,
+    permissions: IsOrgPermission
+})
+export type OrgClaims = typeof IsOrgClaims.infer
 
 export const IsOrg = IsObject({
     id: IsOrgId,

@@ -14,11 +14,20 @@ export type ANY_ERROR = ERROR<any, any>
 export type ANY_RESULT = OK<any> | ANY_ERROR
 
 export interface GGErrorData {
+    /**
+     * This message survives network etc calls. Users can see it.
+     */
     displayMessage?: string
     timestamp?: number
+    /**
+     * unique identifier for the error. Randomly generated, don't set it if you don't have to.
+     */
     ref?: string
 }
 
+/**
+ * These items are hidden when crossing network boundaries. Useful for internal logs that can be matched using REF.
+ */
 export interface GGDebugData {
     debugMessage?: string
     debugData?: any

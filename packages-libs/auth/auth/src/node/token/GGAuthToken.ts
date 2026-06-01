@@ -5,9 +5,9 @@ import {IsRefreshTokenRecord, type RefreshTokenStore} from "../refresh/RefreshTo
 import {IsGGAccessTokenData, IsGGRefreshTokenData} from "../../shared/tokenSchemas"
 import type {GGAuthTokensResult, GGAuthTokenResult} from "../../shared/tokenSchemas"
 
-export type NoClaims = Record<string, never>
+export type GGNoClaims = Record<string, never>
 
-export type AccessPayload<P extends string, C extends object> = C & {
+export type GGAccessPayload<P extends string, C extends object> = C & {
     sub: string
     permissions: P[]
     /** seconds (JWT convention). */
@@ -16,7 +16,7 @@ export type AccessPayload<P extends string, C extends object> = C & {
     exp: number
 }
 
-export interface AuthTokenOptions<P extends string, C extends object> {
+export interface GGAuthTokenOptions<P extends string, C extends object> {
     signer: SigningStrategy
     // Omit for an access-only kind (issueAccess + verifyAccess only); required by issue/refresh/revoke.
     store?: RefreshTokenStore
@@ -33,7 +33,7 @@ export interface AuthTokenOptions<P extends string, C extends object> {
 }
 
 /** What `refresh` re-derives for a subject so a new token reflects current state. */
-export interface RefreshedGrant<P extends string, C extends object> {
+export interface GGRefreshedGrant<P extends string, C extends object> {
     permissions: P[]
     claims: C
 }
@@ -41,7 +41,7 @@ export interface RefreshedGrant<P extends string, C extends object> {
 // Generic over permission `P` and claims `C`, and unaware of org/global/tenant.
 // A dependency between kinds (e.g. org-token-requires-user-token) is app code
 // calling verifyAccess before issue — never modelled here.
-export class AuthToken<P extends string, C extends object = NoClaims> {
+export class GGAuthToken<P extends string, C extends object = GGNoClaims> {
 
     private readonly signer: SigningStrategy
     private readonly store: RefreshTokenStore | undefined
@@ -53,7 +53,7 @@ export class AuthToken<P extends string, C extends object = NoClaims> {
     private readonly now: () => number
     private readonly randomToken: () => string
 
-    constructor(options: AuthTokenOptions<P, C>) {
+    constructor(options: GGAuthTokenOptions<P, C>) {
         this.signer = options.signer
         this.store = options.store
         this.permissions = IsArray(options.permission)
@@ -78,7 +78,7 @@ export class AuthToken<P extends string, C extends object = NoClaims> {
         }
     }
 
-    public verifyAccess = async (accessToken: string): Promise<AccessPayload<P, C>> => {
+    public verifyAccess = async (accessToken: string): Promise<GGAccessPayload<P, C>> => {
         const payload = await this.signer.verify(accessToken)
         const sub = payload["sub"]
         if (typeof sub !== "string") throw new NOT_AUTHORIZED({debugMessage: "TOKEN_INVALID: missing sub"})
@@ -93,7 +93,7 @@ export class AuthToken<P extends string, C extends object = NoClaims> {
             permissions,
             iat: Number(payload["iat"]),
             exp: Number(payload["exp"]),
-        } as AccessPayload<P, C>
+        } as GGAccessPayload<P, C>
     }
 
     // Redeem a refresh token for a fresh pair; the presented token is rotated out (marked
@@ -102,7 +102,7 @@ export class AuthToken<P extends string, C extends object = NoClaims> {
     // changes take effect on refresh, not just re-login.
     public refresh = async (
         refreshToken: string,
-        resolve: (subject: string) => Promise<RefreshedGrant<P, C>>,
+        resolve: (subject: string) => Promise<GGRefreshedGrant<P, C>>,
     ): Promise<GGAuthTokensResult> => {
         const store = this.requireStore()
         const hash = this.hash(refreshToken)
