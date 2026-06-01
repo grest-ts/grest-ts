@@ -130,12 +130,9 @@ function setupRoutes<TContract extends GGContractApiDefinition>(
                 try {
                     const rpcInput = await requestParser.parseRequest(req)
                     try {
-                        const scopes = new Set<string>() // @TODO Is Set really good for most cases here? Every request making a Set does not seem optimal.
+                        const scopes: Array<readonly string[]> = [];
                         for (let i = 0; i < middlewaresWithPermissions.length; i++) {
-                            const permissions = await middlewaresWithPermissions[i].permissions();
-                            for (let p = 0; p < permissions.length; p++) {
-                                scopes.add(permissions[p])
-                            }
+                            scopes.push(await middlewaresWithPermissions[i].permissions())
                         }
                         const required = contractFunctionSchema.permission
                         if (required !== undefined && required !== GG_NO_PERMISSIONS && !satisfies(required, scopes)) {
