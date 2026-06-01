@@ -39,6 +39,11 @@ export interface GGWireServerHandler {
 const HANDLER_KEYS = new WeakMap<GGWireContextKey, GGLocatorKey<GGWireServerHandler>>()
 const FACTORIES = new WeakMap<GGWireContextKey, unknown>()
 
+// Locator keys resolve by their string name, so the handler key must be unique per wire
+// instance — two wires over the same name (e.g. a public ambient cookie and a gated one
+// over the same cookie name) must not share a handler.
+let nextWireHandlerId = 0
+
 /** True once .define() has run on this wire — distinguishes verified wires from ambient ones. */
 export function wireIsDefined(wire: GGWireContextKey): boolean {
     return FACTORIES.has(wire)
@@ -47,7 +52,7 @@ export function wireIsDefined(wire: GGWireContextKey): boolean {
 function handlerKeyFor(wire: GGWireContextKey): GGLocatorKey<GGWireServerHandler> {
     let key = HANDLER_KEYS.get(wire)
     if (!key) {
-        key = new GGLocatorKey<GGWireServerHandler>(`wire:${wire.name}`)
+        key = new GGLocatorKey<GGWireServerHandler>(`wire:${wire.name}:${nextWireHandlerId++}`)
         HANDLER_KEYS.set(wire, key)
     }
     return key

@@ -20,9 +20,9 @@ import {QuerySocketApi} from "./api/QuerySocketApi"
 import {EventsTestApi} from "./api/EventsTestApi"
 import {LanguageTestApi} from "./api/LanguageTestApi"
 import {MiddlewareTestApi} from "./api/MiddlewareTestApi"
-import {CookieTestApi, SESSION_HANDLER} from "./api/CookieTestApi"
+import {CookieTestApi} from "./api/CookieTestApi"
 import {CookieTestService} from "./services/CookieTestService"
-import {WsCookieApi} from "./api/WsCookieApi"
+import {WsCookieApi, WS_SESSION_HANDLER} from "./api/WsCookieApi"
 import {WsCookieService} from "./services/WsCookieService"
 import {FileUploadTestApi} from "./api/FileUploadTestApi"
 import {BenchmarkApi} from "./api/BenchmarkApi"
@@ -108,13 +108,13 @@ export class MainRuntime extends GGRuntime {
         new GGHttp(httpServer)
             .http(PermissionsApi, new PermissionsTestService());
 
-        // Cookie API — the SESSION cookie wire mints SESSION_VALUE from the incoming Cookie
-        // and derives scopes; handlers emit Set-Cookie via GGCookie.setCookie(SESSION, …).
-        SESSION_HANDLER.create({});
+        // Cookie API — SESSION is an ambient cookie wire (no handler): public routes read
+        // SESSION.get() directly and emit Set-Cookie via GGCookie.setCookie(SESSION, …).
         CookieTestApi.register(new CookieTestService());
 
-        // WS cookie API — the SAME SESSION cookie wire, read from the browser's upgrade Cookie.
-        // connectPermission gates on the scopes that wire derives from the cookie.
+        // WS cookie API — its own required-throw session wire over the same "session" cookie:
+        // a missing cookie rejects the handshake with NOT_AUTHORIZED (401).
+        WS_SESSION_HANDLER.create({});
         WsCookieApi.register(new WsCookieService().handleConnection);
 
         // WebSocket permission test fixtures — same x-test-scopes wire as the HTTP gate.

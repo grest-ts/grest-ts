@@ -1,4 +1,6 @@
 import {defineSocketContract, webSocketSchema} from "@grest-ts/websocket"
+import {GGContextKey} from "@grest-ts/context"
+import {GGCookie} from "@grest-ts/http"
 import {
     FORBIDDEN,
     GG_NO_PERMISSIONS,
@@ -9,9 +11,25 @@ import {
     SERVER_ERROR,
 } from "@grest-ts/schema"
 import {AppPermission} from "./PermissionsApi"
-// The SAME cookie key (and handler) the HTTP CookieTestApi binds — one wire, two transports.
-// Its process() mints SESSION_VALUE and derives the connection scopes from the cookie.
-import {SESSION} from "./CookieTestApi"
+
+// WsCookieApi's own credential wire over the same "session" cookie. Unlike CookieTestApi's
+// ambient SESSION, this one is required-or-throw: a missing cookie is unauthenticated, so
+// process() rejects the handshake with 401 rather than resolving to no scopes.
+const WS_SESSION = new GGCookie("session")
+export const WS_SESSION_VALUE = new GGContextKey<string | undefined>("ws-session-value", IsString.orUndefined)
+
+export const WS_SESSION_HANDLER = WS_SESSION.define(() => ({
+    process: async () => {
+        const v = WS_SESSION.get()
+        if (v === undefined) throw new NOT_AUTHORIZED({debugMessage: "no session cookie"})
+        WS_SESSION_VALUE.set(v)
+    },
+    permissions: async () => {
+        const s = WS_SESSION_VALUE.get()
+        if (!s) return []
+        return s.includes("admin") ? [AppPermission.Admin, AppPermission.Read] : [AppPermission.Read]
+    },
+}))
 
 export const WsCookieApiContract = defineSocketContract("WsCookieApi", {
     clientToServer: {
@@ -31,11 +49,11 @@ export const WsCookieApiContract = defineSocketContract("WsCookieApi", {
     serverToClient: {},
 })
 
-// .connectPermission(Read) is the "allowSocketConnection" gate: a connection with no
-// session cookie resolves to no scopes and is rejected at the handshake (FORBIDDEN).
+// WS_SESSION.process() throws NOT_AUTHORIZED on a missing cookie (401, unauthenticated);
+// connectPermission(Read) then gates the authenticated connection's scopes.
 export const WsCookieApi = webSocketSchema(WsCookieApiContract)
     .path("ws/cookie-test")
-    .use(SESSION)
+    .use(WS_SESSION)
     .connectPermission(AppPermission.Read)
     .done()
 
