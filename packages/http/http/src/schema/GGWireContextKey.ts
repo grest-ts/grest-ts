@@ -12,24 +12,16 @@ export interface GGWireClientHandler {
     recover?: () => Promise<void>
 }
 
-export interface GGWireSmartOptions {
-    scheme?: "bearer"
-}
-
-export interface GGWireDumbOptions {
-    scheme?: "bearer"
-}
-
 const WIRE_SCHEMA = IsString.orUndefined
 
 /**
  * Base for credential wires (GGHeader, GGCookie). A wire IS a GGContextKey and a transport
- * middleware at once:
- *  - smart form (`{scheme?}`): the wire is the ephemeral key holding the raw
- *    inbound credential. It is verified into a durable key during process(), then clear()d
- *    before the handler runs — handlers read the durable key, never the credential.
- *  - dumb form (a context key passed in): ambient. Parsed values land in that key, persist
- *    through the handler, and need no implementation.
+ * middleware at once. Verified vs ambient is decided by whether `.define()` was called:
+ *  - verified (`.define()`d): the wire holds the raw inbound credential, which is verified
+ *    during process(), then clear()d before the handler runs — handlers read the durable key
+ *    minted by the handler, never the credential.
+ *  - ambient (never `.define()`d): the parsed value lands in the wire and persists through the
+ *    handler (read via WIRE.get()); no process, no clear, no implementation needed.
  *
  * The server/inbound half (define/create/process/permissions) is attached node-side via
  * ./GGWireContextKey.node — the browser bundle never pulls @grest-ts/locator.
@@ -39,30 +31,13 @@ export abstract class GGWireContextKey
     implements GGTransportMiddleware {
 
     public readonly wireName: string
-    public readonly isSmart: boolean
-    public readonly scheme?: "bearer"
-    /** Where parsed values land: `this` (smart, ephemeral) or the wrapped key (dumb, ambient). */
-    public readonly target: GGContextKey<string | undefined>
-    public readonly key: GGContextKey<string | undefined> | undefined
+    public isSmart = false
+    public readonly key: GGContextKey<string | undefined>
 
-    protected constructor(
-        name: string,
-        keyOrOptions: GGContextKey<string | undefined> | GGWireSmartOptions,
-        dumbOptions?: GGWireDumbOptions,
-    ) {
+    protected constructor(name: string) {
         super(name, WIRE_SCHEMA)
         this.wireName = name.toLowerCase()
-        if (keyOrOptions instanceof GGContextKey) {
-            this.isSmart = false
-            this.target = keyOrOptions
-            this.key = undefined
-            this.scheme = dumbOptions?.scheme
-        } else {
-            this.isSmart = true
-            this.scheme = keyOrOptions.scheme
-            this.target = this
-            this.key = this
-        }
+        this.key = this
     }
 
     private _clientHandler?: GGWireClientHandler
@@ -85,12 +60,12 @@ export abstract class GGWireContextKey
         }
     }
 
-    /** Outbound value to attach: the defineClient value() if set, else the ambient key value. */
+    /** Outbound value to attach: the defineClient value() if set, else the ambient wire value. */
     public outboundValue(): string | undefined {
-        return this._clientHandler ? this._clientHandler.value() : this.target.get()
+        return this._clientHandler ? this._clientHandler.value() : this.get()
     }
 
-    /** Drop the ephemeral raw credential after process(); ambient (dumb) wires keep their value. */
+    /** Drop the ephemeral raw credential after process(); ambient wires keep their value. */
     public clear(): void {
         if (this.isSmart && this.has()) this.delete()
     }

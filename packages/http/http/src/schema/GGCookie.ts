@@ -1,6 +1,6 @@
 import {GGContextKey, type GGInbound, type GGResponse} from "@grest-ts/context"
 import {IsAny, IsString, SERVER_ERROR, type GGSchema} from "@grest-ts/schema"
-import {GGWireContextKey, type GGWireSmartOptions} from "./GGWireContextKey"
+import {GGWireContextKey} from "./GGWireContextKey"
 
 /**
  * Per-request set of context-key names the current route is permitted to write a cookie
@@ -37,12 +37,12 @@ interface PendingCookie {
 }
 
 /**
- * A cookie bound to a context key.
+ * A cookie that IS its own context key.
  *
- *   // dumb: ambient — the named cookie's value lands in the passed key, no implementation needed.
- *   const SESSION_WIRE = new GGCookie("session_id", SESSION)
+ *   // ambient — the named cookie's value lands in the wire and persists, no implementation needed.
+ *   const SESSION_WIRE = new GGCookie("session_id")
  *
- * Reads ONLY the named cookie — never a header — from the inbound Cookie header into the key.
+ * Reads ONLY the named cookie — never a header — from the inbound Cookie header into the wire.
  * For HTTP that is the request Cookie; for WebSocket the real upgrade Cookie (the runtime fills
  * inbound.cookie from there, never from the spoofable in-band message). The cookie name is the
  * first constructor argument (case-sensitive — unlike a header it is not lowercased). To write
@@ -53,19 +53,19 @@ export class GGCookie extends GGWireContextKey {
 
     public readonly cookieParams: Record<string, GGSchema<string | undefined>>
 
-    constructor(name: string, keyOrOptions: GGContextKey<string | undefined> | GGWireSmartOptions) {
-        super(name, keyOrOptions)
+    constructor(name: string) {
+        super(name)
         _assertCookieSafe("name", this.name)
         this.cookieParams = {[this.name]: IsString.orUndefined}
     }
 
     public parse(inbound: GGInbound): void {
         const value = _readCookie(inbound.cookie, this.name)
-        if (value !== undefined) this.target.set(value)
+        if (value !== undefined) this.set(value)
     }
 
     public respond(res: GGResponse): void {
-        const pending = GG_COOKIE_PENDING.get()?.get(this.target.name)
+        const pending = GG_COOKIE_PENDING.get()?.get(this.name)
         if (pending === undefined) return
         const line = _serializeSetCookie(this.name, pending.value, pending.options)
         const existing = res.headers["set-cookie"]

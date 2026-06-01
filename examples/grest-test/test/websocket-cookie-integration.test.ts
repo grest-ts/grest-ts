@@ -11,7 +11,6 @@ import * as http from "http"
 import WebSocket from "ws"
 import {GGContext} from "@grest-ts/context"
 import {GG_TEST_RUNNER, GGTest} from "@grest-ts/testkit"
-import {GGCookie} from "@grest-ts/http"
 import {MainRuntime} from "../src/main"
 import {SESSION} from "../src/api/CookieTestApi"
 
@@ -19,26 +18,23 @@ describe("ws cookie binding (unit)", () => {
 
     const inContext = (fn: () => void) => new GGContext("ws-cookie-unit").run(fn)
 
-    test("parse reads the cookie from the upgrade Cookie header into the key", () => {
+    test("parse reads the cookie from the upgrade Cookie header into the wire", () => {
         inContext(() => {
-            const mw = new GGCookie(SESSION.name, SESSION)
-            mw.parse!({headers: {}, query: {}, cookie: "other=x; session=abc123; y=z"})
+            SESSION.parse!({headers: {}, query: {}, cookie: "other=x; session=abc123; y=z"})
             expect(SESSION.get()).toBe("abc123")
         })
     })
 
     test("a cookie absent from inbound.cookie (in-band only) is never read (no spoof)", () => {
         inContext(() => {
-            const mw = new GGCookie(SESSION.name, SESSION)
-            mw.parse!({headers: {cookie: "session=spoofed"}, query: {}})
+            SESSION.parse!({headers: {cookie: "session=spoofed"}, query: {}})
             expect(SESSION.get()).toBeUndefined()
         })
     })
 
-    test("no cookie → the key stays undefined", () => {
+    test("no cookie → the wire stays undefined", () => {
         inContext(() => {
-            const mw = new GGCookie(SESSION.name, SESSION)
-            mw.parse!({headers: {}, query: {}})
+            SESSION.parse!({headers: {}, query: {}})
             expect(SESSION.get()).toBeUndefined()
         })
     })

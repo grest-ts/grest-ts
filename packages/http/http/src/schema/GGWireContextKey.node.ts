@@ -93,6 +93,7 @@ GGWireContextKey.prototype.define = function (factory) {
         throw new Error(`Wire "${this.name}" already has .define() — it can only be defined once.`)
     }
     FACTORIES.set(this, factory)
+    this.isSmart = true
     return new GGWireHandlerRegistration(this, factory as any)
 }
 

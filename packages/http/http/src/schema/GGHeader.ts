@@ -1,28 +1,26 @@
-import {type GGContextKey, type GGInbound, type GGOutbound} from "@grest-ts/context"
+import {type GGInbound, type GGOutbound} from "@grest-ts/context"
 import {type GGSchema, IsString} from "@grest-ts/schema"
-import {GGWireContextKey, type GGWireDumbOptions, type GGWireSmartOptions} from "./GGWireContextKey"
+import {GGWireContextKey} from "./GGWireContextKey"
 
 const BEARER = "Bearer "
 
 /**
- * A request header bound to a context key.
+ * A request header that IS its own context key.
  *
- *   // smart: the wire IS the ephemeral key; requires .define() server-side.
+ *   // verified: requires .define() server-side; raw credential is ephemeral.
  *   const USER_TOKEN_WIRE = new GGHeader("authorization", {scheme: "bearer"})
  *
- *   // dumb: ambient — parsed value lands in the passed key, no implementation needed.
- *   const CLIENT_VERSION_WIRE = new GGHeader("x-client-version", CLIENT_VERSION)
+ *   // ambient: parsed value lands in the wire and persists, no implementation needed.
+ *   const CLIENT_VERSION_WIRE = new GGHeader("x-client-version")
  */
 export class GGHeader extends GGWireContextKey {
 
     public readonly headers: Record<string, GGSchema<string | undefined>>
+    public readonly scheme?: "bearer"
 
-    constructor(
-        name: string,
-        keyOrOptions: GGContextKey<string | undefined> | GGWireSmartOptions,
-        dumbOptions?: GGWireDumbOptions,
-    ) {
-        super(name, keyOrOptions, dumbOptions)
+    constructor(name: string, options?: {scheme?: "bearer"}) {
+        super(name)
+        this.scheme = options?.scheme
         this.headers = {[this.wireName]: IsString.orUndefined}
     }
 
@@ -33,7 +31,7 @@ export class GGHeader extends GGWireContextKey {
         }
         const value = this.scheme === "bearer" && raw.startsWith(BEARER) ? raw.slice(BEARER.length) : raw
         if (value !== undefined) {
-            this.target.set(value)
+            this.set(value)
         }
     }
 

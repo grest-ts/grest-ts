@@ -24,8 +24,6 @@ import {CookieTestApi} from "./api/CookieTestApi"
 import {CookieTestService} from "./services/CookieTestService"
 import {getScopesFromSession, WsCookieApi} from "./api/WsCookieApi"
 import {WsCookieService} from "./services/WsCookieService"
-import {AccountHttpCookie, AccountHttpHeader, AccountWsCookie, AccountWsHeader} from "./api/wire-symmetry/wiring"
-import {AccountService} from "./api/wire-symmetry/AccountService"
 import {FileUploadTestApi} from "./api/FileUploadTestApi"
 import {BenchmarkApi} from "./api/BenchmarkApi"
 import {ConfigTestService} from "./services/ConfigTestService"
@@ -109,21 +107,13 @@ export class MainRuntime extends GGRuntime {
             .usePermissions(getTestScopes)
             .http(PermissionsApi, new PermissionsTestService());
 
-        // Cookie API — GGCookie.middleware(SESSION) on the schema parses the incoming Cookie
-        // into the SESSION key; handlers emit Set-Cookie via GGCookie.setCookie(SESSION, …).
+        // Cookie API — the SESSION cookie wire parses the incoming Cookie into itself;
+        // handlers emit Set-Cookie via GGCookie.setCookie(SESSION, …).
         CookieTestApi.register(new CookieTestService());
 
-        // WS cookie API — the SAME SESSION key, read from the browser's upgrade Cookie.
+        // WS cookie API — the SAME SESSION cookie wire, read from the browser's upgrade Cookie.
         // connectPermission gates on scopes the resolver derives from that cookie.
         WsCookieApi.register(new WsCookieService().handleConnection, {permissionResolver: getScopesFromSession});
-
-        // Wire-symmetry showcase — one AccountService behind four wirings (header/cookie ×
-        // HTTP/WS), all reading the same ACCESS/LOCALE context keys.
-        const account = new AccountService();
-        AccountHttpHeader.register(account);
-        AccountHttpCookie.register(account);
-        AccountWsHeader.register(account.handleConnection);
-        AccountWsCookie.register(account.handleConnection);
 
         // WebSocket permission test fixtures.
         const wsPermissionsService = new WsPermissionsService();
