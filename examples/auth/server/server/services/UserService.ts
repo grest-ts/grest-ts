@@ -1,5 +1,5 @@
 import {EXISTS, GGContractImplementation, NOT_AUTHORIZED, NOT_FOUND} from "@grest-ts/schema"
-import {GGAuthToken} from "@grest-ts/auth"
+import {GGAuthRefreshToken} from "@grest-ts/auth"
 import {AuthPublicApiContract, AuthResponse, InvalidCredentialsError, LoginRequest, RefreshRequest, RegisterRequest} from "../../../api/AuthPublicApi"
 import {UpdateProfileRequest, UserApiContract} from "../../../api/UserApi"
 import {tUserId, User, UserClaims, UserPermission} from "../../../api/auth/UserAuth"
@@ -14,7 +14,7 @@ export class UserService implements GGContractImplementation<typeof AuthPublicAp
     private readonly table = new UserTable()
     private onProfileUpdated: ((user: User) => void) | undefined
 
-    constructor(private readonly tokenEngine: GGAuthToken<UserClaims>) {
+    constructor(private readonly tokenEngine: GGAuthRefreshToken<UserClaims>) {
     }
 
     public setOnProfileUpdatedCallback(cb: (user: User) => void): void {

@@ -1,6 +1,6 @@
 import {GGRuntime} from "@grest-ts/runtime"
 import {GGHttp, GGHttpServer} from "@grest-ts/http"
-import {GGAuthToken, HmacSigner, InMemoryRefreshTokenStore} from "@grest-ts/auth"
+import {GGAuthAccessToken, GGAuthRefreshToken, HmacSigner, InMemoryRefreshTokenStore} from "@grest-ts/auth"
 import {AuthPublicApi} from "../../api/AuthPublicApi"
 import {UserApi} from "../../api/UserApi"
 import {OrgApi, OrgScopedApi} from "../../api/OrgApi"
@@ -23,18 +23,19 @@ export class AppRuntime extends GGRuntime {
     protected compose(): void {
         const server = new GGHttpServer()
 
-        const userTokenEngine = new GGAuthToken({
-            signer: new HmacSigner(SECRET),
+        const userTokenEngine = new GGAuthRefreshToken({
             store: new InMemoryRefreshTokenStore(),
-            claimSchema: IsUserClaims,
-            accessTtlMs: 60 * 60 * 1000,
             refreshTtlMs: 7 * 24 * 60 * 60 * 1000,
+            access: new GGAuthAccessToken({
+                signer: new HmacSigner(SECRET),
+                claimSchema: IsUserClaims,
+                accessTtlMs: 60 * 60 * 1000
+            })
         })
-        const orgTokenEngine = new GGAuthToken({
+        const orgTokenEngine = new GGAuthAccessToken({
             signer: new HmacSigner(SECRET + "-org"),
             claimSchema: IsOrgUser,
             accessTtlMs: 8 * 60 * 60 * 1000,
-            refreshTtlMs: 0,
         })
 
         const userService = new UserService(userTokenEngine)
