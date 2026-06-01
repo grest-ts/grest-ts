@@ -5,6 +5,7 @@ definePackage({
     description: "Authentication library for Node.js and browser — JWT signing, IdP strategies, HTTP/WS guards, and client-side session management",
     keywords: ["auth", "jwt", "authentication", "session", "idp"],
     targets: {node: true, browser: true},
+    publishToNpm: true,
     hasTests: true,
     dependencies: {
         "jose": "^5.9.6",
