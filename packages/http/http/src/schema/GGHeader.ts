@@ -4,6 +4,7 @@ import {GGWireContextKey} from "./GGWireContextKey"
 
 const BEARER = "Bearer "
 
+
 /**
  * A request header that IS its own context key.
  *
@@ -16,12 +17,15 @@ const BEARER = "Bearer "
 export class GGHeader extends GGWireContextKey {
 
     public readonly headers: Record<string, GGSchema<string | undefined>>
-    public readonly scheme?: "bearer"
+    private readonly scheme?: "bearer"
+    private readonly wireName: string
 
-    constructor(name: string, options?: {scheme?: "bearer"}) {
-        super(name)
+    constructor(name: string, options?: { scheme?: "bearer" }) {
+        const WIRE_SCHEMA = IsString.orUndefined
+        super(name, WIRE_SCHEMA)
         this.scheme = options?.scheme
-        this.headers = {[this.wireName]: IsString.orUndefined}
+        this.wireName = name.toLowerCase()
+        this.headers = {[this.wireName]: WIRE_SCHEMA}
     }
 
     public parse(inbound: GGInbound): void {

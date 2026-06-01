@@ -1,5 +1,5 @@
 import {GGContextKey, type GGInbound, type GGResponse} from "@grest-ts/context"
-import {IsAny, IsString, SERVER_ERROR, type GGSchema} from "@grest-ts/schema"
+import {type GGSchema, IsAny, IsString, SERVER_ERROR} from "@grest-ts/schema"
 import {GGWireContextKey} from "./GGWireContextKey"
 
 /**
@@ -25,9 +25,9 @@ export interface CookieOptions {
 }
 
 const SAFE_DEFAULTS: CookieOptions = {
-    httpOnly: true, 
-    secure: true, 
-    sameSite: "lax", 
+    httpOnly: true,
+    secure: true,
+    sameSite: "lax",
     path: "/"
 } as const
 
@@ -54,9 +54,10 @@ export class GGCookie extends GGWireContextKey {
     public readonly cookieParams: Record<string, GGSchema<string | undefined>>
 
     constructor(name: string) {
-        super(name)
+        const WIRE_SCHEMA = IsString.orUndefined
+        super(name, WIRE_SCHEMA)
         _assertCookieSafe("name", this.name)
-        this.cookieParams = {[this.name]: IsString.orUndefined}
+        this.cookieParams = {[this.name]: WIRE_SCHEMA}
     }
 
     public parse(inbound: GGInbound): void {

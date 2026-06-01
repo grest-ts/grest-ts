@@ -1,5 +1,4 @@
 import {GGContextKey, type GGTransportMiddleware} from "@grest-ts/context"
-import {IsString} from "@grest-ts/schema"
 import {GGContextKeySynchronizer} from "../client/GGContextKeySynchronizer"
 
 /** Outbound freshness gate for a smart wire. The outbound value is always the wire's own context value. */
@@ -9,8 +8,6 @@ export interface GGWireClientHandler {
     /** Async — refresh the credential into the wire (via key.set); run by the synchronizer's waitFor before the outbound read. */
     recover?: () => Promise<void>
 }
-
-const WIRE_SCHEMA = IsString.orUndefined
 
 /**
  * Base for credential wires (GGHeader, GGCookie). A wire IS a GGContextKey and a transport
@@ -25,13 +22,6 @@ const WIRE_SCHEMA = IsString.orUndefined
  * ./GGWireContextKey.node — the browser bundle never pulls @grest-ts/locator.
  */
 export abstract class GGWireContextKey extends GGContextKey<string | undefined> implements GGTransportMiddleware {
-
-    public readonly wireName: string
-
-    protected constructor(name: string) {
-        super(name, WIRE_SCHEMA)
-        this.wireName = name.toLowerCase()
-    }
 
     private _clientHandler?: GGWireClientHandler
 
@@ -48,7 +38,8 @@ export abstract class GGWireContextKey extends GGContextKey<string | undefined> 
         if (handler.isStale || handler.recover) {
             GGContextKeySynchronizer.provide(this, {
                 isStale: handler.isStale ?? (() => false),
-                recover: handler.recover ?? (async () => {}),
+                recover: handler.recover ?? (async () => {
+                }),
             })
         }
     }

@@ -80,8 +80,7 @@ function setupRoutes<TContract extends GGContractApiDefinition>(
 
     // Smart wires on the schema ARE the scope resolver (each wire's process() already verified
     // identity, permissions() yields the grants). An explicit .usePermissions(...) still wins.
-    const permissionResolver: GGScopeResolver | undefined =
-        config.permissionResolver ?? deriveWireScopeResolver(apiMiddlewares);
+    const permissionResolver: GGScopeResolver | undefined = config.permissionResolver ?? deriveWireScopeResolver(apiMiddlewares);
 
     for (const mw of apiMiddlewares) {
         const hKeys = Object.keys(mw.headers ?? {});
