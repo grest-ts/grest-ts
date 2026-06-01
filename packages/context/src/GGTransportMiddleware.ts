@@ -1,5 +1,4 @@
 import type {GGSchema} from "@grest-ts/schema";
-import type {GGContextKey} from "./GGContextKey";
 
 /**
  * Inbound credentials a server reads. Headers are flattened to a single value by the
@@ -33,11 +32,6 @@ export interface GGResponse {
  * respond`. A middleware implements only the hooks it needs and never knows its transport.
  */
 export interface GGTransportMiddleware {
-    /**
-     * Context key whose value this middleware writes outbound. When set, the runtime awaits
-     * GGContextKeySynchronizer.waitFor(key) before calling update(), so the value is fresh.
-     */
-    readonly key?: GGContextKey<string | undefined>;
 
     /** Inbound headers this middleware reads/writes — CORS Allow-Headers + OpenAPI/AsyncAPI docs. */
     readonly headers?: Record<string, GGSchema<string | undefined>>;
@@ -48,15 +42,19 @@ export interface GGTransportMiddleware {
 
     /** Client: write outbound credentials. */
     update?(outbound: GGOutbound): void;
+
     /** Server: read inbound credentials into context. */
     parse?(inbound: GGInbound): void;
+
     /** Server: async validation after all parsing is done. Throwing rejects the request/connection. */
     process?(): Promise<void>;
+
     /**
      * Server: drop any ephemeral inbound value after process() and before the handler runs.
      * A smart wire clears its raw credential here so handlers read undefined, never the token.
      */
     clear?(): void;
+
     /** Server: write response headers (set-cookie etc.). */
     respond?(response: GGResponse): void;
 }

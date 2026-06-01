@@ -26,18 +26,14 @@ const WIRE_SCHEMA = IsString.orUndefined
  * The server/inbound half (define/create/process/permissions) is attached node-side via
  * ./GGWireContextKey.node — the browser bundle never pulls @grest-ts/locator.
  */
-export abstract class GGWireContextKey
-    extends GGContextKey<string | undefined>
-    implements GGTransportMiddleware {
+export abstract class GGWireContextKey extends GGContextKey<string | undefined> implements GGTransportMiddleware {
 
     public readonly wireName: string
     public isSmart = false
-    public readonly key: GGContextKey<string | undefined>
 
     protected constructor(name: string) {
         super(name, WIRE_SCHEMA)
         this.wireName = name.toLowerCase()
-        this.key = this
     }
 
     private _clientHandler?: GGWireClientHandler

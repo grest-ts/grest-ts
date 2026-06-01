@@ -4,7 +4,7 @@ import {GG_WS_CONNECTION} from "../server/GG_WS_CONNECTION";
 import {Message, MessageType} from "../socket/SocketMessage";
 import {GGContractExecutor, GGValidator, SERVER_ERROR} from "@grest-ts/schema";
 import {withTimeout} from "@grest-ts/common";
-import {GGContext, GGContextStore, type GGOutbound, type GGTransportMiddleware} from "@grest-ts/context";
+import {GGContext, GGContextKey, GGContextStore, type GGOutbound, type GGTransportMiddleware} from "@grest-ts/context";
 import {GGContextKeySynchronizer} from "@grest-ts/http";
 import {GG_TRACE} from "@grest-ts/trace";
 import {getDefaultAdapter} from "../adapter/getDefaultAdapter";
@@ -140,7 +140,9 @@ export class GGSocketPool {
     private static async gateMiddlewares(middlewares: readonly GGTransportMiddleware[] | undefined): Promise<void> {
         if (!middlewares) return;
         for (const mw of middlewares) {
-            if (mw.key) await GGContextKeySynchronizer.waitFor(mw.key);
+            if (mw instanceof GGContextKey) {
+                await GGContextKeySynchronizer.waitFor(mw);
+            }
         }
     }
 
