@@ -128,10 +128,11 @@ The schema builder configures the WebSocket endpoint:
 
 ```typescript
 export const ChatApi = webSocketSchema(ChatApiContract)
-    .path("ws/chat")              // WebSocket endpoint path
-    .use(AuthMiddleware)           // Add middleware (can chain multiple)
+    .path("ws/chat")                     // WebSocket endpoint path
+    .use(USER_TOKEN_WIRE)                // attach a credential wire (verified at handshake)
+    .connectPermission(ChatPermission.USE)  // optional handshake-level permission gate
     .queryOnConnect<{ room: string }>()  // Validate query params on connect
-    .done()                        // Finalize the schema
+    .done()                              // Finalize the schema
 ```
 
 ## Permissions
@@ -143,71 +144,89 @@ Two gating levels combine:
 - **`.connectPermission(...)`** on the schema (optional) is checked at handshake. Use it for feature-specific sockets where lacking permission means there's no point opening the connection at all. Failure closes the socket immediately.
 - **Per-c2s-method `permission`** is checked on every incoming message, against scopes that were resolved **once** at handshake and cached on the connection. There is no per-message token re-parsing.
 
-Wiring lives in `register()`'s config:
+Scopes come from the **wires** the schema `.use()`s — exactly as on HTTP. The wire's `process()` verifies the credential at handshake and its `permissions()` resolver returns the caller's grants. There is no `permissionResolver` config on `register()`; the schema's wires are the only source of scopes:
 
 ```typescript
-ChatApi.register(chatService.handleConnection, {
-    permissionResolver: getScopes,   // () => ReadonlySet<string> | null | Promise<...>
-})
+export const ChatApi = webSocketSchema(ChatApiContract)
+    .path("ws/chat")
+    .use(USER_TOKEN_WIRE)               // verifies the credential + resolves scopes at handshake
+    .connectPermission(ChatPermission.USE)
+    .done()
+
+// register() takes only { http?, middlewares? } — no resolver
+ChatApi.register(chatService.handleConnection, { http: httpServer })
 ```
 
-The same refuse-to-start guarantee from HTTP applies: a non-public c2s permission or `connectPermission` requires a resolver — the server start fails with the offending methods listed otherwise. The strict-mode trigger is shared with HTTP across the same `GGHttpServer`.
+The same refuse-to-start guarantee from HTTP applies: a `.use()`d wire must be implemented (`.define(...).create(deps)` in `compose()`) or the server fails to start; a permissioned route on a wire-less schema fails closed. The strict-mode trigger is shared with HTTP across the same `GGHttpServer`.
 
 **Revocation, accepted limitation.** Scopes are resolved at handshake and cached for the life of the connection. Mid-session revocation (an admin removes a user's `chat:write`) does not take effect until the socket closes — the same constraint that applies to bearer tokens generally. Apps that need strong revocation guarantees on a surface should either avoid long-lived sockets there or close affected connections externally when revoking.
 
-## Middleware
+## Wires & Middleware
 
-WebSocket middleware handles authentication and context during the connection handshake. It runs once when the connection is established (HTTP middleware, by contrast, runs per-request).
+Authentication and per-request context ride on **wires** — exactly as on HTTP (see
+`@grest-ts/http` → "Authentication & Context"). A wire (`GGHeader` / `GGCookie`) is a context
+key and a transport middleware at once; attach it with one `.use(WIRE)` on the WS schema. On
+WebSocket the wire resolves **once at the connection handshake** (HTTP, by contrast, resolves
+per request). A credential wire's `process()` verifies the credential off the upgrade and
+mints a durable principal; per-message permission gates read scopes cached at handshake.
 
-WebSocket has **no separate middleware interface**. It uses the same unified `GGTransportMiddleware` from `@grest-ts/context` as HTTP. The runtime normalizes each transport into a `GGInbound` (server-side credentials it reads) and a `GGOutbound` (client-side credentials it writes), so one implementation works on both protocols without any protocol-specific methods.
+### Auth wire (the common case)
 
-### Defining Middleware
+The wire and its identity types live in the shared `api/`; the verification handler and the
+durable principal live server-side. This is the **same** `USER_TOKEN_WIRE` an HTTP schema
+uses — one declaration, both transports.
 
 ```typescript
-import { GGTransportMiddleware, GGInbound, GGOutbound } from "@grest-ts/context"
+// api/auth/UserAuth.ts  (shared)
+import { GGHeader } from "@grest-ts/http"
+export const USER_TOKEN_WIRE = new GGHeader("authorization", { scheme: "bearer" })
+```
+
+```typescript
+// server/auth/UserAuthHandler.ts  (server-only) — runs once at handshake
 import { GGContextKey } from "@grest-ts/context"
-import { IsObject, IsString, NOT_AUTHORIZED } from "@grest-ts/schema"
+import { NOT_AUTHORIZED } from "@grest-ts/schema"
+import { IsUser, USER_TOKEN_WIRE } from "../../api/auth/UserAuth"
 
-export const IsUserAuth = IsObject({
-    userId: IsString,
-    token: IsString
-})
-export type UserAuth = typeof IsUserAuth.infer
+export const USER_DATA = new GGContextKey("userData", IsUser)
 
-export const GG_USER_AUTH = new GGContextKey<UserAuth>("user_auth", IsUserAuth)
-
-export const AuthMiddleware: GGTransportMiddleware = {
-    // Client-side: add auth headers to the handshake
-    update(outbound: GGOutbound): void {
-        const auth = GG_USER_AUTH.get()
-        if (auth) {
-            outbound.headers["authorization"] = `Bearer ${auth.token}`
-        }
-    },
-
-    // Server-side: parse auth headers from the inbound handshake
-    parse(inbound: GGInbound): void {
-        const authHeader = inbound.headers["authorization"]
-        if (!authHeader?.startsWith("Bearer ")) {
-            throw new NOT_AUTHORIZED()
-        }
-        GG_USER_AUTH.set({
-            userId: "",  // Will be resolved in process()
-            token: authHeader.substring(7)
-        })
-    },
-
-    // Server-side: async processing (validate token, load user, etc.)
-    async process(): Promise<void> {
-        const auth = GG_USER_AUTH.get()
-        const user = await validateToken(auth.token)
+export const USER_TOKEN_WIRE_HANDLER = USER_TOKEN_WIRE.define((users: UserService) => ({
+    process: async () => {
+        const user = await users.verifyAccessToken(USER_TOKEN_WIRE.get())
         if (!user) throw new NOT_AUTHORIZED()
-        GG_USER_AUTH.set({ userId: user.id, token: auth.token })
-    }
+        USER_DATA.set(user)
+    },
+    permissions: async () => USER_DATA.get()!.permissions,   // feeds per-message gates
+}))
+```
+
+```typescript
+export const ChatApi = webSocketSchema(ChatApiContract)
+    .path("ws/chat")
+    .use(USER_TOKEN_WIRE)            // verified at handshake
+    .done()
+
+// compose(): bind the handler once per runtime; the same .create() covers HTTP + WS schemas.
+USER_TOKEN_WIRE_HANDLER.create(userService)
+```
+
+In the connection handler / message handlers, read the durable principal — never the token
+(it's ephemeral and already cleared):
+
+```typescript
+handleConnection = (incoming, outgoing) => {
+    const user = USER_DATA.get()   // identity for this connection
+    ...
 }
 ```
 
-### Middleware Interface
+### Custom `GGTransportMiddleware` (ambient context)
+
+For *non-credential* connection context (client version, locale, a structured value built
+from several headers), implement a `GGTransportMiddleware` directly — the same unified
+interface HTTP uses. The runtime normalizes each transport into a `GGInbound` (server reads)
+and `GGOutbound` (client writes), so one implementation works on both protocols. Use wires
+for credentials; use a custom middleware only for ambient context.
 
 ```typescript
 interface GGTransportMiddleware {
@@ -223,80 +242,38 @@ interface GGOutbound { headers: Record<string, string> }
 
 All methods are optional — implement only what you need. Throwing an error in `parse` or `process` rejects the connection. `respond` writes response headers and is an HTTP-only hook — it is never called on WebSocket, which has no response-header stage.
 
-A middleware reads the cookie via `inbound.cookie`, not from `inbound.headers`. On WebSocket the runtime fills `inbound.cookie` from the real HTTP upgrade request; the in-band handshake message can never set it, so it can't be spoofed. The middleware just reads `inbound.cookie` and does not choose the source.
+A middleware (and a `GGCookie` wire) reads the cookie via `inbound.cookie`, not from `inbound.headers`. On WebSocket the runtime fills `inbound.cookie` from the real HTTP upgrade request; the in-band handshake message can never set it, so it can't be spoofed.
 
-### Chaining Middleware
+### Chaining
 
 ```typescript
 export const ChatApi = webSocketSchema(ChatApiContract)
     .path("ws/chat")
-    .use(AuthMiddleware)
-    .use(LocaleMiddleware)
-    .use(RateLimitMiddleware)
+    .use(USER_TOKEN_WIRE)      // credential wire
+    .use(LocaleMiddleware)     // ambient middleware
     .done()
 ```
 
-Middlewares run in order during connection establishment.
+Wires/middleware resolve in order during connection establishment.
 
-### Sharing middleware with HTTP APIs (one class, two transports)
+### One wire, two transports
 
-Most apps are HTTP-first and add WebSockets later. You'll often want the *same* auth logic on both — same bearer-token shape, same verification, same user context key. Because HTTP and WebSocket share the single `GGTransportMiddleware` interface, you write **one** implementation and attach the same instance to both schemas. There are no protocol-specific methods to keep in sync.
+Most apps are HTTP-first and add WebSockets later, and want the *same* auth on both. Because
+a wire is the single source of truth, you `.use()` the **same wire instance** on both kinds of
+schema — and `.create()` its handler once. There is nothing protocol-specific to keep in sync.
 
 ```typescript
-import { GGTransportMiddleware, GGInbound, GGOutbound, GGContextKey } from "@grest-ts/context"
-import { IsObject, IsString, NOT_AUTHORIZED } from "@grest-ts/schema"
-
-export const IsAuthUser = IsObject({ id: IsString, role: IsString })
-export type AuthUser = typeof IsAuthUser.infer
-export const GG_AUTH_USER = new GGContextKey<AuthUser>("authUser", IsAuthUser)
-
-/**
- * One middleware for HTTP and WebSocket. Use the same instance on both kinds of
- * schema — single source of truth for auth wiring.
- */
-export class BearerAuthMiddleware implements GGTransportMiddleware {
-
-    constructor(private opts: {
-        /** Client-side: return the current token. Called on every HTTP request AND on every WS handshake. */
-        getToken: () => string | undefined
-        /** Server-side: verify the token and return the user. Throw/return undefined to reject. */
-        verify:   (token: string) => AuthUser | undefined
-    }) {}
-
-    // ---- Client-side: attach the bearer header ----
-    update = (outbound: GGOutbound) => {
-        const t = this.opts.getToken()
-        if (t) outbound.headers["authorization"] = "Bearer " + t
-    }
-
-    // ---- Server-side: extract + verify, populate context ----
-    parse = (inbound: GGInbound) => {
-        const header = inbound.headers["authorization"]
-        if (typeof header !== "string" || !header.startsWith("Bearer ")) {
-            throw new NOT_AUTHORIZED({ displayMessage: "Missing bearer token" })
-        }
-        const user = this.opts.verify(header.substring(7))
-        if (!user) throw new NOT_AUTHORIZED({ displayMessage: "Invalid token" })
-        GG_AUTH_USER.set(user)
-    }
-}
-
-// One instance, used on both kinds of schema:
-const auth = new BearerAuthMiddleware({
-    getToken: () => GG_AUTH_USER.get()?.id,
-    verify:   (token) => validateTokenSync(token),
-})
-
 export const ItemApi = httpSchema(ItemContract).pathPrefix("api/items")
-    .use(auth)
+    .use(USER_TOKEN_WIRE)
     .routes({ ... })
 
 export const ChatApi = webSocketSchema(ChatContract).path("ws/chat")
-    .use(auth)
+    .use(USER_TOKEN_WIRE)
     .done()
 ```
 
-The same `update`/`parse` hooks drive both transports — the runtime feeds them a `GGOutbound`/`GGInbound` normalized from whatever protocol is in play, so the extraction logic is written once.
+The wire's `process()` runs on whichever transport is in play; the durable principal it mints
+reads the same in both. Sharing the wire shares *logic* — the *lifecycles* still differ:
 
 **Important — the lifecycles still differ:**
 
@@ -313,28 +290,39 @@ Sharing the interface shares *logic*, not *lifecycle*: WS middleware still runs 
 If your app authenticates over HTTP with an httpOnly session cookie (see
 `@grest-ts/http` → "Cookies"), that **same cookie authenticates the socket** with no
 client code: a browser auto-attaches the cookie to the WebSocket upgrade request (it
-can't put an httpOnly cookie into the in-band handshake — JS can't read it). Bind the
-**same** `GGContextKeyForCookie` on the WS schema and read it identically to HTTP.
+can't put an httpOnly cookie into the in-band handshake — JS can't read it). `.use()` a
+`GGCookie` wire on the WS schema and read it identically to HTTP.
+
+To turn the cookie into scopes / identity at handshake, `.define()` the cookie wire
+(server-side) so its `process()` verifies the session and its `permissions()` resolves
+scopes — the same smart-wire model as a token wire, just over a cookie:
 
 ```typescript
-import {GGContextKeyForCookie} from "@grest-ts/http"
+import {GGCookie} from "@grest-ts/http"
+import {GGContextKey} from "@grest-ts/context"
+import {NOT_AUTHORIZED, IsString} from "@grest-ts/schema"
 
-// The SAME key the HTTP schema binds — one key, two transports.
-export const SESSION = new GGContextKeyForCookie("session")
+// A GGCookie wire over the "session" cookie. Reads the upgrade cookie into the wire.
+export const SESSION = new GGCookie("session")
+export const SESSION_VALUE = new GGContextKey<string | undefined>("session-value", IsString.orUndefined)
+
+export const SESSION_HANDLER = SESSION.define(() => ({
+    process: async () => {
+        const v = SESSION.get()                                  // the upgrade cookie value
+        if (v === undefined) throw new NOT_AUTHORIZED()          // 401 — rejects the handshake
+        SESSION_VALUE.set(v)
+    },
+    permissions: async () => scopesFromSession(SESSION_VALUE.get()),
+}))
 
 export const ChatApi = webSocketSchema(ChatContract)
     .path("ws/chat")
-    .useCookie(SESSION)             // read the session cookie off the upgrade
+    .use(SESSION)                   // read + verify the session cookie off the upgrade
     .connectPermission(CHAT_USE)    // gate the handshake (see Permissions)
     .done()
-```
 
-```typescript
-// server: derive scopes / identity from the cookie at handshake
-ChatApi.register(chat.handleConnection, {
-    permissionResolver: () => scopesFromSession(SESSION.get()),
-})
-// in a handler or the connect gate: SESSION.get() === the browser's session cookie
+// compose(): bind the handler once per runtime
+SESSION_HANDLER.create()
 ```
 
 ```typescript
@@ -343,10 +331,13 @@ const client = ChatApi.createClient({url: ""})   // same-origin
 await client.connect()
 ```
 
+For a purely read-only cookie with no gating, skip `.define()` — an ambient `GGCookie`
+lands the value in the wire and you read `SESSION.get()` in the handler.
+
 **Read-only on WS, by construction.** There is no `Set-Cookie` on a WebSocket — cookies
-are minted on HTTP login/refresh and ride the upgrade. So `.useCookie(SESSION)` on a WS
-schema only *reads*; there is no `.updatesCookie` / write-gate (those are `GGRpc.*` HTTP
-route concepts).
+are minted on HTTP login/refresh and ride the upgrade. So a `GGCookie` wire on a WS schema
+only *reads*; there is no `.updatesCookie` / write-gate (those are `GGRpc.*` HTTP route
+concepts).
 
 **The in-band handshake can't spoof it.** The cookie is read only from the real upgrade
 request headers, never from the client-authored in-band handshake message — so a client
@@ -377,7 +368,7 @@ export class ChatService {
         incoming: WebSocketIncoming<typeof ChatApiContract.methods.clientToServer>,
         outgoing: WebSocketOutgoing<typeof ChatApiContract.methods.serverToClient>
     ): void => {
-        const user = GG_USER_AUTH.get()
+        const user = USER_DATA.get()   // durable principal minted by the wire at handshake
 
         // Track connection
         if (!this.connections.has(user.userId)) {
