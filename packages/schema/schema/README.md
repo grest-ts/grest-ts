@@ -104,7 +104,7 @@ See [Contract documentation](./README-contract.md) for custom errors, GGPromise 
 
 ## Permissions (reference)
 
-Contract methods may declare an optional `permission` field. Strict mode is per-server: the moment any route on a server declares `permission` *or* a `.usePermissions(...)` resolver is wired, every route on that server must declare a permission (use `GG_NO_PERMISSIONS` for intentionally public routes). The check runs at server start. Exports from `@grest-ts/schema`:
+Contract methods may declare an optional `permission` field. The caller's scopes come from the wires the schema `.use()`s (each smart wire's `permissions()` resolver) — see `@grest-ts/http` → "Permissions". Strict mode is per-server: the moment any route on a server declares `permission`, every route on that server must declare one (use `GG_NO_PERMISSIONS` for intentionally public routes). The check runs at server start. Exports from `@grest-ts/schema`:
 
 - `GG_NO_PERMISSIONS` — explicit public endpoint.
 - `GG_ANY_PERMISSION` — any authenticated identity (caller must have at least one scope).

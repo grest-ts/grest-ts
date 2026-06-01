@@ -54,8 +54,7 @@ describe("single-token wire — HTTP end-to-end", () => {
 
 describe("single-token wire — startup enforcement", () => {
 
-    // QUARANTINED: see packages/http/http/src/server/checkers/README.md
-    test.skip("a .use()d smart wire with no .create() refuses to start", async () => {
+    test("a .use()d smart wire with no .create() refuses to start", async () => {
         let caught: unknown
         try {
             await GGTest.startInline(WireAuthMissingCreateRuntime)

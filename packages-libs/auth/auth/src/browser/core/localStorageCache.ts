@@ -1,29 +1,29 @@
 /// <reference lib="dom" />
-import type {SharedCache, GGTokenPair} from "./types"
+import type {SharedCache, StoredAuth} from "./types"
 
 export function localStorageSharedCache(key: string): SharedCache {
     return {
-        read(): GGTokenPair | undefined {
+        read(): StoredAuth | undefined {
             try {
                 const raw = localStorage.getItem(key)
                 if (!raw) return undefined
-                return JSON.parse(raw) as GGTokenPair
+                return JSON.parse(raw) as StoredAuth
             } catch {
                 return undefined
             }
         },
-        write(v: GGTokenPair | undefined): void {
+        write(v: StoredAuth | undefined): void {
             if (v === undefined) {
                 localStorage.removeItem(key)
             } else {
                 localStorage.setItem(key, JSON.stringify(v))
             }
         },
-        subscribe(cb: (v: GGTokenPair | undefined) => void): () => void {
+        subscribe(cb: (v: StoredAuth | undefined) => void): () => void {
             const handler = (event: StorageEvent) => {
                 if (event.key !== key) return
                 try {
-                    const v = event.newValue ? (JSON.parse(event.newValue) as GGTokenPair) : undefined
+                    const v = event.newValue ? (JSON.parse(event.newValue) as StoredAuth) : undefined
                     cb(v)
                 } catch {
                     cb(undefined)

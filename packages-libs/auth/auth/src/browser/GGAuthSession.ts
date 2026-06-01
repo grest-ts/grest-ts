@@ -13,37 +13,37 @@ type Wire = GGWireContextKey
 
 // What the auth endpoints return verbatim: the GGAuth token pair under `tokens`, plus the
 // identity `data`. The session consumes this shape directly — no flattening/re-wrapping at the
-// call site — and captures `data` as the current identity on every login/refresh.
-export interface GGAuthResult {
+// call site — and captures `data` as the current identity on every login/refresh. `I` is the
+// app's identity type, inferred from the configured refresh response, so get() returns it.
+export interface GGAuthResult<I = unknown> {
     tokens: GGTokenPair
-    data?: unknown
+    data?: I
 }
 
-export interface GGTokenSessionConfig {
-    refresh: (token: {refreshToken: string}) => Promise<GGAuthResult>
+export interface GGTokenSessionConfig<I = unknown> {
+    refresh: (token: {refreshToken: string}) => Promise<GGAuthResult<I>>
     localStorageKey: string
 }
 
-export interface GGCookieSessionConfig {
-    refresh: () => Promise<GGAuthResult>
+export interface GGCookieSessionConfig<I = unknown> {
+    refresh: () => Promise<GGAuthResult<I>>
     logout: () => Promise<void>
 }
 
-export class GGAuthSession<D extends DerivedMap = {}> {
+export class GGAuthSession<D extends DerivedMap = {}, I = unknown> {
     private _session: BaseAuthSession<D> | null = null
     private readonly _rootKey: Wire
-    private readonly _refresh: (refreshToken?: string) => Promise<GGAuthResult>
+    private readonly _refresh: (refreshToken?: string) => Promise<GGAuthResult<I>>
     private readonly _logout: (() => Promise<void>) | undefined
     private readonly _storage: "localStorage" | "cookie"
     private readonly _cacheKey: string
     private readonly _derivedConfigs: Record<string, {key: Wire; mint: (params: unknown) => Promise<DerivedTokenResult<unknown>>}> = {}
-    private _identity: unknown = undefined
 
     // Protected (not private) + `new this` in the factories so an app can subclass to add its
     // own helpers (e.g. hasPermission over get()) — see examples/auth/client/src/api.ts.
     protected constructor(
         key: Wire,
-        refresh: (refreshToken?: string) => Promise<GGAuthResult>,
+        refresh: (refreshToken?: string) => Promise<GGAuthResult<I>>,
         storage: "localStorage" | "cookie",
         logout: (() => Promise<void>) | undefined,
         cacheKey: string,
@@ -55,27 +55,27 @@ export class GGAuthSession<D extends DerivedMap = {}> {
         this._cacheKey = cacheKey
     }
 
-    static withToken(key: Wire, config: GGTokenSessionConfig): GGAuthSession<{}> {
+    static withToken<I = unknown>(key: Wire, config: GGTokenSessionConfig<I>): GGAuthSession<{}, I> {
         return new this(
             key,
             (token) => config.refresh({refreshToken: token!}),
             "localStorage",
             undefined,
             config.localStorageKey,
-        )
+        ) as unknown as GGAuthSession<{}, I>
     }
 
-    static withCookie(key: Wire, config: GGCookieSessionConfig): GGAuthSession<{}> {
-        return new this(key, () => config.refresh(), "cookie", config.logout, "")
+    static withCookie<I = unknown>(key: Wire, config: GGCookieSessionConfig<I>): GGAuthSession<{}, I> {
+        return new this(key, () => config.refresh(), "cookie", config.logout, "") as unknown as GGAuthSession<{}, I>
     }
 
     public addDerived<N extends string, Par, DData>(
         name: N,
         key: Wire,
         config: {mint: (params: Par) => Promise<DerivedTokenResult<DData>>},
-    ): GGAuthSession<D & {[K in N]: DerivedConfig<Par, DData>}> {
+    ): GGAuthSession<D & {[K in N]: DerivedConfig<Par, DData>}, I> {
         this._derivedConfigs[name] = {key, mint: config.mint as (params: unknown) => Promise<DerivedTokenResult<unknown>>}
-        return this as unknown as GGAuthSession<D & {[K in N]: DerivedConfig<Par, DData>}>
+        return this as unknown as GGAuthSession<D & {[K in N]: DerivedConfig<Par, DData>}, I>
     }
 
     private _getSession(): BaseAuthSession<D> {
@@ -87,13 +87,9 @@ export class GGAuthSession<D extends DerivedMap = {}> {
 
         this._session = new BaseAuthSession<D>(
             {
-                // Capture the re-resolved identity `data` the refresh response carries, so the
-                // client's identity/permissions stay current without ever decoding the token.
-                refresh: async (token) => {
-                    const result = await this._refresh(token)
-                    if (result.data !== undefined) this._identity = result.data
-                    return result.tokens
-                },
+                // The base persists the response's identity `data` alongside the tokens, so it
+                // stays current (and survives reload) without ever decoding the token.
+                refresh: (token) => this._refresh(token),
                 key: this._rootKey,
                 derived,
                 storage: this._storage,
@@ -132,13 +128,11 @@ export class GGAuthSession<D extends DerivedMap = {}> {
         return this._getSession().derived
     }
 
-    public start(result: GGAuthResult): void {
-        this._identity = result.data
-        this._getSession().start(result.tokens)
+    public start(result: GGAuthResult<I>): void {
+        this._getSession().start(result.tokens, result.data)
     }
 
     public logout(): void {
-        this._identity = undefined
         this._getSession().logout()
     }
 
@@ -165,16 +159,17 @@ export class GGAuthSession<D extends DerivedMap = {}> {
     }
 
     /**
-     * The identity captured from the last start() / refresh response `data`. Permission gates
-     * are intentionally NOT on the session — the session can't read the opaque access token, and
-     * permission shape is app-specific. Subclass and read this to add your own UX gate, e.g.:
+     * The identity (`I`) captured from the last start() / refresh response `data`, inferred from
+     * the configured refresh response so it's typed here — no decoding the opaque access token.
+     * Permission gates are intentionally NOT on the session (permission shape is app-specific);
+     * subclass and read this to add your own UX gate, e.g.:
      *
-     *   class AppSession extends GGAuthSession<{org: DerivedConfig<SelectOrgRequest, Org>}> {
-     *     hasPermission(p: UserPermission) { return (this.get() as User)?.permissions.includes(p) }
+     *   class AppSession extends GGAuthSession<{org: DerivedConfig<SelectOrgRequest, Org>}, User> {
+     *     hasPermission(p: UserPermission) { return this.get()?.permissions.includes(p) }
      *   }
      */
-    public get(): any {
-        return this._identity
+    public get(): I | undefined {
+        return this._session?.getIdentity() as I | undefined
     }
 
     public subscribe(listener: () => void): () => void {

@@ -1,4 +1,5 @@
 import type {
+    AuthResult,
     CoreConfig,
     CorePorts,
     DerivedConfig,
@@ -8,6 +9,7 @@ import type {
     DerivedTokenResult,
     GGTokenPair,
     SessionState,
+    StoredAuth,
 } from "./core/types"
 
 // Data fields of D proxied as optional properties on the DerivedToken handle.
@@ -54,6 +56,9 @@ export class BaseAuthSession<D extends DerivedMap> {
     protected readonly ports: CorePorts
 
     private shared: GGTokenPair | undefined = undefined
+    // The identity `data` carried by the auth response, persisted with the tokens so it survives
+    // reload + cross-tab. Read via getIdentity(); the session never decodes the access token.
+    private identity: unknown = undefined
     private state: SessionState = {status: "anonymous", refreshing: false, degraded: false}
     private inflightRefresh: Promise<void> | null = null
     private readonly inflightDerivedMint = new Map<string, Promise<void>>()
@@ -173,8 +178,8 @@ export class BaseAuthSession<D extends DerivedMap> {
         }
     }
 
-    start(pair: GGTokenPair): void {
-        // The pair IS the canonical stored shape — store it directly, no field-rename transform.
+    start(pair: GGTokenPair, data?: unknown): void {
+        this.identity = data
         const next: GGTokenPair = {
             access: pair.access,
             refresh: this.config.storage === "cookie" ? undefined : pair.refresh,
@@ -182,8 +187,13 @@ export class BaseAuthSession<D extends DerivedMap> {
         this.commitShared(next)
     }
 
+    getIdentity(): unknown {
+        return this.identity
+    }
+
     logout(): void {
         this.shared = undefined
+        this.identity = undefined
         this.clearRootWire()
         this.clearAllDerivedWires()
         this.cacheWrite(undefined)
@@ -238,7 +248,7 @@ export class BaseAuthSession<D extends DerivedMap> {
                 throw new Error("No refresh token")
             }
 
-            let result: GGTokenPair
+            let result: AuthResult
             try {
                 result = await this.config.refresh(this.currentRefreshToken())
             } catch (e) {
@@ -250,11 +260,12 @@ export class BaseAuthSession<D extends DerivedMap> {
                 throw e
             }
 
+            this.identity = result.data
             const next: GGTokenPair = {
-                access: result.access,
+                access: result.tokens.access,
                 refresh: this.config.storage === "cookie"
                     ? undefined
-                    : (result.refresh ?? this.shared?.refresh),
+                    : (result.tokens.refresh ?? this.shared?.refresh),
             }
             this.commitShared(next)
         })
@@ -358,8 +369,9 @@ export class BaseAuthSession<D extends DerivedMap> {
         return this.remintActiveDerived(key)
     }
 
-    private adoptRoot(s: GGTokenPair): void {
-        this.shared = s
+    private adoptRoot(s: StoredAuth): void {
+        this.shared = {access: s.access, refresh: s.refresh}
+        this.identity = s.data
         this.config.key.set(s.access.token)
         this.setState({status: "authenticated", refreshing: false, degraded: false})
         this.scheduleNextRefresh()
@@ -369,14 +381,14 @@ export class BaseAuthSession<D extends DerivedMap> {
     private commitShared(s: GGTokenPair): void {
         this.shared = s
         this.config.key.set(s.access.token)
-        this.cacheWrite(s)
+        this.cacheWrite({...s, data: this.identity})
         this.setState({status: "authenticated", refreshing: this.state.refreshing, degraded: false})
         this.scheduleNextRefresh()
         this.fireRefreshed()
         this.notifyListeners()
     }
 
-    private cacheWrite(v: GGTokenPair | undefined): void {
+    private cacheWrite(v: StoredAuth | undefined): void {
         this.writing = true
         try {
             this.ports.cache.write(v)
@@ -404,6 +416,7 @@ export class BaseAuthSession<D extends DerivedMap> {
         this.clearRootWire()
         this.clearAllDerivedWires()
         this.shared = undefined
+        this.identity = undefined
         this.setState({status: "expired", refreshing: false, degraded: false})
         this.fireLogout()
         this.notifyListeners()
@@ -414,10 +427,11 @@ export class BaseAuthSession<D extends DerivedMap> {
         this.notifyListeners()
     }
 
-    private onCrossTab(incoming: GGTokenPair | undefined): void {
+    private onCrossTab(incoming: StoredAuth | undefined): void {
         if (this.writing) return
         if (!incoming) {
             this.shared = undefined
+            this.identity = undefined
             this.clearRootWire()
             this.clearAllDerivedWires()
             this.cancelNextRefresh()

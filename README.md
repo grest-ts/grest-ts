@@ -432,23 +432,27 @@ class UserContextKey extends GGContextKey<AuthUser> {
 export const UserContext = new UserContextKey("userData", IsAuthUser)
 ```
 
-### Set it in middleware
+### Populate it from an auth wire
+
+Identity is minted by a **smart wire** declared on the schema (`.use(USER_TOKEN_WIRE)`): the
+wire's server handler verifies the credential at the request boundary and sets the durable
+principal. The raw token stays ephemeral — it never reaches handler code. (For non-credential
+ambient context, a plain `GGTransportMiddleware` is fine.)
 
 ```typescript
-import {GGInbound, GGTransportMiddleware} from "@grest-ts/context"
+// server/src/auth/UserAuthHandler.ts
+import {NOT_AUTHORIZED} from "@grest-ts/schema"
+import {USER_TOKEN_WIRE} from "../../api/auth/UserAuth"
 
-export class UserAuthMiddleware implements GGTransportMiddleware {
-    private token: string | undefined
-
-    parse(inbound: GGInbound): void {
-        this.token = inbound.headers["authorization"]
-    }
-
-    async process(): Promise<void> {
-        const user = await this.verifyToken(this.token)
+export const USER_TOKEN_WIRE_HANDLER = USER_TOKEN_WIRE.define((users: UserService) => ({
+    process: async () => {
+        const user = await users.verifyToken(USER_TOKEN_WIRE.get())   // raw token, readable only here
+        if (!user) throw new NOT_AUTHORIZED()
         UserContext.set(user)
-    }
-}
+    },
+}))
+
+// compose(): USER_TOKEN_WIRE_HANDLER.create(userService)
 ```
 
 ### Read it anywhere — no passing through parameters

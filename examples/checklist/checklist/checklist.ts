@@ -11,7 +11,7 @@ import {UserAuthApi} from "../common/api-user/UserAuthApi"
 import {ChecklistApi} from "../common/api-user/ChecklistApi"
 import {BlockerUserApi} from "../common/api-user/BlockerUserApi";
 import {ChecklistNotificationApi} from "../common/api-user/ChecklistNotificationApi";
-import {UserContextMiddleware} from "./UserContext";
+import {GG_USER_AUTH_TOKEN_HANDLER} from "./UserContext";
 import {NotificationService} from "./services/NotificationService";
 import {MyRuntime} from "../shared/MyRuntime";
 import {GGConfigLocator, GGConfigStoreFile, GGConfigStoreLocal, GGResource, GGSecret, GGSetting} from "@grest-ts/config";
@@ -36,6 +36,8 @@ export class ChecklistRuntime extends MyRuntime {
         const userService = new UserService(checklistDb, blockerClient, userEventsPublisher);
         const checklistService = new ChecklistService();
 
+        GG_USER_AUTH_TOKEN_HANDLER.create(userService);
+
         new GGHttp(new GGHttpServer())
             .http(UserPublicApi, userService)
             .http(StatusApi, {
@@ -46,7 +48,6 @@ export class ChecklistRuntime extends MyRuntime {
             .openApi({title: "Checklist Public API", version: "1.0.0", specPath: "/openapi.json", docsPath: "/docs"})
 
         new GGHttp(new GGHttpServer({key: new GGLocatorKey("two")}))
-            .use(new UserContextMiddleware(userService))
             .http(ChecklistApi, checklistService)
             .http(UserAuthApi, userService)
             .http(BlockerUserApi, {
@@ -56,9 +57,7 @@ export class ChecklistRuntime extends MyRuntime {
             })
             .openApi({title: "Checklist Auth API", version: "1.0.0", specPath: "/openapi.json", docsPath: "/docs"})
 
-        ChecklistNotificationApi.register(new NotificationService(checklistService).handleConnection, {
-            middlewares: [new UserContextMiddleware(userService)]
-        });
+        ChecklistNotificationApi.register(new NotificationService(checklistService).handleConnection);
 
         // AsyncAPI docs — dedicated server for WebSocket API documentation
         const asyncApiDocsServer = new GGHttpServer({key: new GGLocatorKey("asyncapi-docs")});

@@ -86,8 +86,8 @@ export type {
 export {Topics, parseTopic} from "./socket/topics"
 export type {ParsedTopic} from "./socket/topics"
 
-// Internal auth (shared-secret + WS handshake transport)
-export {GG_INTERNAL_TOKEN, SocketAuthHeaderMiddleware} from "./auth/internalAuth"
+// Internal auth (shared-secret transport)
+export {GG_INTERNAL_TOKEN} from "./auth/internalAuth"
 
 // HTTP: work-server → socket-server push
 export {NotifyApiContract, NotifyApi} from "./socket/NotifyApi"

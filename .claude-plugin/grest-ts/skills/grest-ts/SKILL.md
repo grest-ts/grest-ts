@@ -203,20 +203,23 @@ AppRuntime.cli(import.meta.url).then()
 - `AppRuntime.cli(import.meta.url).then()` — entry point; starts the runtime when run directly.
 - Use `tsx src/AppRuntime.ts` to run locally.
 
-### Multiple APIs / middleware
+### Multiple APIs / auth wires
+
+Auth rides on **wires** declared on the schema (`.use(WIRE)`), not on a `GGHttp` chain. The
+schema carries the wire; the runtime binds the wire's deps once with `WIRE_HANDLER.create(deps)`.
+A schema with no wire is public. See `@grest-ts/http` → "Authentication & Context" for the
+wire's `.define()`/`.create()` model.
 
 ```typescript
 protected compose(): void {
     const httpServer = new GGHttpServer()
 
-    // Public routes (no auth)
-    new GGHttp(httpServer)
-        .http(PublicApi, new PublicApiImpl())
+    // Bind the auth wire's handler into this runtime's scope (once per runtime).
+    USER_TOKEN_WIRE_HANDLER.create(userService)
 
-    // Authenticated routes
     new GGHttp(httpServer)
-        .use(new UserAuthMiddleware(userService))
-        .http(ItemApi, new ItemApiImpl(db))
+        .http(PublicApi, new PublicApiImpl())   // schema has no wire → public
+        .http(ItemApi, new ItemApiImpl(db))     // ItemApi schema .use(USER_TOKEN_WIRE)
         .http(UserApi, userService)
 }
 ```
@@ -504,15 +507,15 @@ export const UserContext = new GGContextKey<AuthUser>("userData", IsAuthUser)
 ```
 
 ```typescript
-// Set in middleware
-import {GGInbound, GGTransportMiddleware} from "@grest-ts/context"
-
-export class UserAuthMiddleware implements GGTransportMiddleware {
-    parse(inbound: GGInbound): void {
-        const user = this.verifyToken(inbound.headers["authorization"])
+// Populated by a smart auth wire's server handler (.define()) — verifies the credential
+// at the request boundary and mints the durable principal. See @grest-ts/http → "Auth".
+export const USER_TOKEN_WIRE_HANDLER = USER_TOKEN_WIRE.define((users: UserService) => ({
+    process: async () => {
+        const user = await users.verifyAccessToken(USER_TOKEN_WIRE.get())
+        if (!user) throw new NOT_AUTHORIZED()
         UserContext.set(user)
-    }
-}
+    },
+}))
 ```
 
 ```typescript
@@ -524,6 +527,10 @@ export class AuditService {
     }
 }
 ```
+
+> For credentials, prefer this wire model over a hand-written `GGTransportMiddleware` — the
+> token stays ephemeral and can't leak into handler code. A bare `GGTransportMiddleware` is
+> still the right tool for *non-credential* ambient context (client version, locale).
 
 ---
 

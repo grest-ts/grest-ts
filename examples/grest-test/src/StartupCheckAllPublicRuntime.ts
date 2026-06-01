@@ -8,9 +8,9 @@ class AllPublicImpl {
 }
 
 /**
- * Runtime that registers a contract whose every method is GG_NO_PERMISSIONS,
- * without wiring `.usePermissions(...)`. Public-only services should boot
- * cleanly — no resolver is required when there's nothing to gate.
+ * Runtime that registers a contract whose every method is GG_NO_PERMISSIONS.
+ * Strict mode is on (declarations exist) but every route satisfies coverage,
+ * so the server boots cleanly.
  */
 export class StartupCheckAllPublicRuntime extends GGRuntime {
     public static readonly NAME = "startup-check-all-public"

@@ -145,7 +145,7 @@ function setupRoutes<TContract extends GGContractApiDefinition>(
                     metrics(rpcResult?.type, httpSchema.name, codec.method, pathPrefix, codec.path, startTime)
                 }
             });
-        })
+        }, `${httpSchema.name}.${methodName}`)
     }
 }
 
