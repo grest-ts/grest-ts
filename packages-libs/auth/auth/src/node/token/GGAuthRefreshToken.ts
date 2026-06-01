@@ -1,84 +1,40 @@
 import {createHash, randomBytes} from "node:crypto"
-import {type GGSchema, IsObject, NOT_AUTHORIZED, NOT_FOUND} from "@grest-ts/schema"
-import type {SigningStrategy} from "../signing/SigningStrategy"
+import {type GGSchema, NOT_AUTHORIZED, NOT_FOUND} from "@grest-ts/schema"
 import {IsRefreshTokenRecord, type RefreshTokenStore} from "../refresh/RefreshTokenStore"
-import {GGAuthSubject, GGAuthTokenResult, GGAuthTokensResult, IsGGAccessTokenData, IsGGRefreshTokenData} from "../../shared/tokenSchemas"
+import {GGAuthSubject, GGAuthTokensResult, IsGGRefreshTokenData} from "../../shared/tokenSchemas"
+import {GGAuthAccessToken} from "./GGAuthAccessToken";
 
-export type GGAccessPayload<C extends object> = {
-    data: C
-    sub: GGAuthSubject
-    /** seconds (JWT convention). */
-    iat: number
-    /** seconds (JWT convention). */
-    exp: number
-}
-
-export interface GGAuthTokenOptions<C extends object> {
-    signer: SigningStrategy
+export interface GGAuthRefreshTokenOptions<C extends object> {
     // Omit for an access-only kind (issueAccess + verifyAccess only); required by issue/refresh/revoke.
     store?: RefreshTokenStore
-    // Validates non-permission claims; omit for a permissions-only token.
-    claimSchema?: GGSchema<C>
-    accessTtlMs: number
     refreshTtlMs: number
     // When set, tokens carry `aud` and verifyAccess rejects a different audience.
-    audience?: string
     now?: () => number
-    randomToken?: () => string
+    randomToken?: () => string,
+    access: GGAuthAccessToken<C>
 }
 
 // Generic over permission `P` and claims `C`, and unaware of org/global/tenant.
 // A dependency between kinds (e.g. org-token-requires-user-token) is app code
 // calling verifyAccess before issue — never modelled here.
-export class GGAuthToken<C extends object> {
+export class GGAuthRefreshToken<C extends object> {
 
-    private readonly signer: SigningStrategy
     private readonly store: RefreshTokenStore | undefined
     private readonly claims: GGSchema<C>
-    private readonly accessTtlMs: number
     private readonly refreshTtlMs: number
-    private readonly audience: string | undefined
     private readonly now: () => number
     private readonly randomToken: () => string
+    private readonly access: GGAuthAccessToken<C>
 
-    constructor(options: GGAuthTokenOptions<C>) {
-        this.signer = options.signer
+    constructor(options: GGAuthRefreshTokenOptions<C>) {
         this.store = options.store
-        this.claims = options.claimSchema ?? (IsObject({}) as unknown as GGSchema<C>)
-        this.accessTtlMs = options.accessTtlMs
         this.refreshTtlMs = options.refreshTtlMs
-        this.audience = options.audience
         this.now = options.now ?? Date.now
         this.randomToken = options.randomToken ?? (() => randomBytes(32).toString("base64url"))
     }
 
     public issue = async (subject: string | GGAuthSubject, claims: C): Promise<GGAuthTokensResult> => {
         return await this.mint(subject as GGAuthSubject, this.claims.parse(claims), this.randomToken())
-    }
-
-    // Mint an access token with no refresh token and no store write. For a secondary/scoped
-    // kind re-minted behind a primary token (e.g. an org token), where rotation is the primary
-    // token's job. Works with or without a store configured.
-    public issueAccess = async (subject: string | GGAuthSubject, claims: C): Promise<GGAuthTokenResult> => {
-        return {
-            access: await this.signAccess(subject as GGAuthSubject, this.claims.parse(claims), this.now())
-        }
-    }
-
-    public verifyAccess = async (accessToken: string): Promise<GGAccessPayload<C>> => {
-        const payload = await this.signer.verify(accessToken)
-        const sub = payload["sub"]
-        if (typeof sub !== "string") throw new NOT_AUTHORIZED({debugMessage: "TOKEN_INVALID: missing sub"})
-        if (this.audience !== undefined && payload["aud"] !== this.audience) {
-            throw new NOT_AUTHORIZED({debugMessage: "TOKEN_INVALID: wrong audience"})
-        }
-        const claims = this.claims.parse(payload)
-        return {
-            data: claims,
-            sub,
-            iat: Number(payload["iat"]),
-            exp: Number(payload["exp"]),
-        } as GGAccessPayload<C>
     }
 
     // Redeem a refresh token for a fresh pair; the presented token is rotated out (marked
@@ -127,7 +83,7 @@ export class GGAuthToken<C extends object> {
     private mint = async (subject: GGAuthSubject, claims: C, familyId: string): Promise<GGAuthTokensResult> => {
         const store = this.requireStore()
         const nowMs = this.now()
-        const accessToken = await this.signAccess(subject, claims, nowMs)
+        const accessToken = await this.access.signAccess(subject, claims, nowMs)
         const refreshExpiresAt = nowMs + this.refreshTtlMs
         const refreshToken = this.randomToken()
         await store.save(IsRefreshTokenRecord.parse({
@@ -144,18 +100,6 @@ export class GGAuthToken<C extends object> {
                 expiresAt: refreshExpiresAt
             })
         }
-    }
-
-    private signAccess = async (subject: GGAuthSubject, claims: C, nowMs: number): Promise<typeof IsGGAccessTokenData.infer> => {
-        const expiresAt = nowMs + this.accessTtlMs
-        const token = await this.signer.sign({
-            data: claims,
-            ...(this.audience !== undefined ? {aud: this.audience} : {}),
-            sub: subject,
-            iat: Math.floor(nowMs / 1000),
-            exp: Math.floor(expiresAt / 1000),
-        })
-        return IsGGAccessTokenData.parse({token, expiresAt})
     }
 
     private requireStore = (): RefreshTokenStore => {

@@ -14,6 +14,8 @@ import {UserService} from "./services/UserService"
 import {OrgService} from "./services/OrgService"
 import {BannerService} from "./services/BannerService"
 import {LiveService} from "./services/LiveService"
+import {GGAuthAccessToken} from "@grest-ts/auth";
+import {GGAuthRefreshToken} from "@grest-ts/auth";
 
 const SECRET = "auth-example-secret-do-not-use-in-prod"
 
@@ -23,14 +25,16 @@ export class AppRuntime extends GGRuntime {
     protected compose(): void {
         const server = new GGHttpServer()
 
-        const userTokenEngine = new GGAuthToken({
-            signer: new HmacSigner(SECRET),
+        const userTokenEngine = new GGAuthRefreshToken({
             store: new InMemoryRefreshTokenStore(),
-            claimSchema: IsUser,
-            accessTtlMs: 60 * 60 * 1000,
             refreshTtlMs: 7 * 24 * 60 * 60 * 1000,
+            access: new GGAuthAccessToken({
+                signer: new HmacSigner(SECRET),
+                claimSchema: IsUser,
+                accessTtlMs: 60 * 60 * 1000
+            })
         })
-        const orgTokenEngine = new GGAuthToken({
+        const orgTokenEngine = new GGAuthAccessToken({
             signer: new HmacSigner(SECRET + "-org"),
             claimSchema: IsOrg,
             accessTtlMs: 8 * 60 * 60 * 1000,
