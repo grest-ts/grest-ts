@@ -1,5 +1,5 @@
 import {WebSocketIncoming, WebSocketOutgoing} from "@grest-ts/websocket"
-import {SESSION} from "../api/CookieTestApi"
+import {SESSION_VALUE} from "../api/CookieTestApi"
 import {WsCookieIncoming, WsCookieOutgoing} from "../api/WsCookieApi"
 
 type Incoming = WebSocketIncoming<WsCookieIncoming>
@@ -9,7 +9,7 @@ export class WsCookieService {
 
     public handleConnection = (incoming: Incoming, _outgoing: Outgoing): void => {
         incoming.on({
-            whoami: async () => SESSION.get(),
+            whoami: async () => SESSION_VALUE.get(),
             adminOnly: async () => "admin-ok",
         })
     }

@@ -1,12 +1,12 @@
 /**
  * QUARANTINED — see ./README.md. Not wired into GGHttpServer.start().
  *
- * Needs a "does this schema have a scope resolver?" input. The live `_schemasWithResolver`
- * side-set that fed it was removed; when restored, derive this in a post-compose pass over the
- * fully-assembled graph (a wire-bearing or .usePermissions()'d schema has a resolver) rather than
- * from a side-set populated during wiring.
+ * Strict-mode coverage: once any route declares a permission, every route on the server must
+ * declare one (use GG_NO_PERMISSIONS for intentionally public routes). The old "orphaned
+ * permission" arm is gone — there is no resolver wiring anymore; scopes come only from the
+ * schema's wires, and a permissioned route on a wire-less schema simply fails closed at runtime.
  */
-import {describePermission, GG_NO_PERMISSIONS, GGContractMethod, GGPermission} from "@grest-ts/schema"
+import {GGContractMethod, GGPermission} from "@grest-ts/schema"
 
 interface HttpSchemaLike {
     name: string
@@ -22,48 +22,31 @@ interface WebSocketSchemaLike {
 export function checkPermissionsAtStart(
     httpSchemas: readonly HttpSchemaLike[],
     webSocketSchemas: readonly WebSocketSchemaLike[],
-    schemasWithResolver: ReadonlySet<object>,
 ): void {
-    type Surface = {label: string; permission: GGPermission | undefined; resolverWired: boolean}
+    type Surface = {label: string; permission: GGPermission | undefined}
     const surfaces: Surface[] = []
 
     for (const schema of httpSchemas) {
-        const resolverWired = schemasWithResolver.has(schema)
         const methods = schema.contract?.methods ?? {}
         for (const name of Object.keys(methods)) {
-            surfaces.push({
-                label: `${schema.name}.${name}`,
-                permission: methods[name].permission,
-                resolverWired,
-            })
+            surfaces.push({label: `${schema.name}.${name}`, permission: methods[name].permission})
         }
     }
     for (const ws of webSocketSchemas) {
-        const resolverWired = schemasWithResolver.has(ws)
         const methods = ws.contract.clientToServer.methods
         for (const name of Object.keys(methods)) {
-            surfaces.push({
-                label: `${ws.name}.${name}`,
-                permission: methods[name].permission,
-                resolverWired,
-            })
+            surfaces.push({label: `${ws.name}.${name}`, permission: methods[name].permission})
         }
         if (ws.connectPermission !== undefined) {
-            surfaces.push({
-                label: `${ws.name} (connectPermission)`,
-                permission: ws.connectPermission,
-                resolverWired,
-            })
+            surfaces.push({label: `${ws.name} (connectPermission)`, permission: ws.connectPermission})
         }
     }
 
     let strict = false
     const undeclared: Surface[] = []
-    const orphaned: Surface[] = []
     for (const s of surfaces) {
-        if (s.permission !== undefined || s.resolverWired) strict = true
+        if (s.permission !== undefined) strict = true
         if (s.permission === undefined) undeclared.push(s)
-        else if (s.permission !== GG_NO_PERMISSIONS && !s.resolverWired) orphaned.push(s)
     }
     if (!strict) return
 
@@ -71,22 +54,10 @@ export function checkPermissionsAtStart(
         const lines = undeclared.map(s => `  ${s.label}`).join("\n")
         throw new Error(
             `GGHttpServer: permission strict mode is active on this server ` +
-            `(at least one route declares a permission or has .usePermissions(...) wired), ` +
+            `(at least one route declares a permission), ` +
             `but the following routes have no \`permission\` declared:\n\n` +
             lines +
             `\n\nFix: declare \`permission\` on every route — use \`GG_NO_PERMISSIONS\` for intentionally public ones.`
-        )
-    }
-    if (orphaned.length > 0) {
-        const lines = orphaned.map(s =>
-            `  ${s.label}   requires ${describePermission(s.permission)}`
-        ).join("\n")
-        throw new Error(
-            `GGHttpServer: these routes declare non-public permissions but their schema was ` +
-            `registered without a scope resolver:\n\n` +
-            lines +
-            `\n\nFix: call \`.usePermissions(yourResolver)\` on the GGHttp chain (or pass ` +
-            `\`permissionResolver\` to the WS schema config) before registering these routes.`
         )
     }
 }

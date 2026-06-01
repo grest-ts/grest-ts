@@ -2,17 +2,16 @@ import {callOn, GGTest} from "@grest-ts/testkit"
 import {GGContext} from "@grest-ts/context"
 import {afterEach} from "vitest"
 import {MainRuntime} from "../src/main"
-import {AppPermission, GG_TEST_SCOPES, PermissionsApi, TEST_RESOLVER_THROW_SCOPE} from "../src/api/PermissionsApi"
+import {AppPermission, PermissionsApi, TEST_RESOLVER_THROW_SCOPE, TEST_SCOPES_WIRE} from "../src/api/PermissionsApi"
 
 /**
- * Helper: create a request scope with the given scopes set.
- * The test middleware reads GG_TEST_SCOPES from context and writes a header
- * the server-side middleware parses back into context — exercising the real
- * transport path including the gate.
+ * Helper: create a request scope carrying the given scopes on the credential wire.
+ * The wire emits them as the x-test-scopes header; the server's process() verifies
+ * identity and permissions() yields them to the gate — the real transport path.
  */
 function withScopes(...scopes: string[]): GGContext {
     const scope = new GGContext("permissions-test")
-    scope.set(GG_TEST_SCOPES, scopes)
+    scope.set(TEST_SCOPES_WIRE, scopes.join(","))
     return scope
 }
 
@@ -24,19 +23,6 @@ describe.shuffle("permissions / HTTP gate", () => {
     afterEach(() => {
         scope?.reset()
         scope = undefined
-    })
-
-    describe("GG_NO_PERMISSIONS (public)", () => {
-        test("works with no caller identity", async () => {
-            const client = callOn(PermissionsApi)
-            expect(await client.publicMethod()).toBe("ok")
-        })
-        test("GG_PERMISSIONS populated when resolver wired and caller has scopes", async () => {
-            scope = withScopes(AppPermission.Read)
-            const client = callOn(PermissionsApi, scope)
-            // Handler returns "ok:authed" when GG_PERMISSIONS is present.
-            expect(await client.publicMethod()).toBe("ok:authed")
-        })
     })
 
     describe("GG_ANY_PERMISSION", () => {
@@ -126,30 +112,19 @@ describe.shuffle("permissions / HTTP gate", () => {
     })
 
     describe("order semantics", () => {
-        test("empty header → no identity → NOT_AUTHORIZED on non-public", async () => {
-            // Setting an empty list intentionally: the middleware only sets
-            // GG_TEST_SCOPES if header value is non-empty. Empty scopes here
-            // means no header is sent, so resolver returns null.
-            scope = new GGContext("permissions-test-empty")
-            scope.set(GG_TEST_SCOPES, [])
-            await expect(callOn(PermissionsApi, scope).needsRead()).rejects.toThrow(/NOT_AUTHORIZED/)
+        test("no wire → no identity → NOT_AUTHORIZED on a gated method", async () => {
+            // Omitting the wire leaves x-test-scopes unset, so the wire's process()
+            // throws NOT_AUTHORIZED before any permission check runs.
+            await expect(callOn(PermissionsApi).needsRead()).rejects.toThrow(/NOT_AUTHORIZED/)
         })
     })
 
     describe("resolver crashes", () => {
-        test("resolver throws → SERVER_ERROR to caller (handler not invoked)", async () => {
-            // Sentinel scope makes getTestScopes() throw an unrelated Error.
+        test("permissions() throws → SERVER_ERROR to caller (handler not invoked)", async () => {
+            // Sentinel scope makes the wire's permissions() throw an unrelated Error.
             // The gate's outer catch converts it to SERVER_ERROR via ERROR.fromUnknown.
             scope = withScopes(TEST_RESOLVER_THROW_SCOPE)
             await expect(callOn(PermissionsApi, scope).needsRead()).rejects.toThrow(/SERVER_ERROR/)
-        })
-        test("resolver throws on a public method → still SERVER_ERROR (gate runs the resolver to populate GG_PERMISSIONS)", async () => {
-            // Even though the method is GG_NO_PERMISSIONS, the gate still calls
-            // the resolver (to populate the checker for handler-side use). A
-            // crashing resolver therefore breaks public endpoints too — a tradeoff
-            // that's intentional: the resolver is meant to be reliable.
-            scope = withScopes(TEST_RESOLVER_THROW_SCOPE)
-            await expect(callOn(PermissionsApi, scope).publicMethod()).rejects.toThrow(/SERVER_ERROR/)
         })
     })
 })

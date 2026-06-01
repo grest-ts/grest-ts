@@ -10,17 +10,16 @@ import {GGWireContextKey} from "./GGWireContextKey"
 /**
  * The scope resolver a set of wired middlewares contributes: the union of each wire's
  * permissions() (each verified wire's process() already authenticated-or-threw; ambient wires
- * have no handler and contribute nothing). Returns undefined when no wire is present — the schema
- * is then ungated unless a manual resolver is supplied. Shared by the HTTP and WebSocket register
- * paths so the derivation lives in exactly one place.
+ * have no handler and contribute nothing). With no wire present the resolver yields the empty
+ * set — a permissioned route then fails closed. Shared by the HTTP and WebSocket register paths
+ * so the derivation lives in exactly one place.
  */
 export function deriveWireScopeResolver(
     middlewares: readonly GGTransportMiddleware[],
-): (() => Promise<ReadonlySet<string>>) | undefined {
+): () => Promise<ReadonlySet<string>> {
     const wires = middlewares.filter(
         (mw): mw is GGWireContextKey => mw instanceof GGWireContextKey,
     )
-    if (wires.length === 0) return undefined
     return async () => {
         const scopes = new Set<string>()
         for (const wire of wires) {

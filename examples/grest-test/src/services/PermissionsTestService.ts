@@ -4,13 +4,6 @@ import {AppPermission} from "../api/PermissionsApi"
 
 export class PermissionsTestService {
 
-    public publicMethod = async (): Promise<string> => {
-        // Even on a public endpoint, GG_PERMISSIONS is populated when a
-        // resolver is wired and identity is present — handlers can personalize.
-        const perm = GG_PERMISSIONS.get()
-        return perm ? "ok:authed" : "ok"
-    }
-
     public anyAuth = async (): Promise<string> => "ok"
 
     public needsRead = async (): Promise<string> => "ok"

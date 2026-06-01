@@ -3,21 +3,6 @@ import {GGContractApiDefinition, GGContractImplementation} from "@grest-ts/schem
 import type {GGTransportMiddleware} from "@grest-ts/context";
 import {GGHttpServer} from "./GGHttpServer";
 
-/**
- * Resolves the caller's permission scopes for the current request. The function
- * is called once between transport middleware and the handler. Sync or async —
- * both supported (the gate awaits).
- *
- * Return `null` when no caller identity is available (the gate will throw
- * NOT_AUTHORIZED for non-public methods). Return a (possibly empty) set
- * otherwise; the gate will call satisfies() against the method's permission.
- *
- * The resolver should read whatever app-defined context the upstream auth
- * middleware populated — it should NOT parse the token itself.
- */
-export type GGScopeResolver =
-    () => ReadonlySet<string> | null | Promise<ReadonlySet<string> | null>
-
 export class GGHttp<TContext = undefined> {
 
     /**
@@ -27,7 +12,6 @@ export class GGHttp<TContext = undefined> {
      */
     protected readonly httpServer: GGHttpServer
     private readonly middlewares: GGTransportMiddleware[] = [];
-    private permissionResolver?: GGScopeResolver;
 
     constructor(httpServer: GGHttpServer) {
         this.httpServer = httpServer;
@@ -38,20 +22,6 @@ export class GGHttp<TContext = undefined> {
         return this as any;
     }
 
-    /**
-     * Register a scope resolver. Subsequent .http(...) calls capture this
-     * resolver and use it to gate every request against the contract's
-     * declared `permission`.
-     *
-     * Calling order matters: .use(auth) → .usePermissions(getScopes) → .http(api).
-     * If .http() runs before .usePermissions(), the call sees no resolver — and
-     * the startup check will hard-fail if its schema has any non-public method.
-     */
-    public usePermissions(resolver: GGScopeResolver): this {
-        this.permissionResolver = resolver;
-        return this;
-    }
-
     public http<TContract extends GGContractApiDefinition, TSchemaContext>(
         schema: GGHttpSchema<TContract, TSchemaContext>,
         implementation: GGContractImplementation<TContract>
@@ -59,7 +29,6 @@ export class GGHttp<TContext = undefined> {
         schema.register(implementation, {
             http: this.httpServer,
             middlewares: this.middlewares,
-            permissionResolver: this.permissionResolver,
         });
         return this as any;
     }

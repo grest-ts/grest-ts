@@ -1,5 +1,5 @@
 import {GGCookie} from "@grest-ts/http"
-import {SESSION} from "../api/CookieTestApi"
+import {SESSION, SESSION_VALUE} from "../api/CookieTestApi"
 
 export class CookieTestService {
 
@@ -9,7 +9,7 @@ export class CookieTestService {
     }
 
     public me = async (): Promise<{session: string | undefined}> => {
-        return {session: SESSION.get()}
+        return {session: SESSION_VALUE.get()}
     }
 
     public logout = async (): Promise<{ok: boolean}> => {

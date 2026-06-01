@@ -1,8 +1,8 @@
 import {GGRuntime} from "@grest-ts/runtime"
 import {GGHttp, GGHttpServer} from "@grest-ts/http"
-import {getTestScopes, PermissionsApi} from "./api/PermissionsApi"
+import {PermissionsApi, TEST_SCOPES_WIRE_HANDLER} from "./api/PermissionsApi"
 import {PermissionsTestService} from "./services/PermissionsTestService"
-import {getWsTestScopes, WsFeaturePermissionsApi, WsPermissionsApi} from "./api/WsPermissionsApi"
+import {WsFeaturePermissionsApi, WsPermissionsApi} from "./api/WsPermissionsApi"
 import {WsFeaturePermissionsService, WsPermissionsService} from "./services/WsPermissionsService"
 import {GGOpenApiDocs} from "@grest-ts/openapi"
 import {GGAsyncApiDocs} from "@grest-ts/asyncapi"
@@ -20,9 +20,9 @@ import {QuerySocketApi} from "./api/QuerySocketApi"
 import {EventsTestApi} from "./api/EventsTestApi"
 import {LanguageTestApi} from "./api/LanguageTestApi"
 import {MiddlewareTestApi} from "./api/MiddlewareTestApi"
-import {CookieTestApi} from "./api/CookieTestApi"
+import {CookieTestApi, SESSION_HANDLER} from "./api/CookieTestApi"
 import {CookieTestService} from "./services/CookieTestService"
-import {getScopesFromSession, WsCookieApi} from "./api/WsCookieApi"
+import {WsCookieApi} from "./api/WsCookieApi"
 import {WsCookieService} from "./services/WsCookieService"
 import {FileUploadTestApi} from "./api/FileUploadTestApi"
 import {BenchmarkApi} from "./api/BenchmarkApi"
@@ -102,24 +102,26 @@ export class MainRuntime extends GGRuntime {
         AuthedSocketApi.register(authedSocketService.handleConnection);
         QuerySocketApi.register(querySocketService.handleConnection);
 
-        // Permissions API — wired via GGHttp builder so usePermissions(...) gates each request.
+        // Permissions API — the schema's x-test-scopes credential wire authenticates each
+        // request (required-or-throw) and yields the caller's scopes to the always-on gate.
+        TEST_SCOPES_WIRE_HANDLER.create({});
         new GGHttp(httpServer)
-            .usePermissions(getTestScopes)
             .http(PermissionsApi, new PermissionsTestService());
 
-        // Cookie API — the SESSION cookie wire parses the incoming Cookie into itself;
-        // handlers emit Set-Cookie via GGCookie.setCookie(SESSION, …).
+        // Cookie API — the SESSION cookie wire mints SESSION_VALUE from the incoming Cookie
+        // and derives scopes; handlers emit Set-Cookie via GGCookie.setCookie(SESSION, …).
+        SESSION_HANDLER.create({});
         CookieTestApi.register(new CookieTestService());
 
         // WS cookie API — the SAME SESSION cookie wire, read from the browser's upgrade Cookie.
-        // connectPermission gates on scopes the resolver derives from that cookie.
-        WsCookieApi.register(new WsCookieService().handleConnection, {permissionResolver: getScopesFromSession});
+        // connectPermission gates on the scopes that wire derives from the cookie.
+        WsCookieApi.register(new WsCookieService().handleConnection);
 
-        // WebSocket permission test fixtures.
+        // WebSocket permission test fixtures — same x-test-scopes wire as the HTTP gate.
         const wsPermissionsService = new WsPermissionsService();
-        WsPermissionsApi.register(wsPermissionsService.handleConnection, {permissionResolver: getWsTestScopes});
+        WsPermissionsApi.register(wsPermissionsService.handleConnection);
         const wsFeaturePermissionsService = new WsFeaturePermissionsService();
-        WsFeaturePermissionsApi.register(wsFeaturePermissionsService.handleConnection, {permissionResolver: getWsTestScopes});
+        WsFeaturePermissionsApi.register(wsFeaturePermissionsService.handleConnection);
 
         GGOpenApiDocs.register({http: httpServer, title: "Grest Test API", version: "1.0.0", specPath: "/openapi.json", docsPath: "/docs"});
 

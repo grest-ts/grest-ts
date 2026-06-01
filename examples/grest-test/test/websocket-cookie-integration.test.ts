@@ -120,10 +120,11 @@ describe("ws cookie integration (real upgrade)", () => {
         }
     })
 
-    test("connecting WITHOUT a session cookie is rejected at the handshake (NOT_AUTHORIZED)", async () => {
-        // The connectPermission resolver derives no scopes from a missing cookie, so the
-        // "allowSocketConnection" gate fails the handshake.
-        await expect(openRaw()).rejects.toMatchObject({type: "NOT_AUTHORIZED"})
+    test("connecting WITHOUT a session cookie is rejected at the handshake (FORBIDDEN)", async () => {
+        // SESSION is ambient (so the HTTP CookieTestApi can serve cookie-less requests),
+        // and SESSION_SCOPES_WIRE derives no scopes from a missing cookie, so the
+        // connectPermission(Read) gate fails the handshake with FORBIDDEN.
+        await expect(openRaw()).rejects.toMatchObject({type: "FORBIDDEN"})
     })
 
     test("an admin session may call adminOnly; a plain session is FORBIDDEN", async () => {
@@ -144,9 +145,9 @@ describe("ws cookie integration (real upgrade)", () => {
 
     test("a cookie in the in-band handshake message cannot spoof identity", async () => {
         // No real upgrade Cookie; try to smuggle a session into the in-band handshake.
-        // It must be ignored, so the connect gate still rejects with NOT_AUTHORIZED.
+        // It must be ignored, so the connect gate still rejects (FORBIDDEN — no scopes).
         await expect(openRaw(undefined, {cookie: "session=session-for-admin"}))
-            .rejects.toMatchObject({type: "NOT_AUTHORIZED"})
+            .rejects.toMatchObject({type: "FORBIDDEN"})
     })
 
     test("no Set-Cookie is emitted on the WS upgrade response", async () => {

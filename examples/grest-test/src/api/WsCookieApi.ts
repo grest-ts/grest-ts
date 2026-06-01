@@ -9,20 +9,9 @@ import {
     SERVER_ERROR,
 } from "@grest-ts/schema"
 import {AppPermission} from "./PermissionsApi"
-// The SAME cookie key the HTTP CookieTestApi binds — one key, two transports.
+// The SAME cookie key (and handler) the HTTP CookieTestApi binds — one wire, two transports.
+// Its process() mints SESSION_VALUE and derives the connection scopes from the cookie.
 import {SESSION} from "./CookieTestApi"
-
-/**
- * Resolve connection scopes from the session cookie that rode in on the WS upgrade.
- * No session → null (no identity, so connectPermission rejects with NOT_AUTHORIZED).
- * A session value containing "admin" → [Admin, Read]; any other session → [Read].
- */
-export const getScopesFromSession = (): ReadonlySet<string> | null => {
-    const session = SESSION.get()
-    if (!session) return null
-    if (session.includes("admin")) return new Set([AppPermission.Admin, AppPermission.Read])
-    return new Set([AppPermission.Read])
-}
 
 export const WsCookieApiContract = defineSocketContract("WsCookieApi", {
     clientToServer: {
@@ -43,7 +32,7 @@ export const WsCookieApiContract = defineSocketContract("WsCookieApi", {
 })
 
 // .connectPermission(Read) is the "allowSocketConnection" gate: a connection with no
-// session cookie resolves to no scopes and is rejected at the handshake.
+// session cookie resolves to no scopes and is rejected at the handshake (FORBIDDEN).
 export const WsCookieApi = webSocketSchema(WsCookieApiContract)
     .path("ws/cookie-test")
     .use(SESSION)

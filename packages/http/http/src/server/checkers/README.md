@@ -29,11 +29,11 @@ When restored, each checker takes explicit inputs derived in that post-compose p
 - `checkWiresImplemented(httpSchemas, webSocketSchemas)` — already self-contained; it reads each
   schema's middleware list and uses `wireIsDefined(wire)` (a `FACTORIES.has` probe exported from
   `GGWireContextKey.node`) + `wire.hasHandler()`.
-- `checkPermissionsAtStart(httpSchemas, webSocketSchemas, schemasWithResolver)` — needs a
-  **"does this schema have a scope resolver?"** signal. The old `_schemasWithResolver` side-set is
-  gone; tick 2 should compute `schemasWithResolver` from the assembled graph (a schema that bears a
-  wire, or had `.usePermissions(...)` applied, has a resolver) instead of from a side-set mutated
-  during wiring.
+- `checkPermissionsAtStart(httpSchemas, webSocketSchemas)` — self-contained; reads each route's
+  declared `permission` and enforces strict-mode coverage (once any route declares a permission,
+  every route must). The old "orphaned permission" arm and its `schemasWithResolver` input are gone:
+  there is no resolver wiring anymore — scopes come only from the schema's wires, so a permissioned
+  route on a wire-less schema simply fails closed at runtime instead of being a startup fault.
 
 ## Full check catalog
 
@@ -47,7 +47,7 @@ Every wiring/correctness check in the HTTP + WS layer, with status.
 | 4 | missing impl method | each contract method has an implementation function | registration | KEPT INLINE |
 | 5 | missing contract method schema | each codec method maps to a contract method definition | registration | KEPT INLINE |
 | 6 | **`_checkWiresImplemented`** | every `.define()`d + `.use()`d wire has a `.create()`d handler | start() | **QUARANTINED (disabled)** → `checkWiresImplemented.ts` |
-| 7 | **`_checkPermissionsAtStart`** | strict-mode coverage: no undeclared route, no orphaned non-public permission | start() | **QUARANTINED (disabled)** → `checkPermissionsAtStart.ts` |
+| 7 | **`_checkPermissionsAtStart`** | strict-mode coverage: once any route declares a permission, every route must (no undeclared route) | start() | **QUARANTINED (disabled)** → `checkPermissionsAtStart.ts` |
 | 8 | wire "used but not implemented" | a wire reaches `process()`/`permissions()` with no handler in scope | per-request | KEPT INLINE (per-request safety net) |
 | 9 | `.define()` once | a wire is `.define()`d at most once | registration | KEPT INLINE |
 | 10 | `.create()` once | a wire handler is `.create()`d at most once per runtime scope | registration | KEPT INLINE |
