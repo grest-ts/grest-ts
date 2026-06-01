@@ -61,9 +61,13 @@ Every wiring/correctness check in the HTTP + WS layer, with status.
 | 18 | `defineClient` once | a wire's client handler is `.defineClient()`d at most once | client build | KEPT INLINE |
 | 19 | WS missing contract | a `GGWebSocketSchema` has a `contract` before `startServer()` | registration | KEPT INLINE |
 | 20 | WS missing http server | a `GGHttpServer` is in scope or passed via config (WS `startServer`) | registration | KEPT INLINE |
+| 21 | duplicate wire name on one API | no two distinct wires sharing a name are `.use()`d on the same schema | start() | ASPIRATIONAL (not built) |
 
 The two QUARANTINED checks are the only ones removed from the live path. Everything else is a cheap
 structural/constructor guard left in place; #8 and #16 are per-request safety nets that still run.
+
+#21 is aspirational: two wires may share a name across *different* schemas (handlers are isolated per
+wire instance), but two same-named wires on one schema would collide — flagged for the tick-2 pass.
 
 ## Parked tests
 
