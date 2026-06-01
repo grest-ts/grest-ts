@@ -188,7 +188,7 @@ Each step has one job: the auth middleware turns a token into identity in contex
 
 The check is per-server (HTTP routes + WS schemas on the same `GGHttpServer`), so a permission declared anywhere is infectious across sibling chains. The only way to opt out is to declare nothing — projects with no auth pay zero ceremony, but the moment one route opts in, the framework forces consistency.
 
-**What this does not cover.** The permission gates *endpoint access* — "is this caller allowed to invoke this method at all?" It does not handle *resource access* — "can this caller edit *this specific* post?" That check still belongs in the handler. The same `GGPermissionChecker` the gate used is exposed via `GG_PERMISSIONS.get()`, so handler-side sub-decisions use identical logic with no drift between framework and app code.
+**What this does not cover.** The permission gates *endpoint access* — "is this caller allowed to invoke this method at all?" It does not handle *resource access* — "can this caller edit *this specific* post?" That check still belongs in the handler, which reads the app's own durable principal (minted by the wire's `process()`) — not a framework scope bag.
 
 ## Authentication & Context
 
