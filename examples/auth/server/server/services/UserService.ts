@@ -1,5 +1,5 @@
 import {EXISTS, GGContractImplementation, NOT_AUTHORIZED, NOT_FOUND} from "@grest-ts/schema"
-import {AuthError, AuthToken} from "@grest-ts/auth"
+import {AuthToken} from "@grest-ts/auth"
 import {AuthPublicApiContract, InvalidCredentialsError, RegisterRequest, LoginRequest, RefreshRequest, AuthResponse, TokenPairResponse} from "../../../api/AuthPublicApi"
 import {UserApiContract, UpdateProfileRequest} from "../../../api/UserApi"
 import {UserPermission, tUserId, User} from "../../../api/auth/UserAuth"
@@ -43,17 +43,11 @@ export class UserService implements GGContractImplementation<typeof AuthPublicAp
     }
 
     public refresh = async ({refreshToken}: RefreshRequest): Promise<TokenPairResponse> => {
-        try {
-            const pair = await this.tokenEngine.refresh(refreshToken, async (subject) => {
-                const record = this.table.getRecord(subject as tUserId)
-                if (!record) throw new NOT_AUTHORIZED()
-                return {permissions: record.permissions, claims: {}}
-            })
-            return pair
-        } catch (err) {
-            if (err instanceof AuthError) throw new NOT_AUTHORIZED({debugMessage: err.code})
-            throw err
-        }
+        return await this.tokenEngine.refresh(refreshToken, async (subject) => {
+            const record = this.table.getRecord(subject as tUserId)
+            if (!record) throw new NOT_AUTHORIZED()
+            return {permissions: record.permissions, claims: {}}
+        })
     }
 
     public me = async (): Promise<User> => {
@@ -75,11 +69,6 @@ export class UserService implements GGContractImplementation<typeof AuthPublicAp
     // token into a verified payload (subject + permissions).
     public verifyAccessToken = async (token: string | undefined) => {
         if (!token) throw new NOT_AUTHORIZED({debugMessage: "Missing bearer token"})
-        try {
-            return await this.tokenEngine.verifyAccess(token)
-        } catch (err) {
-            if (err instanceof AuthError) throw new NOT_AUTHORIZED({debugMessage: err.code})
-            throw err
-        }
+        return await this.tokenEngine.verifyAccess(token)
     }
 }

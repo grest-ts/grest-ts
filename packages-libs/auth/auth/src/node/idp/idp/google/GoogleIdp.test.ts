@@ -1,6 +1,7 @@
 import {describe, test, expect} from "vitest"
 import {SignJWT, generateKeyPair, type JWTVerifyGetKey, type KeyLike} from "jose"
-import {AuthError, GoogleIdp} from "../../../../index-node"
+import {NOT_AUTHORIZED} from "@grest-ts/schema"
+import {GoogleIdp} from "../../../../index-node"
 
 const CLIENT_ID = "client-123.apps.googleusercontent.com"
 
@@ -39,21 +40,21 @@ describe("GoogleIdp", () => {
         const {publicKey, privateKey} = await generateKeyPair("ES256")
         const idp = new GoogleIdp({clientId: "some-other-client", keys: async () => publicKey})
         await expect(idp.authenticate(await googleToken(privateKey)))
-            .rejects.toMatchObject({code: "TOKEN_INVALID"})
+            .rejects.toBeInstanceOf(NOT_AUTHORIZED)
     })
 
     test("rejects a token from a different issuer", async () => {
         const {publicKey, privateKey} = await generateKeyPair("ES256")
         const idp = new GoogleIdp({clientId: CLIENT_ID, keys: async () => publicKey})
         const token = await googleToken(privateKey, {issuer: "https://evil.example.com"})
-        await expect(idp.authenticate(token)).rejects.toMatchObject({code: "TOKEN_INVALID"})
+        await expect(idp.authenticate(token)).rejects.toBeInstanceOf(NOT_AUTHORIZED)
     })
 
     test("rejects an expired token", async () => {
         const {publicKey, privateKey} = await generateKeyPair("ES256")
         const idp = new GoogleIdp({clientId: CLIENT_ID, keys: async () => publicKey})
         const token = await googleToken(privateKey, {expEpochSec: Math.floor(Date.now() / 1000) - 60})
-        await expect(idp.authenticate(token)).rejects.toBeInstanceOf(AuthError)
+        await expect(idp.authenticate(token)).rejects.toBeInstanceOf(NOT_AUTHORIZED)
     })
 
     test("rejects a token signed by an unknown key", async () => {
@@ -61,6 +62,6 @@ describe("GoogleIdp", () => {
         const attacker = await generateKeyPair("ES256")
         const idp = new GoogleIdp({clientId: CLIENT_ID, keys: async () => trusted.publicKey})
         await expect(idp.authenticate(await googleToken(attacker.privateKey)))
-            .rejects.toMatchObject({code: "TOKEN_INVALID"})
+            .rejects.toBeInstanceOf(NOT_AUTHORIZED)
     })
 })

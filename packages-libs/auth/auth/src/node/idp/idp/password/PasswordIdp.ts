@@ -1,4 +1,4 @@
-import {AuthError} from "../../../errors"
+import {NOT_AUTHORIZED} from "@grest-ts/schema"
 import {BcryptHasher} from "./BcryptHasher"
 import type {PasswordHasher} from "./PasswordHasher"
 import type {ExternalIdentity, IdpStrategy} from "../../IdpStrategy"
@@ -38,7 +38,7 @@ export class PasswordIdp implements IdpStrategy<PasswordCredential> {
     public authenticate = async (input: PasswordCredential): Promise<ExternalIdentity> => {
         const record = await this.lookup(input.username)
         if (!record || !(await this.hasher.verify(input.password, record.passwordHash))) {
-            throw new AuthError("CREDENTIALS_INVALID")
+            throw new NOT_AUTHORIZED({displayMessage: "Invalid username or password", debugMessage: "CREDENTIALS_INVALID"})
         }
         return {provider: this.provider, subject: record.subject, claims: {}}
     }

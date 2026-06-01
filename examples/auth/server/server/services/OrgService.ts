@@ -1,5 +1,5 @@
 import {FORBIDDEN, GGContractImplementation, NOT_AUTHORIZED, NOT_FOUND} from "@grest-ts/schema"
-import {AuthError, AuthToken} from "@grest-ts/auth"
+import {AuthToken} from "@grest-ts/auth"
 import {OrgApiContract, SelectOrgRequest, SelectOrgResponse} from "../../../api/OrgApi"
 import {OrgScopedApiContract} from "../../../api/OrgApi"
 import {OrgClaims, OrgPermission, Org} from "../../../api/auth/OrgAuth"
@@ -37,11 +37,6 @@ export class OrgService implements GGContractImplementation<typeof OrgApiContrac
     // Called by ORG_TOKEN_WIRE's server handler during process().
     public verifyOrgToken = async (token: string | undefined) => {
         if (!token) throw new NOT_AUTHORIZED({debugMessage: "Missing org token"})
-        try {
-            return await this.orgTokenEngine.verifyAccess(token)
-        } catch (err) {
-            if (err instanceof AuthError) throw new NOT_AUTHORIZED({debugMessage: err.code})
-            throw err
-        }
+        return await this.orgTokenEngine.verifyAccess(token)
     }
 }

@@ -1,7 +1,4 @@
 import "./_dedupCheck";
-export {AuthError} from "./node/errors"
-export type {AuthErrorCode} from "./node/errors"
-
 export type {SigningStrategy} from "./node/signing/SigningStrategy"
 export {HmacSigner} from "./node/signing/HmacSigner"
 

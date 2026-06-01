@@ -1,5 +1,5 @@
 import {createRemoteJWKSet, jwtVerify, errors as joseErrors, type JWTVerifyGetKey} from "jose"
-import {AuthError} from "../errors"
+import {NOT_AUTHORIZED} from "@grest-ts/schema"
 import type {ExternalIdentity, IdpStrategy} from "./IdpStrategy"
 import {identityFromClaims} from "./identity"
 
@@ -40,8 +40,8 @@ export class OidcIdp implements IdpStrategy<string> {
             const {payload} = await jwtVerify(idToken, keys, {issuer: this.issuer, audience: this.audience})
             return identityFromClaims(this.provider, payload as Record<string, unknown>)
         } catch (err) {
-            if (err instanceof AuthError) throw err
-            if (err instanceof joseErrors.JOSEError) throw new AuthError("TOKEN_INVALID", err.message)
+            if (err instanceof NOT_AUTHORIZED) throw err
+            if (err instanceof joseErrors.JOSEError) throw new NOT_AUTHORIZED({debugMessage: "TOKEN_INVALID: " + err.message})
             throw err
         }
     }
@@ -57,9 +57,9 @@ export class OidcIdp implements IdpStrategy<string> {
     private async discoverJwksUri(): Promise<string> {
         const url = this.options.discoveryUrl ?? `${this.issuer.replace(/\/+$/, "")}/.well-known/openid-configuration`
         const res = await fetch(url)
-        if (!res.ok) throw new AuthError("TOKEN_INVALID", `OIDC discovery failed (${res.status}) at ${url}`)
+        if (!res.ok) throw new NOT_AUTHORIZED({debugMessage: `TOKEN_INVALID: OIDC discovery failed (${res.status}) at ${url}`})
         const doc = await res.json() as {jwks_uri?: string}
-        if (!doc.jwks_uri) throw new AuthError("TOKEN_INVALID", "OIDC discovery document has no jwks_uri")
+        if (!doc.jwks_uri) throw new NOT_AUTHORIZED({debugMessage: "TOKEN_INVALID: OIDC discovery document has no jwks_uri"})
         return doc.jwks_uri
     }
 }

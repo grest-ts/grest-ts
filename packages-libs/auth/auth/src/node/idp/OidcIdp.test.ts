@@ -1,6 +1,7 @@
 import {describe, test, expect} from "vitest"
 import {SignJWT, generateKeyPair, type KeyLike} from "jose"
-import {AuthError, OidcIdp, OktaIdp} from "../../index-node"
+import {NOT_AUTHORIZED} from "@grest-ts/schema"
+import {OidcIdp, OktaIdp} from "../../index-node"
 
 const ISSUER = "https://example.okta.com/oauth2/default"
 const CLIENT = "0oaclient123"
@@ -39,20 +40,20 @@ describe("OidcIdp (generic OIDC, e.g. Okta)", () => {
         const {publicKey, privateKey} = await generateKeyPair("ES256")
         const idp = new OidcIdp({issuer: ISSUER, clientId: CLIENT, keys: async () => publicKey})
         const token = await oidcToken(privateKey, {issuer: "https://attacker.example.com"})
-        await expect(idp.authenticate(token)).rejects.toMatchObject({code: "TOKEN_INVALID"})
+        await expect(idp.authenticate(token)).rejects.toBeInstanceOf(NOT_AUTHORIZED)
     })
 
     test("rejects a token for a different audience", async () => {
         const {publicKey, privateKey} = await generateKeyPair("ES256")
         const idp = new OidcIdp({issuer: ISSUER, clientId: "different-client", keys: async () => publicKey})
-        await expect(idp.authenticate(await oidcToken(privateKey))).rejects.toMatchObject({code: "TOKEN_INVALID"})
+        await expect(idp.authenticate(await oidcToken(privateKey))).rejects.toBeInstanceOf(NOT_AUTHORIZED)
     })
 
     test("rejects an expired token", async () => {
         const {publicKey, privateKey} = await generateKeyPair("ES256")
         const idp = new OidcIdp({issuer: ISSUER, clientId: CLIENT, keys: async () => publicKey})
         const token = await oidcToken(privateKey, {expEpochSec: Math.floor(Date.now() / 1000) - 60})
-        await expect(idp.authenticate(token)).rejects.toBeInstanceOf(AuthError)
+        await expect(idp.authenticate(token)).rejects.toBeInstanceOf(NOT_AUTHORIZED)
     })
 
     test("OktaIdp labels the identity provider as 'okta'", async () => {

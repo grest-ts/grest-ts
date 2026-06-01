@@ -1,6 +1,5 @@
 import {createHash, randomBytes} from "node:crypto"
-import {IsArray, IsObject, type GGSchema} from "@grest-ts/schema"
-import {AuthError} from "../errors"
+import {IsArray, IsObject, NOT_AUTHORIZED, type GGSchema} from "@grest-ts/schema"
 import type {SigningStrategy} from "../signing/SigningStrategy"
 import {IsRefreshTokenRecord, type RefreshTokenStore} from "../refresh/RefreshTokenStore"
 import {IsGGAccessTokenData, IsGGRefreshTokenData} from "../../shared/tokenSchemas"
@@ -82,9 +81,9 @@ export class AuthToken<P extends string, C extends object = NoClaims> {
     public verifyAccess = async (accessToken: string): Promise<AccessPayload<P, C>> => {
         const payload = await this.signer.verify(accessToken)
         const sub = payload["sub"]
-        if (typeof sub !== "string") throw new AuthError("TOKEN_INVALID", "missing sub")
+        if (typeof sub !== "string") throw new NOT_AUTHORIZED({debugMessage: "TOKEN_INVALID: missing sub"})
         if (this.audience !== undefined && payload["aud"] !== this.audience) {
-            throw new AuthError("TOKEN_INVALID", "wrong audience")
+            throw new NOT_AUTHORIZED({debugMessage: "TOKEN_INVALID: wrong audience"})
         }
         const permissions = this.permissions.parse(payload["permissions"])
         const claims = this.claims.parse(payload)
@@ -108,17 +107,17 @@ export class AuthToken<P extends string, C extends object = NoClaims> {
         const store = this.requireStore()
         const hash = this.hash(refreshToken)
         const record = await store.find(hash)
-        if (!record) throw new AuthError("REFRESH_INVALID")
-        if (record.expiresAt <= this.now()) throw new AuthError("REFRESH_INVALID", "expired")
+        if (!record) throw new NOT_AUTHORIZED({debugMessage: "REFRESH_INVALID"})
+        if (record.expiresAt <= this.now()) throw new NOT_AUTHORIZED({debugMessage: "REFRESH_INVALID: expired"})
         if (record.spentAt !== undefined) {
             await store.revokeFamily(record.familyId)
-            throw new AuthError("REFRESH_REUSE", "refresh token replayed")
+            throw new NOT_AUTHORIZED({debugMessage: "REFRESH_REUSE: refresh token replayed"})
         }
         // markSpent is the atomic single-winner gate: a concurrent second redemption of the
         // same live token loses here and is treated as reuse (strict policy).
         if (!(await store.markSpent(hash, this.now()))) {
             await store.revokeFamily(record.familyId)
-            throw new AuthError("REFRESH_REUSE", "refresh token used concurrently")
+            throw new NOT_AUTHORIZED({debugMessage: "REFRESH_REUSE: refresh token used concurrently"})
         }
         try {
             const grant = await resolve(record.subject)

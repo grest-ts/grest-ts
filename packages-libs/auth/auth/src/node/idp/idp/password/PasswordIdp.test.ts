@@ -1,5 +1,5 @@
 import {describe, test, expect} from "vitest"
-import {AuthError} from "../../../../index-node"
+import {NOT_AUTHORIZED} from "@grest-ts/schema"
 import {BcryptHasher, PasswordIdp, type PasswordRecord} from "."
 
 describe("PasswordIdp", () => {
@@ -22,13 +22,13 @@ describe("PasswordIdp", () => {
     test("rejects a wrong password with CREDENTIALS_INVALID", async () => {
         const idp = await idpWith("alice", "s3cret")
         await expect(idp.authenticate({username: "alice", password: "wrong"}))
-            .rejects.toMatchObject({code: "CREDENTIALS_INVALID"})
+            .rejects.toBeInstanceOf(NOT_AUTHORIZED)
     })
 
     test("rejects an unknown user with CREDENTIALS_INVALID", async () => {
         const idp = await idpWith("alice", "s3cret")
         await expect(idp.authenticate({username: "nobody", password: "s3cret"}))
-            .rejects.toBeInstanceOf(AuthError)
+            .rejects.toBeInstanceOf(NOT_AUTHORIZED)
     })
 
     test("provider defaults to 'password' and is overridable", async () => {

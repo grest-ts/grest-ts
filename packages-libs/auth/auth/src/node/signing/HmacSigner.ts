@@ -1,6 +1,6 @@
 import {hkdfSync} from "node:crypto"
 import {SignJWT, jwtVerify, errors as joseErrors} from "jose"
-import {AuthError} from "../errors"
+import {NOT_AUTHORIZED} from "@grest-ts/schema"
 import type {SigningStrategy} from "./SigningStrategy"
 
 const KEY_INFO = "@kratt/auth hs256 signing key"
@@ -31,8 +31,8 @@ export class HmacSigner implements SigningStrategy {
             const {payload} = await jwtVerify(token, this.key(), {algorithms: [this.alg]})
             return payload as Record<string, unknown>
         } catch (err) {
-            if (err instanceof joseErrors.JWTExpired) throw new AuthError("TOKEN_EXPIRED")
-            throw new AuthError("TOKEN_INVALID", (err as Error).message)
+            if (err instanceof joseErrors.JWTExpired) throw new NOT_AUTHORIZED({debugMessage: "TOKEN_EXPIRED"})
+            throw new NOT_AUTHORIZED({debugMessage: "TOKEN_INVALID: " + (err as Error).message})
         }
     }
 }

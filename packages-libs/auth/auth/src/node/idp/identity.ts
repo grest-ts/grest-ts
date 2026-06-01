@@ -1,10 +1,10 @@
-import {AuthError} from "../errors"
+import {NOT_AUTHORIZED} from "@grest-ts/schema"
 import type {ExternalIdentity} from "./IdpStrategy"
 
 // Normalize verified OIDC/JWT claims into an ExternalIdentity. Shared by Google + generic OIDC.
 export function identityFromClaims(provider: string, claims: Record<string, unknown>): ExternalIdentity {
     const sub = claims["sub"]
-    if (typeof sub !== "string") throw new AuthError("TOKEN_INVALID", "missing sub")
+    if (typeof sub !== "string") throw new NOT_AUTHORIZED({debugMessage: "TOKEN_INVALID: missing sub"})
     return {
         provider,
         subject: sub,

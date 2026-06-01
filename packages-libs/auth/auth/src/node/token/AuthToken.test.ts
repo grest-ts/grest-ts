@@ -1,6 +1,6 @@
 import {describe, test, expect} from "vitest"
-import {IsBoolean, IsEnum, IsObject, IsString} from "@grest-ts/schema"
-import {AuthError, AuthToken, HmacSigner, InMemoryRefreshTokenStore, IsRefreshTokenRecord} from "../../index-node"
+import {IsBoolean, IsEnum, IsObject, IsString, NOT_AUTHORIZED} from "@grest-ts/schema"
+import {AuthToken, HmacSigner, InMemoryRefreshTokenStore, IsRefreshTokenRecord} from "../../index-node"
 
 enum Perm {
     Read = "read",
@@ -9,6 +9,17 @@ enum Perm {
 }
 
 const IsPerm = IsEnum(Perm)
+
+async function expectAuthError(p: Promise<unknown>, code: string): Promise<void> {
+    let err: any
+    try {
+        await p
+    } catch (e) {
+        err = e
+    }
+    expect(err).toBeInstanceOf(NOT_AUTHORIZED)
+    expect(err.getDebugContext()?.debugMessage).toContain(code)
+}
 
 function permToken(overrides: {accessTtlMs?: number; refreshTtlMs?: number} = {}) {
     return new AuthToken({
@@ -50,14 +61,13 @@ describe("AuthToken — access", () => {
         const auth = permToken()
         const pair = await auth.issue("user-1", [Perm.Read], {})
         const tampered = pair.access.token.slice(0, -3) + "xyz"
-        await expect(auth.verifyAccess(tampered)).rejects.toBeInstanceOf(AuthError)
-        await expect(auth.verifyAccess(tampered)).rejects.toMatchObject({code: "TOKEN_INVALID"})
+        await expectAuthError(auth.verifyAccess(tampered), "TOKEN_INVALID")
     })
 
     test("expired access token is rejected as TOKEN_EXPIRED", async () => {
         const auth = permToken({accessTtlMs: -1000})
         const pair = await auth.issue("user-1", [Perm.Read], {})
-        await expect(auth.verifyAccess(pair.access.token)).rejects.toMatchObject({code: "TOKEN_EXPIRED"})
+        await expectAuthError(auth.verifyAccess(pair.access.token), "TOKEN_EXPIRED")
     })
 })
 
@@ -76,11 +86,9 @@ describe("AuthToken — refresh", () => {
         const pair = await auth.issue("user-1", [Perm.Read], {})
         const child = await auth.refresh(pair.refresh.token, async () => ({permissions: [Perm.Read], claims: {}}))
         // Re-presenting the spent parent trips reuse detection.
-        await expect(auth.refresh(pair.refresh.token, async () => ({permissions: [Perm.Read], claims: {}})))
-            .rejects.toMatchObject({code: "REFRESH_REUSE"})
+        await expectAuthError(auth.refresh(pair.refresh.token, async () => ({permissions: [Perm.Read], claims: {}})), "REFRESH_REUSE")
         // ...which severs the whole lineage — the live child is revoked too.
-        await expect(auth.refresh(child.refresh.token, async () => ({permissions: [Perm.Read], claims: {}})))
-            .rejects.toMatchObject({code: "REFRESH_INVALID"})
+        await expectAuthError(auth.refresh(child.refresh.token, async () => ({permissions: [Perm.Read], claims: {}})), "REFRESH_INVALID")
     })
 
     test("reuse detection is scoped to the offending family — other logins survive", async () => {
@@ -88,31 +96,27 @@ describe("AuthToken — refresh", () => {
         const sessionA = await auth.issue("user-1", [Perm.Read], {})
         const sessionB = await auth.issue("user-1", [Perm.Read], {})
         await auth.refresh(sessionA.refresh.token, async () => ({permissions: [Perm.Read], claims: {}}))
-        await expect(auth.refresh(sessionA.refresh.token, async () => ({permissions: [Perm.Read], claims: {}})))
-            .rejects.toMatchObject({code: "REFRESH_REUSE"})
+        await expectAuthError(auth.refresh(sessionA.refresh.token, async () => ({permissions: [Perm.Read], claims: {}})), "REFRESH_REUSE")
         const bNext = await auth.refresh(sessionB.refresh.token, async () => ({permissions: [Perm.Read], claims: {}}))
         expect(await auth.verifyAccess(bNext.access.token)).toMatchObject({sub: "user-1"})
     })
 
     test("unknown refresh token is rejected", async () => {
         const auth = permToken()
-        await expect(auth.refresh("not-a-real-token", async () => ({permissions: [Perm.Read], claims: {}})))
-            .rejects.toMatchObject({code: "REFRESH_INVALID"})
+        await expectAuthError(auth.refresh("not-a-real-token", async () => ({permissions: [Perm.Read], claims: {}})), "REFRESH_INVALID")
     })
 
     test("expired refresh token is rejected", async () => {
         const auth = permToken({refreshTtlMs: -1000})
         const pair = await auth.issue("user-1", [Perm.Read], {})
-        await expect(auth.refresh(pair.refresh.token, async () => ({permissions: [Perm.Read], claims: {}})))
-            .rejects.toMatchObject({code: "REFRESH_INVALID"})
+        await expectAuthError(auth.refresh(pair.refresh.token, async () => ({permissions: [Perm.Read], claims: {}})), "REFRESH_INVALID")
     })
 
     test("revoke invalidates the refresh token", async () => {
         const auth = permToken()
         const pair = await auth.issue("user-1", [Perm.Read], {})
         await auth.revoke(pair.refresh.token)
-        await expect(auth.refresh(pair.refresh.token, async () => ({permissions: [Perm.Read], claims: {}})))
-            .rejects.toMatchObject({code: "REFRESH_INVALID"})
+        await expectAuthError(auth.refresh(pair.refresh.token, async () => ({permissions: [Perm.Read], claims: {}})), "REFRESH_INVALID")
     })
 
     test("revokeAll drops every refresh token for a subject", async () => {
@@ -121,8 +125,7 @@ describe("AuthToken — refresh", () => {
         const second = await auth.issue("user-1", [Perm.Read], {})
         await auth.revokeAll("user-1")
         for (const pair of [first, second]) {
-            await expect(auth.refresh(pair.refresh.token, async () => ({permissions: [Perm.Read], claims: {}})))
-                .rejects.toMatchObject({code: "REFRESH_INVALID"})
+            await expectAuthError(auth.refresh(pair.refresh.token, async () => ({permissions: [Perm.Read], claims: {}})), "REFRESH_INVALID")
         }
     })
 
@@ -153,8 +156,7 @@ describe("AuthToken — audience", () => {
         const userAuth = audienceToken("kratt-user")
         const orgAuth = audienceToken("kratt-org")
         const pair = await userAuth.issue("user-1", [Perm.Read], {})
-        await expect(orgAuth.verifyAccess(pair.access.token))
-            .rejects.toMatchObject({code: "TOKEN_INVALID"})
+        await expectAuthError(orgAuth.verifyAccess(pair.access.token), "TOKEN_INVALID")
     })
 })
 
