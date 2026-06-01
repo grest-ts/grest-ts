@@ -10,7 +10,6 @@ import {describePermission, ERROR, FORBIDDEN, GG_NO_PERMISSIONS, GGContractApiDe
 import {HttpMethod} from "@grest-ts/common";
 import {GG_DISCOVERY} from "@grest-ts/discovery";
 import {GGContext, GGContextStore, type GGTransportMiddleware} from "@grest-ts/context";
-import {deriveWireScopeResolver} from "../schema/GGWireContextKey.node";
 import {GG_TRACE} from "@grest-ts/trace";
 import {GG_HTTP_REQUEST} from "./GG_HTTP_REQUEST";
 import {GG_COOKIE_WRITES} from "../schema/GGCookie";
@@ -19,6 +18,7 @@ import {GGHttpMetrics} from "./GGHttpMetrics";
 import {GG_HTTP_SERVER} from "./GG_HTTP_SERVER";
 import {GGHttpServer} from "./GGHttpServer";
 import {GGLog} from "@grest-ts/logger";
+import {GGWireContextKey} from "../schema/GGWireContextKey";
 
 export interface GGHttpSchemaConfig {
     /**
@@ -72,7 +72,7 @@ function setupRoutes<TContract extends GGContractApiDefinition>(
 
     // Smart wires on the schema ARE the scope resolver (each wire's process() already verified
     // identity, permissions() yields the grants).
-    const resolveScopes = deriveWireScopeResolver(apiMiddlewares);
+    const wires = apiMiddlewares.filter((mw): mw is GGWireContextKey => mw instanceof GGWireContextKey) // @TODO Should filter to only those wires that actually provide permissions.
 
     for (const mw of apiMiddlewares) {
         const hKeys = Object.keys(mw.headers ?? {});
@@ -130,7 +130,13 @@ function setupRoutes<TContract extends GGContractApiDefinition>(
                 try {
                     const rpcInput = await requestParser.parseRequest(req)
                     try {
-                        const scopes = await resolveScopes()
+                        const scopes = new Set<string>() // @TODO Is Set really good for most cases here? Every request making a Set does not seem optimal.
+                        for (let i = 0; i < wires.length; i++) {
+                            const permissions = await wires[i].permissions();
+                            for (let p = 0; p < permissions.length; p++) {
+                                scopes.add(permissions[p])
+                            }
+                        }
                         const required = contractFunctionSchema.permission
                         if (required !== undefined && required !== GG_NO_PERMISSIONS && !satisfies(required, scopes)) {
                             throw new FORBIDDEN({

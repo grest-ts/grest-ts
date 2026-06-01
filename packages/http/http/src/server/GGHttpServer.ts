@@ -74,14 +74,7 @@ export class GGHttpServer {
      * Framework-internal — only setupRoutes() (in GGHttpSchema.startServer.ts) should push here.
      */
     private readonly _registeredSchemas: GGHttpSchema<any, any>[] = [];
-
-    /**
-     * All GGHttpSchema instances registered on this server, in registration order.
-     * Available from the moment compose() begins; frozen (no further push allowed) once start() is called.
-     */
-    get registeredSchemas(): ReadonlyArray<GGHttpSchema<any, any>> {
-        return this._registeredSchemas;
-    }
+    private readonly _registeredWebSocketSchemas: AnyWebSocketSchema[] = [];
 
     public readonly httpServer: http.Server;
     private activeRequests = 0;
@@ -194,7 +187,18 @@ export class GGHttpServer {
         this._registeredSchemas.push(schema);
     }
 
-    private readonly _registeredWebSocketSchemas: AnyWebSocketSchema[] = [];
+    /**
+     * All GGHttpSchema instances registered on this server, in registration order.
+     * Available from the moment compose() begins; frozen (no further push allowed) once start() is called.
+     */
+    get registeredSchemas(): ReadonlyArray<GGHttpSchema<any, any>> {
+        return this._registeredSchemas;
+    }
+
+    /** @internal Called by GGWebSocketSchema.startServer(). Do not call directly. */
+    public _registerWebSocketSchema(schema: AnyWebSocketSchema): void {
+        this._registeredWebSocketSchemas.push(schema);
+    }
 
     /**
      * All GGWebSocketSchema instances registered on this server, in registration order.
@@ -202,11 +206,6 @@ export class GGHttpServer {
      */
     get registeredWebSocketSchemas(): ReadonlyArray<AnyWebSocketSchema> {
         return this._registeredWebSocketSchemas;
-    }
-
-    /** @internal Called by GGWebSocketSchema.startServer(). Do not call directly. */
-    public _registerWebSocketSchema(schema: AnyWebSocketSchema): void {
-        this._registeredWebSocketSchemas.push(schema);
     }
 
     public registerRoute(method: HttpMethod, path: string, handler: GGHttpRequestCallback): void {

@@ -4,30 +4,7 @@
  * (permissions). Node-only — keeps @grest-ts/locator out of the browser bundle.
  */
 import {GGLocator, GGLocatorKey} from "@grest-ts/locator"
-import type {GGTransportMiddleware} from "@grest-ts/context"
 import {GGWireContextKey} from "./GGWireContextKey"
-
-/**
- * The scope resolver a set of wired middlewares contributes: the union of each wire's
- * permissions() (each verified wire's process() already authenticated-or-threw; ambient wires
- * have no handler and contribute nothing). With no wire present the resolver yields the empty
- * set — a permissioned route then fails closed. Shared by the HTTP and WebSocket register paths
- * so the derivation lives in exactly one place.
- */
-export function deriveWireScopeResolver(
-    middlewares: readonly GGTransportMiddleware[],
-): () => Promise<ReadonlySet<string>> {
-    const wires = middlewares.filter(
-        (mw): mw is GGWireContextKey => mw instanceof GGWireContextKey,
-    )
-    return async () => {
-        const scopes = new Set<string>()
-        for (const wire of wires) {
-            for (const p of await wire.permissions()) scopes.add(p)
-        }
-        return scopes
-    }
-}
 
 export interface GGWireServerHandler {
     /** Verify the raw credential and mint the durable principal. Throws to reject the request. */
@@ -74,7 +51,8 @@ export class GGWireHandlerRegistration<Deps> {
     constructor(
         private readonly wire: GGWireContextKey,
         private readonly factory: (deps: Deps) => GGWireServerHandler,
-    ) {}
+    ) {
+    }
 
     public create(deps: Deps): void {
         const key = handlerKeyFor(this.wire)
@@ -89,12 +67,16 @@ declare module "./GGWireContextKey" {
     interface GGWireContextKey {
         /** Attach the server-side verification handler. Process-global, frozen once — a second call throws. */
         define<Deps>(factory: (deps: Deps) => GGWireServerHandler): GGWireHandlerRegistration<Deps>
+
         /** @internal server pipeline hook — verify the credential and mint the durable principal. */
         process(): Promise<void>
+
         /** @internal permission-gate hook — the caller's grants from this wire. */
         permissions(): Promise<readonly string[]>
+
         /** @internal startup validation — true once .create() has run on the current runtime scope. */
         hasHandler(): boolean
+
         /** Drop the ephemeral raw credential after process(); ambient wires keep their value. */
         clear(): void
     }
