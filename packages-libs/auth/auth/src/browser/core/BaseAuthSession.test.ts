@@ -5,6 +5,7 @@ import {GGContext} from "@grest-ts/context"
 import {BaseAuthSession} from "../GGAuthSessionBase"
 import {GGAuthSession} from "../GGAuthSession"
 import type {
+    AuthResult,
     Clock,
     CoreConfig,
     CorePorts,
@@ -15,6 +16,7 @@ import type {
     GGTokenPair,
     Scheduler,
     SharedCache,
+    StoredAuth,
     TokenKey,
 } from "./types"
 
@@ -37,20 +39,20 @@ class FakeLock implements CrossTabLock {
 }
 
 class FakeSharedCache implements SharedCache {
-    private value: GGTokenPair | undefined = undefined
-    private readonly listeners = new Set<(v: GGTokenPair | undefined) => void>()
-    private activeWriter: ((v: GGTokenPair | undefined) => void) | undefined = undefined
+    private value: StoredAuth | undefined = undefined
+    private readonly listeners = new Set<(v: StoredAuth | undefined) => void>()
+    private activeWriter: ((v: StoredAuth | undefined) => void) | undefined = undefined
 
     read() { return this.value }
 
-    write(v: GGTokenPair | undefined): void {
+    write(v: StoredAuth | undefined): void {
         this.value = v
         for (const l of this.listeners) {
             if (l !== this.activeWriter) l(v)
         }
     }
 
-    subscribe(cb: (v: GGTokenPair | undefined) => void): () => void {
+    subscribe(cb: (v: StoredAuth | undefined) => void): () => void {
         this.listeners.add(cb)
         return () => this.listeners.delete(cb)
     }
@@ -120,7 +122,7 @@ function makeSession<D extends DerivedMap = {}>(overrides: {
     cache?: FakeSharedCache
     scheduler?: FakeScheduler
     slot?: FakeKey
-    refreshResult?: GGTokenPair
+    refreshResult?: AuthResult
     storage?: "localStorage" | "cookie"
 } = {}): SessionSetup<D> {
     const clock = overrides.clock ?? new FakeClock()
@@ -128,7 +130,7 @@ function makeSession<D extends DerivedMap = {}>(overrides: {
     const cache = overrides.cache ?? new FakeSharedCache()
     const scheduler = overrides.scheduler ?? new FakeScheduler()
     const slot = overrides.slot ?? new FakeKey()
-    const defaultRefreshResult = makePair("at-root-2", 3_000_000, "rt-2")
+    const defaultRefreshResult: AuthResult = {tokens: makePair("at-root-2", 3_000_000, "rt-2")}
     const refreshFn = vi.fn().mockResolvedValue(overrides.refreshResult ?? defaultRefreshResult)
 
     const config: CoreConfig<D> = {
@@ -158,6 +160,46 @@ describe("start() — localStorage", () => {
         const cached = cache.read()
         expect(cached?.access.token).toBe("at-root-1")
         expect(cached?.refresh?.token).toBe("rt-1")
+    })
+})
+
+describe("identity persistence", () => {
+    test("start(pair, data) exposes data via getIdentity() and persists it to cache", () => {
+        const {session, cache} = makeSession()
+        session.start(makePair("at", 2_000_000, "rt"), {userId: "u1", role: "admin"})
+        expect(session.getIdentity()).toEqual({userId: "u1", role: "admin"})
+        expect(cache.read()?.data).toEqual({userId: "u1", role: "admin"})
+    })
+
+    test("a fresh session restores identity from cache via init() — no refresh", async () => {
+        const cache = new FakeSharedCache()
+        const seed = makeSession({cache})
+        seed.session.start(makePair("at", 9_000_000, "rt"), {userId: "u1"})
+
+        const {session, refreshFn} = makeSession({cache})
+        await session.init()
+        expect(session.getState().status).toBe("authenticated")
+        expect(session.getIdentity()).toEqual({userId: "u1"})
+        expect(refreshFn).not.toHaveBeenCalled()
+    })
+
+    test("refresh re-resolves and re-persists identity", async () => {
+        const cache = new FakeSharedCache()
+        const {session} = makeSession({
+            cache,
+            refreshResult: {tokens: makePair("at2", 9_000_000, "rt2"), data: {userId: "u1", role: "member"}},
+        })
+        session.start(makePair("at1", 500_000, "rt1"), {userId: "u1", role: "admin"})
+        await session.ensureFresh()
+        expect(session.getIdentity()).toEqual({userId: "u1", role: "member"})
+        expect(cache.read()?.data).toEqual({userId: "u1", role: "member"})
+    })
+
+    test("logout clears identity", () => {
+        const {session} = makeSession()
+        session.start(makePair("at", 2_000_000, "rt"), {userId: "u1"})
+        session.logout()
+        expect(session.getIdentity()).toBeUndefined()
     })
 })
 
@@ -195,6 +237,93 @@ describe("ensureFresh()", () => {
     })
 })
 
+describe("refresh failure policy", () => {
+    test("transient (non-fatal) error → stays authenticated + degraded, token kept, no logout", async () => {
+        const {session, slot, refreshFn} = makeSession()
+        session.start(makePair("at-root-1", 500_000, "rt-1"))
+        refreshFn.mockRejectedValueOnce(new Error("network blip"))
+        const onLogout = vi.fn()
+        session.onLogout(onLogout)
+
+        await expect(session.ensureFresh()).rejects.toThrow("network blip")
+
+        const state = session.getState()
+        expect(state.status).toBe("authenticated")
+        expect(state.degraded).toBe(true)
+        expect(state.refreshing).toBe(false)
+        expect(slot.get()).toBe("at-root-1")
+        expect(onLogout).not.toHaveBeenCalled()
+    })
+
+    test("fatal error (NOT_AUTHORIZED) → expired, wire cleared, onLogout fires", async () => {
+        const {session, slot, refreshFn} = makeSession()
+        session.start(makePair("at-root-1", 500_000, "rt-1"))
+        refreshFn.mockRejectedValueOnce(new NOT_AUTHORIZED())
+        const onLogout = vi.fn()
+        session.onLogout(onLogout)
+
+        await expect(session.ensureFresh()).rejects.toBeInstanceOf(NOT_AUTHORIZED)
+
+        expect(session.getState().status).toBe("expired")
+        expect(slot.get()).toBeUndefined()
+        expect(onLogout).toHaveBeenCalledOnce()
+    })
+
+    test("missing refresh token → expired without calling refresh", async () => {
+        const {session, slot, refreshFn} = makeSession()
+        session.start(makePair("at-root-1", 500_000))
+        const onLogout = vi.fn()
+        session.onLogout(onLogout)
+
+        await expect(session.ensureFresh()).rejects.toThrow("No refresh token")
+
+        expect(refreshFn).not.toHaveBeenCalled()
+        expect(session.getState().status).toBe("expired")
+        expect(slot.get()).toBeUndefined()
+        expect(onLogout).toHaveBeenCalledOnce()
+    })
+
+    test("a later successful refresh clears the degraded flag", async () => {
+        const {session, refreshFn} = makeSession()
+        session.start(makePair("at-root-1", 500_000, "rt-1"))
+        refreshFn.mockRejectedValueOnce(new Error("network blip"))
+        await session.ensureFresh().catch((): void => undefined)
+        expect(session.getState().degraded).toBe(true)
+
+        await session.ensureFresh()
+        expect(session.getState().status).toBe("authenticated")
+        expect(session.getState().degraded).toBe(false)
+    })
+})
+
+describe("onWake → ensureFresh (H2: laptop sleep/resume)", () => {
+    test("wake refreshes a stale root that the suspended timer never fired", async () => {
+        const scheduler = new FakeScheduler()
+        const {session, refreshFn} = makeSession({scheduler})
+        session.start(makePair("at-root-1", 500_000, "rt-1"))
+        expect(refreshFn).not.toHaveBeenCalled()
+
+        scheduler.fireWake()
+        await Promise.resolve()
+        await Promise.resolve()
+        await Promise.resolve()
+
+        expect(refreshFn).toHaveBeenCalledOnce()
+    })
+
+    test("wake is a no-op when root is still fresh", async () => {
+        const scheduler = new FakeScheduler()
+        const {session, refreshFn} = makeSession({scheduler})
+        session.start(makePair("at-root-1", 9_000_000, "rt-1"))
+
+        scheduler.fireWake()
+        await Promise.resolve()
+        await Promise.resolve()
+
+        expect(refreshFn).not.toHaveBeenCalled()
+    })
+})
+
 describe("cross-tab single-flight via lock + cache re-check", () => {
     test("two sessions sharing lock+cache, both ensureFresh expired root → refresh called once; loser adopts", async () => {
         const clock = new FakeClock()
@@ -204,9 +333,9 @@ describe("cross-tab single-flight via lock + cache re-check", () => {
         const slot1 = new FakeKey()
         const slot2 = new FakeKey()
 
-        let resolveRefresh!: (v: GGTokenPair) => void
+        let resolveRefresh!: (v: AuthResult) => void
         const refreshFn = vi.fn().mockImplementation(
-            () => new Promise<GGTokenPair>(r => { resolveRefresh = r })
+            () => new Promise<AuthResult>(r => { resolveRefresh = r })
         )
 
         const cfg = (slot: FakeKey): CoreConfig => ({
@@ -233,7 +362,7 @@ describe("cross-tab single-flight via lock + cache re-check", () => {
         await Promise.resolve()
         await Promise.resolve()
 
-        resolveRefresh(makePair("at-new", 3_000_000, "rt-new"))
+        resolveRefresh({tokens: makePair("at-new", 3_000_000, "rt-new")})
         await Promise.all([p1, p2])
 
         expect(refreshFn).toHaveBeenCalledOnce()
@@ -269,7 +398,7 @@ describe("cross-tab adopt via cache event", () => {
                 {clock, lock, cache: shared, scheduler: new FakeScheduler()},
             )
 
-        const sessionA = mk(slot1, orgSlot1, orgMint1, vi.fn().mockResolvedValue(makePair("at-root-2", 3_000_000, "rt-2")))
+        const sessionA = mk(slot1, orgSlot1, orgMint1, vi.fn().mockResolvedValue({tokens: makePair("at-root-2", 3_000_000, "rt-2")}))
         const sessionB = mk(slot2, orgSlot2, orgMint2, vi.fn())
 
         const onRefreshedB = vi.fn()
@@ -329,7 +458,7 @@ describe("per-tab org independence", () => {
         const rootSlot2 = new FakeKey()
         const orgSlot2 = new FakeKey()
 
-        const refreshFn = vi.fn().mockResolvedValue(makePair("at-root-2", 3_000_000, "rt-2"))
+        const refreshFn = vi.fn().mockResolvedValue({tokens: makePair("at-root-2", 3_000_000, "rt-2")})
         const mint1 = vi.fn().mockResolvedValue(makeAccess("org-a", 3_000_000))
         const mint2 = vi.fn().mockResolvedValue(makeAccess("org-b", 3_000_000))
 
@@ -444,7 +573,7 @@ describe("cookie mode", () => {
     })
 
     test("cookie mode init with no cache → calls refresh with undefined", async () => {
-        const refreshFn = vi.fn().mockResolvedValue(makePair("at-new", 3_000_000))
+        const refreshFn = vi.fn().mockResolvedValue({tokens: makePair("at-new", 3_000_000)})
         const clock = new FakeClock()
         const cache = new FakeSharedCache()
         const session = new BaseAuthSession(

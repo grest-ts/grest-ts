@@ -31,15 +31,29 @@ export interface SessionState {
 
 export interface Clock { now(): number }
 export interface CrossTabLock { withLock<T>(name: string, fn: () => Promise<T>): Promise<T> }
+
+// The persisted session value: the token pair plus the identity `data` captured from the auth
+// response. Persisting `data` is what lets session.get() survive a reload and cross-tab adopt
+// without ever decoding the (opaque) access token.
+export interface StoredAuth extends GGTokenPair {
+    data?: unknown
+}
+
+// What refresh() yields back: the rotated token pair plus the re-resolved identity.
+export interface AuthResult {
+    tokens: GGTokenPair
+    data?: unknown
+}
+
 export interface SharedCache {
-    read(): GGTokenPair | undefined
-    write(v: GGTokenPair | undefined): void
-    subscribe(cb: (v: GGTokenPair | undefined) => void): () => void
+    read(): StoredAuth | undefined
+    write(v: StoredAuth | undefined): void
+    subscribe(cb: (v: StoredAuth | undefined) => void): () => void
 }
 export interface Scheduler { schedule(delayMs: number, fn: () => void): () => void; onWake(cb: () => void): () => void }
 
 export interface CoreConfig<D extends DerivedMap = {}> {
-    refresh: (refreshToken?: string) => Promise<GGTokenPair>
+    refresh: (refreshToken?: string) => Promise<AuthResult>
     key: TokenKey
     derived?: D
     storage: "localStorage" | "cookie"
