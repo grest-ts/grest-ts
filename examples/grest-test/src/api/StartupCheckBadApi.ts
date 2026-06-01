@@ -1,33 +1,11 @@
 import {GGRpc, httpSchema} from "@grest-ts/http"
 import {
-    FORBIDDEN,
     GG_NO_PERMISSIONS,
     GGContractClass,
     IsString,
-    NOT_AUTHORIZED,
     SERVER_ERROR,
 } from "@grest-ts/schema"
 import {defineSocketContract, webSocketSchema} from "@grest-ts/websocket"
-
-/**
- * Fixture for the negative startup-check test. The contract has a non-public
- * method, so wiring it via GGHttp without .usePermissions(...) must throw when
- * the server starts (strict mode triggered by the declaration; no resolver
- * means the route can't be enforced).
- */
-export const StartupCheckBadContract = new GGContractClass("StartupCheckBad", {
-    needsScope: {
-        success: IsString,
-        errors: [NOT_AUTHORIZED, FORBIDDEN, SERVER_ERROR],
-        permission: "startup:check",
-    },
-})
-
-export const StartupCheckBadApi = httpSchema(StartupCheckBadContract)
-    .pathPrefix("api/startup-check-bad")
-    .routes({
-        needsScope: GGRpc.GET("read"),
-    })
 
 /**
  * Fixture: every method declared GG_NO_PERMISSIONS. Strict mode is triggered

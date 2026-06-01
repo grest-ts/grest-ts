@@ -118,6 +118,7 @@ class GGWebSocketSchemaBuilder<
     }
 
     done(): GGWebSocketSchema<TClientToServer, TServerToClient, TContext, TQuery, TClientToServerImpl, TServerToClientImpl> {
+        assertValidSocketPath(this._path, this._contract.name);
         const contract = this._contract;
         const contractFactory = (): GGWebSocketContractRuntime => {
             const methods = contract.methods;
@@ -136,6 +137,20 @@ class GGWebSocketSchemaBuilder<
             this._middlewares,
             this._queryValidator,
             this._connectPermission
+        )
+    }
+}
+
+/**
+ * A WS path is matched verbatim against the upgrade request's pathname (after a leading slash is
+ * ensured), so a path that is empty or carries whitespace / a query / a fragment can never match a
+ * real connection — the schema would silently accept zero clients. Reject it at build time.
+ */
+export function assertValidSocketPath(path: string, apiName: string): void {
+    if (path === "" || /\s/.test(path) || path.includes("?") || path.includes("#")) {
+        throw new Error(
+            `webSocketSchema "${apiName}": invalid path ${JSON.stringify(path)} — a WebSocket path must be ` +
+            `non-empty and contain no whitespace, "?" or "#" (it is matched against the upgrade request pathname).`
         )
     }
 }

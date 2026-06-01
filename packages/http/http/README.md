@@ -186,16 +186,16 @@ export const ItemApi = httpSchema(ItemApiContract)
     .routes({ list: GGRpc.GET("list"), delete: GGRpc.DELETE("delete/:id") })
 ```
 
-The gate reads the method's `permission`, asks the owning wire's `permissions()` for the caller's grants, checks `satisfies(method.permission, grants)`, and throws `NOT_AUTHORIZED` (the wire couldn't authenticate) or `FORBIDDEN` (authenticated, wrong scopes).
+The gate reads the method's `permission`, collects the caller's grants from every wire on the schema (each wire's `permissions()`), pools them into one set, checks `satisfies(method.permission, pooledGrants)`, and throws `NOT_AUTHORIZED` (a wire couldn't authenticate) or `FORBIDDEN` (authenticated, wrong scopes).
 
-**Multi-wire composition (AND across sources).** A schema may `.use()` more than one auth wire (e.g. a user wire AND an org wire). Each wire declares its own permission enum, so a method requiring `UserPermission.X` **and** `OrgPermission.Y` is routed to each owning wire and **both** must grant. Permission strings are globally unique across wires — two wires declaring the same string is a startup crash, never silently namespaced. A method requiring an `OrgPermission` on a schema that didn't `.use(ORG_TOKEN_WIRE)` refuses to start (its owning wire isn't on the chain).
+**Multi-wire composition (AND across sources).** A schema may `.use()` more than one auth wire (e.g. a user wire AND an org wire). Each wire's server handler runs at the request boundary, so **every** wire must authenticate — any one throwing rejects the request. That is the AND across sources. For scope checks the grants from all wires are **pooled** into one set, and the method's `permission` must be satisfied by that union; grants are matched by string against the pool, with no per-wire ownership of permission strings. A route that declares a non-public `permission` on a schema that `.use()`s **no** permission-resolving wire can never be satisfied (its pooled grants are always empty), so it fails at startup — see the hard guarantee below.
 
-**Hard guarantee.** At server start the framework walks every HTTP / WS route registered on the `GGHttpServer`. If any of them declared a permission, **strict mode** is on for the whole server. In strict mode:
+**Hard guarantee.** At server start the framework walks every HTTP / WS route registered on the `GGHttpServer`, before it accepts traffic. Two guarantees hold:
 
-- Every route must declare `permission` — use `GG_NO_PERMISSIONS` for intentionally public ones. Routes that omit it fail the start and are listed by name.
-- A `.use()`d wire that was never implemented (no `.define(...).create(deps)` in `compose()`) fails the start — a listed wire must work or the request fails loud.
+- **Wires are implemented (always).** A `.use()`d wire that was never implemented (no `.define(...).create(deps)` in `compose()`) fails the start — a listed wire must work or the request fails loud. This runs regardless of whether any permission is declared.
+- **Permission coverage (strict mode).** If any route declared a permission, **strict mode** is on for the whole server: every route must declare `permission` — use `GG_NO_PERMISSIONS` for intentionally public ones. Routes that omit it fail the start and are listed by name.
 
-The check is per-server (HTTP routes + WS schemas on the same `GGHttpServer`), so a permission declared anywhere is infectious across sibling chains. The only way to opt out is to declare nothing — projects with no auth pay zero ceremony, but the moment one route opts in, the framework forces consistency.
+The coverage check is per-server (HTTP routes + WS schemas on the same `GGHttpServer`), so a permission declared anywhere is infectious across sibling chains. The only way to opt out is to declare nothing — projects with no auth pay zero ceremony, but the moment one route opts in, the framework forces consistency.
 
 **What this does not cover.** The permission gates *endpoint access* — "is this caller allowed to invoke this method at all?" It does not handle *resource access* — "can this caller edit *this specific* post?" That check still belongs in the handler, which reads the app's own durable principal (minted by the wire's `process()`) — not a framework scope bag.
 

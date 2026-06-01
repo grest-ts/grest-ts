@@ -6,15 +6,22 @@ import {GG_HTTP_SERVER} from "./GG_HTTP_SERVER";
 import {GGLog} from "@grest-ts/logger";
 import findMyWay, {HTTPMethod} from "find-my-way";
 import type {GGHttpSchema} from "../schema/GGHttpSchema";
+import {checkWiresImplemented} from "./checkers/checkWiresImplemented";
+import {checkPermissionsAtStart} from "./checkers/checkPermissionsAtStart";
+import {checkWireConflicts} from "./checkers/checkWireConflicts";
 import "../schema/GGWireContextKey.node";
 import {GGContractMethod, GGPermission} from "@grest-ts/schema";
+import type {GGTransportMiddleware} from "@grest-ts/context";
 // Forward declaration — actual type lives in @grest-ts/websocket to avoid circular dep.
 // GGHttpServer only stores the array; callers cast as needed.
 type AnyWebSocketSchema = {
     name: string;
     path: string;
-    contract: {clientToServer: {methods: Record<string, GGContractMethod>}};
-    middlewares: readonly unknown[];
+    contract: {
+        clientToServer: {methods: Record<string, GGContractMethod>};
+        serverToClient: {methods: Record<string, GGContractMethod>};
+    };
+    middlewares: readonly GGTransportMiddleware[];
     connectPermission?: GGPermission;
 };
 
@@ -77,6 +84,7 @@ export class GGHttpServer {
     private readonly _registeredWebSocketSchemas: AnyWebSocketSchema[] = [];
 
     public readonly httpServer: http.Server;
+    private readonly _routeOwners = new Map<string, string>();
     private activeRequests = 0;
     private router = findMyWay<findMyWay.HTTPVersion.V1>();
 
@@ -208,12 +216,24 @@ export class GGHttpServer {
         return this._registeredWebSocketSchemas;
     }
 
-    public registerRoute(method: HttpMethod, path: string, handler: GGHttpRequestCallback): void {
+    public registerRoute(method: HttpMethod, path: string, handler: GGHttpRequestCallback, owner?: string): void {
+        const route = `${method} ${path}`;
+        const existing = this._routeOwners.get(route);
+        if (existing !== undefined) {
+            throw new Error(
+                `GGHttpServer: route ${route} is declared by both ${existing} and ${owner ?? "another route"}. ` +
+                `Give each route a distinct path (change a pathPrefix or route path).`
+            );
+        }
+        this._routeOwners.set(route, owner ?? path);
         this.router.on(method as HTTPMethod, path, handler as unknown as findMyWay.Handler<findMyWay.HTTPVersion.V1>);
     }
 
     public async start(): Promise<void> {
         Object.freeze(this._registeredSchemas);
+        checkWireConflicts(this.registeredSchemas, this.registeredWebSocketSchemas);
+        checkWiresImplemented(this.registeredSchemas, this.registeredWebSocketSchemas);
+        checkPermissionsAtStart(this.registeredSchemas, this.registeredWebSocketSchemas);
         this._port = await new Promise((resolve) => {
             this.httpServer.listen(this.configuredPort, '0.0.0.0', () => {
                 const port = (this.httpServer.address() as any).port;

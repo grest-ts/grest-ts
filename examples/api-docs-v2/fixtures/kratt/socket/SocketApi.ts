@@ -1,7 +1,7 @@
 import {defineSocketContract, webSocketSchema} from "@grest-ts/websocket"
 import {IsObject, IsString, SERVER_ERROR } from "@grest-ts/schema"
 import {UNAUTHORIZED, NOT_FOUND} from "../hub/errors"
-import {SocketAuthHeaderMiddleware} from "../auth/internalAuth"
+import {GG_USER_TOKEN, GG_ORG_TOKEN} from "../auth/AuthContext"
 import {
     IsTaskEvent, IsAgentEvent, IsServiceEvent,
     IsBaseImageEvent, IsProjectImageEvent,
@@ -46,5 +46,6 @@ export const SocketContract = defineSocketContract("KrattSocket", {
 
 export const SocketApi = webSocketSchema(SocketContract)
     .path("/socket")
-    .use(new SocketAuthHeaderMiddleware())
+    .use(GG_USER_TOKEN)
+    .use(GG_ORG_TOKEN)
     .done()

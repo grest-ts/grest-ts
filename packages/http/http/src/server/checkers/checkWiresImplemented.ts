@@ -1,5 +1,6 @@
 /**
- * QUARANTINED — see ./README.md. Not wired into GGHttpServer.start().
+ * Run at GGHttpServer.start() over the frozen schema graph: every wire a schema
+ * .use()s and that is .define()d must have a .create()d handler on this runtime.
  */
 import {GGWireContextKey} from "../../schema/GGWireContextKey"
 import {wireIsDefined} from "../../schema/GGWireContextKey.node"
