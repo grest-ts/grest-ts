@@ -25,6 +25,7 @@ export type User = typeof IsUser.infer
 // is sent on every request, so it carries only permissions, not the profile. The full identity
 // is the response `data` / the re-fetched principal, never the token.
 export const IsUserClaims = IsObject({
+    id: IsUserId,
     permissions: IsArray(IsUserPermission)
 })
 export type UserClaims = typeof IsUserClaims.infer

@@ -29,7 +29,7 @@ export class UserService implements GGContractImplementation<typeof AuthPublicAp
         })
         // Token carries only the authz claims; the response `data` is the full profile.
         return {
-            tokens: await this.tokenEngine.issue(record.id, {permissions: record.permissions}),
+            tokens: await this.tokenEngine.issue(record.id, record),
             data: record
         }
     }
@@ -38,7 +38,7 @@ export class UserService implements GGContractImplementation<typeof AuthPublicAp
         const record = this.table.findByUsername(request.username)
         if (!record || record.password !== request.password) throw new InvalidCredentialsError()
         return {
-            tokens: await this.tokenEngine.issue(record.id, {permissions: record.permissions}),
+            tokens: await this.tokenEngine.issue(record.id, record),
             data: record
         }
     }
@@ -46,10 +46,10 @@ export class UserService implements GGContractImplementation<typeof AuthPublicAp
     public refresh = async ({refreshToken}: RefreshRequest): Promise<AuthResponse> => {
         let user: User | undefined
         const tokens = await this.tokenEngine.refresh(refreshToken, async (subject) => {
-            user = this.table.get(subject as tUserId)
-            return user ? {permissions: user.permissions} : undefined
+            return user = this.table.get(subject as tUserId)
         })
         return {tokens, data: user!}
+
     }
 
     public me = async (): Promise<User> => {

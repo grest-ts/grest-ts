@@ -18,23 +18,23 @@ export interface GGAuthRefreshTokenOptions<C extends object> {
 // opaque: minting/verifying is delegated to the composed access token, this class only owns
 // the refresh lifecycle. A dependency between kinds (e.g. org-token-requires-user-token) is
 // app code calling verifyAccess before issue — never modelled here.
-export class GGAuthRefreshToken<C extends object> {
+export class GGAuthRefreshToken<ClaimData extends object> {
 
     private readonly store: RefreshTokenStore | undefined
     private readonly refreshTtlMs: number
     private readonly now: () => number
     private readonly randomToken: () => string
-    public readonly access: GGAuthAccessToken<C>
+    public readonly access: GGAuthAccessToken<ClaimData>
 
-    constructor(options: GGAuthRefreshTokenOptions<C>) {
+    constructor(options: GGAuthRefreshTokenOptions<ClaimData>) {
         this.store = options.store
         this.refreshTtlMs = options.refreshTtlMs
         this.now = options.now ?? Date.now
         this.randomToken = options.randomToken ?? (() => randomBytes(32).toString("base64url"))
         this.access = options.access
     }
-    
-    public issue = async (subject: string | GGAuthSubject, claims: C): Promise<GGAuthTokensResult> => {
+
+    public issue = async (subject: string | GGAuthSubject, claims: ClaimData): Promise<GGAuthTokensResult> => {
         return await this.mint(subject as GGAuthSubject, claims, this.randomToken())
     }
 
@@ -44,7 +44,7 @@ export class GGAuthRefreshToken<C extends object> {
     // take effect on refresh, not just re-login.
     public refresh = async (
         refreshToken: string,
-        resolve: (subject: string) => Promise<C | undefined>,
+        resolve: (subject: string) => Promise<ClaimData | undefined>,
     ): Promise<GGAuthTokensResult> => {
         const hash = this.hash(refreshToken)
         const record = await this.store.find(hash)
@@ -80,7 +80,7 @@ export class GGAuthRefreshToken<C extends object> {
         await this.store.revokeForSubject(subject as GGAuthSubject)
     }
 
-    private mint = async (subject: GGAuthSubject, claims: C, familyId: string): Promise<GGAuthTokensResult> => {
+    private mint = async (subject: GGAuthSubject, claims: ClaimData, familyId: string): Promise<GGAuthTokensResult> => {
         const nowMs = this.now()
         const accessToken = await this.access._sign(subject, claims, nowMs)
         const refreshExpiresAt = nowMs + this.refreshTtlMs
