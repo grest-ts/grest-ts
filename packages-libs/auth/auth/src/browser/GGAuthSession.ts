@@ -11,20 +11,28 @@ import type {DerivedToken} from "./GGAuthSessionBase"
 
 type Wire = GGWireContextKey
 
+// What the auth endpoints return verbatim: the GGAuth token pair under `tokens`, plus the
+// identity `data`. The session consumes this shape directly — no flattening/re-wrapping at the
+// call site — and captures `data` as the current identity on every login/refresh.
+export interface GGAuthResult {
+    tokens: GGTokenPair
+    data?: unknown
+}
+
 export interface GGTokenSessionConfig {
-    refresh: (token: {refreshToken: string}) => Promise<GGTokenPair>
+    refresh: (token: {refreshToken: string}) => Promise<GGAuthResult>
     localStorageKey: string
 }
 
 export interface GGCookieSessionConfig {
-    refresh: () => Promise<GGTokenPair>
+    refresh: () => Promise<GGAuthResult>
     logout: () => Promise<void>
 }
 
 export class GGAuthSession<D extends DerivedMap = {}> {
     private _session: BaseAuthSession<D> | null = null
     private readonly _rootKey: Wire
-    private readonly _refresh: (refreshToken?: string) => Promise<GGTokenPair>
+    private readonly _refresh: (refreshToken?: string) => Promise<GGAuthResult>
     private readonly _logout: (() => Promise<void>) | undefined
     private readonly _storage: "localStorage" | "cookie"
     private readonly _cacheKey: string
@@ -35,7 +43,7 @@ export class GGAuthSession<D extends DerivedMap = {}> {
     // own helpers (e.g. hasPermission over get()) — see examples/auth/client/src/api.ts.
     protected constructor(
         key: Wire,
-        refresh: (refreshToken?: string) => Promise<GGTokenPair>,
+        refresh: (refreshToken?: string) => Promise<GGAuthResult>,
         storage: "localStorage" | "cookie",
         logout: (() => Promise<void>) | undefined,
         cacheKey: string,
@@ -83,9 +91,8 @@ export class GGAuthSession<D extends DerivedMap = {}> {
                 // client's identity/permissions stay current without ever decoding the token.
                 refresh: async (token) => {
                     const result = await this._refresh(token)
-                    const data = (result as {data?: unknown}).data
-                    if (data !== undefined) this._identity = data
-                    return result
+                    if (result.data !== undefined) this._identity = result.data
+                    return result.tokens
                 },
                 key: this._rootKey,
                 derived,
@@ -125,9 +132,9 @@ export class GGAuthSession<D extends DerivedMap = {}> {
         return this._getSession().derived
     }
 
-    public start(pair: GGTokenPair & {data?: unknown}): void {
-        this._identity = pair.data
-        this._getSession().start(pair)
+    public start(result: GGAuthResult): void {
+        this._identity = result.data
+        this._getSession().start(result.tokens)
     }
 
     public logout(): void {

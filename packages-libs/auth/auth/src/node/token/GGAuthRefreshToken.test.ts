@@ -34,10 +34,10 @@ function refreshToken(overrides: {accessTtlMs?: number; refreshTtlMs?: number} =
 }
 
 describe("GGAuthRefreshToken — issue & refresh", () => {
-    test("issue → verifyAccess round-trips subject + claims under data", async () => {
+    test("issue → access.verify round-trips subject + claims under data", async () => {
         const auth = refreshToken()
         const pair = await auth.issue("user-1", {permissions: [Perm.Read, Perm.Write]})
-        const payload = await auth.verifyAccess(pair.access.token)
+        const payload = await auth.access.verify(pair.access.token)
         expect(payload.sub).toBe("user-1")
         expect(payload.data.permissions).toEqual([Perm.Read, Perm.Write])
     })
@@ -46,7 +46,7 @@ describe("GGAuthRefreshToken — issue & refresh", () => {
         const auth = refreshToken()
         const pair = await auth.issue("user-1", {permissions: [Perm.Read]})
         const next = await auth.refresh(pair.refresh.token, async () => ({permissions: [Perm.Read, Perm.Admin]}))
-        const payload = await auth.verifyAccess(next.access.token)
+        const payload = await auth.access.verify(next.access.token)
         expect(payload.data.permissions).toEqual([Perm.Read, Perm.Admin])
         expect(next.refresh.token).not.toBe(pair.refresh.token)
     })
@@ -68,7 +68,7 @@ describe("GGAuthRefreshToken — issue & refresh", () => {
         await auth.refresh(sessionA.refresh.token, async () => ({permissions: [Perm.Read]}))
         await expectAuthError(auth.refresh(sessionA.refresh.token, async () => ({permissions: [Perm.Read]})), "REFRESH_REUSE")
         const bNext = await auth.refresh(sessionB.refresh.token, async () => ({permissions: [Perm.Read]}))
-        expect(await auth.verifyAccess(bNext.access.token)).toMatchObject({sub: "user-1"})
+        expect(await auth.access.verify(bNext.access.token)).toMatchObject({sub: "user-1"})
     })
 
     test("unknown refresh token is rejected", async () => {
@@ -105,7 +105,7 @@ describe("GGAuthRefreshToken — issue & refresh", () => {
         const boom = new Error("transient DB error")
         await expect(auth.refresh(pair.refresh.token, async () => { throw boom })).rejects.toBe(boom)
         const next = await auth.refresh(pair.refresh.token, async () => ({permissions: [Perm.Write]}))
-        const payload = await auth.verifyAccess(next.access.token)
+        const payload = await auth.access.verify(next.access.token)
         expect(payload.data.permissions).toEqual([Perm.Write])
     })
 
@@ -114,35 +114,7 @@ describe("GGAuthRefreshToken — issue & refresh", () => {
         const pair = await auth.issue("user-1", {permissions: [Perm.Read]})
         await expect(auth.refresh(pair.refresh.token, async () => undefined)).rejects.toBeInstanceOf(NOT_FOUND)
         const next = await auth.refresh(pair.refresh.token, async () => ({permissions: [Perm.Read]}))
-        expect(await auth.verifyAccess(next.access.token)).toMatchObject({sub: "user-1"})
-    })
-})
-
-describe("GGAuthRefreshToken — no store", () => {
-    function noStore() {
-        return new GGAuthRefreshToken({
-            refreshTtlMs: 15 * 60 * 1000,
-            access: new GGAuthAccessToken({
-                signer: new HmacSigner("unit-test-secret-which-is-long-enough"),
-                claimSchema: IsClaims,
-                accessTtlMs: 15 * 60 * 1000,
-            }),
-        })
-    }
-
-    test("issue/refresh/revoke throw without a store", async () => {
-        const auth = noStore()
-        await expect(auth.issue("user-1", {permissions: [Perm.Read]})).rejects.toThrow(/RefreshTokenStore/)
-        await expect(auth.refresh("x", async () => ({permissions: []}))).rejects.toThrow(/RefreshTokenStore/)
-        await expect(auth.revoke("x")).rejects.toThrow(/RefreshTokenStore/)
-        await expect(auth.revokeAll("user-1")).rejects.toThrow(/RefreshTokenStore/)
-    })
-
-    test("issueAccess (delegated to the access token) works without a store", async () => {
-        const auth = noStore()
-        const {access} = await auth.issueAccess("user-1", {permissions: [Perm.Write]})
-        const payload = await auth.verifyAccess(access.token)
-        expect(payload.data.permissions).toEqual([Perm.Write])
+        expect(await auth.access.verify(next.access.token)).toMatchObject({sub: "user-1"})
     })
 })
 

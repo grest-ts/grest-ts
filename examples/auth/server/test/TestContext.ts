@@ -8,12 +8,12 @@ import {Raw} from "@grest-ts/schema"
 export class TestContext extends GGTestContext {
     public async register(data: Raw<RegisterRequest>) {
         const result = await this.callOn(AuthPublicApi).register(data)
-        this.setLoggedIn(result.access.token)
+        this.setLoggedIn(result.tokens.access.token)
     }
 
     public async login(data: Raw<LoginRequest>) {
         const result = await this.callOn(AuthPublicApi).login(data)
-        this.setLoggedIn(result.access.token)
+        this.setLoggedIn(result.tokens.access.token)
     }
 
     // Test affordance: inject a fixed outbound value for the wire directly, bypassing the

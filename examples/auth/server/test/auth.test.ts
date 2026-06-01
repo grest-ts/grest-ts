@@ -33,10 +33,12 @@ describe("Registration", () => {
             .register(aliceData)
             .toMatchObject({
                 data: {username: "alice", email: "alice@example.com"},
-                access: {token: expect.any(String)},
-                refresh: {token: expect.any(String)},
+                tokens: {
+                    access: {token: expect.any(String)},
+                    refresh: {token: expect.any(String)},
+                },
             })
-        expect(result.access.token).toMatch(/^ey/)  // JWT format
+        expect(result.tokens.access.token).toMatch(/^ey/)  // JWT format
     })
 
     test("rejects duplicate username", async () => {
@@ -64,7 +66,7 @@ describe("Login", () => {
         const result = await ctx.auth
             .login(aliceData)
             .toMatchObject({data: {username: aliceData.username}})
-        expect(result.access.token).toMatch(/^ey/)
+        expect(result.tokens.access.token).toMatch(/^ey/)
     })
 })
 

@@ -658,9 +658,9 @@ describe("AuthSession — GGContextKeySynchronizer.provide wiring", () => {
             const orgWire = new GGHeader("x-org-t1", {})
 
             new GGContext("test").run(() => {
-                GGAuthSession.withToken(rootWire, {refresh: vi.fn().mockResolvedValue(okPair()), localStorageKey: "test"})
+                GGAuthSession.withToken(rootWire, {refresh: vi.fn().mockResolvedValue({tokens: okPair()}), localStorageKey: "test"})
                     .addDerived("org", orgWire, {mint: vi.fn().mockResolvedValue(okDerived())})
-                    .start(makePair("at", 0, "rt")) // triggers _getSession
+                    .start({tokens: makePair("at", 0, "rt")}) // triggers _getSession
 
                 expect(provideSpy).toHaveBeenCalledTimes(2)
 
@@ -690,8 +690,8 @@ describe("AuthSession — GGContextKeySynchronizer.provide wiring", () => {
         try {
             const rootWire = new GGHeader("authorization-t2", {scheme: "bearer"})
             new GGContext("test").run(() => {
-                GGAuthSession.withToken(rootWire, {refresh: vi.fn().mockResolvedValue(okPair()), localStorageKey: "test"})
-                    .start(makePair("at", 0, "rt")) // triggers _getSession
+                GGAuthSession.withToken(rootWire, {refresh: vi.fn().mockResolvedValue({tokens: okPair()}), localStorageKey: "test"})
+                    .start({tokens: makePair("at", 0, "rt")}) // triggers _getSession
                 expect(provideSpy).toHaveBeenCalledTimes(1)
             })
         } finally {
@@ -717,9 +717,9 @@ describe("AuthSession — GGContextKeySynchronizer.provide wiring", () => {
             const orgWire = new GGHeader("x-org-t3", {})
 
             await new GGContext("test").run(async () => {
-                GGAuthSession.withToken(rootWire, {refresh: vi.fn().mockResolvedValue(okPair()), localStorageKey: "test"})
+                GGAuthSession.withToken(rootWire, {refresh: vi.fn().mockResolvedValue({tokens: okPair()}), localStorageKey: "test"})
                     .addDerived("org", orgWire, {mint: vi.fn().mockResolvedValue(okDerived())})
-                    .start(makePair("at", 0, "rt")) // triggers _getSession
+                    .start({tokens: makePair("at", 0, "rt")}) // triggers _getSession
 
                 const rootCtrl = capturedControllers[0]
                 const orgCtrl = capturedControllers[1]
