@@ -1,5 +1,4 @@
-import {GGContextKey} from "@grest-ts/context";
-import {GGHttpRequest} from "@grest-ts/http";
+import {GGContextKey, GGInbound, GGOutbound} from "@grest-ts/context";
 import {IsString} from "@grest-ts/schema";
 
 // ---------------------------------------------------------
@@ -14,16 +13,16 @@ class CompanyAuthHeader extends GGContextKey<string> {
 
     public readonly responseHeaders: Record<string, never> = {};
 
-    updateRequest(req: GGHttpRequest): void {
+    update(outbound: GGOutbound): void {
         const token = GG_COMPANY_AUTH_TOKEN.get();
         if (token) {
-            req.headers["x-company-auth"] = token;
+            outbound.headers["x-company-auth"] = token;
         }
     }
 
-    parseRequest(req: GGHttpRequest): void {
-        const header = req.headers?.["x-company-auth"];
-        if (header && typeof header === "string") {
+    parse(inbound: GGInbound): void {
+        const header = inbound.headers["x-company-auth"];
+        if (header) {
             GG_COMPANY_AUTH_TOKEN.set(header);
         }
     }

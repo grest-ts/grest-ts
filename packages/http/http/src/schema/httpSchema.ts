@@ -1,6 +1,6 @@
 import {GGHttpCodec, GGHttpSchema} from "./GGHttpSchema";
-import {GGHttpTransportMiddleware} from "./GGHttpSchema";
 import {GGContractApiDefinition, GGContractClass} from "@grest-ts/schema";
+import type {GGTransportMiddleware} from "@grest-ts/context";
 
 /**
  * Create an HTTP API schema builder from a contract.
@@ -36,7 +36,7 @@ class GGHttpSchemaBuilder<TContract extends GGContractApiDefinition, TContext = 
 
     private readonly _contract: GGContractClass<TContract>
     private _pathPrefix: string = ""
-    private _middlewares: GGHttpTransportMiddleware[] = []
+    private _middlewares: GGTransportMiddleware[] = []
 
     constructor(contract: GGContractClass<TContract>) {
         this._contract = contract;
@@ -47,7 +47,7 @@ class GGHttpSchemaBuilder<TContract extends GGContractApiDefinition, TContext = 
         return this
     }
 
-    use<M extends GGHttpTransportMiddleware>(middleware: M): GGHttpSchemaBuilder<TContract, TContext | M> {
+    use<M extends GGTransportMiddleware>(middleware: M): GGHttpSchemaBuilder<TContract, TContext | M> {
         this._middlewares.push(middleware)
         return this as unknown as GGHttpSchemaBuilder<TContract, TContext | M>
     }

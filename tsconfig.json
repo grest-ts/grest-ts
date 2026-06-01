@@ -13,6 +13,7 @@
   },
   "include": [
     "grest.package.ts",
+    "packages-libs/auth/auth/src/**/*",
     "packages-libs/db/db-dynamodb/src/**/*",
     "packages-libs/db/db-dynamodb/testkit/**/*",
     "packages-libs/db/db-mysql/src/**/*",

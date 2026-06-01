@@ -11,7 +11,8 @@
  * model.
  */
 
-import type {GGHttpSchema, GGHttpTransportMiddleware} from "@grest-ts/http";
+import type {GGTransportMiddleware} from "@grest-ts/context";
+import type {GGHttpSchema} from "@grest-ts/http";
 import type {GGWebSocketSchema} from "@grest-ts/websocket";
 import type {ANY_ERROR_CLS, GGSchema} from "@grest-ts/schema";
 import {JsonSchemaAdapter} from "./jsonSchemaAdapter";
@@ -108,7 +109,7 @@ export function buildContractDoc(options: BuildContractDocOptions): ApiDocsDocum
 // ── HTTP contract ──────────────────────────────────────────────────────
 
 function buildHttpContract(httpSchema: GGHttpSchema<any, any>, ctx: BuildContext): ContractDoc {
-    const auth = extractHttpAuth(httpSchema.apiMiddlewares as readonly GGHttpTransportMiddleware[]);
+    const auth = extractHttpAuth(httpSchema.apiMiddlewares as readonly GGTransportMiddleware[]);
     const methods: MethodDoc[] = [];
 
     for (const methodName of Object.keys(httpSchema.codec)) {
@@ -369,7 +370,7 @@ function collectErrors(
 
 // ── Auth ───────────────────────────────────────────────────────────────
 
-function extractHttpAuth(middlewares: readonly GGHttpTransportMiddleware[]): AuthDoc[] {
+function extractHttpAuth(middlewares: readonly GGTransportMiddleware[]): AuthDoc[] {
     const auth: AuthDoc[] = [];
     for (const mw of middlewares) {
         for (const [name, schema] of Object.entries(mw.headers ?? {})) {

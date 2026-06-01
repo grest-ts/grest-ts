@@ -157,12 +157,14 @@ The same refuse-to-start guarantee from HTTP applies: a non-public c2s permissio
 
 ## Middleware
 
-WebSocket middleware handles authentication and context during the connection handshake. Unlike HTTP middleware which runs per-request, WebSocket middleware runs once when the connection is established.
+WebSocket middleware handles authentication and context during the connection handshake. It runs once when the connection is established (HTTP middleware, by contrast, runs per-request).
+
+WebSocket has **no separate middleware interface**. It uses the same unified `GGTransportMiddleware` from `@grest-ts/context` as HTTP. The runtime normalizes each transport into a `GGInbound` (server-side credentials it reads) and a `GGOutbound` (client-side credentials it writes), so one implementation works on both protocols without any protocol-specific methods.
 
 ### Defining Middleware
 
 ```typescript
-import { GGWebSocketMiddleware, GGWebSocketHandshakeContext } from "@grest-ts/websocket"
+import { GGTransportMiddleware, GGInbound, GGOutbound } from "@grest-ts/context"
 import { GGContextKey } from "@grest-ts/context"
 import { IsObject, IsString, NOT_AUTHORIZED } from "@grest-ts/schema"
 
@@ -174,18 +176,18 @@ export type UserAuth = typeof IsUserAuth.infer
 
 export const GG_USER_AUTH = new GGContextKey<UserAuth>("user_auth", IsUserAuth)
 
-export const AuthMiddleware: GGWebSocketMiddleware = {
+export const AuthMiddleware: GGTransportMiddleware = {
     // Client-side: add auth headers to the handshake
-    updateHandshake(context: GGWebSocketHandshakeContext): void {
+    update(outbound: GGOutbound): void {
         const auth = GG_USER_AUTH.get()
         if (auth) {
-            context.headers["authorization"] = `Bearer ${auth.token}`
+            outbound.headers["authorization"] = `Bearer ${auth.token}`
         }
     },
 
-    // Server-side: parse auth headers from the handshake
-    parseHandshake(context: GGWebSocketHandshakeContext): void {
-        const authHeader = context.headers["authorization"]
+    // Server-side: parse auth headers from the inbound handshake
+    parse(inbound: GGInbound): void {
+        const authHeader = inbound.headers["authorization"]
         if (!authHeader?.startsWith("Bearer ")) {
             throw new NOT_AUTHORIZED()
         }
@@ -208,14 +210,20 @@ export const AuthMiddleware: GGWebSocketMiddleware = {
 ### Middleware Interface
 
 ```typescript
-interface GGWebSocketMiddleware {
-    updateHandshake?(context: GGWebSocketHandshakeContext): void  // Client-side
-    parseHandshake?(context: GGWebSocketHandshakeContext): void   // Server-side
-    process?(): Promise<void>                                     // Server-side async
+interface GGTransportMiddleware {
+    update?(outbound: GGOutbound): void    // Client: write handshake/request headers
+    parse?(inbound: GGInbound): void       // Server: read inbound credentials
+    process?(): Promise<void>              // Server: async validation
+    respond?(response: GGResponse): void   // Server: response headers (HTTP only; not called on WS)
 }
+
+interface GGInbound  { headers: Record<string, string | undefined>; cookie?: string; query: Record<string, string | undefined> }
+interface GGOutbound { headers: Record<string, string> }
 ```
 
-All methods are optional — implement only what you need. Throwing an error in `parseHandshake` or `process` rejects the connection.
+All methods are optional — implement only what you need. Throwing an error in `parse` or `process` rejects the connection. `respond` writes response headers and is an HTTP-only hook — it is never called on WebSocket, which has no response-header stage.
+
+A middleware reads the cookie via `inbound.cookie`, not from `inbound.headers`. On WebSocket the runtime fills `inbound.cookie` from the real HTTP upgrade request; the in-band handshake message can never set it, so it can't be spoofed. The middleware just reads `inbound.cookie` and does not choose the source.
 
 ### Chaining Middleware
 
@@ -232,12 +240,10 @@ Middlewares run in order during connection establishment.
 
 ### Sharing middleware with HTTP APIs (one class, two transports)
 
-Most apps are HTTP-first and add WebSockets later. You'll often want the *same* auth logic on both — same bearer-token shape, same verification, same user context key. The two middleware interfaces are deliberately separate (HTTP runs per-request; WS runs once at handshake — see the note below), but TypeScript structural typing lets **one class implement both interfaces** so you write the logic once and attach it to both schemas.
+Most apps are HTTP-first and add WebSockets later. You'll often want the *same* auth logic on both — same bearer-token shape, same verification, same user context key. Because HTTP and WebSocket share the single `GGTransportMiddleware` interface, you write **one** implementation and attach the same instance to both schemas. There are no protocol-specific methods to keep in sync.
 
 ```typescript
-import { GGHttpTransportMiddleware, GGHttpRequest } from "@grest-ts/http"
-import { GGWebSocketMiddleware, GGWebSocketHandshakeContext } from "@grest-ts/websocket"
-import { GGContextKey } from "@grest-ts/context"
+import { GGTransportMiddleware, GGInbound, GGOutbound, GGContextKey } from "@grest-ts/context"
 import { IsObject, IsString, NOT_AUTHORIZED } from "@grest-ts/schema"
 
 export const IsAuthUser = IsObject({ id: IsString, role: IsString })
@@ -245,11 +251,10 @@ export type AuthUser = typeof IsAuthUser.infer
 export const GG_AUTH_USER = new GGContextKey<AuthUser>("authUser", IsAuthUser)
 
 /**
- * Implements both middleware interfaces. Use the same instance on HTTP and
- * WebSocket schemas — single source of truth for auth wiring.
+ * One middleware for HTTP and WebSocket. Use the same instance on both kinds of
+ * schema — single source of truth for auth wiring.
  */
-export class BearerAuthMiddleware
-    implements GGHttpTransportMiddleware, GGWebSocketMiddleware {
+export class BearerAuthMiddleware implements GGTransportMiddleware {
 
     constructor(private opts: {
         /** Client-side: return the current token. Called on every HTTP request AND on every WS handshake. */
@@ -259,23 +264,14 @@ export class BearerAuthMiddleware
     }) {}
 
     // ---- Client-side: attach the bearer header ----
-    updateRequest   = (req: GGHttpRequest) =>
-        this.setHeader(req.headers as Record<string, string>)
-    updateHandshake = (ctx: GGWebSocketHandshakeContext) =>
-        this.setHeader(ctx.headers)
+    update = (outbound: GGOutbound) => {
+        const t = this.opts.getToken()
+        if (t) outbound.headers["authorization"] = "Bearer " + t
+    }
 
     // ---- Server-side: extract + verify, populate context ----
-    parseRequest    = (req: GGHttpRequest) =>
-        this.extract(req.headers as Record<string, string | string[]>)
-    parseHandshake  = (ctx: GGWebSocketHandshakeContext) =>
-        this.extract(ctx.headers)
-
-    private setHeader(headers: Record<string, string>) {
-        const t = this.opts.getToken()
-        if (t) headers["authorization"] = "Bearer " + t
-    }
-    private extract(headers: Record<string, string | string[]>) {
-        const header = headers["authorization"]
+    parse = (inbound: GGInbound) => {
+        const header = inbound.headers["authorization"]
         if (typeof header !== "string" || !header.startsWith("Bearer ")) {
             throw new NOT_AUTHORIZED({ displayMessage: "Missing bearer token" })
         }
@@ -292,15 +288,17 @@ const auth = new BearerAuthMiddleware({
 })
 
 export const ItemApi = httpSchema(ItemContract).pathPrefix("api/items")
-    .use(auth)           // acts as GGHttpTransportMiddleware
+    .use(auth)
     .routes({ ... })
 
 export const ChatApi = webSocketSchema(ChatContract).path("ws/chat")
-    .use(auth)           // acts as GGWebSocketMiddleware
+    .use(auth)
     .done()
 ```
 
-**Important — the rhythms are different:**
+The same `update`/`parse` hooks drive both transports — the runtime feeds them a `GGOutbound`/`GGInbound` normalized from whatever protocol is in play, so the extraction logic is written once.
+
+**Important — the lifecycles still differ:**
 
 | | HTTP | WebSocket |
 |---|---|---|
@@ -308,9 +306,7 @@ export const ChatApi = webSocketSchema(ChatContract).path("ws/chat")
 | What it can do        | Modify each request/response    | Set connection-scoped context |
 | Token refresh         | Naturally handled: next request reads the new token | Not automatic — token is captured at connect time. If the token rotates mid-session, the old connection keeps its old identity until it's dropped and a fresh handshake runs |
 
-This is why the interfaces aren't merged: forcing a single interface would make WS middleware silently not re-run on messages (a foot-gun). Keep the rhythms distinct and share *logic*, not *lifecycle*.
-
-The server-side extraction logic here is identical for both transports — that's the common case and the reason this pattern pays off. If your HTTP flow needs per-request behavior that doesn't map to WS (say, modifying the HTTP response body), put those hooks on a separate HTTP-only middleware and apply both.
+Sharing the interface shares *logic*, not *lifecycle*: WS middleware still runs only once per connection, so connection-scoped context (identity, scopes) is pinned at handshake and does not re-run on each message. If your HTTP flow needs per-request response behavior that doesn't map to WS (say, writing a `Set-Cookie` via `respond`), that hook is simply never invoked on the WebSocket side — `respond` is HTTP-only.
 
 ## Cookies (httpOnly sessions, read-only)
 

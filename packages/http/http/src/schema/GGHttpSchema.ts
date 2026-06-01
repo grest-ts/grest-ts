@@ -1,15 +1,14 @@
 import {ERROR, ERROR_JSON, GGContractApiDefinition, GGContractClass, GGContractMethod, GGSchema, GGSchemaDescription, OK} from "@grest-ts/schema";
 import type {HttpMethod} from "@grest-ts/common";
 import type http from "http";
-import type {GGHttpServerMiddleware} from "../server/GGHttpSchema.startServer";
-import type {GGContextKey} from "@grest-ts/context";
+import type {GGContextKey, GGTransportMiddleware} from "@grest-ts/context";
 import type {OpenAPIV3_1} from "openapi-types";
 
 export class GGHttpSchema<TContract extends GGContractApiDefinition, TContext> {
 
     public readonly name: string
     public readonly pathPrefix: string
-    public readonly apiMiddlewares: readonly GGHttpTransportMiddleware[]
+    public readonly apiMiddlewares: readonly GGTransportMiddleware[]
     public readonly codec: Record<keyof TContract, GGHttpCodec>
     public readonly contract: GGContractClass<TContract> | null = null
 
@@ -17,7 +16,7 @@ export class GGHttpSchema<TContract extends GGContractApiDefinition, TContext> {
         pathPrefix: string,
         contract: GGContractClass<TContract>,
         wireCodec: Record<keyof TContract, GGHttpCodec>,
-        middlewares: readonly GGHttpTransportMiddleware[] = []
+        middlewares: readonly GGTransportMiddleware[] = []
     ) {
         this.name = contract.name
         this.pathPrefix = pathPrefix
@@ -37,7 +36,7 @@ export class GGHttpSchema<TContract extends GGContractApiDefinition, TContext> {
 export interface ClientHttpRouteToRpcTransformClientConfig {
     pathPrefix: string,
     contract: GGContractMethod,
-    middlewares: readonly GGHttpTransportMiddleware[]
+    middlewares: readonly GGTransportMiddleware[]
 }
 
 export interface ClientHttpRouteToRpcTransformClientCodec {
@@ -58,12 +57,13 @@ export interface GGHttpFetchRequest {
 
 export interface ClientHttpRouteToRpcTransformServerConfig {
     contract: GGContractMethod,
-    apiMiddlewares: readonly GGHttpTransportMiddleware[],
-    serverMiddlewares: readonly GGHttpServerMiddleware[]
+    /** Schema bindings + server middlewares, already merged into one ordered server pipeline. */
+    middlewares: readonly GGTransportMiddleware[]
 }
 
 export interface ClientHttpRouteToRpcTransformServerCodec {
-    parseRequest: (req: http.IncomingMessage) => Promise<unknown>,
+    readRequest: (req: http.IncomingMessage) => Promise<unknown>,
+    validateInput: (rawInput: unknown) => unknown,
     sendResponse: (res: http.ServerResponse, rpcResult: ERROR<string, unknown> | OK<unknown>) => Promise<void>
 }
 
@@ -137,66 +137,3 @@ export interface GGHttpCodec {
     toOpenApiOperation?(config: GGHttpCodecOpenApiConfig): Partial<OpenAPIV3_1.OperationObject>
 }
 
-// --------------------------------------------------------------------------------------------------------
-// Middleware
-// --------------------------------------------------------------------------------------------------------
-
-export interface GGHttpTransportMiddleware {
-    /**
-     * Request headers this middleware reads or writes, mapped to their value schemas.
-     * Keys are header names; values describe the header value format for validation and docs.
-     * Used for CORS Access-Control-Allow-Headers and OpenAPI parameter docs.
-     * Use {} if the middleware touches no custom request headers.
-     *
-     * @example
-     * headers: {
-     *   "authorization": IsString.nonEmpty.docs({title: "Bearer token", example: "Bearer ..."}),
-     *   "accept-language": IsLocale.orUndefined
-     * }
-     */
-    readonly headers: Record<string, GGSchema<string | undefined>>;
-
-    /**
-     * Response headers this middleware sets, mapped to their value schemas.
-     * Keys are header names; values describe the header value format for validation and docs.
-     * Used for CORS Access-Control-Expose-Headers and OpenAPI response header docs.
-     * Use {} if the middleware sets no custom response headers.
-     */
-    readonly responseHeaders: Record<string, GGSchema<string | undefined>>;
-
-    /**
-     * Cookies this middleware reads, mapped to their value schemas. Emitted as `in: cookie`
-     * parameters in OpenAPI so cookie-bound inputs are documented. Absent for header/plain
-     * middlewares.
-     */
-    readonly cookieParams?: Record<string, GGSchema<string | undefined>>;
-
-    /**
-     * Client-side: modify outgoing request (add headers, etc.)
-     */
-    updateRequest?(req: GGHttpRequest): void;
-
-    /**
-     * Server-side: parse incoming request (extract context from headers, etc.)
-     */
-    parseRequest?(req: GGHttpRequest): void;
-
-    /**
-     * Server-side: modify outgoing response
-     */
-    updateResponse?(res: GGHttpResponse): void;
-
-    /**
-     * Client-side: parse incoming response
-     */
-    parseResponse?(res: GGHttpResponse): void;
-}
-
-export interface GGHttpRequest {
-    headers?: Record<string, string | string[]>;
-    queryArgs?: Record<string, string | string[]>;
-}
-
-export interface GGHttpResponse {
-    headers: Record<string, string | string[]>;
-}

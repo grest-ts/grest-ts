@@ -1,7 +1,5 @@
 import {
     defineSocketContract,
-    GGWebSocketHandshakeContext,
-    GGWebSocketMiddleware,
     webSocketSchema,
 } from "@grest-ts/websocket"
 import {
@@ -9,51 +7,14 @@ import {
     GG_NO_PERMISSIONS,
     GGContractClient,
     GGContractImplementation,
-    IsArray,
     IsString,
     NOT_AUTHORIZED,
     SERVER_ERROR,
 } from "@grest-ts/schema"
-import {GGContextKey} from "@grest-ts/context"
-import {AppPermission} from "./PermissionsApi"
+import {AppPermission, TEST_RESOLVER_THROW_SCOPE, TEST_SCOPES_WIRE} from "./PermissionsApi"
 
-/**
- * Client-side: scopes the test wants to claim — sent via custom handshake header.
- */
-export const WS_CLIENT_SCOPES = new GGContextKey<string[]>("wsClientScopes", IsArray(IsString))
-
-/**
- * Server-side: scopes parsed from the handshake header (cached by the gate
- * for the lifetime of the connection).
- */
-export const WS_SERVER_SCOPES = new GGContextKey<string[]>("wsServerScopes", IsArray(IsString))
-
-export const WsTestAuthMiddleware: GGWebSocketMiddleware = {
-    // Client → puts scopes header on the handshake message.
-    updateHandshake(ctx: GGWebSocketHandshakeContext): void {
-        const scopes = WS_CLIENT_SCOPES.get()
-        if (scopes && scopes.length > 0) {
-            ctx.headers["x-test-scopes"] = scopes.join(",")
-        }
-    },
-    // Server → reads the header, populates WS_SERVER_SCOPES.
-    parseHandshake(ctx: GGWebSocketHandshakeContext): void {
-        const raw = ctx.headers["x-test-scopes"]
-        if (typeof raw === "string" && raw.length > 0) {
-            WS_SERVER_SCOPES.set(raw.split(",").map(s => s.trim()).filter(Boolean))
-        }
-    },
-}
-
-/** See PermissionsApi.TEST_RESOLVER_THROW_SCOPE — same sentinel, WS variant. */
-export const WS_TEST_RESOLVER_THROW_SCOPE = "__test:throw__"
-
-export const getWsTestScopes = (): ReadonlySet<string> | null => {
-    const scopes = WS_SERVER_SCOPES.get()
-    if (!scopes) return null
-    if (scopes.includes(WS_TEST_RESOLVER_THROW_SCOPE)) throw new Error("ws resolver intentionally threw — test signal")
-    return new Set(scopes)
-}
+/** See PermissionsApi.TEST_RESOLVER_THROW_SCOPE — same sentinel, reused for WS. */
+export const WS_TEST_RESOLVER_THROW_SCOPE = TEST_RESOLVER_THROW_SCOPE
 
 // ---- Contract: a multiplex socket (no connectPermission). ----
 export const WsPermissionsApiContract = defineSocketContract("WsPermissionsApi", {
@@ -95,7 +56,7 @@ export const WsPermissionsApiContract = defineSocketContract("WsPermissionsApi",
 
 export const WsPermissionsApi = webSocketSchema(WsPermissionsApiContract)
     .path("ws/permissions-test")
-    .use(WsTestAuthMiddleware)
+    .use(TEST_SCOPES_WIRE)
     .done()
 
 // ---- A second contract gated AT THE CONNECTION LEVEL. ----
@@ -112,7 +73,7 @@ export const WsFeaturePermissionsApiContract = defineSocketContract("WsFeaturePe
 
 export const WsFeaturePermissionsApi = webSocketSchema(WsFeaturePermissionsApiContract)
     .path("ws/feature-permissions-test")
-    .use(WsTestAuthMiddleware)
+    .use(TEST_SCOPES_WIRE)
     .connectPermission(AppPermission.Admin)
     .done()
 

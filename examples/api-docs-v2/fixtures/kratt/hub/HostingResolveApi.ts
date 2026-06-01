@@ -1,5 +1,4 @@
-import {GGContextKey} from "@grest-ts/context"
-import type {GGHttpRequest} from "@grest-ts/http"
+import {GGContextKey, type GGInbound, type GGOutbound} from "@grest-ts/context"
 import {GGContractClass, IsObject, IsString, IsNumber, SERVER_ERROR, type GGSchema } from "@grest-ts/schema"
 import {GGRpc, httpSchema} from "@grest-ts/http"
 import {NOT_FOUND, UNAUTHORIZED} from "./errors"
@@ -30,17 +29,16 @@ class HostingProxySecretTransport extends GGContextKey<tHostingProxySecret> {
     readonly headers: Record<string, GGSchema<string | undefined>> = {"x-hosting-proxy-secret": IsString.orUndefined}
     readonly responseHeaders: Record<string, GGSchema<string | undefined>> = {}
 
-    updateRequest(req: GGHttpRequest): void {
+    update(outbound: GGOutbound): void {
         const secret = GG_HOSTING_PROXY_SECRET.get()
         if (secret) {
-            req.headers = req.headers ?? {}
-            req.headers["x-hosting-proxy-secret"] = secret
+            outbound.headers["x-hosting-proxy-secret"] = secret
         }
     }
 
-    parseRequest(req: GGHttpRequest): void {
-        const header = req.headers?.["x-hosting-proxy-secret"]
-        if (header && typeof header === "string") {
+    parse(inbound: GGInbound): void {
+        const header = inbound.headers["x-hosting-proxy-secret"]
+        if (header) {
             GG_HOSTING_PROXY_SECRET.set(header as tHostingProxySecret)
         }
     }

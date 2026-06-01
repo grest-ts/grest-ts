@@ -1,11 +1,11 @@
 import {GGSocket} from '../socket/GGSocket';
-import {GGWebSocketHandshakeContext, GGWebSocketMiddleware} from "../schema/GGWebSocketMiddleware";
 import {SocketAdapter} from "../socket/SocketAdapter";
 import {GG_WS_CONNECTION} from "../server/GG_WS_CONNECTION";
 import {Message, MessageType} from "../socket/SocketMessage";
 import {GGContractExecutor, GGValidator, SERVER_ERROR} from "@grest-ts/schema";
 import {withTimeout} from "@grest-ts/common";
-import {GGContext, GGContextStore} from "@grest-ts/context";
+import {GGContext, GGContextKey, GGContextStore, type GGOutbound, type GGTransportMiddleware} from "@grest-ts/context";
+import {GGContextKeySynchronizer} from "@grest-ts/http";
 import {GG_TRACE} from "@grest-ts/trace";
 import {getDefaultAdapter} from "../adapter/getDefaultAdapter";
 
@@ -14,7 +14,7 @@ export interface GGSocketPoolConfig<Query> {
     path: string,
     query?: Query
     queryValidator?: GGValidator<Query>
-    middlewares?: readonly GGWebSocketMiddleware[]
+    middlewares?: readonly GGTransportMiddleware[]
 }
 
 /**
@@ -119,28 +119,37 @@ export class GGSocketPool {
     }
 
     /**
-     * Build headers from middlewares' updateHandshake()
+     * Build handshake headers from middlewares' update()
      */
     private static buildHeaders(config: GGSocketPoolConfig<any>): Record<string, string> {
         if (!config.middlewares) {
             return {};
         }
 
-        const handshakeContext: GGWebSocketHandshakeContext = {
-            headers: {},
-            queryArgs: (config.query as Record<string, string>) ?? {}
-        };
-
+        const outbound: GGOutbound = {headers: {}};
         for (const middleware of config.middlewares) {
-            middleware.updateHandshake?.(handshakeContext);
+            middleware.update?.(outbound);
         }
+        return outbound.headers;
+    }
 
-        return handshakeContext.headers;
+    /**
+     * Await GGContextKeySynchronizer.waitFor for each middleware that carries a key.
+     * Must be called before reading middleware keys to ensure fresh values.
+     */
+    private static async gateMiddlewares(middlewares: readonly GGTransportMiddleware[] | undefined): Promise<void> {
+        if (!middlewares) return;
+        for (const mw of middlewares) {
+            if (mw instanceof GGContextKey) {
+                await GGContextKeySynchronizer.waitFor(mw);
+            }
+        }
     }
 
     static async getOrConnect<Query>(
         config: GGSocketPoolConfig<Query>
     ): Promise<GGSocket> {
+        await this.gateMiddlewares(config.middlewares);
         const headers = this.buildHeaders(config);
         const fullUrl = this.buildUrl(config);
 
@@ -155,7 +164,7 @@ export class GGSocketPool {
             return this.pendingSockets.get(key);
         }
 
-        const connectionPromise = this.openSocket(fullUrl, headers, config.domain);
+        const connectionPromise = this.openSocket(fullUrl, config, config.domain);
         this.pendingSockets.set(key, connectionPromise);
 
         try {
@@ -183,7 +192,7 @@ export class GGSocketPool {
     static async connect<Query>(
         config: GGSocketPoolConfig<Query>
     ): Promise<GGSocket> {
-        return this.openSocket(this.buildUrl(config), this.buildHeaders(config), config.domain);
+        return this.openSocket(this.buildUrl(config), config, config.domain);
     }
 
     /**
@@ -214,7 +223,7 @@ export class GGSocketPool {
         return fullUrl;
     }
 
-    private static async openSocket(fullUrl: string, headers: Record<string, string>, domain: string): Promise<GGSocket> {
+    private static async openSocket(fullUrl: string, config: GGSocketPoolConfig<any>, domain: string): Promise<GGSocket> {
         const adapterClass = await this.ensureAdapter();
         return new Promise<GGSocket>((resolve, reject) => {
             const adapter = new adapterClass(fullUrl);
@@ -235,6 +244,8 @@ export class GGSocketPool {
                             port: undefined,
                             path: domain
                         });
+                        await this.gateMiddlewares(config.middlewares);
+                        const headers = this.buildHeaders(config);
                         adapter.send(Message.create(MessageType.HANDSHAKE, "", "", headers));
                         await withTimeout(
                             new Promise<void>((handshakeResolve, handshakeReject) => {

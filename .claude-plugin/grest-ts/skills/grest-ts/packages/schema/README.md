@@ -111,7 +111,7 @@ Contract methods may declare an optional `permission` field. Strict mode is per-
 - A bare `string` — single OAuth-style scope.
 - `{allOf: [...]}` / `{anyOf: [...]}` — AND/OR combinators (non-empty tuples).
 - `satisfies(required, scopes)` — pure checker used by both the gate and `GGPermissionChecker.has(...)`.
-- `GGPermissionChecker` — handler-side accessor (the gate populates one in context via `GG_PERMISSIONS` from `@grest-ts/http`).
+- `GGPermissionChecker` — wraps a scope set so `allOf`/`anyOf` checks use the same `satisfies(...)` the gate uses.
 - `validatePermission(tree)` — well-formedness pass; runs in `GGContractClass`/`GGContractFunction` constructors when a permission is set.
 
 For the runtime mechanics — gate placement, transport wiring, and the strict-mode startup check — see [`@grest-ts/http`](../../http/http/README.md) and [`@grest-ts/websocket`](../../http/websocket/README.md).

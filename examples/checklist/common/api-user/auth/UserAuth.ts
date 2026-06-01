@@ -1,8 +1,5 @@
-import type http from "http";
-import {GGHttpRequest} from "@grest-ts/http"
-import {GGWebSocketHandshakeContext} from "@grest-ts/websocket"
 import {GGSchema, IsBearerToken, IsObject, IsString, NOT_AUTHORIZED} from "@grest-ts/schema";
-import {GGContextKey} from "@grest-ts/context";
+import {GGContextKey, GGInbound, GGOutbound} from "@grest-ts/context";
 
 export const IsUserAuthToken = IsString.brand("UserAuthToken");
 export type tUserAuthToken = typeof IsUserAuthToken.infer
@@ -17,10 +14,6 @@ export const IsUser = IsObject({
 })
 export type User = typeof IsUser.infer
 
-/**
- * User authentication middleware that works with both HTTP and WebSocket.
- * Implements both GGHttpTransportMiddleware and GGWebSocketMiddleware interfaces.
- */
 export class UserAuth extends GGContextKey<tUserAuthToken> {
 
     readonly headers: Record<string, GGSchema<string | undefined>> = {
@@ -31,42 +24,15 @@ export class UserAuth extends GGContextKey<tUserAuthToken> {
     };
     readonly responseHeaders: Record<string, GGSchema<string | undefined>> = {};
 
-    // =========================================================================
-    // HTTP Middleware Interface (GGHttpTransportMiddleware)
-    // =========================================================================
-
-    updateRequest(req: GGHttpRequest): void {
+    update(outbound: GGOutbound): void {
         const user = GG_USER_AUTH_TOKEN.get();
         if (user) {
-            req.headers["authorization"] = `Bearer ${user}`;
+            outbound.headers["authorization"] = `Bearer ${user}`;
         }
     }
 
-    parseRequest(req: http.IncomingMessage): void {
-        this.parseAuthHeader(req.headers as Record<string, string>);
-    }
-
-    // =========================================================================
-    // WebSocket Middleware Interface (GGWebSocketMiddleware)
-    // =========================================================================
-
-    updateHandshake(context: GGWebSocketHandshakeContext): void {
-        const user = GG_USER_AUTH_TOKEN.get();
-        if (user) {
-            context.headers["authorization"] = `Bearer ${user}`;
-        }
-    }
-
-    parseHandshake(context: GGWebSocketHandshakeContext): void {
-        this.parseAuthHeader(context.headers);
-    }
-
-    // =========================================================================
-    // Shared Implementation
-    // =========================================================================
-
-    private parseAuthHeader(headers: Record<string, string>): void {
-        const authHeader = headers['authorization'];
+    parse(inbound: GGInbound): void {
+        const authHeader = inbound.headers['authorization'];
         if (!authHeader || typeof authHeader !== 'string' || !authHeader.startsWith('Bearer ')) {
             throw new NOT_AUTHORIZED({displayMessage: "Invalid authorization header!"});
         }

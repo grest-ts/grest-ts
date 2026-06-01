@@ -1,4 +1,5 @@
-import type {GGHttpSchema, GGHttpTransportMiddleware} from "@grest-ts/http";
+import type {GGHttpSchema} from "@grest-ts/http";
+import type {GGTransportMiddleware} from "@grest-ts/context";
 import type {ANY_ERROR_CLS} from "@grest-ts/schema";
 import type {OpenAPIV3_1} from "openapi-types";
 import {SchemaRegistry} from "./SchemaRegistry";
@@ -108,7 +109,7 @@ export function toOpenApi(
  * on the operation so Swagger UI shows the padlock "Authorize" button.
  */
 function buildMiddlewareOpenApi(
-    middlewares: readonly GGHttpTransportMiddleware[],
+    middlewares: readonly GGTransportMiddleware[],
     registry: SchemaRegistry,
     securitySchemes: Map<string, OpenAPIV3_1.SecuritySchemeObject>
 ): { headerParams: OpenAPIV3_1.ParameterObject[]; cookieParams: OpenAPIV3_1.ParameterObject[]; operationSecurity: OpenAPIV3_1.SecurityRequirementObject[] } {
@@ -130,7 +131,7 @@ function buildMiddlewareOpenApi(
             if (description) param.description = description;
             cookieParams.push(param);
         }
-        for (const [name, schema] of Object.entries(mw.headers)) {
+        for (const [name, schema] of Object.entries(mw.headers ?? {})) {
             const desc = schema.toSchemaDescription();
             const format = desc.docs?.format;
 

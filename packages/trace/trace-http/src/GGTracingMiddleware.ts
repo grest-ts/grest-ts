@@ -1,5 +1,4 @@
-import type http from "http";
-import type {GGHttpRequest, GGHttpTransportMiddleware} from "@grest-ts/http";
+import type {GGInbound, GGOutbound, GGTransportMiddleware} from "@grest-ts/context";
 import {IsString} from "@grest-ts/schema";
 import {GG_TRACE, GGContextTraceKey} from "@grest-ts/trace";
 
@@ -12,7 +11,7 @@ const HEADER_ROOT_START_TS = "x-root-start-ts"    // Timestamp when root context
  * Trace effect - provides distributed tracing context.
  * Extracts B3/Zipkin headers and generates trace IDs.
  */
-export const GGTracingMiddleware: GGHttpTransportMiddleware = {
+export const GGTracingMiddleware: GGTransportMiddleware = {
 
     headers: {
         [HEADER_TRACE_ID]:       IsString.orUndefined.docs({description: "Root trace ID for the entire request chain"}),
@@ -20,18 +19,17 @@ export const GGTracingMiddleware: GGHttpTransportMiddleware = {
         [HEADER_PARENT_SPAN_ID]: IsString.orUndefined.docs({description: "Parent span ID"}),
         [HEADER_ROOT_START_TS]:  IsString.orUndefined.docs({description: "Timestamp (ms) when the root context was created"}),
     },
-    responseHeaders: {},
 
-    updateRequest(req: GGHttpRequest): void {
+    update(outbound: GGOutbound): void {
         const trace = GG_TRACE.get()
-        if (trace?.traceId) req.headers[HEADER_TRACE_ID] = trace.traceId;
-        if (trace?.parentSpanId) req.headers[HEADER_PARENT_SPAN_ID] = trace.parentSpanId;
-        if (trace?.spanId) req.headers[HEADER_SPAN_ID] = trace.spanId;
-        if (trace?.traceTimestamp) req.headers[HEADER_ROOT_START_TS] = String(trace.traceTimestamp);
+        if (trace?.traceId) outbound.headers[HEADER_TRACE_ID] = trace.traceId;
+        if (trace?.parentSpanId) outbound.headers[HEADER_PARENT_SPAN_ID] = trace.parentSpanId;
+        if (trace?.spanId) outbound.headers[HEADER_SPAN_ID] = trace.spanId;
+        if (trace?.traceTimestamp) outbound.headers[HEADER_ROOT_START_TS] = String(trace.traceTimestamp);
     },
 
-    parseRequest(req: http.IncomingMessage): void {
-        const headers = req.headers as Record<string, string | undefined>;
+    parse(inbound: GGInbound): void {
+        const headers = inbound.headers;
         const currentSpanId = GGContextTraceKey.generateTraceId();
         const currentStartTs = Date.now();
         GG_TRACE.set(Object.freeze({

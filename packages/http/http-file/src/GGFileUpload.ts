@@ -29,8 +29,10 @@ class GGFileUploadCodec implements GGHttpCodec {
 
     public createForServer(config: ClientHttpRouteToRpcTransformServerConfig): ClientHttpRouteToRpcTransformServerCodec {
         this.assertHasNonJsonData(config.contract);
+        const parser = new GGFileUploadRequestParser(this.method, this.path, config);
         return {
-            parseRequest: new GGFileUploadRequestParser(this.method, this.path, config).parseRequest,
+            readRequest: parser.readRequest,
+            validateInput: parser.validateInput,
             sendResponse: new GGRpcResponseBuilder(config).sendResponse
         }
     }

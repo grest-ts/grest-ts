@@ -11,7 +11,8 @@
  * model.
  */
 
-import type {GGHttpSchema, GGHttpTransportMiddleware} from "@grest-ts/http";
+import type {GGHttpSchema} from "@grest-ts/http";
+import type {GGTransportMiddleware} from "@grest-ts/context";
 import type {GGWebSocketSchema} from "@grest-ts/websocket";
 import type {ANY_ERROR_CLS, GGPermission, GGSchema} from "@grest-ts/schema";
 import {GG_ANY_PERMISSION, GG_NO_PERMISSIONS} from "@grest-ts/schema";
@@ -109,9 +110,9 @@ export function buildContractDoc(options: BuildContractDocOptions): ApiDocsDocum
 // ── HTTP contract ──────────────────────────────────────────────────────
 
 function buildHttpContract(httpSchema: GGHttpSchema<any, any>, ctx: BuildContext): ContractDoc {
-    const auth = extractHttpAuth(httpSchema.apiMiddlewares as readonly GGHttpTransportMiddleware[]);
-    const headers = extractHttpHeaders(httpSchema.apiMiddlewares as readonly GGHttpTransportMiddleware[], ctx, httpSchema.name);
-    const cookies = extractCookies(httpSchema.apiMiddlewares as readonly GGHttpTransportMiddleware[], ctx, httpSchema.name);
+    const auth = extractHttpAuth(httpSchema.apiMiddlewares as readonly GGTransportMiddleware[]);
+    const headers = extractHttpHeaders(httpSchema.apiMiddlewares as readonly GGTransportMiddleware[], ctx, httpSchema.name);
+    const cookies = extractCookies(httpSchema.apiMiddlewares as readonly GGTransportMiddleware[], ctx, httpSchema.name);
     const methods: MethodDoc[] = [];
 
     for (const methodName of Object.keys(httpSchema.codec)) {
@@ -390,7 +391,7 @@ function collectErrors(
 
 // ── Auth ───────────────────────────────────────────────────────────────
 
-function extractHttpAuth(middlewares: readonly GGHttpTransportMiddleware[]): AuthDoc[] {
+function extractHttpAuth(middlewares: readonly GGTransportMiddleware[]): AuthDoc[] {
     const auth: AuthDoc[] = [];
     for (const mw of middlewares) {
         for (const [name, schema] of Object.entries(mw.headers ?? {})) {
@@ -453,7 +454,7 @@ function authSchemeFromFormat(format: string | undefined): AuthDoc["scheme"] | u
 // needs to know about.
 
 function extractHttpHeaders(
-    middlewares: readonly GGHttpTransportMiddleware[],
+    middlewares: readonly GGTransportMiddleware[],
     ctx: BuildContext,
     contractName: string,
 ): ParamDoc[] {

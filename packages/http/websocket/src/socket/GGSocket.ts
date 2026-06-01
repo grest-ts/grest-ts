@@ -167,6 +167,9 @@ export class GGSocket {
             }
         } catch (error) {
             this.log.error(this, error);
+            if (expectsResponse) {
+                this.sendResponse(msg as RequestMessage, error instanceof ERROR ? error : ERROR.fromUnknown(error), labels, startTime);
+            }
             this.onErrorCallbacks.forEach(cb => cb(error as Error));
         }
     }

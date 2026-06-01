@@ -1,5 +1,5 @@
 import type http from "http";
-import type {GGHttpResponse, GGHttpTransportMiddleware} from "../schema/GGHttpSchema";
+import type {GGResponse, GGTransportMiddleware} from "@grest-ts/context";
 
 /**
  * Runs the transport chain's server-side response hook and writes the collected
@@ -11,14 +11,14 @@ import type {GGHttpResponse, GGHttpTransportMiddleware} from "../schema/GGHttpSc
  */
 export function applyResponseMiddleware(
     res: http.ServerResponse,
-    middlewares: readonly GGHttpTransportMiddleware[] | undefined
+    middlewares: readonly GGTransportMiddleware[] | undefined
 ): void {
     if (!middlewares?.length || res.headersSent) return;
-    let response: GGHttpResponse | undefined;
+    let response: GGResponse | undefined;
     for (const mw of middlewares) {
-        if (!mw.updateResponse) continue;
+        if (!mw.respond) continue;
         response ??= {headers: {}};
-        mw.updateResponse(response);
+        mw.respond(response);
     }
     if (!response) return;
     for (const name in response.headers) {

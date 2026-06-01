@@ -1,4 +1,4 @@
-import {GGWebSocketMiddleware} from "./GGWebSocketMiddleware";
+import type {GGTransportMiddleware} from "@grest-ts/context";
 import {GGContractApiDefinition, GGContractClass, GGPermission, GGValidator} from "@grest-ts/schema";
 
 /**
@@ -7,7 +7,7 @@ import {GGContractApiDefinition, GGContractClass, GGPermission, GGValidator} fro
  * Type parameters:
  * - TClientToServer: Client-facing type for clientToServer methods (returns GGPromise)
  * - TServerToClient: Client-facing type for serverToClient methods (returns GGPromise)
- * - TContext: Accumulated context type (parseHandshake return types)
+ * - TContext: Accumulated context type (parse return types)
  * - TQuery: Query parameters on connect
  * - TClientToServerImpl: Server implementation type for clientToServer handlers (returns Promise)
  */
@@ -21,7 +21,7 @@ export class GGWebSocketSchema<
 > {
     public readonly name: string
     public readonly path: string
-    public readonly middlewares: readonly GGWebSocketMiddleware[]
+    public readonly middlewares: readonly GGTransportMiddleware[]
     public readonly queryValidator?: GGValidator<TQuery>
     public readonly connectPermission?: GGPermission
     private readonly contractFactory: () => GGWebSocketContractRuntime
@@ -31,7 +31,7 @@ export class GGWebSocketSchema<
         name: string,
         path: string,
         contractFactory: () => GGWebSocketContractRuntime,
-        middlewares: readonly GGWebSocketMiddleware[] = [],
+        middlewares: readonly GGTransportMiddleware[] = [],
         queryValidator?: GGValidator<TQuery>,
         connectPermission?: GGPermission
     ) {

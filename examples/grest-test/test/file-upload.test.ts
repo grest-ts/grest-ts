@@ -129,7 +129,7 @@ describe("File upload tests", async () => {
         await api
             .uploadImage({image: largeImage})
             .toBeError(VALIDATION_ERROR);
-    });
+    }, 10_000); // 6MB upload can exceed the 5s default under full-suite parallel load
 
     // -------------------------------------------------
     // File nested inside a discriminated union

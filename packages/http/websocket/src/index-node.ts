@@ -15,7 +15,6 @@ export * from "./socket/GGSocket";
 // API Schema
 export * from "./schema/webSocketSchema";
 export * from "./schema/GGWebSocketSchema";
-export * from "./schema/GGWebSocketMiddleware";
 
 // Server
 export * from "./server/GGSocketServer";

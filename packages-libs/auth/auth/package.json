@@ -1,0 +1,66 @@
+{
+  "//": "THIS FILE IS GENERATED - DO NOT EDIT",
+  "name": "@grest-ts/auth",
+  "version": "0.0.48",
+  "type": "module",
+  "license": "MIT",
+  "description": "Authentication library for Node.js and browser — JWT signing, IdP strategies, HTTP/WS guards, and client-side session management",
+  "exports": {
+    ".": {
+      "browser": {
+        "types": "./src/index-browser.ts",
+        "import": "./src/index-browser.ts"
+      },
+      "default": {
+        "types": "./src/index-node.ts",
+        "import": "./src/index-node.ts"
+      }
+    }
+  },
+  "files": [
+    "src"
+  ],
+  "scripts": {
+    "typecheck": "tsc --noEmit -p src",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "test:coverage:html": "vitest run --coverage --reporter=html"
+  },
+  "private": true,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/grest-ts/grest-ts.git",
+    "directory": "packages-libs/auth/auth"
+  },
+  "homepage": "https://grest-ts.com/packages/auth",
+  "bugs": {
+    "url": "https://github.com/grest-ts/grest-ts/issues"
+  },
+  "keywords": [
+    "typescript",
+    "framework",
+    "contract",
+    "api",
+    "microservices",
+    "testing",
+    "auth",
+    "jwt",
+    "authentication",
+    "session",
+    "idp"
+  ],
+  "engines": {
+    "node": ">=24"
+  },
+  "dependencies": {
+    "jose": "^5.9.6"
+  },
+  "peerDependencies": {
+    "@grest-ts/http": "0.0.48",
+    "@grest-ts/schema": "0.0.48",
+    "bcrypt": "^6.0.0"
+  },
+  "devDependencies": {
+    "@types/bcrypt": "^6.0.0"
+  }
+}

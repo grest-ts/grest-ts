@@ -1,11 +1,10 @@
 import {GG_TEST_RUNNER, GGTest} from "@grest-ts/testkit"
 import {GGContext} from "@grest-ts/context"
 import {MainRuntime} from "../src/main"
-import {AppPermission} from "../src/api/PermissionsApi"
+import {AppPermission, TEST_SCOPES_WIRE} from "../src/api/PermissionsApi"
 import {
     WsFeaturePermissionsApi,
     WsPermissionsApi,
-    WS_CLIENT_SCOPES,
     WS_TEST_RESOLVER_THROW_SCOPE,
 } from "../src/api/WsPermissionsApi"
 
@@ -13,9 +12,10 @@ function urlFor(apiName: string): string {
     return GG_TEST_RUNNER.get().discoveryServer.getRoutingUrl(apiName)
 }
 
+// null → omit the credential wire (no identity → handshake rejects with NOT_AUTHORIZED).
 async function withClientScopes<R>(scopes: string[] | null, fn: () => Promise<R>): Promise<R> {
     const scope = new GGContext("ws-perm-test")
-    if (scopes && scopes.length > 0) scope.set(WS_CLIENT_SCOPES, scopes)
+    if (scopes && scopes.length > 0) scope.set(TEST_SCOPES_WIRE, scopes.join(","))
     return await scope.run(fn)
 }
 
@@ -24,24 +24,21 @@ describe("WebSocket permission gate", () => {
     GGTest.startWorker(MainRuntime)
 
     describe("per-message gate (multiplex socket, no connectPermission)", () => {
-        test("public message works without scopes", async () => {
+        test("no identity → handshake rejected with NOT_AUTHORIZED", async () => {
+            // The schema carries a required-or-throw credential wire; omitting it
+            // fails the wire's process() at handshake, so connect() rejects.
             await withClientScopes(null, async () => {
+                const client = WsPermissionsApi.createClient({url: urlFor("WsPermissionsApi")})
+                await expect(client.connect()).rejects.toMatchObject({type: "NOT_AUTHORIZED"})
+            })
+        })
+
+        test("public message works for any authenticated caller (public-within-authed)", async () => {
+            await withClientScopes(["any"], async () => {
                 const client = WsPermissionsApi.createClient({url: urlFor("WsPermissionsApi")})
                 await client.connect()
                 try {
                     expect(await client.outgoing.publicMessage("hi")).toBe("pub:hi")
-                } finally {
-                    await client.disconnect()
-                }
-            })
-        })
-
-        test("needsRead without scopes → NOT_AUTHORIZED on the message", async () => {
-            await withClientScopes(null, async () => {
-                const client = WsPermissionsApi.createClient({url: urlFor("WsPermissionsApi")})
-                await client.connect()
-                try {
-                    await expect(client.outgoing.needsRead("x")).rejects.toMatchObject({type: "NOT_AUTHORIZED"})
                 } finally {
                     await client.disconnect()
                 }
@@ -131,14 +128,14 @@ describe("WebSocket permission gate", () => {
 
         test("scopes are cached at handshake — header changes after connect have no effect", async () => {
             const scope = new GGContext("ws-cache-test")
-            scope.set(WS_CLIENT_SCOPES, [AppPermission.Read])
+            scope.set(TEST_SCOPES_WIRE, AppPermission.Read)
             await scope.run(async () => {
                 const client = WsPermissionsApi.createClient({url: urlFor("WsPermissionsApi")})
                 await client.connect()
                 try {
                     expect(await client.outgoing.needsRead("a")).toBe("read:a")
-                    // Mutating the scopes in the test context does NOT affect the live socket.
-                    scope.set(WS_CLIENT_SCOPES, [AppPermission.Admin])
+                    // Mutating the wire in the test context does NOT affect the live socket.
+                    scope.set(TEST_SCOPES_WIRE, AppPermission.Admin)
                     expect(await client.outgoing.needsRead("b")).toBe("read:b")
                 } finally {
                     await client.disconnect()
@@ -146,26 +143,9 @@ describe("WebSocket permission gate", () => {
             })
         })
 
-        test("server-pushed s2c messages reach unauthenticated callers — gate has no caller identity to check", async () => {
-            // No client scopes set — connection opens (multiplex socket has no
-            // connectPermission). Server still pushes `echo` right after connect.
-            await withClientScopes(null, async () => {
-                const received: string[] = []
-                const client = WsPermissionsApi.createClient({url: urlFor("WsPermissionsApi")})
-                await client.connect(({incoming}) => {
-                    incoming.on({
-                        echo: async (text: string) => { received.push(text) },
-                    })
-                })
-                try {
-                    await new Promise(r => setTimeout(r, 150))
-                    expect(received).toEqual(["hello-from-server"])
-                } finally {
-                    await client.disconnect()
-                }
-            })
-        })
-
+        // s2c to no-identity callers belongs on a PUBLIC (wireless) socket — covered by
+        // websocket-client.test.ts "serverToClient push". This gated schema only has
+        // authenticated callers, so we keep just the authenticated-receives-s2c case.
         test("authenticated callers also receive s2c pushes — same behavior, same code path", async () => {
             await withClientScopes([AppPermission.Read], async () => {
                 const received: string[] = []
@@ -187,7 +167,7 @@ describe("WebSocket permission gate", () => {
 
     describe("resolver crashes at handshake", () => {
         test("resolver throws → handshake fails, client.connect() rejects", async () => {
-            // Sentinel scope makes getWsTestScopes() throw inside the handshake
+            // Sentinel scope makes the wire's permissions() throw inside the handshake
             // permission middleware. The handshake's try/catch surfaces it to
             // the client as a HANDSHAKE_ERR.
             await withClientScopes([WS_TEST_RESOLVER_THROW_SCOPE], async () => {

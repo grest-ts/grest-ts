@@ -8,6 +8,7 @@ export default defineConfig({
   test: {
     globals: true,
     projects: [
+      'packages-libs/auth/auth',
       'packages-libs/docs/api-docs',
       'packages-libs/docs/asyncapi',
       'packages-libs/docs/openapi',
@@ -19,12 +20,14 @@ export default defineConfig({
       'packages-tooling/testkit/testkit-vitest',
       'packages/context',
       'packages/discovery/discovery-local',
+      'packages/http/http',
       'packages/locator',
       'packages/schema/schema',
       'packages/trace/trace',
       'packages/trace/trace-http',
       'examples/checklist',
-      'examples/grest-test'
+      'examples/grest-test',
+      'examples/auth/server'
     ]
   }
 })

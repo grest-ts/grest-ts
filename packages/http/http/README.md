@@ -188,7 +188,7 @@ Each step has one job: the auth middleware turns a token into identity in contex
 
 The check is per-server (HTTP routes + WS schemas on the same `GGHttpServer`), so a permission declared anywhere is infectious across sibling chains. The only way to opt out is to declare nothing — projects with no auth pay zero ceremony, but the moment one route opts in, the framework forces consistency.
 
-**What this does not cover.** The permission gates *endpoint access* — "is this caller allowed to invoke this method at all?" It does not handle *resource access* — "can this caller edit *this specific* post?" That check still belongs in the handler. The same `GGPermissionChecker` the gate used is exposed via `GG_PERMISSIONS.get()`, so handler-side sub-decisions use identical logic with no drift between framework and app code.
+**What this does not cover.** The permission gates *endpoint access* — "is this caller allowed to invoke this method at all?" It does not handle *resource access* — "can this caller edit *this specific* post?" That check still belongs in the handler, which reads the app's own durable principal (minted by the wire's `process()`) — not a framework scope bag.
 
 ## Authentication & Context
 
@@ -242,9 +242,15 @@ GG_USER_AUTH.addCodec("http", HeaderType.codecTo(IsUserAuthContext, {
 
 ### Using Middleware (For Complex Logic)
 
+A middleware is a `GGTransportMiddleware` (from `@grest-ts/context`) — one shape for
+both HTTP and WebSocket. The runtime calls only the hooks each side needs: a client runs
+`update(outbound)` to write outbound credentials; a server runs `parse(inbound)` to read
+inbound credentials, optionally `process()` for async validation, and `respond(response)`
+to write response headers. `inbound.headers[name]` is already flat (`string | undefined`).
+
 ```typescript
 // middleware/ClientInfoMiddleware.ts
-import { GGHttpRequest, GGHttpTransportMiddleware } from "@grest-ts/http"
+import { GGTransportMiddleware, GGInbound, GGOutbound } from "@grest-ts/context"
 import { GGContextKey } from "@grest-ts/context"
 import { IsObject, IsString, IsLiteral } from "@grest-ts/schema"
 
@@ -258,20 +264,22 @@ export const GG_CLIENT_INFO = new GGContextKey<ClientInfo>('clientInfo', IsObjec
     platform: IsLiteral("web", "ios", "android")
 }))
 
-export const ClientInfoMiddleware: GGHttpTransportMiddleware = {
-    headers: ['x-client-version', 'x-client-platform'],
-    responseHeaders: [],
-    updateRequest(req: GGHttpRequest): void {
+export const ClientInfoMiddleware: GGTransportMiddleware = {
+    headers: {
+        'x-client-version': IsString.orUndefined,
+        'x-client-platform': IsString.orUndefined
+    },
+    update(outbound: GGOutbound): void {
         const info = GG_CLIENT_INFO.get()
         if (info) {
-            req.headers['x-client-version'] = info.version
-            req.headers['x-client-platform'] = info.platform
+            outbound.headers['x-client-version'] = info.version
+            outbound.headers['x-client-platform'] = info.platform
         }
     },
-    parseRequest(req: GGHttpRequest): void {
+    parse(inbound: GGInbound): void {
         GG_CLIENT_INFO.set({
-            version: req.headers['x-client-version'] ?? 'unknown',
-            platform: (req.headers['x-client-platform'] ?? 'web') as ClientInfo['platform']
+            version: inbound.headers['x-client-version'] ?? 'unknown',
+            platform: (inbound.headers['x-client-platform'] ?? 'web') as ClientInfo['platform']
         })
     }
 }
@@ -455,20 +463,20 @@ httpSchema(Contract)
     .routes({ ... })
 ```
 
-Both `headers` (request) and `responseHeaders` (response) are required on middleware and codecs —
-TypeScript enforces this at compile time. Use `[]` when not applicable:
+A middleware declares the headers it reads via `headers` and the response headers it
+sets via `responseHeaders` — both are `Record<string, GGSchema<string | undefined>>`,
+keyed by header name. The names feed CORS auto-discovery; omit a field when not applicable:
 
 ```typescript
-export const MyMiddleware: GGHttpTransportMiddleware = {
-    headers: ['x-custom-header'],
-    responseHeaders: [],
-    updateRequest(req) { ... },
-    parseRequest(req) { ... }
+export const MyMiddleware: GGTransportMiddleware = {
+    headers: { 'x-custom-header': IsString.orUndefined },
+    update(outbound) { ... },
+    parse(inbound) { ... }
 }
 ```
 
 Codecs also declare `responseHeaders`. For example, `GGFileDownload` declares
-`['Content-Disposition']` which is automatically added to `Access-Control-Expose-Headers`.
+`Content-Disposition` which is automatically added to `Access-Control-Expose-Headers`.
 
 You can also register headers manually on the server:
 

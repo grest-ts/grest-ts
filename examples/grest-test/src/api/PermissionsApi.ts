@@ -1,7 +1,7 @@
-import {GGRpc, GGHttpRequest, GGHttpTransportMiddleware, httpSchema} from "@grest-ts/http"
+import {GGRpc, GGHeader, httpSchema} from "@grest-ts/http"
+import {GGContextKey} from "@grest-ts/context"
 import {
     GG_ANY_PERMISSION,
-    GG_NO_PERMISSIONS,
     GGContractClass,
     FORBIDDEN,
     IsArray,
@@ -9,8 +9,8 @@ import {
     IsString,
     NOT_AUTHORIZED,
     SERVER_ERROR,
+    VALIDATION_ERROR,
 } from "@grest-ts/schema"
-import {GGContextKey} from "@grest-ts/context"
 
 /**
  * App-specific scope catalog. Following plan §1 — projects centralize permission
@@ -24,66 +24,37 @@ export enum AppPermission {
 }
 
 /**
- * Context key that holds the caller's resolved scopes for a request.
- * In production this would be populated by a JWT auth middleware. Here the
- * test middleware reads them from a custom header so tests can drive the gate
- * deterministically without minting tokens.
- */
-export const GG_TEST_SCOPES = new GGContextKey<string[]>("test-scopes", IsArray(IsString))
-
-/**
- * Test auth middleware. Parses `x-test-scopes` header into GG_TEST_SCOPES.
- * Empty header / no header → no identity (null resolver result → NOT_AUTHORIZED
- * for non-public methods).
- */
-export const TestAuthMiddleware: GGHttpTransportMiddleware = {
-    headers: {
-        "x-test-scopes": IsString.orUndefined.docs({description: "Comma-separated scopes for permission tests"}),
-    },
-    responseHeaders: {},
-    parseRequest(req: GGHttpRequest): void {
-        const raw = req.headers?.["x-test-scopes"]
-        if (typeof raw === "string" && raw.length > 0) {
-            GG_TEST_SCOPES.set(raw.split(",").map(s => s.trim()).filter(Boolean))
-        }
-    },
-    updateRequest(req: GGHttpRequest): void {
-        const scopes = GG_TEST_SCOPES.get()
-        if (scopes && scopes.length > 0) {
-            req.headers!["x-test-scopes"] = scopes.join(",")
-        }
-    },
-}
-
-/**
  * Sentinel scope value tests use to verify the gate behaves correctly when
- * the resolver itself throws (DB lookup failure, etc.). Sending this scope
- * in the test header makes the resolver throw a plain Error.
+ * the wire's permissions() itself throws (DB lookup failure, etc.). Sending this
+ * scope in the test header makes permissions() throw a plain Error.
  */
 export const TEST_RESOLVER_THROW_SCOPE = "__test:throw__"
 
 /**
- * Scope resolver passed to GGHttp.usePermissions(). Reads from the context
- * the auth middleware populated — never parses headers itself.
- *
- * The TEST_RESOLVER_THROW_SCOPE sentinel is honored to exercise the gate's
- * defensive path: a resolver that crashes should surface as a SERVER_ERROR
- * to HTTP callers and a HANDSHAKE_ERR to WS callers.
+ * Required-throw credential wire. process() rejects with NOT_AUTHORIZED when the
+ * header is absent (no caller identity); permissions() yields the comma-separated
+ * scopes the header carries. In production this would verify a JWT; here tests
+ * drive the gate deterministically by setting the wire's value.
  */
-export const getTestScopes = (): ReadonlySet<string> | null => {
-    const scopes = GG_TEST_SCOPES.get()
-    if (!scopes) return null
-    if (scopes.includes(TEST_RESOLVER_THROW_SCOPE)) throw new Error("resolver intentionally threw — test signal")
-    return new Set(scopes)
-}
+// Durable scopes minted in process() — read by permissions() AFTER the ephemeral
+// credential has been cleared (the HTTP gate resolves scopes once clear() has run).
+export const TEST_SCOPES_DATA = new GGContextKey<string[]>("test-scopes-data", IsArray(IsString))
+
+export const TEST_SCOPES_WIRE = new GGHeader("x-test-scopes")
+export const TEST_SCOPES_WIRE_HANDLER = TEST_SCOPES_WIRE.define(() => ({
+    process: async () => {
+        const raw = TEST_SCOPES_WIRE.get()
+        if (raw === undefined) throw new NOT_AUTHORIZED({debugMessage: "no caller identity"})
+        TEST_SCOPES_DATA.set(raw.split(",").map(s => s.trim()).filter(Boolean))
+    },
+    permissions: async () => {
+        const scopes = TEST_SCOPES_DATA.get() ?? []
+        if (scopes.includes(TEST_RESOLVER_THROW_SCOPE)) throw new Error("resolver intentionally threw — test signal")
+        return scopes
+    },
+}))
 
 export const PermissionsApiContract = new GGContractClass("PermissionsApi", {
-    // Public endpoint — no auth needed.
-    publicMethod: {
-        success: IsString,
-        errors: [SERVER_ERROR],
-        permission: GG_NO_PERMISSIONS,
-    },
     // Any authenticated identity with at least one scope.
     anyAuth: {
         success: IsString,
@@ -114,20 +85,19 @@ export const PermissionsApiContract = new GGContractClass("PermissionsApi", {
         errors: [NOT_AUTHORIZED, FORBIDDEN, SERVER_ERROR],
         permission: {anyOf: [{allOf: [AppPermission.Read, AppPermission.Write]}, AppPermission.Admin]},
     },
-    // Handler does its own sub-check via GG_PERMISSIONS.
+    // Handler does its own sub-check by reading the durable principal the wire minted.
     checksInside: {
         input: IsObject({label: IsString}),
         success: IsObject({label: IsString, branch: IsString}),
-        errors: [NOT_AUTHORIZED, FORBIDDEN, SERVER_ERROR],
+        errors: [NOT_AUTHORIZED, FORBIDDEN, VALIDATION_ERROR, SERVER_ERROR],
         permission: {anyOf: [AppPermission.Admin, AppPermission.Owner]},
     },
 })
 
 export const PermissionsApi = httpSchema(PermissionsApiContract)
     .pathPrefix("api/permissions")
-    .use(TestAuthMiddleware)
+    .use(TEST_SCOPES_WIRE)
     .routes({
-        publicMethod:       GGRpc.GET("public"),
         anyAuth:            GGRpc.GET("any"),
         needsRead:          GGRpc.GET("read"),
         needsReadAndWrite:  GGRpc.GET("read-write"),

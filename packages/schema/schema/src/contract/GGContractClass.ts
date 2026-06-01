@@ -4,7 +4,7 @@ import {GGSchema} from "../GGSchema";
 import {GGPromise} from "./GGPromise";
 import {FORBIDDEN, NOT_AUTHORIZED, VALIDATION_ERROR} from "./standardErrors";
 import {GG_NO_PERMISSIONS, GGPermission} from "./permission/GGPermission";
-import {validatePermission} from "./permission/validatePermission";
+import {GGPermissionChecker} from "./permission/GGPermissionChecker";
 
 export interface GGContractMethod<Request = any, Response = any, ErrorsUnion extends ANY_ERROR_CLS = any> {
     input?: GGSchema<Request>
@@ -60,7 +60,7 @@ export class GGContractClass<ContractMethods extends GGContractApiDefinition> {
         for (const methodName in this.methods) {
             const method = this.methods[methodName];
             if (method.permission !== undefined) {
-                validatePermission(method.permission, `${name}.${methodName}.permission`);
+                GGPermissionChecker.validatePermission(method.permission, `${name}.${methodName}.permission`);
                 if (method.permission !== GG_NO_PERMISSIONS) {
                     const errs = method.errors ?? [];
                     if (!errs.includes(NOT_AUTHORIZED as any) || !errs.includes(FORBIDDEN as any)) {

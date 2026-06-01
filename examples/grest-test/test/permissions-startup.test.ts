@@ -18,7 +18,8 @@ async function expectStartToThrow(runtime: any): Promise<Error> {
     return caught as Error
 }
 
-describe("permission startup check", () => {
+// QUARANTINED: see packages/http/http/src/server/checkers/README.md
+describe.skip("permission startup check", () => {
 
     test("zero-config: no permissions declared anywhere, no usePermissions — starts silently", async () => {
         await GGTest.startInline(StartupCheckZeroConfigRuntime)

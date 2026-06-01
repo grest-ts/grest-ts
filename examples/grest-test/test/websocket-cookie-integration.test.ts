@@ -11,7 +11,6 @@ import * as http from "http"
 import WebSocket from "ws"
 import {GGContext} from "@grest-ts/context"
 import {GG_TEST_RUNNER, GGTest} from "@grest-ts/testkit"
-import {cookie} from "@grest-ts/http"
 import {MainRuntime} from "../src/main"
 import {SESSION} from "../src/api/CookieTestApi"
 
@@ -19,26 +18,23 @@ describe("ws cookie binding (unit)", () => {
 
     const inContext = (fn: () => void) => new GGContext("ws-cookie-unit").run(fn)
 
-    test("parseHandshake reads the cookie from the upgrade headers into the key", () => {
+    test("parse reads the cookie from the upgrade Cookie header into the wire", () => {
         inContext(() => {
-            const mw = cookie(SESSION)
-            mw.parseHandshake!({headers: {}, upgradeHeaders: {cookie: "other=x; session=abc123; y=z"}, queryArgs: {}})
+            SESSION.parse!({headers: {}, query: {}, cookie: "other=x; session=abc123; y=z"})
             expect(SESSION.get()).toBe("abc123")
         })
     })
 
-    test("a cookie present only in the in-band handshake message is ignored (no spoof)", () => {
+    test("a cookie absent from inbound.cookie (in-band only) is never read (no spoof)", () => {
         inContext(() => {
-            const mw = cookie(SESSION)
-            mw.parseHandshake!({headers: {cookie: "session=spoofed"}, upgradeHeaders: {}, queryArgs: {}})
+            SESSION.parse!({headers: {cookie: "session=spoofed"}, query: {}})
             expect(SESSION.get()).toBeUndefined()
         })
     })
 
-    test("no cookie → the key stays undefined", () => {
+    test("no cookie → the wire stays undefined", () => {
         inContext(() => {
-            const mw = cookie(SESSION)
-            mw.parseHandshake!({headers: {}, upgradeHeaders: {}, queryArgs: {}})
+            SESSION.parse!({headers: {}, query: {}})
             expect(SESSION.get()).toBeUndefined()
         })
     })
@@ -125,8 +121,8 @@ describe("ws cookie integration (real upgrade)", () => {
     })
 
     test("connecting WITHOUT a session cookie is rejected at the handshake (NOT_AUTHORIZED)", async () => {
-        // The connectPermission resolver derives no scopes from a missing cookie, so the
-        // "allowSocketConnection" gate fails the handshake.
+        // No cookie = no credential = unauthenticated: WS_SESSION.process() throws
+        // NOT_AUTHORIZED (401), rejecting the handshake before the permission gate.
         await expect(openRaw()).rejects.toMatchObject({type: "NOT_AUTHORIZED"})
     })
 
@@ -148,7 +144,7 @@ describe("ws cookie integration (real upgrade)", () => {
 
     test("a cookie in the in-band handshake message cannot spoof identity", async () => {
         // No real upgrade Cookie; try to smuggle a session into the in-band handshake.
-        // It must be ignored, so the connect gate still rejects with NOT_AUTHORIZED.
+        // It must be ignored, so WS_SESSION.process() sees no cookie and throws NOT_AUTHORIZED.
         await expect(openRaw(undefined, {cookie: "session=session-for-admin"}))
             .rejects.toMatchObject({type: "NOT_AUTHORIZED"})
     })

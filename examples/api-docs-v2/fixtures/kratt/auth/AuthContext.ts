@@ -1,5 +1,4 @@
-import {GGContextKey} from "@grest-ts/context"
-import type {GGHttpRequest} from "@grest-ts/http"
+import {GGContextKey, type GGInbound, type GGOutbound} from "@grest-ts/context"
 import {IsString, type GGSchema} from "@grest-ts/schema"
 
 const IsUserToken = IsString.brand("UserToken")
@@ -16,17 +15,16 @@ class UserTokenTransport extends GGContextKey<tUserToken> {
     readonly headers: Record<string, GGSchema<string | undefined>> = {"authorization": IsString.orUndefined}
     readonly responseHeaders: Record<string, GGSchema<string | undefined>> = {}
 
-    updateRequest(req: GGHttpRequest): void {
+    update(outbound: GGOutbound): void {
         const token = GG_USER_TOKEN.get()
         if (token) {
-            req.headers = req.headers ?? {}
-            req.headers["authorization"] = `Bearer ${token}`
+            outbound.headers["authorization"] = `Bearer ${token}`
         }
     }
 
-    parseRequest(req: GGHttpRequest): void {
-        const authHeader = req.headers?.["authorization"]
-        if (authHeader && typeof authHeader === "string" && authHeader.startsWith("Bearer ")) {
+    parse(inbound: GGInbound): void {
+        const authHeader = inbound.headers["authorization"]
+        if (authHeader && authHeader.startsWith("Bearer ")) {
             GG_USER_TOKEN.set(authHeader.substring(7) as tUserToken)
         }
     }
@@ -39,17 +37,16 @@ class OrgTokenTransport extends GGContextKey<tOrgToken> {
     readonly headers: Record<string, GGSchema<string | undefined>> = {"x-org-token": IsString.orUndefined}
     readonly responseHeaders: Record<string, GGSchema<string | undefined>> = {}
 
-    updateRequest(req: GGHttpRequest): void {
+    update(outbound: GGOutbound): void {
         const token = GG_ORG_TOKEN.get()
         if (token) {
-            req.headers = req.headers ?? {}
-            req.headers["x-org-token"] = token
+            outbound.headers["x-org-token"] = token
         }
     }
 
-    parseRequest(req: GGHttpRequest): void {
-        const orgHeader = req.headers?.["x-org-token"]
-        if (orgHeader && typeof orgHeader === "string") {
+    parse(inbound: GGInbound): void {
+        const orgHeader = inbound.headers["x-org-token"]
+        if (orgHeader) {
             GG_ORG_TOKEN.set(orgHeader as tOrgToken)
         }
     }

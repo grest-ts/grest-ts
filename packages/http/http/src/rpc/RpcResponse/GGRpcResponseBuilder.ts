@@ -1,17 +1,18 @@
 import type http from "http";
 import {ANY_ERROR, ERROR, GGContractExecutor, GGContractMethod, GGDebugData, GGErrorData, GGSchema, OK} from "@grest-ts/schema";
-import {ClientHttpRouteToRpcTransformServerConfig, GGHttpTransportMiddleware} from "../../schema/GGHttpSchema";
+import type {GGTransportMiddleware} from "@grest-ts/context";
+import {ClientHttpRouteToRpcTransformServerConfig} from "../../schema/GGHttpSchema";
 import {applyResponseMiddleware} from "../../server/applyResponseMiddleware";
 
 
 export class GGRpcResponseBuilder {
 
     protected readonly contract: GGContractMethod
-    private readonly apiMiddlewares: readonly GGHttpTransportMiddleware[]
+    private readonly middlewares: readonly GGTransportMiddleware[]
 
     constructor(config: ClientHttpRouteToRpcTransformServerConfig) {
         this.contract = config.contract;
-        this.apiMiddlewares = config.apiMiddlewares;
+        this.middlewares = config.middlewares;
     }
 
     public sendResponse = async (res: http.ServerResponse, rpcResult: ERROR<string, unknown> | OK<unknown>): Promise<void> => {
@@ -28,7 +29,7 @@ export class GGRpcResponseBuilder {
             json = this.makeError(GGContractExecutor.getResponseSchema(this.contract, rpcResult), rpcResult);
             statusCode = rpcResult.statusCode;
         }
-        applyResponseMiddleware(res, this.apiMiddlewares);
+        applyResponseMiddleware(res, this.middlewares);
         res.writeHead(statusCode, {
             'Content-Type': 'application/json',
             'Content-Length': Buffer.byteLength(json)

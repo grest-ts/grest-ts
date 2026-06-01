@@ -1,5 +1,5 @@
 import {GGWebSocketSchema, GGWebSocketContractRuntime} from "./GGWebSocketSchema";
-import {GGWebSocketMiddleware} from "./GGWebSocketMiddleware";
+import type {GGTransportMiddleware} from "@grest-ts/context";
 import {GGContractClass, GGContractClient, GGContractImplementation, GGContractMethod, GGPermission, GGValidator} from "@grest-ts/schema";
 
 /**
@@ -73,7 +73,7 @@ class GGWebSocketSchemaBuilder<
     TServerToClientImpl = TServerToClient
 > {
     private _path: string = ""
-    private _middlewares: GGWebSocketMiddleware[] = []
+    private _middlewares: GGTransportMiddleware[] = []
     private _queryValidator?: GGValidator<any>
     private _connectPermission?: GGPermission
 
@@ -87,7 +87,7 @@ class GGWebSocketSchemaBuilder<
         return this
     }
 
-    use<M extends GGWebSocketMiddleware>(middleware: M): GGWebSocketSchemaBuilder<TClientToServer, TServerToClient, TContext | M, TQuery, TClientToServerImpl, TServerToClientImpl> {
+    use<M extends GGTransportMiddleware>(middleware: M): GGWebSocketSchemaBuilder<TClientToServer, TServerToClient, TContext | M, TQuery, TClientToServerImpl, TServerToClientImpl> {
         this._middlewares.push(middleware)
         return this as any
     }

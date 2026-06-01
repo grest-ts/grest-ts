@@ -1,4 +1,4 @@
-import {defineSocketContract, webSocketSchema, GGWebSocketMiddleware, GGWebSocketHandshakeContext} from "@grest-ts/websocket"
+import {defineSocketContract, webSocketSchema} from "@grest-ts/websocket"
 import {
     GGContractClient,
     GGContractImplementation,
@@ -6,7 +6,7 @@ import {
     IsString,
     NOT_AUTHORIZED,
     SERVER_ERROR, GG_NO_PERMISSIONS } from "@grest-ts/schema"
-import {GGContextKey} from "@grest-ts/context"
+import {GGContextKey, GGInbound, GGOutbound, GGTransportMiddleware} from "@grest-ts/context"
 
 // ---------------------------------------------------------
 // Context keys
@@ -32,18 +32,18 @@ const VALID_TOKENS: Record<string, AuthedUser> = {
     "secret-bob":   {username: "bob"},
 }
 
-export const AuthedSocketMiddleware: GGWebSocketMiddleware = {
+export const AuthedSocketMiddleware: GGTransportMiddleware = {
     // Client-side: fires during createClient's connect() when building handshake.
-    updateHandshake(ctx: GGWebSocketHandshakeContext): void {
+    update(outbound: GGOutbound): void {
         const token = CLIENT_AUTH_TOKEN.get()
         if (token) {
-            ctx.headers["authorization"] = "Bearer " + token
+            outbound.headers["authorization"] = "Bearer " + token
         }
     },
 
     // Server-side: fires when handshake message arrives.
-    parseHandshake(ctx: GGWebSocketHandshakeContext): void {
-        const header = ctx.headers["authorization"]
+    parse(inbound: GGInbound): void {
+        const header = inbound.headers["authorization"]
         if (!header?.startsWith("Bearer ")) {
             throw new NOT_AUTHORIZED({displayMessage: "Missing bearer token"})
         }
