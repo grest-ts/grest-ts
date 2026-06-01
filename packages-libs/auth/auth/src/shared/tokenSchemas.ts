@@ -11,3 +11,6 @@ export type GGAuthTokenResult = typeof IsGGAuthTokenResult.infer
 
 export const IsGGAuthTokensResult = IsObject({access: IsGGAccessTokenData, refresh: IsGGRefreshTokenData})
 export type GGAuthTokensResult = typeof IsGGAuthTokensResult.infer
+
+export const IsGGAuthSubject = IsString.nonEmpty.brand("GGAuth.subject")
+export type GGAuthSubject = typeof IsGGAuthSubject.infer

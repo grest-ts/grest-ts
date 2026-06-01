@@ -2,13 +2,11 @@ import {createHash, randomBytes} from "node:crypto"
 import {type GGSchema, IsObject, NOT_AUTHORIZED, NOT_FOUND} from "@grest-ts/schema"
 import type {SigningStrategy} from "../signing/SigningStrategy"
 import {IsRefreshTokenRecord, type RefreshTokenStore} from "../refresh/RefreshTokenStore"
-import type {GGAuthTokenResult, GGAuthTokensResult} from "../../shared/tokenSchemas"
-import {IsGGAccessTokenData, IsGGRefreshTokenData} from "../../shared/tokenSchemas"
+import {GGAuthSubject, GGAuthTokenResult, GGAuthTokensResult, IsGGAccessTokenData, IsGGRefreshTokenData} from "../../shared/tokenSchemas"
 
-export type GGNoClaims = Record<string, never>
-
-export type GGAccessPayload<C extends object> = C & {
-    sub: string
+export type GGAccessPayload<C extends object> = {
+    data: C
+    sub: GGAuthSubject
     /** seconds (JWT convention). */
     iat: number
     /** seconds (JWT convention). */
@@ -32,7 +30,7 @@ export interface GGAuthTokenOptions<C extends object> {
 // Generic over permission `P` and claims `C`, and unaware of org/global/tenant.
 // A dependency between kinds (e.g. org-token-requires-user-token) is app code
 // calling verifyAccess before issue — never modelled here.
-export class GGAuthToken<C extends object = GGNoClaims> {
+export class GGAuthToken<C extends object> {
 
     private readonly signer: SigningStrategy
     private readonly store: RefreshTokenStore | undefined
@@ -54,16 +52,16 @@ export class GGAuthToken<C extends object = GGNoClaims> {
         this.randomToken = options.randomToken ?? (() => randomBytes(32).toString("base64url"))
     }
 
-    public issue = async (subject: string, claims: C): Promise<GGAuthTokensResult> => {
-        return await this.mint(subject, this.claims.parse(claims), this.randomToken())
+    public issue = async (subject: string | GGAuthSubject, claims: C): Promise<GGAuthTokensResult> => {
+        return await this.mint(subject as GGAuthSubject, this.claims.parse(claims), this.randomToken())
     }
 
     // Mint an access token with no refresh token and no store write. For a secondary/scoped
     // kind re-minted behind a primary token (e.g. an org token), where rotation is the primary
     // token's job. Works with or without a store configured.
-    public issueAccess = async (subject: string, claims: C): Promise<GGAuthTokenResult> => {
+    public issueAccess = async (subject: string | GGAuthSubject, claims: C): Promise<GGAuthTokenResult> => {
         return {
-            access: await this.signAccess(subject, this.claims.parse(claims), this.now())
+            access: await this.signAccess(subject as GGAuthSubject, this.claims.parse(claims), this.now())
         }
     }
 
@@ -76,7 +74,7 @@ export class GGAuthToken<C extends object = GGNoClaims> {
         }
         const claims = this.claims.parse(payload)
         return {
-            ...(claims as object),
+            data: claims,
             sub,
             iat: Number(payload["iat"]),
             exp: Number(payload["exp"]),
@@ -122,11 +120,11 @@ export class GGAuthToken<C extends object = GGNoClaims> {
         await this.requireStore().revoke(this.hash(refreshToken))
     }
 
-    public revokeAll = async (subject: string): Promise<void> => {
+    public revokeAll = async (subject: GGAuthSubject): Promise<void> => {
         await this.requireStore().revokeForSubject(subject)
     }
 
-    private mint = async (subject: string, claims: C, familyId: string): Promise<GGAuthTokensResult> => {
+    private mint = async (subject: GGAuthSubject, claims: C, familyId: string): Promise<GGAuthTokensResult> => {
         const store = this.requireStore()
         const nowMs = this.now()
         const accessToken = await this.signAccess(subject, claims, nowMs)
@@ -148,10 +146,10 @@ export class GGAuthToken<C extends object = GGNoClaims> {
         }
     }
 
-    private signAccess = async (subject: string, claims: C, nowMs: number): Promise<typeof IsGGAccessTokenData.infer> => {
+    private signAccess = async (subject: GGAuthSubject, claims: C, nowMs: number): Promise<typeof IsGGAccessTokenData.infer> => {
         const expiresAt = nowMs + this.accessTtlMs
         const token = await this.signer.sign({
-            ...(claims as object),
+            data: claims,
             ...(this.audience !== undefined ? {aud: this.audience} : {}),
             sub: subject,
             iat: Math.floor(nowMs / 1000),
