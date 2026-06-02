@@ -13,7 +13,7 @@ import {GG_WS_CONNECTION} from "./GG_WS_CONNECTION";
 import {GGWebSocketMetrics} from "./GGWebSocketMetrics";
 import {Message, MessageType} from "../socket/SocketMessage";
 import {GG_TRACE} from "@grest-ts/trace";
-import {GGSocket, GGSocketLogger, GGSocketMetrics} from "../socket/GGSocket";
+import {GGSocket, GGSocketLogger, GGSocketMetrics, type GGHeartbeatConfig} from "../socket/GGSocket";
 import {GGLocator, GGLocatorScope} from "@grest-ts/locator";
 import {GG_METRICS} from "@grest-ts/metrics";
 import {withTimeout} from "@grest-ts/common";
@@ -21,11 +21,19 @@ import {GGContext, type GGInbound, type GGTransportMiddleware} from "@grest-ts/c
 import {GG_DISCOVERY} from "@grest-ts/discovery";
 import {GGHttpServer} from "@grest-ts/http";
 
+/**
+ * Per-connection liveness heartbeat: the server pings each client and reaps sockets
+ * that stop responding, so NAT/proxy/LB idle timeouts can't silently sever the link.
+ * On by default; pass `false` to disable.
+ */
+export type GGServerHeartbeatOption = GGHeartbeatConfig | false;
+
 export interface GGSocketServerConfig<TContext, Query> {
     path: string;
     apiName: string;
     queryValidator?: GGValidator<Query>;
     middlewares: readonly GGTransportMiddleware[];
+    heartbeat?: GGServerHeartbeatOption;
 }
 
 /**
@@ -83,6 +91,7 @@ export class GGSocketServer<TContext, Query> {
     private readonly apiName: string;
     private readonly middlewares: readonly GGTransportMiddleware[];
     private readonly queryValidator: GGValidator<Query>;
+    private readonly heartbeat: GGServerHeartbeatOption;
 
     private readonly activeSockets: Set<GGSocket> = new Set();
     private readonly onConnectionHandlers: Array<(socket: GGSocket, query: Query) => Promise<void>> = [];
@@ -96,6 +105,7 @@ export class GGSocketServer<TContext, Query> {
         this.apiName = config.apiName;
         this.middlewares = config.middlewares;
         this.queryValidator = config.queryValidator;
+        this.heartbeat = config.heartbeat ?? {};
         this.wss = new WebSocketServer({noServer: true});
         this.wss.on('connection', this.scope.wrapWithEnter(this._onConnection));
         attachUpgradeDispatch(http.httpServer, this.path, this.wss);
@@ -187,6 +197,8 @@ export class GGSocketServer<TContext, Query> {
                 });
                 this.activeSockets.add(socket);
 
+                if (this.heartbeat !== false) socket.startHeartbeat(this.heartbeat);
+
                 // Track connection metrics
                 if (GG_METRICS.has()) {
                     GGWebSocketMetrics.connections.inc(1, {...connectionLabels, result: 'OK'});
@@ -239,6 +251,9 @@ export class GGSocketServer<TContext, Query> {
                 if (startTime !== undefined) {
                     GGWebSocketMetrics.outRequestDuration.observe(performance.now() - startTime, labels);
                 }
+            },
+            recordHeartbeatTimeout(labels) {
+                GGWebSocketMetrics.heartbeatTimeouts.inc(1, labels);
             },
         };
     }
