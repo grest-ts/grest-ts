@@ -368,7 +368,7 @@ export class GGSocket {
         const watchdog = setInterval(() => {
             if (!this.isActive) return;
             if (Date.now() - this.lastActivity > intervalMs + timeoutMs) {
-                this.log.warn(this, 'Heartbeat timeout — no response from peer; closing socket');
+                this.log.warn(this, 'Heartbeat timeout - no response from peer; closing socket');
                 this.metrics?.recordHeartbeatTimeout({api: this.apiName, path: this.socketPath});
                 clearInterval(sender);
                 clearInterval(watchdog);
