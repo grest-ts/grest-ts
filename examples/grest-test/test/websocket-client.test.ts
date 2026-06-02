@@ -340,4 +340,55 @@ describe("WebSocket createClient (production client)", () => {
         })
     })
 
+    // ----------------------------------------------------------------------
+    // forceReconnect — programmatic drop that re-enters the reconnect loop.
+    // This is the "real drop+retry" the config tests above couldn't reach
+    // without server-side socket injection.
+    // ----------------------------------------------------------------------
+
+    describe("forceReconnect", () => {
+
+        test("drops the socket, re-runs setup, and works again after reconnect", async () => {
+            let setupRuns = 0
+            const disconnectReasons: string[] = []
+            const client = ClientTestSocketApi.createClient({
+                url: clientUrl(),
+                reconnect: {initialDelayMs: 10},
+            })
+            client.onDisconnect((reason) => { disconnectReasons.push(reason) })
+
+            await client.connect(() => { setupRuns++ })
+            try {
+                expect(client.isConnected).toBe(true)
+                expect(setupRuns).toBe(1)
+
+                client.forceReconnect()
+
+                for (let i = 0; i < 200 && setupRuns < 2; i++) await wait(10)
+                expect(setupRuns).toBe(2)
+                expect(client.isConnected).toBe(true)
+                expect(disconnectReasons).toContain("drop")   // not "manual"
+
+                const res = await client.outgoing.echo({message: "after-reconnect"})
+                expect(res).toEqual({message: "after-reconnect", echoedBy: "server"})
+            } finally {
+                await client.disconnect()
+            }
+        })
+
+        test("no-op when reconnect is disabled — the live connection is left intact", async () => {
+            const client = ClientTestSocketApi.createClient({url: clientUrl()})   // no reconnect
+            await client.connect()
+            try {
+                client.forceReconnect()
+                await wait(40)
+                expect(client.isConnected).toBe(true)
+                const res = await client.outgoing.echo({message: "still-here"})
+                expect(res.echoedBy).toBe("server")
+            } finally {
+                await client.disconnect()
+            }
+        })
+    })
+
 })

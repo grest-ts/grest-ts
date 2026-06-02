@@ -321,13 +321,19 @@ async function main() {
     // Build compiled packages in parallel
     console.log("Building packages (parallel)...\n")
 
-    const buildResults = await Promise.allSettled(
-        compiledNames.map(async name => {
-            const entry = packages.get(name)!
-            await buildPackage(name, entry.dir)
-            console.log(`  built ${name}`)
-        })
-    )
+    const buildResults: PromiseSettledResult<void>[] = []
+    const LIMIT = 4
+    for (let i = 0; i < compiledNames.length; i += LIMIT) {
+        const batch = compiledNames.slice(i, i + LIMIT)
+        const batchResults = await Promise.allSettled(
+            batch.map(async name => {
+                const entry = packages.get(name)!
+                await buildPackage(name, entry.dir)
+                console.log(`  built ${name}`)
+            })
+        )
+        buildResults.push(...batchResults)
+    }
 
     const buildFailures = buildResults.filter(r => r.status === "rejected")
     if (buildFailures.length > 0) {

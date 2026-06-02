@@ -27,7 +27,7 @@ export class GGHttpPermissionsChecker {
     public assertGrants(schema: string, method: string, granted: undefined | ReadonlyArray<ReadonlyArray<string>>, required: GGPermission): void {
         if (!GGPermissionChecker.satisfies(required, granted)) {
             throw new FORBIDDEN({
-                debugMessage: `${schema + (method ? "." + method : "")} requires ${GGPermissionChecker.describePermission(required)} — caller scopes did not satisfy`
+                debugMessage: `${schema + (method ? "." + method : "")} requires ${GGPermissionChecker.describePermission(required)} - caller scopes did not satisfy`
             })
         }
     }

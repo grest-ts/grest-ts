@@ -11,6 +11,8 @@ export enum MessageType {
     MSG = "m",         // Regular message (send-and-forget)
     REQ = "r",         // Request (expects response)
     RES = "s",         // Successful response
+    PING = "p",        // Application-level liveness ping (peer auto-answers PONG)
+    PONG = "o",        // Application-level liveness pong
 }
 
 export interface SocketMessage {
@@ -50,13 +52,26 @@ export interface ResponseMessage extends SocketMessage {
     data: OK_JSON<any>
 }
 
-export type AnyMessage = HandshakeMessage | HandshakeOkMessage | HandshakeErrMessage | RegularMessage | RequestMessage | ResponseMessage;
+export interface PingMessage extends SocketMessage {
+    type: MessageType.PING;
+}
+
+export interface PongMessage extends SocketMessage {
+    type: MessageType.PONG;
+}
+
+export type AnyMessage = HandshakeMessage | HandshakeOkMessage | HandshakeErrMessage | RegularMessage | RequestMessage | ResponseMessage | PingMessage | PongMessage;
 
 export class Message {
 
     public static create(type: MessageType, path: string, id: tPendingMessageId | "", data: any): string {
         const dataStr = data !== undefined ? JSON.stringify(data) : "";
         return type + DELIMITER + String(path) + DELIMITER + (id || "") + DELIMITER + dataStr;
+    }
+
+    /** Build a pathless control frame (handshake, ping/pong). */
+    public static createControl(type: MessageType, data?: any): string {
+        return Message.create(type, "", "", data);
     }
 
     public static parse(msg: unknown): AnyMessage | undefined {
@@ -71,12 +86,14 @@ export class Message {
         const id = parts[2];
         const data = parts.length > 3 ? parts.slice(3).join(DELIMITER) : undefined;
 
-        // Handshake messages don't require path
-        const isHandshake = type === MessageType.HANDSHAKE ||
+        // Handshake and liveness ping/pong are pathless control frames.
+        const isControl = type === MessageType.HANDSHAKE ||
             type === MessageType.HANDSHAKE_OK ||
-            type === MessageType.HANDSHAKE_ERR;
+            type === MessageType.HANDSHAKE_ERR ||
+            type === MessageType.PING ||
+            type === MessageType.PONG;
 
-        if (!type || (!isHandshake && !path)) {
+        if (!type || (!isControl && !path)) {
             return undefined;
         }
         let dataParsed: any = undefined;

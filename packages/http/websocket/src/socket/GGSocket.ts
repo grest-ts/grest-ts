@@ -35,7 +35,20 @@ const consoleLogger: GGSocketLogger = {
 export interface GGSocketMetrics {
     recordIn(labels: {api: string, path: string, method: string}, result: string, startTime?: number): void;
     recordOut(labels: {api: string, path: string, method: string}, result: string, startTime?: number): void;
+    recordHeartbeatTimeout(labels: {api: string, path: string}): void;
 }
+
+export interface GGHeartbeatConfig {
+    /** How often to ping when the link is idle. */
+    intervalMs?: number;
+    /** Grace period for a response after a ping. */
+    timeoutMs?: number;
+}
+
+export const DEFAULT_HEARTBEAT: Required<GGHeartbeatConfig> = {
+    intervalMs: 30_000,
+    timeoutMs: 10_000,
+};
 
 export interface GGSocketConfig {
     apiName?: string;
@@ -67,6 +80,8 @@ export class GGSocket {
     private isActive = true;
     private isCleanedUp = false;
     private tearingDownPromise: Promise<void>;
+
+    private lastActivity = Date.now();
 
     private readonly onTearDownCallbacks: Array<() => Promise<void>> = [];
     private readonly onCloseCallbacks: Array<() => void> = [];
@@ -103,11 +118,15 @@ export class GGSocket {
                 }
 
                 if (this.isActive) {
+                    // Any inbound frame is proof of life for the heartbeat watchdog.
+                    this.lastActivity = Date.now();
                     if (msg.type === MessageType.MSG || msg.type === MessageType.REQ) {
                         GG_WS_MESSAGE.set({path: msg.path});
                         await this.handleIncomingMessage(msg);
                     } else if (msg.type === MessageType.RES) {
                         this.pendingRequests.resolve(msg.id, msg.data);
+                    } else if (msg.type === MessageType.PING) {
+                        try { this.socket.send(Message.createControl(MessageType.PONG)); } catch (_) {}
                     }
                 }
             })
@@ -317,44 +336,46 @@ export class GGSocket {
     // --------------------------------------------------------------------------------------
 
     /**
-     * Start a heartbeat loop that sends protocol-level PINGs and closes the socket
-     * if no PONG comes back within `intervalMs + timeoutMs`. Returns a stop function.
-     *
-     * No-op (returns an empty stop fn) if the underlying adapter does not support
-     * ping/pong — e.g. the browser WebSocket API cannot initiate pings.
+     * Ping the peer while the link is idle and close the socket if no inbound frame
+     * (pong, app-pong, or normal traffic) arrives within `intervalMs + timeoutMs`.
+     * Returns a stop function. Uses WS protocol pings when the adapter supports them
+     * (Node), else application-level PING frames (browser) — chosen automatically.
      */
-    public startHeartbeat(config: {intervalMs: number; timeoutMs: number}): () => void {
-        // Adapter doesn't support ping/pong (e.g. browser WebSocket) — no-op.
-        if (!this.socket.ping || !this.socket.onPong) {
-            return () => {};
-        }
+    public startHeartbeat(config: GGHeartbeatConfig = {}): () => void {
         // Socket is already closed — starting heartbeat would leak intervals
         // because the onCloseCallbacks push below won't fire (isCleanedUp guard).
         if (!this.isActive) {
             return () => {};
         }
-        let lastActivity = Date.now();
-        const onPong = () => { lastActivity = Date.now(); };
-        this.socket.onPong(onPong);
+
+        const intervalMs = config.intervalMs ?? DEFAULT_HEARTBEAT.intervalMs;
+        const timeoutMs = config.timeoutMs ?? DEFAULT_HEARTBEAT.timeoutMs;
+        const useProtocol = !!(this.socket.ping && this.socket.onPong);
+
+        this.lastActivity = Date.now();
+        // Protocol pongs never reach onMessage; stamp them here. App pongs are stamped there.
+        if (useProtocol) this.socket.onPong!(() => { this.lastActivity = Date.now(); });
+
+        const sendPing = useProtocol
+            ? () => { try { this.socket.ping!(); } catch (_) {} }
+            : () => { try { this.socket.send(Message.createControl(MessageType.PING)); } catch (_) {} };
 
         const sender = setInterval(() => {
             if (!this.isActive) return;
-            try {
-                this.socket.ping!();
-            } catch (_) { /* adapter may throw if socket already closing */ }
-        }, config.intervalMs);
+            sendPing();
+        }, intervalMs);
 
         const watchdog = setInterval(() => {
             if (!this.isActive) return;
-            if (Date.now() - lastActivity > config.intervalMs + config.timeoutMs) {
-                this.log.warn(this, 'Heartbeat timeout — no PONG received; closing socket');
+            if (Date.now() - this.lastActivity > intervalMs + timeoutMs) {
+                this.log.warn(this, 'Heartbeat timeout - no response from peer; closing socket');
+                this.metrics?.recordHeartbeatTimeout({api: this.apiName, path: this.socketPath});
                 clearInterval(sender);
                 clearInterval(watchdog);
                 this.close();
             }
-        }, config.timeoutMs);
+        }, timeoutMs);
 
-        // Auto-cleanup on close
         const cleanup = () => {
             clearInterval(sender);
             clearInterval(watchdog);

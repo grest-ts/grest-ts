@@ -1,7 +1,7 @@
 {
   "//": "THIS FILE IS GENERATED - DO NOT EDIT",
   "name": "@grest-ts/websocket",
-  "version": "0.0.49",
+  "version": "0.0.50",
   "type": "module",
   "license": "MIT",
   "description": "WebSocket server and client library for Node.js and browser",
@@ -55,18 +55,18 @@
     "node": ">=24"
   },
   "peerDependencies": {
-    "@grest-ts/common": "0.0.49",
-    "@grest-ts/context": "0.0.49",
-    "@grest-ts/discovery": "0.0.49",
-    "@grest-ts/http": "0.0.49",
-    "@grest-ts/locator": "0.0.49",
-    "@grest-ts/logger": "0.0.49",
-    "@grest-ts/metrics": "0.0.49",
-    "@grest-ts/schema": "0.0.49",
-    "@grest-ts/trace": "0.0.49",
+    "@grest-ts/common": "0.0.50",
+    "@grest-ts/context": "0.0.50",
+    "@grest-ts/discovery": "0.0.50",
+    "@grest-ts/http": "0.0.50",
+    "@grest-ts/locator": "0.0.50",
+    "@grest-ts/logger": "0.0.50",
+    "@grest-ts/metrics": "0.0.50",
+    "@grest-ts/schema": "0.0.50",
+    "@grest-ts/trace": "0.0.50",
     "ws": "^8.19.0"
   },
   "devDependencies": {
-    "@grest-ts/testkit": "0.0.49"
+    "@grest-ts/testkit": "0.0.50"
   }
 }

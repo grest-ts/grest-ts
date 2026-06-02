@@ -6,7 +6,7 @@
 import type {GGSocket} from "../socket/GGSocket"
 import {GGWebSocketSchema} from "../schema/GGWebSocketSchema";
 import {type GGTransportMiddleware} from "@grest-ts/context";
-import {GGSocketServer} from "./GGSocketServer";
+import {GGSocketServer, type GGServerHeartbeatOption} from "./GGSocketServer";
 import {GGLocator} from "@grest-ts/locator";
 import {WebSocketIncoming, WebSocketOutgoing} from "../socket/WebSocketTypes";
 import {GG_HTTP_SERVER, GGHttpServer} from "@grest-ts/http";
@@ -22,6 +22,11 @@ export interface WebSocketSchemaConfig {
      * Additional middlewares to apply to all connections.
      */
     middlewares?: GGTransportMiddleware[];
+    /**
+     * Per-connection liveness heartbeat (server pings each client, reaps dead sockets).
+     * On by default; pass `false` to disable or an object to tune interval/timeout/mode.
+     */
+    heartbeat?: GGServerHeartbeatOption;
 }
 
 declare module "../schema/GGWebSocketSchema" {
@@ -80,6 +85,7 @@ GGWebSocketSchema.prototype.startServer = function (
         path: normalizedPath,
         middlewares,
         queryValidator: this.queryValidator,
+        heartbeat: config?.heartbeat,
     });
 
     socketServer.onConnection(async (socket: GGSocket, queryArgs: any): Promise<void> => {
@@ -155,6 +161,7 @@ GGWebSocketSchema.prototype.register = function (
     this.startServer(onConnection, {
         http: httpServer,
         middlewares: config?.middlewares,
+        heartbeat: config?.heartbeat,
     });
 }
 
