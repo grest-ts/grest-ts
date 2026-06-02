@@ -29,6 +29,11 @@ export const GGWebSocketMetrics = GGMetrics.define('/websocket/', () => ({
         labelNames: ['api', 'path', 'result'],
         groupBy: {labels: ["api"]}
     }),
+    heartbeatTimeouts: new GGCounterKey<{ api: string, path: string }>('heartbeat_timeouts_total', {
+        help: 'Connections closed because no heartbeat response arrived within the deadline',
+        labelNames: ['api', 'path'],
+        groupBy: {labels: ["api"]}
+    }),
 
     // Incoming (server handling REQ + MSG)
     requests: new GGCounterKey<{ api: string, path: string, method: string, result: ResultType }>('requests_total', {

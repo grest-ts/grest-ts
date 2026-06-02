@@ -31,16 +31,11 @@ import {
 } from "@grest-ts/schema"
 import {GGWebSocketSchema} from "../schema/GGWebSocketSchema"
 import {GGSocketPool} from "./GGSocketPool"
-import {GGSocket} from "../socket/GGSocket"
+import {GGSocket, type GGHeartbeatConfig} from "../socket/GGSocket"
 import type {GGTransportMiddleware} from "@grest-ts/context";
 import {GGWsLogMode} from "./GGWsLogMode"
 
-export interface GGHeartbeatConfig {
-    /** How often to send a PING. Default 30 000 ms. */
-    intervalMs?: number
-    /** Grace period for a PONG after each PING. Default 10 000 ms. */
-    timeoutMs?: number
-}
+export type {GGHeartbeatConfig}
 
 export interface GGReconnectConfig {
     /** First retry delay. Default 500 ms. */
@@ -59,11 +54,11 @@ export interface GGReconnectConfig {
      */
     shouldRetry?: (error: Error) => boolean
     /**
-     * Dead-connection detection via protocol PING/PONG. Off by default.
-     * Only supported on Node (browsers cannot initiate pings). Browser clients
-     * silently ignore this config.
+     * Dead-connection detection via PING/PONG. On by default when reconnect is enabled:
+     * a missed heartbeat drops the socket and reconnects, so a half-open link self-heals
+     * (works in the browser too). Pass `false` to disable, or an object to tune.
      */
-    heartbeat?: GGHeartbeatConfig
+    heartbeat?: GGHeartbeatConfig | false
 }
 
 export interface GGWebSocketClientConfig<TQuery = undefined> {
@@ -182,6 +177,14 @@ export interface GGWebSocketClient<TClientToServer, TServerToClientImpl> {
      * Fires on socket errors. Multiple events possible per connection lifetime.
      */
     onError(cb: (error: Error) => void): this
+
+    /**
+     * Drop the current socket as if it had been lost, triggering the auto-reconnect
+     * loop (unlike `close()`/`disconnect()`, which disable reconnect). Use when the
+     * app knows the connection is stale — e.g. on `visibilitychange`/`online`, or
+     * from a liveness watchdog. No-op if reconnect is disabled or already closed.
+     */
+    forceReconnect(): void
 }
 
 declare module "../schema/GGWebSocketSchema" {
@@ -205,7 +208,7 @@ interface NormalizedReconnect {
     multiplier: number
     maxAttempts: number
     shouldRetry: (error: Error) => boolean
-    heartbeat?: {intervalMs: number; timeoutMs: number}
+    heartbeat?: GGHeartbeatConfig
 }
 
 /** Default: don't retry if the server said "auth" — re-trying won't help. */
@@ -231,12 +234,8 @@ function normalizeReconnect(r: boolean | GGReconnectConfig | undefined): Normali
         multiplier: cfg.multiplier ?? 2,
         maxAttempts: cfg.maxAttempts ?? Infinity,
         shouldRetry: cfg.shouldRetry ?? defaultShouldRetry,
-        heartbeat: cfg.heartbeat
-            ? {
-                  intervalMs: cfg.heartbeat.intervalMs ?? 30_000,
-                  timeoutMs: cfg.heartbeat.timeoutMs ?? 10_000,
-              }
-            : undefined,
+        // On by default; startHeartbeat fills the defaults. Explicit `false` opts out.
+        heartbeat: cfg.heartbeat === false ? undefined : (cfg.heartbeat ?? {}),
     }
 }
 
@@ -568,6 +567,13 @@ GGWebSocketSchema.prototype.createClient = function (
             onErrorCallbacks.push(cb)
             if (socket) socket.onError(cb)
             return this
+        },
+
+        forceReconnect(): void {
+            // No-op without reconnect — dropping the socket would just terminally close it.
+            if (finallyClosed || !reconnectConfig || !socket) return
+            // finallyClosed is false, so the onClose handler treats this as a "drop" and reconnects.
+            socket.close()
         },
     }
 
