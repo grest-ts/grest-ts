@@ -38,7 +38,7 @@ function handlerKeyFor(wire: GGWireContextKey): GGLocatorKey<GGWireServerHandler
 function resolveHandler(wire: GGWireContextKey): GGWireServerHandler {
     const handler = handlerKeyFor(wire).tryGet()
     if (!handler) {
-        throw new Error(`Wire "${wire.name}" is used but not implemented — call ${wire.name}.define(...).create(deps) in compose().`)
+        throw new Error(`Wire "${wire.name}" is used but not implemented - call ${wire.name}.define(...).create(deps) in compose().`)
     }
     return handler
 }
@@ -57,7 +57,7 @@ export class GGWireHandlerRegistration<Deps> {
     public create(deps: Deps): void {
         const key = handlerKeyFor(this.wire)
         if (GGLocator.getScope().has(key)) {
-            throw new Error(`Wire "${this.wire.name}" was already created in this runtime scope — .create() runs once per runtime.`)
+            throw new Error(`Wire "${this.wire.name}" was already created in this runtime scope - .create() runs once per runtime.`)
         }
         GGLocator.getScope().set(key, this.factory(deps))
     }
@@ -87,7 +87,7 @@ declare module "./GGWireContextKey" {
 
 GGWireContextKey.prototype.define = function (factory) {
     if (FACTORIES.has(this)) {
-        throw new Error(`Wire "${this.name}" already has .define() — it can only be defined once.`)
+        throw new Error(`Wire "${this.name}" already has .define() - it can only be defined once.`)
     }
     FACTORIES.set(this, factory)
     return new GGWireHandlerRegistration(this, factory as any)
