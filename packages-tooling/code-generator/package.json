@@ -1,7 +1,7 @@
 {
   "//": "THIS FILE IS GENERATED - DO NOT EDIT",
   "name": "@grest-ts/code-generator",
-  "version": "0.0.52",
+  "version": "0.0.54",
   "type": "module",
   "license": "MIT",
   "description": "TypeScript code generator for type-safe HTTP/WebSocket clients and servers",
@@ -52,7 +52,7 @@
     "fast-glob": "^3.3.3"
   },
   "peerDependencies": {
-    "@grest-ts/common": "0.0.52",
-    "@grest-ts/http": "0.0.52"
+    "@grest-ts/common": "0.0.54",
+    "@grest-ts/http": "0.0.54"
   }
 }

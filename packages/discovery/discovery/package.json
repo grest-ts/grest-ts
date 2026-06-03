@@ -1,7 +1,7 @@
 {
   "//": "THIS FILE IS GENERATED - DO NOT EDIT",
   "name": "@grest-ts/discovery",
-  "version": "0.0.52",
+  "version": "0.0.54",
   "type": "module",
   "license": "MIT",
   "description": "Service discovery implementations for Grest Framework",
@@ -48,9 +48,9 @@
     "node": ">=24"
   },
   "peerDependencies": {
-    "@grest-ts/locator": "0.0.52"
+    "@grest-ts/locator": "0.0.54"
   },
   "devDependencies": {
-    "@grest-ts/testkit": "0.0.52"
+    "@grest-ts/testkit": "0.0.54"
   }
 }

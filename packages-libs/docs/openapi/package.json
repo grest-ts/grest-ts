@@ -1,7 +1,7 @@
 {
   "//": "THIS FILE IS GENERATED - DO NOT EDIT",
   "name": "@grest-ts/openapi",
-  "version": "0.0.52",
+  "version": "0.0.54",
   "type": "module",
   "license": "MIT",
   "description": "OpenAPI 3.1 spec generation and Swagger UI server for grest-ts",
@@ -52,9 +52,9 @@
     "swagger-ui-dist": "^5.32.2"
   },
   "peerDependencies": {
-    "@grest-ts/context": "0.0.52",
-    "@grest-ts/http": "0.0.52",
-    "@grest-ts/locator": "0.0.52",
-    "@grest-ts/schema": "0.0.52"
+    "@grest-ts/context": "0.0.54",
+    "@grest-ts/http": "0.0.54",
+    "@grest-ts/locator": "0.0.54",
+    "@grest-ts/schema": "0.0.54"
   }
 }

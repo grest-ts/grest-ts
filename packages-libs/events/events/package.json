@@ -1,7 +1,7 @@
 {
   "//": "THIS FILE IS GENERATED - DO NOT EDIT",
   "name": "@grest-ts/events",
-  "version": "0.0.52",
+  "version": "0.0.54",
   "type": "module",
   "license": "MIT",
   "description": "Event-driven messaging for Grest Framework - SNS/SQS pub/sub pattern with type-safe contracts",
@@ -47,17 +47,17 @@
     "node": ">=24"
   },
   "peerDependencies": {
-    "@grest-ts/common": "0.0.52",
-    "@grest-ts/config": "0.0.52",
-    "@grest-ts/context": "0.0.52",
-    "@grest-ts/discovery": "0.0.52",
-    "@grest-ts/locator": "0.0.52",
-    "@grest-ts/logger": "0.0.52",
-    "@grest-ts/metrics": "0.0.52",
-    "@grest-ts/schema": "0.0.52",
-    "@grest-ts/trace": "0.0.52"
+    "@grest-ts/common": "0.0.54",
+    "@grest-ts/config": "0.0.54",
+    "@grest-ts/context": "0.0.54",
+    "@grest-ts/discovery": "0.0.54",
+    "@grest-ts/locator": "0.0.54",
+    "@grest-ts/logger": "0.0.54",
+    "@grest-ts/metrics": "0.0.54",
+    "@grest-ts/schema": "0.0.54",
+    "@grest-ts/trace": "0.0.54"
   },
   "devDependencies": {
-    "@grest-ts/testkit": "0.0.52"
+    "@grest-ts/testkit": "0.0.54"
   }
 }
