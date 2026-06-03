@@ -16,6 +16,24 @@ const GG_SYNC_CONTROLLERS = new GGContextKey<Map<string, ControllerEntry>>(
     IsAny as unknown as GGSchema<Map<string, ControllerEntry>>
 )
 
+// Backstop so a stuck recover() can't hang every gated request forever. A recover() that
+// never settles - e.g. a credential whose refresh endpoint is itself gated by the same wire,
+// so the refresh call waits on the recover that is waiting on it (circular wait) - would
+// otherwise block the outbound read with no request ever issued. Bounded well above a healthy
+// recover (lock acquire 20s + request 15s) so only a truly stuck one trips; on timeout the
+// waiter rejects and the caller fails/retries instead of freezing.
+const RECOVER_TIMEOUT_MS = 45_000
+
+function withRecoverTimeout(recover: Promise<void>, name: string): Promise<void> {
+    return new Promise<void>((resolve, reject) => {
+        const timer = setTimeout(
+            () => reject(new Error(`Credential recover for "${name}" timed out after ${RECOVER_TIMEOUT_MS}ms (stuck/circular refresh?)`)),
+            RECOVER_TIMEOUT_MS,
+        )
+        recover.then(resolve, reject).finally(() => clearTimeout(timer))
+    })
+}
+
 export class GGContextKeySynchronizer {
 
     static provide(key: GGContextKey<any>, controller: GGKeyController): void {
@@ -30,7 +48,7 @@ export class GGContextKeySynchronizer {
     static async waitFor(key: GGContextKey<any>): Promise<void> {
         const entry = GG_SYNC_CONTROLLERS.get()?.get(key.name)
         if (entry === undefined || !entry.controller.isStale()) return
-        entry.inflight ??= entry.controller.recover().finally(() => {
+        entry.inflight ??= withRecoverTimeout(entry.controller.recover(), key.name).finally(() => {
             entry.inflight = undefined
         })
         await entry.inflight
