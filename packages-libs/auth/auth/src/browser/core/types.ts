@@ -60,6 +60,13 @@ export interface CoreConfig<D extends DerivedMap = {}> {
     logout?: () => Promise<void>
     refreshLeadMs: number
     clockSkewMs: number
+    // Upper bound on a single refresh call. A refresh that never settles (server
+    // down, dropped connection, a sibling tab stuck holding the cross-tab lock)
+    // would otherwise pin `inflightRefresh` and the "auth-refresh" lock forever,
+    // freezing every authed call across all tabs. On timeout the refresh is
+    // treated as a non-fatal failure (degraded + retry), releasing the lock.
+    // Undefined or <= 0 disables the bound.
+    refreshTimeoutMs?: number
     isFatalRefreshError: (err: unknown) => boolean
 }
 

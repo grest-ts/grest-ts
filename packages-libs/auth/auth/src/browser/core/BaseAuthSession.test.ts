@@ -2,7 +2,7 @@ import {describe, test, expect, vi} from "vitest"
 import {NOT_AUTHORIZED} from "@grest-ts/schema"
 import {GGContextKeySynchronizer, GGHeader} from "@grest-ts/http"
 import {GGContext} from "@grest-ts/context"
-import {BaseAuthSession} from "../GGAuthSessionBase"
+import {BaseAuthSession, GGAuthRefreshTimeoutError} from "../GGAuthSessionBase"
 import {GGAuthSession} from "../GGAuthSession"
 import type {
     AuthResult,
@@ -76,6 +76,12 @@ class FakeScheduler implements Scheduler {
     fireWake() {
         for (const l of this.wakeListeners) l()
     }
+
+    runDue() {
+        for (const entry of this.scheduled.splice(0)) {
+            if (!entry.cancelled) entry.fn()
+        }
+    }
 }
 
 class FakeKey implements TokenKey {
@@ -86,6 +92,10 @@ class FakeKey implements TokenKey {
 }
 
 // ---- Helpers ----
+
+// Let queued microtasks run so the cross-tab lock body executes (FakeLock defers
+// it via .then) and the refresh deadline is actually scheduled before we fire it.
+const flushMicrotasks = async () => { for (let i = 0; i < 10; i++) await Promise.resolve() }
 
 function makeAccess(token: string, expiresAt: number): DerivedTokenResult<unknown> {
     return {access: {token, expiresAt}, data: undefined}
@@ -123,6 +133,8 @@ function makeSession<D extends DerivedMap = {}>(overrides: {
     scheduler?: FakeScheduler
     slot?: FakeKey
     refreshResult?: AuthResult
+    refreshImpl?: () => Promise<AuthResult>
+    refreshTimeoutMs?: number
     storage?: "localStorage" | "cookie"
 } = {}): SessionSetup<D> {
     const clock = overrides.clock ?? new FakeClock()
@@ -131,7 +143,9 @@ function makeSession<D extends DerivedMap = {}>(overrides: {
     const scheduler = overrides.scheduler ?? new FakeScheduler()
     const slot = overrides.slot ?? new FakeKey()
     const defaultRefreshResult: AuthResult = {tokens: makePair("at-root-2", 3_000_000, "rt-2")}
-    const refreshFn = vi.fn().mockResolvedValue(overrides.refreshResult ?? defaultRefreshResult)
+    const refreshFn = overrides.refreshImpl
+        ? vi.fn(overrides.refreshImpl)
+        : vi.fn().mockResolvedValue(overrides.refreshResult ?? defaultRefreshResult)
 
     const config: CoreConfig<D> = {
         refresh: refreshFn,
@@ -140,6 +154,7 @@ function makeSession<D extends DerivedMap = {}>(overrides: {
         storage: overrides.storage ?? "localStorage",
         refreshLeadMs: overrides.refreshLeadMs ?? 60_000,
         clockSkewMs: overrides.clockSkewMs ?? 10_000,
+        refreshTimeoutMs: overrides.refreshTimeoutMs,
         isFatalRefreshError: overrides.isFatalRefreshError ?? ((e) => e instanceof NOT_AUTHORIZED),
     }
     const ports: CorePorts = {clock, lock, cache, scheduler}
@@ -293,6 +308,71 @@ describe("refresh failure policy", () => {
         await session.ensureFresh()
         expect(session.getState().status).toBe("authenticated")
         expect(session.getState().degraded).toBe(false)
+    })
+})
+
+describe("refresh timeout (refreshTimeoutMs)", () => {
+    test("a refresh that never settles times out → rejects, stays degraded, no logout", async () => {
+        const scheduler = new FakeScheduler()
+        const {session} = makeSession({
+            scheduler,
+            refreshTimeoutMs: 15_000,
+            refreshImpl: () => new Promise<AuthResult>(() => {}),  // never settles — server down / sibling tab stuck
+        })
+        session.start(makePair("at-root-1", 500_000, "rt-1"))  // already stale vs the fake clock
+        const onLogout = vi.fn()
+        session.onLogout(onLogout)
+
+        const p = session.ensureFresh()
+        await flushMicrotasks()  // let the lock body schedule the deadline
+        scheduler.runDue()       // fire it
+
+        await expect(p).rejects.toBeInstanceOf(GGAuthRefreshTimeoutError)
+        const state = session.getState()
+        expect(state.status).toBe("authenticated")
+        expect(state.degraded).toBe(true)
+        expect(state.refreshing).toBe(false)
+        expect(onLogout).not.toHaveBeenCalled()
+    })
+
+    test("inflight clears on timeout → a subsequent refresh runs and recovers", async () => {
+        const scheduler = new FakeScheduler()
+        const {session, refreshFn} = makeSession({
+            scheduler,
+            refreshTimeoutMs: 15_000,
+            refreshImpl: () => new Promise<AuthResult>(() => {}),
+        })
+        session.start(makePair("at-root-1", 500_000, "rt-1"))
+
+        const first = session.ensureFresh()
+        await flushMicrotasks()
+        scheduler.runDue()
+        await expect(first).rejects.toBeInstanceOf(GGAuthRefreshTimeoutError)
+
+        // Not deduped onto the dead inflight: a fresh attempt runs and settles.
+        refreshFn.mockReturnValueOnce(Promise.resolve({tokens: makePair("at-root-2", 3_000_000, "rt-2")}))
+        await session.ensureFresh()
+        expect(session.getState().status).toBe("authenticated")
+        expect(session.getState().degraded).toBe(false)
+        expect(refreshFn).toHaveBeenCalledTimes(2)
+    })
+
+    test("a refresh that completes before the deadline cancels the timer and succeeds", async () => {
+        const scheduler = new FakeScheduler()
+        const {session} = makeSession({
+            scheduler,
+            refreshTimeoutMs: 15_000,
+            refreshResult: {tokens: makePair("at-root-2", 3_000_000, "rt-2")},
+        })
+        session.start(makePair("at-root-1", 500_000, "rt-1"))
+
+        await session.ensureFresh()
+        expect(session.getState().status).toBe("authenticated")
+        expect(session.getState().degraded).toBe(false)
+
+        // The deadline was cancelled on success — firing due timers rejects nothing.
+        scheduler.runDue()
+        expect(session.getState().status).toBe("authenticated")
     })
 })
 

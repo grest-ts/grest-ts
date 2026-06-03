@@ -12,6 +12,16 @@ import type {
     StoredAuth,
 } from "./core/types"
 
+// Thrown when a refresh exceeds CoreConfig.refreshTimeoutMs. Non-fatal by
+// design (not a NOT_AUTHORIZED), so the session degrades and retries rather
+// than logging out.
+export class GGAuthRefreshTimeoutError extends Error {
+    constructor(ms: number) {
+        super(`auth refresh timed out after ${ms}ms`)
+        this.name = "GGAuthRefreshTimeoutError"
+    }
+}
+
 // Data fields of D proxied as optional properties on the DerivedToken handle.
 type ProxiedData<D> = D extends object ? Partial<D> : {}
 
@@ -250,7 +260,7 @@ export class BaseAuthSession<D extends DerivedMap> {
 
             let result: AuthResult
             try {
-                result = await this.config.refresh(this.currentRefreshToken())
+                result = await this.withRefreshTimeout(this.config.refresh(this.currentRefreshToken()))
             } catch (e) {
                 if (this.config.isFatalRefreshError(e)) {
                     this.toExpired()
@@ -268,6 +278,22 @@ export class BaseAuthSession<D extends DerivedMap> {
                     : (result.tokens.refresh ?? this.shared?.refresh),
             }
             this.commitShared(next)
+        })
+    }
+
+    // Race the refresh against a scheduler-driven deadline. The timer is the
+    // injected scheduler (not setTimeout) so tests drive it deterministically.
+    // A timed-out refresh's underlying request is left to settle on its own and
+    // its result discarded — the next ensureFresh starts a fresh attempt.
+    private withRefreshTimeout(p: Promise<AuthResult>): Promise<AuthResult> {
+        const ms = this.config.refreshTimeoutMs
+        if (!ms || ms <= 0) return p
+        return new Promise<AuthResult>((resolve, reject) => {
+            const cancel = this.ports.scheduler.schedule(ms, () => reject(new GGAuthRefreshTimeoutError(ms)))
+            p.then(
+                (r) => { cancel(); resolve(r) },
+                (e) => { cancel(); reject(e) },
+            )
         })
     }
 

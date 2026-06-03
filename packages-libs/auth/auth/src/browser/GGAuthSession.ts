@@ -96,6 +96,7 @@ export class GGAuthSession<D extends DerivedMap = {}, I = unknown> {
                 logout: this._logout,
                 refreshLeadMs: 60_000,
                 clockSkewMs: 10_000,
+                refreshTimeoutMs: 15_000,
                 isFatalRefreshError: (e) => e instanceof NOT_AUTHORIZED,
             },
             {
