@@ -10,7 +10,7 @@ type ConstructorOf<T> = new (...args: any[]) => T;
 export class GGLocatorScope {
 
     public readonly name: string
-    public readonly serviceName?: string
+    public readonly serviceName: string
     private readonly parent: GGLocatorScope | undefined
     private readonly values: Map<string, any>
     private readonly registrationStacks: Map<string, string[]>
@@ -18,7 +18,7 @@ export class GGLocatorScope {
 
     constructor(name: string, parent?: GGLocatorScope, serviceName?: string) {
         this.name = name
-        this.serviceName = serviceName ?? this.serviceName ?? "Unknown";
+        this.serviceName = serviceName ?? "Unknown";
         this.parent = parent
         this.values = new Map(this.parent?.values ?? []);
         this.registrationStacks = new Map(this.parent?.registrationStacks ?? []);
@@ -61,7 +61,7 @@ export class GGLocatorScope {
 
     public overwrite<T>(token: GGLocatorKey<T>, value: T): void {
         this.values.set(token.name, value);
-        this.registrationStacks.set(token.name, new Error().stack.split("\n").splice(2));
+        this.registrationStacks.set(token.name, new Error().stack?.split("\n").splice(2) ?? []);
     }
 
     public has<T>(token: GGLocatorKey<T>): boolean {
@@ -80,7 +80,7 @@ export class GGLocatorScope {
 
     private _lifecycleHandler?: (service: GGLocatorLifecycleCallbacks) => void;
 
-    public setLifecycleOwner(handler: (service: GGLocatorLifecycleCallbacks) => void | undefined): void {
+    public setLifecycleOwner(handler: ((service: GGLocatorLifecycleCallbacks) => void) | undefined): void {
         this._lifecycleHandler = handler;
     }
 
@@ -170,8 +170,9 @@ export class GGLocatorScope {
 
     public reset(): void {
         this.values.clear();
-        this.parent.values.forEach((value, name) => this.values.set(name, value))
         this.registrationStacks.clear();
+        if (!this.parent) return;
+        this.parent.values.forEach((value, name) => this.values.set(name, value))
         this.parent.registrationStacks.forEach((value, name) => this.registrationStacks.set(name, value))
     }
 

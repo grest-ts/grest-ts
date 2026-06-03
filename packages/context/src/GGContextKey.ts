@@ -46,6 +46,6 @@ export class GGContextKey<Type> {
         if (!this.has()) {
             throw new Error(`Context named '${this.name}' is required, but not defined!`);
         }
-        return this.get()
+        return this.get() as Type
     }
 }

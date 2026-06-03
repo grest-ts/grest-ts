@@ -51,7 +51,6 @@ export class BuilderExportable {
         const hasMultipleChunks = struct.chunks.length > 1;
         const chunkInfo: ChunkInfo[] = new Array(struct.chunks.length);
         struct.chunks.forEach((chunk, chunkIndex) => {
-            let controllingProp: ChunkProperty = undefined
             const usedBits = new Map<8 | 16 | 32 | 64, SeenBits>([]);
             const usedDataTypes = new Map<string, SeenDataTypes>();
             const chunkProperties: ChunkProperty[] = []
@@ -80,9 +79,6 @@ export class BuilderExportable {
                 }
                 chunkProperties.push(prop)
 
-                if (!controllingProp || property.bits > controllingProp.bits) {
-                    controllingProp = prop;
-                }
                 if (hasMultipleValues) {
                     usedBits.set(dataTypeBits, {
                         bits: dataTypeBits,
@@ -97,15 +93,24 @@ export class BuilderExportable {
                 });
             })
 
+            let controlling: ChunkProperty | undefined = undefined;
+            for (const prop of chunkProperties) {
+                if (!controlling || prop.bits > controlling.bits) {
+                    controlling = prop;
+                }
+            }
+            if (!controlling) {
+                throw new Error("Chunk has no properties for '" + struct.name + "'");
+            }
             const varSuffix = hasMultipleChunks ? chunkIndex + "" : "";
             chunkInfo[chunkIndex] = {
-                sizeConstName: controllingProp.sizeConst,
-                viewName: controllingProp.viewName,
-                exportViewName: "exp" + varSuffix + ucFirst(controllingProp.viewType),
-                importViewName: "imp" + varSuffix + ucFirst(controllingProp.viewType),
-                viewJsType: controllingProp.viewJsType,
+                sizeConstName: controlling.sizeConst,
+                viewName: controlling.viewName,
+                exportViewName: "exp" + varSuffix + ucFirst(controlling.viewType),
+                importViewName: "imp" + varSuffix + ucFirst(controlling.viewType),
+                viewJsType: controlling.viewJsType,
                 varSuffix: varSuffix,
-                noOfElements: chunk.bits / controllingProp.bits,
+                noOfElements: chunk.bits / controlling.bits,
                 noOfProperties: chunk.properties.length,
                 bits: chunk.bits,
                 seenPropertyBits: Array.from(usedBits.values()).sort(((a, b) => b.bits - a.bits)),
@@ -179,7 +184,12 @@ export class BuilderExportable {
                 struct.chunks.forEach((chunk) => {
                     chunk.properties.forEach((property) => {
                         if (property.tsType && property.tsTypeImport) {
-                            (importsMap.get(property.tsTypeImport) || importsMap.set(property.tsTypeImport, new Set()).get(property.tsTypeImport)).add(property.tsType)
+                            let set = importsMap.get(property.tsTypeImport);
+                            if (!set) {
+                                set = new Set();
+                                importsMap.set(property.tsTypeImport, set);
+                            }
+                            set.add(property.tsType)
                         }
                     })
                 })
@@ -216,7 +226,7 @@ export class BuilderExportable {
             .lines("viewProperties", (lines) => {
                 chunkInfo.forEach((chunk, index) => {
                     chunk.usedPropertyDataTypes.forEach(type => {
-                        lines.push("protected " + (struct.useNew ? "" : "readonly ") + type.viewName + ": " + type.typeArray)
+                        lines.push("protected " + (struct.useNew ? "" : "readonly ") + type.viewName + "!: " + type.typeArray)
                     })
                 })
             })
@@ -296,7 +306,7 @@ for ( let ref = 1; ref <= end; ref++) {
 
             .lines("exportViews", lines => {
                 chunkInfo.forEach((chunk, i) => {
-                    lines.push("private " + (struct.useNew ? "" : "readonly ") + chunk.exportViewName + ": " + chunk.viewJsType + ";");
+                    lines.push("private " + (struct.useNew ? "" : "readonly ") + chunk.exportViewName + "!: " + chunk.viewJsType + ";");
                 });
             })
 
@@ -335,7 +345,7 @@ for ( let ref = 1; ref <= end; ref++) {
 
             .lines("importViewDefinitions", lines => {
                 chunkInfo.forEach((chunk) => {
-                    lines.push("private " + chunk.importViewName + ": " + chunk.viewJsType + ";");
+                    lines.push("private " + chunk.importViewName + "!: " + chunk.viewJsType + ";");
                 })
             })
 
@@ -377,9 +387,10 @@ for ( let ref = 1; ref <= end; ref++) {
 
                         if (prop.type === "bool" || prop.type === "bit") {
                             const resType = prop.type === "bool" ? "boolean" : "0 | 1";
+                            const mask = prop.mask ?? 0;
                             lines.push(`
 public get${ucFirst(prop.name)}(ref: ${ID}): ${resType} {
-    return (this.${prop.viewName}[ref${prop.byteLocMulti}] & ${prop.mask})${prop.mask > 1 ? " >> " + Math.log2(prop.mask) : ""}${prop.type === "bool" ? " !== 0" : " as " + resType};
+    return (this.${prop.viewName}[ref${prop.byteLocMulti}] & ${mask})${mask > 1 ? " >> " + Math.log2(mask) : ""}${prop.type === "bool" ? " !== 0" : " as " + resType};
 }`)
 
                         } else {
@@ -399,11 +410,12 @@ public get${ucFirst(prop.name)}(ref: ${ID}): ${prop.tsType ?? "number"} {
 
                         if (prop.type === "bool" || prop.type === "bit") {
                             const resType = prop.type === "bool" ? "boolean" : "0 | 1";
+                            const mask = prop.mask ?? 0;
 
                             lines.push(`
 public set${ucFirst(prop.name)}(ref: ${ID}, value: ${resType}): this {
     const pos = ref${prop.byteLocMulti};
-    this.${prop.viewName}[pos] = (this.${prop.viewName}[pos] & ${~prop.mask}) | ${prop.mask > 1 ? "((+value & 1) << " + Math.log2(prop.mask) + ")" : "(+value & 1)"};
+    this.${prop.viewName}[pos] = (this.${prop.viewName}[pos] & ${~mask}) | ${mask > 1 ? "((+value & 1) << " + Math.log2(mask) + ")" : "(+value & 1)"};
     return this;
 }`)
 

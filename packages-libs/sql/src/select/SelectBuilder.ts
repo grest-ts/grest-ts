@@ -36,10 +36,10 @@ export class SelectBuilder<Result, Aliases, AliasesFromWith, Tables> implements 
     GatewaySelectOrderByMethods<Result, Tables>,
     GatewaySelectLimitMethods<Result> {
 
-    public readonly [SQL_ENTITY]: undefined; // never used
+    public readonly [SQL_ENTITY]!: Result; // phantom, never populated
 
     private _withQueries: Map<string, string> = new Map()
-    private _from: string;
+    private _from: string = "";
     private readonly _columns: string[] = [];
     private _columnStruct: DbTableDefinition<any> = {} as any;
 
@@ -49,7 +49,7 @@ export class SelectBuilder<Result, Aliases, AliasesFromWith, Tables> implements 
     private readonly _having: string[] = []
     private readonly _groupBy: string[] = []
     private _orderBy: string[] = []
-    private _limit: string = undefined
+    private _limit: string = ""
 
     private readonly unions: string[] = []
     private _unionColumnOrder: string[] = []

@@ -11,9 +11,9 @@ export * from "./GGLogInterceptor";
 
 const originalInit = GGLog.init.bind(GGLog);
 GGLog.init = function (scope?: GGLocatorScope) {
-    originalInit();
+    const instance = originalInit();
     GGLog.add(new GGTestLogger());
-    return originalInit
+    return instance;
 };
 
 if (GG_LOG.tryGet()) {

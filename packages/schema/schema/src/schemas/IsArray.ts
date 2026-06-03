@@ -2,7 +2,7 @@ import {GGSchema, Opt} from "../GGSchema";
 import {ArrayDef} from "../Definition";
 import type {GGSchemaNodeKind} from "../GGSchemaDescription";
 
-export class ArraySchema<T extends any[] = any[]> extends GGSchema<T, ArrayDef> {
+export class ArraySchema<T extends any[] | null | undefined = any[]> extends GGSchema<T, ArrayDef> {
 
     constructor(def: ArrayDef) {
         super(def);

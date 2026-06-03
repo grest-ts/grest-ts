@@ -35,7 +35,7 @@ interface ValidationCase {
 export function testValidation(name: string, schema: GGSchema<any>, cases: ValidationCase[]) {
     describe(name, () => {
         cases.forEach(({value, valid, issue}) => {
-            it(`${label(value)} → ${valid ? 'valid' : issue.code}`, () => {
+            it(`${label(value)} → ${valid ? 'valid' : issue!.code}`, () => {
                 expect(schema.is(value)).toBe(valid);
 
                 const issues = new GGIssuesList();
@@ -45,7 +45,7 @@ export function testValidation(name: string, schema: GGSchema<any>, cases: Valid
                     expect(issues.length).toBe(0);
                 } else {
                     expect(result).toBeUndefined();
-                    expect(issues.getIssue(0)?.code).toBe(issue.code);
+                    expect(issues.getIssue(0)?.code).toBe(issue!.code);
                 }
 
                 if (valid) {
@@ -67,7 +67,7 @@ interface CoercionCase {
 export function testCoercion(name: string, schema: GGSchema<any>, cases: CoercionCase[]) {
     describe(name, () => {
         cases.forEach(({value, result, issue}) => {
-            it(`${label(value)} → ${result ?? issue.code}`, () => {
+            it(`${label(value)} → ${result ?? issue!.code}`, () => {
                 const issues = new GGIssuesList();
                 const parsed = schema._parse(value, issues, 'test', true);
                 if (result !== undefined) {
@@ -75,7 +75,7 @@ export function testCoercion(name: string, schema: GGSchema<any>, cases: Coercio
                     expect(issues.length).toBe(0);
                 } else {
                     expect(parsed).toBeUndefined();
-                    expect(issues.getIssue(0)?.code).toBe(issue.code);
+                    expect(issues.getIssue(0)?.code).toBe(issue!.code);
                 }
             });
         });

@@ -40,7 +40,7 @@ export class MysqlTable<TableName extends string, Entity, EditEntity, InsertEnti
     }
 
     public deleteWhere(where: Partial<Entity>): GatewayDeleteOrderByMethods<Entity> {
-        const builder = new DeleteBuilder().from(this.tableName, undefined)
+        const builder = new DeleteBuilder().from(this.tableName)
         for (const prop in where) {
             builder.where(escapeId(prop) + " = " + escape((where as any)[prop]));
         }

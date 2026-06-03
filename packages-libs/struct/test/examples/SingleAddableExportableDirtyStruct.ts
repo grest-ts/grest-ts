@@ -5,10 +5,10 @@ export type tRef33 = number & { tRef33: never };
 abstract class SingleAddableExportableDirtyStructBase {
 
     protected _size: number = 0;
-    protected _max: number;
-    protected x: Int16Array
-    protected y: Int16Array
-    protected spriteId: Uint32Array
+    protected _max!: number;
+    protected x!: Int16Array
+    protected y!: Int16Array
+    protected spriteId!: Uint32Array
 
     public get size(): number {
         return this._size;
@@ -83,7 +83,7 @@ export class SingleAddableExportableDirtyStruct extends SingleAddableExportableD
         super.realloc(newNoOfMaxObjects)
         const oldDirtyBuffer = this.dirtySetView;
         this.dirtySetView = new Uint32Array(Math.ceil(this._max / 32));
-        this.maxDirty = Math.floor(this._max * this.config.fullSyncRatio)
+        this.maxDirty = Math.floor(this._max * this.config.fullSyncRatio!)
         this.dirtyIdsView = new Uint32Array(this.maxDirty);
         if (oldDirtyBuffer) this.dirtySetView.set(oldDirtyBuffer);
     }
@@ -92,7 +92,7 @@ export class SingleAddableExportableDirtyStruct extends SingleAddableExportableD
 
     public new(): tRef33 {
         if (this.freeIds.length > 0) {
-            return this.freeIds.pop();
+            return this.freeIds.pop()!;
         } else {
             if (this._size === this._max) {
                 this.realloc(this._max * 2);
@@ -108,8 +108,8 @@ export class SingleAddableExportableDirtyStruct extends SingleAddableExportableD
         this.freeIds.push(ref);
     }
 
-    private dirtySetView: Uint32Array;
-    private dirtyIdsView: Uint32Array;
+    private dirtySetView!: Uint32Array;
+    private dirtyIdsView!: Uint32Array;
     private noOfDirtyObjects = 0;
     private syncFullNext: boolean = true;
 
@@ -129,12 +129,12 @@ export class SingleAddableExportableDirtyStruct extends SingleAddableExportableD
         }
     }
 
-    private exportMsg: SingleAddableExportableDirtyStructExport = {max: 0, size: 0, syncFull: false, noOfDirty: 0, transfer: []} as SingleAddableExportableDirtyStructExport;
+    private exportMsg: SingleAddableExportableDirtyStructExport = {max: 0, size: 0, syncFull: false, noOfDirty: 0, transfer: []} as unknown as SingleAddableExportableDirtyStructExport;
     private exportViewsMaxNoOfObjects: number = 0;
-    public exportDirtyIdsView: Uint32Array;
-    private exp0Int16: Int16Array;
-    private exp1Int16: Int16Array;
-    private exp2Uint32: Uint32Array;
+    public exportDirtyIdsView!: Uint32Array;
+    private exp0Int16!: Int16Array;
+    private exp1Int16!: Int16Array;
+    private exp2Uint32!: Uint32Array;
 
     public export(): SingleAddableExportableDirtyStructExport {
         if (this.exportViewsMaxNoOfObjects !== this._max) {
@@ -207,10 +207,10 @@ export class SingleAddableExportableDirtyStruct extends SingleAddableExportableD
 
 export class SingleAddableExportableDirtyStructReader extends SingleAddableExportableDirtyStructBase {
 
-    private importDirtyView: Uint32Array;
-    private imp0Int16: Int16Array;
-    private imp1Int16: Int16Array;
-    private imp2Uint32: Uint32Array;
+    private importDirtyView!: Uint32Array;
+    private imp0Int16!: Int16Array;
+    private imp1Int16!: Int16Array;
+    private imp2Uint32!: Uint32Array;
 
     public import(data: SingleAddableExportableDirtyStructExport, onChange?: (ref: tRef33) => void, onFullSync?: () => void) {
 

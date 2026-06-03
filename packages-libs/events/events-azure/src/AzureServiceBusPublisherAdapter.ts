@@ -49,7 +49,7 @@ export class AzureServiceBusPublisherAdapter<TMessage> implements PublisherTrans
 
         GGLog.debug(this, `Publishing to Azure Service Bus topic ${this.config.resource.topicName}:`, message)
 
-        await this.sender.sendMessages({
+        await this.sender!.sendMessages({
             body: messageBody
         })
 
@@ -59,18 +59,18 @@ export class AzureServiceBusPublisherAdapter<TMessage> implements PublisherTrans
     public async publishBatch(messages: TMessage[]): Promise<void> {
         GGLog.debug(this, `Publishing batch of ${messages.length} messages to Azure Service Bus topic ${this.config.resource.topicName}`)
 
-        const batch = await this.sender.createMessageBatch()
+        const batch = await this.sender!.createMessageBatch()
         for (const msg of messages) {
             const messageBody = JSON.stringify(msg)
             if (!batch.tryAddMessage({body: messageBody})) {
-                await this.sender.sendMessages(batch)
-                const newBatch = await this.sender.createMessageBatch()
+                await this.sender!.sendMessages(batch)
+                const newBatch = await this.sender!.createMessageBatch()
                 newBatch.tryAddMessage({body: messageBody})
             }
         }
 
         if (batch.count > 0) {
-            await this.sender.sendMessages(batch)
+            await this.sender!.sendMessages(batch)
         }
     }
 

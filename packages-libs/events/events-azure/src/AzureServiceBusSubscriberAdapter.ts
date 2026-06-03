@@ -67,7 +67,7 @@ export class AzureServiceBusSubscriberAdapter implements SubscriberTransport {
 
         GGLog.debug(this, `Polling Azure Service Bus subscription ${this.config.providerConfig.resource.get().subscriptionName}`)
 
-        const messages = await this.receiver.receiveMessages(maxMessages, {
+        const messages = await this.receiver!.receiveMessages(maxMessages, {
             maxWaitTimeInMs: waitTimeMs
         })
 
@@ -86,9 +86,9 @@ export class AzureServiceBusSubscriberAdapter implements SubscriberTransport {
 
     public async deleteMessage(receiptHandle: string): Promise<void> {
         const handle = JSON.parse(receiptHandle)
-        const messages = await this.receiver.receiveDeferredMessages(handle.sequenceNumber)
+        const messages = await this.receiver!.receiveDeferredMessages(handle.sequenceNumber)
         if (messages.length > 0) {
-            await this.receiver.completeMessage(messages[0])
+            await this.receiver!.completeMessage(messages[0])
         }
 
         GGLog.debug(this, `Completed Azure Service Bus message`, {receiptHandle: receiptHandle.substring(0, 20)})

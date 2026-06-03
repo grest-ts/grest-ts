@@ -42,19 +42,18 @@ export class EventSubscriberClient<TEventMap> {
 
     /** Lazy adapter - created on first access. Can be overridden by testkit. */
     protected get adapter(): SubscriberTransport {
-        if (!this._adapter) {
-            const discovery = GG_DISCOVERY.get()
-            if (discovery.isLocal) {
-                this._adapter = new LocalSubscriberAdapter(this.name, this.config)
-            } else {
-                const adapterFactory = this.config.resource.adapterFactory ?? this.config.resource.topic.options.subscriberAdapterFactory
-                if (!adapterFactory) {
-                    throw new Error(`No adapter factory configured for subscriber ${this.config.resource.queueName}`)
-                }
-                this._adapter = (adapterFactory as any)(this.config)
-            }
+        if (this._adapter) {
+            return this._adapter
         }
-        return this._adapter
+        const discovery = GG_DISCOVERY.get()
+        if (discovery.isLocal) {
+            return this._adapter = new LocalSubscriberAdapter(this.name, this.config)
+        }
+        const adapterFactory = this.config.resource.adapterFactory ?? this.config.resource.topic.options.subscriberAdapterFactory
+        if (!adapterFactory) {
+            throw new Error(`No adapter factory configured for subscriber ${this.config.resource.queueName}`)
+        }
+        return this._adapter = (adapterFactory as any)(this.config)
     }
 
     public async start(): Promise<void> {
@@ -140,17 +139,19 @@ export class EventSubscriberClient<TEventMap> {
         GGEventsMetrics.subscriber.inFlight.inc(1, mData)
         GGEventsMetrics.subscriber.messageAgeSum.inc(messageAge, mData)
 
-        if (messageAge > settings.messageAgeWarningMs) {
+        const messageAgeWarningMs = settings.messageAgeWarningMs ?? 30000
+        if (messageAge > messageAgeWarningMs) {
             GGEventsMetrics.subscriber.warnings.inc(1, {queue, provider: this.provider, reason: SubscriberWarning.MESSAGE_AGE_HIGH})
-            GGLog.warn(this, `Message age ${messageAge}ms exceeds threshold of ${settings.messageAgeWarningMs}ms`)
+            GGLog.warn(this, `Message age ${messageAge}ms exceeds threshold of ${messageAgeWarningMs}ms`)
         }
 
         if (receivedMessage.receiveCount > 1) {
             GGEventsMetrics.subscriber.redeliveries.inc(1, mData)
         }
-        if (receivedMessage.receiveCount >= settings.highRedeliveryThreshold) {
+        const highRedeliveryThreshold = settings.highRedeliveryThreshold ?? 3
+        if (receivedMessage.receiveCount >= highRedeliveryThreshold) {
             GGEventsMetrics.subscriber.warnings.inc(1, {queue, provider: this.provider, reason: SubscriberWarning.HIGH_REDELIVERY_COUNT})
-            GGLog.warn(this, `Message receive count ${receivedMessage.receiveCount} meets/exceeds threshold of ${settings.highRedeliveryThreshold}`)
+            GGLog.warn(this, `Message receive count ${receivedMessage.receiveCount} meets/exceeds threshold of ${highRedeliveryThreshold}`)
         }
 
         const finalize = (eventType: string | "unknown", result: 'ERROR' | "OK" | "SKIPPED") => {
@@ -159,9 +160,10 @@ export class EventSubscriberClient<TEventMap> {
             GGEventsMetrics.subscriber.inFlight.dec(1, mData)
             GGEventsMetrics.subscriber.processingDurationSum.inc(processingDuration, mData)
 
-            if (processingDuration > settings.processingSlowThresholdMs) {
+            const processingSlowThresholdMs = settings.processingSlowThresholdMs ?? 5000
+            if (processingDuration > processingSlowThresholdMs) {
                 GGEventsMetrics.subscriber.warnings.inc(1, {queue, provider: this.provider, reason: SubscriberWarning.PROCESSING_SLOW})
-                GGLog.warn(this, `Processing took ${processingDuration}ms, exceeds threshold of ${settings.processingSlowThresholdMs}ms`)
+                GGLog.warn(this, `Processing took ${processingDuration}ms, exceeds threshold of ${processingSlowThresholdMs}ms`)
             }
         }
 

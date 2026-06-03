@@ -114,7 +114,7 @@ export class GGLoggerConsole implements GGLogger {
         parts.push(LOG_COLORS.white + process.pid);
 
         const levelColor = this.getLevelColor(entry.level);
-        parts.push(levelColor + (LOG_LEVELS[entry.level].padEnd(5) ?? "?????"));
+        parts.push(levelColor + (LOG_LEVELS[entry.level]?.padEnd(5) ?? "?????"));
 
         parts.push(LOG_COLORS.cyan + entry.contextName + LOG_COLORS.reset);
 
@@ -252,7 +252,7 @@ export class GGLoggerConsole implements GGLogger {
 
         if (error instanceof ERROR) {
             const debugData = error.getDebugContext()
-            const baseMsg = levelColor + "" + error.message + (debugData.debugMessage ? " " + debugData.debugMessage : "");
+            const baseMsg = levelColor + "" + error.message + (debugData?.debugMessage ? " " + debugData.debugMessage : "");
 
             let extra = "";
             if (VALIDATION_ERROR.is(error)) {
@@ -262,15 +262,15 @@ export class GGLoggerConsole implements GGLogger {
             }
 
             let originalError = "";
-            if (debugData.originalError) {
+            if (debugData?.originalError) {
                 originalError += "\n\tOriginal error: " + this.tabData(1, this.formatError(levelColor, debugData.originalError));
             }
 
             let debugDataStr = "";
-            if (debugData.debugMessage) {
+            if (debugData?.debugMessage) {
                 debugDataStr += "\n\tDebug message: " + debugData.debugMessage;
             }
-            if (debugData.debugData) {
+            if (debugData?.debugData) {
                 debugDataStr += "\n\tDebug data: " + this.tabData(1, JSON.stringify(debugData.debugData, null, 2));
             }
 

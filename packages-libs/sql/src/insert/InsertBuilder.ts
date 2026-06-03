@@ -4,17 +4,17 @@ import {SQL_ENTITY, SQL_EXPRESSION} from "../Symbols";
 
 export class InsertBuilder<Entity> implements ExecInsertMethods, InsertSetMethods<Entity> {
 
-    public readonly [SQL_ENTITY]: undefined; // never used
+    public readonly [SQL_ENTITY]!: { insertId: number }; // phantom, never populated
 
     private _ignore: boolean = false;
-    private _tableName: string;
+    private _tableName: string = "";
 
     private _set: string[] = []
 
-    private _valueNames: Set<string>;
-    private _valuesObjects: any[];
+    private _valueNames: Set<string> = new Set();
+    private _valuesObjects: any[] = [];
 
-    private _select: string;
+    private _select: string = "";
 
 
     public to(tableName: string) {

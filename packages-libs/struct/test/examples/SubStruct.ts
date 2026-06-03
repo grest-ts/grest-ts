@@ -11,7 +11,7 @@ export interface SubStructConfig {
 export class SubStruct {
 
     private readonly _max: number;
-    protected readonly vInt16: Int16Array
+    protected readonly vInt16!: Int16Array
 
     constructor( config: SubStructConfig ) {
         this._max = config.initialNumberOfObjects;

@@ -1085,7 +1085,7 @@ testUtils('IsDiscriminated', () => {
             type: 'user' as const,
             name: IsString,
             code: IsString.orNull.default("AUTO"),
-        }).refine(obj => obj.code.length >= 3, testCodeMinError);
+        }).refine(obj => obj.code!.length >= 3, testCodeMinError);
 
         const AdminWithRefineAndDefault = IsObject({
             type: 'admin' as const,

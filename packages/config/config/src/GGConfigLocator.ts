@@ -16,7 +16,7 @@ export class GGConfigLocator<T extends object> {
     readonly #storesList: GGConfigStore<GGConfigKey>[] = []
     readonly #storesMap: Map<string, GGConfigStore<GGConfigKey>> = new Map()
 
-    protected readonly localConfig: GGConfigStoreLocal<T, any> = undefined
+    protected readonly localConfig: GGConfigStoreLocal<T, any> | undefined = undefined
 
     /**
      * @param config - Config definition.
@@ -26,7 +26,7 @@ export class GGConfigLocator<T extends object> {
     constructor(config: GGConfigDefinition<T>, localConfig?: ConfigValues<T>) {
         if (!config) throw new Error("Config definition is required");
         this.#config = config;
-        this.localConfig = localConfig ? new GGConfigStoreLocal(config, localConfig) : undefined
+        this.localConfig = localConfig ? new GGConfigStoreLocal<T>(config, localConfig) : undefined
         GGLocator.getScope().setWithLifecycle(GG_CONFIG, this, {
             type: GGLocatorServiceType.CONFIG,
             start: () => this.start(),

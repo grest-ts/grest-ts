@@ -17,9 +17,9 @@ export class SqlExpression<TableRef, Name extends string | unknown | undefined, 
 
     public readonly expression: string;
     public readonly nameAs: Name | undefined;
-    public readonly transformer: Transformer<unknown, Type>
+    public readonly transformer: Transformer<any, Type> | undefined
 
-    constructor(expression: string, nameAs?: Name, parser?: Transformer<unknown, Type>) {
+    constructor(expression: string, nameAs?: Name, parser?: Transformer<any, Type>) {
         this.expression = expression;
         this.nameAs = nameAs;
         this.transformer = parser;
@@ -132,8 +132,8 @@ export class SqlExpressionWithOver<TableRef, Name, Type extends string | number 
     //public over<WindowName extends string>(namedWindow: WindowName): Expr<TableRef | `${WINDOW} as ${WindowName}`, unknown, Type>
     public over<WindowName extends string, TableRef1>(namedWindow: WindowName, func: (builder: Over<TableRef1>) => void): Expr<TableRef | TableRef1 | `(window) as ${WindowName}`, unknown, Type>
     public over(a: any, b?: any): any {
-        let namedWindow: string = undefined;
-        let func: (builder: Over<never>) => void = undefined;
+        let namedWindow: string | undefined = undefined;
+        let func: ((builder: Over<never>) => void) | undefined = undefined;
         if (typeof a === "function") {
             func = a
         } else if (typeof a === "string") {
@@ -143,7 +143,7 @@ export class SqlExpressionWithOver<TableRef, Name, Type extends string | number 
             }
         }
         const builder = new Over<{}>();
-        func(builder);
+        func!(builder);
         return SqlExpression.create(this.expression + " OVER (" + (namedWindow ? escapeId(namedWindow) + " " : "") + builder.toString() + ")");
     }
 
@@ -151,8 +151,8 @@ export class SqlExpressionWithOver<TableRef, Name, Type extends string | number 
 
 export class Over<TableRef> {
 
-    private _partitionBy: string[];
-    private _orderBy: string[];
+    private _partitionBy: string[] | undefined;
+    private _orderBy: string[] | undefined;
 
     public orderBy<TableRef2>(...cols: OrderByStructure<Expr<TableRef2, string, any>>): Over<TableRef | TableRef2> {
         this._orderBy = orderByStructureToSqlString(cols)
@@ -165,8 +165,8 @@ export class Over<TableRef> {
     }
 
     public toString() {
-        return (this._partitionBy?.length > 0 ? " PARTITION BY " + this._partitionBy.join(", ") : "") +
-            (this._orderBy?.length > 0 ? " ORDER BY " + this._orderBy.join(", ") : "")
+        return (this._partitionBy && this._partitionBy.length > 0 ? " PARTITION BY " + this._partitionBy.join(", ") : "") +
+            (this._orderBy && this._orderBy.length > 0 ? " ORDER BY " + this._orderBy.join(", ") : "")
     }
 
 }

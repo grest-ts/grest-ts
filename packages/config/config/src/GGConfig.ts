@@ -18,10 +18,12 @@ export class GGConfig {
             name,
             add: (key: GGConfigKey) => {
                 const cls = key.constructor as ConstructorOf<GGConfigKey>;
-                if (!keysMap.has(cls)) {
-                    keysMap.set(cls, [])
+                let list = keysMap.get(cls)
+                if (!list) {
+                    list = []
+                    keysMap.set(cls, list)
                 }
-                keysMap.get(cls).push(key)
+                list.push(key)
             }
         });
         const result = defineContext.run(ctx, define) as GGConfigDefinition<T>;

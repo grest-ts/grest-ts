@@ -11,6 +11,7 @@ import {GGLocator} from "@grest-ts/locator";
 import {WebSocketIncoming, WebSocketOutgoing} from "../socket/WebSocketTypes";
 import {GG_HTTP_SERVER, GGHttpServer} from "@grest-ts/http";
 import {GGHttpPermissionsChecker} from "@grest-ts/http";
+import {GG_NO_PERMISSIONS} from "@grest-ts/schema";
 
 export interface WebSocketSchemaConfig {
     /**
@@ -67,7 +68,7 @@ GGWebSocketSchema.prototype.startServer = function (
     const http = config.http ?? GGLocator.getScope().get(GG_HTTP_SERVER);
     http._registerWebSocketSchema(this as any);
 
-    const connectPermission = this.connectPermission
+    const connectPermission = this.connectPermission ?? GG_NO_PERMISSIONS
     const permissionsChecker = new GGHttpPermissionsChecker(this.middlewares);
     const middlewares: GGTransportMiddleware[] = [...this.middlewares, ...(config?.middlewares ?? [])]
     // Gate the handshake: resolve scopes and assert connectPermission here so a failed

@@ -22,8 +22,7 @@ import {
 } from "@grest-ts/schema";
 import {
     IsEmail, IsCountry, IsLanguage, IsLocale, IsUrl, IsPhone,
-    IsDate, IsDateTime, IsTimestamp, IsCurrency, IsIp, IsLatitude, IsLongitude,
-    IsBearerToken
+    IsDate, IsDateTime, IsTimestamp, IsCurrency, IsIp, IsLatitude, IsLongitude
 } from "@grest-ts/schema";
 import {GGFileUpload, GGFileDownload} from "@grest-ts/http-file";
 import {IsFile} from "@grest-ts/schema-file";
@@ -41,7 +40,9 @@ export const CONFLICT = ERROR.define("CONFLICT", 409);
 // Showcase auth middleware — demonstrates bearer security scheme generation
 export const ShowcaseBearerAuth = {
     headers: {
-        "authorization": IsBearerToken.docs({
+        "authorization": IsString.orUndefined.docs({
+            title: "Bearer token",
+            format: "bearer",
             description: "JWT access token. Use the Authorize button to set."
         })
     },

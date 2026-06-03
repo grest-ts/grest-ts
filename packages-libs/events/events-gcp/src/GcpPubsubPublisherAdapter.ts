@@ -39,16 +39,16 @@ export class GcpPubsubPublisherAdapter<TMessage> implements PublisherTransport<T
         this.client = new PubSub({projectId: gcp.projectId})
         this.topic = this.client.topic(this.config.resource.topicName)
 
-        await this.verifyTopic()
+        await this.verifyTopic(this.topic)
     }
 
     public isConfigured(): boolean {
         return this.client !== null
     }
 
-    private async verifyTopic(): Promise<void> {
+    private async verifyTopic(topic: Topic): Promise<void> {
         try {
-            const [exists] = await this.topic.exists()
+            const [exists] = await topic.exists()
             if (!exists) {
                 throw new Error(`GCP Pub/Sub topic not found: ${this.config.resource.topicName}`)
             }
@@ -61,6 +61,10 @@ export class GcpPubsubPublisherAdapter<TMessage> implements PublisherTransport<T
     }
 
     public async publish(message: TMessage): Promise<PublishResult> {
+        if (!this.topic) {
+            throw new Error(`GCP Pub/Sub publisher not started for topic ${this.config.resource.topicName}`)
+        }
+
         const messageBody = JSON.stringify(message)
 
         GGLog.debug(this, `Publishing to GCP Pub/Sub topic ${this.config.resource.topicName}:`, message)

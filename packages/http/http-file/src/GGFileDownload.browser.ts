@@ -16,7 +16,7 @@ class GGFileDownloadCodec implements GGHttpCodec {
         "Content-Disposition": IsString.nonEmpty.docs({
             description: "attachment; filename=<name>",
             example: "attachment; filename=document.pdf"
-        })
+        }).orUndefined
     }
 
     constructor(method: HttpMethod, path: string) {

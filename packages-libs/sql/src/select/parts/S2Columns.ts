@@ -26,8 +26,12 @@ export interface ColumnsMethods<Result, Tables> {
  * Take array of Col-s and convert to Record<key, value> & ... object.
  */
 export type ExtractObj<Columns extends Expr<any, string, any>[]> = {
-    [K in Columns[number]['nameAs']]: Extract<Columns[number], { nameAs: K }>['type']
+    [K in NonNullable<Columns[number]['nameAs']> & (string | number | symbol)]: _ColumnTypeByName<Columns[number], K>
 }
+
+type _ColumnTypeByName<Column, K> = Column extends { nameAs: infer N, type: infer T }
+    ? K extends NonNullable<N> ? T : never
+    : never
 
 
 // --------------------------------------------------------------------
@@ -35,18 +39,20 @@ export type ExtractObj<Columns extends Expr<any, string, any>[]> = {
 type _checkIfExistsInOtherFields<Rest extends any[], Expr> =
     Rest extends []
         ? Expr
-        : Expr extends { nameAs: string } ?
-            Expr["nameAs"] extends (Rest extends { nameAs: infer A }[] ? A : never)
-                ? `'${Expr["nameAs"]}' already exists in columns!`
-                : Expr
-            : Expr extends { nameAs: unknown } ?
-                `Is missing column name. Add .as('name')`
-                : Expr
+        : Expr extends { nameAs: infer N } ?
+            [NonNullable<N>] extends [string] ?
+                NonNullable<N> extends (Rest extends { nameAs: infer A }[] ? NonNullable<A> : never)
+                    ? `'${NonNullable<N>}' already exists in columns!`
+                    : Expr
+                : `Is missing column name. Add .as('name')`
+            : Expr
 
 type _checkIfExistsInResult<Result, Expr> =
-    Expr extends { nameAs: string } ?
-        Expr["nameAs"] extends keyof Result
-            ? `'${Expr["nameAs"]}' already exists in result columns!`
+    Expr extends { nameAs: infer N } ?
+        [NonNullable<N>] extends [string] ?
+            NonNullable<N> extends keyof Result
+                ? `'${NonNullable<N> & string}' already exists in result columns!`
+                : Expr
             : Expr
         : Expr
 

@@ -18,8 +18,8 @@
     "@grest-ts/websocket": "*"
   },
   "devDependencies": {
-    "@types/node": "^22.15.0",
+    "@types/node": "^24.12.4",
     "tsx": "^4.21.0",
-    "typescript": "^5.9.3"
+    "typescript": "^6.0.3"
   }
 }

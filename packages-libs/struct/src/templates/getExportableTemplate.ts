@@ -43,7 +43,7 @@ abstract class ${struct.name}Base {
 
 export class ${struct.name} extends ${struct.name}Base {
 
-    private readonly exportMsg: ${struct.name}Export = {transfer: []} as ${struct.name}Export;
+    private readonly exportMsg: ${struct.name}Export = {transfer: []} as unknown as ${struct.name}Export;
     ${CodeTemplate.variable("exportViews")}
     
     constructor(config: ${struct.name}Config) {

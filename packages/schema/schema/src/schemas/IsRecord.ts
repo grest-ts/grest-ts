@@ -27,7 +27,7 @@ export const IsRecord = <K extends string, V>(
 ): RecordSchema<Record<K, V>> => {
     return new RecordSchema<Record<K, V>>({
         type: 'record',
-        key: keySchema as GGSchema<string>,
+        key: keySchema as unknown as GGSchema<string>,
         value: valueSchema,
         hasNonJsonData: valueSchema.toCompilerDef().hasNonJsonData
     });
@@ -44,7 +44,7 @@ export const IsPartialRecord = <K extends string, V>(
 ): RecordSchema<Partial<Record<K, V>>> => {
     return new RecordSchema<Partial<Record<K, V>>>({
         type: 'record',
-        key: keySchema as GGSchema<string>,
+        key: keySchema as unknown as GGSchema<string>,
         value: valueSchema,
         hasNonJsonData: valueSchema.toCompilerDef().hasNonJsonData
     });

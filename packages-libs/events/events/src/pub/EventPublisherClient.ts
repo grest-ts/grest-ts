@@ -147,14 +147,16 @@ export class EventPublisherClient<TEventMap> {
                 GGEventsMetrics.publisher.publishDurationSum.inc(duration, {topic, provider: this.provider})
 
                 const maxSize = 256 * 1024
-                if (messageSize > maxSize * settings.messageSizeWarningRatio) {
+                const messageSizeWarningRatio = settings.messageSizeWarningRatio ?? 0.8
+                if (messageSize > maxSize * messageSizeWarningRatio) {
                     GGEventsMetrics.publisher.warnings.inc(1, {topic, provider: this.provider, reason: PublisherWarning.MESSAGE_SIZE_NEAR_LIMIT})
-                    GGLog.warn(this, `Message size ${messageSize} bytes exceeds ${settings.messageSizeWarningRatio * 100}% of max (${maxSize} bytes)`)
+                    GGLog.warn(this, `Message size ${messageSize} bytes exceeds ${messageSizeWarningRatio * 100}% of max (${maxSize} bytes)`)
                 }
 
-                if (duration > settings.publishSlowThresholdMs) {
+                const publishSlowThresholdMs = settings.publishSlowThresholdMs ?? 500
+                if (duration > publishSlowThresholdMs) {
                     GGEventsMetrics.publisher.warnings.inc(1, {topic, provider: this.provider, reason: PublisherWarning.PUBLISH_SLOW})
-                    GGLog.warn(this, `Publish took ${duration}ms, exceeds threshold of ${settings.publishSlowThresholdMs}ms`)
+                    GGLog.warn(this, `Publish took ${duration}ms, exceeds threshold of ${publishSlowThresholdMs}ms`)
                 }
 
                 return {success: true, type: "OK", data: undefined}

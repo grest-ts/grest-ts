@@ -9,6 +9,7 @@ export default createLocalConfig(MainConfigApi, {
     publisher: {
         eventsTest: {
             settings: {},
+            resource: {options: {}},
             providerConfig: {
                 resource: {arn: "arn:aws:sns:eu-central-1:000000000000:events_test"},
                 credentials: {accessKeyId: "test", secretAccessKey: "test"}

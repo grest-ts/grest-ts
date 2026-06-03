@@ -6,24 +6,24 @@ import {SingleAddableExportableDirtyStruct, SingleAddableExportableDirtyStructRe
 type REF = number;
 
 export interface BaseInterface {
-    getX: (ref: REF) => number,
-    getY: (ref: REF) => number,
-    getSpriteId: (ref: REF) => number,
-    forEach: (callback: (ref: REF) => void) => void
+    getX(ref: REF): number,
+    getY(ref: REF): number,
+    getSpriteId(ref: REF): number,
+    forEach(callback: (ref: REF) => void): void
 }
 
 export interface MasterInterface<T> extends BaseInterface {
     size: number;
     new: () => REF
-    export: () => T,
-    setX: (ref: REF, value: number) => void,
-    setY: (ref: REF, value: number) => void,
-    setSpriteId: (ref: REF, value: number) => void,
+    export(): T,
+    setX(ref: REF, value: number): void,
+    setY(ref: REF, value: number): void,
+    setSpriteId(ref: REF, value: number): void,
 }
 
 export interface ReaderInterface<T> extends BaseInterface {
     size: number;
-    import: (data: T) => void
+    import(data: T): void
 }
 
 function fillAddable<T extends MasterInterface<any>>(pool: T): T {

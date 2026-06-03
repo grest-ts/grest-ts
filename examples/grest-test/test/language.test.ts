@@ -29,7 +29,7 @@ describe.shuffle("language", () => {
         expect(responseFr.detectedLanguage).toBe("fr");
 
         // Test no language header - should be undefined
-        scope.set(GG_INTL_LOCALE, undefined);
+        scope.delete(GG_INTL_LOCALE);
         const responseDefault = await client.echo({name: "test", age: 25});
         expect(responseDefault.detectedLanguage).toBeUndefined();
     });

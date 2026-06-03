@@ -8,7 +8,7 @@ export function getUseNewCodeMethods(struct: StructMeta) {
 
     public new(): ${ID} {
         if (this.freeIds.length > 0) {
-            return this.freeIds.pop();
+            return this.freeIds.pop()!;
         } else {
             if (this._size === this._max) {
                 this.realloc(this._max * 2);

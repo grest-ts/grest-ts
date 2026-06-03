@@ -15,13 +15,13 @@ const B1_SIZE_8BIT = 12;
 abstract class ComplexStructBase {
 
     protected _size: number = 0;
-    protected _max: number;
-    protected v0Int16: Int16Array
-    protected v0Uint16: Uint16Array
-    protected v1Uint32: Uint32Array
-    protected v1Uint16: Uint16Array
-    protected v1Uint8: Uint8Array
-    protected v1Int8: Int8Array
+    protected _max!: number;
+    protected v0Int16!: Int16Array
+    protected v0Uint16!: Uint16Array
+    protected v1Uint32!: Uint32Array
+    protected v1Uint16!: Uint16Array
+    protected v1Uint8!: Uint8Array
+    protected v1Int8!: Int8Array
 
     public get size(): number {
         return this._size;
@@ -135,7 +135,7 @@ export class ComplexStruct extends ComplexStructBase {
         super.realloc(newNoOfMaxObjects)
         const oldDirtyBuffer = this.dirtySetView;
         this.dirtySetView = new Uint32Array(Math.ceil(this._max / 32));
-        this.maxDirty = Math.floor(this._max * this.config.fullSyncRatio)
+        this.maxDirty = Math.floor(this._max * this.config.fullSyncRatio!)
         this.dirtyIdsView = new Uint32Array(this.maxDirty);
         if (oldDirtyBuffer) this.dirtySetView.set(oldDirtyBuffer);
     }
@@ -144,7 +144,7 @@ export class ComplexStruct extends ComplexStructBase {
 
     public new(): tRef33 {
         if (this.freeIds.length > 0) {
-            return this.freeIds.pop();
+            return this.freeIds.pop()!;
         } else {
             if (this._size === this._max) {
                 this.realloc(this._max * 2);
@@ -159,8 +159,8 @@ export class ComplexStruct extends ComplexStructBase {
         this.freeIds.push(ref);
     }
 
-    private dirtySetView: Uint32Array;
-    private dirtyIdsView: Uint32Array;
+    private dirtySetView!: Uint32Array;
+    private dirtyIdsView!: Uint32Array;
     private noOfDirtyObjects = 0;
     private syncFullNext: boolean = true;
 
@@ -180,11 +180,11 @@ export class ComplexStruct extends ComplexStructBase {
         }
     }
 
-    private exportMsg: ComplexStructExport = {max: 0, size: 0, syncFull: false, noOfDirty: 0, transfer: []} as ComplexStructExport;
+    private exportMsg: ComplexStructExport = {max: 0, size: 0, syncFull: false, noOfDirty: 0, transfer: []} as unknown as ComplexStructExport;
     private exportViewsMaxNoOfObjects: number = 0;
-    public exportDirtyIdsView: Uint32Array;
-    private exp0Int16: Int16Array;
-    private exp1Uint32: Uint32Array;
+    public exportDirtyIdsView!: Uint32Array;
+    private exp0Int16!: Int16Array;
+    private exp1Uint32!: Uint32Array;
 
     public export(): ComplexStructExport {
         if (this.exportViewsMaxNoOfObjects !== this._max) {
@@ -307,9 +307,9 @@ export class ComplexStruct extends ComplexStructBase {
 
 export class ComplexStructReader extends ComplexStructBase {
 
-    private importDirtyView: Uint32Array;
-    private imp0Int16: Int16Array;
-    private imp1Uint32: Uint32Array;
+    private importDirtyView!: Uint32Array;
+    private imp0Int16!: Int16Array;
+    private imp1Uint32!: Uint32Array;
 
     public import(data: ComplexStructExport, onChange?: (ref: tRef33) => void, onFullSync?: () => void) {
 

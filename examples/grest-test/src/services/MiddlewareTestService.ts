@@ -5,8 +5,8 @@ export class MiddlewareTestService implements IMiddlewareTestApi {
 
     public async echo(request: MiddlewareTestRequest): Promise<MiddlewareTestResponse> {
         const locale = GG_INTL_LOCALE.get();
-        const clientInfo = GG_CLIENT_INFO.get();
-        const features = GG_FEATURE_FLAGS.get();
+        const clientInfo = GG_CLIENT_INFO.assert();
+        const features = GG_FEATURE_FLAGS.assert();
         return {
             message: request.message,
             language: locale?.locale,

@@ -1,6 +1,6 @@
 import {callOn, GGTest} from "@grest-ts/testkit";
 import {MainRuntime} from "../src/main";
-import {GG_CLIENT_INFO, GG_FEATURE_FLAGS, MiddlewareTestApi} from "../src/api/MiddlewareTestApi";
+import {ClientInfo, GG_CLIENT_INFO, GG_FEATURE_FLAGS, MiddlewareTestApi} from "../src/api/MiddlewareTestApi";
 import {GG_INTL_LOCALE} from "@grest-ts/intl";
 import {GGContext} from "@grest-ts/context";
 import {afterEach} from "vitest";
@@ -29,7 +29,7 @@ describe.shuffle("middleware", () => {
         expect(responseFr.language).toBe("fr");
 
         // Test undefined (no language preference)
-        scope.set(GG_INTL_LOCALE, undefined);
+        scope.delete(GG_INTL_LOCALE);
         const responseDefault = await client.getLanguage();
         expect(responseDefault.language).toBeUndefined();
     });
@@ -38,7 +38,7 @@ describe.shuffle("middleware", () => {
         // Create client with context for all effects
 
         scope.set(GG_INTL_LOCALE, {locale: "de" as tLocale});
-        scope.set(GG_CLIENT_INFO, {version: '2.0.0', platform: 'ios'});
+        scope.set<ClientInfo>(GG_CLIENT_INFO, {version: '2.0.0', platform: 'ios'});
         scope.set(GG_FEATURE_FLAGS, {darkMode: true, betaFeatures: true});
 
         const client = callOn(MiddlewareTestApi, scope);
@@ -61,7 +61,7 @@ describe.shuffle("middleware", () => {
     });
 
     test("middleware uses defaults when headers are missing", async () => {
-        scope.set(GG_CLIENT_INFO, {version: 'unknown', platform: 'web'});
+        scope.set<ClientInfo>(GG_CLIENT_INFO, {version: 'unknown', platform: 'web'});
 
         const client = callOn(MiddlewareTestApi, scope);
         const response = await client.echo({message: "Test"});

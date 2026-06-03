@@ -13,7 +13,7 @@ ${CodeTemplate.variable("sizeConstants")}
 abstract class ${struct.name}Base {
         
     protected _size: number = 0;
-    protected _max: number;
+    protected _max!: number;
     ${CodeTemplate.variable("viewProperties")}
 
     public get size(): number {
@@ -66,15 +66,15 @@ export class ${struct.name} extends ${struct.name}Base {
         super.realloc(newNoOfMaxObjects)
         const oldDirtyBuffer = this.dirtySetView;
         this.dirtySetView = new Uint32Array(Math.ceil(this._max / 32));
-        this.maxDirty = Math.floor(this._max * this.config.fullSyncRatio)
+        this.maxDirty = Math.floor(this._max * this.config.fullSyncRatio!)
         this.dirtyIdsView = new Uint32Array(this.maxDirty);
         if (oldDirtyBuffer) this.dirtySetView.set(oldDirtyBuffer);
     }
 
     ${getUseNewCodeMethods(struct)}
 
-    private dirtySetView: Uint32Array;
-    private dirtyIdsView: Uint32Array;
+    private dirtySetView!: Uint32Array;
+    private dirtyIdsView!: Uint32Array;
     private noOfDirtyObjects = 0;
     private syncFullNext: boolean = true;
 
@@ -94,9 +94,9 @@ export class ${struct.name} extends ${struct.name}Base {
         }
     }
 
-    private exportMsg: ${struct.name}Export = {max: 0, size: 0, syncFull: false, noOfDirty: 0, transfer: []} as ${struct.name}Export;
+    private exportMsg: ${struct.name}Export = {max: 0, size: 0, syncFull: false, noOfDirty: 0, transfer: []} as unknown as ${struct.name}Export;
     private exportViewsMaxNoOfObjects: number = 0;
-    public exportDirtyIdsView: Uint32Array;
+    public exportDirtyIdsView!: Uint32Array;
     ${CodeTemplate.variable("exportViews")}
 
     public export(): ${struct.name}Export {
@@ -138,7 +138,7 @@ export class ${struct.name} extends ${struct.name}Base {
 
 export class ${struct.name}Reader extends ${struct.name}Base {
 
-    private importDirtyView: Uint32Array;
+    private importDirtyView!: Uint32Array;
     ${CodeTemplate.variable("importViewDefinitions")}
     
     public import(data: ${struct.name}Export, onChange?: (ref: ${ID}) => void, onFullSync?: () => void) {

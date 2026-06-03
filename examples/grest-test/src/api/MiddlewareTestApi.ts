@@ -26,7 +26,7 @@ export const GG_CLIENT_INFO = new GGContextKey<ClientInfo>('clientInfo', IsObjec
 export const ClientInfoEffect: GGTransportMiddleware = {
     headers: {
         'x-client-version':  IsString.orUndefined.docs({description: "Client application version"}),
-        'x-client-platform': IsLiteral("web", "ios", "android").orUndefined.docs({description: "Client platform"}),
+        'x-client-platform': IsString.orUndefined.docs({description: "Client platform"}),
     },
     responseHeaders: {},
     update(outbound: GGOutbound): void {

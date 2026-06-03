@@ -31,7 +31,7 @@ export class NotificationService {
     }
 
     public handleConnection = (incoming: IncomingHandler, outgoing: OutgoingConnection): void => {
-        const user = UserContext.get()
+        const user = UserContext.assert()
 
         // Add this connection to the user's set of connections
         if (!this.connectedClients.has(user.id)) {
@@ -41,7 +41,7 @@ export class NotificationService {
 
         incoming.on({
             updateItem: async (arg: { item: ChecklistItem, reason?: string }): Promise<UpdateItemResponse> => {
-                const user = UserContext.get();
+                const user = UserContext.assert();
                 GGLog.debug(this, 'Updating item for user: ' + user.username)
                 await this.checklistService.edit({
                     id: arg.item.id,

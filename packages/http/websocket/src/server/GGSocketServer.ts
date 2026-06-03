@@ -90,7 +90,7 @@ export class GGSocketServer<TContext, Query> {
     public readonly path: string;
     private readonly apiName: string;
     private readonly middlewares: readonly GGTransportMiddleware[];
-    private readonly queryValidator: GGValidator<Query>;
+    private readonly queryValidator?: GGValidator<Query>;
     private readonly heartbeat: GGServerHeartbeatOption;
 
     private readonly activeSockets: Set<GGSocket> = new Set();
@@ -118,7 +118,8 @@ export class GGSocketServer<TContext, Query> {
                         api: this.apiName,
                         pathPrefix: this.path,
                         protocol: "ws",
-                        port: http.port
+                        // onStart fires after the http server has bound its port.
+                        port: http.port!
                     }]);
                 }
             })
@@ -128,7 +129,7 @@ export class GGSocketServer<TContext, Query> {
                     detachUpgradeDispatch(http.httpServer, this.path);
                     this.wss.close();
                 } catch (error) {
-                    GGLog.error(this, error);
+                    GGLog.error(this, error instanceof Error ? error : new Error(String(error)));
                 }
                 await Promise.allSettled(Array.from(this.activeSockets).map(socket => socket.teardown()));
                 GGLog.info(this, "WebSocket server stopped");
@@ -215,11 +216,11 @@ export class GGSocketServer<TContext, Query> {
                     try {
                         await handler(socket, queryArgs);
                     } catch (error) {
-                        GGLog.error(this, error);
+                        GGLog.error(this, error instanceof Error ? error : new Error(String(error)));
                     }
                 }
             } catch (error) {
-                GGLog.error(this, error);
+                GGLog.error(this, error instanceof Error ? error : new Error(String(error)));
                 if (GG_METRICS.has()) GGWebSocketMetrics.connections.inc(1, {...connectionLabels, result: 'ERROR'});
                 // Only close if socket is still open (fix #5 - avoid double close)
                 if (ws.readyState === ws.OPEN || ws.readyState === ws.CONNECTING) {

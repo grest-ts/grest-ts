@@ -13,14 +13,14 @@ export class UpdateBuilder<Entity, Tables> implements ExecUpdateMethods,
     UpdateOrderByMethods<Tables>,
     UpdateLimitMethods {
 
-    public readonly [SQL_ENTITY]: { affectedRows: number; }; // never used
+    public readonly [SQL_ENTITY]!: { affectedRows: number; }; // phantom, never populated
 
-    private _tableName: string;
+    private _tableName: string = "";
     private _joins: string[] = [];
     private _set: string[] = []
     private readonly _where: string[] = [];
     private readonly _orderBy: string[] = [];
-    private _limit: string;
+    private _limit: string = "";
     private _ignore: boolean = false;
 
     public in(tableName: string, alias?: string) {

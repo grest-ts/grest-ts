@@ -67,6 +67,8 @@ export function createClient<TContract extends GGContractApiDefinition, TContext
     config ??= {};
     config.timeout ??= 15000;
 
+    const contract = httpSchema.contract;
+
     // A custom transport implies "I take over the wire layer" — discovery is
     // off the table (the transport knows how to find the target), and the
     // default base URL becomes "" so the transport sees just the request path.
@@ -84,7 +86,7 @@ export function createClient<TContract extends GGContractApiDefinition, TContext
     const transportImplementation: any = {}
     for (const methodName of Object.keys(httpSchema.codec)) {
 
-        const contractFunction = httpSchema.contract.methods[methodName];
+        const contractFunction = contract.methods[methodName];
         const noValidation = config?.noValidation === true;
 
         const codec: GGHttpCodec = httpSchema.codec[methodName];
@@ -96,7 +98,7 @@ export function createClient<TContract extends GGContractApiDefinition, TContext
 
         const implementation = async (data?: unknown): Promise<OK<unknown> | ANY_ERROR> => {
             try {
-                let baseUrl: string = config.url;
+                let baseUrl: string | undefined = config.url;
                 if (baseUrl === undefined) {
                     try {
                         const {GG_DISCOVERY} = await import(/* @vite-ignore */ '@grest-ts/discovery');
@@ -149,7 +151,7 @@ export function createClient<TContract extends GGContractApiDefinition, TContext
 
     }
     // Per-client stub — doesn't belong in the callOn registry (server's impl does).
-    httpSchema.contract.implement(transportImplementation as GGContractImplementation<TContract>, {skipLocatorRegistration: true})
+    contract.implement(transportImplementation as GGContractImplementation<TContract>, {skipLocatorRegistration: true})
     return transportImplementation;
 }
 

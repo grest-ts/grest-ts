@@ -336,7 +336,7 @@ export class TypeExtractor {
                 const cached = this.typeCache.get(cacheKey)
                 verbose(`[resolveType] ${typeName} found in cache for ${foundSourceFile.fileName}:`, cached ? {kind: cached.kind} : 'NULL')
                 // If cached as "not found" (null), return primitive 'any'
-                if (cached === null) {
+                if (cached == null) {
                     return {kind: 'primitive', baseType: 'any'}
                 }
                 return cached

@@ -19,7 +19,7 @@ export class GGSocketCall<InputData, SuccessData, ErrorsUnion extends ERROR<any,
     private readonly request: any;
     private readonly hasResponse: boolean;
 
-    private _validatingError: ConstructorOf<ERROR<any, any>>;
+    private _validatingError?: ConstructorOf<ERROR<any, any>>;
 
     constructor(socket: GGSocket, path: string, request: any, hasResponse: boolean = true) {
         const config: GGTestActionConfig = {

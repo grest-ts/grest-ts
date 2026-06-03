@@ -16,12 +16,12 @@ export class GGSpyWith<RequestBody = any, ResponseData = any, ErrorsUnion = any>
     private readonly definedInSourceFile: string;
 
     private readonly _expectInput: GGExpectations<RequestBody> = new GGExpectations()
-    private _expectError: ConstructorOf<ErrorsUnion>
+    private _expectError?: ConstructorOf<ErrorsUnion>
     private readonly _expectOutput: GGExpectations<ResponseData> = new GGExpectations()
 
     private activeExpect: GGExpectations<any>;
 
-    private _sleep: number;
+    private _sleep: number = 0;
     private _times: number = 1;
 
     constructor(interceptorFactory: InterceptorFactory, config: Record<string, any>) {

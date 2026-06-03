@@ -63,7 +63,7 @@ export class GGFileDownloadResponseBuilder {
         return "";
     }
 
-    private makeErrorCtx(ctx: GGErrorData): string {
+    private makeErrorCtx(ctx: GGErrorData | undefined): string {
         if (ctx) {
             let str = "";
             str += ctx.displayMessage ? '"displayMessage":' + JSON.stringify(ctx.displayMessage) : "";

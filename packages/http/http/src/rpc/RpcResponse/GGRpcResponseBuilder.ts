@@ -47,7 +47,7 @@ export class GGRpcResponseBuilder {
             "}";
     }
 
-    private makeDataStr(schema: GGSchema<any>, data: OK<any> | ANY_ERROR): string {
+    private makeDataStr(schema: GGSchema<any> | undefined, data: OK<any> | ANY_ERROR): string {
         if (schema) {
             GGContractExecutor.assertResponse(schema, data);
             const dataStr = schema.unsafeStringify(data.data)
@@ -57,7 +57,7 @@ export class GGRpcResponseBuilder {
         }
     }
 
-    private makeErrorCtx(ctx: GGErrorData, debugContext?: GGDebugData): string {
+    private makeErrorCtx(ctx: GGErrorData | undefined, debugContext?: GGDebugData): string {
         if (ctx) {
             let str = "";
             str += ctx?.displayMessage ? '"displayMessage":' + JSON.stringify(ctx.displayMessage) + '' : "";

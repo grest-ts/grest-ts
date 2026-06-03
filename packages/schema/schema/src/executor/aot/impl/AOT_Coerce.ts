@@ -167,7 +167,7 @@ export class AOT_Coerce {
                 const fieldSchema = shape[k];
                 if (!(fieldSchema && typeof fieldSchema === 'object' && 'def' in fieldSchema)) return false;
                 const fieldDef = fieldSchema.toCompilerDef() as AnyStandardSchemaDef;
-                return fieldDef.defaultValue !== undefined || fieldSchema.def.coercions?.length > 0 || this.needsCoercion(fieldDef);
+                return fieldDef.defaultValue !== undefined || (fieldSchema.def.coercions?.length ?? 0) > 0 || this.needsCoercion(fieldDef);
             });
 
             if (!hasCoercionsOrDefaults) {

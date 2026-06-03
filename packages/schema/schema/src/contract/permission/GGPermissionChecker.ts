@@ -6,7 +6,7 @@ export class GGPermissionChecker {
 
     public static satisfies(required: GGPermission, granted: undefined | ReadonlyArray<ReadonlyArray<string>>): boolean {
         if (required === GG_NO_PERMISSIONS || required === undefined) return true
-        if (required === GG_ANY_PERMISSION) return granted?.length > 0
+        if (required === GG_ANY_PERMISSION) return granted !== undefined && granted.length > 0
         if (typeof required === "string") {
             if (granted === undefined || granted.length === 0) return false;
             for (let i = 0; i < granted.length; i++) {

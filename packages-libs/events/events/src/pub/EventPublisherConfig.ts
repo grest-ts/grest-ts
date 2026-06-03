@@ -47,7 +47,7 @@ export class EventPublisherConfig<TEventMap, TProviderConfig = unknown> {
             publishSlowThresholdMs: data?.publishSlowThresholdMs ?? 500,
         }, "Event publisher settings")
 
-        this.providerConfig = resource.options.providerConfigFactory?.(resource.topicName)
+        this.providerConfig = resource.options.providerConfigFactory?.(resource.topicName) as TProviderConfig
         Object.freeze(this)
     }
 

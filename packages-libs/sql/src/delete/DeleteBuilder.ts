@@ -12,14 +12,14 @@ export class DeleteBuilder<Tables, Entity> implements DeleteWhereMethods<Tables>
     GatewayDeleteWhereMethods<Entity>,
     GatewayDeleteOrderByMethods<Entity> {
 
-    public readonly [SQL_ENTITY]: undefined; // never used
+    public readonly [SQL_ENTITY]!: { affectedRows: number }; // phantom, never populated
 
-    private _from: string;
+    private _from: string = "";
     private readonly _where: string[] = [];
     private readonly _orderBy: string[] = [];
-    private _limit: string;
+    private _limit: string = "";
 
-    public from(table: string, alias: string): this {
+    public from(table: string, alias?: string): this {
         this._from = table + (alias ? " as " + escapeId(alias) : "");
         return this;
     }

@@ -87,7 +87,7 @@ export abstract class GGMetric<
     protected getByKey(key: tMetricKey): TValue | undefined {
         const value = this.values.get(key);
         if (value === undefined) {
-            if (this.values.size >= this.key.maxLabelCombinations) {
+            if (this.key.maxLabelCombinations !== undefined && this.values.size >= this.key.maxLabelCombinations) {
                 return undefined;
             }
             const defaultValue = this.getDefaultValue();
@@ -102,7 +102,7 @@ export abstract class GGMetric<
         this.values.set(key, value);
     }
 
-    public getValue(...args: LabelsArgs<TLabels>): TValue {
+    public getValue(...args: LabelsArgs<TLabels>): TValue | undefined {
         return this.getByKey(this.getKey(args[0] as TLabels));
     }
 

@@ -30,7 +30,7 @@ test("simple", async () => {
             c.id,
             c.id.as("from"),
             c.id.as("renamedId"),
-            VALUE(null as string).as("emptyValue").transform((val): null => null),
+            VALUE(null as unknown as string).as("emptyValue").transform((val): null => null),
             DATE(c.created).as("myDate"),
             DATE(c.created),
             VALUE(MyEnum.aa).as("enumValue"),

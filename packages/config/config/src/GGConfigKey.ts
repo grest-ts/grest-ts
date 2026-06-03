@@ -34,7 +34,7 @@ export abstract class GGConfigKey<T = unknown> {
     public readonly root: string;
     public readonly name: string;
     public readonly description: string | undefined;
-    public readonly schema: GGValidator<T> | undefined;
+    public readonly schema: GGValidator<T>;
     /** File location where this ConfigKey was defined (file:line:col) */
     public readonly definedAt: string | undefined;
 
@@ -81,6 +81,7 @@ export abstract class GGConfigKey<T = unknown> {
 
 function captureDefinitionLocation(): string | undefined {
     const stack = new Error().stack;
+    if (!stack) return undefined;
 
     /* This could be one possible error we are filtering for.
     Error

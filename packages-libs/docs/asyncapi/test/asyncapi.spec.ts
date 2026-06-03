@@ -5,7 +5,9 @@ import {toAsyncApi} from "../src/toAsyncApi";
 import {ConfigTestSocketApi} from "../../../../examples/grest-test/src/api/ConfigTestSocketApi";
 
 import {webSocketSchema, defineSocketContract} from "@grest-ts/websocket";
+import type {GGSchema} from "@grest-ts/schema";
 import {IsString, IsObject, IsNumber, SERVER_ERROR, VALIDATION_ERROR, IsBearerToken, GG_NO_PERMISSIONS } from "@grest-ts/schema";
+import type {GGTransportMiddleware} from "@grest-ts/context";
 
 // ---------------------------------------------------------------------------
 // A rich WebSocket showcase contract for snapshot testing
@@ -45,9 +47,11 @@ const ChatContract = defineSocketContract("ChatApi", {
     }
 });
 
-const ChatAuthMiddleware = {
+const ChatAuthMiddleware: GGTransportMiddleware = {
+    // IsBearerToken's branded value type is invariant-incompatible with the header element
+    // type, but the doc generator only reads its docs (format: "bearer"), so the brand is moot.
     headers: {
-        "authorization": IsBearerToken.docs({description: "JWT access token for chat auth"})
+        "authorization": IsBearerToken.docs({description: "JWT access token for chat auth"}) as unknown as GGSchema<string | undefined>
     }
 };
 

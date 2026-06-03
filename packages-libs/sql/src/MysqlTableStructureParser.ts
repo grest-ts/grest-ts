@@ -30,10 +30,12 @@ export class MysqlTableStructureParser {
     public static parse(schema: SchemaRow[]): TableStructure[] {
         const tables: Map<string, TableStructure> = new Map()
         for (const row of schema) {
-            if (!tables.has(row.tableName)) {
-                tables.set(row.tableName, {name: row.tableName, columns: []})
+            let table = tables.get(row.tableName)
+            if (!table) {
+                table = {name: row.tableName, columns: []}
+                tables.set(row.tableName, table)
             }
-            tables.get(row.tableName).columns.push(this.parseColumn(row));
+            table.columns.push(this.parseColumn(row));
         }
         return Array.from(tables.values()).sort((a, b) => a.name >= b.name ? 1 : -1);
     }
@@ -45,7 +47,7 @@ export class MysqlTableStructureParser {
             name: row.columnName,
             dataType: row.dataType.toUpperCase(),
             columnType: row.columnType,
-            tsType: MYSQL_TYPE_TO_TS_TYPE.get(type),
+            tsType: MYSQL_TYPE_TO_TS_TYPE.get(type)!,
             isNullable: row.isNullable.toUpperCase().indexOf("YES") >= 0,
             default: this.parseDefault(row.columnDefault),
             columnKey: this.parseColumnKey(row.columnKey),
@@ -74,7 +76,7 @@ export class MysqlTableStructureParser {
 
         } else if (type === ColumnDataType.TINYINT || type === ColumnDataType.SMALLINT || type === ColumnDataType.INT || type === ColumnDataType.MEDIUMINT
             || type === ColumnDataType.BIGINT || type === ColumnDataType.DECIMAL || type === ColumnDataType.FLOAT || type === ColumnDataType.BIT) {
-            const typeNum = Number(row.columnType.split("(").pop().split(")").shift());
+            const typeNum = Number(row.columnType.split("(").pop()!.split(")").shift());
             const res: ColumnNumber = {
                 ...column,
                 type: type,
@@ -90,14 +92,14 @@ export class MysqlTableStructureParser {
             const res: ColumnEnum = {
                 ...column,
                 type: type,
-                values: row.columnType.match(/'([^']+)'/g).map(e => e.replace(/'/g, "").replace(/"/g, ""))
+                values: row.columnType.match(/'([^']+)'/g)!.map(e => e.replace(/'/g, "").replace(/"/g, ""))
             }
             return res;
         } else if (type === ColumnDataType.SET) {
             const res: ColumnSet = {
                 ...column,
                 type: type,
-                values: row.columnType.match(/'([^']+)'/g).map(e => e.replace(/'/g, "").replace(/"/g, ""))
+                values: row.columnType.match(/'([^']+)'/g)!.map(e => e.replace(/'/g, "").replace(/"/g, ""))
             }
             return res;
         } else {
@@ -105,7 +107,7 @@ export class MysqlTableStructureParser {
         }
     }
 
-    private static parseDefault(def: string): string | number {
+    private static parseDefault(def: string): string | number | null {
         if (!def || def === "NULL") {
             return null;
         } else if (!isNaN(Number(def))) {
@@ -127,7 +129,7 @@ export class MysqlTableStructureParser {
             } else {
                 return null;
             }
-        }).filter(e => e);
+        }).filter((e): e is KeyType => e !== null);
     }
 }
 
@@ -196,7 +198,7 @@ export interface Column {
     dataType: string // Type like INT
     columnType: string; // Type like INT(11)
     typeNum?: number | undefined // for INT(11), this would be 11
-    default: string | number;
+    default: string | number | null;
     isNullable: boolean;
     columnKey: KeyType[];
     extra: string;

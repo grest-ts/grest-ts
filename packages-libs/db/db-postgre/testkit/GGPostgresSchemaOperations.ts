@@ -3,10 +3,10 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 export interface GGPostgresSchemaOperationsConfig {
-    host: string;
-    port: number;
-    user: string;
-    password: string;
+    host?: string;
+    port?: number;
+    user?: string;
+    password?: string;
 }
 
 export class GGPostgresSchemaOperations {

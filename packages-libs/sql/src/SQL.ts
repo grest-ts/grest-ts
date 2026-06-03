@@ -191,7 +191,7 @@ export class SQL {
      *
      */
     public static prepare<PrepareQueryArguments extends { [key: string]: any }, Result>(func: (args: PrepareQueryArguments) => ExecMethods<Result>): (args: PrepareQueryArguments) => SqlQuery<Result> {
-        let sqlQuery: string = undefined;
+        let sqlQuery: string | undefined = undefined;
         const seenArguments: Map<string, string> = new Map();
         const getSqlString = () => {
             if (sqlQuery === undefined) {
@@ -209,9 +209,9 @@ export class SQL {
             }
             return sqlQuery;
         }
-        return (args: PrepareQueryArguments) => {
+        return (args: PrepareQueryArguments): SqlQuery<Result> => {
             return {
-                [SQL_ENTITY]: undefined,
+                [SQL_ENTITY]: undefined as Result,
                 toSqlString: (): string => {
                     let usedQuery = getSqlString();
                     seenArguments.forEach((variable, key) => {

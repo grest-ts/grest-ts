@@ -18,7 +18,7 @@ test("short", async () => {
         return [{}] as any;
     }
 
-    const val: "username2" = undefined;
+    const val: "username2" = undefined as unknown as "username2";
 
     const query = SQL
         .selectFrom(c)

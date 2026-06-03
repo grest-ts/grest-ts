@@ -16,7 +16,7 @@ export class ChecklistService implements GGContractImplementation<typeof Checkli
     }
 
     public async list(): Promise<ChecklistItem[]> {
-        const user = UserContext.get();
+        const user = UserContext.assert();
         const userItems: ChecklistItem[] = []
         for (const item of this.items.values()) {
             if (item.userId === user.id) {
@@ -27,7 +27,7 @@ export class ChecklistService implements GGContractImplementation<typeof Checkli
     }
 
     public async add(request: AddChecklistRequest): Promise<ChecklistItem> {
-        const user = UserContext.get();
+        const user = UserContext.assert();
         const itemId = `item-${this.nextItemId++}` as tChecklistId
         const now = Date.now() as tUint
 
@@ -58,7 +58,7 @@ export class ChecklistService implements GGContractImplementation<typeof Checkli
     }
 
     public async get({id}: { id: tChecklistId }): Promise<ChecklistItem> {
-        const user = UserContext.get();
+        const user = UserContext.assert();
         const item = this.items.get(id)
         if (!item) {
             throw new NOT_FOUND()
@@ -73,7 +73,7 @@ export class ChecklistService implements GGContractImplementation<typeof Checkli
     }
 
     public async edit(request: EditChecklistRequest): Promise<ChecklistItem> {
-        const user = UserContext.get();
+        const user = UserContext.assert();
         const item = this.items.get(request.id)
         if (!item) {
             throw new NOT_FOUND()
@@ -111,7 +111,7 @@ export class ChecklistService implements GGContractImplementation<typeof Checkli
     }
 
     public async delete({id}: { id: tChecklistId }): Promise<void> {
-        const user = UserContext.get();
+        const user = UserContext.assert();
         const item = this.items.get(id)
         if (!item) {
             throw new NOT_FOUND()
@@ -126,7 +126,7 @@ export class ChecklistService implements GGContractImplementation<typeof Checkli
     }
 
     public async markDone({id}: { id: tChecklistId }): Promise<ChecklistItem> {
-        const user = UserContext.get();
+        const user = UserContext.assert();
         const item = this.items.get(id)
         if (!item) {
             throw new NOT_FOUND()

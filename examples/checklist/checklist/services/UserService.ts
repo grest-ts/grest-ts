@@ -132,7 +132,7 @@ export class UserService implements GGContractImplementation<typeof UserPublicAp
     }
 
     public async changePassword(request: ChangePasswordRequest): Promise<void> {
-        const authUser = UserContext.get();
+        const authUser = UserContext.assert();
 
         const users = await this.db.query<UserRow>(
             'SELECT id, username, password FROM users WHERE id = $1',
@@ -164,7 +164,7 @@ export class UserService implements GGContractImplementation<typeof UserPublicAp
     }
 
     public async me(): Promise<User> {
-        return UserContext.get();
+        return UserContext.assert();
     }
 
     public async getUserByToken(token: tUserAuthToken): Promise<User | undefined> {

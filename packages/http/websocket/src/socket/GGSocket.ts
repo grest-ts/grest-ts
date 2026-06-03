@@ -79,7 +79,7 @@ export class GGSocket {
 
     private isActive = true;
     private isCleanedUp = false;
-    private tearingDownPromise: Promise<void>;
+    private tearingDownPromise?: Promise<void>;
 
     private lastActivity = Date.now();
 
@@ -143,7 +143,8 @@ export class GGSocket {
                         try {
                             onClose?.();
                         } catch (e) {
-                            this.onErrorCallbacks.forEach(cb => cb(e));
+                            const err = e instanceof Error ? e : new Error(String(e));
+                            this.onErrorCallbacks.forEach(cb => cb(err));
                         }
                     });
                 }
