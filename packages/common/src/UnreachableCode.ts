@@ -1,5 +1,5 @@
 export class UnreachableCode {
-    public static never<T>(input: never, defaultValue?: T): T {
+    public static never<T>(input: never, defaultValue?: T): T | undefined {
         return defaultValue;
     }
 

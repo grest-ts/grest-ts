@@ -33,7 +33,7 @@ export class SocketHandler {
     private readonly disconnectListeners: ClientDisconnectListener[] = [];
     private clientIdCounter = 0;
 
-    private routeResolver: (path: string) => string
+    private routeResolver!: (path: string) => string
     private readonly proxy: httpProxy;
 
     constructor() {
@@ -58,14 +58,19 @@ export class SocketHandler {
     }
 
     public async handleUpgrade(req: http.IncomingMessage, socket: Duplex, head: Buffer): Promise<void> {
-        if (req.url.startsWith(INTERNAL_SOCKET_PATH)) {
+        const url = req.url;
+        if (!url) {
+            socket.destroy();
+            return;
+        }
+        if (url.startsWith(INTERNAL_SOCKET_PATH)) {
             this.wss.handleUpgrade(req, socket, head, (ws) => {
-                this.handleNewConnection(ws, req.url);
+                this.handleNewConnection(ws, url);
             });
             return;
         }
 
-        const routeToUrl = this.routeResolver(req.url)
+        const routeToUrl = this.routeResolver(url)
         if (routeToUrl) {
             GGLog.debug(this, `Proxying WS ${req.url} -> ${routeToUrl}`);
             this.proxy.ws(req, socket, head, {target: routeToUrl}, (err: any) => {

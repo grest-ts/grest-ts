@@ -27,8 +27,11 @@ export class GGNestedMetricsExporter extends GGMetricsExporter<NestedMetricsOutp
     /**
      * Register a value converter for a custom metric type.
      */
-    static registerConverter(metricClass: Function, converter: NestedValueConverter): void {
-        GGNestedMetricsExporter.converters.set(metricClass, converter);
+    static registerConverter<T extends GGMetric<any>>(
+        metricClass: new (...args: any[]) => T,
+        converter: (metric: T, value: any, exporter: GGNestedMetricsExporter) => any
+    ): void {
+        GGNestedMetricsExporter.converters.set(metricClass, converter as NestedValueConverter);
     }
 
     constructor(config: ExporterConfig = {}) {

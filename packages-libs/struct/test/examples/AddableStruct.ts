@@ -12,9 +12,9 @@ export interface AddableStructConfig {
 export class AddableStruct {
 
     private _size: number = 0;
-    private _max: number;
-    protected vUint32: Uint32Array
-    protected vInt16: Int16Array
+    private _max!: number;
+    protected vUint32!: Uint32Array
+    protected vInt16!: Int16Array
 
     constructor( config: AddableStructConfig ) {
         this.realloc(config.initialNumberOfObjects);
@@ -50,7 +50,7 @@ export class AddableStruct {
 
     public new(): tRef {
         if (this.freeIds.length > 0) {
-            return this.freeIds.pop();
+            return this.freeIds.pop()!;
         } else {
             if (this._size === this._max) {
                 this.realloc(this._max * 2);

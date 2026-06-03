@@ -3,7 +3,7 @@ import {GGIssueKey, ValidationIssueJson} from "./GGIssueKey";
 export class GGIssuesList {
 
     // Storage: [ |path, issue, params, value|, |path, issue, params, value|, ...]
-    private issues: (string | GGIssueKey | object | undefined | unknown)[];
+    private issues: (string | GGIssueKey | object | undefined | unknown)[] | undefined;
     private _length = 0;
 
     public add(value: unknown, path: string, issue: GGIssueKey<any>, params?: object): undefined {

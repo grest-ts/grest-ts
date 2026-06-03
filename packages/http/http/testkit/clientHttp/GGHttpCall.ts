@@ -16,7 +16,7 @@ export class GGHttpCall<InputData, SuccessData, ErrorsUnion extends ERROR<any, a
     private readonly data: any;
     private readonly _execute: (data: any) => GGPromise<any, any>;
 
-    private _validatingError: ConstructorOf<ERROR<any, any>>;
+    private _validatingError: ConstructorOf<ERROR<any, any>> | undefined;
 
     constructor(ctx: GGContext, methodName: string, data: any, execute: (data: any) => GGPromise<any, any>) {
         const config: GGTestActionConfig = {

@@ -7,7 +7,11 @@ describe('collectStructDefinitions – integration', () => {
 
     let parsed: StructMeta[]
 
-    const get = (clsName: string) => parsed.find(e => e.name === clsName)
+    const get = (clsName: string): StructMeta => {
+        const found = parsed.find(e => e.name === clsName)
+        if (!found) throw new Error("Struct not found: " + clsName)
+        return found
+    }
 
     beforeAll(() => {
         const sourceFile = path.dirname(__filename) + "/examples/";
@@ -79,7 +83,7 @@ describe('collectStructDefinitions – integration', () => {
 });
 
 function compareObjects(parsed: object, expected: object) {
-    const res = diff(expected, parsed, {expand: false});
+    const res = diff(expected, parsed, {expand: false}) ?? "";
     if (res.indexOf("Compared values have no visual difference") === -1) {
         throw new Error(res);
     }

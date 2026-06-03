@@ -21,7 +21,7 @@ export class GGTestRuntimeWorker {
 
     public readonly ipcClient: IPCClient;
     public readonly config: GGTestEnvConfig;
-    public runtime: GGRuntime = undefined
+    public runtime!: GGRuntime
     private runtimeStopped = false;
 
     private readonly scope: GGLocatorScope;

@@ -48,7 +48,7 @@ export class GcpPubsubSubscriberAdapter implements SubscriberTransport {
         this.client = new PubSub({projectId: gcp.projectId})
         this.subscription = this.client.subscription(gcp.subscriptionName)
 
-        await this.verifySubscription()
+        await this.verifySubscription(this.subscription)
 
         this.subscription.on('message', (message: any) => {
             const receivedMessage: ReceivedMessage = {
@@ -73,9 +73,9 @@ export class GcpPubsubSubscriberAdapter implements SubscriberTransport {
         return this.client !== null
     }
 
-    private async verifySubscription(): Promise<void> {
+    private async verifySubscription(subscription: Subscription): Promise<void> {
         try {
-            const [exists] = await this.subscription.exists()
+            const [exists] = await subscription.exists()
             if (!exists) {
                 throw new Error(`GCP Pub/Sub subscription not found: ${this.config.providerConfig.resource.get().subscriptionName}`)
             }

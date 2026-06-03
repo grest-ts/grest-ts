@@ -22,7 +22,7 @@ test("simple", async () => {
                 c.username,
                 c.id,
                 c.id.as("renamedId"),
-                VALUE(null as string).as("emptyValue"),
+                VALUE(null as unknown as string).as("emptyValue"),
                 DATE(c.created).as("myDate"),
                 IF(
                     c.id.eq(10 as tUserId),

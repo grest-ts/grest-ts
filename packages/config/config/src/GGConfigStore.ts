@@ -74,17 +74,18 @@ export abstract class GGConfigStore<Key extends GGConfigKey> {
     }
 
     public async notify(key: GGConfigKey) {
-        if (this.#watchers.has(key)) {
+        const watchers = this.#watchers.get(key);
+        if (watchers) {
             const promises: Promise<void>[] = [];
             const newValue = this.getValue(key);
-            this.#watchers.get(key).forEach(callback => {
+            watchers.forEach(callback => {
                 try {
                     const result = callback(newValue);
                     if (result instanceof Promise) {
                         promises.push(result);
                     }
                 } catch (err) {
-                    GG_CONFIG.get().onNotifyError(err);
+                    GG_CONFIG.get().onNotifyError(err instanceof Error ? err : new Error(String(err)));
                 }
             })
             if (promises.length > 0) {

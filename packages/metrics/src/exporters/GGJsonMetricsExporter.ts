@@ -22,8 +22,11 @@ export class GGJsonMetricsExporter extends GGMetricsExporter<JsonMetricsOutput> 
     /**
      * Register a converter for a custom metric type.
      */
-    static registerConverter(metricClass: Function, converter: JsonMetricConverter): void {
-        GGJsonMetricsExporter.converters.set(metricClass, converter);
+    static registerConverter<T extends GGMetric<any>>(
+        metricClass: new (...args: any[]) => T,
+        converter: (metric: T, exporter: GGJsonMetricsExporter) => JsonMetric
+    ): void {
+        GGJsonMetricsExporter.converters.set(metricClass, converter as JsonMetricConverter);
     }
 
     constructor(config: ExporterConfig = {}) {

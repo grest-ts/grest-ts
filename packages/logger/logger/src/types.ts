@@ -5,7 +5,7 @@ export interface LogEntry {
     timestamp: Date;
     level: LogLevel;
     contextName?: string; // Name of the class/source where log was written
-    message: string;
+    message?: string;
     data?: any;
     error?: Error | string | unknown;
     requestContext?: any; // TODO: Refactor to use new context system

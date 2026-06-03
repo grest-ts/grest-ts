@@ -160,7 +160,7 @@ export class GGApiDocs {
         const scope = GGLocator.getScope();
         server.onStart(() => {
             GG_DISCOVERY.tryGet()?.registerRoutes([{
-                runtime: scope.serviceName,
+                runtime: scope.serviceName ?? "Unknown",
                 api: "GGApiDocs",
                 pathPrefix: docsPrefix,
                 protocol: "http",

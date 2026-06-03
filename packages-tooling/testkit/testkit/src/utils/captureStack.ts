@@ -2,7 +2,7 @@
  * @returns path to the source test file
  */
 export function captureStackSourceFile(): string {
-    return getLinesFromTestFile(new Error().stack.split("\n"))[0] ?? "[Source not found]";
+    return getLinesFromTestFile((new Error().stack ?? "").split("\n"))[0] ?? "[Source not found]";
 }
 
 /**

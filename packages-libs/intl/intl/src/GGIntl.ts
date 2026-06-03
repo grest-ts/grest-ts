@@ -10,7 +10,7 @@ export interface GGIntlOptions extends Omit<InitOptions, 'fallbackLng' | 'interp
 }
 
 export class GGIntl {
-    private instance: i18n;
+    private instance!: i18n;
     private readonly systemLocale: string;
     private readonly options: GGIntlOptions;
 

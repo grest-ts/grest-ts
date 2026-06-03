@@ -17,7 +17,7 @@ import {createClient} from "../../src/client/GGHttpSchema.createClient";
  */
 type HttpCallWithInput<TContract extends Record<string, GGContractMethod>> = {
     [K in keyof TContract as TContract[K] extends { input: GGSchema<any> } ? K : never]:
-    (data: Raw<TContract[K]['input']['infer']>) => GGHttpCall<TContract[K]['input']['infer'], TContract[K]['success']['infer'], GGContractMethodErrors<TContract[K]> | typeof SERVER_ERROR.infer | typeof VALIDATION_ERROR.infer>
+    (data: Raw<NonNullable<TContract[K]['input']>['infer']>) => GGHttpCall<NonNullable<TContract[K]['input']>['infer'], NonNullable<TContract[K]['success']>['infer'], GGContractMethodErrors<TContract[K]> | typeof SERVER_ERROR.infer | typeof VALIDATION_ERROR.infer>
 }
 
 /**
@@ -25,7 +25,7 @@ type HttpCallWithInput<TContract extends Record<string, GGContractMethod>> = {
  */
 type HttpCallWithoutInput<TContract extends Record<string, GGContractMethod>> = {
     [K in keyof TContract as TContract[K] extends { input: GGSchema<any> } ? never : K]:
-    () => GGHttpCall<void, TContract[K]['success']['infer'], GGContractMethodErrors<TContract[K]> | typeof SERVER_ERROR.infer>
+    () => GGHttpCall<void, NonNullable<TContract[K]['success']>['infer'], GGContractMethodErrors<TContract[K]> | typeof SERVER_ERROR.infer>
 }
 
 /**

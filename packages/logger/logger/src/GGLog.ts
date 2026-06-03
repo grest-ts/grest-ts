@@ -108,9 +108,9 @@ export class GGLog {
             return;
         }
 
-        let message: string = undefined;
+        let message: string | undefined = undefined;
         let data: any = undefined;
-        let error: Error = undefined
+        let error: Error | undefined = undefined
 
         if (typeof messageOrError === "string") {
             message = messageOrError;

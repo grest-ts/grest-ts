@@ -13,7 +13,7 @@ ${CodeTemplate.variable("sizeConstants")}
 abstract class ${struct.name}Base {
         
     protected _size: number = 0;
-    protected _max: number;
+    protected _max!: number;
     ${CodeTemplate.variable("viewProperties")}
 
     public get size(): number {
@@ -59,8 +59,8 @@ export class ${struct.name} extends ${struct.name}Base {
 
     ${getUseNewCodeMethods(struct)}
 
-    private exportMsg: ${struct.name}Export = {max: 0, size: 0, transfer: []} as ${struct.name}Export;
-    private exportViewsMaxNoOfObjects: number;
+    private exportMsg: ${struct.name}Export = {max: 0, size: 0, transfer: []} as unknown as ${struct.name}Export;
+    private exportViewsMaxNoOfObjects!: number;
     ${CodeTemplate.variable("exportViews")}
 
     public export(): ${struct.name}Export {

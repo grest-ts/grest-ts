@@ -17,7 +17,7 @@ interface RouteStore {
 export class HttpHandler {
 
     private router = findMyWay<findMyWay.HTTPVersion.V1>();
-    private routeResolver: (path: string) => string
+    private routeResolver!: (path: string) => string
     private readonly proxy: httpProxy;
 
     constructor() {

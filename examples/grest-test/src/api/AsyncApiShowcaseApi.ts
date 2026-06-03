@@ -14,7 +14,7 @@
 import {defineSocketContract, webSocketSchema} from "@grest-ts/websocket";
 import {
     IsString, IsNumber, IsBoolean, IsArray, IsObject, IsLiteral,
-    IsDiscriminated, IsBearerToken, VALIDATION_ERROR, SERVER_ERROR, ERROR, GG_NO_PERMISSIONS } from "@grest-ts/schema";
+    IsDiscriminated, VALIDATION_ERROR, SERVER_ERROR, ERROR, GG_NO_PERMISSIONS } from "@grest-ts/schema";
 
 // ---------------------------------------------------------------------------
 // Error classes
@@ -137,7 +137,7 @@ export const NotificationContract = defineSocketContract("NotificationApi", {
 
 export const AsyncApiBearerAuth = {
     headers: {
-        "authorization": IsBearerToken.docs({description: "JWT access token for WebSocket auth"})
+        "authorization": IsString.orUndefined.docs({title: "Bearer token", format: "bearer", description: "JWT access token for WebSocket auth"})
     }
 };
 

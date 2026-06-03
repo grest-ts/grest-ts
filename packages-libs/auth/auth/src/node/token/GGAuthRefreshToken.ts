@@ -31,7 +31,7 @@ export interface GGAuthRefreshTokenOptions<C extends object> {
 // app code calling verifyAccess before issue — never modelled here.
 export class GGAuthRefreshToken<ClaimData extends object> {
 
-    private readonly store: RefreshTokenStore | undefined
+    private readonly store: RefreshTokenStore
     private readonly refreshTtlMs: number
     private readonly now: () => number
     private readonly randomToken: () => string

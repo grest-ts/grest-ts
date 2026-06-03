@@ -279,7 +279,7 @@ testUtils('IsObject', () => {
             const Schema = IsObject({
                 min: IsNumber,
                 max: IsNumber.orNull.default(100),
-            }).refine(v => v.min < v.max, testRangeError);
+            }).refine(v => v.min < v.max!, testRangeError);
 
             // max is null → default 100 → refinement sees min=5 < max=100 → pass
             const issues1 = new GGIssuesList();
@@ -305,7 +305,7 @@ testUtils('IsObject', () => {
             // When tag is null, default applies first → "" → refinement passes.
             const Schema = IsObject({
                 name: IsString,
-                tag: IsString.orNull.default("").refine(s => s.length <= 10, testTagLenError),
+                tag: IsString.orNull.default("").refine(s => s!.length <= 10, testTagLenError),
             });
 
             // tag is null → default "" → refine("") → "".length <= 10 → pass
@@ -334,7 +334,7 @@ testUtils('IsObject', () => {
                 name: IsString,
                 email: IsString.orNull.default(""),
                 phone: IsString.orNull.default(""),
-            }).refine(v => v.email.length > 0 || v.phone.length > 0, testContactError);
+            }).refine(v => v.email!.length > 0 || v.phone!.length > 0, testContactError);
 
             // Both null → both default to "" → refinement fails (no contact)
             const issues1 = new GGIssuesList();
@@ -353,7 +353,7 @@ testUtils('IsObject', () => {
             const Schema = IsObject({
                 min: IsNumber,
                 max: IsNumber.orNull.default(100),
-            }).refine(v => v.min < v.max, testRange2Error);
+            }).refine(v => v.min < v.max!, testRange2Error);
 
             const issues = new GGIssuesList();
             const result = Schema._parse({min: 5, max: null}, issues, 'test', true);

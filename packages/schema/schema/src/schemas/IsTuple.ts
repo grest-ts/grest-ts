@@ -10,7 +10,7 @@ export interface TupleDefImpl extends TupleDef {
     readonly elementsFactory?: () => readonly GGSchema<any>[];
 }
 
-export class TupleSchema<T extends readonly unknown[] = readonly unknown[]> extends GGSchema<T, TupleDefImpl> {
+export class TupleSchema<T extends readonly unknown[] | null | undefined = readonly unknown[]> extends GGSchema<T, TupleDefImpl> {
 
     constructor(def: TupleDefImpl) {
         super(def);

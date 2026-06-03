@@ -6,8 +6,8 @@ export class MetricsTestService implements IMetricsTestApi {
     async getMetrics(): Promise<MetricsResponse> {
         return {
             success: true,
-            counterValue: MainMetrics.requestCounter.getValue({ type: 'api' }),
-            gaugeValue: MainMetrics.activeUsers.getValue(),
+            counterValue: MainMetrics.requestCounter.getValue({ type: 'api' }) ?? 0,
+            gaugeValue: MainMetrics.activeUsers.getValue() ?? 0,
             histogramCount: MainMetrics.requestDuration.getValue()?.count ?? 0
         };
     }

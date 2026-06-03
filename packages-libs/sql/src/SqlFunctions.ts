@@ -230,7 +230,7 @@ export function GROUP_CONCAT<TableRef, TableRef2 = never>(
     call?: (arg: GroupConcat<TableRef2>) => GroupConcat<TableRef2>
 ): Expr<TableRef | TableRef2, unknown, string> {
     const builder = new GroupConcat();
-    call(builder);
+    call!(builder);
     return SqlExpression.create("GROUP_CONCAT(" + builder.toString() + ")");
 }
 
@@ -240,7 +240,7 @@ export class GroupConcat<TableRef = never> {
     private _columns: any[] = [];
     private _distinct: boolean = false;
     private _orderBy: string[] = [];
-    private _separator: string = undefined;
+    private _separator: string | undefined = undefined;
 
     public all<TableRef2>(...args: (string | PrepareQueryArgument | Expr<TableRef2, any, any>)[]): GroupConcat<TableRef | TableRef2> {
         this._columns = args.map(toSql);
@@ -292,7 +292,7 @@ export function UNIX_TIMESTAMP<Name, TableRef>(field: Expr<TableRef, Name, tDate
     return SqlExpression.create("UNIX_TIMESTAMP(" + field.expression + ")")
 }
 
-export function DATE<Name, TableRef>(field: Expr<TableRef, Name, tDate | tDateTime>): Expr<TableRef, Name, tDate> {
+export function DATE<Name, TableRef>(field: Expr<TableRef, Name, tDate | tDateTime | null>): Expr<TableRef, Name, tDate> {
     return SqlExpression.create("DATE(" + field.expression + ")")
 }
 

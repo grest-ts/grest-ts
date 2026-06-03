@@ -63,7 +63,7 @@ export class StructParser {
 
         const args = ne.getArguments()[0] as ObjectLiteralExpression;
         const result: StructMeta = {
-            name: path.basename(sf.getFilePath()).split(".").shift(),
+            name: path.basename(sf.getFilePath()).split(".").shift() ?? "",
             path: sf.getFilePath(),
             idTsType: undefined,
             idTsTypeDefinition: undefined,
@@ -93,7 +93,7 @@ export class StructParser {
                 case 'ref': {
                     const typeArg = call.getTypeArguments()[0];
                     result.idTsType = typeArg?.getText() ?? result.idTsType;
-                    const alias = sf.getTypeAlias(result.idTsType);
+                    const alias = result.idTsType ? sf.getTypeAlias(result.idTsType) : undefined;
                     if (alias) {
                         result.idTsTypeDefinition = "export " + alias.getText();
                     }

@@ -5,7 +5,7 @@ import {LoginRequest, RegisterRequest, UserPublicApi} from "../../../common/api-
 
 export class ChecklistUserContext extends GGTestContext {
 
-    public user: User
+    public user!: User
 
     public async register(registerData: Raw<RegisterRequest>) {
         const result = await this.callOn(UserPublicApi).register(registerData);

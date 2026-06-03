@@ -81,7 +81,7 @@ describe('standardErrors', () => {
                 {path: 'field1', code: 'required', message: 'Field is required'},
                 {path: 'field2', code: 'too_short', message: 'Too short', params: {min: 3}}
             ];
-            expect(VALIDATION_ERROR.schema.is(validIssues)).toBe(true);
+            expect(VALIDATION_ERROR.schema!.is(validIssues)).toBe(true);
         });
 
         it('should identify instances correctly', () => {

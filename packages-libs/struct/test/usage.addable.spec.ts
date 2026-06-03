@@ -8,15 +8,15 @@ type REF = number
 export interface AddableInterface {
     size: number,
     new: () => REF,
-    free: (ref: REF) => void,
-    exists: (ref: REF) => boolean,
-    forEach: (callback: (ref: REF) => void) => void,
-    setX: (ref: REF, value: number) => void,
-    setY: (ref: REF, value: number) => void,
-    setSpriteId: (ref: REF, value: number) => void,
-    getX: (ref: REF) => number,
-    getY: (ref: REF) => number,
-    getSpriteId: (ref: REF) => number,
+    free(ref: REF): void,
+    exists(ref: REF): boolean,
+    forEach(callback: (ref: REF) => void): void,
+    setX(ref: REF, value: number): void,
+    setY(ref: REF, value: number): void,
+    setSpriteId(ref: REF, value: number): void,
+    getX(ref: REF): number,
+    getY(ref: REF): number,
+    getSpriteId(ref: REF): number,
 }
 
 describe('Addable test', () => {

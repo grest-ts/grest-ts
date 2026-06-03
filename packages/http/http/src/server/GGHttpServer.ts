@@ -97,7 +97,7 @@ export class GGHttpServer {
 
     constructor(config?: GGHttpServerAdapterConfig) {
 
-        this.runtimeName = GGLocator.getScope().serviceName;
+        this.runtimeName = GGLocator.getScope().serviceName ?? "Unknown";
         this.scope = GGLocator.getScope();
         this.configuredPort = config?.port ?? (process.env.PORT ? Number(process.env.PORT) : 0);
         this.cors = config?.cors;
@@ -122,7 +122,7 @@ export class GGHttpServer {
                     res.writeHead(204);
                     res.end();
                 } else {
-                    const resolved = this.router.find(req.method as HTTPMethod, req.url)
+                    const resolved = this.router.find(req.method as HTTPMethod, req.url ?? "")
                     if (resolved) {
                         await (resolved.handler as unknown as GGHttpRequestCallback)(req, res);
                     } else {
@@ -131,7 +131,7 @@ export class GGHttpServer {
                     }
                 }
             } catch (error) {
-                GGLog.error(this, error);
+                GGLog.error(this, error instanceof Error ? error : new Error(String(error)));
                 res.writeHead(500);
                 res.end();
             } finally {

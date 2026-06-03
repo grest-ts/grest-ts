@@ -142,8 +142,9 @@ function _readCookie(rawCookieHeader: string | undefined, name: string): string 
 
 function _serializeSetCookie(name: string, value: string | undefined, options?: CookieOptions): string {
     const o = {...SAFE_DEFAULTS, ...options}
-    const secure = o.sameSite === "none" ? true : o.secure
-    const sameSite = `${o.sameSite.charAt(0).toUpperCase()}${o.sameSite.slice(1)}`
+    const sameSiteValue = o.sameSite ?? "lax"
+    const secure = sameSiteValue === "none" ? true : o.secure
+    const sameSite = `${sameSiteValue.charAt(0).toUpperCase()}${sameSiteValue.slice(1)}`
     const attrs = `; Path=${o.path}${o.domain ? `; Domain=${o.domain}` : ""}; SameSite=${sameSite}${secure ? "; Secure" : ""}${o.httpOnly ? "; HttpOnly" : ""}`
     return value
         ? `${name}=${encodeURIComponent(value)}${o.maxAgeSec !== undefined ? `; Max-Age=${Math.trunc(o.maxAgeSec)}` : ""}${attrs}`

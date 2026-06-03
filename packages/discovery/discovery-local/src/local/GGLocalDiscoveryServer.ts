@@ -70,7 +70,7 @@ export class GGLocalDiscoveryServer {
         });
 
         this.server.setRouteProxyResolver((path) => {
-            return this.matchRoute(path)?.baseUrl || undefined;
+            return this.matchRoute(path)?.baseUrl || "";
         })
 
         // When an IPC client's socket closes — for any reason, including

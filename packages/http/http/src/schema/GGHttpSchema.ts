@@ -10,7 +10,7 @@ export class GGHttpSchema<TContract extends GGContractApiDefinition, TContext> {
     public readonly pathPrefix: string
     public readonly apiMiddlewares: readonly GGTransportMiddleware[]
     public readonly codec: Record<keyof TContract, GGHttpCodec>
-    public readonly contract: GGContractClass<TContract> | null = null
+    public readonly contract: GGContractClass<TContract>
 
     constructor(
         pathPrefix: string,

@@ -24,8 +24,8 @@ export interface ExportableDirtyStructConfig extends ExportableDirtyStructReader
 abstract class ExportableDirtyStructBase {
 
     protected readonly _max: number;
-    protected readonly vUint32: Uint32Array
-    protected readonly vInt16: Int16Array
+    protected readonly vUint32!: Uint32Array
+    protected readonly vInt16!: Int16Array
 
     protected constructor( newNoOfMaxObjects: number ) {
         this._max = newNoOfMaxObjects;
@@ -79,10 +79,10 @@ export class ExportableDirtyStruct extends ExportableDirtyStructBase {
     private readonly maxNoOfDirtyObjects: number;
     private syncFullNext: boolean = true;
 
-    private exportMsg: ExportableDirtyStructExport = {_max: 0, syncFull: false, noOfDirty: 0, transfer: []} as ExportableDirtyStructExport;
+    private exportMsg: ExportableDirtyStructExport = {_max: 0, syncFull: false, noOfDirty: 0, transfer: []} as unknown as ExportableDirtyStructExport;
     public exportDirtyIdsView: Uint8Array | Uint16Array | Uint32Array;
 
-    private readonly expUint32: Uint32Array;
+    private readonly expUint32!: Uint32Array;
 
     constructor(config: ExportableDirtyStructConfig) {
         super( config.initialNumberOfObjects );
@@ -90,9 +90,9 @@ export class ExportableDirtyStruct extends ExportableDirtyStructBase {
         this.config.fullSyncRatio ??= undefined;
 
         const idsViewType = getIdArrayType(this._max);
-        const oldDirtyBuffer = this.dirtySetView;
+        const oldDirtyBuffer: Uint32Array | undefined = undefined;
         this.dirtySetView = new Uint32Array(Math.ceil(this._max / 32));
-        this.maxNoOfDirtyObjects = Math.floor(this._max * this.config.fullSyncRatio)
+        this.maxNoOfDirtyObjects = Math.floor(this._max * this.config.fullSyncRatio!)
         this.dirtyIdsView = new idsViewType( this.maxNoOfDirtyObjects);
 
         if (oldDirtyBuffer) this.dirtySetView.set(oldDirtyBuffer);
@@ -165,8 +165,8 @@ export class ExportableDirtyStruct extends ExportableDirtyStructBase {
 
 export class ExportableDirtyStructReader extends ExportableDirtyStructBase {
 
-    private importDirtyView: Uint8Array | Uint16Array | Uint32Array;
-    private impUint32: Uint32Array;
+    private importDirtyView!: Uint8Array | Uint16Array | Uint32Array;
+    private impUint32!: Uint32Array;
 
     constructor(config: ExportableDirtyStructReaderConfig) {
         super(config.initialNumberOfObjects);

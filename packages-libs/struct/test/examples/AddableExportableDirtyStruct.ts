@@ -6,9 +6,9 @@ const SIZE_16BIT = 4;
 abstract class AddableExportableDirtyStructBase {
 
     protected _size: number = 0;
-    protected _max: number;
-    protected vUint32: Uint32Array
-    protected vInt16: Int16Array
+    protected _max!: number;
+    protected vUint32!: Uint32Array
+    protected vInt16!: Int16Array
 
     public get size(): number {
         return this._size;
@@ -79,7 +79,7 @@ export class AddableExportableDirtyStruct extends AddableExportableDirtyStructBa
         super.realloc(newNoOfMaxObjects)
         const oldDirtyBuffer = this.dirtySetView;
         this.dirtySetView = new Uint32Array(Math.ceil(this._max / 32));
-        this.maxDirty = Math.floor(this._max * this.config.fullSyncRatio)
+        this.maxDirty = Math.floor(this._max * this.config.fullSyncRatio!)
         this.dirtyIdsView = new Uint32Array(this.maxDirty);
         if (oldDirtyBuffer) this.dirtySetView.set(oldDirtyBuffer);
     }
@@ -88,7 +88,7 @@ export class AddableExportableDirtyStruct extends AddableExportableDirtyStructBa
 
     public new(): number {
         if (this.freeIds.length > 0) {
-            return this.freeIds.pop();
+            return this.freeIds.pop()!;
         } else {
             if (this._size === this._max) {
                 this.realloc(this._max * 2);
@@ -102,8 +102,8 @@ export class AddableExportableDirtyStruct extends AddableExportableDirtyStructBa
         this.freeIds.push(ref);
     }
 
-    private dirtySetView: Uint32Array;
-    private dirtyIdsView: Uint32Array;
+    private dirtySetView!: Uint32Array;
+    private dirtyIdsView!: Uint32Array;
     private noOfDirtyObjects = 0;
     private syncFullNext: boolean = true;
 
@@ -123,10 +123,10 @@ export class AddableExportableDirtyStruct extends AddableExportableDirtyStructBa
         }
     }
 
-    private exportMsg: AddableExportableDirtyStructExport = {max: 0, size: 0, syncFull: false, noOfDirty: 0, transfer: []} as AddableExportableDirtyStructExport;
+    private exportMsg: AddableExportableDirtyStructExport = {max: 0, size: 0, syncFull: false, noOfDirty: 0, transfer: []} as unknown as AddableExportableDirtyStructExport;
     private exportViewsMaxNoOfObjects: number = 0;
-    public exportDirtyIdsView: Uint32Array;
-    private expUint32: Uint32Array;
+    public exportDirtyIdsView!: Uint32Array;
+    private expUint32!: Uint32Array;
 
     public export(): AddableExportableDirtyStructExport {
         if (this.exportViewsMaxNoOfObjects !== this._max) {
@@ -193,8 +193,8 @@ export class AddableExportableDirtyStruct extends AddableExportableDirtyStructBa
 
 export class AddableExportableDirtyStructReader extends AddableExportableDirtyStructBase {
 
-    private importDirtyView: Uint32Array;
-    private impUint32: Uint32Array;
+    private importDirtyView!: Uint32Array;
+    private impUint32!: Uint32Array;
 
     public import(data: AddableExportableDirtyStructExport, onChange?: (ref: number) => void, onFullSync?: () => void) {
 

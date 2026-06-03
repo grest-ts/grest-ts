@@ -1,7 +1,7 @@
 export interface StructMeta {
     name: string;
     path: string;
-    idTsType: string;
+    idTsType?: string;
     idTsTypeDefinition?: string;
     useExport: boolean;
     useDirty: boolean;

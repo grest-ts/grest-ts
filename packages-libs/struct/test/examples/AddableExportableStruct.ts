@@ -8,9 +8,9 @@ const SIZE_16BIT = 4;
 abstract class AddableExportableStructBase {
 
     protected _size: number = 0;
-    protected _max: number;
-    protected vUint32: Uint32Array
-    protected vInt16: Int16Array
+    protected _max!: number;
+    protected vUint32!: Uint32Array
+    protected vInt16!: Int16Array
 
     public get size(): number {
         return this._size;
@@ -76,7 +76,7 @@ export class AddableExportableStruct extends AddableExportableStructBase {
 
     public new(): tRef {
         if (this.freeIds.length > 0) {
-            return this.freeIds.pop();
+            return this.freeIds.pop()!;
         } else {
             if (this._size === this._max) {
                 this.realloc(this._max * 2);
@@ -90,9 +90,9 @@ export class AddableExportableStruct extends AddableExportableStructBase {
         this.freeIds.push(ref);
     }
 
-    private exportMsg: AddableExportableStructExport = {max: 0, size: 0, transfer: []} as AddableExportableStructExport;
-    private exportViewsMaxNoOfObjects: number;
-    private expUint32: Uint32Array;
+    private exportMsg: AddableExportableStructExport = {max: 0, size: 0, transfer: []} as unknown as AddableExportableStructExport;
+    private exportViewsMaxNoOfObjects!: number;
+    private expUint32!: Uint32Array;
 
     public export(): AddableExportableStructExport {
          if (this.exportViewsMaxNoOfObjects !== this._max) {
@@ -137,7 +137,7 @@ export class AddableExportableStruct extends AddableExportableStructBase {
 
 export class AddableExportableStructReader extends AddableExportableStructBase {
 
-    private impUint32: Uint32Array;
+    private impUint32!: Uint32Array;
 
     public import(data: AddableExportableStructExport, onChange?: (ref: tRef) => void, onFullSync?: () => void) {
 

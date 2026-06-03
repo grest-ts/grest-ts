@@ -8,9 +8,9 @@ export class GGTestError extends Error {
             return str.split("\n").join("\n" + ("\t".repeat(n)));
         }
 
-        const fixValue = (value: any) => {
+        const fixValue = (value: any): string => {
             if (value instanceof Error) {
-                return value.stack
+                return value.stack ?? value.message
             } else if (typeof value === "object") {
                 return JSON.stringify(value, null, 2)
             } else {

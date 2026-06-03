@@ -19,7 +19,7 @@ export class GGCounterKey<
         this.getMetric().inc(value, ...args);
     }
 
-    public getValue(...args: LabelsArgs<TLabels>): number {
+    public getValue(...args: LabelsArgs<TLabels>): number | undefined {
         return this.getMetric().getValue(...args);
     }
 

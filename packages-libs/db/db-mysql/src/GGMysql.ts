@@ -10,7 +10,7 @@ export class GGMysql {
 
     private started = false;
 
-    private pool: Pool | undefined = null;
+    private pool: Pool | undefined = undefined;
     private unwatchHost: (() => void) | undefined = undefined;
     private unwatchUser: (() => void) | undefined = undefined;
 
@@ -82,9 +82,9 @@ export class GGMysql {
     }
 
     private async teardown(): Promise<void> {
-        this.unwatchHost();
+        this.unwatchHost?.();
         this.unwatchHost = undefined;
-        this.unwatchUser();
+        this.unwatchUser?.();
         this.unwatchUser = undefined;
         if (this.pool) {
             await this.pool.end();

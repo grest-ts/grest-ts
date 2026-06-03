@@ -89,7 +89,7 @@ export abstract class ERROR<Type extends string, Data> extends Error {
             displayMessage: context?.displayMessage,
             timestamp: context?.timestamp ?? Date.now(),
             ref: context?.ref
-                ?? (context && context.originalError instanceof ERROR ? context.originalError.context.ref : undefined)
+                ?? (context && context.originalError instanceof ERROR ? context.originalError.context?.ref : undefined)
                 ?? "ERR_REF_" + Math.random().toString(36).substring(2, 10) + Date.now().toString(36)
         }
         this.#debugContext = {
@@ -160,7 +160,7 @@ export abstract class ERROR<Type extends string, Data> extends Error {
     public static badRequest<Type extends string, Data = never>(type: Type): ERR_CLASS<Type>
     public static badRequest<Type extends string, Data>(type: Type, schema: GGSchema<Data>): ERR_CLASS_DATA<Type, Data>
     public static badRequest(type: string, schema?: GGSchema<any>): any {
-        return ERROR.define(type, 400, schema)
+        return schema ? ERROR.define(type, 400, schema) : ERROR.define(type, 400)
     }
 
     public toJSON(): ERROR_JSON<Type, Data> {

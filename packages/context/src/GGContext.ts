@@ -28,7 +28,7 @@ export class GGContext {
     }
 
     public has<T>(token: GGContextKey<T>): boolean {
-        return this.values.has(token.name) || this.parent?.has(token);
+        return this.values.has(token.name) || (this.parent?.has(token) ?? false);
     }
 
     public delete<T>(token: GGContextKey<T>): void {

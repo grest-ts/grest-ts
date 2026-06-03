@@ -32,7 +32,7 @@ export class GGContractExecutor {
                 throw new VALIDATION_ERROR(parsed.issues.toJSON(), {displayMessage: "Invalid arguments"})
             }
         } else {
-            return undefined; // if not input validator, we do not pass data through for security reasons.
+            return undefined as RequestData; // if not input validator, we do not pass data through for security reasons.
         }
     }
 
@@ -42,7 +42,7 @@ export class GGContractExecutor {
     public static getResponseSchema<RequestData, ResponseData, ErrorsUnion extends ANY_ERROR_CLS>(
         contract: GGContractMethod<RequestData, ResponseData, ErrorsUnion>,
         rawResponse: { type: string }
-    ): GGSchema<ResponseData | ErrorsUnion["schema"]> | undefined {
+    ): GGSchema<any> | undefined {
 
         const type: string = rawResponse?.type;
         if (type === "OK") {
@@ -77,7 +77,7 @@ export class GGContractExecutor {
                     }
                 })
             }
-            return errorCls.schema
+            return errorCls.schema as GGSchema<any> | undefined
         }
     }
 
@@ -89,7 +89,7 @@ export class GGContractExecutor {
         responseData: T,
     ): T {
         if (!schema) {
-            return undefined;
+            return undefined as T;
         }
         const parsed = schema.safeParse(responseData, true)
         if (parsed.success === true) {

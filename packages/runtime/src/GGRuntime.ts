@@ -28,7 +28,7 @@ export abstract class GGRuntime {
     public readonly name: string;
     public readonly scope: GGLocatorScope;
 
-    private readonly runtimeConfig: GGRuntimeConfig;
+    private readonly runtimeConfig: Required<GGRuntimeConfig>;
     private readonly services: GGLocatorLifecycleCallbacks[][] = [];
     private state: GGRuntimeState = GGRuntimeState.CREATED
 
@@ -136,7 +136,7 @@ export abstract class GGRuntime {
                     GGLog.info(this, "Runtime running");
                 } catch (err) {
                     this.scope.setLifecycleOwner(undefined);
-                    GGLog.error(this, err);
+                    GGLog.error(this, err instanceof Error ? err : new Error(String(err)));
                     await this.callTeardownCallbacks();
                     this.state = GGRuntimeState.STOPPED;
                     throw err;

@@ -84,12 +84,14 @@ function setupRoutes<TContract extends GGContractApiDefinition>(
     }
 
     server.onStart(() => {
+        const port = server.port;
+        if (port === undefined) throw new Error("HTTP server port is not set; onStart ran before listen completed.");
         GG_DISCOVERY.tryGet()?.registerRoutes([{
-            runtime: scope.serviceName,
+            runtime: scope.serviceName ?? "Unknown",
             api: httpSchema.name,
             pathPrefix: pathPrefix,
             protocol: "http",
-            port: server.port
+            port: port
         }]);
     })
 
@@ -103,7 +105,8 @@ function setupRoutes<TContract extends GGContractApiDefinition>(
         if (!codec) throw new Error(`Contract for "${httpSchema.name}.${methodName}" is missing wire format!`)
 
         // Implementation function
-        const implFn = implementation[methodName]?.bind(implementation)
+        const implMethod = implementation[methodName] as ((data?: unknown) => Promise<unknown>) | undefined
+        const implFn = implMethod?.bind(implementation)
         if (!implFn) throw new Error(`Implementation for "${httpSchema.name}.${methodName}" is missing implementation method!`)
 
         // Input schema
@@ -120,10 +123,10 @@ function setupRoutes<TContract extends GGContractApiDefinition>(
             scope.ensureEntered();
             return new GGContext("REQ", parentContext, true).run(async () => {
                 GG_TRACE.init();
-                GG_HTTP_REQUEST.set({port: server.port, method: req.method, path: req.url});
+                GG_HTTP_REQUEST.set({port: server.port ?? 0, method: req.method ?? "", path: req.url ?? ""});
                 GG_COOKIE_WRITES.set(cookieWriteNames);
                 const startTime = performance.now()
-                let rpcResult: ERROR<string, unknown> | OK<unknown>
+                let rpcResult: ERROR<string, unknown> | OK<unknown> | undefined
                 try {
                     const rawInput = await requestParser.readRequest(req)
                     await permissionsChecker.assert(httpSchema.name, methodName, contractFunctionSchema.permission)
@@ -150,7 +153,7 @@ function setupRoutes<TContract extends GGContractApiDefinition>(
 }
 
 function metrics(
-    resultType: string,
+    resultType: string | undefined,
     apiName: string,
     method: HttpMethod,
     pathPrefix: string,
@@ -163,7 +166,7 @@ function metrics(
             api: apiName,
             method: pathSuffix,
             path: path,
-            result: resultType
+            result: resultType ?? "unknown"
         });
         GGHttpMetrics.requestDuration.observe(performance.now() - startTime, {
             api: apiName,

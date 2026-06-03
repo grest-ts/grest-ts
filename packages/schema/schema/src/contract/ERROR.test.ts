@@ -104,9 +104,9 @@ describe('ERROR', () => {
             });
 
             it('should validate schema structure', () => {
-                expect(DATA_ERROR.schema.is({field: 'test', code: 100})).toBe(true);
-                expect(DATA_ERROR.schema.is({field: 'test'})).toBe(false);
-                expect(DATA_ERROR.schema.is({field: 123, code: 100})).toBe(false);
+                expect(DATA_ERROR.schema!.is({field: 'test', code: 100})).toBe(true);
+                expect(DATA_ERROR.schema!.is({field: 'test'})).toBe(false);
+                expect(DATA_ERROR.schema!.is({field: 123, code: 100})).toBe(false);
             });
         });
 

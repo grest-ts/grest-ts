@@ -11,7 +11,7 @@ export interface BasicStructConfig {
 export class BasicStruct {
 
     private readonly _max: number;
-    protected readonly vInt16: Int16Array
+    protected readonly vInt16!: Int16Array
 
     constructor( config: BasicStructConfig ) {
         this._max = config.initialNumberOfObjects;

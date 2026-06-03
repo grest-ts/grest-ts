@@ -157,11 +157,13 @@ export class GGSocketPool {
         const headerKey = Object.entries(headers).sort().map(([k, v]) => `${k}=${v}`).join('&');
         const key = fullUrl + "::" + headerKey;
 
-        if (this.sockets.has(key)) {
-            return this.sockets.get(key);
+        const existing = this.sockets.get(key);
+        if (existing) {
+            return existing;
         }
-        if (this.pendingSockets.has(key)) {
-            return this.pendingSockets.get(key);
+        const pending = this.pendingSockets.get(key);
+        if (pending) {
+            return pending;
         }
 
         const connectionPromise = this.openSocket(fullUrl, config, config.domain);

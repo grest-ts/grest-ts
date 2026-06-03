@@ -14,11 +14,11 @@ export class GGMockWith<RequestBody = any, ResponseData = any, ErrorsUnion = any
     private readonly interceptorFactory: InterceptorFactory;
     private readonly interceptorConfig: Record<string, any>;
     private readonly definedInSourceFile: string;
-    private _sleep: number;
+    private _sleep: number = 0;
     private _times: number = 1;
 
     private readonly expectations: GGExpectations<RequestBody> = new GGExpectations();
-    private returnData: ResponseData | ErrorsUnion | (() => ResponseData | ErrorsUnion);
+    private returnData?: ResponseData | ErrorsUnion | (() => ResponseData | ErrorsUnion);
 
     constructor(interceptorFactory: InterceptorFactory, config: Record<string, any>) {
         this.interceptorFactory = interceptorFactory;

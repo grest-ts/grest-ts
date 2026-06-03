@@ -70,7 +70,7 @@ export class ${struct.name} extends ${struct.name}Base {
     private readonly maxNoOfDirtyObjects: number;
     private syncFullNext: boolean = true;
     
-    private exportMsg: ${struct.name}Export = {_max: 0, syncFull: false, noOfDirty: 0, transfer: []} as ${struct.name}Export;
+    private exportMsg: ${struct.name}Export = {_max: 0, syncFull: false, noOfDirty: 0, transfer: []} as unknown as ${struct.name}Export;
     public exportDirtyIdsView: Uint8Array | Uint16Array | Uint32Array;
     
     ${CodeTemplate.variable("exportViews")}
@@ -81,9 +81,9 @@ export class ${struct.name} extends ${struct.name}Base {
         this.config.fullSyncRatio ??= ${CodeTemplate.variable("fullSyncRation")};
         
         const idsViewType = getIdArrayType(this._max);
-        const oldDirtyBuffer = this.dirtySetView;
+        const oldDirtyBuffer: Uint32Array | undefined = undefined;
         this.dirtySetView = new Uint32Array(Math.ceil(this._max / 32));
-        this.maxNoOfDirtyObjects = Math.floor(this._max * this.config.fullSyncRatio)
+        this.maxNoOfDirtyObjects = Math.floor(this._max * this.config.fullSyncRatio!)
         this.dirtyIdsView = new idsViewType( this.maxNoOfDirtyObjects);
         
         if (oldDirtyBuffer) this.dirtySetView.set(oldDirtyBuffer);
@@ -140,7 +140,7 @@ export class ${struct.name} extends ${struct.name}Base {
 
 export class ${struct.name}Reader extends ${struct.name}Base {
 
-    private importDirtyView: Uint8Array | Uint16Array | Uint32Array;
+    private importDirtyView!: Uint8Array | Uint16Array | Uint32Array;
     ${CodeTemplate.variable("importViewDefinitions")}
          
     constructor(config: ${struct.name}ReaderConfig) {

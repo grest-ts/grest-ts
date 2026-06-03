@@ -17,7 +17,7 @@ export interface ${struct.name}Config {
 export class ${struct.name} {
 
     private _size: number = 0;
-    private _max: number;
+    private _max!: number;
     ${CodeTemplate.variable("viewProperties")}
 
     constructor( config: ${struct.name}Config ) {

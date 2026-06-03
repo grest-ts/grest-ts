@@ -17,8 +17,8 @@ export interface ExportableStructConfig {
 abstract class ExportableStructBase {
 
     protected readonly _max: number;
-    protected readonly vUint32: Uint32Array
-    protected readonly vInt16: Int16Array
+    protected readonly vUint32!: Uint32Array
+    protected readonly vInt16!: Int16Array
 
     protected constructor( newNoOfMaxObjects: number ) {
         this._max = newNoOfMaxObjects;
@@ -52,8 +52,8 @@ abstract class ExportableStructBase {
 
 export class ExportableStruct extends ExportableStructBase {
 
-    private readonly exportMsg: ExportableStructExport = {transfer: []} as ExportableStructExport;
-    private readonly expUint32: Uint32Array;
+    private readonly exportMsg: ExportableStructExport = {transfer: []} as unknown as ExportableStructExport;
+    private readonly expUint32!: Uint32Array;
 
     constructor(config: ExportableStructConfig) {
         super(config.initialNumberOfObjects);
@@ -86,7 +86,7 @@ export class ExportableStruct extends ExportableStructBase {
 export class ExportableStructReader extends ExportableStructBase {
 
     private initialized: boolean = false;
-    private impUint32: Uint32Array;
+    private impUint32!: Uint32Array;
 
     constructor(config: ExportableStructConfig) {
         super(config.initialNumberOfObjects);

@@ -43,7 +43,7 @@ export class StringSchema<T extends string | undefined | null = string> extends 
 
         if (error) {
             // Don't store pattern in def when custom error provided - only use refinement
-            return this.refine(v => safePattern.test(v), error) as unknown as StringSchema<T>;
+            return this.refine(v => safePattern.test(v as string), error) as unknown as StringSchema<T>;
         }
         return this.derive({pattern: safePattern}) as this;
     }
