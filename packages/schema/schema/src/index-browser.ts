@@ -58,7 +58,7 @@ export * from "./schemas/IsRecord";
 export * from "./schemas/IsTuple";
 export * from "./custom/IsDate";
 export * from "./custom/IsDateTime";
-export {type tInt32, IsInt32, type tInt16, IsInt16, type tInt8, IsInt8, type tUint32, IsUint32, type tUint16, IsUint16, type tUint8, IsUint8, type tUint, IsUint, type tInt, IsInt, type tPosInt, IsPosInt} from "./custom/IsInt";
+export {type int, type int8, type int16, type int32, type uint, type uint8, type uint16, type uint32, type tInt32, IsInt32, type tInt16, IsInt16, type tInt8, IsInt8, type tUint32, IsUint32, type tUint16, IsUint16, type tUint8, IsUint8, type tUint, IsUint, type tInt, IsInt, type tPosInt, IsPosInt} from "./custom/IsInt";
 export {type tLatitude, IsLatitude} from "./custom/IsLatitude";
 export {type tLongitude, IsLongitude} from "./custom/IsLongitude";
 export {type tEmail, IsEmail} from "./custom/IsEmail";
