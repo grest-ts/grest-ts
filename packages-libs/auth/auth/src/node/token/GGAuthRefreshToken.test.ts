@@ -25,10 +25,29 @@ function refreshToken(overrides: {accessTtlMs?: number; refreshTtlMs?: number} =
     return new GGAuthRefreshToken({
         store: new InMemoryRefreshTokenStore(),
         refreshTtlMs: overrides.refreshTtlMs ?? 30 * 24 * 60 * 60 * 1000,
+        // These tests assert strict reuse detection on immediate replay, so opt out
+        // of the reuse grace (now on by default).
+        reuseGraceMs: 0,
         access: new GGAuthAccessToken({
             signer: new HmacSigner("unit-test-secret-which-is-long-enough"),
             claimSchema: IsClaims,
             accessTtlMs: overrides.accessTtlMs ?? 15 * 60 * 1000,
+        }),
+    })
+}
+
+// Variant with a controllable clock + reuse grace, for the lost-response tests.
+function graceRefreshToken(reuseGraceMs: number, clock: {now: number}) {
+    const now = () => clock.now
+    return new GGAuthRefreshToken({
+        store: new InMemoryRefreshTokenStore(now),
+        refreshTtlMs: 30 * 24 * 60 * 60 * 1000,
+        reuseGraceMs,
+        now,
+        access: new GGAuthAccessToken({
+            signer: new HmacSigner("unit-test-secret-which-is-long-enough"),
+            claimSchema: IsClaims,
+            accessTtlMs: 15 * 60 * 1000,
         }),
     })
 }
@@ -58,6 +77,67 @@ describe("GGAuthRefreshToken — issue & refresh", () => {
         // Re-presenting the spent parent trips reuse detection.
         await expectAuthError(auth.refresh(pair.refresh.token, async () => ({permissions: [Perm.Read]})), "REFRESH_REUSE")
         // ...which severs the whole lineage — the live child is revoked too.
+        await expectAuthError(auth.refresh(child.refresh.token, async () => ({permissions: [Perm.Read]})), "REFRESH_INVALID")
+    })
+
+    test("refreshTtlMs defaults to 14 days", async () => {
+        const now = 1_700_000_000_000
+        const auth = new GGAuthRefreshToken({
+            store: new InMemoryRefreshTokenStore(() => now),
+            now: () => now,  // no refreshTtlMs → default
+            access: new GGAuthAccessToken({
+                signer: new HmacSigner("unit-test-secret-which-is-long-enough"),
+                claimSchema: IsClaims,
+            }),
+        })
+        const pair = await auth.issue("user-1", {permissions: [Perm.Read]})
+        expect(pair.refresh.expiresAt).toBe(now + 14 * 24 * 60 * 60 * 1000)
+    })
+
+    test("reuse grace defaults to 30s (forgives a within-window replay without being configured)", async () => {
+        const clock = {now: 1_000_000}
+        const now = () => clock.now
+        const auth = new GGAuthRefreshToken({
+            store: new InMemoryRefreshTokenStore(now),
+            refreshTtlMs: 30 * 24 * 60 * 60 * 1000,
+            now,  // no reuseGraceMs → default
+            access: new GGAuthAccessToken({
+                signer: new HmacSigner("unit-test-secret-which-is-long-enough"),
+                claimSchema: IsClaims,
+                accessTtlMs: 15 * 60 * 1000,
+            }),
+        })
+        const pair = await auth.issue("user-1", {permissions: [Perm.Read]})
+        await auth.refresh(pair.refresh.token, async () => ({permissions: [Perm.Read]}))  // spend
+        clock.now += 20_000  // within the 30s default
+        const retry = await auth.refresh(pair.refresh.token, async () => ({permissions: [Perm.Read]}))
+        expect(retry.refresh.token).toBeTruthy()
+    })
+
+    test("reuse grace: re-presenting a token spent within the window re-rotates instead of revoking", async () => {
+        const clock = {now: 1_000_000}
+        const auth = graceRefreshToken(30_000, clock)
+        const pair = await auth.issue("user-1", {permissions: [Perm.Read]})
+        const child = await auth.refresh(pair.refresh.token, async () => ({permissions: [Perm.Read]}))  // spends pair
+
+        clock.now += 10_000  // within grace
+        // Lost-response retry of the spent parent: forgiven, issues a fresh pair.
+        const retry = await auth.refresh(pair.refresh.token, async () => ({permissions: [Perm.Read]}))
+        expect(retry.refresh.token).toBeTruthy()
+        // Family survived — the earlier child is still live (would throw
+        // REFRESH_INVALID if the lineage had been revoked).
+        const childNext = await auth.refresh(child.refresh.token, async () => ({permissions: [Perm.Read]}))
+        expect(childNext.refresh.token).toBeTruthy()
+    })
+
+    test("reuse grace: re-presenting after the window is reuse → family burned", async () => {
+        const clock = {now: 1_000_000}
+        const auth = graceRefreshToken(30_000, clock)
+        const pair = await auth.issue("user-1", {permissions: [Perm.Read]})
+        const child = await auth.refresh(pair.refresh.token, async () => ({permissions: [Perm.Read]}))
+
+        clock.now += 31_000  // past the grace window
+        await expectAuthError(auth.refresh(pair.refresh.token, async () => ({permissions: [Perm.Read]})), "REFRESH_REUSE")
         await expectAuthError(auth.refresh(child.refresh.token, async () => ({permissions: [Perm.Read]})), "REFRESH_INVALID")
     })
 

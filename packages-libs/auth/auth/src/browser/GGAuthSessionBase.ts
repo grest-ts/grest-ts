@@ -94,7 +94,7 @@ export class BaseAuthSession<D extends DerivedMap> {
         this.derived = handles
 
         ports.cache.subscribe((incoming) => this.onCrossTab(incoming))
-        ports.scheduler.onWake(() => void this.ensureFresh())
+        ports.scheduler.onWake(() => { void this.ensureFresh().catch(() => {}) })
     }
 
     subscribe(listener: () => void): () => void {
@@ -402,7 +402,9 @@ export class BaseAuthSession<D extends DerivedMap> {
         if (!this.shared) return
         const now = this.ports.clock.now()
         const delay = Math.max(0, this.shared.access.expiresAt - this.config.refreshLeadMs - now)
-        this.cancelScheduled = this.ports.scheduler.schedule(delay, () => void this.ensureFresh())
+        // Fire-and-forget: failures already surface via state (degraded/expired),
+        // so swallow the rejection rather than leave it unhandled.
+        this.cancelScheduled = this.ports.scheduler.schedule(delay, () => { void this.ensureFresh().catch(() => {}) })
     }
 
     private cancelNextRefresh(): void {

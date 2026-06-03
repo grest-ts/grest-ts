@@ -31,6 +31,17 @@ function accessToken(overrides: { accessTtlMs?: number; audience?: string } = {}
 }
 
 describe("GGAuthAccessToken", () => {
+    test("accessTtlMs defaults to 30 minutes", async () => {
+        const now = 1_700_000_000_000
+        const auth = new GGAuthAccessToken({
+            signer: new HmacSigner("unit-test-secret-which-is-long-enough"),
+            claimSchema: IsClaims,
+            now: () => now,  // no accessTtlMs → default
+        })
+        const access = await auth.issue("user-1", {permissions: [Perm.Read]})
+        expect(access.expiresAt).toBe(now + 30 * 60 * 1000)
+    })
+
     test("issueAccess → verifyAccess round-trips subject + claims under data", async () => {
         const auth = accessToken()
         const access = await auth.issue("user-1", {permissions: [Perm.Read, Perm.Write]})

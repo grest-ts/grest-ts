@@ -15,7 +15,9 @@ export interface GGAuthAccessTokenOptions<C extends object> {
     signer: SigningStrategy
     // Validates the app claims carried under `data`; omit for a token with no claims.
     claimSchema?: GGSchema<C>
-    accessTtlMs: number
+    // Access token lifetime. Defaults to 30 min — short-lived by design, paired with
+    // rotating refresh so expiry is seamless. Override for stricter/looser policy.
+    accessTtlMs?: number
     // When set, tokens carry `aud` and verifyAccess rejects a different audience.
     audience?: string
     now?: () => number
@@ -36,7 +38,7 @@ export class GGAuthAccessToken<C extends object> {
     constructor(options: GGAuthAccessTokenOptions<C>) {
         this.signer = options.signer
         this.claims = options.claimSchema ?? (IsObject({}) as unknown as GGSchema<C>)
-        this.accessTtlMs = options.accessTtlMs
+        this.accessTtlMs = options.accessTtlMs ?? 30 * 60 * 1000
         this.audience = options.audience
         this.now = options.now ?? Date.now
     }

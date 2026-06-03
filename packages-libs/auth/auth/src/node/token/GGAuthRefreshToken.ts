@@ -7,11 +7,22 @@ import {GGAuthAccessToken} from "./GGAuthAccessToken"
 export interface GGAuthRefreshTokenOptions<C extends object> {
     // Required by issue/refresh/revoke. For an access-only kind, use GGAuthAccessToken directly.
     store: RefreshTokenStore
-    refreshTtlMs: number
+    // Refresh token lifetime. Defaults to 14 days. Rotation re-mints with a fresh
+    // TTL on every use, so this is effectively an inactivity window (active users
+    // stay signed in); there is no absolute session cap. Override for a different
+    // inactivity window.
+    refreshTtlMs?: number
     now?: () => number
     randomToken?: () => string
     // The access half of the rotating pair — owns the claim schema, signing and verification.
     access: GGAuthAccessToken<C>
+    // Grace window (ms) for re-presenting a just-rotated token. A token spent this
+    // recently being shown again is almost always a client that never received the
+    // rotation response (dropped response / retry on a flaky link), not theft — so
+    // re-rotate within the family instead of revoking. The window is anchored to the
+    // original spend, so replays can't extend it. Defaults to 30s (matches Okta's
+    // refresh-rotation grace); set 0 to disable (strict reuse detection).
+    reuseGraceMs?: number
 }
 
 // Adds rotation + reuse-detection + revocation on top of a GGAuthAccessToken. Claims stay
@@ -24,13 +35,15 @@ export class GGAuthRefreshToken<ClaimData extends object> {
     private readonly refreshTtlMs: number
     private readonly now: () => number
     private readonly randomToken: () => string
+    private readonly reuseGraceMs: number
     public readonly access: GGAuthAccessToken<ClaimData>
 
     constructor(options: GGAuthRefreshTokenOptions<ClaimData>) {
         this.store = options.store
-        this.refreshTtlMs = options.refreshTtlMs
+        this.refreshTtlMs = options.refreshTtlMs ?? 14 * 24 * 60 * 60 * 1000
         this.now = options.now ?? Date.now
         this.randomToken = options.randomToken ?? (() => randomBytes(32).toString("base64url"))
+        this.reuseGraceMs = options.reuseGraceMs ?? 30_000
         this.access = options.access
     }
 
@@ -51,6 +64,14 @@ export class GGAuthRefreshToken<ClaimData extends object> {
         if (!record) throw new NOT_AUTHORIZED({debugMessage: "REFRESH_INVALID"})
         if (record.expiresAt <= this.now()) throw new NOT_AUTHORIZED({debugMessage: "REFRESH_INVALID: expired"})
         if (record.spentAt !== undefined) {
+            // Within the grace window, a re-presented spent token is treated as a
+            // lost-response retry, not theft: re-rotate in the same family instead
+            // of burning it. Outside the window it's reuse → revoke the lineage.
+            if (this.reuseGraceMs > 0 && this.now() - record.spentAt <= this.reuseGraceMs) {
+                const claims = await resolve(record.subject)
+                if (!claims) throw new NOT_FOUND()
+                return await this.mint(record.subject, claims, record.familyId)
+            }
             await this.store.revokeFamily(record.familyId)
             throw new NOT_AUTHORIZED({debugMessage: "REFRESH_REUSE: refresh token replayed"})
         }
