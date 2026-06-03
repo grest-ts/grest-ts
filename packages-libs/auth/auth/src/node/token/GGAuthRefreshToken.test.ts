@@ -25,6 +25,9 @@ function refreshToken(overrides: {accessTtlMs?: number; refreshTtlMs?: number} =
     return new GGAuthRefreshToken({
         store: new InMemoryRefreshTokenStore(),
         refreshTtlMs: overrides.refreshTtlMs ?? 30 * 24 * 60 * 60 * 1000,
+        // These tests assert strict reuse detection on immediate replay, so opt out
+        // of the reuse grace (now on by default).
+        reuseGraceMs: 0,
         access: new GGAuthAccessToken({
             signer: new HmacSigner("unit-test-secret-which-is-long-enough"),
             claimSchema: IsClaims,
@@ -75,6 +78,26 @@ describe("GGAuthRefreshToken — issue & refresh", () => {
         await expectAuthError(auth.refresh(pair.refresh.token, async () => ({permissions: [Perm.Read]})), "REFRESH_REUSE")
         // ...which severs the whole lineage — the live child is revoked too.
         await expectAuthError(auth.refresh(child.refresh.token, async () => ({permissions: [Perm.Read]})), "REFRESH_INVALID")
+    })
+
+    test("reuse grace defaults to 30s (forgives a within-window replay without being configured)", async () => {
+        const clock = {now: 1_000_000}
+        const now = () => clock.now
+        const auth = new GGAuthRefreshToken({
+            store: new InMemoryRefreshTokenStore(now),
+            refreshTtlMs: 30 * 24 * 60 * 60 * 1000,
+            now,  // no reuseGraceMs → default
+            access: new GGAuthAccessToken({
+                signer: new HmacSigner("unit-test-secret-which-is-long-enough"),
+                claimSchema: IsClaims,
+                accessTtlMs: 15 * 60 * 1000,
+            }),
+        })
+        const pair = await auth.issue("user-1", {permissions: [Perm.Read]})
+        await auth.refresh(pair.refresh.token, async () => ({permissions: [Perm.Read]}))  // spend
+        clock.now += 20_000  // within the 30s default
+        const retry = await auth.refresh(pair.refresh.token, async () => ({permissions: [Perm.Read]}))
+        expect(retry.refresh.token).toBeTruthy()
     })
 
     test("reuse grace: re-presenting a token spent within the window re-rotates instead of revoking", async () => {

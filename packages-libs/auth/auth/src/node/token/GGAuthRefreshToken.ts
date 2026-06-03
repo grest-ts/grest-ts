@@ -16,7 +16,8 @@ export interface GGAuthRefreshTokenOptions<C extends object> {
     // recently being shown again is almost always a client that never received the
     // rotation response (dropped response / retry on a flaky link), not theft — so
     // re-rotate within the family instead of revoking. The window is anchored to the
-    // original spend, so replays can't extend it. 0 (default) = strict, no grace.
+    // original spend, so replays can't extend it. Defaults to 30s (matches Okta's
+    // refresh-rotation grace); set 0 to disable (strict reuse detection).
     reuseGraceMs?: number
 }
 
@@ -38,7 +39,7 @@ export class GGAuthRefreshToken<ClaimData extends object> {
         this.refreshTtlMs = options.refreshTtlMs
         this.now = options.now ?? Date.now
         this.randomToken = options.randomToken ?? (() => randomBytes(32).toString("base64url"))
-        this.reuseGraceMs = options.reuseGraceMs ?? 0
+        this.reuseGraceMs = options.reuseGraceMs ?? 30_000
         this.access = options.access
     }
 
