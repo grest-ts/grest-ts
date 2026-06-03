@@ -7,7 +7,11 @@ import {GGAuthAccessToken} from "./GGAuthAccessToken"
 export interface GGAuthRefreshTokenOptions<C extends object> {
     // Required by issue/refresh/revoke. For an access-only kind, use GGAuthAccessToken directly.
     store: RefreshTokenStore
-    refreshTtlMs: number
+    // Refresh token lifetime. Defaults to 14 days. Rotation re-mints with a fresh
+    // TTL on every use, so this is effectively an inactivity window (active users
+    // stay signed in); there is no absolute session cap. Override for a different
+    // inactivity window.
+    refreshTtlMs?: number
     now?: () => number
     randomToken?: () => string
     // The access half of the rotating pair — owns the claim schema, signing and verification.
@@ -36,7 +40,7 @@ export class GGAuthRefreshToken<ClaimData extends object> {
 
     constructor(options: GGAuthRefreshTokenOptions<ClaimData>) {
         this.store = options.store
-        this.refreshTtlMs = options.refreshTtlMs
+        this.refreshTtlMs = options.refreshTtlMs ?? 14 * 24 * 60 * 60 * 1000
         this.now = options.now ?? Date.now
         this.randomToken = options.randomToken ?? (() => randomBytes(32).toString("base64url"))
         this.reuseGraceMs = options.reuseGraceMs ?? 30_000

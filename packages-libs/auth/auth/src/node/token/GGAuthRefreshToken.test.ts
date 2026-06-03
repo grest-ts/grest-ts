@@ -80,6 +80,20 @@ describe("GGAuthRefreshToken — issue & refresh", () => {
         await expectAuthError(auth.refresh(child.refresh.token, async () => ({permissions: [Perm.Read]})), "REFRESH_INVALID")
     })
 
+    test("refreshTtlMs defaults to 14 days", async () => {
+        const now = 1_700_000_000_000
+        const auth = new GGAuthRefreshToken({
+            store: new InMemoryRefreshTokenStore(() => now),
+            now: () => now,  // no refreshTtlMs → default
+            access: new GGAuthAccessToken({
+                signer: new HmacSigner("unit-test-secret-which-is-long-enough"),
+                claimSchema: IsClaims,
+            }),
+        })
+        const pair = await auth.issue("user-1", {permissions: [Perm.Read]})
+        expect(pair.refresh.expiresAt).toBe(now + 14 * 24 * 60 * 60 * 1000)
+    })
+
     test("reuse grace defaults to 30s (forgives a within-window replay without being configured)", async () => {
         const clock = {now: 1_000_000}
         const now = () => clock.now
