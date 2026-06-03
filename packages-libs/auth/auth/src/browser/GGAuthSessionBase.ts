@@ -104,7 +104,7 @@ export class BaseAuthSession<D extends DerivedMap> {
         this.derived = handles
 
         ports.cache.subscribe((incoming) => this.onCrossTab(incoming))
-        ports.scheduler.onWake(() => void this.ensureFresh())
+        ports.scheduler.onWake(() => { void this.ensureFresh().catch(() => {}) })
     }
 
     subscribe(listener: () => void): () => void {
@@ -260,7 +260,7 @@ export class BaseAuthSession<D extends DerivedMap> {
 
             let result: AuthResult
             try {
-                result = await this.withRefreshTimeout(this.config.refresh(this.currentRefreshToken()))
+                result = await this.refreshWithRetries()
             } catch (e) {
                 if (this.config.isFatalRefreshError(e)) {
                     this.toExpired()
@@ -279,6 +279,36 @@ export class BaseAuthSession<D extends DerivedMap> {
             }
             this.commitShared(next)
         })
+    }
+
+    // Retry a failed refresh a few times with exponential backoff before giving
+    // up. Runs inside the cross-tab lock, so only one tab ever retries — the
+    // others stay queued on the lock and then adopt the refreshed token from
+    // cache (no stampede on the refresh endpoint). A fatal error short-circuits
+    // immediately (expire, don't retry). Each attempt is bounded by
+    // withRefreshTimeout, so a hung attempt still advances to the next.
+    private async refreshWithRetries(): Promise<AuthResult> {
+        const retries = Math.max(0, this.config.refreshRetries ?? 0)
+        let lastErr: unknown
+        for (let attempt = 0; attempt <= retries; attempt++) {
+            try {
+                return await this.withRefreshTimeout(this.config.refresh(this.currentRefreshToken()))
+            } catch (e) {
+                lastErr = e
+                if (this.config.isFatalRefreshError(e) || attempt === retries) throw e
+                await this.delay(this.backoffMs(attempt))
+            }
+        }
+        throw lastErr
+    }
+
+    private backoffMs(attempt: number): number {
+        return (this.config.refreshRetryDelayMs ?? 500) * 2 ** attempt
+    }
+
+    private delay(ms: number): Promise<void> {
+        if (ms <= 0) return Promise.resolve()
+        return new Promise((resolve) => { this.ports.scheduler.schedule(ms, resolve) })
     }
 
     // Race the refresh against a scheduler-driven deadline. The timer is the
@@ -428,7 +458,9 @@ export class BaseAuthSession<D extends DerivedMap> {
         if (!this.shared) return
         const now = this.ports.clock.now()
         const delay = Math.max(0, this.shared.access.expiresAt - this.config.refreshLeadMs - now)
-        this.cancelScheduled = this.ports.scheduler.schedule(delay, () => void this.ensureFresh())
+        // Background refresh is fire-and-forget; failures already surface via state
+        // (degraded/expired), so swallow the rejection to avoid an unhandled one.
+        this.cancelScheduled = this.ports.scheduler.schedule(delay, () => { void this.ensureFresh().catch(() => {}) })
     }
 
     private cancelNextRefresh(): void {

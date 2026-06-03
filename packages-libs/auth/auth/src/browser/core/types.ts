@@ -67,6 +67,13 @@ export interface CoreConfig<D extends DerivedMap = {}> {
     // treated as a non-fatal failure (degraded + retry), releasing the lock.
     // Undefined or <= 0 disables the bound.
     refreshTimeoutMs?: number
+    // Extra refresh attempts after the first before giving up, so a brief server
+    // blip doesn't fail every waiting authed call. Retries run inside the
+    // cross-tab lock (single-flight: one tab retries, others wait then adopt the
+    // refreshed token), with exponential backoff from refreshRetryDelayMs.
+    // Fatal errors (isFatalRefreshError) are never retried. Default 0 = no retry.
+    refreshRetries?: number
+    refreshRetryDelayMs?: number
     isFatalRefreshError: (err: unknown) => boolean
 }
 

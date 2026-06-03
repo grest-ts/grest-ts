@@ -97,6 +97,16 @@ class FakeKey implements TokenKey {
 // it via .then) and the refresh deadline is actually scheduled before we fire it.
 const flushMicrotasks = async () => { for (let i = 0; i < 10; i++) await Promise.resolve() }
 
+// Drive a refresh-with-retries flow deterministically: interleave microtask
+// flushes (let each attempt run + schedule its backoff) with firing due timers.
+const pump = async (scheduler: FakeScheduler, rounds = 25) => {
+    for (let i = 0; i < rounds; i++) {
+        await flushMicrotasks()
+        scheduler.runDue()
+    }
+    await flushMicrotasks()
+}
+
 function makeAccess(token: string, expiresAt: number): DerivedTokenResult<unknown> {
     return {access: {token, expiresAt}, data: undefined}
 }
@@ -135,6 +145,8 @@ function makeSession<D extends DerivedMap = {}>(overrides: {
     refreshResult?: AuthResult
     refreshImpl?: () => Promise<AuthResult>
     refreshTimeoutMs?: number
+    refreshRetries?: number
+    refreshRetryDelayMs?: number
     storage?: "localStorage" | "cookie"
 } = {}): SessionSetup<D> {
     const clock = overrides.clock ?? new FakeClock()
@@ -155,6 +167,8 @@ function makeSession<D extends DerivedMap = {}>(overrides: {
         refreshLeadMs: overrides.refreshLeadMs ?? 60_000,
         clockSkewMs: overrides.clockSkewMs ?? 10_000,
         refreshTimeoutMs: overrides.refreshTimeoutMs,
+        refreshRetries: overrides.refreshRetries,
+        refreshRetryDelayMs: overrides.refreshRetryDelayMs,
         isFatalRefreshError: overrides.isFatalRefreshError ?? ((e) => e instanceof NOT_AUTHORIZED),
     }
     const ports: CorePorts = {clock, lock, cache, scheduler}
@@ -373,6 +387,59 @@ describe("refresh timeout (refreshTimeoutMs)", () => {
         // The deadline was cancelled on success — firing due timers rejects nothing.
         scheduler.runDue()
         expect(session.getState().status).toBe("authenticated")
+    })
+})
+
+describe("refresh retries (refreshRetries + backoff)", () => {
+    test("retries a transient failure with backoff, then succeeds", async () => {
+        const scheduler = new FakeScheduler()
+        const {session, refreshFn} = makeSession({scheduler, refreshRetries: 2, refreshRetryDelayMs: 500})
+        session.start(makePair("at-root-1", 500_000, "rt-1"))
+        refreshFn
+            .mockRejectedValueOnce(new Error("blip 1"))
+            .mockRejectedValueOnce(new Error("blip 2"))
+            .mockResolvedValueOnce({tokens: makePair("at-root-2", 3_000_000, "rt-2")})
+
+        const p = session.ensureFresh()
+        await pump(scheduler)
+        await p
+
+        expect(refreshFn).toHaveBeenCalledTimes(3)
+        expect(session.getState().status).toBe("authenticated")
+        expect(session.getState().degraded).toBe(false)
+        expect(session.getState().refreshing).toBe(false)
+    })
+
+    test("gives up after refreshRetries (bounded attempts) → rejects + degraded, no logout", async () => {
+        const scheduler = new FakeScheduler()
+        const {session, refreshFn} = makeSession({scheduler, refreshRetries: 2, refreshRetryDelayMs: 500})
+        session.start(makePair("at-root-1", 500_000, "rt-1"))
+        refreshFn.mockRejectedValue(new Error("server down"))
+        const onLogout = vi.fn()
+        session.onLogout(onLogout)
+
+        const p = session.ensureFresh()
+        await pump(scheduler)
+        await expect(p).rejects.toThrow("server down")
+
+        expect(refreshFn).toHaveBeenCalledTimes(3)  // first + 2 retries
+        expect(session.getState().status).toBe("authenticated")
+        expect(session.getState().degraded).toBe(true)
+        expect(onLogout).not.toHaveBeenCalled()
+    })
+
+    test("a fatal error is not retried — expires after the first attempt", async () => {
+        const scheduler = new FakeScheduler()
+        const {session, refreshFn} = makeSession({scheduler, refreshRetries: 2, refreshRetryDelayMs: 500})
+        session.start(makePair("at-root-1", 500_000, "rt-1"))
+        refreshFn.mockRejectedValue(new NOT_AUTHORIZED())
+
+        const p = session.ensureFresh()
+        await pump(scheduler)
+        await expect(p).rejects.toBeInstanceOf(NOT_AUTHORIZED)
+
+        expect(refreshFn).toHaveBeenCalledTimes(1)
+        expect(session.getState().status).toBe("expired")
     })
 })
 
