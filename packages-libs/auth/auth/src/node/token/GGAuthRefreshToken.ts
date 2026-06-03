@@ -12,6 +12,12 @@ export interface GGAuthRefreshTokenOptions<C extends object> {
     randomToken?: () => string
     // The access half of the rotating pair — owns the claim schema, signing and verification.
     access: GGAuthAccessToken<C>
+    // Grace window (ms) for re-presenting a just-rotated token. A token spent this
+    // recently being shown again is almost always a client that never received the
+    // rotation response (dropped response / retry on a flaky link), not theft — so
+    // re-rotate within the family instead of revoking. The window is anchored to the
+    // original spend, so replays can't extend it. 0 (default) = strict, no grace.
+    reuseGraceMs?: number
 }
 
 // Adds rotation + reuse-detection + revocation on top of a GGAuthAccessToken. Claims stay
@@ -24,6 +30,7 @@ export class GGAuthRefreshToken<ClaimData extends object> {
     private readonly refreshTtlMs: number
     private readonly now: () => number
     private readonly randomToken: () => string
+    private readonly reuseGraceMs: number
     public readonly access: GGAuthAccessToken<ClaimData>
 
     constructor(options: GGAuthRefreshTokenOptions<ClaimData>) {
@@ -31,6 +38,7 @@ export class GGAuthRefreshToken<ClaimData extends object> {
         this.refreshTtlMs = options.refreshTtlMs
         this.now = options.now ?? Date.now
         this.randomToken = options.randomToken ?? (() => randomBytes(32).toString("base64url"))
+        this.reuseGraceMs = options.reuseGraceMs ?? 0
         this.access = options.access
     }
 
@@ -51,6 +59,14 @@ export class GGAuthRefreshToken<ClaimData extends object> {
         if (!record) throw new NOT_AUTHORIZED({debugMessage: "REFRESH_INVALID"})
         if (record.expiresAt <= this.now()) throw new NOT_AUTHORIZED({debugMessage: "REFRESH_INVALID: expired"})
         if (record.spentAt !== undefined) {
+            // Within the grace window, a re-presented spent token is treated as a
+            // lost-response retry, not theft: re-rotate in the same family instead
+            // of burning it. Outside the window it's reuse → revoke the lineage.
+            if (this.reuseGraceMs > 0 && this.now() - record.spentAt <= this.reuseGraceMs) {
+                const claims = await resolve(record.subject)
+                if (!claims) throw new NOT_FOUND()
+                return await this.mint(record.subject, claims, record.familyId)
+            }
             await this.store.revokeFamily(record.familyId)
             throw new NOT_AUTHORIZED({debugMessage: "REFRESH_REUSE: refresh token replayed"})
         }
