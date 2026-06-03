@@ -8,6 +8,7 @@ export * from "./server/GG_WS_MESSAGE";
 
 // Core
 export * from "./socket/GGSocket";
+export * from "./socket/SocketAdapter";
 
 // API Schema
 export * from "./schema/webSocketSchema";
