@@ -11,7 +11,6 @@ import type {
     SessionState,
     StoredAuth,
 } from "./core/types"
-import {ggAuthLog} from "./core/authDebug"
 
 // Data fields of D proxied as optional properties on the DerivedToken handle.
 type ProxiedData<D> = D extends object ? Partial<D> : {}
@@ -208,31 +207,17 @@ export class BaseAuthSession<D extends DerivedMap> {
     }
 
     ensureFresh(): Promise<void> {
-        if (this.inflightRefresh) {
-            ggAuthLog("ensureFresh: joining inflight refresh")
-            return this.inflightRefresh
-        }
+        if (this.inflightRefresh) return this.inflightRefresh
         const now = this.ports.clock.now()
-        if (this.shared && this.shared.access.expiresAt > now + this.config.refreshLeadMs) {
-            ggAuthLog("ensureFresh: token fresh, no-op", {expiresInMs: this.shared.access.expiresAt - now})
-            return Promise.resolve()
-        }
-        ggAuthLog("ensureFresh: stale, refreshing", {hasToken: !!this.shared, expiresInMs: this.shared ? this.shared.access.expiresAt - now : null})
+        if (this.shared && this.shared.access.expiresAt > now + this.config.refreshLeadMs) return Promise.resolve()
         return this.refreshNow()
     }
 
     refreshNow(): Promise<void> {
-        if (this.inflightRefresh) {
-            ggAuthLog("refreshNow: joining inflight refresh")
-            return this.inflightRefresh
-        }
-        ggAuthLog("refreshNow: starting")
+        if (this.inflightRefresh) return this.inflightRefresh
         this.setState({...this.state, refreshing: true})
         this.notifyListeners()
-        this.inflightRefresh = this.doRefreshCrossTab().then(
-            () => { ggAuthLog("refreshNow: done OK") },
-            (e) => { ggAuthLog("refreshNow: FAILED", e); throw e },
-        ).finally(() => {
+        this.inflightRefresh = this.doRefreshCrossTab().finally(() => {
             this.inflightRefresh = null
             this.setState({...this.state, refreshing: false})
             this.notifyListeners()
@@ -241,9 +226,7 @@ export class BaseAuthSession<D extends DerivedMap> {
     }
 
     private async doRefreshCrossTab(): Promise<void> {
-        ggAuthLog("doRefreshCrossTab: acquiring auth-refresh lock")
         await this.ports.lock.withLock("auth-refresh", async () => {
-            ggAuthLog("doRefreshCrossTab: lock held, evaluating")
             const cached = this.ports.cache.read()
             const now = this.ports.clock.now()
 
@@ -252,29 +235,23 @@ export class BaseAuthSession<D extends DerivedMap> {
                 cached.access.expiresAt > now + this.config.clockSkewMs &&
                 cached.access.token !== this.shared?.access.token
             ) {
-                ggAuthLog("doRefreshCrossTab: adopting fresher cross-tab token")
                 this.adoptRoot(cached)
                 return
             }
 
             if (this.shared && this.shared.access.expiresAt > now + this.config.refreshLeadMs) {
-                ggAuthLog("doRefreshCrossTab: token became fresh while waiting, no-op")
                 return
             }
 
             if (!this.canRefresh()) {
-                ggAuthLog("doRefreshCrossTab: no refresh token -> expired")
                 this.toExpired()
                 throw new Error("No refresh token")
             }
 
-            ggAuthLog("doRefreshCrossTab: calling config.refresh()")
             let result: AuthResult
             try {
                 result = await this.config.refresh(this.currentRefreshToken())
-                ggAuthLog("doRefreshCrossTab: config.refresh() returned")
             } catch (e) {
-                ggAuthLog("doRefreshCrossTab: config.refresh() threw", {fatal: this.config.isFatalRefreshError(e)}, e)
                 if (this.config.isFatalRefreshError(e)) {
                     this.toExpired()
                 } else {
@@ -291,7 +268,6 @@ export class BaseAuthSession<D extends DerivedMap> {
                     : (result.tokens.refresh ?? this.shared?.refresh),
             }
             this.commitShared(next)
-            ggAuthLog("doRefreshCrossTab: committed new token", {expiresInMs: next.access.expiresAt - now})
         })
     }
 

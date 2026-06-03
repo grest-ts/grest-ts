@@ -1,6 +1,5 @@
 /// <reference lib="dom" />
 import type {CrossTabLock} from "./types"
-import {ggAuthLog} from "./authDebug"
 
 // Cap how long we wait to ACQUIRE the lock. A tab can grab "auth-refresh" and
 // then be suspended/throttled (its timers frozen) so it never releases — without
@@ -17,22 +16,13 @@ export function webLocksLock(): CrossTabLock {
         return {
             withLock<T>(name: string, fn: () => Promise<T>): Promise<T> {
                 const controller = new AbortController()
-                const timer = setTimeout(() => {
-                    ggAuthLog(`webLocksLock: ABORTING acquire of "${name}" after ${ACQUIRE_TIMEOUT_MS}ms (stuck holder?)`)
-                    controller.abort()
-                }, ACQUIRE_TIMEOUT_MS)
-                ggAuthLog(`webLocksLock: requesting "${name}"`)
-                return (navigator.locks.request(name, {signal: controller.signal}, (lock) => {
-                    ggAuthLog(`webLocksLock: granted "${name}"`, {lock: !!lock})
-                    return (fn() as Promise<T>).finally(() => ggAuthLog(`webLocksLock: releasing "${name}"`))
-                }) as Promise<T>)
-                    .catch((e) => { ggAuthLog(`webLocksLock: "${name}" rejected (abort/timeout?)`, e); throw e })
+                const timer = setTimeout(() => controller.abort(), ACQUIRE_TIMEOUT_MS)
+                return (navigator.locks.request(name, {signal: controller.signal}, fn as () => T) as Promise<T>)
                     .finally(() => clearTimeout(timer))
             },
         }
     }
 
-    ggAuthLog("webLocksLock: navigator.locks UNAVAILABLE, using in-tab promise-chain serialization")
     // navigator.locks unavailable (e.g. non-secure context) — in-tab promise-chain serializes.
     let tail: Promise<void> = Promise.resolve()
     return {

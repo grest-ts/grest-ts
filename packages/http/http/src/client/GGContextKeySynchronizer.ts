@@ -1,6 +1,5 @@
 import {GGContextKey} from "@grest-ts/context"
 import {IsAny, type GGSchema} from "@grest-ts/schema"
-import {ggAuthLog} from "./authDebug"
 
 export interface GGKeyController {
     isStale: () => boolean
@@ -48,22 +47,10 @@ export class GGContextKeySynchronizer {
 
     static async waitFor(key: GGContextKey<any>): Promise<void> {
         const entry = GG_SYNC_CONTROLLERS.get()?.get(key.name)
-        if (entry === undefined) return
-        if (!entry.controller.isStale()) {
-            ggAuthLog(`waitFor("${key.name}"): fresh, passing through`)
-            return
-        }
-        if (entry.inflight) {
-            ggAuthLog(`waitFor("${key.name}"): stale, joining inflight recover`)
-        } else {
-            ggAuthLog(`waitFor("${key.name}"): stale, starting recover() — request is BLOCKED until this resolves`)
-            entry.inflight = withRecoverTimeout(entry.controller.recover(), key.name).then(
-                () => { ggAuthLog(`waitFor("${key.name}"): recover() resolved, request may proceed`) },
-                (e) => { ggAuthLog(`waitFor("${key.name}"): recover() REJECTED`, e); throw e },
-            ).finally(() => {
-                entry.inflight = undefined
-            })
-        }
+        if (entry === undefined || !entry.controller.isStale()) return
+        entry.inflight ??= withRecoverTimeout(entry.controller.recover(), key.name).finally(() => {
+            entry.inflight = undefined
+        })
         await entry.inflight
     }
 

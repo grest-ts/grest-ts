@@ -3,7 +3,6 @@ import {GGContractMethod} from "@grest-ts/schema";
 import {ClientHttpRouteToRpcTransformClientConfig, GGHttpFetchRequest} from "../../schema/GGHttpSchema";
 import {GGContextKey, type GGTransportMiddleware} from "@grest-ts/context";
 import {GGContextKeySynchronizer} from "../../client/GGContextKeySynchronizer";
-import {ggAuthLog} from "../../client/authDebug";
 
 export class GGRpcRequestBuilder {
 
@@ -46,14 +45,12 @@ export class GGRpcRequestBuilder {
                 body: undefined
             }
         }
-        ggAuthLog(`createRequest: ${this.method} ${result.url} — running ${this.middlewares?.length ?? 0} middleware(s) before issuing`)
         for (const mw of this.middlewares ?? []) {
             if (mw instanceof GGContextKey) {
                 await GGContextKeySynchronizer.waitFor(mw)
             }
         }
         this.middlewares?.forEach(mw => mw.update?.(result))
-        ggAuthLog(`createRequest: ${this.method} ${result.url} — ready, issuing now`)
         return result
     }
 
