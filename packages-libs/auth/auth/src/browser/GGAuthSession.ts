@@ -97,7 +97,13 @@ export class GGAuthSession<D extends DerivedMap = {}, I = unknown> {
                 refreshLeadMs: 60_000,
                 clockSkewMs: 10_000,
                 refreshTimeoutMs: 15_000,
-                refreshRetries: 2,
+                // Default off: with one-time-use refresh-token rotation, blindly
+                // re-sending the same token after an ambiguous failure (timeout,
+                // dropped response) can replay an already-spent token and trip
+                // reuse-detection → whole-family revoke. A failed refresh instead
+                // leaves the session stale, so the next authed call retries with a
+                // fresh attempt — recovery without a dangerous tight re-send loop.
+                refreshRetries: 0,
                 refreshRetryDelayMs: 500,
                 isFatalRefreshError: (e) => e instanceof NOT_AUTHORIZED,
             },
