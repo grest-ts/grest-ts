@@ -81,13 +81,10 @@ export class ${struct.name} extends ${struct.name}Base {
         this.config.fullSyncRatio ??= ${CodeTemplate.variable("fullSyncRation")};
         
         const idsViewType = getIdArrayType(this._max);
-        const oldDirtyBuffer: Uint32Array | undefined = undefined;
         this.dirtySetView = new Uint32Array(Math.ceil(this._max / 32));
         this.maxNoOfDirtyObjects = Math.floor(this._max * this.config.fullSyncRatio!)
         this.dirtyIdsView = new idsViewType( this.maxNoOfDirtyObjects);
-        
-        if (oldDirtyBuffer) this.dirtySetView.set(oldDirtyBuffer);
-        
+
         this.exportMsg._max = this._max;
         this.exportDirtyIdsView = new idsViewType(this.maxNoOfDirtyObjects);
         this.exportMsg.transfer[0] = this.exportDirtyIdsView.buffer as ArrayBuffer;

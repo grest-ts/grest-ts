@@ -114,7 +114,7 @@ export class GGSocketServer<TContext, Query> {
                 GGLog.info(this, "WebSocket server started", {api: config.apiName, path: config.path});
                 if (GG_DISCOVERY.has()) {
                     GG_DISCOVERY.get().registerRoutes([{
-                        runtime: this.scope.serviceName ?? "Unknown",
+                        runtime: this.scope.serviceName,
                         api: this.apiName,
                         pathPrefix: this.path,
                         protocol: "ws",

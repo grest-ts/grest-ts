@@ -90,12 +90,9 @@ export class ExportableDirtyStruct extends ExportableDirtyStructBase {
         this.config.fullSyncRatio ??= undefined;
 
         const idsViewType = getIdArrayType(this._max);
-        const oldDirtyBuffer: Uint32Array | undefined = undefined;
         this.dirtySetView = new Uint32Array(Math.ceil(this._max / 32));
         this.maxNoOfDirtyObjects = Math.floor(this._max * this.config.fullSyncRatio!)
         this.dirtyIdsView = new idsViewType( this.maxNoOfDirtyObjects);
-
-        if (oldDirtyBuffer) this.dirtySetView.set(oldDirtyBuffer);
 
         this.exportMsg._max = this._max;
         this.exportDirtyIdsView = new idsViewType(this.maxNoOfDirtyObjects);

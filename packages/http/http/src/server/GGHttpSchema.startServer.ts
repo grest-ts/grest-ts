@@ -87,7 +87,7 @@ function setupRoutes<TContract extends GGContractApiDefinition>(
         const port = server.port;
         if (port === undefined) throw new Error("HTTP server port is not set; onStart ran before listen completed.");
         GG_DISCOVERY.tryGet()?.registerRoutes([{
-            runtime: scope.serviceName ?? "Unknown",
+            runtime: scope.serviceName,
             api: httpSchema.name,
             pathPrefix: pathPrefix,
             protocol: "http",
