@@ -59,6 +59,7 @@
     "ws": "^8.19.0"
   },
   "peerDependencies": {
+    "@grest-ts/common": "0.0.55",
     "@grest-ts/discovery": "0.0.55",
     "@grest-ts/ipc": "0.0.55",
     "@grest-ts/locator": "0.0.55",

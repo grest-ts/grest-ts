@@ -47,6 +47,7 @@
     "sqlstring": "^2.3.3"
   },
   "peerDependencies": {
+    "@grest-ts/common": "0.0.55",
     "@grest-ts/schema": "0.0.55"
   },
   "devDependencies": {

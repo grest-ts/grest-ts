@@ -29,7 +29,10 @@ export interface CityComparison {
 @mockable
 export class CityService {
 
-    constructor(private readonly weather: WeatherService) {
+    private readonly weather: WeatherService
+
+    constructor(weather: WeatherService) {
+        this.weather = weather
     }
 
     /**

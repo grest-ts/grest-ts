@@ -21,9 +21,12 @@ export class NotificationService {
     // Track all connected WebSocket clients, organized by token (simplified for demo)
     private connectedClients = new Map<tUserId, Set<OutgoingConnection>>()
 
+    private checklistService: ChecklistService
+
     constructor(
-        private checklistService: ChecklistService
+        checklistService: ChecklistService
     ) {
+        this.checklistService = checklistService
 
         this.checklistService.setOnItemMarkedCallback((event: ItemMarkedEvent) => {
             this.broadcastItemMarked(event)

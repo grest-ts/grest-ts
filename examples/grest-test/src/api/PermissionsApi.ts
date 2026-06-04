@@ -11,17 +11,19 @@ import {
     SERVER_ERROR,
     VALIDATION_ERROR,
 } from "@grest-ts/schema"
+import {enumOf, type Values} from "@grest-ts/common"
 
 /**
  * App-specific scope catalog. Following plan §1 — projects centralize permission
- * names in an enum so typos become compile errors and refactors stay clean.
+ * names so typos become compile errors and refactors stay clean.
  */
-export enum AppPermission {
-    Read   = "perm:read",
-    Write  = "perm:write",
-    Admin  = "perm:admin",
-    Owner  = "perm:owner",
-}
+export const AppPermission = enumOf({
+    Read:  "perm:read",
+    Write: "perm:write",
+    Admin: "perm:admin",
+    Owner: "perm:owner",
+})
+export type AppPermission = Values<typeof AppPermission>
 
 /**
  * Sentinel scope value tests use to verify the gate behaves correctly when

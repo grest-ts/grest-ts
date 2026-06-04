@@ -1,10 +1,12 @@
 import {GGRpc, GGHeader, httpSchema} from "@grest-ts/http"
 import {defineSocketContract, webSocketSchema} from "@grest-ts/websocket"
 import {FORBIDDEN, GGContractClass, GGContractClient, GGContractImplementation, GG_NO_PERMISSIONS, IsArray, IsEnum, IsObject, IsString, NOT_AUTHORIZED, SERVER_ERROR} from "@grest-ts/schema"
+import {enumOf, type Values} from "@grest-ts/common"
 
-export enum WirePermission {
-    ADMIN = "WIRE_ADMIN",
-}
+export const WirePermission = enumOf({
+    ADMIN: "WIRE_ADMIN",
+})
+export type WirePermission = Values<typeof WirePermission>
 export const IsWirePermission = IsEnum(WirePermission)
 
 export const IsWireUser = IsObject({
@@ -62,9 +64,10 @@ export const WirePublicApi = httpSchema(WirePublicApiContract)
     })
 
 // ---- second wire (org-like), for multi-wire AND-across-sources -------------------------------
-export enum OrgWirePermission {
-    ORG_MEMBER = "WIRE_ORG_MEMBER",
-}
+export const OrgWirePermission = enumOf({
+    ORG_MEMBER: "WIRE_ORG_MEMBER",
+})
+export type OrgWirePermission = Values<typeof OrgWirePermission>
 export const IsOrgWirePermission = IsEnum(OrgWirePermission)
 
 export const ORG_TOKEN_WIRE = new GGHeader("x-org-token", {})
