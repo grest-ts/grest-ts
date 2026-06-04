@@ -9,7 +9,10 @@ import {GGHistogram, HistogramData} from "../src/metric/GGHistogram.js";
  * Use this in tests when you need to capture metric state at a point in time.
  */
 export class GGTestMetricsExporter {
-    constructor(private readonly store: GGMetricsStore) {
+    private readonly store: GGMetricsStore
+
+    constructor(store: GGMetricsStore) {
+        this.store = store
     }
 
     /**

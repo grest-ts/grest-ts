@@ -8,7 +8,8 @@
       "DOM"
     ],
     "types": [
-      "node"
+      "node",
+      "vitest/globals"
     ]
   },
   "include": [

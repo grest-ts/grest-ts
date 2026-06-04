@@ -18,6 +18,7 @@ export default defineConfig({
       'packages-tooling/code-generator',
       'packages-tooling/testkit/testkit',
       'packages-tooling/testkit/testkit-vitest',
+      'packages/common',
       'packages/context',
       'packages/discovery/discovery-local',
       'packages/http/http',

@@ -5,8 +5,10 @@ import {GGHttpPermissionsChecker} from "./GGHttpPermissionsChecker";
 import {GGWireContextKey} from "./GGWireContextKey";
 
 class TestWire extends GGWireContextKey {
-    constructor(name: string, private readonly grants: readonly string[] | null) {
+    private readonly grants: readonly string[] | null
+    constructor(name: string, grants: readonly string[] | null) {
         super(name, IsString.orUndefined);
+        this.grants = grants
     }
 
     public hasPermissions(): boolean {

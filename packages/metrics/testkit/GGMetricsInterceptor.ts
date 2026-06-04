@@ -42,15 +42,28 @@ export class GGMetricsInterceptor<TLabels extends GGMetricLabels> implements IGG
     private beforeSnapshot: Map<string, number | HistogramData> = new Map();
     private validationError: Error | undefined;
     private wasRegistered = false;
+    private readonly metricName: string
+    private readonly labelNames: readonly string[]
+    private readonly runtimes: GGTestRuntime[]
+    private readonly expectations: MetricExpectation<TLabels>[]
+    private readonly noChangeExpected: boolean
+    private readonly definedInSourceFile: string
 
     constructor(
-        private readonly metricName: string,
-        private readonly labelNames: readonly string[],
-        private readonly runtimes: GGTestRuntime[],
-        private readonly expectations: MetricExpectation<TLabels>[],
-        private readonly noChangeExpected: boolean,
-        private readonly definedInSourceFile: string
-    ) {}
+        metricName: string,
+        labelNames: readonly string[],
+        runtimes: GGTestRuntime[],
+        expectations: MetricExpectation<TLabels>[],
+        noChangeExpected: boolean,
+        definedInSourceFile: string
+    ) {
+        this.metricName = metricName
+        this.labelNames = labelNames
+        this.runtimes = runtimes
+        this.expectations = expectations
+        this.noChangeExpected = noChangeExpected
+        this.definedInSourceFile = definedInSourceFile
+    }
 
     async register(): Promise<void> {
         this.wasRegistered = true;

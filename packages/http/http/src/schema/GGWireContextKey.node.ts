@@ -48,10 +48,14 @@ function resolveHandler(wire: GGWireContextKey): GGWireServerHandler {
  * `.define()`; `.create(deps)` runs once per scope (a fresh worker / restart gets its own).
  */
 export class GGWireHandlerRegistration<Deps> {
+    private readonly wire: GGWireContextKey
+    private readonly factory: (deps: Deps) => GGWireServerHandler
     constructor(
-        private readonly wire: GGWireContextKey,
-        private readonly factory: (deps: Deps) => GGWireServerHandler,
+        wire: GGWireContextKey,
+        factory: (deps: Deps) => GGWireServerHandler,
     ) {
+        this.wire = wire
+        this.factory = factory
     }
 
     public create(deps: Deps): void {

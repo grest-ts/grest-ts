@@ -1,5 +1,5 @@
 import {GGLog} from "@grest-ts/logger";
-import {withTimeout} from "@grest-ts/common";
+import {withTimeout, enumOf, type Values} from "@grest-ts/common";
 import {GGContext} from "@grest-ts/context";
 import {GG_TRACE} from "@grest-ts/trace";
 import {IPCClientRequest} from "@grest-ts/ipc";
@@ -12,18 +12,19 @@ import type {GGTestRunner} from "./GGTestRunner";
 /**
  * Lifecycle state of a runtime instance.
  */
-export enum GGTestRuntimeState {
+export const GGTestRuntimeState = enumOf({
     /** Initial state, not yet started */
-    CREATED = 'created',
+    CREATED: 'created',
     /** Running successfully */
-    STARTED = 'started',
+    STARTED: 'started',
     /** Startup failed, but worker/IPC still alive for diagnostics */
-    FAILED = 'failed',
+    FAILED: 'failed',
     /** Runtime stopped, but worker/IPC still alive for log retrieval */
-    STOPPED = 'stopped',
+    STOPPED: 'stopped',
     /** Fully shut down, no IPC available */
-    SHUTDOWN = 'shutdown',
-}
+    SHUTDOWN: 'shutdown',
+})
+export type GGTestRuntimeState = Values<typeof GGTestRuntimeState>
 
 export interface GGTestEnvConfig {
     executablePath: string;
@@ -45,11 +46,12 @@ export interface GGTestRuntimeConfig {
     mode?: GGTestMode
 }
 
-export enum GGTestMode {
-    INLINE = 'INLINE',
-    WORKER = 'WORKER',
-    ISOLATED = 'ISOLATED'
-}
+export const GGTestMode = enumOf({
+    INLINE: 'INLINE',
+    WORKER: 'WORKER',
+    ISOLATED: 'ISOLATED',
+})
+export type GGTestMode = Values<typeof GGTestMode>
 
 export class GGTestRuntime {
 

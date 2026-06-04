@@ -2,36 +2,39 @@
  * Shared constants for the benchmark system.
  * Centralizes test categories, test types, and other repeated values.
  */
+import {enumOf, type Values} from "@grest-ts/common";
 
 // ============ Test Categories ============
 
-export enum TestCategory {
-    number = "number",
-    simple = "simple",
-    nested = "nested",
-    refine = "refine",
-    discriminated = "discriminated",
-    recursive = "recursive",
-    tuple = "tuple",
-    bigString = "bigString",
-    bigArray = "bigArray"
-}
+export const TestCategory = enumOf({
+    number: "number",
+    simple: "simple",
+    nested: "nested",
+    refine: "refine",
+    discriminated: "discriminated",
+    recursive: "recursive",
+    tuple: "tuple",
+    bigString: "bigString",
+    bigArray: "bigArray",
+});
+export type TestCategory = Values<typeof TestCategory>;
 
 export const TEST_CATEGORIES = Object.values(TestCategory);
 
 // ============ Test Types (for benchmarks) ============
 
-export enum TestType {
-    startup = "startup",
-    is_correct = "is_correct",
-    is_wrong = "is_wrong",
-    parse_correct = "parse_correct",
-    parse_wrong = "parse_wrong",
-    string_correct = "string_correct",
-    string_wrong = "string_wrong",
-    stringify_correct = "stringify_correct",
-    stringify_wrong = "stringify_wrong"
-}
+export const TestType = enumOf({
+    startup: "startup",
+    is_correct: "is_correct",
+    is_wrong: "is_wrong",
+    parse_correct: "parse_correct",
+    parse_wrong: "parse_wrong",
+    string_correct: "string_correct",
+    string_wrong: "string_wrong",
+    stringify_correct: "stringify_correct",
+    stringify_wrong: "stringify_wrong",
+});
+export type TestType = Values<typeof TestType>;
 
 export const BENCHMARK_TEST_TYPES = [
     TestType.is_correct,

@@ -6,11 +6,15 @@ import {GGLocatorScope} from "@grest-ts/locator";
 export class InlineRunner implements RuntimeRunner {
 
     private controlClient?: GGTestRuntimeWorker;
+    private readonly config: GGTestEnvConfig
+    private readonly runtimeFactory?: () => any
 
     constructor(
-        private readonly config: GGTestEnvConfig,
-        private readonly runtimeFactory?: () => any
+        config: GGTestEnvConfig,
+        runtimeFactory?: () => any
     ) {
+        this.config = config
+        this.runtimeFactory = runtimeFactory
     }
 
     async start(): Promise<void> {

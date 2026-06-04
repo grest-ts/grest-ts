@@ -4,6 +4,10 @@ import {CapturedLogEntry, SerializableLogMatcher} from "./GGTestLogger";
 import {LogMatcher} from "./GGLogCursor";
 import {GGLogIPC} from "./GGLogCommands";
 
+const LOG_LEVEL_NAME: Record<number, string> = Object.fromEntries(
+    Object.entries(LogLevel).map(([name, value]) => [value, name])
+);
+
 export class GGLogInterceptor implements IGGTestInterceptor {
 
     private readonly runtimes: GGTestRuntime[];
@@ -47,7 +51,7 @@ export class GGLogInterceptor implements IGGTestInterceptor {
                 expected: this.describeExpectation(),
                 received: allLogs.length === 0
                     ? "No logs captured"
-                    : allLogs.map(l => `[${LogLevel[l.level]}] ${l.contextName}: ${l.message}`).join("\n"),
+                    : allLogs.map(l => `[${LOG_LEVEL_NAME[l.level]}] ${l.contextName}: ${l.message}`).join("\n"),
                 sourceFile: this.definedInSourceFile
             });
         }

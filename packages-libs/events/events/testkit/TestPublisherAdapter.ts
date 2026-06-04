@@ -11,7 +11,10 @@ import {GGEventsIPC} from "./GGEventsCommands";
 // =============================================================================
 
 export class TestPublisherAdapter implements PublisherTransport<any> {
-    constructor(private readonly config: any) {
+    private readonly config: any
+
+    constructor(config: any) {
+        this.config = config
     }
 
     async start(): Promise<void> {

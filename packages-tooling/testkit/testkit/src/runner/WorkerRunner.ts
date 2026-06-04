@@ -5,6 +5,7 @@ import {GGTestEnvConfig} from "../GGTestRuntime";
 
 export class WorkerRunner implements RuntimeRunner {
     private worker?: Worker;
+    private readonly config: GGTestEnvConfig
 
     private static workerLoaderPath: string | undefined;
 
@@ -16,7 +17,8 @@ export class WorkerRunner implements RuntimeRunner {
         this.workerLoaderPath = path;
     }
 
-    constructor(private readonly config: GGTestEnvConfig) {
+    constructor(config: GGTestEnvConfig) {
+        this.config = config
     }
 
     async start(): Promise<void> {

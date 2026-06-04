@@ -1,3 +1,5 @@
+import {enumOf, type Values} from "@grest-ts/common";
+
 /**
  * Complete log entry structure
  */
@@ -14,10 +16,11 @@ export interface LogEntry {
 /**
  * Log levels
  */
-export enum LogLevel {
-    DEBUG = 1,
-    INFO = 2,
-    WARN = 3,
-    ERROR = 4,
-    CRITICAL = 5
-}
+export const LogLevel = enumOf({
+    DEBUG: 1,
+    INFO: 2,
+    WARN: 3,
+    ERROR: 4,
+    CRITICAL: 5,
+});
+export type LogLevel = Values<typeof LogLevel>;

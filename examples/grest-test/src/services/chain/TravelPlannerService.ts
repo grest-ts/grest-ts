@@ -29,7 +29,10 @@ export interface TravelComparison {
 @mockable
 export class TravelPlannerService {
 
-    constructor(private readonly cityService: CityService) {
+    private readonly cityService: CityService
+
+    constructor(cityService: CityService) {
+        this.cityService = cityService
     }
 
     /**

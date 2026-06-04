@@ -5,6 +5,7 @@ export * from './withTimeout';
 export * from './GGError';
 export * from './UnreachableCode';
 export * from './types';
+export * from './enumOf';
 export * from './http';
 export * from './Secret';
 export * from "./sleep"

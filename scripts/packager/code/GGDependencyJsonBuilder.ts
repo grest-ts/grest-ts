@@ -50,11 +50,18 @@ const CATEGORY_COLORS_DARK = {
  * Used by the interactive HTML dependency viewer.
  */
 export class GGDependencyJsonBuilder {
+    private readonly packages: GGPackageInfo[]
+    private readonly rootDir: string
+    private readonly outputPath: string
     constructor(
-        private readonly packages: GGPackageInfo[],
-        private readonly rootDir: string,
-        private readonly outputPath: string = "docs/dependencies.json"
-    ) {}
+        packages: GGPackageInfo[],
+        rootDir: string,
+        outputPath: string = "docs/dependencies.json"
+    ) {
+        this.packages = packages
+        this.rootDir = rootDir
+        this.outputPath = outputPath
+    }
 
     build(): PackagerFile {
         const graph = this.generateGraph()

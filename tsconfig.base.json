@@ -21,6 +21,7 @@
     "noImplicitReturns": true,
     "noUnusedLocals": true,
     "noUnusedParameters": false,
+    "erasableSyntaxOnly": true,
 
     // Interop Constraints
     "allowJs": false,
@@ -35,5 +36,7 @@
     "paths": {
       "#scripts/*": ["./scripts/*"]
     }
-  }
+  },
+  // IsEnum.spec deliberately declares native enums (incl. numeric reverse-mapping and heterogeneous cases) to test IsEnum against them, which erasableSyntaxOnly forbids; it stays covered by vitest.
+  "exclude": ["**/IsEnum.spec.ts"]
 }

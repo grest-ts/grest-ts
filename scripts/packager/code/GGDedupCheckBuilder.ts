@@ -25,10 +25,15 @@ export class GGDedupCheckBuilder {
     private static readonly DEDUP_FILE_BASENAME = "_dedupCheck.ts"
     private static readonly DEDUP_IMPORT_LINE = `import "./_dedupCheck";`
 
+    private readonly packages: GGPackageInfo[]
+    private readonly version: string
     constructor(
-        private readonly packages: GGPackageInfo[],
-        private readonly version: string,
-    ) {}
+        packages: GGPackageInfo[],
+        version: string,
+    ) {
+        this.packages = packages
+        this.version = version
+    }
 
     build(): PackagerFile[] {
         const files: PackagerFile[] = []

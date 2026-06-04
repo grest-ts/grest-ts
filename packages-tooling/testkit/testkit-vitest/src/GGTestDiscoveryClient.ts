@@ -8,9 +8,11 @@ import {GGLocalDiscoveryServer} from "@grest-ts/discovery-local";
 export class GGTestDiscoveryClient extends GGDiscoveryClient {
 
     public override readonly isLocal = true;
+    private readonly discoveryServer: GGLocalDiscoveryServer
 
-    constructor(private readonly discoveryServer: GGLocalDiscoveryServer) {
+    constructor(discoveryServer: GGLocalDiscoveryServer) {
         super();
+        this.discoveryServer = discoveryServer
     }
 
     public registerRoutes(_registrations: GGServiceRegistration[]): void {

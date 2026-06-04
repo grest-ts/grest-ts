@@ -32,11 +32,18 @@ const COLORS = [
  * Only used during full builds, not for single package generation.
  */
 export class GGMermaidBuilder {
+    private readonly packages: GGPackageInfo[]
+    private readonly rootDir: string
+    private readonly outputPath: string
     constructor(
-        private readonly packages: GGPackageInfo[],
-        private readonly rootDir: string,
-        private readonly outputPath: string = "DEPENDENCIES.md"
-    ) {}
+        packages: GGPackageInfo[],
+        rootDir: string,
+        outputPath: string = "DEPENDENCIES.md"
+    ) {
+        this.packages = packages
+        this.rootDir = rootDir
+        this.outputPath = outputPath
+    }
 
     /**
      * Convert package name to human-readable format

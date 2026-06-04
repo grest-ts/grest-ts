@@ -901,6 +901,10 @@
     },
     {
       "from": "discovery-local",
+      "to": "common"
+    },
+    {
+      "from": "discovery-local",
       "to": "discovery"
     },
     {
@@ -1109,6 +1113,10 @@
     },
     {
       "from": "logger",
+      "to": "common"
+    },
+    {
+      "from": "logger",
       "to": "locator"
     },
     {
@@ -1201,11 +1209,19 @@
     },
     {
       "from": "schema-benchmark",
+      "to": "common"
+    },
+    {
+      "from": "schema-benchmark",
       "to": "schema"
     },
     {
       "from": "schema-file",
       "to": "schema"
+    },
+    {
+      "from": "sql",
+      "to": "common"
     },
     {
       "from": "sql",

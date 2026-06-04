@@ -103,6 +103,7 @@ flowchart TB
     discovery --> locator
     discovery-kubernetes --> discovery
     discovery-kubernetes --> logger
+    discovery-local --> common
     discovery-local --> discovery
     discovery-local --> ipc
     discovery-local --> locator
@@ -155,6 +156,7 @@ flowchart TB
     ipc --> trace
     locator --> common
     lock --> locator
+    logger --> common
     logger --> locator
     logger-console --> logger
     logger-console --> schema
@@ -178,8 +180,10 @@ flowchart TB
     runtime --> logger
     runtime --> metrics
     runtime --> trace
+    schema-benchmark --> common
     schema-benchmark --> schema
     schema-file --> schema
+    sql --> common
     sql --> schema
     testkit --> common
     testkit --> context
@@ -308,11 +312,11 @@ flowchart TB
     linkStyle 38 stroke:#A0CBE8,stroke-width:2px
     linkStyle 39 stroke:#A0CBE8,stroke-width:2px
     linkStyle 40 stroke:#A0CBE8,stroke-width:2px
-    linkStyle 41 stroke:#FFBE7D,stroke-width:2px
+    linkStyle 41 stroke:#A0CBE8,stroke-width:2px
     linkStyle 42 stroke:#FFBE7D,stroke-width:2px
-    linkStyle 43 stroke:#D4A6C8,stroke-width:2px
+    linkStyle 43 stroke:#FFBE7D,stroke-width:2px
     linkStyle 44 stroke:#D4A6C8,stroke-width:2px
-    linkStyle 45 stroke:#4E79A7,stroke-width:2px
+    linkStyle 45 stroke:#D4A6C8,stroke-width:2px
     linkStyle 46 stroke:#4E79A7,stroke-width:2px
     linkStyle 47 stroke:#4E79A7,stroke-width:2px
     linkStyle 48 stroke:#4E79A7,stroke-width:2px
@@ -321,19 +325,19 @@ flowchart TB
     linkStyle 51 stroke:#4E79A7,stroke-width:2px
     linkStyle 52 stroke:#4E79A7,stroke-width:2px
     linkStyle 53 stroke:#4E79A7,stroke-width:2px
-    linkStyle 54 stroke:#F28E2B,stroke-width:2px
+    linkStyle 54 stroke:#4E79A7,stroke-width:2px
     linkStyle 55 stroke:#F28E2B,stroke-width:2px
     linkStyle 56 stroke:#F28E2B,stroke-width:2px
     linkStyle 57 stroke:#F28E2B,stroke-width:2px
-    linkStyle 58 stroke:#E15759,stroke-width:2px
+    linkStyle 58 stroke:#F28E2B,stroke-width:2px
     linkStyle 59 stroke:#E15759,stroke-width:2px
     linkStyle 60 stroke:#E15759,stroke-width:2px
     linkStyle 61 stroke:#E15759,stroke-width:2px
-    linkStyle 62 stroke:#76B7B2,stroke-width:2px
+    linkStyle 62 stroke:#E15759,stroke-width:2px
     linkStyle 63 stroke:#76B7B2,stroke-width:2px
     linkStyle 64 stroke:#76B7B2,stroke-width:2px
     linkStyle 65 stroke:#76B7B2,stroke-width:2px
-    linkStyle 66 stroke:#59A14F,stroke-width:2px
+    linkStyle 66 stroke:#76B7B2,stroke-width:2px
     linkStyle 67 stroke:#59A14F,stroke-width:2px
     linkStyle 68 stroke:#59A14F,stroke-width:2px
     linkStyle 69 stroke:#59A14F,stroke-width:2px
@@ -341,61 +345,61 @@ flowchart TB
     linkStyle 71 stroke:#59A14F,stroke-width:2px
     linkStyle 72 stroke:#59A14F,stroke-width:2px
     linkStyle 73 stroke:#59A14F,stroke-width:2px
-    linkStyle 74 stroke:#EDC948,stroke-width:2px
+    linkStyle 74 stroke:#59A14F,stroke-width:2px
     linkStyle 75 stroke:#EDC948,stroke-width:2px
     linkStyle 76 stroke:#EDC948,stroke-width:2px
     linkStyle 77 stroke:#EDC948,stroke-width:2px
-    linkStyle 78 stroke:#B07AA1,stroke-width:2px
+    linkStyle 78 stroke:#EDC948,stroke-width:2px
     linkStyle 79 stroke:#B07AA1,stroke-width:2px
     linkStyle 80 stroke:#B07AA1,stroke-width:2px
-    linkStyle 81 stroke:#FF9DA7,stroke-width:2px
+    linkStyle 81 stroke:#B07AA1,stroke-width:2px
     linkStyle 82 stroke:#FF9DA7,stroke-width:2px
     linkStyle 83 stroke:#FF9DA7,stroke-width:2px
     linkStyle 84 stroke:#FF9DA7,stroke-width:2px
     linkStyle 85 stroke:#FF9DA7,stroke-width:2px
-    linkStyle 86 stroke:#9C755F,stroke-width:2px
-    linkStyle 87 stroke:#BAB0AC,stroke-width:2px
-    linkStyle 88 stroke:#86BCB6,stroke-width:2px
-    linkStyle 89 stroke:#8CD17D,stroke-width:2px
-    linkStyle 90 stroke:#8CD17D,stroke-width:2px
+    linkStyle 86 stroke:#FF9DA7,stroke-width:2px
+    linkStyle 87 stroke:#9C755F,stroke-width:2px
+    linkStyle 88 stroke:#BAB0AC,stroke-width:2px
+    linkStyle 89 stroke:#86BCB6,stroke-width:2px
+    linkStyle 90 stroke:#86BCB6,stroke-width:2px
     linkStyle 91 stroke:#8CD17D,stroke-width:2px
-    linkStyle 92 stroke:#B6992D,stroke-width:2px
-    linkStyle 93 stroke:#B6992D,stroke-width:2px
-    linkStyle 94 stroke:#499894,stroke-width:2px
-    linkStyle 95 stroke:#499894,stroke-width:2px
+    linkStyle 92 stroke:#8CD17D,stroke-width:2px
+    linkStyle 93 stroke:#8CD17D,stroke-width:2px
+    linkStyle 94 stroke:#B6992D,stroke-width:2px
+    linkStyle 95 stroke:#B6992D,stroke-width:2px
     linkStyle 96 stroke:#499894,stroke-width:2px
     linkStyle 97 stroke:#499894,stroke-width:2px
-    linkStyle 98 stroke:#D37295,stroke-width:2px
-    linkStyle 99 stroke:#D37295,stroke-width:2px
+    linkStyle 98 stroke:#499894,stroke-width:2px
+    linkStyle 99 stroke:#499894,stroke-width:2px
     linkStyle 100 stroke:#D37295,stroke-width:2px
     linkStyle 101 stroke:#D37295,stroke-width:2px
     linkStyle 102 stroke:#D37295,stroke-width:2px
-    linkStyle 103 stroke:#A0CBE8,stroke-width:2px
-    linkStyle 104 stroke:#A0CBE8,stroke-width:2px
+    linkStyle 103 stroke:#D37295,stroke-width:2px
+    linkStyle 104 stroke:#D37295,stroke-width:2px
     linkStyle 105 stroke:#A0CBE8,stroke-width:2px
     linkStyle 106 stroke:#A0CBE8,stroke-width:2px
     linkStyle 107 stroke:#A0CBE8,stroke-width:2px
     linkStyle 108 stroke:#A0CBE8,stroke-width:2px
     linkStyle 109 stroke:#A0CBE8,stroke-width:2px
     linkStyle 110 stroke:#A0CBE8,stroke-width:2px
-    linkStyle 111 stroke:#D4A6C8,stroke-width:2px
-    linkStyle 112 stroke:#4E79A7,stroke-width:2px
-    linkStyle 113 stroke:#F28E2B,stroke-width:2px
-    linkStyle 114 stroke:#76B7B2,stroke-width:2px
-    linkStyle 115 stroke:#76B7B2,stroke-width:2px
-    linkStyle 116 stroke:#76B7B2,stroke-width:2px
-    linkStyle 117 stroke:#76B7B2,stroke-width:2px
+    linkStyle 111 stroke:#A0CBE8,stroke-width:2px
+    linkStyle 112 stroke:#A0CBE8,stroke-width:2px
+    linkStyle 113 stroke:#D4A6C8,stroke-width:2px
+    linkStyle 114 stroke:#D4A6C8,stroke-width:2px
+    linkStyle 115 stroke:#4E79A7,stroke-width:2px
+    linkStyle 116 stroke:#F28E2B,stroke-width:2px
+    linkStyle 117 stroke:#F28E2B,stroke-width:2px
     linkStyle 118 stroke:#76B7B2,stroke-width:2px
     linkStyle 119 stroke:#76B7B2,stroke-width:2px
     linkStyle 120 stroke:#76B7B2,stroke-width:2px
     linkStyle 121 stroke:#76B7B2,stroke-width:2px
     linkStyle 122 stroke:#76B7B2,stroke-width:2px
     linkStyle 123 stroke:#76B7B2,stroke-width:2px
-    linkStyle 124 stroke:#59A14F,stroke-width:2px
-    linkStyle 125 stroke:#EDC948,stroke-width:2px
-    linkStyle 126 stroke:#EDC948,stroke-width:2px
-    linkStyle 127 stroke:#EDC948,stroke-width:2px
-    linkStyle 128 stroke:#EDC948,stroke-width:2px
+    linkStyle 124 stroke:#76B7B2,stroke-width:2px
+    linkStyle 125 stroke:#76B7B2,stroke-width:2px
+    linkStyle 126 stroke:#76B7B2,stroke-width:2px
+    linkStyle 127 stroke:#76B7B2,stroke-width:2px
+    linkStyle 128 stroke:#59A14F,stroke-width:2px
     linkStyle 129 stroke:#EDC948,stroke-width:2px
     linkStyle 130 stroke:#EDC948,stroke-width:2px
     linkStyle 131 stroke:#EDC948,stroke-width:2px
@@ -408,20 +412,24 @@ flowchart TB
     linkStyle 138 stroke:#EDC948,stroke-width:2px
     linkStyle 139 stroke:#EDC948,stroke-width:2px
     linkStyle 140 stroke:#EDC948,stroke-width:2px
-    linkStyle 141 stroke:#B07AA1,stroke-width:2px
-    linkStyle 142 stroke:#B07AA1,stroke-width:2px
-    linkStyle 143 stroke:#FF9DA7,stroke-width:2px
-    linkStyle 144 stroke:#FF9DA7,stroke-width:2px
-    linkStyle 145 stroke:#FF9DA7,stroke-width:2px
-    linkStyle 146 stroke:#9C755F,stroke-width:2px
-    linkStyle 147 stroke:#9C755F,stroke-width:2px
-    linkStyle 148 stroke:#9C755F,stroke-width:2px
-    linkStyle 149 stroke:#9C755F,stroke-width:2px
+    linkStyle 141 stroke:#EDC948,stroke-width:2px
+    linkStyle 142 stroke:#EDC948,stroke-width:2px
+    linkStyle 143 stroke:#EDC948,stroke-width:2px
+    linkStyle 144 stroke:#EDC948,stroke-width:2px
+    linkStyle 145 stroke:#B07AA1,stroke-width:2px
+    linkStyle 146 stroke:#B07AA1,stroke-width:2px
+    linkStyle 147 stroke:#FF9DA7,stroke-width:2px
+    linkStyle 148 stroke:#FF9DA7,stroke-width:2px
+    linkStyle 149 stroke:#FF9DA7,stroke-width:2px
     linkStyle 150 stroke:#9C755F,stroke-width:2px
     linkStyle 151 stroke:#9C755F,stroke-width:2px
     linkStyle 152 stroke:#9C755F,stroke-width:2px
     linkStyle 153 stroke:#9C755F,stroke-width:2px
     linkStyle 154 stroke:#9C755F,stroke-width:2px
+    linkStyle 155 stroke:#9C755F,stroke-width:2px
+    linkStyle 156 stroke:#9C755F,stroke-width:2px
+    linkStyle 157 stroke:#9C755F,stroke-width:2px
+    linkStyle 158 stroke:#9C755F,stroke-width:2px
 ```
 
 ---
@@ -554,13 +562,17 @@ flowchart TB
         code-generator["code-generator 🟢"]
         config["config 🟢"]
         context["context 🟢🌐"]
+        discovery-local["discovery-local 🟢"]
         events["events 🟢"]
         http["http 🟢🌐"]
         http-file["http-file 🟢🌐"]
         ipc["ipc 🟢"]
         locator["locator 🟢"]
+        logger["logger 🟢🌐"]
         metrics["metrics 🟢"]
         runtime["runtime 🟢"]
+        schema-benchmark["schema-benchmark 🟢"]
+        sql["sql 🟢"]
         testkit["testkit 🟢"]
         testkit-vitest["testkit-vitest 🟢"]
         websocket["websocket 🟢🌐"]
@@ -571,13 +583,17 @@ flowchart TB
     code-generator --> common
     config --> common
     context --> common
+    discovery-local --> common
     events --> common
     http --> common
     http-file --> common
     ipc --> common
     locator --> common
+    logger --> common
     metrics --> common
     runtime --> common
+    schema-benchmark --> common
+    sql --> common
     testkit --> common
     testkit-vitest --> common
     websocket --> common
@@ -585,29 +601,37 @@ flowchart TB
     style code-generator fill:#59A14F,stroke:#59A14F,color:#fff
     style config fill:#B07AA1,stroke:#B07AA1,color:#fff
     style context fill:#9C755F,stroke:#9C755F,color:#fff
+    style discovery-local fill:#A0CBE8,stroke:#A0CBE8,color:#fff
     style events fill:#4E79A7,stroke:#4E79A7,color:#fff
     style http fill:#59A14F,stroke:#59A14F,color:#fff
     style http-file fill:#EDC948,stroke:#EDC948,color:#fff
     style ipc fill:#FF9DA7,stroke:#FF9DA7,color:#fff
     style locator fill:#9C755F,stroke:#9C755F,color:#fff
+    style logger fill:#86BCB6,stroke:#86BCB6,color:#fff
     style metrics fill:#B6992D,stroke:#B6992D,color:#fff
     style runtime fill:#A0CBE8,stroke:#A0CBE8,color:#fff
+    style schema-benchmark fill:#D4A6C8,stroke:#D4A6C8,color:#fff
+    style sql fill:#F28E2B,stroke:#F28E2B,color:#fff
     style testkit fill:#76B7B2,stroke:#76B7B2,color:#fff
     style testkit-vitest fill:#EDC948,stroke:#EDC948,color:#fff
     style websocket fill:#9C755F,stroke:#9C755F,color:#fff
     linkStyle 0 stroke:#59A14F,stroke-width:2px
     linkStyle 1 stroke:#B07AA1,stroke-width:2px
     linkStyle 2 stroke:#9C755F,stroke-width:2px
-    linkStyle 3 stroke:#4E79A7,stroke-width:2px
-    linkStyle 4 stroke:#59A14F,stroke-width:2px
-    linkStyle 5 stroke:#EDC948,stroke-width:2px
-    linkStyle 6 stroke:#FF9DA7,stroke-width:2px
-    linkStyle 7 stroke:#9C755F,stroke-width:2px
-    linkStyle 8 stroke:#B6992D,stroke-width:2px
-    linkStyle 9 stroke:#A0CBE8,stroke-width:2px
-    linkStyle 10 stroke:#76B7B2,stroke-width:2px
-    linkStyle 11 stroke:#EDC948,stroke-width:2px
-    linkStyle 12 stroke:#9C755F,stroke-width:2px
+    linkStyle 3 stroke:#A0CBE8,stroke-width:2px
+    linkStyle 4 stroke:#4E79A7,stroke-width:2px
+    linkStyle 5 stroke:#59A14F,stroke-width:2px
+    linkStyle 6 stroke:#EDC948,stroke-width:2px
+    linkStyle 7 stroke:#FF9DA7,stroke-width:2px
+    linkStyle 8 stroke:#9C755F,stroke-width:2px
+    linkStyle 9 stroke:#86BCB6,stroke-width:2px
+    linkStyle 10 stroke:#B6992D,stroke-width:2px
+    linkStyle 11 stroke:#A0CBE8,stroke-width:2px
+    linkStyle 12 stroke:#D4A6C8,stroke-width:2px
+    linkStyle 13 stroke:#F28E2B,stroke-width:2px
+    linkStyle 14 stroke:#76B7B2,stroke-width:2px
+    linkStyle 15 stroke:#EDC948,stroke-width:2px
+    linkStyle 16 stroke:#9C755F,stroke-width:2px
 ```
 
 ### Config
@@ -964,6 +988,7 @@ flowchart TB
         discovery-local["discovery-local 🟢"]
     end
     subgraph Dependencies[" "]
+        common["common 🟢🌐"]
         discovery["discovery 🟢"]
         ipc["ipc 🟢"]
         locator["locator 🟢"]
@@ -972,6 +997,7 @@ flowchart TB
     end
     runtime --> discovery-local
     testkit-vitest --> discovery-local
+    discovery-local --> common
     discovery-local --> discovery
     discovery-local --> ipc
     discovery-local --> locator
@@ -980,6 +1006,7 @@ flowchart TB
     style discovery-local fill:#A0CBE8,stroke:#A0CBE8,color:#fff
     style runtime fill:#A0CBE8,stroke:#A0CBE8,color:#fff
     style testkit-vitest fill:#EDC948,stroke:#EDC948,color:#fff
+    style common fill:#EDC948,stroke:#EDC948,color:#fff
     style discovery fill:#499894,stroke:#499894,color:#fff
     style ipc fill:#FF9DA7,stroke:#FF9DA7,color:#fff
     style locator fill:#9C755F,stroke:#9C755F,color:#fff
@@ -992,6 +1019,7 @@ flowchart TB
     linkStyle 4 stroke:#A0CBE8,stroke-width:2px
     linkStyle 5 stroke:#A0CBE8,stroke-width:2px
     linkStyle 6 stroke:#A0CBE8,stroke-width:2px
+    linkStyle 7 stroke:#A0CBE8,stroke-width:2px
 ```
 
 ### Discovery Migration
@@ -1512,6 +1540,7 @@ flowchart TB
         logger["logger 🟢🌐"]
     end
     subgraph Dependencies[" "]
+        common["common 🟢🌐"]
         locator["locator 🟢"]
     end
     db-dynamodb --> logger
@@ -1532,6 +1561,7 @@ flowchart TB
     testkit --> logger
     testkit-vitest --> logger
     websocket --> logger
+    logger --> common
     logger --> locator
     style logger fill:#86BCB6,stroke:#86BCB6,color:#fff
     style db-dynamodb fill:#86BCB6,stroke:#86BCB6,color:#fff
@@ -1552,6 +1582,7 @@ flowchart TB
     style testkit fill:#76B7B2,stroke:#76B7B2,color:#fff
     style testkit-vitest fill:#EDC948,stroke:#EDC948,color:#fff
     style websocket fill:#9C755F,stroke:#9C755F,color:#fff
+    style common fill:#EDC948,stroke:#EDC948,color:#fff
     style locator fill:#9C755F,stroke:#9C755F,color:#fff
     linkStyle 0 stroke:#86BCB6,stroke-width:2px
     linkStyle 1 stroke:#8CD17D,stroke-width:2px
@@ -1572,6 +1603,7 @@ flowchart TB
     linkStyle 16 stroke:#EDC948,stroke-width:2px
     linkStyle 17 stroke:#9C755F,stroke-width:2px
     linkStyle 18 stroke:#86BCB6,stroke-width:2px
+    linkStyle 19 stroke:#86BCB6,stroke-width:2px
 ```
 
 ### Logger Console
@@ -1894,12 +1926,16 @@ flowchart TB
         schema-benchmark["schema-benchmark 🟢"]
     end
     subgraph Dependencies[" "]
+        common["common 🟢🌐"]
         schema["schema 🟢🌐"]
     end
+    schema-benchmark --> common
     schema-benchmark --> schema
     style schema-benchmark fill:#D4A6C8,stroke:#D4A6C8,color:#fff
+    style common fill:#EDC948,stroke:#EDC948,color:#fff
     style schema fill:#FFBE7D,stroke:#FFBE7D,color:#fff
     linkStyle 0 stroke:#D4A6C8,stroke-width:2px
+    linkStyle 1 stroke:#D4A6C8,stroke-width:2px
 ```
 
 ### Schema File
@@ -1936,12 +1972,16 @@ flowchart TB
         sql["sql 🟢"]
     end
     subgraph Dependencies[" "]
+        common["common 🟢🌐"]
         schema["schema 🟢🌐"]
     end
+    sql --> common
     sql --> schema
     style sql fill:#F28E2B,stroke:#F28E2B,color:#fff
+    style common fill:#EDC948,stroke:#EDC948,color:#fff
     style schema fill:#FFBE7D,stroke:#FFBE7D,color:#fff
     linkStyle 0 stroke:#F28E2B,stroke-width:2px
+    linkStyle 1 stroke:#F28E2B,stroke-width:2px
 ```
 
 ### Struct

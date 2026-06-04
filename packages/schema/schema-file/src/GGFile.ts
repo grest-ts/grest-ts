@@ -213,12 +213,14 @@ export class BufferGGFile extends GGFile {
  */
 export class BrowserGGFile extends GGFile {
     private _consumed = false;
+    private readonly nativeFile: File & { readonly name: string };
     readonly name: string;
     readonly mimeType: string;
     readonly size: number;
 
-    constructor(private readonly nativeFile: File & { readonly name: string }) {
+    constructor(nativeFile: File & { readonly name: string }) {
         super();
+        this.nativeFile = nativeFile;
         this.name = nativeFile.name;
         this.mimeType = nativeFile.type || 'application/octet-stream';
         this.size = nativeFile.size;

@@ -55,7 +55,10 @@ export interface GGPackageInfo {
  * Finds grest.package.ts files, parses configs, and discovers imports.
  */
 export class GGParser {
-    constructor(private readonly rootDir: string) {}
+    private readonly rootDir: string
+    constructor(rootDir: string) {
+        this.rootDir = rootDir
+    }
 
     /**
      * Parse all packages in the workspace

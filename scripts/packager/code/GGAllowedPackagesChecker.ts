@@ -5,7 +5,10 @@ import type { GGPackageInfo } from "./GGParser"
  * When a package has `allowedPackages` configured, only those packages may be imported.
  */
 export class GGAllowedPackagesChecker {
-    constructor(private readonly packages: GGPackageInfo[]) {}
+    private readonly packages: GGPackageInfo[]
+    constructor(packages: GGPackageInfo[]) {
+        this.packages = packages
+    }
 
     /**
      * Check for disallowed package imports and throw an error if found.

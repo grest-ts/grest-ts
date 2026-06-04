@@ -15,7 +15,10 @@ export interface GGPostgresCloneTestOptions {
 
 export class GGPostgresTestMethods {
 
-    constructor(private readonly config: GGPostgresConfig) {
+    private readonly config: GGPostgresConfig
+
+    constructor(config: GGPostgresConfig) {
+        this.config = config
     }
 
     /**

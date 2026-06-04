@@ -33,9 +33,11 @@ export class GGLocalDiscoveryServer {
     private readonly routes: Map<string, RegisteredEntry[]> = new Map();
     private readonly routingStrategies: Map<string, RoutingStrategy> = new Map();
     public onYield?: () => Promise<void>;
-  
-    constructor(server: IPCServer, public readonly kind: DiscoveryServerKind = DiscoveryServerKind.Embedded) {
+    public readonly kind: DiscoveryServerKind
+
+    constructor(server: IPCServer, kind: DiscoveryServerKind = DiscoveryServerKind.Embedded) {
         this.server = server;
+        this.kind = kind;
 
         // Socket handlers for framework communication
         this.server.onFrameworkMessage(GGDiscoveryIPC.discoveryServer.register, async (routes, msg) => {

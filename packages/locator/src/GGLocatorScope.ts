@@ -1,6 +1,7 @@
 import type {GGLocatorKey} from "./GGLocatorKey";
 import {GG_ASYNC_STORAGE} from "./GGLocatorStorage";
 import {GGLocatorScopeDebug, GGLocatorScopeDebugList} from "./GGLocatorScopeDebug";
+import {enumOf, type Values} from "@grest-ts/common";
 
 type ConstructorOf<T> = new (...args: any[]) => T;
 
@@ -184,15 +185,16 @@ export class GGLocatorScope {
  *
  * Example startup order: CONFIG → DATABASE → HTTP → INTL → BUSINESS → PERIODIC_JOBS → SERVICE_DISCOVERY
  */
-export enum GGLocatorServiceType {
-    CONFIG = 0,
-    DATABASE = 10,
-    HTTP = 20,
-    INTL = 25,
-    BUSINESS = 30,
-    PERIODIC_JOBS = 40,
-    SERVICE_DISCOVERY = 999
-}
+export const GGLocatorServiceType = enumOf({
+    CONFIG: 0,
+    DATABASE: 10,
+    HTTP: 20,
+    INTL: 25,
+    BUSINESS: 30,
+    PERIODIC_JOBS: 40,
+    SERVICE_DISCOVERY: 999,
+});
+export type GGLocatorServiceType = Values<typeof GGLocatorServiceType>;
 
 /**
  * Service lifecycle callbacks registered with GGServiceRegistry.
@@ -201,7 +203,8 @@ export enum GGLocatorServiceType {
  * in the runtime lifecycle - startup, teardown, and per-request context hooks.
  */
 export interface GGLocatorLifecycleCallbacks {
-    type: GGLocatorServiceType
+    // Numeric start/stop priority (lower starts first). The named anchors stay visible in editors; `number & {}` keeps the union from collapsing to bare `number` so offsets like CONFIG + 1 are still allowed.
+    type: GGLocatorServiceType | (number & {})
     start: () => any | Promise<any>
     teardown?: () => any | Promise<any>
 }

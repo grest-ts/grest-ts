@@ -2,10 +2,7 @@ import {tSpriteId} from "./misc/MiscTypes";
 
 export type tRef33 = number & { tRef33: never };
 
-export enum MyEnum {
-    A = 10,
-    B = 20
-}
+export type MyEnum = 10 | 20
 
 const B0_SIZE_16BIT = 4;
 const B1_SIZE_32BIT = 3;

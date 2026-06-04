@@ -1,12 +1,14 @@
 import WebSocket from 'ws';
 import {GGLog} from "@grest-ts/logger";
 import {GGLocator} from "@grest-ts/locator";
+import {enumOf, type Values} from "@grest-ts/common";
 
-export enum IPCMessageType {
-    MSG = 'm',
-    REQ = 'r',
-    RES = 's'
-}
+export const IPCMessageType = enumOf({
+    MSG: 'm',
+    REQ: 'r',
+    RES: 's',
+});
+export type IPCMessageType = Values<typeof IPCMessageType>;
 
 export interface IPCMessage {
     type: IPCMessageType;

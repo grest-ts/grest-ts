@@ -1,3 +1,5 @@
+import {enumOf, type Values} from "@grest-ts/common";
+
 /**
  * Wire-log verbosity for the WebSocket client. Integer-backed; OFF is `0`
  * so the fast-path gate is a single truthy check (`if (logMode) emit(...)`).
@@ -11,8 +13,9 @@
  *             unexpected drops, retries exhausted)
  *   ALL     — every frame + every lifecycle transition logged
  */
-export enum GGWsLogMode {
-    OFF = 0,
-    NON_OK = 1,
-    ALL = 2,
-}
+export const GGWsLogMode = enumOf({
+    OFF: 0,
+    NON_OK: 1,
+    ALL: 2,
+});
+export type GGWsLogMode = Values<typeof GGWsLogMode>;

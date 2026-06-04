@@ -71,8 +71,10 @@ export class GGTestSelector<T extends RuntimeConstructor[]> {
 export class GGTestSelectorExtension {
 
     protected readonly runner: GGTestRunner
+    protected readonly runtimes: GGTestRuntime[]
 
-    constructor(protected readonly runtimes: GGTestRuntime[]) {
+    constructor(runtimes: GGTestRuntime[]) {
+        this.runtimes = runtimes
         this.runner = this.runtimes[0]?.runner
     }
 

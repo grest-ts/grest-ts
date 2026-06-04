@@ -72,14 +72,16 @@ class GGWebSocketSchemaBuilder<
     TClientToServerImpl = TClientToServer,
     TServerToClientImpl = TServerToClient
 > {
+    private readonly _contract: GGSocketContract
     private _path: string = ""
     private _middlewares: GGTransportMiddleware[] = []
     private _queryValidator?: GGValidator<any>
     private _connectPermission?: GGPermission
 
     constructor(
-        private readonly _contract: GGSocketContract
+        _contract: GGSocketContract
     ) {
+        this._contract = _contract
     }
 
     path(path: string): this {

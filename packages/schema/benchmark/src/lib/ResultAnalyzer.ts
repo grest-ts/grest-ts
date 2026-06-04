@@ -20,7 +20,9 @@ const DEFAULT_RANKING_CONFIG: RankingConfig = {
  * Analyzer for calculating comparative metrics from raw benchmark results.
  */
 export class ResultAnalyzer {
-    constructor(private config: RankingConfig = DEFAULT_RANKING_CONFIG) {
+    private config: RankingConfig
+    constructor(config: RankingConfig = DEFAULT_RANKING_CONFIG) {
+        this.config = config
     }
 
     /**

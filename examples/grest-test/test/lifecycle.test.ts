@@ -5,11 +5,18 @@ import {GGRuntime} from "@grest-ts/runtime";
 import {GGMetricsLoader} from "@grest-ts/metrics";
 
 export class LifecycleService {
+    public readonly name: string
+    public readonly priority: GGLocatorServiceType
+    private readonly shouldFail: boolean
+
     constructor(
-        public readonly name: string,
-        public readonly priority: GGLocatorServiceType,
-        private readonly shouldFail: boolean = false
+        name: string,
+        priority: GGLocatorServiceType,
+        shouldFail: boolean = false
     ) {
+        this.name = name
+        this.priority = priority
+        this.shouldFail = shouldFail
         GGLocator.getScope().setWithLifecycle(
             new GGLocatorKey<LifecycleService>(`LifecycleService-${name}`),
             this,
@@ -33,8 +40,11 @@ export class LifecycleTestRuntime extends GGRuntime {
     public static readonly NAME = "lifecycle"
     public static readonly SOURCE_MODULE_URL = import.meta.url
 
-    constructor(private readonly failServiceLetter?: "A" | "B" | "C" | "D") {
+    private readonly failServiceLetter?: "A" | "B" | "C" | "D"
+
+    constructor(failServiceLetter?: "A" | "B" | "C" | "D") {
         super();
+        this.failServiceLetter = failServiceLetter
     }
 
     protected compose(): void {

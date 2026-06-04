@@ -1,6 +1,7 @@
 import {IPCServer} from "@grest-ts/ipc";
 
 import {GGServiceDiscoveryEntry} from "./GGLocalDiscoveryClient";
+import {enumOf, type Values} from "@grest-ts/common";
 
 export interface DiscoverApiResult {
     success: boolean;
@@ -8,10 +9,11 @@ export interface DiscoverApiResult {
     error?: string;
 }
 
-export enum DiscoveryServerKind {
-    Bin = "bin",
-    Embedded = "embedded",
-}
+export const DiscoveryServerKind = enumOf({
+    Bin: "bin",
+    Embedded: "embedded",
+});
+export type DiscoveryServerKind = Values<typeof DiscoveryServerKind>;
 
 export const GGDiscoveryIPC = {
     discoveryServer: {

@@ -8,6 +8,7 @@ const GG_ISOLATED_CONFIG = "GG_ISOLATED_CONFIG";
 
 export class IsolatedRunner implements RuntimeRunner {
     private process?: ChildProcess;
+    private config: GGTestEnvConfig
 
     private static isolatedLoaderPath: string | undefined;
 
@@ -19,7 +20,8 @@ export class IsolatedRunner implements RuntimeRunner {
         this.isolatedLoaderPath = path;
     }
 
-    constructor(private config: GGTestEnvConfig) {
+    constructor(config: GGTestEnvConfig) {
+        this.config = config
     }
 
     async start(): Promise<void> {
