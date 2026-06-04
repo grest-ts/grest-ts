@@ -27,7 +27,12 @@ const RECOVER_TIMEOUT_MS = 45_000
 function withRecoverTimeout(recover: Promise<void>, name: string): Promise<void> {
     return new Promise<void>((resolve, reject) => {
         const timer = setTimeout(
-            () => reject(new Error(`Credential recover for "${name}" timed out after ${RECOVER_TIMEOUT_MS}ms (stuck/circular refresh?)`)),
+            () => {
+                // A 45s recover is never normal — log loudly so a stuck/circular refresh
+                // is visible, not just surfaced as a generic rejected request.
+                console.warn(`[gg-http] credential recover for "${name}" timed out after ${RECOVER_TIMEOUT_MS}ms (stuck/circular refresh?) — failing the request instead of hanging`)
+                reject(new Error(`Credential recover for "${name}" timed out after ${RECOVER_TIMEOUT_MS}ms (stuck/circular refresh?)`))
+            },
             RECOVER_TIMEOUT_MS,
         )
         recover.then(resolve, reject).finally(() => clearTimeout(timer))

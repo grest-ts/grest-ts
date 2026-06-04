@@ -11,6 +11,7 @@ import type {
     SessionState,
     StoredAuth,
 } from "./core/types"
+import {GGAuthLog} from "./core/GGAuthLog"
 
 // Data fields of D proxied as optional properties on the DerivedToken handle.
 type ProxiedData<D> = D extends object ? Partial<D> : {}
@@ -94,7 +95,7 @@ export class BaseAuthSession<D extends DerivedMap> {
         this.derived = handles
 
         ports.cache.subscribe((incoming) => this.onCrossTab(incoming))
-        ports.scheduler.onWake(() => { void this.ensureFresh().catch(() => {}) })
+        ports.scheduler.onWake(() => { void this.ensureFresh().catch((e) => GGAuthLog.warn("wake refresh failed", e)) })
     }
 
     subscribe(listener: () => void): () => void {
@@ -402,9 +403,9 @@ export class BaseAuthSession<D extends DerivedMap> {
         if (!this.shared) return
         const now = this.ports.clock.now()
         const delay = Math.max(0, this.shared.access.expiresAt - this.config.refreshLeadMs - now)
-        // Fire-and-forget: failures already surface via state (degraded/expired),
-        // so swallow the rejection rather than leave it unhandled.
-        this.cancelScheduled = this.ports.scheduler.schedule(delay, () => { void this.ensureFresh().catch(() => {}) })
+        // Fire-and-forget: failures already surface via state (degraded/expired). Warn
+        // rather than swallow — a failing scheduled refresh is abnormal and worth seeing.
+        this.cancelScheduled = this.ports.scheduler.schedule(delay, () => { void this.ensureFresh().catch((e) => GGAuthLog.warn("scheduled refresh failed", e)) })
     }
 
     private cancelNextRefresh(): void {
@@ -425,6 +426,7 @@ export class BaseAuthSession<D extends DerivedMap> {
     }
 
     private markDegraded(): void {
+        GGAuthLog.warn("session degraded — refresh failed but the current token is still usable; will retry")
         this.setState({...this.state, degraded: true})
         this.notifyListeners()
     }
