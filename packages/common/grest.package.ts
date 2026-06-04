@@ -6,6 +6,7 @@ definePackage({
     publishToNpm: true,
     keywords: ["utilities", "shared", "helpers"],
     targets: {node: true, browser: true},
+    hasTests: true,
     allowedPackages: [],
     dependencies: {
         "fast-glob": "^3.3.3"

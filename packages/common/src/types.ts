@@ -14,3 +14,9 @@ export type ConstructorOf<T> = new (...args: any[]) => T;
  * Returns the instance of a class. T would be the class reference.
  */
 export type InstanceOf<T> = T extends { new(...args: any[]): infer S } ? S : undefined
+
+/**
+ * Union of an object's value types. Pair with `enumOf` to replace `enum`:
+ * `type Color = Values<typeof Color>`.
+ */
+export type Values<T> = T[keyof T]
