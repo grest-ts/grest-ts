@@ -27,23 +27,29 @@ export class GGDynamoDbTable<
     /** Sort-key field name. `undefined` for HASH-only tables. */
     public readonly skField: string | undefined
 
+    // `db` is `protected` — escape hatch for subclasses that need a
+    // raw DDB op we haven't wrapped (BatchGet, TransactWrite, ...).
+    protected readonly db: GGDynamoDb
+    public readonly tableName: string
+    // `schema` and `validate` are `private` on purpose. Validation
+    // is the contract of `put` / `putConditional`; subclasses must
+    // not bypass it by writing raw values via `this.db`.
+    private readonly schema: GGSchema<T>
+    public readonly pkField: PK
+
     constructor(
-        // `db` is `protected` — escape hatch for subclasses that need a
-        // raw DDB op we haven't wrapped (BatchGet, TransactWrite, ...).
-        protected readonly db: GGDynamoDb,
-        public readonly tableName: string,
-        // `schema` and `validate` are `private` on purpose. Validation
-        // is the contract of `put` / `putConditional`; subclasses must
-        // not bypass it by writing raw values via `this.db`.
+        db: GGDynamoDb,
+        tableName: string,
         schema: GGSchema<T>,
-        public readonly pkField: PK,
+        pkField: PK,
         skField?: keyof T & string,
     ) {
+        this.db = db
+        this.tableName = tableName
         this.schema = schema
+        this.pkField = pkField
         this.skField = skField
     }
-
-    private readonly schema: GGSchema<T>
 
     async get(pk: T[PK], sk?: unknown): Promise<T | undefined> {
         return this.db.get<T>(this.tableName, this.buildKey(pk, sk))

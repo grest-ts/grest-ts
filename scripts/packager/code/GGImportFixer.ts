@@ -25,9 +25,12 @@ export interface ImportFix {
 }
 
 export class GGImportFixer {
+    private readonly packages: GGPackageInfo[]
     constructor(
-        private readonly packages: GGPackageInfo[]
-    ) {}
+        packages: GGPackageInfo[]
+    ) {
+        this.packages = packages
+    }
 
     async fix(): Promise<ImportFix[]> {
         const allFixes: ImportFix[] = []

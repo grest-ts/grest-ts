@@ -23,6 +23,7 @@ export class TypeExtractor {
 
     // Performance metrics
     public resolveTypeCallCount = 0
+    private options?: { skipLibCheck?: boolean }
 
     /**
      * Generate cache key scoped by source file path and type name
@@ -68,7 +69,8 @@ export class TypeExtractor {
      * @param apiFilePathOrPaths - Single file path or array of file paths
      * @param options - Optional generator options (for skipLibCheck, etc.)
      */
-    constructor(apiFilePathOrPaths: string | string[], private options?: { skipLibCheck?: boolean }) {
+    constructor(apiFilePathOrPaths: string | string[], options?: { skipLibCheck?: boolean }) {
+        this.options = options
         const apiFilePaths = Array.isArray(apiFilePathOrPaths) ? apiFilePathOrPaths : [apiFilePathOrPaths]
         const mainFilePath = apiFilePaths[0]
 

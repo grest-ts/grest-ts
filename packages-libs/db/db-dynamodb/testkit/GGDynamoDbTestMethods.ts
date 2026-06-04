@@ -25,7 +25,10 @@ export interface GGDynamoDbCloneTestOptions {
 
 export class GGDynamoDbTestMethods {
 
-    constructor(private readonly config: GGDynamoDbConfig) {
+    private readonly config: GGDynamoDbConfig
+
+    constructor(config: GGDynamoDbConfig) {
+        this.config = config
     }
 
     /**

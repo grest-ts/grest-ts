@@ -95,7 +95,10 @@ export abstract class BaseBenchmarkCollector implements BenchmarkCollector {
  * Multiplexer that forwards events to multiple collectors.
  */
 export class MultiCollector implements BenchmarkCollector {
-    constructor(private collectors: BenchmarkCollector[]) {}
+    private collectors: BenchmarkCollector[]
+    constructor(collectors: BenchmarkCollector[]) {
+        this.collectors = collectors
+    }
 
     setFirstErrorOnly(libraries: Set<string>): void {
         for (const c of this.collectors) c.setFirstErrorOnly(libraries);

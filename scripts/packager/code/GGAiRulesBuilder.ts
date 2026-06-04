@@ -43,10 +43,15 @@ description: Use whenever the user is using or considering grest-ts (contract-fi
  * This way only one file lives in the template, not three identical copies.
  */
 export class GGAiRulesBuilder {
+    private readonly rootDir: string
+    private readonly packages: GGPackageInfo[]
     constructor(
-        private readonly rootDir: string,
-        private readonly packages: GGPackageInfo[],
-    ) {}
+        rootDir: string,
+        packages: GGPackageInfo[],
+    ) {
+        this.rootDir = rootDir
+        this.packages = packages
+    }
 
     build(): PackagerFile[] {
         const frameworkBody = this.read("scripts/ai-rules/grest-ts.md")

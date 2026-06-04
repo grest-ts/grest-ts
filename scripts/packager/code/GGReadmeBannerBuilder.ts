@@ -16,7 +16,10 @@ ${BANNER_END}`
  * Ensures each package README has a banner linking to the parent framework.
  */
 export class GGReadmeBannerBuilder {
-    constructor(private readonly packages: GGPackageInfo[]) {}
+    private readonly packages: GGPackageInfo[]
+    constructor(packages: GGPackageInfo[]) {
+        this.packages = packages
+    }
 
     /**
      * Build banner-updated READMEs for all non-hidden packages

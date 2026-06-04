@@ -15,7 +15,10 @@ export interface GGMysqlCloneTestOptions {
 
 export class GGMysqlTestMethods {
 
-    constructor(private readonly config: GGMysqlConfig) {
+    private readonly config: GGMysqlConfig
+
+    constructor(config: GGMysqlConfig) {
+        this.config = config
     }
 
     /**

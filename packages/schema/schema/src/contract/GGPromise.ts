@@ -26,8 +26,10 @@ import {OK} from "./OK";
 export class GGPromise<TSuccess, TError extends ANY_ERROR = never> implements Promise<TSuccess> {
 
     readonly [Symbol.toStringTag] = 'GGPromise'
+    private readonly promise: Promise<OK<TSuccess> | TError>
 
-    constructor(private readonly promise: Promise<OK<TSuccess> | TError>) {
+    constructor(promise: Promise<OK<TSuccess> | TError>) {
+        this.promise = promise
     }
 
     /**

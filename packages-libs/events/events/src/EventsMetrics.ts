@@ -1,18 +1,21 @@
 import {GGCounterKey, GGGaugeKey, GGMetrics} from "@grest-ts/metrics"
+import {enumOf, type Values} from "@grest-ts/common"
 
 type PublishResult = 'OK' | 'ERROR' | string
 type ProcessResult = 'OK' | 'ERROR' | 'SKIPPED' | string
 
-export enum PublisherWarning {
-    MESSAGE_SIZE_NEAR_LIMIT = 'message_size_near_limit',
-    PUBLISH_SLOW = 'publish_slow',
-}
+export const PublisherWarning = enumOf({
+    MESSAGE_SIZE_NEAR_LIMIT: 'message_size_near_limit',
+    PUBLISH_SLOW: 'publish_slow',
+})
+export type PublisherWarning = Values<typeof PublisherWarning>
 
-export enum SubscriberWarning {
-    MESSAGE_AGE_HIGH = 'message_age_high',
-    PROCESSING_SLOW = 'processing_slow',
-    HIGH_REDELIVERY_COUNT = 'high_redelivery_count',
-}
+export const SubscriberWarning = enumOf({
+    MESSAGE_AGE_HIGH: 'message_age_high',
+    PROCESSING_SLOW: 'processing_slow',
+    HIGH_REDELIVERY_COUNT: 'high_redelivery_count',
+})
+export type SubscriberWarning = Values<typeof SubscriberWarning>
 
 export const GGEventsMetrics = GGMetrics.define('/events/', () => ({
 

@@ -4,8 +4,10 @@ import {IsRefreshTokenRecord, type RefreshTokenRecord, type RefreshTokenStore} f
 export class InMemoryRefreshTokenStore implements RefreshTokenStore {
 
     private readonly records = new Map<string, RefreshTokenRecord>()
-
-    constructor(private readonly now: () => number = Date.now) {}
+    private readonly now: () => number
+    constructor(now: () => number = Date.now) {
+        this.now = now
+    }
 
     public save = async (record: RefreshTokenRecord): Promise<void> => {
         this.sweepExpired()

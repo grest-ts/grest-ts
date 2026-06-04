@@ -2,11 +2,12 @@ import {describe, test, expect} from "vitest"
 import {IsArray, IsBoolean, IsEnum, IsObject, IsString, NOT_AUTHORIZED} from "@grest-ts/schema"
 import {GGAuthAccessToken, HmacSigner} from "../../index-node"
 
-enum Perm {
-    Read = "read",
-    Write = "write",
-    Admin = "admin",
-}
+const Perm = {
+    Read: "read",
+    Write: "write",
+    Admin: "admin",
+} as const
+type Perm = typeof Perm[keyof typeof Perm]
 
 const IsClaims = IsObject({permissions: IsArray(IsEnum(Perm))})
 

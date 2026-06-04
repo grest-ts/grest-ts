@@ -4,11 +4,15 @@ import {GGEventsIPC} from "./GGEventsCommands";
 
 export class TestSubscriberAdapter implements SubscriberTransport {
     private _notifyResolver?: () => void
+    public readonly serviceName: string
+    private readonly config: any
 
     constructor(
-        public readonly serviceName: string,
-        private readonly config: any
+        serviceName: string,
+        config: any
     ) {
+        this.serviceName = serviceName
+        this.config = config
     }
 
     async start(): Promise<void> {

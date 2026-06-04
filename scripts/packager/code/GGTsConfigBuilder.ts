@@ -33,7 +33,10 @@ export interface TsConfig {
  * Note: No project references are generated (dist-less setup with noEmit: true)
  */
 export class GGTsConfigBuilder {
-    constructor(private readonly packages: GGPackageInfo[]) {}
+    private readonly packages: GGPackageInfo[]
+    constructor(packages: GGPackageInfo[]) {
+        this.packages = packages
+    }
 
     /**
      * Build relative path to tsconfig.base.json from a given depth.

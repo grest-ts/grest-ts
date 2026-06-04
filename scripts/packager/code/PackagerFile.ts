@@ -9,10 +9,15 @@ const GENERATED_MESSAGE = "THIS FILE IS GENERATED - DO NOT EDIT"
  * Encapsulates path and content, with a write() method for deferred writing.
  */
 export class PackagerFile {
+    public readonly path: string
+    public readonly content: string
     constructor(
-        public readonly path: string,
-        public readonly content: string
-    ) {}
+        path: string,
+        content: string
+    ) {
+        this.path = path
+        this.content = content
+    }
 
     /**
      * Write the file if content has changed.

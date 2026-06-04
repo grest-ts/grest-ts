@@ -4,11 +4,12 @@ import {AND, CONCAT, DATE, GROUP_CONCAT, IF, MATH, OR, VALUE} from "../src";
 import {SQL} from "../src/SQL";
 import {execOne} from "./tables/exec";
 
-enum MyEnum {
-    aa = "aa",
-    bb = "bb",
-    dd = 123
-}
+const MyEnum = {
+    aa: "aa",
+    bb: "bb",
+    dd: 123,
+} as const
+type MyEnum = typeof MyEnum[keyof typeof MyEnum]
 
 test("simple", async () => {
 

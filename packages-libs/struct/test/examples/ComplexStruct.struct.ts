@@ -3,10 +3,7 @@ import {tSpriteId} from "./misc/MiscTypes";
 
 type tRef33 = number & { tRef33: never };
 
-export enum MyEnum {
-    A = 10,
-    B = 20
-}
+export type MyEnum = 10 | 20
 
 new Struct({useDirty: true, useExport: true, useNew: true})
     .ref<tRef33>()

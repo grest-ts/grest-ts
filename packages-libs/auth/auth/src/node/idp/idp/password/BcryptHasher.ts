@@ -9,7 +9,10 @@ const lib = (): typeof import("bcrypt") => bcrypt ??= createRequire(import.meta.
 
 export class BcryptHasher implements PasswordHasher {
 
-    constructor(private readonly rounds: number = 10) {}
+    private readonly rounds: number
+    constructor(rounds: number = 10) {
+        this.rounds = rounds
+    }
 
     public hash = (password: string): Promise<string> => {
         return lib().hash(password, this.rounds)

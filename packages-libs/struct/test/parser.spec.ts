@@ -68,12 +68,7 @@ describe('collectStructDefinitions – integration', () => {
                         {name: "opacity", type: "uint8", offset: 8, bits: 8},
                         {name: "isHighlighted", type: "bool", offset: 9, bits: 1, mask: 0b0000001},
                         {name: "isAnimated", type: "bit", offset: 9, bits: 1, mask: 0b0000010},
-                        {
-                            name: "something", type: "int8", offset: 10, bits: 8, tsType: "MyEnum", tsTypeDefinition: "export enum MyEnum {\n" +
-                                "    A = 10,\n" +
-                                "    B = 20\n" +
-                                "}"
-                        },
+                        {name: "something", type: "int8", offset: 10, bits: 8, tsType: "MyEnum", tsTypeDefinition: "export type MyEnum = 10 | 20"},
                     ]
                 }
             ]

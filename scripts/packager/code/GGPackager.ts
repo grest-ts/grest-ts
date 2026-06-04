@@ -79,7 +79,10 @@ async function writeFiles(files: PackagerFile[], dryRun: boolean): Promise<void>
  * Parses packages and generates tsconfig.json and package.json files.
  */
 export class GGPackager {
-    constructor(private readonly options: GGPackagerOptions) {}
+    private readonly options: GGPackagerOptions
+    constructor(options: GGPackagerOptions) {
+        this.options = options
+    }
 
     /**
      * Run the packager

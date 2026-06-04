@@ -6,8 +6,10 @@ import type { GGPackageInfo } from "./GGParser"
  */
 export class GGCircularDependencyChecker {
     private packageMap: Map<string, GGPackageInfo>
+    private readonly packages: GGPackageInfo[]
 
-    constructor(private readonly packages: GGPackageInfo[]) {
+    constructor(packages: GGPackageInfo[]) {
+        this.packages = packages
         this.packageMap = new Map(packages.map(p => [p.shortName, p]))
     }
 

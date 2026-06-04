@@ -53,8 +53,12 @@ export interface PackageJson {
 export class GGPackageBuilder {
     /** Map of package short names to their info */
     private packageMap: Map<string, GGPackageInfo>
+    private readonly packages: GGPackageInfo[]
+    private readonly rootMeta: PackageJsonRootMeta
 
-    constructor(private readonly packages: GGPackageInfo[], private readonly rootMeta: PackageJsonRootMeta) {
+    constructor(packages: GGPackageInfo[], rootMeta: PackageJsonRootMeta) {
+        this.packages = packages
+        this.rootMeta = rootMeta
         this.packageMap = new Map(packages.map(p => [p.shortName, p]))
     }
 

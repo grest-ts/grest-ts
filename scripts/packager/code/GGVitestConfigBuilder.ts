@@ -8,7 +8,10 @@ import type { ViteUserConfig } from "vitest/config"
  * Generates for packages with hasTests or hasCodegenTests.
  */
 export class GGVitestConfigBuilder {
-    constructor(private readonly packages: GGPackageInfo[]) {}
+    private readonly packages: GGPackageInfo[]
+    constructor(packages: GGPackageInfo[]) {
+        this.packages = packages
+    }
 
     /**
      * Check if package needs a vitest config
