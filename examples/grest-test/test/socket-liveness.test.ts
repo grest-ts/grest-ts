@@ -1,12 +1,12 @@
 /**
- * Unit coverage for the shared GGSocketLiveness primitives (server reap + browser
- * watchdog). These are payload-agnostic transport helpers, so they're exercised
- * against fakes rather than a real socket. The browser watchdog runs in the node
- * test env because it guards `document`/`window` — with neither present the
- * visibility gate is skipped and it acts purely on the `isAlive` verdict.
+ * Unit coverage for the shared liveness primitives (GGServerLiveness reap +
+ * GGClientLiveness watchdog). These are payload-agnostic transport helpers, so they're
+ * exercised against fakes rather than a real socket. The client watchdog runs in the node
+ * test env because it guards `document`/`window` — with neither present the visibility
+ * gate is skipped and it acts purely on the `isAlive` verdict.
  */
 import {describe, it, expect, vi, beforeEach, afterEach} from "vitest"
-import {GGSocketLiveness} from "@grest-ts/websocket"
+import {GGServerLiveness, GGClientLiveness} from "@grest-ts/websocket"
 
 beforeEach(() => vi.useFakeTimers())
 afterEach(() => vi.useRealTimers())
@@ -22,14 +22,14 @@ class FakeWs {
 }
 
 function fakeWss(clients: Set<FakeWs>) {
-    return {clients} as unknown as Parameters<typeof GGSocketLiveness.attachServer>[0]
+    return {clients} as unknown as Parameters<typeof GGServerLiveness.attach>[0]
 }
 
-describe("GGSocketLiveness.attachServer", () => {
+describe("GGServerLiveness.attach", () => {
     it("pings a responsive client every interval and never reaps it", () => {
         const ws = new FakeWs()
         const clients = new Set([ws])
-        const stop = GGSocketLiveness.attachServer(fakeWss(clients), {intervalMs: 1000})
+        const stop = GGServerLiveness.attach(fakeWss(clients), {intervalMs: 1000})
 
         vi.advanceTimersByTime(1000)        // first sight: track, grace tick, no ping yet
         expect(ws.pings).toBe(0)
@@ -44,7 +44,7 @@ describe("GGSocketLiveness.attachServer", () => {
 
     it("terminates a client that misses its pong", () => {
         const ws = new FakeWs()
-        const stop = GGSocketLiveness.attachServer(fakeWss(new Set([ws])), {intervalMs: 1000})
+        const stop = GGServerLiveness.attach(fakeWss(new Set([ws])), {intervalMs: 1000})
 
         vi.advanceTimersByTime(1000)        // track + grace
         vi.advanceTimersByTime(1000)        // ping #1, mark not-alive (no pong answered)
@@ -57,7 +57,7 @@ describe("GGSocketLiveness.attachServer", () => {
 
     it("picks up a client that joins after start", () => {
         const clients = new Set<FakeWs>()
-        const stop = GGSocketLiveness.attachServer(fakeWss(clients), {intervalMs: 1000})
+        const stop = GGServerLiveness.attach(fakeWss(clients), {intervalMs: 1000})
         const late = new FakeWs()
         clients.add(late)
 
@@ -69,7 +69,7 @@ describe("GGSocketLiveness.attachServer", () => {
 
     it("stop() halts the loop", () => {
         const ws = new FakeWs()
-        const stop = GGSocketLiveness.attachServer(fakeWss(new Set([ws])), {intervalMs: 1000})
+        const stop = GGServerLiveness.attach(fakeWss(new Set([ws])), {intervalMs: 1000})
         vi.advanceTimersByTime(2000)
         stop()
         const before = ws.pings
@@ -78,10 +78,10 @@ describe("GGSocketLiveness.attachServer", () => {
     })
 })
 
-describe("GGSocketLiveness.attachBrowser", () => {
+describe("GGClientLiveness.attach", () => {
     it("sends a ping every pingMs", () => {
         const sendPing = vi.fn()
-        const stop = GGSocketLiveness.attachBrowser({
+        const stop = GGClientLiveness.attach({
             sendPing, isAlive: () => true, onDead: () => {}, pingMs: 1000, checkMs: 500,
         })
         vi.advanceTimersByTime(3000)
@@ -92,7 +92,7 @@ describe("GGSocketLiveness.attachBrowser", () => {
     it("drops the socket once isAlive reports stale", () => {
         const onDead = vi.fn()
         let alive = true
-        const stop = GGSocketLiveness.attachBrowser({
+        const stop = GGClientLiveness.attach({
             sendPing: () => {}, isAlive: () => alive, onDead, pingMs: 1000, checkMs: 500,
         })
         vi.advanceTimersByTime(2000)
@@ -106,7 +106,7 @@ describe("GGSocketLiveness.attachBrowser", () => {
     it("stop() halts ping and check timers", () => {
         const sendPing = vi.fn()
         const onDead = vi.fn()
-        const stop = GGSocketLiveness.attachBrowser({
+        const stop = GGClientLiveness.attach({
             sendPing, isAlive: () => false, onDead, pingMs: 1000, checkMs: 500,
         })
         stop()

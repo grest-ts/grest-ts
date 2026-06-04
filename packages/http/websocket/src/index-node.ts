@@ -12,7 +12,8 @@ export * from "./server/GG_WS_MESSAGE";
 // Core
 export * from "./socket/GGSocket";
 export * from "./socket/SocketAdapter";
-export * from "./liveness/GGSocketLiveness";
+export * from "./liveness/GGServerLiveness";
+export * from "./liveness/GGClientLiveness";
 
 // API Schema
 export * from "./schema/webSocketSchema";

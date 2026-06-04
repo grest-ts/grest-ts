@@ -677,24 +677,25 @@ a missed heartbeat drops the socket and the reconnect loop self-heals. Tune or d
 `reconnect.heartbeat`, and force a drop from app code (e.g. on `visibilitychange`) with
 `client.forceReconnect()`. You don't need anything below for contract-based sockets.
 
-### Raw streaming sockets — `GGSocketLiveness`
+### Raw streaming sockets — `GGServerLiveness` / `GGClientLiveness`
 
 Some sockets are **not** an API: a terminal/PTY passthrough, a log tail, a binary stream. Those
 don't go through `httpSchema`/`createClient`, so they can't use the built-in liveness — but the
-*mechanism* (ping + reap on the server, watchdog + reconnect in the browser) is the same. The two
-reusable, payload-agnostic halves are exported as `GGSocketLiveness`:
+*mechanism* (ping + reap on the server, watchdog + reconnect in the client) is the same. The two
+reusable, payload-agnostic halves are separate classes — `GGServerLiveness` (Node, exported only
+from the node entry) and `GGClientLiveness` (browser-safe, exported from both):
 
 ```typescript
-import { GGSocketLiveness } from "@grest-ts/websocket"
-
 // --- Server (Node) ---: protocol ping + reap over a `ws` WebSocketServer.
 // Keeps proxy/LB legs warm and terminates clients that stop answering pongs.
-const stop = GGSocketLiveness.attachServer(wss)   // default 30s; returns a teardown fn
+import { GGServerLiveness } from "@grest-ts/websocket"
+const stop = GGServerLiveness.attach(wss)   // default 30s; returns a teardown fn
 // ...on shutdown: stop()
 
-// --- Browser ---: ping + watchdog. You own the wire format (see below); the
+// --- Client (browser) ---: ping + watchdog. You own the wire format (see below); the
 // watchdog only acts on the verdict your `isAlive` returns and the tab being visible.
-const stop = GGSocketLiveness.attachBrowser({
+import { GGClientLiveness } from "@grest-ts/websocket"
+const stop = GGClientLiveness.attach({
     sendPing: () => ws.send(JSON.stringify({type: "ping"})),
     isAlive:  () => !ws || ws.readyState !== WebSocket.OPEN || Date.now() - lastRxAt <= 60_000,
     onDead:   () => ws.close(),   // your onclose handler drives the reconnect
@@ -706,7 +707,7 @@ observe protocol-level ping/pong frames, so it sends an *application* ping that 
 That message shape is your protocol, so it can't live in the framework — wire it up once:
 
 ```typescript
-// Server: echo the app-level ping (alongside attachServer, which handles protocol pings).
+// Server: echo the app-level ping (alongside GGServerLiveness, which handles protocol pings).
 ws.on("message", (data, isBinary) => {
     if (isBinary) return
     try { if (JSON.parse(data.toString()).type === "ping") ws.send(JSON.stringify({type: "pong"})) }
@@ -720,8 +721,9 @@ ws.onmessage = (e) => {
 }
 ```
 
-That's the whole recipe: `attachServer` + `attachBrowser` + your ~3-line ping echo. Everything
-fiddly (visibility/online gating, throttle-awareness, reap bookkeeping) lives in the helper.
+That's the whole recipe: `GGServerLiveness.attach` + `GGClientLiveness.attach` + your ~3-line ping
+echo. Everything fiddly (visibility/online gating, throttle-awareness, reap bookkeeping) lives in
+the helpers.
 
 ## Testing
 
