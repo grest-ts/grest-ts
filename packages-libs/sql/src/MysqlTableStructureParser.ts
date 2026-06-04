@@ -1,4 +1,5 @@
 import {escape} from "./escape";
+import {enumOf, type Values} from "@grest-ts/common";
 
 export class MysqlTableStructureParser {
 
@@ -138,30 +139,31 @@ export interface TableStructure {
     columns: AnyColumn[];
 }
 
-export enum ColumnDataType {
-    TINYINT = "TINYINT",
-    SMALLINT = "SMALLINT",
-    MEDIUMINT = "MEDIUMINT",
-    INT = "INT",
-    BIGINT = "BIGINT",
-    DECIMAL = "DECIMAL",
-    FLOAT = "FLOAT",
-    CHAR = "CHAR",
-    VARCHAR = "VARCHAR",
-    MEDIUMTEXT = "MEDIUMTEXT",
-    TEXT = "TEXT",
-    LONGTEXT = "LONGTEXT",
-    TIMESTAMP = "TIMESTAMP",
-    DATETIME = "DATETIME",
-    DATE = "DATE",
-    TIME = "TIME",
-    YEAR = "YEAR",
-    ENUM = "ENUM",
-    SET = "SET",
-    BIT = "BIT",
-    LONGBLOB = "LONGBLOB",
-    JSON = "JSON"
-}
+export const ColumnDataType = enumOf({
+    TINYINT: "TINYINT",
+    SMALLINT: "SMALLINT",
+    MEDIUMINT: "MEDIUMINT",
+    INT: "INT",
+    BIGINT: "BIGINT",
+    DECIMAL: "DECIMAL",
+    FLOAT: "FLOAT",
+    CHAR: "CHAR",
+    VARCHAR: "VARCHAR",
+    MEDIUMTEXT: "MEDIUMTEXT",
+    TEXT: "TEXT",
+    LONGTEXT: "LONGTEXT",
+    TIMESTAMP: "TIMESTAMP",
+    DATETIME: "DATETIME",
+    DATE: "DATE",
+    TIME: "TIME",
+    YEAR: "YEAR",
+    ENUM: "ENUM",
+    SET: "SET",
+    BIT: "BIT",
+    LONGBLOB: "LONGBLOB",
+    JSON: "JSON",
+});
+export type ColumnDataType = Values<typeof ColumnDataType>;
 
 const MYSQL_TYPE_TO_TS_TYPE: Map<ColumnDataType, string> = new Map([
     [ColumnDataType.TINYINT, "number"],
@@ -206,39 +208,39 @@ export interface Column {
 }
 
 export interface ColumnDateTimeLike extends Column {
-    type: ColumnDataType.DATE |
-        ColumnDataType.DATETIME |
-        ColumnDataType.TIMESTAMP |
-        ColumnDataType.YEAR
+    type: typeof ColumnDataType.DATE |
+        typeof ColumnDataType.DATETIME |
+        typeof ColumnDataType.TIMESTAMP |
+        typeof ColumnDataType.YEAR
 }
 
 export interface ColumnText extends Column {
-    type: ColumnDataType.CHAR |
-        ColumnDataType.VARCHAR |
-        ColumnDataType.MEDIUMTEXT |
-        ColumnDataType.TEXT |
-        ColumnDataType.LONGTEXT;
+    type: typeof ColumnDataType.CHAR |
+        typeof ColumnDataType.VARCHAR |
+        typeof ColumnDataType.MEDIUMTEXT |
+        typeof ColumnDataType.TEXT |
+        typeof ColumnDataType.LONGTEXT;
     characterSetName: string;
     collationName: string;
 }
 
 export interface ColumnChar extends ColumnText {
-    type: ColumnDataType.VARCHAR |
-        ColumnDataType.CHAR;
+    type: typeof ColumnDataType.VARCHAR |
+        typeof ColumnDataType.CHAR;
     characterMaximumLength: number;
     characterOctetLength: number;
 }
 
 export interface ColumnNumber extends Column {
     type:
-        ColumnDataType.TINYINT |
-        ColumnDataType.SMALLINT |
-        ColumnDataType.MEDIUMINT |
-        ColumnDataType.INT |
-        ColumnDataType.BIGINT |
-        ColumnDataType.DECIMAL |
-        ColumnDataType.FLOAT |
-        ColumnDataType.BIT
+        typeof ColumnDataType.TINYINT |
+        typeof ColumnDataType.SMALLINT |
+        typeof ColumnDataType.MEDIUMINT |
+        typeof ColumnDataType.INT |
+        typeof ColumnDataType.BIGINT |
+        typeof ColumnDataType.DECIMAL |
+        typeof ColumnDataType.FLOAT |
+        typeof ColumnDataType.BIT
     isUnsigned: boolean;
     isAutoIncrement: boolean;
     precision: number;
@@ -246,20 +248,21 @@ export interface ColumnNumber extends Column {
 }
 
 export interface ColumnEnum extends Column {
-    type: ColumnDataType.ENUM;
+    type: typeof ColumnDataType.ENUM;
     values: string[];
 }
 
 export interface ColumnSet extends Column {
-    type: ColumnDataType.SET;
+    type: typeof ColumnDataType.SET;
     values: string[];
 }
 
-export enum KeyType {
-    PRIMARY = "primary",
-    UNIQUE = "unique",
-    MULTIPLE = "multiple"
-}
+export const KeyType = enumOf({
+    PRIMARY: "primary",
+    UNIQUE: "unique",
+    MULTIPLE: "multiple",
+});
+export type KeyType = Values<typeof KeyType>;
 
 interface SchemaRow {
     tableSchema: string;

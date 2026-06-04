@@ -1,19 +1,21 @@
 import {tPendingMessageId} from "./utils/PendingRequestsMap";
 import {OK_JSON} from "@grest-ts/schema";
+import {enumOf, type Values} from "@grest-ts/common";
 
 export const DELIMITER = ":"
 
 // Message types (single character for fast type checking)
-export enum MessageType {
-    HANDSHAKE = "h",   // Handshake request (client -> server with headers)
-    HANDSHAKE_OK = "k", // Handshake success (server -> client)
-    HANDSHAKE_ERR = "x", // Handshake error (server -> client)
-    MSG = "m",         // Regular message (send-and-forget)
-    REQ = "r",         // Request (expects response)
-    RES = "s",         // Successful response
-    PING = "p",        // Application-level liveness ping (peer auto-answers PONG)
-    PONG = "o",        // Application-level liveness pong
-}
+export const MessageType = enumOf({
+    HANDSHAKE: "h",   // Handshake request (client -> server with headers)
+    HANDSHAKE_OK: "k", // Handshake success (server -> client)
+    HANDSHAKE_ERR: "x", // Handshake error (server -> client)
+    MSG: "m",         // Regular message (send-and-forget)
+    REQ: "r",         // Request (expects response)
+    RES: "s",         // Successful response
+    PING: "p",        // Application-level liveness ping (peer auto-answers PONG)
+    PONG: "o",        // Application-level liveness pong
+});
+export type MessageType = Values<typeof MessageType>;
 
 export interface SocketMessage {
     type: MessageType;
@@ -22,42 +24,42 @@ export interface SocketMessage {
 }
 
 export interface HandshakeMessage extends SocketMessage {
-    type: MessageType.HANDSHAKE;
+    type: typeof MessageType.HANDSHAKE;
     data: Record<string, string>; // Headers
 }
 
 export interface HandshakeOkMessage extends SocketMessage {
-    type: MessageType.HANDSHAKE_OK;
+    type: typeof MessageType.HANDSHAKE_OK;
 }
 
 export interface HandshakeErrMessage extends SocketMessage {
-    type: MessageType.HANDSHAKE_ERR;
+    type: typeof MessageType.HANDSHAKE_ERR;
     data: any; // Error details
 }
 
 export interface RegularMessage extends SocketMessage {
-    type: MessageType.MSG;
+    type: typeof MessageType.MSG;
     data?: any;
 }
 
 export interface RequestMessage extends SocketMessage {
-    type: MessageType.REQ;
+    type: typeof MessageType.REQ;
     id: tPendingMessageId;
     data?: any;
 }
 
 export interface ResponseMessage extends SocketMessage {
-    type: MessageType.RES;
+    type: typeof MessageType.RES;
     id: tPendingMessageId;
     data: OK_JSON<any>
 }
 
 export interface PingMessage extends SocketMessage {
-    type: MessageType.PING;
+    type: typeof MessageType.PING;
 }
 
 export interface PongMessage extends SocketMessage {
-    type: MessageType.PONG;
+    type: typeof MessageType.PONG;
 }
 
 export type AnyMessage = HandshakeMessage | HandshakeOkMessage | HandshakeErrMessage | RegularMessage | RequestMessage | ResponseMessage | PingMessage | PongMessage;

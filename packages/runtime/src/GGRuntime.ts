@@ -1,4 +1,4 @@
-import {withTimeout} from "@grest-ts/common";
+import {withTimeout, enumOf, type Values} from "@grest-ts/common";
 import {GGLog} from "@grest-ts/logger";
 import {GGLocator, GGLocatorLifecycleCallbacks, GGLocatorScope} from "@grest-ts/locator";
 import {GGContext} from "@grest-ts/context";
@@ -9,15 +9,16 @@ export interface GGRuntimeConfig {
     shutdownTimeoutMs?: number;
 }
 
-export enum GGRuntimeState {
-    CREATED = 0,
-    BOOTSTRAPPING = 1,
-    COMPOSING = 2,
-    STARTING = 3,
-    RUNNING = 4,
-    STOPPING = 5,
-    STOPPED = 6,
-}
+export const GGRuntimeState = enumOf({
+    CREATED: 0,
+    BOOTSTRAPPING: 1,
+    COMPOSING: 2,
+    STARTING: 3,
+    RUNNING: 4,
+    STOPPING: 5,
+    STOPPED: 6,
+});
+export type GGRuntimeState = Values<typeof GGRuntimeState>;
 
 export abstract class GGRuntime {
 

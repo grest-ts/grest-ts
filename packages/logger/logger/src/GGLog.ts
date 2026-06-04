@@ -18,7 +18,8 @@ export const GG_LOG = new GGLocatorKey<GGLog>("GGLog");
 export class GGLog {
 
     private readonly loggers: GGLogger[] = [];
-    private globalMinLevel: LogLevel = LogLevel.CRITICAL + 1; // No loggers = nothing logged
+    // LogLevel | (number & {}) keeps the named levels visible while still allowing the CRITICAL + 1 "nothing logged" sentinel and Math.min(...) of logger levels.
+    private globalMinLevel: LogLevel | (number & {}) = LogLevel.CRITICAL + 1;
 
     private constructor() {
     }

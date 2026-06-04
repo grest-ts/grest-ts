@@ -1,21 +1,24 @@
 import type {File} from './File'
 import type {FileImportInput} from './FileImports'
+import {enumOf, type Values} from "@grest-ts/common"
 
 /**
  * Order for chunks within a file
  */
-export enum FileChunkOrder {
-    IMPORTS = 0,
-    INTERFACES = 5,           // DEPRECATED: Old interfaces order (kept for backwards compat)
-    CLASSES = 10,
-    TYPE_ALIASES = 15,        // Type aliases (type X = ...)
-    ERROR_CLASSES = 18,       // Error classes
-    TYPES = 20,               // DEPRECATED: Keep for backwards compat
-    INTERFACES_AFTER_ERRORS = 21,  // Interfaces (in sectioned files)
-    VALIDATOR_CLASSES = 45,   // Validator classes
-    VALIDATORS = 50,
-    HELPERS = 60
-}
+export const FileChunkOrder = enumOf({
+    IMPORTS: 0,
+    INTERFACES: 5,           // DEPRECATED: Old interfaces order (kept for backwards compat)
+    CLASSES: 10,
+    TYPE_ALIASES: 15,        // Type aliases (type X = ...)
+    ERROR_CLASSES: 18,       // Error classes
+    TYPES: 20,               // DEPRECATED: Keep for backwards compat
+    INTERFACES_AFTER_ERRORS: 21,  // Interfaces (in sectioned files)
+    VALIDATOR_CLASSES: 45,   // Validator classes
+    VALIDATORS: 50,
+    HELPERS: 60,
+})
+export type FileChunkOrder = Values<typeof FileChunkOrder>
+
 
 /**
  * Options for a file chunk
