@@ -1,5 +1,6 @@
 /// <reference lib="dom" />
 import type {CrossTabLock} from "./types"
+import {GGAuthLog} from "./GGAuthLog"
 
 // Cap how long we wait to ACQUIRE the lock. A tab can grab "auth-refresh" and
 // then be suspended/throttled (its timers frozen) so it never releases — without
@@ -18,6 +19,16 @@ export function webLocksLock(): CrossTabLock {
                 const controller = new AbortController()
                 const timer = setTimeout(() => controller.abort(), ACQUIRE_TIMEOUT_MS)
                 return (navigator.locks.request(name, {signal: controller.signal}, fn as () => T) as Promise<T>)
+                    .catch((e: unknown) => {
+                        // Acquire timed out (the AbortError below) vs the locked fn itself
+                        // throwing: only the former is the stuck-holder backstop. Rethrow a
+                        // named error so the caller doesn't see a context-free DOMException.
+                        if (controller.signal.aborted) {
+                            GGAuthLog.warn(`cross-tab lock "${name}" acquire timed out after ${ACQUIRE_TIMEOUT_MS}ms — holder tab likely suspended; degrading and will retry on next call`)
+                            throw new Error(`Auth lock "${name}" acquire timed out after ${ACQUIRE_TIMEOUT_MS}ms (holder tab suspended?)`)
+                        }
+                        throw e
+                    })
                     .finally(() => clearTimeout(timer))
             },
         }
