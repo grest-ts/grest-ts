@@ -666,6 +666,63 @@ import { GGWebSocketMetrics } from "@grest-ts/websocket"
 | `out_requests_total` | Counter | Outgoing messages sent |
 | `out_request_duration_ms` | Histogram | Outgoing request round-trip duration |
 
+## Liveness (heartbeat & half-open detection)
+
+A WebSocket can go **half-open**: an intermediary (NAT, proxy, load balancer) silently drops
+an idle connection, or a laptop sleeps, and neither side gets a close event — the link is dead
+but looks open until a manual refresh.
+
+**Schema clients get this for free.** When `reconnect` is enabled, liveness is on by default:
+a missed heartbeat drops the socket and the reconnect loop self-heals. Tune or disable it via
+`reconnect.heartbeat`, and force a drop from app code (e.g. on `visibilitychange`) with
+`client.forceReconnect()`. You don't need anything below for contract-based sockets.
+
+### Raw streaming sockets — `GGSocketLiveness`
+
+Some sockets are **not** an API: a terminal/PTY passthrough, a log tail, a binary stream. Those
+don't go through `httpSchema`/`createClient`, so they can't use the built-in liveness — but the
+*mechanism* (ping + reap on the server, watchdog + reconnect in the browser) is the same. The two
+reusable, payload-agnostic halves are exported as `GGSocketLiveness`:
+
+```typescript
+import { GGSocketLiveness } from "@grest-ts/websocket"
+
+// --- Server (Node) ---: protocol ping + reap over a `ws` WebSocketServer.
+// Keeps proxy/LB legs warm and terminates clients that stop answering pongs.
+const stop = GGSocketLiveness.attachServer(wss)   // default 30s; returns a teardown fn
+// ...on shutdown: stop()
+
+// --- Browser ---: ping + watchdog. You own the wire format (see below); the
+// watchdog only acts on the verdict your `isAlive` returns and the tab being visible.
+const stop = GGSocketLiveness.attachBrowser({
+    sendPing: () => ws.send(JSON.stringify({type: "ping"})),
+    isAlive:  () => !ws || ws.readyState !== WebSocket.OPEN || Date.now() - lastRxAt <= 60_000,
+    onDead:   () => ws.close(),   // your onclose handler drives the reconnect
+})
+```
+
+**The one piece you must supply: the in-band ping/pong.** A browser can neither initiate nor
+observe protocol-level ping/pong frames, so it sends an *application* ping that the server echoes.
+That message shape is your protocol, so it can't live in the framework — wire it up once:
+
+```typescript
+// Server: echo the app-level ping (alongside attachServer, which handles protocol pings).
+ws.on("message", (data, isBinary) => {
+    if (isBinary) return
+    try { if (JSON.parse(data.toString()).type === "ping") ws.send(JSON.stringify({type: "pong"})) }
+    catch { /* not a control frame */ }
+})
+
+// Browser: stamp every inbound frame as proof of life, and learn the peer speaks the protocol.
+ws.onmessage = (e) => {
+    lastRxAt = Date.now()
+    // ...if it's a `pong`, you now know reconnect-on-stale is safe to arm...
+}
+```
+
+That's the whole recipe: `attachServer` + `attachBrowser` + your ~3-line ping echo. Everything
+fiddly (visibility/online gating, throttle-awareness, reap bookkeeping) lives in the helper.
+
 ## Testing
 
 Import the testkit for integration testing support:
