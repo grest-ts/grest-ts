@@ -1,3 +1,4 @@
+/// <reference lib="dom" />
 // Client-side WebSocket liveness: ping the peer on an interval and, while the tab is visible, drop
 // the socket when the caller reports it stale so the app's reconnect loop self-heals a half-open
 // link (NAT/proxy idle drop, laptop sleep). Payload-agnostic — the caller owns the in-band
