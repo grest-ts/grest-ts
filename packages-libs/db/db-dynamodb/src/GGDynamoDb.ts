@@ -154,7 +154,7 @@ export class GGDynamoDb {
         table: string,
         item: object,
         conditionExpression: string,
-        values: Record<string, unknown>,
+        values?: Record<string, unknown>,
         attributeNames?: Record<string, string>,
     ): Promise<boolean> {
         try {
@@ -162,7 +162,9 @@ export class GGDynamoDb {
                 TableName: table,
                 Item: item as Record<string, unknown>,
                 ConditionExpression: conditionExpression,
-                ExpressionAttributeValues: values,
+                // Omit when empty — DynamoDB rejects an empty map, and value-less conditions
+                // (e.g. `attribute_not_exists(pk)`) legitimately have no values.
+                ...(values && Object.keys(values).length > 0 && {ExpressionAttributeValues: values}),
                 ...(attributeNames && {ExpressionAttributeNames: attributeNames}),
             }))
             return true

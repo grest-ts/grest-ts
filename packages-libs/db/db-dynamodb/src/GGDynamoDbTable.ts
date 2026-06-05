@@ -69,7 +69,7 @@ export class GGDynamoDbTable<
     async putConditional(
         item: T,
         conditionExpression: string,
-        values: Record<string, unknown>,
+        values?: Record<string, unknown>,
         attributeNames?: Record<string, string>,
     ): Promise<boolean> {
         const validated = this.validate(item, "putConditional")
