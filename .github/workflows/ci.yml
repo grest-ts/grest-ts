@@ -71,6 +71,10 @@ jobs:
       - name: Test
         run: npx tsx grest.2.vitest.ts
 
+      # We want to make sure build also works.
+      - name: Build
+        run: npx tsx grest.4.build.ts
+        
       - name: Version bump
         if: github.event_name == 'push' && github.ref == 'refs/heads/release'
         run: npx tsx grest.3.ver.patch.ts
