@@ -1,7 +1,7 @@
 {
   "//": "THIS FILE IS GENERATED - DO NOT EDIT",
   "name": "@grest-ts/cli",
-  "version": "0.0.56",
+  "version": "0.0.58",
   "type": "module",
   "license": "MIT",
   "description": "CLI for managing grest-ts in a project (atomic version updates, etc.)",
