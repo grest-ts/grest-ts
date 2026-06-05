@@ -115,9 +115,9 @@ export class GGDynamoDb {
             }),
         })
 
-        return DynamoDBDocumentClient.from(raw, {
+        return this.withErrorContext(DynamoDBDocumentClient.from(raw, {
             marshallOptions: {removeUndefinedValues: true},
-        })
+        }))
     }
 
     private getClient(): DynamoDBDocumentClient {
@@ -128,6 +128,36 @@ export class GGDynamoDb {
             )
         }
         return this.client
+    }
+
+    /**
+     * Installs a middleware that names the db, command, and table on any
+     * failure. The raw SDK errors ("Cannot do operations on a non-existent
+     * table") omit which table failed — useless in a multi-table service.
+     * It lives on the client's shared middleware stack, so it covers both
+     * the document operations below and anything built from `getRawClient`.
+     * The original error is kept as `cause` ($metadata, requestId, stack)
+     * and its `name` is copied across so callers can still branch on it
+     * (e.g. `ConditionalCheckFailedException`).
+     */
+    private withErrorContext<C extends DynamoDBClient | DynamoDBDocumentClient>(client: C): C {
+        client.middlewareStack.add(
+            (next, context) => async (args) => {
+                try {
+                    return await next(args)
+                } catch (err) {
+                    const table = (args.input as {TableName?: string}).TableName
+                    if (!table) throw err
+                    const msg = err instanceof Error ? err.message : String(err)
+                    const wrapped = new Error(`GGDynamoDb '${this.config.name}' ${context.commandName ?? "command"} on table '${table}' failed: ${msg}`, {cause: err})
+                    const name = (err as {name?: string}).name
+                    if (name) wrapped.name = name
+                    throw wrapped
+                }
+            },
+            {step: "initialize", name: "ggTableErrorContext", override: true},
+        )
+        return client
     }
 
     async get<T>(table: string, key: Record<string, unknown>): Promise<T | undefined> {
@@ -212,10 +242,10 @@ export class GGDynamoDb {
         const explicitCreds = (user?.accessKeyId && user?.secretAccessKey)
             ? {accessKeyId: user.accessKeyId, secretAccessKey: user.secretAccessKey}
             : undefined
-        return new DynamoDBClient({
+        return this.withErrorContext(new DynamoDBClient({
             ...(host?.region && {region: host.region}),
             ...(endpoint && {endpoint}),
             credentials: explicitCreds ?? (endpoint ? {accessKeyId: "local", secretAccessKey: "local"} : undefined),
-        })
+        }))
     }
 }
