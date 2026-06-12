@@ -53,6 +53,18 @@ export interface GGHttpClientConfig {
     transport?: GGHttpTransport
 }
 
+/**
+ * Resolves the base URL for URL-less clients from the schema's api name. Attached by the node
+ * entry via ./GGHttpSchema.createClient.node, which routes it through @grest-ts/discovery —
+ * discovery is node-only, and bundlers follow even a dynamic `import()` at build time
+ * regardless of runtime reachability, so the browser bundle must never reference it.
+ */
+let discoveryUrlResolver: ((apiName: string) => Promise<string>) | undefined
+
+export function _registerDiscoveryUrlResolver(resolver: (apiName: string) => Promise<string>): void {
+    discoveryUrlResolver = resolver
+}
+
 GGHttpSchema.prototype.createClient = function <TContract extends GGContractApiDefinition, TContext>(
     this: GGHttpSchema<TContract, TContext>,
     config?: GGHttpClientConfig
@@ -101,8 +113,10 @@ export function createClient<TContract extends GGContractApiDefinition, TContext
                 let baseUrl: string | undefined = config.url;
                 if (baseUrl === undefined) {
                     try {
-                        const {GG_DISCOVERY} = await import(/* @vite-ignore */ '@grest-ts/discovery');
-                        baseUrl = await GG_DISCOVERY.get().discoverApi(httpSchema.name);
+                        if (!discoveryUrlResolver) {
+                            throw new Error("Service discovery is not available in this environment");
+                        }
+                        baseUrl = await discoveryUrlResolver(httpSchema.name);
                     } catch (err) {
                         throw new SERVER_ERROR({displayMessage: "Service discovery failed", originalError: err});
                     }

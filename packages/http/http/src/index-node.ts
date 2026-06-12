@@ -51,5 +51,6 @@ export * from "./server/GGHttpSchema.startServer";
 
 // Extensions
 import "./client/GGHttpSchema.createClient";
+import "./client/GGHttpSchema.createClient.node";
 import "./server/GGHttpSchema.startServer";
 import "./schema/GGWireContextKey.node";
