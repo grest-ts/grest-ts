@@ -187,8 +187,23 @@ export abstract class ERROR<Type extends string, Data> extends Error {
         let text: string = this.type
         if (this.context?.displayMessage) text += ": " + this.context.displayMessage
         if (this.#debugContext?.debugMessage) text += " " + this.#debugContext.debugMessage
-        const data = this.dataToText()
-        if (data !== undefined) text += (config?.dataSeparator ?? "\n\t") + data
+
+        if (this.data !== undefined && this.data !== null) {
+            text += config?.dataSeparator ?? "\n\t"
+            // Matched by type string: VALIDATION_ERROR is defined in standardErrors.ts, which imports this file.
+            if (this.type === "VALIDATION_ERROR" && Array.isArray(this.data)) {
+                const issues = this.data as {path?: string, message?: string}[]
+                const texts = issues.slice(0, 10).map(i => (i.path ? i.path + ": " : "") + i.message)
+                if (issues.length > 10) texts.push("+" + (issues.length - 10) + " more")
+                text += texts.join("\n\t")
+            } else {
+                try {
+                    text += JSON.stringify(this.data)
+                } catch {
+                    text += String(this.data)
+                }
+            }
+        }
 
         if (config?.stack !== false && this.stack) {
             const stackLines = this.stack.split("\n")
@@ -211,28 +226,6 @@ export abstract class ERROR<Type extends string, Data> extends Error {
         if (err instanceof ERROR) return err.toText(config)
         if (err instanceof Error) return (config?.stack !== false ? err.stack : undefined) ?? err.message
         return String(err)
-    }
-
-    /**
-     * Compact rendering of `data`; undefined when the error carries none.
-     * Validation issues render as `path: message` joined by `separator`,
-     * any other data as single-line JSON. Pass `" | "` as separator for a
-     * single-line rendering.
-     */
-    public dataToText(maxItems: number = 10, separator: string = "\n\t"): string | undefined {
-        if (this.data === undefined || this.data === null) return undefined
-        // Matched by type string: VALIDATION_ERROR is defined in standardErrors.ts, which imports this file.
-        if (this.type === "VALIDATION_ERROR" && Array.isArray(this.data)) {
-            const issues = this.data as {path?: string, message?: string}[]
-            const texts = issues.slice(0, maxItems).map(i => (i.path ? i.path + ": " : "") + i.message)
-            if (issues.length > maxItems) texts.push("+" + (issues.length - maxItems) + " more")
-            return texts.join(separator)
-        }
-        try {
-            return JSON.stringify(this.data)
-        } catch {
-            return String(this.data)
-        }
     }
 
     public toJSON(): ERROR_JSON<Type, Data> {

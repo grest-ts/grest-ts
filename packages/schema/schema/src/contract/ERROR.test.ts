@@ -288,24 +288,12 @@ describe('ERROR', () => {
             expect(ERROR.anyToText(42)).toBe('42');
         });
 
-        it('should render single-line with a custom separator', () => {
-            const error = new VALIDATION_ERROR([
-                {path: 'a', code: 'invalid', message: 'm1'},
-                {path: 'b', code: 'invalid', message: 'm2'},
-            ]);
-            expect(error.dataToText(10, ' | ')).toBe('a: m1 | b: m2');
-        });
-
-        it('should truncate validation issues beyond maxItems', () => {
+        it('should truncate validation issues beyond 10', () => {
             const issues = Array.from({length: 12}, (_, i) => ({path: `f${i}`, code: 'invalid', message: `m${i}`}));
-            const text = new VALIDATION_ERROR(issues).dataToText();
+            const text = new VALIDATION_ERROR(issues).toText(BARE);
             expect(text).toContain('f9: m9');
             expect(text).not.toContain('f10');
             expect(text).toContain('+2 more');
-        });
-
-        it('dataToText() should return undefined when there is no data', () => {
-            expect(new MY_ERROR().dataToText()).toBeUndefined();
         });
     });
 
