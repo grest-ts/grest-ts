@@ -245,46 +245,10 @@ export class GGLoggerConsole implements GGLogger {
     }
 
     private formatError(levelColor: string, error: unknown): string {
-
         if (typeof error === 'string') {
             return error;
         }
-
-        if (error instanceof ERROR) {
-            const debugData = error.getDebugContext()
-            const baseMsg = levelColor + error.toText("\n\t" + LOG_COLORS.gray);
-
-            let originalError = "";
-            if (debugData?.originalError) {
-                originalError += "\n\tOriginal error: " + this.tabData(1, this.formatError(levelColor, debugData.originalError));
-            }
-
-            let debugDataStr = "";
-            if (debugData?.debugData) {
-                debugDataStr += "\n\tDebug data: " + this.tabData(1, JSON.stringify(debugData.debugData, null, 2));
-            }
-
-            let stack = "";
-            if (error.stack) {
-                const stackLines = error.stack.split('\n');
-                stackLines.shift();
-                stack = stackLines.join("\n");
-                stack = "\n" + stack
-            }
-
-            return baseMsg + stack + debugDataStr + originalError;
-
-        } else if (error instanceof Error) {
-            return levelColor + error.stack;
-
-        } else {
-            return levelColor + String(error);
-        }
-    }
-
-    private tabData(tabs: number, data: string) {
-        const tabsStr = "\t".repeat(tabs);
-        return data.split('\n').join('\n' + tabsStr);
+        return levelColor + ERROR.anyToText(error, {dataSeparator: "\n\t" + LOG_COLORS.gray});
     }
 
 }

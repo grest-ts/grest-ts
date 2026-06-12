@@ -230,31 +230,33 @@ describe('ERROR', () => {
 
     describe('toText()', () => {
 
+        const BARE = {stack: false, debug: false};
+
         it('should render type only when there is no displayMessage or data', () => {
-            expect(new MY_ERROR().toText()).toBe('MY_ERROR');
+            expect(new MY_ERROR().toText(BARE)).toBe('MY_ERROR');
         });
 
         it('should render type + displayMessage', () => {
-            expect(new MY_ERROR({displayMessage: 'teapot busy'}).toText()).toBe('MY_ERROR: teapot busy');
+            expect(new MY_ERROR({displayMessage: 'teapot busy'}).toText(BARE)).toBe('MY_ERROR: teapot busy');
         });
 
         it('should include debugMessage in the title', () => {
             const error = new MY_ERROR({displayMessage: 'teapot busy', debugMessage: 'kettle 7 is down'});
-            expect(error.toText()).toBe('MY_ERROR: teapot busy kettle 7 is down');
+            expect(error.toText(BARE)).toBe('MY_ERROR: teapot busy kettle 7 is down');
         });
 
         it('should render data as JSON after the data separator', () => {
             const DATA_ERROR = ERROR.define('TO_TEXT_DATA_ERROR', 400, IsObject({limit: IsNumber}));
             const error = new DATA_ERROR({limit: 5}, {displayMessage: 'over limit'});
-            expect(error.toText()).toBe('TO_TEXT_DATA_ERROR: over limit\n\t{"limit":5}');
-            expect(error.toText(' ')).toBe('TO_TEXT_DATA_ERROR: over limit {"limit":5}');
+            expect(error.toText(BARE)).toBe('TO_TEXT_DATA_ERROR: over limit\n\t{"limit":5}');
+            expect(error.toText({...BARE, dataSeparator: ' '})).toBe('TO_TEXT_DATA_ERROR: over limit {"limit":5}');
         });
 
         it('should render a single validation issue after the data separator', () => {
             const error = new VALIDATION_ERROR([
                 {path: 'user.email', code: 'invalid.string.email', message: 'Invalid email'},
             ], {displayMessage: 'Invalid arguments'});
-            expect(error.toText()).toBe('VALIDATION_ERROR: Invalid arguments\n\tuser.email: Invalid email');
+            expect(error.toText(BARE)).toBe('VALIDATION_ERROR: Invalid arguments\n\tuser.email: Invalid email');
         });
 
         it('should render multiple validation issues one per line', () => {
@@ -262,7 +264,28 @@ describe('ERROR', () => {
                 {path: 'user.email', code: 'invalid.string.email', message: 'Invalid email'},
                 {path: 'password', code: 'invalid.string.minLength', message: 'Minimum 8 characters required'},
             ], {displayMessage: 'Invalid arguments'});
-            expect(error.toText()).toBe('VALIDATION_ERROR: Invalid arguments\n\tuser.email: Invalid email\n\tpassword: Minimum 8 characters required');
+            expect(error.toText(BARE)).toBe('VALIDATION_ERROR: Invalid arguments\n\tuser.email: Invalid email\n\tpassword: Minimum 8 characters required');
+        });
+
+        it('should include stack, debug data, and original error by default', () => {
+            const original = new MY_ERROR({displayMessage: 'root cause'});
+            const error = new MY_ERROR({
+                displayMessage: 'teapot busy',
+                debugData: {kettle: 7},
+                originalError: original,
+            });
+            const text = error.toText();
+            expect(text).toContain('MY_ERROR: teapot busy');
+            expect(text).toContain('at ');                              // stack frames
+            expect(text).toContain('\n\tDebug data: {\n\t  "kettle": 7\n\t}');
+            expect(text).toContain('\n\tOriginal error: MY_ERROR: root cause');
+        });
+
+        it('anyToText() should render plain errors and unknown values', () => {
+            expect(ERROR.anyToText(new Error('boom'), {stack: false})).toBe('boom');
+            expect(ERROR.anyToText(new Error('boom'))).toContain('Error: boom');
+            expect(ERROR.anyToText('just text')).toBe('just text');
+            expect(ERROR.anyToText(42)).toBe('42');
         });
 
         it('should render single-line with a custom separator', () => {
