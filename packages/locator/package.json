@@ -7,8 +7,14 @@
   "description": "Hierarchical async context with tree-based inheritance",
   "exports": {
     ".": {
-      "types": "./src/index-node.ts",
-      "import": "./src/index-node.ts"
+      "browser": {
+        "types": "./src/index-browser.ts",
+        "import": "./src/index-browser.ts"
+      },
+      "default": {
+        "types": "./src/index-node.ts",
+        "import": "./src/index-node.ts"
+      }
     }
   },
   "files": [
