@@ -34,6 +34,19 @@ export interface GGDebugData {
     originalError?: ERROR<any, any> | Error | string | unknown
 }
 
+export interface GGErrorTextConfig {
+    /** Separator between the title line and the data block; may carry styling (default `"\n\t"`). */
+    dataSeparator?: string
+    /** Include the stack trace (default true). */
+    stack?: boolean
+    /** Include debug data + original error blocks (default true). */
+    debug?: boolean
+}
+
+function tabLines(text: string): string {
+    return text.split("\n").join("\n\t")
+}
+
 interface ERROR_CLASS<Type extends string, Data> {
     /**
      * Can be any string, it will be used as union discriminator
@@ -161,6 +174,58 @@ export abstract class ERROR<Type extends string, Data> extends Error {
     public static badRequest<Type extends string, Data>(type: Type, schema: GGSchema<Data>): ERR_CLASS_DATA<Type, Data>
     public static badRequest(type: string, schema?: GGSchema<any>): any {
         return schema ? ERROR.define(type, 400, schema) : ERROR.define(type, 400)
+    }
+
+    /**
+     * Full default rendering for logs and wrapped error messages:
+     * `TYPE: displayMessage debugMessage` title (parts present only when set),
+     * data after `dataSeparator`, then stack trace, debug data, and the
+     * original error recursively. Carries no styling of its own; the console
+     * logger injects its colors via the title prefix and `dataSeparator`.
+     */
+    public toText(config?: GGErrorTextConfig): string {
+        let text: string = this.type
+        if (this.context?.displayMessage) text += ": " + this.context.displayMessage
+        if (this.#debugContext?.debugMessage) text += " " + this.#debugContext.debugMessage
+
+        if (this.data !== undefined && this.data !== null) {
+            text += config?.dataSeparator ?? "\n\t"
+            // Matched by type string: VALIDATION_ERROR is defined in standardErrors.ts, which imports this file.
+            if (this.type === "VALIDATION_ERROR" && Array.isArray(this.data)) {
+                const issues = this.data as {path?: string, message?: string}[]
+                const texts = issues.slice(0, 10).map(i => (i.path ? i.path + ": " : "") + i.message)
+                if (issues.length > 10) texts.push("+" + (issues.length - 10) + " more")
+                text += texts.join("\n\t")
+            } else {
+                try {
+                    text += JSON.stringify(this.data)
+                } catch {
+                    text += String(this.data)
+                }
+            }
+        }
+
+        if (config?.stack !== false && this.stack) {
+            const stackLines = this.stack.split("\n")
+            stackLines.shift()
+            text += "\n" + stackLines.join("\n")
+        }
+        if (config?.debug !== false) {
+            const debug = this.#debugContext
+            if (debug?.debugData) text += "\n\tDebug data: " + tabLines(JSON.stringify(debug.debugData, null, 2))
+            if (debug?.originalError) text += "\n\tOriginal error: " + tabLines(ERROR.anyToText(debug.originalError, config))
+        }
+        return text
+    }
+
+    /**
+     * Render any thrown value through the same default formatting:
+     * typed errors via toText(), plain errors via their stack, the rest stringified.
+     */
+    public static anyToText(err: unknown, config?: GGErrorTextConfig): string {
+        if (err instanceof ERROR) return err.toText(config)
+        if (err instanceof Error) return (config?.stack !== false ? err.stack : undefined) ?? err.message
+        return String(err)
     }
 
     public toJSON(): ERROR_JSON<Type, Data> {
