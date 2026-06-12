@@ -252,17 +252,7 @@ export class GGLoggerConsole implements GGLogger {
 
         if (error instanceof ERROR) {
             const debugData = error.getDebugContext()
-            const baseMsg = levelColor + error.type
-                + (error.context?.displayMessage ? ": " + error.context.displayMessage : "")
-                + (debugData?.debugMessage ? " " + debugData.debugMessage : "");
-
-            let extra = "";
-            const dataText = error.dataToText(10);
-            if (dataText !== undefined) {
-                extra = dataText.includes("\n")
-                    ? "\n\t" + LOG_COLORS.gray + dataText
-                    : " " + LOG_COLORS.gray + "(" + dataText + ")";
-            }
+            const baseMsg = levelColor + error.toText("\n\t" + LOG_COLORS.gray);
 
             let originalError = "";
             if (debugData?.originalError) {
@@ -270,9 +260,6 @@ export class GGLoggerConsole implements GGLogger {
             }
 
             let debugDataStr = "";
-            if (debugData?.debugMessage) {
-                debugDataStr += "\n\tDebug message: " + debugData.debugMessage;
-            }
             if (debugData?.debugData) {
                 debugDataStr += "\n\tDebug data: " + this.tabData(1, JSON.stringify(debugData.debugData, null, 2));
             }
@@ -285,7 +272,7 @@ export class GGLoggerConsole implements GGLogger {
                 stack = "\n" + stack
             }
 
-            return baseMsg + extra + stack + debugDataStr + originalError;
+            return baseMsg + stack + debugDataStr + originalError;
 
         } else if (error instanceof Error) {
             return levelColor + error.stack;

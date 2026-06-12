@@ -164,15 +164,17 @@ export abstract class ERROR<Type extends string, Data> extends Error {
     }
 
     /**
-     * Compact text for logs and wrapped error messages: `TYPE`, `TYPE: displayMessage`,
-     * `TYPE: displayMessage (field: message)`. Multiple validation issues render
-     * one per line, tab-indented under the first line.
+     * Compact text for logs and wrapped error messages. The title line is
+     * `TYPE: displayMessage debugMessage` (parts present only when set); data
+     * follows after `dataSeparator`. The separator may carry styling (e.g. the
+     * console logger passes `"\n\t" + gray`).
      */
-    public toText(): string {
+    public toText(dataSeparator: string = "\n\t"): string {
         let text: string = this.type
         if (this.context?.displayMessage) text += ": " + this.context.displayMessage
+        if (this.#debugContext?.debugMessage) text += " " + this.#debugContext.debugMessage
         const data = this.dataToText()
-        if (data !== undefined) text += data.includes("\n") ? "\n\t" + data : " (" + data + ")"
+        if (data !== undefined) text += dataSeparator + data
         return text
     }
 

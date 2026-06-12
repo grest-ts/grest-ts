@@ -238,17 +238,23 @@ describe('ERROR', () => {
             expect(new MY_ERROR({displayMessage: 'teapot busy'}).toText()).toBe('MY_ERROR: teapot busy');
         });
 
-        it('should render data as JSON for data-carrying errors', () => {
-            const DATA_ERROR = ERROR.define('TO_TEXT_DATA_ERROR', 400, IsObject({limit: IsNumber}));
-            const error = new DATA_ERROR({limit: 5}, {displayMessage: 'over limit'});
-            expect(error.toText()).toBe('TO_TEXT_DATA_ERROR: over limit ({"limit":5})');
+        it('should include debugMessage in the title', () => {
+            const error = new MY_ERROR({displayMessage: 'teapot busy', debugMessage: 'kettle 7 is down'});
+            expect(error.toText()).toBe('MY_ERROR: teapot busy kettle 7 is down');
         });
 
-        it('should render a single validation issue inline', () => {
+        it('should render data as JSON after the data separator', () => {
+            const DATA_ERROR = ERROR.define('TO_TEXT_DATA_ERROR', 400, IsObject({limit: IsNumber}));
+            const error = new DATA_ERROR({limit: 5}, {displayMessage: 'over limit'});
+            expect(error.toText()).toBe('TO_TEXT_DATA_ERROR: over limit\n\t{"limit":5}');
+            expect(error.toText(' ')).toBe('TO_TEXT_DATA_ERROR: over limit {"limit":5}');
+        });
+
+        it('should render a single validation issue after the data separator', () => {
             const error = new VALIDATION_ERROR([
                 {path: 'user.email', code: 'invalid.string.email', message: 'Invalid email'},
             ], {displayMessage: 'Invalid arguments'});
-            expect(error.toText()).toBe('VALIDATION_ERROR: Invalid arguments (user.email: Invalid email)');
+            expect(error.toText()).toBe('VALIDATION_ERROR: Invalid arguments\n\tuser.email: Invalid email');
         });
 
         it('should render multiple validation issues one per line', () => {
