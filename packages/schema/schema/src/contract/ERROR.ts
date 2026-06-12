@@ -163,6 +163,38 @@ export abstract class ERROR<Type extends string, Data> extends Error {
         return schema ? ERROR.define(type, 400, schema) : ERROR.define(type, 400)
     }
 
+    /**
+     * Compact single-line text for logs and wrapped error messages:
+     * `TYPE`, `TYPE: displayMessage`, `TYPE: displayMessage (field: message | ...)`.
+     */
+    public toText(): string {
+        let text: string = this.type
+        if (this.context?.displayMessage) text += ": " + this.context.displayMessage
+        const data = this.dataToText()
+        if (data !== undefined) text += " (" + data + ")"
+        return text
+    }
+
+    /**
+     * Compact single-line rendering of `data`; undefined when the error carries none.
+     * Validation issues render as `path: message`, any other data as JSON.
+     */
+    public dataToText(maxItems: number = 10): string | undefined {
+        if (this.data === undefined || this.data === null) return undefined
+        // Matched by type string: VALIDATION_ERROR is defined in standardErrors.ts, which imports this file.
+        if (this.type === "VALIDATION_ERROR" && Array.isArray(this.data)) {
+            const issues = this.data as {path?: string, message?: string}[]
+            const texts = issues.slice(0, maxItems).map(i => (i.path ? i.path + ": " : "") + i.message)
+            if (issues.length > maxItems) texts.push("+" + (issues.length - maxItems) + " more")
+            return texts.join(" | ")
+        }
+        try {
+            return JSON.stringify(this.data)
+        } catch {
+            return String(this.data)
+        }
+    }
+
     public toJSON(): ERROR_JSON<Type, Data> {
         return {
             success: this.success,

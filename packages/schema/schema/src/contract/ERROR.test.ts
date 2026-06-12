@@ -1,5 +1,6 @@
 import {describe, it, expect} from 'vitest';
 import {ERROR, SERVER_ERROR} from './ERROR';
+import {VALIDATION_ERROR} from './standardErrors';
 import {IsString} from '../schemas/IsString';
 import {IsNumber} from '../schemas/IsNumber';
 import {IsObject} from '../schemas/IsObject';
@@ -224,6 +225,43 @@ describe('ERROR', () => {
             expect(json.context?.displayMessage).toBe('User message');
             expect((json as any).debugMessage).toBeUndefined();
             expect((json as any).debugData).toBeUndefined();
+        });
+    });
+
+    describe('toText()', () => {
+
+        it('should render type only when there is no displayMessage or data', () => {
+            expect(new MY_ERROR().toText()).toBe('MY_ERROR');
+        });
+
+        it('should render type + displayMessage', () => {
+            expect(new MY_ERROR({displayMessage: 'teapot busy'}).toText()).toBe('MY_ERROR: teapot busy');
+        });
+
+        it('should render data as JSON for data-carrying errors', () => {
+            const DATA_ERROR = ERROR.define('TO_TEXT_DATA_ERROR', 400, IsObject({limit: IsNumber}));
+            const error = new DATA_ERROR({limit: 5}, {displayMessage: 'over limit'});
+            expect(error.toText()).toBe('TO_TEXT_DATA_ERROR: over limit ({"limit":5})');
+        });
+
+        it('should render validation issues as path: message', () => {
+            const error = new VALIDATION_ERROR([
+                {path: 'user.email', code: 'invalid.string.email', message: 'Invalid email'},
+                {path: 'password', code: 'invalid.string.minLength', message: 'Minimum 8 characters required'},
+            ], {displayMessage: 'Invalid arguments'});
+            expect(error.toText()).toBe('VALIDATION_ERROR: Invalid arguments (user.email: Invalid email | password: Minimum 8 characters required)');
+        });
+
+        it('should truncate validation issues beyond maxItems', () => {
+            const issues = Array.from({length: 12}, (_, i) => ({path: `f${i}`, code: 'invalid', message: `m${i}`}));
+            const text = new VALIDATION_ERROR(issues).dataToText();
+            expect(text).toContain('f9: m9');
+            expect(text).not.toContain('f10');
+            expect(text).toContain('+2 more');
+        });
+
+        it('dataToText() should return undefined when there is no data', () => {
+            expect(new MY_ERROR().dataToText()).toBeUndefined();
         });
     });
 

@@ -1,5 +1,5 @@
 import {GGLogger, LogEntry, LogLevel} from "@grest-ts/logger";
-import {ERROR, VALIDATION_ERROR, ValidationIssueJson} from "@grest-ts/schema";
+import {ERROR} from "@grest-ts/schema";
 import {GGFile} from "@grest-ts/schema-file";
 
 export const LOG_LEVELS = [undefined, "DEBUG", "INFO", "WARN", "ERROR", "CRITICAL"]
@@ -252,14 +252,12 @@ export class GGLoggerConsole implements GGLogger {
 
         if (error instanceof ERROR) {
             const debugData = error.getDebugContext()
-            const baseMsg = levelColor + "" + error.message + (debugData?.debugMessage ? " " + debugData.debugMessage : "");
+            const baseMsg = levelColor + error.type
+                + (error.context?.displayMessage ? ": " + error.context.displayMessage : "")
+                + (debugData?.debugMessage ? " " + debugData.debugMessage : "");
 
-            let extra = "";
-            if (VALIDATION_ERROR.is(error)) {
-                extra = LOG_COLORS.gray + "(" + this.extractValidationErrors(error.data, "", 10).join(" | ") + ")"
-            } else if (error.data) {
-                extra = "[" + error.type + "]" + (error.data ? " " + LOG_COLORS.gray + JSON.stringify(error.data) : "")
-            }
+            const dataText = error.dataToText(10);
+            const extra = dataText !== undefined ? LOG_COLORS.gray + "(" + dataText + ")" : "";
 
             let originalError = "";
             if (debugData?.originalError) {
@@ -295,20 +293,6 @@ export class GGLoggerConsole implements GGLogger {
     private tabData(tabs: number, data: string) {
         const tabsStr = "\t".repeat(tabs);
         return data.split('\n').join('\n' + tabsStr);
-    }
-
-    private extractValidationErrors(
-        issues: ValidationIssueJson[],
-        currentPath: string,
-        maxErrors: number
-    ): string[] {
-        const errors: string[] = [];
-        const length = Math.min(issues?.length ?? 0, maxErrors);
-        for (let i = 0; i < length; i++) {
-            const issue = issues[i];
-            errors.push((currentPath ? currentPath + ": " : "") + issue.message);
-        }
-        return errors;
     }
 
 }
