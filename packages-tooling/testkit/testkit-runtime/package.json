@@ -1,7 +1,7 @@
 {
   "//": "THIS FILE IS GENERATED - DO NOT EDIT",
   "name": "@grest-ts/testkit-runtime",
-  "version": "0.0.59",
+  "version": "0.0.60",
   "type": "module",
   "license": "MIT",
   "description": "Component testing library runtime code. ",
@@ -43,6 +43,6 @@
     "node": ">=24"
   },
   "peerDependencies": {
-    "@grest-ts/locator": "0.0.59"
+    "@grest-ts/locator": "0.0.60"
   }
 }
