@@ -164,29 +164,32 @@ export abstract class ERROR<Type extends string, Data> extends Error {
     }
 
     /**
-     * Compact single-line text for logs and wrapped error messages:
-     * `TYPE`, `TYPE: displayMessage`, `TYPE: displayMessage (field: message | ...)`.
+     * Compact text for logs and wrapped error messages: `TYPE`, `TYPE: displayMessage`,
+     * `TYPE: displayMessage (field: message)`. Multiple validation issues render
+     * one per line, tab-indented under the first line.
      */
     public toText(): string {
         let text: string = this.type
         if (this.context?.displayMessage) text += ": " + this.context.displayMessage
         const data = this.dataToText()
-        if (data !== undefined) text += " (" + data + ")"
+        if (data !== undefined) text += data.includes("\n") ? "\n\t" + data : " (" + data + ")"
         return text
     }
 
     /**
-     * Compact single-line rendering of `data`; undefined when the error carries none.
-     * Validation issues render as `path: message`, any other data as JSON.
+     * Compact rendering of `data`; undefined when the error carries none.
+     * Validation issues render as `path: message` joined by `separator`,
+     * any other data as single-line JSON. Pass `" | "` as separator for a
+     * single-line rendering.
      */
-    public dataToText(maxItems: number = 10): string | undefined {
+    public dataToText(maxItems: number = 10, separator: string = "\n\t"): string | undefined {
         if (this.data === undefined || this.data === null) return undefined
         // Matched by type string: VALIDATION_ERROR is defined in standardErrors.ts, which imports this file.
         if (this.type === "VALIDATION_ERROR" && Array.isArray(this.data)) {
             const issues = this.data as {path?: string, message?: string}[]
             const texts = issues.slice(0, maxItems).map(i => (i.path ? i.path + ": " : "") + i.message)
             if (issues.length > maxItems) texts.push("+" + (issues.length - maxItems) + " more")
-            return texts.join(" | ")
+            return texts.join(separator)
         }
         try {
             return JSON.stringify(this.data)

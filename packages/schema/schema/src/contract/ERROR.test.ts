@@ -244,12 +244,27 @@ describe('ERROR', () => {
             expect(error.toText()).toBe('TO_TEXT_DATA_ERROR: over limit ({"limit":5})');
         });
 
-        it('should render validation issues as path: message', () => {
+        it('should render a single validation issue inline', () => {
+            const error = new VALIDATION_ERROR([
+                {path: 'user.email', code: 'invalid.string.email', message: 'Invalid email'},
+            ], {displayMessage: 'Invalid arguments'});
+            expect(error.toText()).toBe('VALIDATION_ERROR: Invalid arguments (user.email: Invalid email)');
+        });
+
+        it('should render multiple validation issues one per line', () => {
             const error = new VALIDATION_ERROR([
                 {path: 'user.email', code: 'invalid.string.email', message: 'Invalid email'},
                 {path: 'password', code: 'invalid.string.minLength', message: 'Minimum 8 characters required'},
             ], {displayMessage: 'Invalid arguments'});
-            expect(error.toText()).toBe('VALIDATION_ERROR: Invalid arguments (user.email: Invalid email | password: Minimum 8 characters required)');
+            expect(error.toText()).toBe('VALIDATION_ERROR: Invalid arguments\n\tuser.email: Invalid email\n\tpassword: Minimum 8 characters required');
+        });
+
+        it('should render single-line with a custom separator', () => {
+            const error = new VALIDATION_ERROR([
+                {path: 'a', code: 'invalid', message: 'm1'},
+                {path: 'b', code: 'invalid', message: 'm2'},
+            ]);
+            expect(error.dataToText(10, ' | ')).toBe('a: m1 | b: m2');
         });
 
         it('should truncate validation issues beyond maxItems', () => {
