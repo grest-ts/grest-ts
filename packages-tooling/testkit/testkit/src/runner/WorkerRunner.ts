@@ -69,8 +69,8 @@ export class WorkerRunner implements RuntimeRunner {
                 const timeout = setTimeout(() => {
                     // CRITICAL: Terminate worker on timeout to prevent leak
                     this.worker?.terminate();
-                    reject(new Error('Worker did not start within 10 seconds'));
-                }, 10000);
+                    reject(new Error('Worker did not start within 30 seconds'));
+                }, 30000);
 
                 const messageHandler = (msg: any) => {
                     if (msg.type === 'ready') {
