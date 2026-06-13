@@ -37,6 +37,19 @@ import {GGWsLogMode} from "./GGWsLogMode"
 
 export type {GGHeartbeatConfig}
 
+/**
+ * Resolves the base URL for a URL-less websocket client from the schema name.
+ * Attached by the node entry (./GGWebSocketSchema.createClient.node) which
+ * routes it through @grest-ts/discovery — discovery is node-only, and bundlers
+ * follow even a dynamic `import()` at build time regardless of runtime
+ * reachability, so the browser bundle must never reference it.
+ */
+let discoveryUrlResolver: ((apiName: string) => Promise<string>) | undefined
+
+export function _registerWsDiscoveryUrlResolver(resolver: (apiName: string) => Promise<string>): void {
+    discoveryUrlResolver = resolver
+}
+
 export interface GGReconnectConfig {
     /** First retry delay. Default 500 ms. */
     initialDelayMs?: number
@@ -278,8 +291,10 @@ GGWebSocketSchema.prototype.createClient = function (
             return config.url
         }
         try {
-            const {GG_DISCOVERY} = await import(/* @vite-ignore */ "@grest-ts/discovery")
-            return await GG_DISCOVERY.get().discoverApi(schemaName)
+            if (!discoveryUrlResolver) {
+                throw new Error("Service discovery is not available in this environment")
+            }
+            return await discoveryUrlResolver(schemaName)
         } catch (err) {
             throw new SERVER_ERROR({
                 displayMessage: "Service discovery failed for WebSocket API " + schemaName,
