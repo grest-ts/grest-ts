@@ -1,7 +1,7 @@
 {
   "//": "THIS FILE IS GENERATED - DO NOT EDIT",
   "name": "@grest-ts/sql",
-  "version": "0.0.60",
+  "version": "0.0.61",
   "type": "module",
   "license": "MIT",
   "description": "Type-safe SQL query builder for MySQL",
@@ -47,8 +47,8 @@
     "sqlstring": "^2.3.3"
   },
   "peerDependencies": {
-    "@grest-ts/common": "0.0.60",
-    "@grest-ts/schema": "0.0.60"
+    "@grest-ts/common": "0.0.61",
+    "@grest-ts/schema": "0.0.61"
   },
   "devDependencies": {
     "@types/sqlstring": "^2.3.2"

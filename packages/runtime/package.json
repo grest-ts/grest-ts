@@ -1,7 +1,7 @@
 {
   "//": "THIS FILE IS GENERATED - DO NOT EDIT",
   "name": "@grest-ts/runtime",
-  "version": "0.0.60",
+  "version": "0.0.61",
   "type": "module",
   "license": "MIT",
   "description": "Service bootstrap and lifecycle management utilities",
@@ -44,13 +44,13 @@
     "node": ">=24"
   },
   "peerDependencies": {
-    "@grest-ts/common": "0.0.60",
-    "@grest-ts/context": "0.0.60",
-    "@grest-ts/discovery": "0.0.60",
-    "@grest-ts/discovery-local": "0.0.60",
-    "@grest-ts/locator": "0.0.60",
-    "@grest-ts/logger": "0.0.60",
-    "@grest-ts/metrics": "0.0.60",
-    "@grest-ts/trace": "0.0.60"
+    "@grest-ts/common": "0.0.61",
+    "@grest-ts/context": "0.0.61",
+    "@grest-ts/discovery": "0.0.61",
+    "@grest-ts/discovery-local": "0.0.61",
+    "@grest-ts/locator": "0.0.61",
+    "@grest-ts/logger": "0.0.61",
+    "@grest-ts/metrics": "0.0.61",
+    "@grest-ts/trace": "0.0.61"
   }
 }

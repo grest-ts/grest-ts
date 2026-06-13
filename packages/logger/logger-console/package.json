@@ -1,7 +1,7 @@
 {
   "//": "THIS FILE IS GENERATED - DO NOT EDIT",
   "name": "@grest-ts/logger-console",
-  "version": "0.0.60",
+  "version": "0.0.61",
   "type": "module",
   "license": "MIT",
   "description": "Console logger implementation for @grest-ts/logger",
@@ -44,8 +44,8 @@
     "node": ">=24"
   },
   "peerDependencies": {
-    "@grest-ts/logger": "0.0.60",
-    "@grest-ts/schema": "0.0.60",
-    "@grest-ts/schema-file": "0.0.60"
+    "@grest-ts/logger": "0.0.61",
+    "@grest-ts/schema": "0.0.61",
+    "@grest-ts/schema-file": "0.0.61"
   }
 }
