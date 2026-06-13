@@ -1,8 +1,42 @@
-import {GGLocator, GGLocatorKey, GGLocatorScope} from "@grest-ts/locator";
 import {GGLogger} from "./GGLogger";
 import {LogEntry, LogLevel} from "./types";
 
-export const GG_LOG = new GGLocatorKey<GGLog>("GGLog");
+/**
+ * Holds the active GGLog instance for the current execution context. On the
+ * server GGLogStore.node backs this with the locator scope (per-runtime
+ * isolation); the browser default below is a plain module singleton — one
+ * logger config per page, no async-context machinery — so @grest-ts/locator
+ * (a node-only DI / async-context package) never reaches the browser bundle.
+ */
+export interface GGLogStore {
+    get(): GGLog
+    tryGet(): GGLog | undefined
+    /** `scope` is a GGLocatorScope on the server; the browser store ignores it. */
+    set(instance: GGLog, scope?: unknown): void
+}
+
+let browserInstance: GGLog | undefined
+let store: GGLogStore = {
+    get(): GGLog {
+        if (!browserInstance) throw new Error("GGLog not initialized — call GGLog.init() first");
+        return browserInstance;
+    },
+    tryGet: () => browserInstance,
+    set: (instance) => { browserInstance = instance; },
+};
+
+/** Install a different backing store. GGLogStore.node calls this to switch to
+ *  locator-scoped resolution; not for app code. */
+export function _setGGLogStore(s: GGLogStore): void {
+    store = s;
+}
+
+/** The active GGLog instance. Shape kept from the former locator key so every
+ *  `store.get()` / `store.tryGet()` callsite is unchanged. */
+export const GG_LOG = {
+    get: (): GGLog => store.get(),
+    tryGet: (): GGLog | undefined => store.tryGet(),
+};
 
 /**
  * Logging system with async context awareness.
@@ -27,9 +61,9 @@ export class GGLog {
     /**
      * Initialize GGLog - creates a new instance and adds it to the current context.
      */
-    public static init(scope?: GGLocatorScope): GGLog {
+    public static init(scope?: unknown): GGLog {
         const instance = new GGLog();
-        (scope ?? GGLocator.getScope()).set(GG_LOG, instance);
+        store.set(instance, scope);
         return instance;
     }
 
@@ -72,7 +106,7 @@ export class GGLog {
     // -----------------------------------------------
 
     public static getLogger<T extends GGLogger>(type: new (...args: any[]) => T): T | undefined {
-        return GG_LOG.get().loggers.find((l): l is T => l instanceof type);
+        return store.get().loggers.find((l): l is T => l instanceof type);
     }
 
     public getLoggerInstance<T extends GGLogger>(type: new (...args: any[]) => T): T | undefined {
@@ -80,15 +114,15 @@ export class GGLog {
     }
 
     public static add(logger: GGLogger): void {
-        GG_LOG.get().addLogger(logger);
+        store.get().addLogger(logger);
     }
 
     public static clear(): void {
-        GG_LOG.tryGet()?.clearLoggers();
+        store.tryGet()?.clearLoggers();
     }
 
     public static isLevelLogged(level: LogLevel): boolean {
-        return GG_LOG.get().isLevelLoggedInternal(level);
+        return store.get().isLevelLoggedInternal(level);
     }
 
     private static log(
@@ -98,7 +132,7 @@ export class GGLog {
         dataOrError: any | Error,
         possiblyError: Error
     ): void {
-        const ctx = GG_LOG.tryGet();
+        const ctx = store.tryGet();
         if (!ctx) {
             console.warn("Log context not setup for message: ", messageOrError, dataOrError, possiblyError);
             return;

@@ -1,9 +1,8 @@
 import i18next, {i18n, InitOptions} from 'i18next';
 import ICU from 'i18next-icu';
 import {GGContextStore} from "@grest-ts/context";
-import {GGLocator, GGLocatorServiceType} from "@grest-ts/locator";
 import {GG_INTL_LOCALE} from "./GG_INTL_LOCALE";
-import {GG_INTL} from "./GG_INTL";
+import {_registerGGIntl} from "./GG_INTL";
 
 export interface GGIntlOptions extends Omit<InitOptions, 'fallbackLng' | 'interpolation'> {
     systemLocale?: string;
@@ -21,8 +20,7 @@ export class GGIntl {
         this.options = options;
         this.systemLocale = options.systemLocale ?? 'en';
 
-        GGLocator.getScope().setWithLifecycle(GG_INTL, this, {
-            type: GGLocatorServiceType.INTL,
+        _registerGGIntl(this, {
             start: () => this.start(),
             teardown: () => this.teardown()
         });

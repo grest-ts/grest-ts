@@ -5,6 +5,7 @@ import {execSync} from "child_process";
 import path from "path";
 import fg from "fast-glob";
 import fs from "fs";
+import * as esbuild from "esbuild";
 import {generateTestkitExtensions} from "#scripts/packager/generate-testkit-extensions";
 
 function cleanupGeneratedFiles() {
@@ -94,6 +95,45 @@ function typeCheckProject(project: string) {
     }
 }
 
+// Bundle each browser-targeted package's entry for the browser and fail if any
+// pulls a Node builtin. Browser/node packages keep one shared core and isolate
+// the Node-only bits in *.node files swapped in by the node entry; this is the
+// only thing that proves a browser-reachable file never statically OR dynamically
+// (bundlers resolve `import()` at build time) imports a node-only module. Without
+// it, leaks stay silent in grest-ts and only surface in a downstream `vite build`.
+async function checkBrowserBundlePurity() {
+    console.log("\n\n--------------------------------------------\n📦 Checking browser bundle purity (no Node-only imports reach browser entries)...");
+    const root = import.meta.dirname;
+    const pkgFiles = fg.sync("**/grest.package.ts", {cwd: root, absolute: true, ignore: ["**/node_modules/**"]});
+    const browserPkgs: string[] = [];
+    for (const file of pkgFiles) {
+        const src = fs.readFileSync(file, "utf-8");
+        if (!/\bbrowser:\s*true\b/.test(src)) continue;
+        const name = src.match(/\bname:\s*["']([^"']+)["']/)?.[1];
+        if (name) browserPkgs.push(name);
+    }
+    browserPkgs.sort();
+
+    const failures: string[] = [];
+    for (const pkg of browserPkgs) {
+        try {
+            await esbuild.build({
+                stdin: {contents: `import * as m from "${pkg}"; console.log(m)`, resolveDir: root, loader: "ts"},
+                bundle: true, write: false, platform: "browser", format: "esm", logLevel: "silent",
+            });
+            console.log(`  ✅ ${pkg}`);
+        } catch (e: any) {
+            const detail = (e.errors ?? []).map((x: any) => `${x.text}${x.location ? ` (${x.location.file}:${x.location.line})` : ""}`).join("; ");
+            failures.push(`${pkg}: ${detail}`);
+            console.log(`  ❌ ${pkg} — ${detail}`);
+        }
+    }
+    if (failures.length > 0) {
+        throw new Error(`Browser bundle purity check failed for ${failures.length} package(s) — a browser-reachable file imports a Node-only module:\n  ${failures.join("\n  ")}`);
+    }
+    console.log(`✅ Browser bundle purity: ${browserPkgs.length} package(s) clean`);
+}
+
 // Run checks
 
 console.log("\n\n--------------------------------------------\n📦 Running npm install");
@@ -119,3 +159,5 @@ console.log("\n\n--------------------------------------------\n📦 Type checkin
 typeCheckProject("examples/checklist")
 typeCheckProject("examples/grest-test")
 console.log("\n✅ All example projects passed type check");
+
+await checkBrowserBundlePurity();

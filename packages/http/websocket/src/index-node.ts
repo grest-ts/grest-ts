@@ -31,3 +31,4 @@ export * from "./client/GGWsLogMode";
 // Extensions
 import "./server/GGWebSocketSchema.startServer";
 import "./client/GGWebSocketSchema.createClient";
+import "./client/GGWebSocketSchema.createClient.node";
