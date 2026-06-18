@@ -1,4 +1,5 @@
 import {GGContextKey, type GGTransportMiddleware} from "@grest-ts/context"
+import {type GGSchema} from "@grest-ts/schema"
 import {GGContextKeySynchronizer} from "../client/GGContextKeySynchronizer"
 
 /** Outbound freshness gate for a smart wire. The outbound value is always the wire's own context value. */
@@ -22,6 +23,9 @@ export interface GGWireClientHandler {
  * ./GGWireContextKey.node — the browser bundle never pulls @grest-ts/locator.
  */
 export abstract class GGWireContextKey extends GGContextKey<string | undefined> implements GGTransportMiddleware {
+
+    // TS 6 TS2559: implements requires at least one property in common with the interface.
+    readonly headers?: Record<string, GGSchema<string | undefined>>
 
     private _clientHandler?: GGWireClientHandler
 
