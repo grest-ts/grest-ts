@@ -16,7 +16,7 @@
     "src"
   ],
   "scripts": {
-    "typecheck": "tsc --noEmit -p src && tsc --noEmit -p test",
+    "typecheck": "tsc --noEmit -p src",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "test:coverage:html": "vitest run --coverage --reporter=html"

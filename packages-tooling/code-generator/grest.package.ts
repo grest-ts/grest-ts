@@ -7,7 +7,6 @@ definePackage({
     hidden: true,
     targets: {node: true},
     hasTests: true,
-    hasTestsFolder: true,
     references: ["http"],  // Used in generated code paths, not direct imports
     bin: {
         "grest": "./bin/grest.cjs"

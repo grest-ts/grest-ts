@@ -15,3 +15,5 @@ package-lock.json
 docs-web/src/
 docs-web/build/
 docs-web/.vitepress/cache/
+# Ephemeral browser type-check workspace (grest.1.check.ts)
+.tmp-browser-typecheck/
