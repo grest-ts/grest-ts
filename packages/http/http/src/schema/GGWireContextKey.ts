@@ -24,7 +24,7 @@ export interface GGWireClientHandler {
  */
 export abstract class GGWireContextKey extends GGContextKey<string | undefined> implements GGTransportMiddleware {
 
-    readonly headers?: Record<string, GGSchema<string | undefined>>
+    declare readonly headers?: Record<string, GGSchema<string | undefined>>
 
     private _clientHandler?: GGWireClientHandler
 
