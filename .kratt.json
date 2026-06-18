@@ -2,8 +2,8 @@
   "steps": [
     {"kind": "bash:setup", "bash": "npm install"},
     {"kind": "docker", "file": "examples/checklist/docker-compose.yml"},
-    {"kind": "bash:setup", "bash": "docker exec -i gg-postgres psql -U postgres -c 'CREATE DATABASE checklist;'"},
-    {"kind": "bash:setup", "bash": "docker exec -i gg-postgres psql -U postgres -c 'CREATE DATABASE blocker;'"},
+    {"kind": "bash:setup", "bash": "docker exec -i gg-postgres psql -U postgres -tc \"SELECT 1 FROM pg_database WHERE datname='checklist'\" | grep -q 1 || docker exec -i gg-postgres psql -U postgres -c 'CREATE DATABASE checklist'"},
+    {"kind": "bash:setup", "bash": "docker exec -i gg-postgres psql -U postgres -tc \"SELECT 1 FROM pg_database WHERE datname='blocker'\" | grep -q 1 || docker exec -i gg-postgres psql -U postgres -c 'CREATE DATABASE blocker'"},
     {"kind": "bash:setup", "bash": "docker exec -i gg-postgres psql -U postgres -d checklist < examples/checklist/checklist/schema/checklist.postgres.sql"},
     {"kind": "bash:setup", "bash": "docker exec -i gg-postgres psql -U postgres -d blocker < examples/checklist/blocker/schema/blocker.postgres.sql"},
     {"kind": "backend", "name": "auth", "bash": "PORT=4600 npm start", "dir": "examples/auth/server", "port": 4600, "healthcheck": true, "expose": "auth"},
