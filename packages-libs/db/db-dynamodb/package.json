@@ -1,7 +1,7 @@
 {
   "//": "THIS FILE IS GENERATED - DO NOT EDIT",
   "name": "@grest-ts/db-dynamodb",
-  "version": "0.0.62",
+  "version": "0.0.63",
   "type": "module",
   "license": "MIT",
   "description": "DynamoDB database utilities for Grest Framework",
@@ -54,12 +54,12 @@
     "@aws-sdk/lib-dynamodb": "^3.750.0"
   },
   "peerDependencies": {
-    "@grest-ts/config": "0.0.62",
-    "@grest-ts/locator": "0.0.62",
-    "@grest-ts/logger": "0.0.62",
-    "@grest-ts/schema": "0.0.62"
+    "@grest-ts/config": "0.0.63",
+    "@grest-ts/locator": "0.0.63",
+    "@grest-ts/logger": "0.0.63",
+    "@grest-ts/schema": "0.0.63"
   },
   "devDependencies": {
-    "@grest-ts/testkit": "0.0.62"
+    "@grest-ts/testkit": "0.0.63"
   }
 }
