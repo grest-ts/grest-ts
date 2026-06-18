@@ -223,7 +223,7 @@
       "flags": {
         "node": true,
         "browser": false,
-        "testkit": true,
+        "testkit": false,
         "hidden": false,
         "implementation": false,
         "npm": true

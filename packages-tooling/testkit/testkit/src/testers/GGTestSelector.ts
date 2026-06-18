@@ -46,7 +46,7 @@ export class GGTestSelector<T extends RuntimeConstructor[]> {
 
         const extensionInstance = new extension(this.runtimes);
         this.extensionCache.set(name as string, extensionInstance);
-        return extensionInstance as SelectorExtensions<T>[K];
+        return extensionInstance as unknown as SelectorExtensions<T>[K];
     }
 
     /**

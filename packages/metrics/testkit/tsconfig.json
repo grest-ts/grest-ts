@@ -6,7 +6,8 @@
       "ES2022"
     ],
     "types": [
-      "node"
+      "node",
+      "vitest/globals"
     ]
   },
   "include": [

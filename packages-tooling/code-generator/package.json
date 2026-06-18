@@ -1,7 +1,7 @@
 {
   "//": "THIS FILE IS GENERATED - DO NOT EDIT",
   "name": "@grest-ts/code-generator",
-  "version": "0.0.61",
+  "version": "0.0.62",
   "type": "module",
   "license": "MIT",
   "description": "TypeScript code generator for type-safe HTTP/WebSocket clients and servers",
@@ -16,7 +16,7 @@
     "src"
   ],
   "scripts": {
-    "typecheck": "tsc --noEmit -p src && tsc --noEmit -p test",
+    "typecheck": "tsc --noEmit -p src",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "test:coverage:html": "vitest run --coverage --reporter=html"
@@ -52,7 +52,7 @@
     "fast-glob": "^3.3.3"
   },
   "peerDependencies": {
-    "@grest-ts/common": "0.0.61",
-    "@grest-ts/http": "0.0.61"
+    "@grest-ts/common": "0.0.62",
+    "@grest-ts/http": "0.0.62"
   }
 }

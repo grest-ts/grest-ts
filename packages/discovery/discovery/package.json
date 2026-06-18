@@ -1,7 +1,7 @@
 {
   "//": "THIS FILE IS GENERATED - DO NOT EDIT",
   "name": "@grest-ts/discovery",
-  "version": "0.0.61",
+  "version": "0.0.62",
   "type": "module",
   "license": "MIT",
   "description": "Service discovery implementations for Grest Framework",
@@ -9,15 +9,10 @@
     ".": {
       "types": "./src/index-node.ts",
       "import": "./src/index-node.ts"
-    },
-    "./testkit": {
-      "types": "./testkit/index-testkit.ts",
-      "import": "./testkit/index-testkit.ts"
     }
   },
   "files": [
-    "src",
-    "testkit"
+    "src"
   ],
   "scripts": {
     "typecheck": "tsc --noEmit -p src"
@@ -48,9 +43,6 @@
     "node": ">=24"
   },
   "peerDependencies": {
-    "@grest-ts/locator": "0.0.61"
-  },
-  "devDependencies": {
-    "@grest-ts/testkit": "0.0.61"
+    "@grest-ts/locator": "0.0.62"
   }
 }

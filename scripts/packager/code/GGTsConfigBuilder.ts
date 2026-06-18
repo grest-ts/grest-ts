@@ -172,7 +172,7 @@ export class GGTsConfigBuilder {
             extends: this.buildExtendsPath(pkg.depth, 1), // +1 for testkit/ subfolder
             compilerOptions: {
                 lib,
-                types: ["node"]
+                types: ["node", "vitest/globals"]
             },
             include: ["**/*"]
         }
