@@ -8,8 +8,7 @@
       "ES2022"
     ],
     "types": [
-      "node",
-      "vitest/globals"
+      "node"
     ],
     "noEmit": false,
     "declaration": true,
@@ -17,8 +16,7 @@
     "sourceMap": true
   },
   "include": [
-    "src/**/*",
-    "testkit/**/*"
+    "src/**/*"
   ],
   "exclude": [
     "**/*.test.ts",

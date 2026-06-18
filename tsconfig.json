@@ -56,7 +56,6 @@
     "packages/discovery/discovery-migration/src/**/*",
     "packages/discovery/discovery-static/src/**/*",
     "packages/discovery/discovery/src/**/*",
-    "packages/discovery/discovery/testkit/**/*",
     "packages/http/http-file/src/**/*",
     "packages/http/http/src/**/*",
     "packages/http/http/testkit/**/*",
