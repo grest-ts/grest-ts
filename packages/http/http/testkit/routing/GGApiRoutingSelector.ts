@@ -1,5 +1,5 @@
 // Interface for API routing selector (test-only feature)
-// Actual implementation is GGLocalRoutingStrategySelector from @grest-ts/discovery/testkit
+// Actual implementation is GGLocalRoutingStrategySelector from @grest-ts/discovery-local/testkit
 
 export interface GGApiRoutingSelector {
     first(): void
