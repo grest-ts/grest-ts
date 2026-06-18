@@ -16,7 +16,7 @@ const BEARER = "Bearer "
  */
 export class GGHeader extends GGWireContextKey {
 
-    public readonly headers: Record<string, GGSchema<string | undefined>>
+    declare public readonly headers: Record<string, GGSchema<string | undefined>>
     private readonly scheme?: "bearer"
     private readonly wireName: string
 
