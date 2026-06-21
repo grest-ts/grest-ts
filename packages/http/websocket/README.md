@@ -17,7 +17,7 @@ WebSocket contracts define two-way communication channels:
 
 ```typescript
 // NotificationApi.ts
-import { webSocketSchema } from "@grest-ts/websocket"
+import { defineSocketContract, webSocketSchema } from "@grest-ts/websocket"
 import { IsObject, IsString, IsBoolean, IsUint, IsArray, SERVER_ERROR, VALIDATION_ERROR } from "@grest-ts/schema"
 
 // ---------------------------------------------------------
@@ -51,12 +51,13 @@ export const IsTypingEvent = IsObject({
 })
 
 // ---------------------------------------------------------
-// Message maps & API
+// Contract & API
 // ---------------------------------------------------------
 
-// Held separately so the types are reusable (see Server Setup); the inline
-// `.messages({...})` form below is preferable when you don't need the named type.
-export const ChatMessages = {
+// The contract declares the payload mode (typed methods here); webSocketSchema
+// binds the transport. Held as a named contract so the inferred types are reusable
+// (see Server Setup).
+export const ChatContract = defineSocketContract("Chat", {
     clientToServer: {
         // RPC: client sends a request, server responds
         sendMessage: {
@@ -84,11 +85,11 @@ export const ChatMessages = {
             errors: [SERVER_ERROR]
         }
     }
-}
+})
 
-export const ChatApi = webSocketSchema("ChatApi")
+export const ChatApi = webSocketSchema(ChatContract)
     .path("ws/chat")
-    .messages(ChatMessages)
+    .done()
 ```
 
 ### Contract Method Types
@@ -101,7 +102,7 @@ Every method supports two sending modes, determined by the contract shape:
 Both modes work in either direction (`clientToServer` and `serverToClient`).
 
 ```typescript
-webSocketSchema("MyApi").path("ws/my").messages({
+const MyContract = defineSocketContract("My", {
     clientToServer: {
         // Request-response: has input + success + errors
         // Client sends a request, server returns a typed response
@@ -122,19 +123,21 @@ webSocketSchema("MyApi").path("ws/my").messages({
         // Same patterns apply for server-to-client messages
     }
 })
+
+webSocketSchema(MyContract).path("ws/my").done()
 ```
 
 ### Schema Builder
 
-The schema builder configures the WebSocket endpoint, then a terminal picks the payload + mode and finalizes the schema. `.messages({...})` builds a typed contract socket; `.bytes()` / `.passthrough({...})` build raw byte-stream sockets (see "Raw byte-stream sockets").
+The payload mode lives on the **contract** — a typed contract (`clientToServer` / `serverToClient`), a raw `{ bytes: true }` stream, or a `{ passthrough: true }` foreign-client stream (see "Raw byte-stream sockets"). `webSocketSchema(contract)` then configures the endpoint and binds the transport uniformly for all three, finalized by `.done()`.
 
 ```typescript
-export const ChatApi = webSocketSchema("ChatApi")           // schema name
+export const ChatApi = webSocketSchema(ChatContract)        // the contract carries the payload mode
     .path("ws/chat")                                        // WebSocket endpoint path
     .use(USER_TOKEN_WIRE)                                   // attach a credential wire (verified at handshake)
     .connectPermission(ChatPermission.USE)                  // optional handshake-level permission gate
     .queryOnConnect(IsObject({ room: IsString }))           // validate query params on connect
-    .messages(ChatMessages)                                 // typed-contract terminal — finalizes the schema
+    .done()                                                 // finalizes the schema
 ```
 
 ## Permissions
@@ -149,11 +152,11 @@ Two gating levels combine:
 Scopes come from the **wires** the schema `.use()`s — exactly as on HTTP. The wire's `process()` verifies the credential at handshake and its `permissions()` resolver returns the caller's grants. There is no `permissionResolver` config on `register()`; the schema's wires are the only source of scopes:
 
 ```typescript
-export const ChatApi = webSocketSchema("ChatApi")
+export const ChatApi = webSocketSchema(ChatContract)
     .path("ws/chat")
     .use(USER_TOKEN_WIRE)               // verifies the credential + resolves scopes at handshake
     .connectPermission(ChatPermission.USE)
-    .messages(ChatMessages)
+    .done()
 
 // register() takes only { http?, middlewares? } — no resolver
 ChatApi.register(chatService.handleConnection, { http: httpServer })
@@ -203,10 +206,10 @@ export const USER_TOKEN_WIRE_HANDLER = USER_TOKEN_WIRE.define((users: UserServic
 ```
 
 ```typescript
-export const ChatApi = webSocketSchema("ChatApi")
+export const ChatApi = webSocketSchema(ChatContract)
     .path("ws/chat")
     .use(USER_TOKEN_WIRE)            // verified at handshake
-    .messages(ChatMessages)
+    .done()
 
 // compose(): bind the handler once per runtime; the same .create() covers HTTP + WS schemas.
 USER_TOKEN_WIRE_HANDLER.create(userService)
@@ -249,11 +252,11 @@ A middleware (and a `GGCookie` wire) reads the cookie via `inbound.cookie`, not 
 ### Chaining
 
 ```typescript
-export const ChatApi = webSocketSchema("ChatApi")
+export const ChatApi = webSocketSchema(ChatContract)
     .path("ws/chat")
     .use(USER_TOKEN_WIRE)      // credential wire
     .use(LocaleMiddleware)     // ambient middleware
-    .messages(ChatMessages)
+    .done()
 ```
 
 Wires/middleware resolve in order during connection establishment.
@@ -269,9 +272,9 @@ export const ItemApi = httpSchema(ItemContract).pathPrefix("api/items")
     .use(USER_TOKEN_WIRE)
     .routes({ ... })
 
-export const ChatApi = webSocketSchema("ChatApi").path("ws/chat")
+export const ChatApi = webSocketSchema(ChatContract).path("ws/chat")
     .use(USER_TOKEN_WIRE)
-    .messages(ChatMessages)
+    .done()
 ```
 
 The wire's `process()` runs on whichever transport is in play; the durable principal it mints
@@ -317,11 +320,11 @@ export const SESSION_HANDLER = SESSION.define(() => ({
     permissions: async () => scopesFromSession(SESSION_VALUE.get()),
 }))
 
-export const ChatApi = webSocketSchema("ChatApi")
+export const ChatApi = webSocketSchema(ChatContract)
     .path("ws/chat")
     .use(SESSION)                   // read + verify the session cookie off the upgrade
     .connectPermission(CHAT_USE)    // gate the handshake (see Permissions)
-    .messages(ChatMessages)
+    .done()
 
 // compose(): bind the handler once per runtime
 SESSION_HANDLER.create()
@@ -364,11 +367,11 @@ The server receives `incoming` and `outgoing` typed interfaces for each connecti
 import { WebSocketIncoming, WebSocketOutgoing } from "@grest-ts/websocket"
 
 export class ChatService {
-    private connections = new Map<string, Set<WebSocketOutgoing<typeof ChatMessages.serverToClient>>>()
+    private connections = new Map<string, Set<WebSocketOutgoing<typeof ChatContract.methods.serverToClient>>>()
 
     handleConnection = (
-        incoming: WebSocketIncoming<typeof ChatMessages.clientToServer>,
-        outgoing: WebSocketOutgoing<typeof ChatMessages.serverToClient>
+        incoming: WebSocketIncoming<typeof ChatContract.methods.clientToServer>,
+        outgoing: WebSocketOutgoing<typeof ChatContract.methods.serverToClient>
     ): void => {
         const user = USER_DATA.get()   // durable principal minted by the wire at handshake
 
@@ -581,19 +584,19 @@ const socket = await GGSocketPool.getOrConnect({
 
 ## Raw byte-stream sockets
 
-Some sockets aren't an RPC API — a PTY passthrough, a log tail, a binary stream. Build those with the **same builder**, but finish with a byte-stream terminal instead of `.messages(...)`: the connection-level config (`.path` / `.use(WIRE)` / `.queryOnConnect` / `.connectPermission`) is identical, so a raw socket coexists with typed `.messages(...)` schemas on the same `GGHttpServer`. After the handshake there's no message contract — you own the wire as opaque frames. Two terminals build raw sockets:
+Some sockets aren't an RPC API — a PTY passthrough, a log tail, a binary stream. Build those by declaring the payload mode on the **contract** (`{ bytes: true }` or `{ passthrough: true }`) instead of message maps, then bind with the **same builder** and `.done()`: the connection-level config (`.path` / `.use(WIRE)` / `.queryOnConnect` / `.connectPermission`) is identical, so a raw socket coexists with typed schemas on the same `GGHttpServer`. After the handshake there's no message contract — you own the wire as opaque frames. Two raw contract modes exist:
 
-- **`.bytes()`** — both ends speak grest-ts. Runs the **same handshake** as a typed socket (in-band first-message auth, path dispatch, `queryOnConnect` validation, discovery, reconnect + liveness), then hands you the raw frames. Use it for a Node or browser grest-ts client streaming bytes.
-- **`.passthrough({protocols})`** — for a **foreign client** (noVNC, an editor webview) that can't speak the grest-ts handshake. Auth runs against the HTTP upgrade only (cookie / `?query=`); there is no in-band handshake, no `HANDSHAKE_OK`, and **no grest-ts client** — the foreign client connects with its own library. `protocols` is optional.
+- **`{ bytes: true }`** — both ends speak grest-ts. Runs the **same handshake** as a typed socket (in-band first-message auth, path dispatch, `queryOnConnect` validation, discovery, reconnect + liveness), then hands you the raw frames. Use it for a Node or browser grest-ts client streaming bytes.
+- **`{ passthrough: true, protocols? }`** — for a **foreign client** (noVNC, an editor webview) that can't speak the grest-ts handshake. Auth runs against the HTTP upgrade only (cookie / `?query=`); there is no in-band handshake, no `HANDSHAKE_OK`, and **no grest-ts client** — the foreign client connects with its own library. `protocols` is optional.
 
 ```typescript
-// shared schema (no message map — just the connection concerns), .bytes() terminal
-export const PtyStream = webSocketSchema("PtyStream")
+// raw contract (no message map — just the byte-stream mode), bound + finalized with .done()
+export const PtyStream = webSocketSchema(defineSocketContract("Pty", { bytes: true }))
     .path("ws/pty")
     .use(USER_TOKEN_WIRE)                       // same wire/auth as a typed socket
     .queryOnConnect(IsObject({ vmId: IsString }))
     .connectPermission(PtyPermission.ATTACH)    // optional handshake gate
-    .bytes()
+    .done()
 
 // server — handler runs after auth; UserContext.get() is available here
 PtyStream.register((socket, query) => {     // socket: send(bytes|string) / onMessage(Buffer) / onClose / close
@@ -613,9 +616,9 @@ pty.send(input)
 
 The client must let `connect()` resolve before streaming — frames sent before `HANDSHAKE_OK` are dropped, never delivered pre-auth. (For a socket you hand-roll *entirely* outside this schema, see `GGServerLiveness` / `GGClientLiveness` under Liveness.)
 
-### `.bytes()` client surface
+### Raw byte-stream client surface
 
-`schema.createClient(config)` on a `.bytes()` schema returns a client whose `connect()` resolves `void` (there is no separate connection object — the byte methods are on the client):
+`schema.createClient(config)` on a `{ bytes: true }` schema returns a client whose `connect()` resolves `void` (there is no separate connection object — the byte methods are on the client):
 
 - `client.send(bytes)` — send an opaque frame (throws if called before `connect()`)
 - `client.onMessage(cb)` — register an inbound-frame handler; persists across reconnects
@@ -625,15 +628,15 @@ The client must let `connect()` resolve before streaming — frames sent before 
 
 A reconnected byte stream is a **fresh** stream — bytes sent while it was down are not replayed.
 
-### `.passthrough()` — foreign clients
+### `{ passthrough: true }` — foreign clients
 
-A `.passthrough({protocols})` schema has **no grest-ts client** — the foreign client connects with its own WebSocket library, authenticating via the upgrade. Because a foreign client never sends the in-band handshake, the terminal enforces an invariant **at build time**: it throws if any `.use()`'d wire delivers its credential in-band (a wire with an `update()` writer, e.g. `GGHeader`), since that credential could never arrive. Only upgrade-readable credentials (a cookie or `?query=`) are legal with `.passthrough()`.
+A `{ passthrough: true, protocols? }` contract has **no grest-ts client** — the foreign client connects with its own WebSocket library, authenticating via the upgrade. Because a foreign client never sends the in-band handshake, `.done()` enforces an invariant **at build time**: it throws if any `.use()`'d wire delivers its credential in-band (a wire with an `update()` writer, e.g. `GGHeader`), since that credential could never arrive. Only upgrade-readable credentials (a cookie or `?query=`) are legal with a passthrough contract.
 
 ```typescript
-export const Desktop = webSocketSchema("Desktop")
+export const Desktop = webSocketSchema(defineSocketContract("Desktop", { passthrough: true, protocols: ["binary"] }))
     .path("ws/desktop")
     .use(DESKTOP_TOKEN_QUERY)               // upgrade-readable credential (cookie / ?query=)
-    .passthrough({ protocols: ["binary"] }) // protocols optional; no grest-ts client
+    .done()                                 // protocols optional; no grest-ts client
 ```
 
 ## Message Protocol
@@ -662,7 +665,7 @@ import { ERROR, NOT_FOUND, SERVER_ERROR, VALIDATION_ERROR } from "@grest-ts/sche
 
 const ROOM_FULL = ERROR.define("ROOM_FULL", 400)
 
-export const ChatApi = webSocketSchema("ChatApi").path("ws/chat").messages({
+export const RoomContract = defineSocketContract("Room", {
     clientToServer: {
         joinRoom: {
             input: IsObject({ roomId: IsString }),
@@ -672,6 +675,8 @@ export const ChatApi = webSocketSchema("ChatApi").path("ws/chat").messages({
     },
     serverToClient: {}
 })
+
+export const ChatApi = webSocketSchema(RoomContract).path("ws/chat").done()
 ```
 
 ### Throwing Errors in Handlers
@@ -735,13 +740,13 @@ but looks open until a manual refresh.
 detection), and liveness rides with it: a missed heartbeat drops the socket and the reconnect loop
 self-heals. Pass `reconnect: false` to disable it, or a `GGReconnectConfig` object to tune (e.g.
 `reconnect: {heartbeat: ...}`), and force a drop from app code (e.g. on `visibilitychange`) with
-`client.forceReconnect()`. Both the typed (`.messages(...)`) and raw (`.bytes()`) clients share this
+`client.forceReconnect()`. Both the typed and raw (`{ bytes: true }`) clients share this
 machinery — you don't need anything below for them.
 
 ### Raw streaming sockets — `GGServerLiveness` / `GGClientLiveness`
 
 This is for a socket you hand-roll **entirely** outside the framework (a bare `ws` server you set
-up yourself). A `.bytes()` schema doesn't need any of it — it gets the server heartbeat for
+up yourself). A `{ bytes: true }` schema doesn't need any of it — it gets the server heartbeat for
 free, same as a typed schema socket. But if you own the raw `ws` directly, the *mechanism* (ping + reap on
 the server, watchdog + reconnect in the client) is still available. The two reusable, payload-agnostic
 halves are separate classes — `GGServerLiveness` (Node, exported only from the node entry) and
