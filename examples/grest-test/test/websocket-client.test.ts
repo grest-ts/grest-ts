@@ -377,7 +377,7 @@ describe("WebSocket createClient (production client)", () => {
         })
 
         test("no-op when reconnect is disabled — the live connection is left intact", async () => {
-            const client = ClientTestSocketApi.createClient({url: clientUrl()})   // no reconnect
+            const client = ClientTestSocketApi.createClient({url: clientUrl(), reconnect: false})
             await client.connect()
             try {
                 client.forceReconnect()
