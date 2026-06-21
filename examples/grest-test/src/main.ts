@@ -16,6 +16,9 @@ import {HttpMetricsTestApi} from "./api/HttpMetricsTestApi"
 import {ConfigTestSocketApi} from "./api/ConfigTestSocketApi"
 import {ClientTestSocketApi} from "./api/ClientTestSocketApi"
 import {AuthedSocketApi} from "./api/AuthedSocketApi"
+import {RawEchoApi} from "./api/RawEchoApi"
+import {RawEchoService} from "./services/RawEchoService"
+import {RawAdminApi} from "./api/RawAdminApi"
 import {QuerySocketApi} from "./api/QuerySocketApi"
 import {EventsTestApi} from "./api/EventsTestApi"
 import {LanguageTestApi} from "./api/LanguageTestApi"
@@ -100,6 +103,7 @@ export class MainRuntime extends GGRuntime {
         ConfigTestSocketApi.register(configTestService.handleSocketConnection);
         ClientTestSocketApi.register(clientTestSocketService.handleConnection);
         AuthedSocketApi.register(authedSocketService.handleConnection);
+        RawEchoApi.register(new RawEchoService().handleConnection);
         QuerySocketApi.register(querySocketService.handleConnection);
 
         // Permissions API — the schema's x-test-scopes credential wire authenticates each
@@ -116,6 +120,8 @@ export class MainRuntime extends GGRuntime {
         // a missing cookie rejects the handshake with NOT_AUTHORIZED (401).
         WS_SESSION_HANDLER.create({});
         WsCookieApi.register(new WsCookieService().handleConnection);
+        // Raw socket behind a connect-level Admin permission (same session wire).
+        RawAdminApi.register((socket) => { socket.onMessage((data) => socket.send(data)); });
 
         // WebSocket permission test fixtures — same x-test-scopes wire as the HTTP gate.
         const wsPermissionsService = new WsPermissionsService();

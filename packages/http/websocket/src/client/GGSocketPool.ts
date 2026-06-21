@@ -2,12 +2,12 @@ import {GGSocket} from '../socket/GGSocket';
 import {SocketAdapter} from "../socket/SocketAdapter";
 import {GG_WS_CONNECTION} from "../server/GG_WS_CONNECTION";
 import {Message, MessageType} from "../socket/SocketMessage";
-import {GGContractExecutor, GGValidator, SERVER_ERROR} from "@grest-ts/schema";
-import {withTimeout} from "@grest-ts/common";
-import {GGContext, GGContextKey, GGContextStore, type GGOutbound, type GGTransportMiddleware} from "@grest-ts/context";
+import {GGValidator} from "@grest-ts/schema";
+import {GGContext, GGContextKey, GGContextStore, type GGTransportMiddleware} from "@grest-ts/context";
 import {GGContextKeySynchronizer} from "@grest-ts/http";
 import {GG_TRACE} from "@grest-ts/trace";
 import {getDefaultAdapter} from "../adapter/getDefaultAdapter";
+import {awaitHandshakeResponse, buildHandshakeHeaders, buildWsUrl} from "./clientHandshake";
 
 export interface GGSocketPoolConfig<Query> {
     domain: string,
@@ -118,19 +118,8 @@ export class GGSocketPool {
         this.adapterPromise = Promise.resolve(adapter);
     }
 
-    /**
-     * Build handshake headers from middlewares' update()
-     */
     private static buildHeaders(config: GGSocketPoolConfig<any>): Record<string, string> {
-        if (!config.middlewares) {
-            return {};
-        }
-
-        const outbound: GGOutbound = {headers: {}};
-        for (const middleware of config.middlewares) {
-            middleware.update?.(outbound);
-        }
-        return outbound.headers;
+        return buildHandshakeHeaders(config.middlewares ?? []);
     }
 
     /**
@@ -197,32 +186,8 @@ export class GGSocketPool {
         return this.openSocket(this.buildUrl(config), config, config.domain);
     }
 
-    /**
-     * Reconstruct the typed error the server threw during handshake.
-     *
-     * The server sends `error.toJSON()` which has `{success:false, type, data?, context?}`.
-     * System errors (NOT_AUTHORIZED, FORBIDDEN, VALIDATION_ERROR, etc.) are reconstructed
-     * as real instances so callers can `.toBeError(NOT_AUTHORIZED)`. Anything we can't
-     * identify (non-ERROR throw, custom error class the client doesn't know) falls back
-     * to SERVER_ERROR carrying the original payload for inspection.
-     */
-    private static handshakeErrorFrom(payload: any): Error {
-        if (payload && typeof payload === 'object' && typeof payload.type === 'string') {
-            return GGContractExecutor.createErrorObj(payload) as unknown as Error;
-        }
-        return new SERVER_ERROR({
-            displayMessage: 'WebSocket handshake failed',
-            originalError: payload,
-        });
-    }
-
     private static buildUrl(config: GGSocketPoolConfig<any>): string {
-        let fullUrl = config.domain + config.path;
-        if (config.query) {
-            const queryEntries: [string, string][] = Object.entries(config.query).map(([key, value]) => [key, String(value)]);
-            fullUrl += '?' + new URLSearchParams(queryEntries).toString();
-        }
-        return fullUrl;
+        return buildWsUrl(config.domain, config.path, config.query);
     }
 
     private static async openSocket(fullUrl: string, config: GGSocketPoolConfig<any>, domain: string): Promise<GGSocket> {
@@ -249,25 +214,7 @@ export class GGSocketPool {
                         await this.gateMiddlewares(config.middlewares);
                         const headers = this.buildHeaders(config);
                         adapter.send(Message.create(MessageType.HANDSHAKE, "", "", headers));
-                        await withTimeout(
-                            new Promise<void>((handshakeResolve, handshakeReject) => {
-                                const onMessage = (data: string) => {
-                                    const msg = Message.parse(data);
-                                    if (!msg) return;
-
-                                    if (msg.type === MessageType.HANDSHAKE_OK) {
-                                        adapter.offMessage(onMessage);
-                                        handshakeResolve();
-                                    } else if (msg.type === MessageType.HANDSHAKE_ERR) {
-                                        adapter.offMessage(onMessage);
-                                        handshakeReject(this.handshakeErrorFrom(msg.data));
-                                    }
-                                };
-                                adapter.onMessage(onMessage);
-                            }),
-                            5000,
-                            'Handshake timeout'
-                        );
+                        await awaitHandshakeResponse(adapter, 5000);
                         resolve(new GGSocket(adapter, {connectionContext: context}));
                     });
                 } catch (error) {

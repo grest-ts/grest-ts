@@ -8,7 +8,6 @@ import {ERROR, GGValidator} from "@grest-ts/schema";
 import {NodeSocketAdapter} from "../adapter/NodeSocketAdapter";
 import * as http from "http";
 import * as url from "url";
-import type {Duplex} from "stream";
 import {GGLog} from "@grest-ts/logger";
 import {GG_WS_CONNECTION} from "./GG_WS_CONNECTION";
 import {GGWebSocketMetrics} from "./GGWebSocketMetrics";
@@ -21,6 +20,7 @@ import {withTimeout} from "@grest-ts/common";
 import {GGContext, type GGInbound, type GGTransportMiddleware} from "@grest-ts/context";
 import {GG_DISCOVERY} from "@grest-ts/discovery";
 import {GGHttpServer} from "@grest-ts/http";
+import {GGRawSocket} from "../socket/GGRawSocket";
 
 /**
  * Per-connection liveness heartbeat: the server pings each client and reaps sockets
@@ -35,15 +35,16 @@ export interface GGSocketServerConfig<TContext, Query> {
     queryValidator?: GGValidator<Query>;
     middlewares: readonly GGTransportMiddleware[];
     heartbeat?: GGServerHeartbeatOption;
+    /**
+     * Raw mode: skip the typed message layer. After the handshake (query validation +
+     * middleware/wire auth) succeeds, the connection handler receives a GGRawSocket
+     * instead of a GGSocket and owns the wire as an opaque byte stream.
+     */
+    raw?: boolean;
 }
 
-/**
- * A raw upgrade handler — for non-schema sockets (PTY/log/binary streams) that
- * share an http.Server with schema sockets. Returns `true` if it claimed the
- * upgrade (called `handleUpgrade`/consumed the socket), `false` to decline so the
- * dispatcher can try the next handler or 404. See `registerRawUpgradeHandler`.
- */
-export type RawUpgradeHandler = (req: http.IncomingMessage, socket: Duplex, head: Buffer) => boolean
+/** Anything the server tracks for graceful teardown — a schema socket or a raw stream. */
+type ServerSocket = {teardown(): Promise<void>};
 
 /**
  * Shared path-dispatching upgrade registry per http.Server.
@@ -52,16 +53,11 @@ export type RawUpgradeHandler = (req: http.IncomingMessage, socket: Duplex, head
  * whenever the upgrade path doesn't match — so attaching two WebSocketServer
  * instances to the same http.Server causes whichever one fires first to reject
  * requests meant for the other. We install a single shared 'upgrade' listener
- * on each http.Server and dispatch by path instead.
- *
- * Raw (non-schema) sockets register via `registerRawUpgradeHandler` and are tried
- * after schema paths and before the 404 — so a server can mix schema sockets with
- * hand-rolled streams without a second, competing 'upgrade' listener that would
- * destroy the other's sockets.
+ * on each http.Server and dispatch by path instead. Raw byte-stream sockets are
+ * also path-registered WebSocketServers, so they coexist here automatically.
  */
 interface WsRegistry {
     readonly wssByPath: Map<string, WebSocketServer>
-    readonly rawHandlers: Set<RawUpgradeHandler>
 }
 
 const wsRegistryByHttpServer = new WeakMap<http.Server, WsRegistry>();
@@ -69,7 +65,7 @@ const wsRegistryByHttpServer = new WeakMap<http.Server, WsRegistry>();
 function ensureRegistry(httpServer: http.Server): WsRegistry {
     let registry = wsRegistryByHttpServer.get(httpServer);
     if (registry) return registry;
-    registry = {wssByPath: new Map(), rawHandlers: new Set()};
+    registry = {wssByPath: new Map()};
     wsRegistryByHttpServer.set(httpServer, registry);
     const captured = registry;
     httpServer.on('upgrade', (req, socket, head) => {
@@ -80,9 +76,6 @@ function ensureRegistry(httpServer: http.Server): WsRegistry {
                 matched.emit('connection', ws, req);
             });
             return;
-        }
-        for (const handler of captured.rawHandlers) {
-            if (handler(req, socket, head)) return;
         }
         socket.write('HTTP/1.1 404 Not Found\r\nConnection: close\r\n\r\n');
         socket.destroy();
@@ -105,19 +98,7 @@ function detachUpgradeDispatch(httpServer: http.Server, path: string): void {
     }
 }
 
-/**
- * Register a raw upgrade handler on the same shared 'upgrade' dispatcher schema
- * sockets use, so non-schema streams (PTY/log/binary) can live on an http.Server
- * that also serves `webSocketSchema`s. Handlers run after schema-path matching;
- * the first to return `true` claims the upgrade. Returns a teardown fn.
- */
-export function registerRawUpgradeHandler(httpServer: http.Server, handler: RawUpgradeHandler): () => void {
-    const registry = ensureRegistry(httpServer);
-    registry.rawHandlers.add(handler);
-    return () => { registry.rawHandlers.delete(handler); };
-}
-
-export class GGSocketServer<TContext, Query> {
+export class GGSocketServer<TContext, Query, TSocket extends ServerSocket = GGSocket> {
 
     private readonly wss: WebSocketServer;
     private readonly http: GGHttpServer;
@@ -126,9 +107,10 @@ export class GGSocketServer<TContext, Query> {
     private readonly middlewares: readonly GGTransportMiddleware[];
     private readonly queryValidator?: GGValidator<Query>;
     private readonly heartbeat: GGServerHeartbeatOption;
+    private readonly raw: boolean;
 
-    private readonly activeSockets: Set<GGSocket> = new Set();
-    private readonly onConnectionHandlers: Array<(socket: GGSocket, query: Query) => Promise<void>> = [];
+    private readonly activeSockets: Set<ServerSocket> = new Set();
+    private readonly onConnectionHandlers: Array<(socket: TSocket, query: Query) => Promise<void>> = [];
 
     // Capture context at construction - WebSocket events lose AsyncLocalStorage context
     private readonly scope: GGLocatorScope;
@@ -140,6 +122,7 @@ export class GGSocketServer<TContext, Query> {
         this.middlewares = config.middlewares;
         this.queryValidator = config.queryValidator;
         this.heartbeat = config.heartbeat ?? {};
+        this.raw = config.raw ?? false;
         this.wss = new WebSocketServer({noServer: true});
         this.wss.on('connection', this.scope.wrapWithEnter(this._onConnection));
         attachUpgradeDispatch(http.httpServer, this.path, this.wss);
@@ -170,7 +153,7 @@ export class GGSocketServer<TContext, Query> {
             });
     }
 
-    public onConnection(handler: (socket: GGSocket, query: Query) => Promise<void>): void {
+    public onConnection(handler: (socket: TSocket, query: Query) => Promise<void>): void {
         this.onConnectionHandlers.push(handler);
     }
 
@@ -218,6 +201,11 @@ export class GGSocketServer<TContext, Query> {
                     return;
                 }
 
+                if (this.raw) {
+                    await this.openRawConnection(adapter, context, queryArgs, connectionLabels);
+                    return;
+                }
+
                 // Send handshake success
                 adapter.send(Message.create(MessageType.HANDSHAKE_OK, "", "", null));
 
@@ -248,7 +236,7 @@ export class GGSocketServer<TContext, Query> {
                 // Run connection handlers inside the connectionScope so they can access context
                 for (const handler of this.onConnectionHandlers) {
                     try {
-                        await handler(socket, queryArgs);
+                        await handler(socket as unknown as TSocket, queryArgs);
                     } catch (error) {
                         GGLog.error(this, error instanceof Error ? error : new Error(String(error)));
                     }
@@ -262,6 +250,51 @@ export class GGSocketServer<TContext, Query> {
                 }
             }
         });
+    }
+
+    /**
+     * Raw mode: the handshake (query + auth) already passed. Build a GGRawSocket, let the
+     * connection handlers attach their byte listeners, THEN send HANDSHAKE_OK — so the client
+     * only starts streaming once the server is listening (no first-frame race).
+     */
+    private async openRawConnection(
+        adapter: NodeSocketAdapter,
+        context: GGContext,
+        queryArgs: Query,
+        connectionLabels: {api: string; path: string}
+    ): Promise<void> {
+        GGLog.debug(this, "New raw websocket connection", queryArgs);
+        const socket = new GGRawSocket(adapter, {
+            apiName: this.apiName,
+            socketPath: this.path,
+            connectionContext: context,
+            scope: this.scope,
+            metrics: this.createMetrics(),
+            log: this.createLogger(),
+        });
+        this.activeSockets.add(socket);
+
+        if (this.heartbeat !== false) socket.startHeartbeat(this.heartbeat);
+
+        if (GG_METRICS.has()) {
+            GGWebSocketMetrics.connections.inc(1, {...connectionLabels, result: 'OK'});
+            GGWebSocketMetrics.connectionsActive.inc(1, connectionLabels);
+        }
+
+        socket.onClose(() => {
+            this.activeSockets.delete(socket);
+            if (GG_METRICS.has()) GGWebSocketMetrics.connectionsActive.dec(1, connectionLabels);
+        });
+
+        for (const handler of this.onConnectionHandlers) {
+            try {
+                await handler(socket as unknown as TSocket, queryArgs);
+            } catch (error) {
+                GGLog.error(this, error instanceof Error ? error : new Error(String(error)));
+            }
+        }
+
+        adapter.send(Message.create(MessageType.HANDSHAKE_OK, "", "", null));
     }
 
     private createLogger(): GGSocketLogger {

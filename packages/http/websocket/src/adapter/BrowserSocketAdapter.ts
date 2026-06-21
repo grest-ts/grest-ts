@@ -7,6 +7,9 @@ export class BrowserSocketAdapter implements SocketAdapter {
 
     constructor(url: string) {
         this.ws = new WebSocket(url);
+        // Binary frames surface as ArrayBuffer (raw sockets); text frames are unaffected,
+        // so the typed Message path keeps receiving strings.
+        this.ws.binaryType = 'arraybuffer';
     }
 
     send(message: string): void {
@@ -59,5 +62,18 @@ export class BrowserSocketAdapter implements SocketAdapter {
             this.ws.removeEventListener('error', wrapper);
             this.errorWrappers.delete(handler);
         }
+    }
+
+    sendRaw(data: Uint8Array | string): void {
+        // lib.dom over-narrows BufferSource to ArrayBuffer-backed views (excludes SharedArrayBuffer);
+        // a plain Uint8Array is always valid input to WebSocket.send.
+        this.ws.send(data as unknown as ArrayBufferView<ArrayBuffer>);
+    }
+
+    onRawMessage(handler: (data: Uint8Array) => void): void {
+        this.ws.addEventListener('message', (event: MessageEvent) => {
+            const d = event.data;
+            handler(typeof d === 'string' ? new TextEncoder().encode(d) : new Uint8Array(d as ArrayBuffer));
+        });
     }
 }

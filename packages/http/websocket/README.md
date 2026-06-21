@@ -577,6 +577,35 @@ const socket = await GGSocketPool.getOrConnect({
 // Connects to: ws://localhost:3000/ws/chat?room=general&language=en
 ```
 
+## Raw byte-stream sockets
+
+Some sockets aren't an RPC API — a PTY passthrough, a log tail, a binary stream. Use `rawSocketSchema` for those: it runs the **same handshake** as a schema socket (path dispatch, `queryOnConnect` validation, `.use(WIRE)` auth, `connectPermission`, discovery, heartbeat), but after the handshake there's no message contract — you own the wire as opaque frames. Auth rides exactly as above, so a raw socket coexists with `webSocketSchema`s on the same `GGHttpServer`.
+
+```typescript
+// shared schema (no contract — just the connection concerns)
+export const PtyStream = rawSocketSchema("PtyStream", {
+    path: "ws/pty",
+    use: [USER_TOKEN_WIRE],                 // same wire/auth as a schema socket
+    queryOnConnect: IsObject({ vmId: IsString }),
+    connectPermission: PtyPermission.ATTACH, // optional handshake gate
+})
+
+// server — handler runs after auth; UserContext.get() is available here
+PtyStream.register((socket, query) => {     // socket: send(bytes|string) / onMessage(Buffer) / onClose / close
+    const pty = spawn(query.vmId)
+    socket.onMessage((data) => pty.write(data))
+    pty.onData((data) => socket.send(data))
+    socket.onClose(() => pty.kill())
+}, { http: httpServer })
+
+// client (node or browser) — connect() resolves once the handshake auth passes
+const conn = await PtyStream.createRawClient({ url: "", query: { vmId } }).connect()
+conn.onMessage((bytes) => term.write(bytes))
+conn.send(input)
+```
+
+The client must let `connect()` resolve before streaming — frames sent before `HANDSHAKE_OK` are dropped, never delivered pre-auth. (For a socket you hand-roll *entirely* outside this schema, see `GGServerLiveness` / `GGClientLiveness` under Liveness.)
+
 ## Message Protocol
 
 Under the hood, WebSocket communication uses a lightweight text-based protocol:
@@ -679,11 +708,12 @@ a missed heartbeat drops the socket and the reconnect loop self-heals. Tune or d
 
 ### Raw streaming sockets — `GGServerLiveness` / `GGClientLiveness`
 
-Some sockets are **not** an API: a terminal/PTY passthrough, a log tail, a binary stream. Those
-don't go through `httpSchema`/`createClient`, so they can't use the built-in liveness — but the
-*mechanism* (ping + reap on the server, watchdog + reconnect in the client) is the same. The two
-reusable, payload-agnostic halves are separate classes — `GGServerLiveness` (Node, exported only
-from the node entry) and `GGClientLiveness` (browser-safe, exported from both):
+This is for a socket you hand-roll **entirely** outside the framework (a bare `ws` server you set
+up yourself). A `rawSocketSchema` socket doesn't need any of it — it gets the server heartbeat for
+free, same as a schema socket. But if you own the raw `ws` directly, the *mechanism* (ping + reap on
+the server, watchdog + reconnect in the client) is still available. The two reusable, payload-agnostic
+halves are separate classes — `GGServerLiveness` (Node, exported only from the node entry) and
+`GGClientLiveness` (browser-safe, exported from both):
 
 ```typescript
 // --- Server (Node) ---: protocol ping + reap over a `ws` WebSocketServer.

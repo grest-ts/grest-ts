@@ -14,11 +14,14 @@ export * from "./liveness/GGClientLiveness";
 // API Schema
 export * from "./schema/webSocketSchema";
 export * from "./schema/GGWebSocketSchema";
+export * from "./schema/rawSocketSchema";
 
 // Client
 export * from "./client/GGSocketPool";
 export * from "./client/GGWebSocketSchema.createClient";
+export * from "./client/GGRawWebSocketSchema.createRawClient";
 export * from "./client/GGWsLogMode";
 
 // Extensions
 import "./client/GGWebSocketSchema.createClient";
+import "./client/GGRawWebSocketSchema.createRawClient";

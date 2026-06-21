@@ -31,4 +31,13 @@ export interface SocketAdapter {
      * Paired with `ping()` — only supported by adapters that also support ping.
      */
     onPong?(handler: () => void): void;
+
+    /**
+     * Send a raw frame (binary bytes or text) — used by raw byte-stream sockets after
+     * the handshake, bypassing the typed Message protocol.
+     */
+    sendRaw?(data: Uint8Array | string): void;
+
+    /** Receive raw frames as bytes — the raw byte-stream counterpart of `onMessage`. */
+    onRawMessage?(handler: (data: Uint8Array) => void): void;
 }

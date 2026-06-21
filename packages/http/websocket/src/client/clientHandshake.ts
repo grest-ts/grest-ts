@@ -1,0 +1,70 @@
+import {GGContractExecutor, GGValidator, SERVER_ERROR, VALIDATION_ERROR} from "@grest-ts/schema";
+import {GGOutbound, type GGTransportMiddleware} from "@grest-ts/context";
+import {withTimeout} from "@grest-ts/common";
+import {SocketAdapter} from "../socket/SocketAdapter";
+import {Message, MessageType} from "../socket/SocketMessage";
+
+export function buildWsUrl(domain: string, path: string, query: any): string {
+    let url = domain + path;
+    if (query) {
+        const entries: [string, string][] = Object.entries(query).map(([k, v]) => [k, String(v)]);
+        url += '?' + new URLSearchParams(entries).toString();
+    }
+    return url;
+}
+
+export function validateWsQuery(validator: GGValidator<any> | undefined, query: any): any {
+    if (!validator || query === undefined) return query;
+    const parsed = validator.safeParse(query, true);
+    if (parsed.success === false) {
+        throw new VALIDATION_ERROR(parsed.issues.toJSON(), {displayMessage: "Invalid query parameters"});
+    }
+    return parsed.value;
+}
+
+export function buildHandshakeHeaders(middlewares: readonly GGTransportMiddleware[]): Record<string, string> {
+    const outbound: GGOutbound = {headers: {}};
+    for (const m of middlewares) m.update?.(outbound);
+    return outbound.headers;
+}
+
+/**
+ * Reconstruct the typed error the server threw during handshake.
+ *
+ * The server sends `error.toJSON()` which has `{success:false, type, data?, context?}`.
+ * System errors (NOT_AUTHORIZED, FORBIDDEN, VALIDATION_ERROR, etc.) are reconstructed
+ * as real instances so callers can `.toBeError(NOT_AUTHORIZED)`. Anything we can't
+ * identify (non-ERROR throw, custom error class the client doesn't know) falls back
+ * to SERVER_ERROR carrying the original payload for inspection.
+ */
+export function reconstructHandshakeError(payload: any): Error {
+    if (payload && typeof payload === 'object' && typeof payload.type === 'string') {
+        return GGContractExecutor.createErrorObj(payload) as unknown as Error;
+    }
+    return new SERVER_ERROR({
+        displayMessage: 'WebSocket handshake failed',
+        originalError: payload,
+    });
+}
+
+/**
+ * Listen for the handshake response. The caller is responsible for actually SENDING
+ * the HANDSHAKE frame (timing differs between the two clients).
+ */
+export function awaitHandshakeResponse(adapter: SocketAdapter, timeoutMs: number): Promise<void> {
+    return withTimeout(new Promise<void>((resolve, reject) => {
+        const onMsg = (data: string) => {
+            const msg = Message.parse(data);
+            if (!msg) return;
+            if (msg.type === MessageType.HANDSHAKE_OK) {
+                adapter.offMessage(onMsg);
+                resolve();
+            } else if (msg.type === MessageType.HANDSHAKE_ERR) {
+                adapter.offMessage(onMsg);
+                reject(reconstructHandshakeError(msg.data));
+            }
+        };
+        adapter.onMessage(onMsg);
+        adapter.onError(reject);
+    }), timeoutMs, 'Handshake timeout');
+}
