@@ -83,13 +83,18 @@ export class GGRawSocket {
         return this;
     }
 
-    public send(data: Buffer | string): void {
+    public send(data: Uint8Array | string): void {
         if (!this.isActive) return;
         this.adapter.sendRaw!(data);
     }
 
     public onClose(handler: () => void): this {
         this.onCloseCallbacks.push(handler);
+        return this;
+    }
+
+    public onError(handler: (error: Error) => void): this {
+        this.adapter.onError(handler);
         return this;
     }
 

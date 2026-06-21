@@ -24,6 +24,12 @@ export function startSocketHeartbeat(adapter: SocketAdapter, opts: SocketHeartbe
     const timeoutMs = opts.config.timeoutMs ?? DEFAULT_HEARTBEAT.timeoutMs;
     const useProtocol = !!(adapter.ping && adapter.onPong);
 
+    // With no protocol ping (browser) and no app-level ping (a raw byte stream, where an
+    // in-band PING would corrupt the opaque payload), we can't actively probe the link — a
+    // watchdog would falsely reap an idle-but-healthy connection. Rely on inbound traffic and
+    // the server-side heartbeat for liveness instead.
+    if (!useProtocol && !opts.appPing) return () => {};
+
     opts.stampActivity();
     if (useProtocol) adapter.onPong!(() => opts.stampActivity());
 

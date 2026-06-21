@@ -3,11 +3,10 @@ import {SocketAdapter} from "../socket/SocketAdapter";
 import {GG_WS_CONNECTION} from "../server/GG_WS_CONNECTION";
 import {Message, MessageType} from "../socket/SocketMessage";
 import {GGValidator} from "@grest-ts/schema";
-import {GGContext, GGContextKey, GGContextStore, type GGTransportMiddleware} from "@grest-ts/context";
-import {GGContextKeySynchronizer} from "@grest-ts/http";
+import {GGContext, GGContextStore, type GGTransportMiddleware} from "@grest-ts/context";
 import {GG_TRACE} from "@grest-ts/trace";
 import {getDefaultAdapter} from "../adapter/getDefaultAdapter";
-import {awaitHandshakeResponse, buildHandshakeHeaders, buildWsUrl} from "./clientHandshake";
+import {awaitHandshakeResponse, buildHandshakeHeaders, buildWsUrl, gateMiddlewares} from "./clientHandshake";
 
 export interface GGSocketPoolConfig<Query> {
     domain: string,
@@ -122,23 +121,10 @@ export class GGSocketPool {
         return buildHandshakeHeaders(config.middlewares ?? []);
     }
 
-    /**
-     * Await GGContextKeySynchronizer.waitFor for each middleware that carries a key.
-     * Must be called before reading middleware keys to ensure fresh values.
-     */
-    private static async gateMiddlewares(middlewares: readonly GGTransportMiddleware[] | undefined): Promise<void> {
-        if (!middlewares) return;
-        for (const mw of middlewares) {
-            if (mw instanceof GGContextKey) {
-                await GGContextKeySynchronizer.waitFor(mw);
-            }
-        }
-    }
-
     static async getOrConnect<Query>(
         config: GGSocketPoolConfig<Query>
     ): Promise<GGSocket> {
-        await this.gateMiddlewares(config.middlewares);
+        await gateMiddlewares(config.middlewares);
         const headers = this.buildHeaders(config);
         const fullUrl = this.buildUrl(config);
 
@@ -211,7 +197,7 @@ export class GGSocketPool {
                             port: undefined,
                             path: domain
                         });
-                        await this.gateMiddlewares(config.middlewares);
+                        await gateMiddlewares(config.middlewares);
                         const headers = this.buildHeaders(config);
                         adapter.send(Message.create(MessageType.HANDSHAKE, "", "", headers));
                         await awaitHandshakeResponse(adapter, 5000);

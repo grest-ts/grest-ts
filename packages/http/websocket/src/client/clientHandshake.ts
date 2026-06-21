@@ -1,5 +1,6 @@
 import {GGContractExecutor, GGValidator, SERVER_ERROR, VALIDATION_ERROR} from "@grest-ts/schema";
-import {GGOutbound, type GGTransportMiddleware} from "@grest-ts/context";
+import {GGContextKey, GGOutbound, type GGTransportMiddleware} from "@grest-ts/context";
+import {GGContextKeySynchronizer} from "@grest-ts/http";
 import {withTimeout} from "@grest-ts/common";
 import {SocketAdapter} from "../socket/SocketAdapter";
 import {Message, MessageType} from "../socket/SocketMessage";
@@ -26,6 +27,20 @@ export function buildHandshakeHeaders(middlewares: readonly GGTransportMiddlewar
     const outbound: GGOutbound = {headers: {}};
     for (const m of middlewares) m.update?.(outbound);
     return outbound.headers;
+}
+
+/**
+ * Await GGContextKeySynchronizer.waitFor for each middleware that carries a context
+ * key, so a freshly-set credential (auth token, session) is read at its current value
+ * rather than a stale one. Call before reading middleware keys / building headers.
+ */
+export async function gateMiddlewares(middlewares: readonly GGTransportMiddleware[] | undefined): Promise<void> {
+    if (!middlewares) return;
+    for (const mw of middlewares) {
+        if (mw instanceof GGContextKey) {
+            await GGContextKeySynchronizer.waitFor(mw);
+        }
+    }
 }
 
 /**

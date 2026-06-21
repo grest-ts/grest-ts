@@ -1,9 +1,10 @@
 import {GGWebSocketSchema, GGWebSocketContractRuntime} from "./GGWebSocketSchema";
+import {GGRawWebSocketSchema} from "./GGRawWebSocketSchema";
 import type {GGTransportMiddleware} from "@grest-ts/context";
 import {GGContractClass, GGContractClient, GGContractImplementation, GGContractMethod, GGPermission, GGValidator} from "@grest-ts/schema";
 
 /**
- * Bidirectional websocket contract methods.
+ * Bidirectional websocket message maps, passed to `.messages({...})`.
  *
  * Both directions use GGContractMethod (which requires `permission`), but only
  * the `clientToServer` permission is enforced by the gate — server-pushed
@@ -16,72 +17,43 @@ export interface GGSocketContractMethods {
 }
 
 /**
- * WebSocket contract definition
- */
-export interface GGSocketContract<TDef extends GGSocketContractMethods = GGSocketContractMethods> {
-    name: string
-    methods: TDef
-}
-
-/**
- * Create a websocket contract
- */
-export function defineSocketContract<TDef extends GGSocketContractMethods>(
-    name: string,
-    methods: TDef
-): GGSocketContract<TDef> {
-    return {name, methods}
-}
-
-/**
- * Create a WebSocket API schema builder from a contract.
+ * Create a WebSocket schema builder. The builder owns the connection-level config
+ * (`path` / `use` / `queryOnConnect` / `connectPermission`); a terminal picks the
+ * payload + mode and finalizes the schema:
+ *
+ * - `.messages({clientToServer, serverToClient})` — typed contract, both ends grest-ts.
+ * - `.bytes()` — opaque byte stream, both ends grest-ts (in-band handshake auth).
+ * - `.passthrough({protocols})` — opaque byte stream, foreign client (upgrade auth only).
  *
  * @example
- * export const ChatContract = defineSocketContract("Chat", {
- *     clientToServer: {
- *         sendMessage: { input: IsMessage, success: IsVoid, errors: [SERVER_ERROR] }
- *     },
- *     serverToClient: {
- *         onMessage: { input: IsMessage }
- *     }
- * })
+ * export const Chat = webSocketSchema("Chat")
+ *     .path("/ws/chat").use(AUTH)
+ *     .messages({
+ *         clientToServer: {sendMessage: {input: IsMessage, errors: [SERVER_ERROR], permission: P}},
+ *         serverToClient: {onMessage: {input: IsMessage, permission: GG_NO_PERMISSIONS}},
+ *     })
  *
- * export const ChatApi = webSocketSchema(ChatContract)
- *     .path("/chat")
- *     .use(AuthMiddleware)
- *     .done()
+ * export const Terminal = webSocketSchema("Terminal")
+ *     .path("/ws/terminal").use(GG_RELAY_TOKEN).queryOnConnect(IsTokenQ)
+ *     .bytes()
+ *
+ * export const Desktop = webSocketSchema("Desktop")
+ *     .path("/ws/desktop").use(DESKTOP_TOKEN_QUERY)
+ *     .passthrough({protocols: ["binary"]})
  */
-export function webSocketSchema<TDef extends GGSocketContractMethods>(
-    contract: GGSocketContract<TDef>
-): GGWebSocketSchemaBuilder<
-    GGContractClient<TDef["clientToServer"]>,
-    GGContractClient<TDef["serverToClient"]>,
-    undefined,
-    undefined,
-    GGContractImplementation<TDef["clientToServer"]>,
-    GGContractImplementation<TDef["serverToClient"]>
-> {
-    return new GGWebSocketSchemaBuilder(contract)
+export function webSocketSchema(name: string): GGWebSocketSchemaBuilder {
+    return new GGWebSocketSchemaBuilder(name)
 }
 
-class GGWebSocketSchemaBuilder<
-    TClientToServer,
-    TServerToClient,
-    TContext = undefined,
-    TQuery = undefined,
-    TClientToServerImpl = TClientToServer,
-    TServerToClientImpl = TServerToClient
-> {
-    private readonly _contract: GGSocketContract
+class GGWebSocketSchemaBuilder<TContext = undefined, TQuery = undefined> {
+    private readonly _name: string
     private _path: string = ""
-    private _middlewares: GGTransportMiddleware[] = []
+    private readonly _middlewares: GGTransportMiddleware[] = []
     private _queryValidator?: GGValidator<any>
     private _connectPermission?: GGPermission
 
-    constructor(
-        _contract: GGSocketContract
-    ) {
-        this._contract = _contract
+    constructor(name: string) {
+        this._name = name
     }
 
     path(path: string): this {
@@ -89,7 +61,7 @@ class GGWebSocketSchemaBuilder<
         return this
     }
 
-    use<M extends GGTransportMiddleware>(middleware: M): GGWebSocketSchemaBuilder<TClientToServer, TServerToClient, TContext | M, TQuery, TClientToServerImpl, TServerToClientImpl> {
+    use<M extends GGTransportMiddleware>(middleware: M): GGWebSocketSchemaBuilder<TContext | M, TQuery> {
         this._middlewares.push(middleware)
         return this as any
     }
@@ -99,7 +71,7 @@ class GGWebSocketSchemaBuilder<
      * The validator runs on the server (connections with invalid query are rejected
      * before handshake) and on the client (invalid query throws before connecting).
      */
-    queryOnConnect<TNewQuery>(validator: GGValidator<TNewQuery>): GGWebSocketSchemaBuilder<TClientToServer, TServerToClient, TContext, TNewQuery, TClientToServerImpl, TServerToClientImpl> {
+    queryOnConnect<TNewQuery>(validator: GGValidator<TNewQuery>): GGWebSocketSchemaBuilder<TContext, TNewQuery> {
         this._queryValidator = validator
         return this as any
     }
@@ -119,27 +91,74 @@ class GGWebSocketSchemaBuilder<
         return this
     }
 
-    done(): GGWebSocketSchema<TClientToServer, TServerToClient, TContext, TQuery, TClientToServerImpl, TServerToClientImpl> {
-        assertValidSocketPath(this._path, this._contract.name);
-        const contract = this._contract;
-        const contractFactory = (): GGWebSocketContractRuntime => {
-            const methods = contract.methods;
-            const name = contract.name;
-            return {
-                apiName: name,
-                clientToServer: new GGContractClass(name + ".clientToServer", methods.clientToServer),
-                serverToClient: new GGContractClass(name + ".serverToClient", methods.serverToClient)
-            };
-        };
+    /** Typed-contract terminal — both ends speak grest-ts; first-message auth, reconnect/liveness. */
+    messages<TDef extends GGSocketContractMethods>(methods: TDef): GGWebSocketSchema<
+        GGContractClient<TDef["clientToServer"]>,
+        GGContractClient<TDef["serverToClient"]>,
+        TContext,
+        TQuery,
+        GGContractImplementation<TDef["clientToServer"]>,
+        GGContractImplementation<TDef["serverToClient"]>
+    > {
+        assertValidSocketPath(this._path, this._name)
+        const name = this._name
+        const contractFactory = (): GGWebSocketContractRuntime => ({
+            apiName: name,
+            clientToServer: new GGContractClass(name + ".clientToServer", methods.clientToServer),
+            serverToClient: new GGContractClass(name + ".serverToClient", methods.serverToClient),
+        })
 
-        return new GGWebSocketSchema<TClientToServer, TServerToClient, TContext, TQuery, TClientToServerImpl, TServerToClientImpl>(
-            contract.name,
+        return new GGWebSocketSchema(
+            name,
             this._path,
             contractFactory,
             this._middlewares,
             this._queryValidator,
             this._connectPermission
         )
+    }
+
+    /** Byte-stream terminal — both ends speak grest-ts; in-band handshake auth, reconnect/liveness. */
+    bytes(): GGRawWebSocketSchema<TQuery> {
+        assertValidSocketPath(this._path, this._name)
+        return new GGRawWebSocketSchema<TQuery>({
+            name: this._name,
+            path: this._path,
+            middlewares: this._middlewares,
+            queryValidator: this._queryValidator,
+            connectPermission: this._connectPermission,
+            passthrough: false,
+        })
+    }
+
+    /**
+     * Passthrough terminal — a foreign client (noVNC, an editor webview) that can't speak the
+     * grest-ts handshake. Auth runs against the HTTP upgrade request (cookie / `?query=`); no
+     * in-band message, no HANDSHAKE_OK, no grest-ts client.
+     *
+     * A foreign client never sends the handshake, so any `.use()`'d wire that delivers its
+     * credential in-band (an `update()` writer, e.g. GGHeader) could never arrive — the socket
+     * would open unauthenticated while looking gated. Reject that combination here at build time.
+     */
+    passthrough(options: {protocols?: readonly string[]} = {}): GGRawWebSocketSchema<TQuery> {
+        assertValidSocketPath(this._path, this._name)
+        if (this._middlewares.some(m => typeof m.update === "function")) {
+            throw new Error(
+                `webSocketSchema "${this._name}": .passthrough() cannot use a credential delivered via the ` +
+                `grest-ts handshake (a wire with update(), e.g. GGHeader). A passthrough client is foreign and ` +
+                `never sends the in-band handshake, so this credential could never arrive and the socket would ` +
+                `open unauthenticated. Authenticate via a cookie or "?query=" credential instead.`
+            )
+        }
+        return new GGRawWebSocketSchema<TQuery>({
+            name: this._name,
+            path: this._path,
+            middlewares: this._middlewares,
+            queryValidator: this._queryValidator,
+            connectPermission: this._connectPermission,
+            passthrough: true,
+            protocols: options.protocols,
+        })
     }
 }
 

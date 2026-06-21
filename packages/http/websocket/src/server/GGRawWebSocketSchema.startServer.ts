@@ -4,7 +4,7 @@
  */
 
 import type {GGRawSocket} from "../socket/GGRawSocket"
-import {GGRawWebSocketSchema} from "../schema/rawSocketSchema"
+import {GGRawWebSocketSchema} from "../schema/GGRawWebSocketSchema"
 import {type GGTransportMiddleware} from "@grest-ts/context"
 import {GGSocketServer, type GGServerHeartbeatOption} from "./GGSocketServer"
 import {GGLocator} from "@grest-ts/locator"
@@ -17,7 +17,7 @@ export interface RawWebSocketSchemaConfig {
     heartbeat?: GGServerHeartbeatOption;
 }
 
-declare module "../schema/rawSocketSchema" {
+declare module "../schema/GGRawWebSocketSchema" {
     interface GGRawWebSocketSchema<TQuery> {
         /**
          * Start the raw WebSocket server. The handshake (query validation + middleware/wire
@@ -45,26 +45,8 @@ GGRawWebSocketSchema.prototype.startServer = function (
     const schemaName = this.name
     const middlewares: GGTransportMiddleware[] = [...this.middlewares, ...(config?.middlewares ?? [])]
 
-    // Passthrough auth runs against the HTTP upgrade request — there is no in-band handshake.
-    // A middleware with update() delivers its credential by having the grest-ts CLIENT write it
-    // into the handshake (the "fake header" path); a foreign passthrough client never does that,
-    // so the credential can't arrive and the socket would open UNAUTHENTICATED while looking gated.
-    // Fail loudly at registration rather than silently. Read the upgrade cookie/query/header with a
-    // parse-only middleware instead.
-    if (this.passthrough) {
-        const offender = middlewares.find(m => typeof m.update === "function")
-        if (offender) {
-            throw new Error(
-                `rawSocketSchema "${schemaName}": passthrough mode cannot use a credential delivered via ` +
-                `the grest-ts handshake (a middleware/wire with update(), e.g. GGHeader). A passthrough client ` +
-                `is foreign and never sends the in-band handshake, so this credential would never arrive and the ` +
-                `socket could open unauthenticated. Authenticate via a cookie or "?query=" credential (a parse-only ` +
-                `middleware) instead, or remove passthrough.`
-            )
-        }
-    }
-
     const http = config.http ?? GGLocator.getScope().get(GG_HTTP_SERVER)
+    http._registerWebSocketSchema(this as any)
     const connectPermission = this.connectPermission ?? GG_NO_PERMISSIONS
     const permissionsChecker = new GGHttpPermissionsChecker(this.middlewares)
 
