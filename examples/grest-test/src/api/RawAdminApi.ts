@@ -7,7 +7,7 @@ import {AppPermission} from "./PermissionsApi"
  * scopes at the handshake; `connectPermission` asserts Admin before the stream opens —
  * exercising the same permission gate a schema socket uses, on the raw path.
  */
-export const RawAdminApi = webSocketSchema(defineSocketContract("RawAdminApi", {bytes: true}))
+export const RawAdminApi = webSocketSchema(defineSocketContract("RawAdminApi", {raw: true}))
     .path("ws/raw-admin")
     .use(WS_SESSION)
     .connectPermission(AppPermission.Admin)

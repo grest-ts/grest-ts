@@ -23,7 +23,7 @@ export interface GGRawWebSocketSchemaConfig<TQuery> {
  * Carries the same connection-level concerns as a typed schema (path, auth wires, query
  * validation, connect permission): once the connection is authenticated, the application owns
  * the wire as an opaque byte stream. Built only via `webSocketSchema(contract).…done()` from a
- * `{bytes: true}` contract — never constructed directly. `startServer`/`createClient` are
+ * `{raw: true}` contract — never constructed directly. `startServer`/`createClient` are
  * attached by the server and client extension modules.
  */
 export class GGRawWebSocketSchema<TQuery = undefined> {

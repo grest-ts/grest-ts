@@ -41,21 +41,21 @@ export interface GGRawSocketContract {
  * applies only then.
  */
 export type GGRawSocketContractDef =
-    | {bytes: true; customClient?: false}
-    | {bytes: true; customClient: true; protocols?: readonly string[]}
+    | {raw: true; customClient?: false}
+    | {raw: true; customClient: true; protocols?: readonly string[]}
 
 /**
  * Define a websocket contract — the named entity bound by `webSocketSchema(contract)`,
  * mirroring `new GGContractClass(...)` + `httpSchema(contract)` on the HTTP side.
  *
  * - Typed socket: pass the `{clientToServer, serverToClient}` message maps.
- * - Byte stream (grest-ts client): pass `{bytes: true}`.
- * - Byte stream with a custom (foreign) client: pass `{bytes: true, customClient: true, protocols?}`.
+ * - Byte stream (grest-ts client): pass `{raw: true}`.
+ * - Byte stream with a custom (foreign) client: pass `{raw: true, customClient: true, protocols?}`.
  *
  * @example
  * const Chat = defineSocketContract("Chat", {clientToServer: {...}, serverToClient: {...}})
- * const Pty = defineSocketContract("Pty", {bytes: true})
- * const Desktop = defineSocketContract("Desktop", {bytes: true, customClient: true, protocols: ["binary"]})
+ * const Pty = defineSocketContract("Pty", {raw: true})
+ * const Desktop = defineSocketContract("Desktop", {raw: true, customClient: true, protocols: ["binary"]})
  */
 export function defineSocketContract<TDef extends GGSocketContractMethods>(name: string, methods: TDef): GGSocketContract<TDef>
 export function defineSocketContract(name: string, def: GGRawSocketContractDef): GGRawSocketContract
@@ -63,7 +63,7 @@ export function defineSocketContract(
     name: string,
     def: GGSocketContractMethods | GGRawSocketContractDef
 ): GGSocketContract | GGRawSocketContract {
-    if ("bytes" in def) {
+    if ("raw" in def) {
         return {
             name,
             raw: true,
