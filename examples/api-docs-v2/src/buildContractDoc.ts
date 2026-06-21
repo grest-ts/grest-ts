@@ -211,7 +211,7 @@ function buildWsContract(
     const auth = extractWsAuth([...(wsSchema.middlewares ?? [])]);
     const methods: MethodDoc[] = [];
 
-    // Raw byte-stream schemas (bytes / passthrough) carry no per-message contract.
+    // Byte-stream schemas (bytes, with or without customClient) carry no per-message contract.
     // `"raw" in wsSchema` narrows the union (GGRawWebSocketSchema has `raw: true`,
     // GGWebSocketSchema does not), so `.contract` is reachable without a cast.
     if (!("raw" in wsSchema)) {

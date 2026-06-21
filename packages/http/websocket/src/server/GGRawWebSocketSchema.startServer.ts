@@ -65,7 +65,7 @@ GGRawWebSocketSchema.prototype.startServer = function (
         queryValidator: this.queryValidator,
         heartbeat: config?.heartbeat,
         raw: true,
-        passthrough: this.passthrough,
+        customClient: this.customClient,
         protocols: this.protocols,
     })
 

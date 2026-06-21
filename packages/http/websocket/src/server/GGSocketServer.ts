@@ -42,12 +42,12 @@ export interface GGSocketServerConfig<TContext, Query> {
      */
     raw?: boolean;
     /**
-     * Passthrough mode (implies raw): auth runs against the HTTP upgrade request, not an
+     * Custom-client mode (implies raw): auth runs against the HTTP upgrade request, not an
      * in-band handshake, and no HANDSHAKE_OK is sent — for foreign clients that can't
-     * speak the grest-ts handshake. See RawSocketSchemaOptions.passthrough.
+     * speak the grest-ts handshake. See GGRawSocketContract.customClient.
      */
-    passthrough?: boolean;
-    /** Subprotocols to echo (passthrough); first client-requested match wins. */
+    customClient?: boolean;
+    /** Subprotocols to echo (customClient); first client-requested match wins. */
     protocols?: readonly string[];
 }
 
@@ -116,7 +116,7 @@ export class GGSocketServer<TContext, Query, TSocket extends ServerSocket = GGSo
     private readonly queryValidator?: GGValidator<Query>;
     private readonly heartbeat: GGServerHeartbeatOption;
     private readonly raw: boolean;
-    private readonly passthrough: boolean;
+    private readonly customClient: boolean;
 
     private readonly activeSockets: Set<ServerSocket> = new Set();
     private readonly onConnectionHandlers: Array<(socket: TSocket, query: Query) => Promise<void>> = [];
@@ -132,11 +132,11 @@ export class GGSocketServer<TContext, Query, TSocket extends ServerSocket = GGSo
         this.queryValidator = config.queryValidator;
         this.heartbeat = config.heartbeat ?? {};
         this.raw = config.raw ?? false;
-        this.passthrough = config.passthrough ?? false;
+        this.customClient = config.customClient ?? false;
         const protocols = config.protocols;
         this.wss = new WebSocketServer({
             noServer: true,
-            // Passthrough foreign clients (e.g. noVNC) refuse a connection whose requested
+            // Custom (foreign) clients (e.g. noVNC) refuse a connection whose requested
             // Sec-WebSocket-Protocol isn't echoed. Echo the first offered protocol we allow.
             ...(protocols && protocols.length
                 ? {handleProtocols: (offered: Set<string>) => protocols.find(p => offered.has(p)) ?? false}
@@ -208,10 +208,10 @@ export class GGSocketServer<TContext, Query, TSocket extends ServerSocket = GGSo
                 // only spoof-proof source for a WebSocket cookie.
                 const cookie = typeof req.headers.cookie === "string" ? req.headers.cookie : undefined;
 
-                // Passthrough: a foreign client (noVNC, a proxied app) can't send the in-band
+                // Custom client: a foreign client (noVNC, a proxied app) can't send the in-band
                 // handshake, so auth runs against the upgrade request itself and the byte stream
                 // is live immediately — no HANDSHAKE_OK round-trip.
-                if (this.passthrough) {
+                if (this.customClient) {
                     // A client that speaks first (not VNC, which waits for the server greeting)
                     // could emit frames during the auth await, before the handler attaches its
                     // listener — pause the socket across that gap and resume once it's wired.
@@ -291,7 +291,7 @@ export class GGSocketServer<TContext, Query, TSocket extends ServerSocket = GGSo
     }
 
     /**
-     * Run the auth middlewares/wires against the HTTP upgrade request (passthrough mode):
+     * Run the auth middlewares/wires against the HTTP upgrade request (custom-client mode):
      * credentials ride the upgrade headers / cookie / query, not an in-band message. Runs in
      * the connection context (the caller is inside `context.run`) so the durable principal a
      * wire mints persists for the handlers.
@@ -321,7 +321,7 @@ export class GGSocketServer<TContext, Query, TSocket extends ServerSocket = GGSo
      * Raw mode: the handshake (query + auth) already passed. Build a GGRawSocket, let the
      * connection handlers attach their byte listeners, THEN send HANDSHAKE_OK (when the client
      * speaks the grest-ts handshake) — so it only starts streaming once the server is listening
-     * (no first-frame race). Passthrough clients get no HANDSHAKE_OK (`sendHandshakeOk=false`).
+     * (no first-frame race). Custom clients get no HANDSHAKE_OK (`sendHandshakeOk=false`).
      */
     private async openRawConnection(
         adapter: NodeSocketAdapter,

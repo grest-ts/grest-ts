@@ -7,7 +7,7 @@
  * persist across reconnects (re-registered on every fresh socket), and `send` targets the
  * live socket. Works in node and the browser via the shared adapter.
  *
- * Passthrough schemas have no client here — a passthrough socket is foreign by definition.
+ * customClient schemas have no client here — their client is foreign by definition.
  */
 
 import {type GGTransportMiddleware} from "@grest-ts/context"

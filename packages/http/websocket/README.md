@@ -129,7 +129,7 @@ webSocketSchema(MyContract).path("ws/my").done()
 
 ### Schema Builder
 
-The payload mode lives on the **contract** — a typed contract (`clientToServer` / `serverToClient`), a raw `{ bytes: true }` stream, or a `{ passthrough: true }` foreign-client stream (see "Raw byte-stream sockets"). `webSocketSchema(contract)` then configures the endpoint and binds the transport uniformly for all three, finalized by `.done()`.
+The payload mode lives on the **contract** — a typed contract (`clientToServer` / `serverToClient`), a `{ bytes: true }` byte stream, or a `{ bytes: true, customClient: true }` foreign-client byte stream (see "Byte-stream sockets"). `webSocketSchema(contract)` then configures the endpoint and binds the transport uniformly for all three, finalized by `.done()`.
 
 ```typescript
 export const ChatApi = webSocketSchema(ChatContract)        // the contract carries the payload mode
@@ -582,12 +582,12 @@ const socket = await GGSocketPool.getOrConnect({
 // Connects to: ws://localhost:3000/ws/chat?room=general&language=en
 ```
 
-## Raw byte-stream sockets
+## Byte-stream sockets
 
-Some sockets aren't an RPC API — a PTY passthrough, a log tail, a binary stream. Build those by declaring the payload mode on the **contract** (`{ bytes: true }` or `{ passthrough: true }`) instead of message maps, then bind with the **same builder** and `.done()`: the connection-level config (`.path` / `.use(WIRE)` / `.queryOnConnect` / `.connectPermission`) is identical, so a raw socket coexists with typed schemas on the same `GGHttpServer`. After the handshake there's no message contract — you own the wire as opaque frames. Two raw contract modes exist:
+Some sockets aren't an RPC API — a PTY stream, a log tail, a binary stream. Build those by declaring `{ bytes: true }` on the **contract** instead of message maps, then bind with the **same builder** and `.done()`: the connection-level config (`.path` / `.use(WIRE)` / `.queryOnConnect` / `.connectPermission`) is identical, so a byte-stream socket coexists with typed schemas on the same `GGHttpServer`. After the handshake there's no message contract — you own the wire as opaque frames. A byte-stream contract has two client modes:
 
 - **`{ bytes: true }`** — both ends speak grest-ts. Runs the **same handshake** as a typed socket (in-band first-message auth, path dispatch, `queryOnConnect` validation, discovery, reconnect + liveness), then hands you the raw frames. Use it for a Node or browser grest-ts client streaming bytes.
-- **`{ passthrough: true, protocols? }`** — for a **foreign client** (noVNC, an editor webview) that can't speak the grest-ts handshake. Auth runs against the HTTP upgrade only (cookie / `?query=`); there is no in-band handshake, no `HANDSHAKE_OK`, and **no grest-ts client** — the foreign client connects with its own library. `protocols` is optional.
+- **`{ bytes: true, customClient: true, protocols? }`** — for a **foreign client** (noVNC, an editor webview) that can't speak the grest-ts handshake. Auth runs against the HTTP upgrade only (cookie / `?query=`); there is no in-band handshake, no `HANDSHAKE_OK`, and **no grest-ts client** — the foreign client connects with its own library. `protocols` is optional.
 
 ```typescript
 // raw contract (no message map — just the byte-stream mode), bound + finalized with .done()
@@ -616,7 +616,7 @@ pty.send(input)
 
 The client must let `connect()` resolve before streaming — frames sent before `HANDSHAKE_OK` are dropped, never delivered pre-auth. (For a socket you hand-roll *entirely* outside this schema, see `GGServerLiveness` / `GGClientLiveness` under Liveness.)
 
-### Raw byte-stream client surface
+### Byte-stream client surface
 
 `schema.createClient(config)` on a `{ bytes: true }` schema returns a client whose `connect()` resolves `void` (there is no separate connection object — the byte methods are on the client):
 
@@ -628,12 +628,12 @@ The client must let `connect()` resolve before streaming — frames sent before 
 
 A reconnected byte stream is a **fresh** stream — bytes sent while it was down are not replayed.
 
-### `{ passthrough: true }` — foreign clients
+### `{ customClient: true }` — foreign clients
 
-A `{ passthrough: true, protocols? }` contract has **no grest-ts client** — the foreign client connects with its own WebSocket library, authenticating via the upgrade. Because a foreign client never sends the in-band handshake, `.done()` enforces an invariant **at build time**: it throws if any `.use()`'d wire delivers its credential in-band (a wire with an `update()` writer, e.g. `GGHeader`), since that credential could never arrive. Only upgrade-readable credentials (a cookie or `?query=`) are legal with a passthrough contract.
+A `{ bytes: true, customClient: true, protocols? }` contract has **no grest-ts client** — the foreign client connects with its own WebSocket library, authenticating via the upgrade. Because a foreign client never sends the in-band handshake, `.done()` enforces an invariant **at build time**: it throws if any `.use()`'d wire delivers its credential in-band (a wire with an `update()` writer, e.g. `GGHeader`), since that credential could never arrive. Only upgrade-readable credentials (a cookie or `?query=`) are legal with a customClient contract.
 
 ```typescript
-export const Desktop = webSocketSchema(defineSocketContract("Desktop", { passthrough: true, protocols: ["binary"] }))
+export const Desktop = webSocketSchema(defineSocketContract("Desktop", { bytes: true, customClient: true, protocols: ["binary"] }))
     .path("ws/desktop")
     .use(DESKTOP_TOKEN_QUERY)               // upgrade-readable credential (cookie / ?query=)
     .done()                                 // protocols optional; no grest-ts client

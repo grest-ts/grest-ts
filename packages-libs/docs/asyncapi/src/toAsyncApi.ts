@@ -66,7 +66,7 @@ export function toAsyncApi(
             ...(handshakeHeaders ? {bindings: {ws: {method: 'GET', headers: handshakeHeaders}}} : {}),
         });
 
-        // Raw byte stream (.bytes() / .passthrough()): no typed message contract — emit a
+        // Byte stream (bytes, with or without customClient): no typed message contract — emit a
         // bidirectional opaque-binary channel carrying the same auth/path metadata.
         if (isRaw(wsSchema)) {
             const bytesMsgId = `${channelId}_bytes`;

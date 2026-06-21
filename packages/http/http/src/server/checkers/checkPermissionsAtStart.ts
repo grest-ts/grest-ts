@@ -25,7 +25,7 @@ interface HttpSchemaLike {
 interface WebSocketSchemaLike {
     name: string
     middlewares: readonly GGTransportMiddleware[]
-    /** Absent for raw byte-stream / passthrough schemas — only `connectPermission` applies there. */
+    /** Absent for byte-stream schemas — only `connectPermission` applies there. */
     contract?: {
         clientToServer: {methods: Record<string, GGContractMethod>}
         serverToClient: {methods: Record<string, GGContractMethod>}

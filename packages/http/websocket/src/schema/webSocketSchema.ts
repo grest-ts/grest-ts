@@ -23,34 +23,39 @@ export interface GGSocketContract<TDef extends GGSocketContractMethods = GGSocke
 }
 
 /**
- * A raw (payload-free) websocket contract — a byte stream. `passthrough` selects the
- * foreign-client mode (auth at the HTTP upgrade, no in-band handshake); otherwise it is a
- * grest-ts-both-ends byte stream with first-message handshake auth.
+ * A byte-stream websocket contract — opaque bytes, no message maps. `customClient` selects
+ * the foreign-client mode (the client is not grest-ts: auth runs at the HTTP upgrade, no
+ * in-band handshake, no grest-ts client). Default (`false`) is a grest-ts-both-ends byte
+ * stream with first-message handshake auth and a grest-ts `createClient`.
  */
 export interface GGRawSocketContract {
     name: string
     raw: true
-    passthrough: boolean
+    customClient: boolean
     protocols?: readonly string[]
 }
 
-/** The mode descriptor passed to `defineSocketContract` for a raw byte stream. */
+/**
+ * The byte-stream descriptor passed to `defineSocketContract`. `customClient: true` means the
+ * client is foreign (noVNC, an editor webview, a proxied app) — `protocols` (subprotocol echo)
+ * applies only then.
+ */
 export type GGRawSocketContractDef =
-    | {bytes: true}
-    | {passthrough: true; protocols?: readonly string[]}
+    | {bytes: true; customClient?: false}
+    | {bytes: true; customClient: true; protocols?: readonly string[]}
 
 /**
  * Define a websocket contract — the named entity bound by `webSocketSchema(contract)`,
  * mirroring `new GGContractClass(...)` + `httpSchema(contract)` on the HTTP side.
  *
  * - Typed socket: pass the `{clientToServer, serverToClient}` message maps.
- * - Raw byte stream: pass `{bytes: true}`.
- * - Passthrough (foreign client): pass `{passthrough: true, protocols?}`.
+ * - Byte stream (grest-ts client): pass `{bytes: true}`.
+ * - Byte stream with a custom (foreign) client: pass `{bytes: true, customClient: true, protocols?}`.
  *
  * @example
  * const Chat = defineSocketContract("Chat", {clientToServer: {...}, serverToClient: {...}})
  * const Pty = defineSocketContract("Pty", {bytes: true})
- * const Desktop = defineSocketContract("Desktop", {passthrough: true, protocols: ["binary"]})
+ * const Desktop = defineSocketContract("Desktop", {bytes: true, customClient: true, protocols: ["binary"]})
  */
 export function defineSocketContract<TDef extends GGSocketContractMethods>(name: string, methods: TDef): GGSocketContract<TDef>
 export function defineSocketContract(name: string, def: GGRawSocketContractDef): GGRawSocketContract
@@ -58,9 +63,13 @@ export function defineSocketContract(
     name: string,
     def: GGSocketContractMethods | GGRawSocketContractDef
 ): GGSocketContract | GGRawSocketContract {
-    if ("bytes" in def || "passthrough" in def) {
-        const passthrough = "passthrough" in def && def.passthrough === true
-        return {name, raw: true, passthrough, protocols: passthrough ? def.protocols : undefined}
+    if ("bytes" in def) {
+        return {
+            name,
+            raw: true,
+            customClient: def.customClient === true,
+            protocols: "protocols" in def ? def.protocols : undefined,
+        }
     }
     return {name, methods: def}
 }
@@ -204,16 +213,16 @@ class GGRawWebSocketSchemaBuilder<TQuery = undefined> {
 
     done(): GGRawWebSocketSchema<TQuery> {
         assertValidSocketPath(this._path, this._contract.name)
-        // A passthrough client is foreign and never sends the in-band handshake, so a wire that
+        // A custom client is foreign and never sends the in-band handshake, so a wire that
         // delivers its credential there (an update() writer, e.g. GGHeader) could never arrive —
         // the socket would open unauthenticated while looking gated. Reject at build time; only
-        // upgrade-readable credentials (cookie, ?query=) are legal with passthrough.
-        if (this._contract.passthrough && this._middlewares.some(m => typeof m.update === "function")) {
+        // upgrade-readable credentials (cookie, ?query=) are legal with a custom client.
+        if (this._contract.customClient && this._middlewares.some(m => typeof m.update === "function")) {
             throw new Error(
-                `webSocketSchema "${this._contract.name}": a passthrough contract cannot use a credential ` +
-                `delivered via the grest-ts handshake (a wire with update(), e.g. GGHeader). A passthrough ` +
-                `client is foreign and never sends the in-band handshake, so this credential could never arrive ` +
-                `and the socket would open unauthenticated. Authenticate via a cookie or "?query=" credential instead.`
+                `webSocketSchema "${this._contract.name}": a customClient byte socket cannot use a credential ` +
+                `delivered via the grest-ts handshake (a wire with update(), e.g. GGHeader). A custom client is ` +
+                `foreign and never sends the in-band handshake, so this credential could never arrive and the ` +
+                `socket would open unauthenticated. Authenticate via a cookie or "?query=" credential instead.`
             )
         }
         return new GGRawWebSocketSchema<TQuery>({
@@ -222,7 +231,7 @@ class GGRawWebSocketSchemaBuilder<TQuery = undefined> {
             middlewares: this._middlewares,
             queryValidator: this._queryValidator,
             connectPermission: this._connectPermission,
-            passthrough: this._contract.passthrough,
+            customClient: this._contract.customClient,
             protocols: this._contract.protocols,
         })
     }

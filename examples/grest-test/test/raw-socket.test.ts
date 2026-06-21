@@ -260,23 +260,23 @@ describe("createClient (real client, end-to-end)", () => {
     })
 })
 
-describe("passthrough auth guard", () => {
+describe("customClient auth guard", () => {
 
-    // The danger passthrough introduces: a credential that's delivered via the grest-ts handshake
-    // (a middleware with update(), e.g. GGHeader) can never arrive from a foreign client, so the
-    // socket would open unauthenticated. Registration must fail loudly instead.
+    // The danger a custom client introduces: a credential that's delivered via the grest-ts
+    // handshake (a middleware with update(), e.g. GGHeader) can never arrive from a foreign
+    // client, so the socket would open unauthenticated. Registration must fail loudly instead.
     test("rejects an update()-based (handshake-delivered) credential at build time", () => {
-        expect(() => webSocketSchema(defineSocketContract("PassthroughBad", {passthrough: true}))
-            .path("ws/pt-bad")
+        expect(() => webSocketSchema(defineSocketContract("CustomClientBad", {bytes: true, customClient: true}))
+            .path("ws/cc-bad")
             .use(AuthedSocketMiddleware)   // has update() — the "fake header" path
             .done()
-        ).toThrow(/passthrough/i)
+        ).toThrow(/customClient/i)
     })
 
     test("a parse-only credential (cookie wire) does not trip the guard", () => {
-        // WS_SESSION reads the upgrade cookie (parse-only, no update) — valid in passthrough.
-        expect(() => webSocketSchema(defineSocketContract("PassthroughOk", {passthrough: true}))
-            .path("ws/pt-ok")
+        // WS_SESSION reads the upgrade cookie (parse-only, no update) — valid with a custom client.
+        expect(() => webSocketSchema(defineSocketContract("CustomClientOk", {bytes: true, customClient: true}))
+            .path("ws/cc-ok")
             .use(WS_SESSION)
             .done()
         ).not.toThrow()

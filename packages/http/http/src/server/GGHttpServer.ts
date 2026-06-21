@@ -13,8 +13,8 @@ import "../schema/GGWireContextKey.node";
 import {GGContractMethod, GGPermission} from "@grest-ts/schema";
 import type {GGTransportMiddleware} from "@grest-ts/context";
 // Forward declaration — actual type lives in @grest-ts/websocket to avoid circular dep.
-// GGHttpServer only stores the array; callers cast as needed. `contract` is absent for raw
-// byte-stream / passthrough schemas (they carry no per-message methods).
+// GGHttpServer only stores the array; callers cast as needed. `contract` is absent for
+// byte-stream schemas (they carry no per-message methods).
 type AnyWebSocketSchema = {
     name: string;
     path: string;

@@ -8,23 +8,23 @@ export interface GGRawWebSocketSchemaConfig<TQuery> {
     queryValidator?: GGValidator<TQuery>;
     connectPermission?: GGPermission;
     /**
-     * Passthrough mode — auth runs against the HTTP upgrade request, no in-band handshake,
-     * no HANDSHAKE_OK. For foreign clients that can't speak the grest-ts handshake (noVNC,
-     * a proxied editor webview). `.bytes()` produces the in-band variant (`false`).
+     * Custom-client mode — auth runs against the HTTP upgrade request, no in-band handshake,
+     * no HANDSHAKE_OK, no grest-ts client. For foreign clients that can't speak the grest-ts
+     * handshake (noVNC, a proxied editor webview). `false` is the grest-ts-both-ends variant.
      */
-    passthrough: boolean;
-    /** Subprotocols to echo back (passthrough only); first client-requested match wins. */
+    customClient: boolean;
+    /** Subprotocols to echo back (customClient only); first client-requested match wins. */
     protocols?: readonly string[];
 }
 
 /**
- * Raw WebSocket API schema — a byte-stream socket.
+ * Byte-stream WebSocket API schema — opaque bytes, no message contract.
  *
  * Carries the same connection-level concerns as a typed schema (path, auth wires, query
- * validation, connect permission) but no message contract: once the connection is
- * authenticated, the application owns the wire as an opaque byte stream. Built only via the
- * `webSocketSchema(name).…bytes()` / `.passthrough()` terminals — never constructed directly.
- * `startServer`/`createClient` are attached by the server and client extension modules.
+ * validation, connect permission): once the connection is authenticated, the application owns
+ * the wire as an opaque byte stream. Built only via `webSocketSchema(contract).…done()` from a
+ * `{bytes: true}` contract — never constructed directly. `startServer`/`createClient` are
+ * attached by the server and client extension modules.
  */
 export class GGRawWebSocketSchema<TQuery = undefined> {
     public readonly name: string;
@@ -32,7 +32,7 @@ export class GGRawWebSocketSchema<TQuery = undefined> {
     public readonly middlewares: readonly GGTransportMiddleware[];
     public readonly queryValidator?: GGValidator<TQuery>;
     public readonly connectPermission?: GGPermission;
-    public readonly passthrough: boolean;
+    public readonly customClient: boolean;
     public readonly protocols?: readonly string[];
     public readonly raw = true as const;
 
@@ -42,7 +42,7 @@ export class GGRawWebSocketSchema<TQuery = undefined> {
         this.middlewares = Object.freeze([...config.middlewares]);
         this.queryValidator = config.queryValidator;
         this.connectPermission = config.connectPermission;
-        this.passthrough = config.passthrough;
+        this.customClient = config.customClient;
         this.protocols = config.protocols ? Object.freeze([...config.protocols]) : undefined;
     }
 }
