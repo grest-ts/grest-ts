@@ -63,6 +63,8 @@ GGRawWebSocketSchema.prototype.startServer = function (
         queryValidator: this.queryValidator,
         heartbeat: config?.heartbeat,
         raw: true,
+        passthrough: this.passthrough,
+        protocols: this.protocols,
     })
 
     socketServer.onConnection(async (socket: GGRawSocket, queryArgs: any): Promise<void> => {
