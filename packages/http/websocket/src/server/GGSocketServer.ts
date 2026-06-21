@@ -8,6 +8,7 @@ import {ERROR, GGValidator} from "@grest-ts/schema";
 import {NodeSocketAdapter} from "../adapter/NodeSocketAdapter";
 import * as http from "http";
 import * as url from "url";
+import type {Duplex} from "stream";
 import {GGLog} from "@grest-ts/logger";
 import {GG_WS_CONNECTION} from "./GG_WS_CONNECTION";
 import {GGWebSocketMetrics} from "./GGWebSocketMetrics";
@@ -37,6 +38,14 @@ export interface GGSocketServerConfig<TContext, Query> {
 }
 
 /**
+ * A raw upgrade handler — for non-schema sockets (PTY/log/binary streams) that
+ * share an http.Server with schema sockets. Returns `true` if it claimed the
+ * upgrade (called `handleUpgrade`/consumed the socket), `false` to decline so the
+ * dispatcher can try the next handler or 404. See `registerRawUpgradeHandler`.
+ */
+export type RawUpgradeHandler = (req: http.IncomingMessage, socket: Duplex, head: Buffer) => boolean
+
+/**
  * Shared path-dispatching upgrade registry per http.Server.
  *
  * The `ws` library's `{server, path}` mode aborts the HTTP handshake with 400
@@ -44,32 +53,45 @@ export interface GGSocketServerConfig<TContext, Query> {
  * instances to the same http.Server causes whichever one fires first to reject
  * requests meant for the other. We install a single shared 'upgrade' listener
  * on each http.Server and dispatch by path instead.
+ *
+ * Raw (non-schema) sockets register via `registerRawUpgradeHandler` and are tried
+ * after schema paths and before the 404 — so a server can mix schema sockets with
+ * hand-rolled streams without a second, competing 'upgrade' listener that would
+ * destroy the other's sockets.
  */
 interface WsRegistry {
     readonly wssByPath: Map<string, WebSocketServer>
+    readonly rawHandlers: Set<RawUpgradeHandler>
 }
 
 const wsRegistryByHttpServer = new WeakMap<http.Server, WsRegistry>();
 
-function attachUpgradeDispatch(httpServer: http.Server, path: string, wss: WebSocketServer): void {
+function ensureRegistry(httpServer: http.Server): WsRegistry {
     let registry = wsRegistryByHttpServer.get(httpServer);
-    if (!registry) {
-        registry = {wssByPath: new Map()};
-        wsRegistryByHttpServer.set(httpServer, registry);
-        const captured = registry;
-        httpServer.on('upgrade', (req, socket, head) => {
-            const pathname = (req.url ?? '').split('?')[0];
-            const matched = captured.wssByPath.get(pathname);
-            if (matched) {
-                matched.handleUpgrade(req, socket, head, (ws) => {
-                    matched.emit('connection', ws, req);
-                });
-            } else {
-                socket.write('HTTP/1.1 404 Not Found\r\nConnection: close\r\n\r\n');
-                socket.destroy();
-            }
-        });
-    }
+    if (registry) return registry;
+    registry = {wssByPath: new Map(), rawHandlers: new Set()};
+    wsRegistryByHttpServer.set(httpServer, registry);
+    const captured = registry;
+    httpServer.on('upgrade', (req, socket, head) => {
+        const pathname = (req.url ?? '').split('?')[0];
+        const matched = captured.wssByPath.get(pathname);
+        if (matched) {
+            matched.handleUpgrade(req, socket, head, (ws) => {
+                matched.emit('connection', ws, req);
+            });
+            return;
+        }
+        for (const handler of captured.rawHandlers) {
+            if (handler(req, socket, head)) return;
+        }
+        socket.write('HTTP/1.1 404 Not Found\r\nConnection: close\r\n\r\n');
+        socket.destroy();
+    });
+    return registry;
+}
+
+function attachUpgradeDispatch(httpServer: http.Server, path: string, wss: WebSocketServer): void {
+    const registry = ensureRegistry(httpServer);
     if (registry.wssByPath.has(path)) {
         throw new Error(`WebSocket path "${path}" is already registered on this HTTP server.`);
     }
@@ -81,6 +103,18 @@ function detachUpgradeDispatch(httpServer: http.Server, path: string): void {
     if (registry) {
         registry.wssByPath.delete(path);
     }
+}
+
+/**
+ * Register a raw upgrade handler on the same shared 'upgrade' dispatcher schema
+ * sockets use, so non-schema streams (PTY/log/binary) can live on an http.Server
+ * that also serves `webSocketSchema`s. Handlers run after schema-path matching;
+ * the first to return `true` claims the upgrade. Returns a teardown fn.
+ */
+export function registerRawUpgradeHandler(httpServer: http.Server, handler: RawUpgradeHandler): () => void {
+    const registry = ensureRegistry(httpServer);
+    registry.rawHandlers.add(handler);
+    return () => { registry.rawHandlers.delete(handler); };
 }
 
 export class GGSocketServer<TContext, Query> {
