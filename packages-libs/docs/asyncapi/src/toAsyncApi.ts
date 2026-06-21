@@ -30,7 +30,7 @@ export interface ToAsyncApiOptions {
 type AnySocketSchema = GGWebSocketSchema<any, any, any, any, any> | GGRawWebSocketSchema<any>;
 
 function isRaw(schema: AnySocketSchema): schema is GGRawWebSocketSchema<any> {
-    return (schema as GGRawWebSocketSchema<any>).raw === true;
+    return "raw" in schema;
 }
 
 export function toAsyncApi(

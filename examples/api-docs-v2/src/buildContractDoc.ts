@@ -208,12 +208,14 @@ function buildWsContract(
     wsSchema: GGWebSocketSchema<any, any, any, any, any> | GGRawWebSocketSchema<any>,
     ctx: BuildContext,
 ): ContractDoc {
-    const auth = extractWsAuth((wsSchema as any).middlewares ?? []);
+    const auth = extractWsAuth([...(wsSchema.middlewares ?? [])]);
     const methods: MethodDoc[] = [];
 
-    // Raw byte-stream schemas (.bytes()/.passthrough()) carry no per-message contract.
-    if ((wsSchema as any).raw !== true) {
-        const contract = (wsSchema as GGWebSocketSchema<any, any, any, any, any>).contract;
+    // Raw byte-stream schemas (bytes / passthrough) carry no per-message contract.
+    // `"raw" in wsSchema` narrows the union (GGRawWebSocketSchema has `raw: true`,
+    // GGWebSocketSchema does not), so `.contract` is reachable without a cast.
+    if (!("raw" in wsSchema)) {
+        const contract = wsSchema.contract;
         for (const methodName of Object.keys(contract.clientToServer.methods)) {
             const m = contract.clientToServer.methods[methodName];
             methods.push(buildWsMethod(methodName, m, "client-to-server", wsSchema.name, ctx));
