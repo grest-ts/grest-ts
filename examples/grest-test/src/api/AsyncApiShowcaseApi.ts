@@ -11,7 +11,7 @@
  *   - Multiple contracts on one server
  */
 
-import {webSocketSchema} from "@grest-ts/websocket";
+import {defineSocketContract, webSocketSchema} from "@grest-ts/websocket";
 import {
     IsString, IsNumber, IsBoolean, IsArray, IsObject, IsLiteral,
     IsDiscriminated, VALIDATION_ERROR, SERVER_ERROR, ERROR, GG_NO_PERMISSIONS } from "@grest-ts/schema";
@@ -51,7 +51,7 @@ export const IsPresenceUpdate = IsDiscriminated("status", {
 // Chat contract — demonstrates request/response and fire-and-forget
 // ---------------------------------------------------------------------------
 
-export const ChatMethods = {
+export const ChatContract = defineSocketContract("ChatApi", {
     clientToServer: {
         // REQUEST/RESPONSE — client sends, expects a reply
         sendMessage: {
@@ -96,13 +96,13 @@ export const ChatMethods = {
             permission: GG_NO_PERMISSIONS
         },
     }
-};
+});
 
 // ---------------------------------------------------------------------------
 // Notification contract — demonstrates server-push only
 // ---------------------------------------------------------------------------
 
-export const NotificationMethods = {
+export const NotificationContract = defineSocketContract("NotificationApi", {
     clientToServer: {
         subscribe: {
             input: IsObject({
@@ -129,7 +129,7 @@ export const NotificationMethods = {
             permission: GG_NO_PERMISSIONS
         }
     }
-};
+});
 
 // ---------------------------------------------------------------------------
 // Auth middleware
@@ -145,12 +145,12 @@ export const AsyncApiBearerAuth = {
 // Schemas
 // ---------------------------------------------------------------------------
 
-export const ChatApiSchema = webSocketSchema("ChatApi")
+export const ChatApiSchema = webSocketSchema(ChatContract)
     .path("ws/chat")
     .use(AsyncApiBearerAuth)
-    .messages(ChatMethods);
+    .done();
 
-export const NotificationApiSchema = webSocketSchema("NotificationApi")
+export const NotificationApiSchema = webSocketSchema(NotificationContract)
     .path("ws/notifications")
     .use(AsyncApiBearerAuth)
-    .messages(NotificationMethods);
+    .done();

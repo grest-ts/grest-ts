@@ -8,7 +8,7 @@
  */
 import WebSocket from "ws"
 import {GG_TEST_RUNNER, GGTest} from "@grest-ts/testkit"
-import {webSocketSchema} from "@grest-ts/websocket"
+import {defineSocketContract, webSocketSchema} from "@grest-ts/websocket"
 import {MainRuntime} from "../src/main"
 import {RawEchoApi} from "../src/api/RawEchoApi"
 import {AuthedSocketMiddleware, CLIENT_AUTH_TOKEN} from "../src/api/AuthedSocketApi"
@@ -266,19 +266,19 @@ describe("passthrough auth guard", () => {
     // (a middleware with update(), e.g. GGHeader) can never arrive from a foreign client, so the
     // socket would open unauthenticated. Registration must fail loudly instead.
     test("rejects an update()-based (handshake-delivered) credential at build time", () => {
-        expect(() => webSocketSchema("PassthroughBad")
+        expect(() => webSocketSchema(defineSocketContract("PassthroughBad", {passthrough: true}))
             .path("ws/pt-bad")
             .use(AuthedSocketMiddleware)   // has update() — the "fake header" path
-            .passthrough()
+            .done()
         ).toThrow(/passthrough/i)
     })
 
     test("a parse-only credential (cookie wire) does not trip the guard", () => {
         // WS_SESSION reads the upgrade cookie (parse-only, no update) — valid in passthrough.
-        expect(() => webSocketSchema("PassthroughOk")
+        expect(() => webSocketSchema(defineSocketContract("PassthroughOk", {passthrough: true}))
             .path("ws/pt-ok")
             .use(WS_SESSION)
-            .passthrough()
+            .done()
         ).not.toThrow()
     })
 })

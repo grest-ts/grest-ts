@@ -1,4 +1,4 @@
-import {webSocketSchema} from "@grest-ts/websocket"
+import {defineSocketContract, webSocketSchema} from "@grest-ts/websocket"
 import {IsBoolean, IsObject, IsString, SERVER_ERROR, VALIDATION_ERROR, GG_NO_PERMISSIONS } from "@grest-ts/schema";
 import {IsChecklistItem} from "./ChecklistApi"
 import {GG_USER_AUTH_TOKEN} from "./auth/UserAuth"
@@ -21,7 +21,7 @@ export const IsUpdateItemRequest = IsObject({
     reason: IsString.orUndefined
 })
 
-export const ChecklistNotificationApiMethods = {
+export const ChecklistNotificationApiContract = defineSocketContract("ChecklistNotificationApi", {
     clientToServer: {
         updateItem: {
             input: IsUpdateItemRequest,
@@ -42,10 +42,10 @@ export const ChecklistNotificationApiMethods = {
             permission: GG_NO_PERMISSIONS
         }
     }
-}
+})
 
-export const ChecklistNotificationApi = webSocketSchema("ChecklistNotificationApi")
+export const ChecklistNotificationApi = webSocketSchema(ChecklistNotificationApiContract)
     .path("ws/checklist/notifications")
     .use(GG_USER_AUTH_TOKEN)
-    .messages(ChecklistNotificationApiMethods)
+    .done()
 

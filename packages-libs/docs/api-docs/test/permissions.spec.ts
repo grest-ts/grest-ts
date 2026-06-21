@@ -9,7 +9,7 @@ import {
     SERVER_ERROR,
 } from "@grest-ts/schema";
 import {GGRpc, httpSchema} from "@grest-ts/http";
-import {webSocketSchema} from "@grest-ts/websocket";
+import {defineSocketContract, webSocketSchema} from "@grest-ts/websocket";
 import {buildContractDoc} from "../src/buildContractDoc";
 
 function findMethod(doc: ReturnType<typeof buildContractDoc>, contractName: string, methodName: string) {
@@ -104,15 +104,15 @@ describe("buildContractDoc — permission rendering", () => {
     });
 
     it("WS clientToServer method gets permission; serverToClient does not", () => {
-        const SockMethods = {
+        const C = defineSocketContract("Sock", {
             clientToServer: {
                 send: {input: IsString, success: IsString, errors: [NOT_AUTHORIZED, FORBIDDEN, SERVER_ERROR], permission: "chat:write"},
             },
             serverToClient: {
                 push: {input: IsString, permission: GG_NO_PERMISSIONS},
             },
-        };
-        const Api = webSocketSchema("Sock").path("ws/sock").messages(SockMethods);
+        });
+        const Api = webSocketSchema(C).path("ws/sock").done();
         const doc = buildContractDoc({title: "T", groups: {default: {ws: [Api]}}});
         const sendDoc = findMethod(doc, "Sock", "send");
         const pushDoc = findMethod(doc, "Sock", "push");
@@ -123,16 +123,16 @@ describe("buildContractDoc — permission rendering", () => {
     });
 
     it("WS schema.connectPermission propagates to ContractDoc", () => {
-        const FeatMethods = {
+        const C = defineSocketContract("Feat", {
             clientToServer: {
                 ping: {success: IsString, errors: [NOT_AUTHORIZED, FORBIDDEN, SERVER_ERROR], permission: "chat:read"},
             },
             serverToClient: {},
-        };
-        const Api = webSocketSchema("Feat")
+        });
+        const Api = webSocketSchema(C)
             .path("ws/feat")
             .connectPermission({anyOf: ["admin", "owner"]})
-            .messages(FeatMethods);
+            .done();
         const doc = buildContractDoc({title: "T", groups: {default: {ws: [Api]}}});
         const contractDoc = findContract(doc, "Feat");
         expect(contractDoc?.connectPermission?.text).toBe("Requires `admin` **or** `owner`.");

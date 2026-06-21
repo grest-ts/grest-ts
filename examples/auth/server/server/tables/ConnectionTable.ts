@@ -1,9 +1,9 @@
 import {GGContractClient} from "@grest-ts/schema"
 import {WebSocketOutgoing} from "@grest-ts/websocket"
-import {LiveApiMethods} from "../../../api/LiveApi"
+import {LiveApiContract} from "../../../api/LiveApi"
 import {tUserId} from "../../../api/auth/UserAuth"
 
-export type OutgoingConnection = WebSocketOutgoing<GGContractClient<typeof LiveApiMethods["serverToClient"]>>
+export type OutgoingConnection = WebSocketOutgoing<GGContractClient<typeof LiveApiContract.methods["serverToClient"]>>
 
 export class ConnectionTable {
     private readonly connections = new Map<tUserId, Set<OutgoingConnection>>()

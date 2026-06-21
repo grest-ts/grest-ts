@@ -1,4 +1,4 @@
-import {webSocketSchema} from "@grest-ts/websocket"
+import {defineSocketContract, webSocketSchema} from "@grest-ts/websocket"
 import {WS_SESSION} from "./WsCookieApi"
 import {AppPermission} from "./PermissionsApi"
 
@@ -7,4 +7,8 @@ import {AppPermission} from "./PermissionsApi"
  * scopes at the handshake; `connectPermission` asserts Admin before the stream opens —
  * exercising the same permission gate a schema socket uses, on the raw path.
  */
-export const RawAdminApi = webSocketSchema("RawAdminApi").path("ws/raw-admin").use(WS_SESSION).connectPermission(AppPermission.Admin).bytes()
+export const RawAdminApi = webSocketSchema(defineSocketContract("RawAdminApi", {bytes: true}))
+    .path("ws/raw-admin")
+    .use(WS_SESSION)
+    .connectPermission(AppPermission.Admin)
+    .done()

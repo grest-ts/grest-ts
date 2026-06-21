@@ -5,7 +5,7 @@ import {
     IsString,
     SERVER_ERROR,
 } from "@grest-ts/schema"
-import {webSocketSchema} from "@grest-ts/websocket"
+import {defineSocketContract, webSocketSchema} from "@grest-ts/websocket"
 
 /**
  * Fixture: every method declared GG_NO_PERMISSIONS. Strict mode is triggered
@@ -74,14 +74,14 @@ export const StartupCheckUndeclaredApi = httpSchema(StartupCheckUndeclaredContra
  * scope so the orphan-resolver check stays quiet — the test then isolates the
  * "WS declaration infects HTTP" path.
  */
-const StartupCheckWsConnectGatedMethods = {
+export const StartupCheckWsConnectGatedContract = defineSocketContract("StartupCheckWsConnectGated", {
     clientToServer: {
         ping: {success: IsString, errors: [SERVER_ERROR]},
     },
     serverToClient: {},
-}
+})
 
-export const StartupCheckWsConnectGatedApi = webSocketSchema("StartupCheckWsConnectGated")
+export const StartupCheckWsConnectGatedApi = webSocketSchema(StartupCheckWsConnectGatedContract)
     .path("ws/startup-check-connect-gated")
     .connectPermission(GG_NO_PERMISSIONS)
-    .messages(StartupCheckWsConnectGatedMethods)
+    .done()

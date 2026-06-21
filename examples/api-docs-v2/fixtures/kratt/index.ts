@@ -93,7 +93,7 @@ export {GG_INTERNAL_TOKEN} from "./auth/internalAuth"
 export {NotifyApiContract, NotifyApi} from "./socket/NotifyApi"
 
 // WebSocket: socket-server → browser events
-export {SocketApi} from "./socket/SocketApi"
+export {SocketContract, SocketApi} from "./socket/SocketApi"
 
 // ─── Relay (formerly @kratt/api) ─────────────────────────────────
 // HTTP + WS contracts for the relay daemon that runs inside every task VM.

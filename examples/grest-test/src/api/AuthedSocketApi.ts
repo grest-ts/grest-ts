@@ -1,4 +1,4 @@
-import {webSocketSchema} from "@grest-ts/websocket"
+import {defineSocketContract, webSocketSchema} from "@grest-ts/websocket"
 import {
     GGContractClient,
     GGContractImplementation,
@@ -60,7 +60,7 @@ export const AuthedSocketMiddleware: GGTransportMiddleware = {
 // Contract
 // ---------------------------------------------------------
 
-const AuthedSocketApiMethods = {
+export const AuthedSocketApiContract = defineSocketContract("AuthedSocketApi", {
     clientToServer: {
         whoAmI: {
             success: IsAuthedUser,
@@ -69,12 +69,12 @@ const AuthedSocketApiMethods = {
         },
     },
     serverToClient: {},
-}
+})
 
-export const AuthedSocketApi = webSocketSchema("AuthedSocketApi")
+export const AuthedSocketApi = webSocketSchema(AuthedSocketApiContract)
     .path("ws/authed-test")
     .use(AuthedSocketMiddleware)
-    .messages(AuthedSocketApiMethods)
+    .done()
 
-export type AuthedSocketIncoming = GGContractImplementation<typeof AuthedSocketApiMethods["clientToServer"]>
-export type AuthedSocketOutgoing = GGContractClient<typeof AuthedSocketApiMethods["serverToClient"]>
+export type AuthedSocketIncoming = GGContractImplementation<typeof AuthedSocketApiContract.methods["clientToServer"]>
+export type AuthedSocketOutgoing = GGContractClient<typeof AuthedSocketApiContract.methods["serverToClient"]>

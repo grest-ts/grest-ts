@@ -1,5 +1,5 @@
 import {GGHeader, GGRpc, httpSchema} from "@grest-ts/http"
-import {webSocketSchema} from "@grest-ts/websocket"
+import {defineSocketContract, webSocketSchema} from "@grest-ts/websocket"
 import {FORBIDDEN, GGContractClass, IsString, NOT_AUTHORIZED, SERVER_ERROR} from "@grest-ts/schema"
 
 // --- #2 duplicate route: two schemas resolve to the same method + path -------------------------
@@ -39,14 +39,14 @@ export const WireConflictApi = httpSchema(WireConflictContract)
     .routes({hello: GGRpc.GET("hello")})
 
 // --- #5 dead serverToClient permission: gate can't enforce server-pushed messages -------------
-const WsDeadPushMethods = {
+const WsDeadPushContract = defineSocketContract("WsDeadPush", {
     clientToServer: {
         ping: {success: IsString, errors: [SERVER_ERROR]},
     },
     serverToClient: {
         push: {input: IsString, errors: [NOT_AUTHORIZED, FORBIDDEN, SERVER_ERROR], permission: "push:scope"},
     },
-}
-export const WsDeadPushApi = webSocketSchema("WsDeadPush")
+})
+export const WsDeadPushApi = webSocketSchema(WsDeadPushContract)
     .path("ws/dead-push")
-    .messages(WsDeadPushMethods)
+    .done()

@@ -1,6 +1,6 @@
 import {GGContractImplementation} from "@grest-ts/schema"
 import {WebSocketIncoming} from "@grest-ts/websocket"
-import {LiveApiMethods} from "../../../api/LiveApi"
+import {LiveApiContract} from "../../../api/LiveApi"
 import {BannerState} from "../../../api/BannerApi"
 import {User} from "../../../api/auth/UserAuth"
 import {USER_DATA} from "../auth/UserAuthHandler"
@@ -8,7 +8,7 @@ import {UserService} from "./UserService"
 import {BannerService} from "./BannerService"
 import {ConnectionTable, OutgoingConnection} from "../tables/ConnectionTable"
 
-type IncomingHandler = WebSocketIncoming<GGContractImplementation<typeof LiveApiMethods["clientToServer"]>>
+type IncomingHandler = WebSocketIncoming<GGContractImplementation<typeof LiveApiContract.methods["clientToServer"]>>
 
 export class LiveService {
     private readonly connections = new ConnectionTable()
