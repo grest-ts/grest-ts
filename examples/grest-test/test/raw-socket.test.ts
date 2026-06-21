@@ -1,5 +1,5 @@
 /**
- * Raw byte-stream WebSocket sockets (rawSocketSchema).
+ * Raw byte-stream WebSocket sockets (webSocketSchema.bytes()).
  *
  * The critical guarantee under test: a raw socket runs the EXACT same handshake auth
  * as a schema socket. A real `ws` connection is opened by hand (like the cookie test),
@@ -8,7 +8,7 @@
  */
 import WebSocket from "ws"
 import {GG_TEST_RUNNER, GGTest} from "@grest-ts/testkit"
-import {rawSocketSchema} from "@grest-ts/websocket"
+import {webSocketSchema} from "@grest-ts/websocket"
 import {MainRuntime} from "../src/main"
 import {RawEchoApi} from "../src/api/RawEchoApi"
 import {AuthedSocketMiddleware, CLIENT_AUTH_TOKEN} from "../src/api/AuthedSocketApi"
@@ -22,7 +22,7 @@ const HANDSHAKE = "h", HANDSHAKE_OK = "k", HANDSHAKE_ERR = "x", REQ = "r", RES =
 const frame = (type: string, path: string, id: string, data: unknown): string =>
     `${type}${DELIM}${path}${DELIM}${id}${DELIM}${data !== undefined ? JSON.stringify(data) : ""}`
 
-describe("raw socket (rawSocketSchema)", () => {
+describe("raw socket (webSocketSchema.bytes)", () => {
 
     GGTest.startWorker(MainRuntime)
 
@@ -219,7 +219,7 @@ describe("raw socket connectPermission gate (RawAdminApi)", () => {
     })
 })
 
-describe("createRawClient (real client, end-to-end)", () => {
+describe("createClient (real client, end-to-end)", () => {
 
     GGTest.startWorker(MainRuntime)
 
@@ -231,27 +231,29 @@ describe("createRawClient (real client, end-to-end)", () => {
 
     test("connects through the auth handshake and round-trips bytes", async () => {
         await inTokenContext("secret-alice", async () => {
-            const client = RawEchoApi.createRawClient({
+            const client = RawEchoApi.createClient({
                 url: GG_TEST_RUNNER.get().discoveryServer.getRoutingUrl("RawEchoApi"),
                 query: {room: "lobby"},
+                reconnect: false,
             })
-            const conn = await client.connect()
+            await client.connect()
             try {
                 const got = new Promise<string>((res) =>
-                    conn.onMessage((data) => res(Buffer.from(data).toString())))
-                conn.send("hello")
+                    client.onMessage((data) => res(Buffer.from(data).toString())))
+                client.send("hello")
                 expect(await got).toBe("alice@lobby:hello")
             } finally {
-                conn.close()
+                client.close()
             }
         })
     })
 
     test("a bad token rejects connect() with the typed handshake error", async () => {
         await inTokenContext("not-a-real-token", async () => {
-            const client = RawEchoApi.createRawClient({
+            const client = RawEchoApi.createClient({
                 url: GG_TEST_RUNNER.get().discoveryServer.getRoutingUrl("RawEchoApi"),
                 query: {room: "lobby"},
+                reconnect: false,
             })
             await expect(client.connect()).rejects.toBeInstanceOf(NOT_AUTHORIZED)
         })
@@ -263,25 +265,20 @@ describe("passthrough auth guard", () => {
     // The danger passthrough introduces: a credential that's delivered via the grest-ts handshake
     // (a middleware with update(), e.g. GGHeader) can never arrive from a foreign client, so the
     // socket would open unauthenticated. Registration must fail loudly instead.
-    test("rejects an update()-based (handshake-delivered) credential at registration", () => {
-        const schema = rawSocketSchema("PassthroughBad", {
-            path: "ws/pt-bad",
-            use: [AuthedSocketMiddleware],   // has update() — the "fake header" path
-            passthrough: true,
-        })
-        expect(() => schema.startServer(() => {}, {} as any)).toThrow(/passthrough/i)
+    test("rejects an update()-based (handshake-delivered) credential at build time", () => {
+        expect(() => webSocketSchema("PassthroughBad")
+            .path("ws/pt-bad")
+            .use(AuthedSocketMiddleware)   // has update() — the "fake header" path
+            .passthrough()
+        ).toThrow(/passthrough/i)
     })
 
     test("a parse-only credential (cookie wire) does not trip the guard", () => {
         // WS_SESSION reads the upgrade cookie (parse-only, no update) — valid in passthrough.
-        const schema = rawSocketSchema("PassthroughOk", {
-            path: "ws/pt-ok",
-            use: [WS_SESSION],
-            passthrough: true,
-        })
-        let err: unknown
-        try { schema.startServer(() => {}, {} as any) } catch (e) { err = e }
-        // It may fail later (no http/locator in this unit context) but NOT on the passthrough guard.
-        expect(String((err as Error)?.message ?? "")).not.toMatch(/passthrough mode cannot/)
+        expect(() => webSocketSchema("PassthroughOk")
+            .path("ws/pt-ok")
+            .use(WS_SESSION)
+            .passthrough()
+        ).not.toThrow()
     })
 })

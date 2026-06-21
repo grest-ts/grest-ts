@@ -13,7 +13,7 @@
 
 import type {GGTransportMiddleware} from "@grest-ts/context";
 import type {GGHttpSchema} from "@grest-ts/http";
-import type {GGWebSocketSchema} from "@grest-ts/websocket";
+import type {GGWebSocketSchema, GGRawWebSocketSchema} from "@grest-ts/websocket";
 import type {ANY_ERROR_CLS, GGSchema} from "@grest-ts/schema";
 import {JsonSchemaAdapter} from "./jsonSchemaAdapter";
 import type {
@@ -31,7 +31,7 @@ export interface BuildContractDocOptions {
     /** Group label → schemas in that group. Each can have HTTP, WS, or both. */
     groups: Record<string, {
         http?: GGHttpSchema<any, any>[];
-        ws?: GGWebSocketSchema<any, any, any, any, any>[];
+        ws?: (GGWebSocketSchema<any, any, any, any, any> | GGRawWebSocketSchema<any>)[];
         description?: string;
     }>;
 
@@ -204,10 +204,24 @@ function buildHttpMethod(
 
 // ── WS contract ────────────────────────────────────────────────────────
 
-function buildWsContract(wsSchema: GGWebSocketSchema<any, any, any, any, any>, ctx: BuildContext): ContractDoc {
+function buildWsContract(
+    wsSchema: GGWebSocketSchema<any, any, any, any, any> | GGRawWebSocketSchema<any>,
+    ctx: BuildContext,
+): ContractDoc {
     const auth = extractWsAuth((wsSchema as any).middlewares ?? []);
+
+    if ((wsSchema as any).raw === true) {
+        return {
+            name: wsSchema.name,
+            kind: "ws",
+            path: "/" + wsSchema.path.replace(/^\/+/, ""),
+            ...(auth.length > 0 ? {auth} : {}),
+            methods: [],
+        };
+    }
+
     const methods: MethodDoc[] = [];
-    const contract = wsSchema.contract;
+    const contract = (wsSchema as GGWebSocketSchema<any, any, any, any, any>).contract;
 
     for (const methodName of Object.keys(contract.clientToServer.methods)) {
         const m = contract.clientToServer.methods[methodName];

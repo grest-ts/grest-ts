@@ -4,7 +4,7 @@ import {toAsyncApi} from "../src/toAsyncApi";
 // Import the grest-test WebSocket APIs as real test fixtures
 import {ConfigTestSocketApi} from "../../../../examples/grest-test/src/api/ConfigTestSocketApi";
 
-import {webSocketSchema, defineSocketContract} from "@grest-ts/websocket";
+import {webSocketSchema} from "@grest-ts/websocket";
 import type {GGSchema} from "@grest-ts/schema";
 import {IsString, IsObject, IsNumber, SERVER_ERROR, VALIDATION_ERROR, IsBearerToken, GG_NO_PERMISSIONS } from "@grest-ts/schema";
 import type {GGTransportMiddleware} from "@grest-ts/context";
@@ -13,7 +13,7 @@ import type {GGTransportMiddleware} from "@grest-ts/context";
 // A rich WebSocket showcase contract for snapshot testing
 // ---------------------------------------------------------------------------
 
-const ChatContract = defineSocketContract("ChatApi", {
+const ChatApiMethods = {
     clientToServer: {
         sendMessage: {
             input: IsObject({
@@ -45,7 +45,7 @@ const ChatContract = defineSocketContract("ChatApi", {
             permission: GG_NO_PERMISSIONS
         }
     }
-});
+};
 
 const ChatAuthMiddleware: GGTransportMiddleware = {
     // IsBearerToken's branded value type is invariant-incompatible with the header element
@@ -55,10 +55,10 @@ const ChatAuthMiddleware: GGTransportMiddleware = {
     }
 };
 
-const ChatApi = webSocketSchema(ChatContract)
+const ChatApi = webSocketSchema("ChatApi")
     .path("ws/chat")
     .use(ChatAuthMiddleware)
-    .done();
+    .messages(ChatApiMethods);
 
 // ---------------------------------------------------------------------------
 // Tests

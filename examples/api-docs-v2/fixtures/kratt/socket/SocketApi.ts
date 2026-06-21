@@ -1,4 +1,4 @@
-import {defineSocketContract, webSocketSchema} from "@grest-ts/websocket"
+import {webSocketSchema} from "@grest-ts/websocket"
 import {IsObject, IsString, SERVER_ERROR } from "@grest-ts/schema"
 import {UNAUTHORIZED, NOT_FOUND} from "../hub/errors"
 import {GG_USER_TOKEN, GG_ORG_TOKEN} from "../auth/AuthContext"
@@ -21,7 +21,7 @@ const IsTopicRequest = IsObject({topic: IsString})
  * The socket-server routes an incoming notify to the correct serverToClient
  * method based on the topic prefix (see Topics / parseTopic).
  */
-export const SocketContract = defineSocketContract("KrattSocket", {
+export const KrattSocketMethods = {
     clientToServer: {
         subscribe:   {input: IsTopicRequest, errors: [UNAUTHORIZED, NOT_FOUND, SERVER_ERROR],
         },
@@ -42,10 +42,10 @@ export const SocketContract = defineSocketContract("KrattSocket", {
         onTaskOverview: {input: IsTaskOverviewEvent,
         },
     },
-})
+}
 
-export const SocketApi = webSocketSchema(SocketContract)
+export const SocketApi = webSocketSchema("KrattSocket")
     .path("/socket")
     .use(GG_USER_TOKEN)
     .use(GG_ORG_TOKEN)
-    .done()
+    .messages(KrattSocketMethods)

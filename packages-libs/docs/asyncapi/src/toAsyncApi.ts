@@ -1,4 +1,4 @@
-import type {GGWebSocketSchema} from "@grest-ts/websocket";
+import type {GGWebSocketSchema, GGRawWebSocketSchema} from "@grest-ts/websocket";
 import type {ANY_ERROR_CLS, GGSchema} from "@grest-ts/schema";
 import {permissionToSecurity, schemaDescriptionToOpenApi, SchemaRegistry} from "@grest-ts/openapi";
 import type {
@@ -27,8 +27,14 @@ export interface ToAsyncApiOptions {
  * (success + each error type), correctly modelling that both parties can receive
  * any of them.
  */
+type AnySocketSchema = GGWebSocketSchema<any, any, any, any, any> | GGRawWebSocketSchema<any>;
+
+function isRaw(schema: AnySocketSchema): schema is GGRawWebSocketSchema<any> {
+    return (schema as GGRawWebSocketSchema<any>).raw === true;
+}
+
 export function toAsyncApi(
-    schemas: GGWebSocketSchema<any, any, any, any, any>[],
+    schemas: AnySocketSchema[],
     options: ToAsyncApiOptions = {},
     serverPort?: number
 ): AsyncAPIDocument {
@@ -38,7 +44,6 @@ export function toAsyncApi(
     const securitySchemes = new Map<string, SecuritySchemeObject>();
 
     for (const wsSchema of schemas) {
-        const contract = wsSchema.contract;
         const channelId = sanitizeId(wsSchema.name);
         const path = wsSchema.path.startsWith('/') ? wsSchema.path : '/' + wsSchema.path;
         const channelRef: ReferenceObject = {$ref: `#/channels/${channelId}`};
@@ -54,6 +59,37 @@ export function toAsyncApi(
             : null;
         const effectiveChannelSecurity = connectSecurity ?? channelSecurity;
 
+        // Raw byte stream (.bytes() / .passthrough()): no typed message contract — emit a
+        // bidirectional opaque-binary channel carrying the same auth/path metadata.
+        if (isRaw(wsSchema)) {
+            const bytesMsgId = `${channelId}_bytes`;
+            channels[channelId] = {
+                address: path,
+                title: camelToTitle(wsSchema.name),
+                messages: {
+                    [bytesMsgId]: {
+                        name: "bytes",
+                        title: "Binary frame",
+                        description: "Opaque binary frame — no typed payload.",
+                        payload: {type: "string", format: "binary"} as SchemaObject,
+                    },
+                },
+                ...(handshakeHeaders ? {bindings: {ws: {method: 'GET', headers: handshakeHeaders}}} : {}),
+            };
+            const bytesRef = [{$ref: `#/channels/${channelId}/messages/${bytesMsgId}`}];
+            const sec = effectiveChannelSecurity.length ? {security: effectiveChannelSecurity} : {};
+            operations[`${wsSchema.name}_send_bytes`] = {
+                action: 'send', channel: channelRef, title: "Send bytes",
+                description: "Send an opaque binary frame", messages: bytesRef, ...sec,
+            };
+            operations[`${wsSchema.name}_receive_bytes`] = {
+                action: 'receive', channel: channelRef, title: "Receive bytes",
+                description: "Receive an opaque binary frame", messages: bytesRef, ...sec,
+            };
+            continue;
+        }
+
+        const contract = wsSchema.contract;
         const messages: Record<string, MessageObject | ReferenceObject> = {};
 
         // ── clientToServer ──────────────────────────────────────────────────

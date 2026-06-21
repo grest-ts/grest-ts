@@ -1,5 +1,5 @@
 import {ChecklistService} from "./ChecklistService"
-import {ChecklistNotificationApiContract, ItemMarkedEvent, UpdateItemResponse} from "../../common/api-user/ChecklistNotificationApi"
+import {ChecklistNotificationApiMethods, ItemMarkedEvent, UpdateItemResponse} from "../../common/api-user/ChecklistNotificationApi"
 import {ChecklistItem} from "../../common/api-user/ChecklistApi"
 import {GGLog} from "@grest-ts/logger"
 import {WebSocketIncoming, WebSocketOutgoing} from "@grest-ts/websocket"
@@ -8,10 +8,10 @@ import {UserContext} from "../UserContext";
 import {GGContractClient, GGContractImplementation} from "@grest-ts/schema";
 
 // Type for the incoming handler object (implementation returns Promise)
-type IncomingHandler = WebSocketIncoming<GGContractImplementation<typeof ChecklistNotificationApiContract.methods["clientToServer"]>>
+type IncomingHandler = WebSocketIncoming<GGContractImplementation<typeof ChecklistNotificationApiMethods["clientToServer"]>>
 
 // Type for the outgoing object (server->client methods)
-type OutgoingConnection = WebSocketOutgoing<GGContractClient<typeof ChecklistNotificationApiContract.methods["serverToClient"]>>
+type OutgoingConnection = WebSocketOutgoing<GGContractClient<typeof ChecklistNotificationApiMethods["serverToClient"]>>
 
 /**
  * Service that manages real-time WebSocket notifications for checklist updates.

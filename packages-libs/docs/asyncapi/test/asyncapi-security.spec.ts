@@ -7,11 +7,11 @@ import {
     NOT_AUTHORIZED,
     SERVER_ERROR,
 } from "@grest-ts/schema";
-import {defineSocketContract, webSocketSchema} from "@grest-ts/websocket";
+import {GGSocketContractMethods, webSocketSchema} from "@grest-ts/websocket";
 import {toAsyncApi} from "../src/toAsyncApi";
 
 function makeWs(name: string, c2sPermission: any, opts: {connectPermission?: any} = {}) {
-    const contract = defineSocketContract(name, {
+    const methods = {
         clientToServer: {
             send: {
                 input: IsString,
@@ -26,12 +26,12 @@ function makeWs(name: string, c2sPermission: any, opts: {connectPermission?: any
                 permission: GG_NO_PERMISSIONS,
             },
         },
-    });
-    let builder = webSocketSchema(contract).path(`ws/${name.toLowerCase()}`);
+    } satisfies GGSocketContractMethods;
+    let builder = webSocketSchema(name).path(`ws/${name.toLowerCase()}`);
     if (opts.connectPermission !== undefined) {
         builder = builder.connectPermission(opts.connectPermission);
     }
-    return builder.done();
+    return builder.messages(methods);
 }
 
 function findOp(doc: any, suffix: string): any {

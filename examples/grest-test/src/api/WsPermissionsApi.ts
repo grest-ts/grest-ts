@@ -1,5 +1,5 @@
 import {
-    defineSocketContract,
+    GGSocketContractMethods,
     webSocketSchema,
 } from "@grest-ts/websocket"
 import {
@@ -17,7 +17,7 @@ import {AppPermission, TEST_RESOLVER_THROW_SCOPE, TEST_SCOPES_WIRE} from "./Perm
 export const WS_TEST_RESOLVER_THROW_SCOPE = TEST_RESOLVER_THROW_SCOPE
 
 // ---- Contract: a multiplex socket (no connectPermission). ----
-export const WsPermissionsApiContract = defineSocketContract("WsPermissionsApi", {
+const WsPermissionsApiMethods = {
     clientToServer: {
         publicMessage: {
             input: IsString,
@@ -52,15 +52,15 @@ export const WsPermissionsApiContract = defineSocketContract("WsPermissionsApi",
             permission: GG_NO_PERMISSIONS,
         },
     },
-})
+} satisfies GGSocketContractMethods
 
-export const WsPermissionsApi = webSocketSchema(WsPermissionsApiContract)
+export const WsPermissionsApi = webSocketSchema("WsPermissionsApi")
     .path("ws/permissions-test")
     .use(TEST_SCOPES_WIRE)
-    .done()
+    .messages(WsPermissionsApiMethods)
 
 // ---- A second contract gated AT THE CONNECTION LEVEL. ----
-export const WsFeaturePermissionsApiContract = defineSocketContract("WsFeaturePermissionsApi", {
+const WsFeaturePermissionsApiMethods = {
     clientToServer: {
         ping: {
             success: IsString,
@@ -69,15 +69,15 @@ export const WsFeaturePermissionsApiContract = defineSocketContract("WsFeaturePe
         },
     },
     serverToClient: {},
-})
+} satisfies GGSocketContractMethods
 
-export const WsFeaturePermissionsApi = webSocketSchema(WsFeaturePermissionsApiContract)
+export const WsFeaturePermissionsApi = webSocketSchema("WsFeaturePermissionsApi")
     .path("ws/feature-permissions-test")
     .use(TEST_SCOPES_WIRE)
     .connectPermission(AppPermission.Admin)
-    .done()
+    .messages(WsFeaturePermissionsApiMethods)
 
-export type WsPermissionsIncoming = GGContractImplementation<typeof WsPermissionsApiContract.methods["clientToServer"]>
-export type WsPermissionsOutgoing = GGContractClient<typeof WsPermissionsApiContract.methods["serverToClient"]>
-export type WsFeatureIncoming = GGContractImplementation<typeof WsFeaturePermissionsApiContract.methods["clientToServer"]>
-export type WsFeatureOutgoing = GGContractClient<typeof WsFeaturePermissionsApiContract.methods["serverToClient"]>
+export type WsPermissionsIncoming = GGContractImplementation<typeof WsPermissionsApiMethods["clientToServer"]>
+export type WsPermissionsOutgoing = GGContractClient<typeof WsPermissionsApiMethods["serverToClient"]>
+export type WsFeatureIncoming = GGContractImplementation<typeof WsFeaturePermissionsApiMethods["clientToServer"]>
+export type WsFeatureOutgoing = GGContractClient<typeof WsFeaturePermissionsApiMethods["serverToClient"]>

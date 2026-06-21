@@ -1,10 +1,10 @@
 import {describe, it, expect, beforeEach} from "vitest";
 import {IsString, IsObject, SERVER_ERROR, GG_NO_PERMISSIONS } from "@grest-ts/schema";
 import {GGHttpServer} from "@grest-ts/http";
-import {defineSocketContract, webSocketSchema} from "@grest-ts/websocket";
+import {webSocketSchema} from "@grest-ts/websocket";
 import {GGAsyncApiDocsGroups} from "../src/GGAsyncApiDocsGroups";
 
-const ChatContract = defineSocketContract("ChatApi", {
+const ChatApiMethods = {
     clientToServer: {
         send: {input: IsObject({text: IsString}), success: IsObject({id: IsString}), errors: [SERVER_ERROR],
             permission: GG_NO_PERMISSIONS
@@ -15,8 +15,8 @@ const ChatContract = defineSocketContract("ChatApi", {
             permission: GG_NO_PERMISSIONS
         }
     }
-});
-const NotificationContract = defineSocketContract("NotificationApi", {
+};
+const NotificationApiMethods = {
     clientToServer: {
         subscribe: {input: IsObject({topic: IsString}), success: IsObject({ok: IsString}), errors: [SERVER_ERROR],
             permission: GG_NO_PERMISSIONS
@@ -27,10 +27,10 @@ const NotificationContract = defineSocketContract("NotificationApi", {
             permission: GG_NO_PERMISSIONS
         }
     }
-});
+};
 
-const ChatApiSchema = webSocketSchema(ChatContract).path("ws/chat").done();
-const NotificationApiSchema = webSocketSchema(NotificationContract).path("ws/notifications").done();
+const ChatApiSchema = webSocketSchema("ChatApi").path("ws/chat").messages(ChatApiMethods);
+const NotificationApiSchema = webSocketSchema("NotificationApi").path("ws/notifications").messages(NotificationApiMethods);
 
 function newStubServer(): {routes: Map<string, Function>, server: GGHttpServer} {
     const routes = new Map<string, Function>();

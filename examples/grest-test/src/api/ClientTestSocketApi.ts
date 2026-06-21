@@ -1,4 +1,4 @@
-import {defineSocketContract, webSocketSchema} from "@grest-ts/websocket"
+import {webSocketSchema} from "@grest-ts/websocket"
 import {
     GGContractClient,
     GGContractImplementation,
@@ -37,7 +37,7 @@ export type Question = typeof IsQuestion.infer
 // Contract — demonstrates all four websocket messaging modes
 // ---------------------------------------------------------
 
-export const ClientTestSocketApiContract = defineSocketContract("ClientTestSocketApi", {
+const ClientTestSocketApiMethods = {
     clientToServer: {
         // Req/res: client → server, waits for typed response
         echo: {
@@ -80,11 +80,11 @@ export const ClientTestSocketApiContract = defineSocketContract("ClientTestSocke
             permission: GG_NO_PERMISSIONS
         },
     },
-})
+}
 
-export const ClientTestSocketApi = webSocketSchema(ClientTestSocketApiContract)
+export const ClientTestSocketApi = webSocketSchema("ClientTestSocketApi")
     .path("ws/client-test")
-    .done()
+    .messages(ClientTestSocketApiMethods)
 
-export type ClientTestSocketIncoming = GGContractImplementation<typeof ClientTestSocketApiContract.methods["clientToServer"]>
-export type ClientTestSocketOutgoing = GGContractClient<typeof ClientTestSocketApiContract.methods["serverToClient"]>
+export type ClientTestSocketIncoming = GGContractImplementation<typeof ClientTestSocketApiMethods["clientToServer"]>
+export type ClientTestSocketOutgoing = GGContractClient<typeof ClientTestSocketApiMethods["serverToClient"]>

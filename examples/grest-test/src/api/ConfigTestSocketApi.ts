@@ -1,12 +1,8 @@
-import {defineSocketContract, webSocketSchema} from "@grest-ts/websocket"
+import {webSocketSchema} from "@grest-ts/websocket"
 import {GGContractClient, GGContractImplementation, SERVER_ERROR, GG_NO_PERMISSIONS } from "@grest-ts/schema";
 import {IsConfigTestResponse} from "./ConfigTestApi";
 
-// ---------------------------------------------------------
-// Contract
-// ---------------------------------------------------------
-
-export const ConfigTestSocketApiContract = defineSocketContract("ConfigTestSocketApi", {
+const ConfigTestSocketApiMethods = {
     clientToServer: {
         getWatchedValue: {
             success: IsConfigTestResponse,
@@ -20,12 +16,12 @@ export const ConfigTestSocketApiContract = defineSocketContract("ConfigTestSocke
             permission: GG_NO_PERMISSIONS
         }
     }
-})
+}
 
-export const ConfigTestSocketApi = webSocketSchema(ConfigTestSocketApiContract)
+export const ConfigTestSocketApi = webSocketSchema("ConfigTestSocketApi")
     .path("ws/config-test")
-    .done()
+    .messages(ConfigTestSocketApiMethods)
 
 // Type exports for use in services (implementation types return Promise)
-export type ConfigTestSocketApiClientToServer = GGContractImplementation<typeof ConfigTestSocketApiContract.methods["clientToServer"]>
-export type ConfigTestSocketApiServerToClient = GGContractClient<typeof ConfigTestSocketApiContract.methods["serverToClient"]>
+export type ConfigTestSocketApiClientToServer = GGContractImplementation<typeof ConfigTestSocketApiMethods["clientToServer"]>
+export type ConfigTestSocketApiServerToClient = GGContractClient<typeof ConfigTestSocketApiMethods["serverToClient"]>

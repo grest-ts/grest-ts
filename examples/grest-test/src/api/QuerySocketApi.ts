@@ -1,4 +1,4 @@
-import {defineSocketContract, webSocketSchema} from "@grest-ts/websocket"
+import {webSocketSchema} from "@grest-ts/websocket"
 import {IsNumber, IsObject, IsString, SERVER_ERROR, GG_NO_PERMISSIONS } from "@grest-ts/schema"
 
 export const IsQueryArgs = IsObject({
@@ -7,7 +7,7 @@ export const IsQueryArgs = IsObject({
 })
 export type QueryArgs = typeof IsQueryArgs.infer
 
-export const QuerySocketApiContract = defineSocketContract("QuerySocketApi", {
+export const QuerySocketApiMethods = {
     clientToServer: {
         echoRoom: {
             success: IsString,
@@ -16,14 +16,14 @@ export const QuerySocketApiContract = defineSocketContract("QuerySocketApi", {
         },
     },
     serverToClient: {},
-})
+}
 
 /**
  * Demonstrates `queryOnConnect(validator)` — both sides validate query params.
  * Bad query on the client throws before opening the socket; bad query that
  * somehow reaches the server causes a close with code 4000.
  */
-export const QuerySocketApi = webSocketSchema(QuerySocketApiContract)
+export const QuerySocketApi = webSocketSchema("QuerySocketApi")
     .path("ws/query-test")
     .queryOnConnect<QueryArgs>(IsQueryArgs)
-    .done()
+    .messages(QuerySocketApiMethods)

@@ -1,7 +1,7 @@
 import {describe, expect, it} from "vitest";
 import {GG_NO_PERMISSIONS, GGContractClass, IsString, NOT_AUTHORIZED, SERVER_ERROR} from "@grest-ts/schema";
 import {GGCookie, GGHeader, GGRpc, httpSchema} from "@grest-ts/http";
-import {defineSocketContract, webSocketSchema} from "@grest-ts/websocket";
+import {webSocketSchema} from "@grest-ts/websocket";
 import {buildContractDoc} from "../src/buildContractDoc";
 
 function findContract(doc: ReturnType<typeof buildContractDoc>, name: string) {
@@ -45,11 +45,11 @@ describe("buildContractDoc — cookie surfacing", () => {
     });
 
     it("WS cookie() binding is surfaced on the connection contract", () => {
-        const C = defineSocketContract("CookieWs", {
+        const CookieWsMethods = {
             clientToServer: {whoami: {success: IsString, errors: [SERVER_ERROR], permission: GG_NO_PERMISSIONS}},
             serverToClient: {},
-        });
-        const Api = webSocketSchema(C).path("ws/acct").use(new GGCookie("access")).done();
+        };
+        const Api = webSocketSchema("CookieWs").path("ws/acct").use(new GGCookie("access")).messages(CookieWsMethods);
         const doc = buildContractDoc({title: "T", groups: {default: {ws: [Api]}}});
         expect(findContract(doc, "CookieWs")?.cookies?.map(x => x.name)).toEqual(["access"]);
     });

@@ -1,4 +1,4 @@
-import {defineSocketContract, webSocketSchema} from "@grest-ts/websocket"
+import {webSocketSchema} from "@grest-ts/websocket"
 import {FORBIDDEN, IsNumber, IsObject, IsString, NOT_AUTHORIZED, SERVER_ERROR, GG_NO_PERMISSIONS} from "@grest-ts/schema"
 import {USER_TOKEN_WIRE, UserPermission} from "./auth/UserAuth"
 
@@ -20,7 +20,7 @@ export const IsBannerPongEvent = IsObject({
 })
 export type BannerPongEvent = typeof IsBannerPongEvent.infer
 
-export const LiveApiContract = defineSocketContract("LiveApi", {
+export const LiveApiMethods = {
     clientToServer: {
         // Anyone authenticated can ping.
         ping: {
@@ -48,9 +48,9 @@ export const LiveApiContract = defineSocketContract("LiveApi", {
             permission: GG_NO_PERMISSIONS,
         },
     },
-})
+}
 
-export const LiveApi = webSocketSchema(LiveApiContract)
+export const LiveApi = webSocketSchema("LiveApi")
     .path("ws/live")
     .use(USER_TOKEN_WIRE)
-    .done()
+    .messages(LiveApiMethods)
