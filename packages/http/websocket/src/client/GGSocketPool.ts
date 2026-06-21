@@ -1,12 +1,9 @@
 import {GGSocket} from '../socket/GGSocket';
 import {SocketAdapter} from "../socket/SocketAdapter";
-import {GG_WS_CONNECTION} from "../server/GG_WS_CONNECTION";
-import {Message, MessageType} from "../socket/SocketMessage";
 import {GGValidator} from "@grest-ts/schema";
-import {GGContext, GGContextStore, type GGTransportMiddleware} from "@grest-ts/context";
-import {GG_TRACE} from "@grest-ts/trace";
+import {type GGTransportMiddleware} from "@grest-ts/context";
 import {getDefaultAdapter} from "../adapter/getDefaultAdapter";
-import {awaitHandshakeResponse, buildHandshakeHeaders, buildWsUrl, gateMiddlewares} from "./clientHandshake";
+import {buildHandshakeHeaders, buildWsUrl, gateMiddlewares, openClientConnection} from "./clientHandshake";
 
 export interface GGSocketPoolConfig<Query> {
     domain: string,
@@ -178,38 +175,16 @@ export class GGSocketPool {
 
     private static async openSocket(fullUrl: string, config: GGSocketPoolConfig<any>, domain: string): Promise<GGSocket> {
         const adapterClass = await this.ensureAdapter();
-        return new Promise<GGSocket>((resolve, reject) => {
-            const adapter = new adapterClass(fullUrl);
-            adapter.onOpen(async () => {
-                try {
-                    // Inherit the connecting context as parent so context
-                    // keys (auth tokens, user/org session, trace ids…) set
-                    // by the caller propagate into the WS connection's
-                    // operations and into events delivered through it.
-                    // Without a parent, downstream HTTP calls fired from
-                    // a WS event handler can't see the user's session
-                    // tokens — they'd be looking up GG_USER_TOKEN /
-                    // GG_ORG_TOKEN in an empty isolated context.
-                    const context = new GGContext("ws-client-connection", GGContextStore.tryGetContext());
-                    await context.run(async () => {
-                        GG_TRACE.init();
-                        GG_WS_CONNECTION.set({
-                            port: undefined,
-                            path: domain
-                        });
-                        await gateMiddlewares(config.middlewares);
-                        const headers = this.buildHeaders(config);
-                        adapter.send(Message.create(MessageType.HANDSHAKE, "", "", headers));
-                        await awaitHandshakeResponse(adapter, 5000);
-                        resolve(new GGSocket(adapter, {connectionContext: context}));
-                    });
-                } catch (error) {
-                    reject(error);
-                }
-            });
-            adapter.onError((error: Error) => {
-                reject(error);
-            });
+        // The connection's context is parented to the connecting one so context keys (auth
+        // tokens, user/org session, trace ids…) propagate into WS operations and delivered
+        // events — see openClientConnection.
+        return openClientConnection({
+            adapter: new adapterClass(fullUrl),
+            domain,
+            middlewares: config.middlewares,
+            contextName: "ws-client-connection",
+            handshakeTimeoutMs: 5000,
+            makeSocket: (adapter, context) => new GGSocket(adapter, {connectionContext: context}),
         });
     }
 }

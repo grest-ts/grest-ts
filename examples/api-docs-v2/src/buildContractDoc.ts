@@ -209,27 +209,19 @@ function buildWsContract(
     ctx: BuildContext,
 ): ContractDoc {
     const auth = extractWsAuth((wsSchema as any).middlewares ?? []);
-
-    if ((wsSchema as any).raw === true) {
-        return {
-            name: wsSchema.name,
-            kind: "ws",
-            path: "/" + wsSchema.path.replace(/^\/+/, ""),
-            ...(auth.length > 0 ? {auth} : {}),
-            methods: [],
-        };
-    }
-
     const methods: MethodDoc[] = [];
-    const contract = (wsSchema as GGWebSocketSchema<any, any, any, any, any>).contract;
 
-    for (const methodName of Object.keys(contract.clientToServer.methods)) {
-        const m = contract.clientToServer.methods[methodName];
-        methods.push(buildWsMethod(methodName, m, "client-to-server", wsSchema.name, ctx));
-    }
-    for (const methodName of Object.keys(contract.serverToClient.methods)) {
-        const m = contract.serverToClient.methods[methodName];
-        methods.push(buildWsMethod(methodName, m, "server-to-client", wsSchema.name, ctx));
+    // Raw byte-stream schemas (.bytes()/.passthrough()) carry no per-message contract.
+    if ((wsSchema as any).raw !== true) {
+        const contract = (wsSchema as GGWebSocketSchema<any, any, any, any, any>).contract;
+        for (const methodName of Object.keys(contract.clientToServer.methods)) {
+            const m = contract.clientToServer.methods[methodName];
+            methods.push(buildWsMethod(methodName, m, "client-to-server", wsSchema.name, ctx));
+        }
+        for (const methodName of Object.keys(contract.serverToClient.methods)) {
+            const m = contract.serverToClient.methods[methodName];
+            methods.push(buildWsMethod(methodName, m, "server-to-client", wsSchema.name, ctx));
+        }
     }
 
     return {

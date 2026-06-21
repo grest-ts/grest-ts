@@ -10,16 +10,13 @@
  * Passthrough schemas have no client here — a passthrough socket is foreign by definition.
  */
 
-import {GGContext, GGContextStore, type GGTransportMiddleware} from "@grest-ts/context"
+import {type GGTransportMiddleware} from "@grest-ts/context"
 import {SERVER_ERROR} from "@grest-ts/schema"
-import {GG_TRACE} from "@grest-ts/trace"
 import {GGRawWebSocketSchema} from "../schema/GGRawWebSocketSchema"
 import {GGRawSocket} from "../socket/GGRawSocket"
 import type {GGHeartbeatConfig} from "../socket/GGSocket"
-import {GG_WS_CONNECTION} from "../server/GG_WS_CONNECTION"
-import {Message, MessageType} from "../socket/SocketMessage"
 import {getDefaultAdapter} from "../adapter/getDefaultAdapter"
-import {awaitHandshakeResponse, buildHandshakeHeaders, buildWsUrl, gateMiddlewares, validateWsQuery} from "./clientHandshake"
+import {buildWsUrl, openClientConnection, validateWsQuery} from "./clientHandshake"
 import {
     createConnector,
     normalizeReconnect,
@@ -103,6 +100,7 @@ GGRawWebSocketSchema.prototype.createClient = function (
     const handshakeTimeoutMs = config?.handshakeTimeoutMs ?? 5000
 
     const messageHandlers: Array<(data: Uint8Array) => void> = []
+    const middlewares = [...schemaMiddlewares, ...(config?.middlewares ?? [])]
 
     const connector = createConnector<GGRawSocket>({
         schemaName,
@@ -110,38 +108,19 @@ GGRawWebSocketSchema.prototype.createClient = function (
         reconnect: normalizeReconnect(config?.reconnect),
         open: async () => {
             const domain = await resolveWsDomain(config?.url, schemaName)
-            const validatedQuery = validateWsQuery(queryValidator, config?.query)
-            const url = buildWsUrl(domain, normalizedPath, validatedQuery)
-            const merged = [...schemaMiddlewares, ...(config?.middlewares ?? [])]
-
+            const url = buildWsUrl(domain, normalizedPath, validateWsQuery(queryValidator, config?.query))
             const AdapterClass = await getDefaultAdapter()
-            const adapter = new AdapterClass(url)
-            // Parent = the connecting context, so context-keyed credentials (auth tokens,
-            // session) resolve through the chain when headers are built at open time.
-            const context = new GGContext("ws-raw-client-connection", GGContextStore.tryGetContext())
-
-            return new Promise<GGRawSocket>((resolve, reject) => {
-                adapter.onError(reject)
-                adapter.onOpen(async () => {
-                    try {
-                        await context.run(async () => {
-                            GG_TRACE.init()
-                            GG_WS_CONNECTION.set({port: undefined, path: domain})
-                            await gateMiddlewares(merged)
-                            const headers = buildHandshakeHeaders(merged)
-                            adapter.send(Message.create(MessageType.HANDSHAKE, "", "", headers))
-                            await awaitHandshakeResponse(adapter, handshakeTimeoutMs)
-                            resolve(new GGRawSocket(adapter, {
-                                apiName: schemaName,
-                                socketPath: normalizedPath,
-                                connectionContext: context,
-                                scope: {ensureEntered() {}},
-                            }))
-                        })
-                    } catch (err) {
-                        reject(err)
-                    }
-                })
+            return openClientConnection({
+                adapter: new AdapterClass(url),
+                domain,
+                middlewares,
+                contextName: "ws-raw-client-connection",
+                handshakeTimeoutMs,
+                makeSocket: (adapter, context) => new GGRawSocket(adapter, {
+                    apiName: schemaName,
+                    socketPath: normalizedPath,
+                    connectionContext: context,
+                }),
             })
         },
         setup: (socket) => {

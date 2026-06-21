@@ -59,23 +59,25 @@ export function toAsyncApi(
             : null;
         const effectiveChannelSecurity = connectSecurity ?? channelSecurity;
 
+        const makeChannel = (messages: Record<string, MessageObject | ReferenceObject>): ChannelObject => ({
+            address: path,
+            title: camelToTitle(wsSchema.name),
+            messages,
+            ...(handshakeHeaders ? {bindings: {ws: {method: 'GET', headers: handshakeHeaders}}} : {}),
+        });
+
         // Raw byte stream (.bytes() / .passthrough()): no typed message contract — emit a
         // bidirectional opaque-binary channel carrying the same auth/path metadata.
         if (isRaw(wsSchema)) {
             const bytesMsgId = `${channelId}_bytes`;
-            channels[channelId] = {
-                address: path,
-                title: camelToTitle(wsSchema.name),
-                messages: {
-                    [bytesMsgId]: {
-                        name: "bytes",
-                        title: "Binary frame",
-                        description: "Opaque binary frame — no typed payload.",
-                        payload: {type: "string", format: "binary"} as SchemaObject,
-                    },
+            channels[channelId] = makeChannel({
+                [bytesMsgId]: {
+                    name: "bytes",
+                    title: "Binary frame",
+                    description: "Opaque binary frame — no typed payload.",
+                    payload: {type: "string", format: "binary"} as SchemaObject,
                 },
-                ...(handshakeHeaders ? {bindings: {ws: {method: 'GET', headers: handshakeHeaders}}} : {}),
-            };
+            });
             const bytesRef = [{$ref: `#/channels/${channelId}/messages/${bytesMsgId}`}];
             const sec = effectiveChannelSecurity.length ? {security: effectiveChannelSecurity} : {};
             operations[`${wsSchema.name}_send_bytes`] = {
@@ -207,12 +209,7 @@ export function toAsyncApi(
             }
         }
 
-        channels[channelId] = {
-            address: path,
-            title: camelToTitle(wsSchema.name),
-            messages,
-            ...(handshakeHeaders ? {bindings: {ws: {method: 'GET', headers: handshakeHeaders}}} : {}),
-        };
+        channels[channelId] = makeChannel(messages);
     }
 
     const doc: AsyncAPIDocument = {

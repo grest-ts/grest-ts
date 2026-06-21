@@ -12,6 +12,7 @@
 import {FORBIDDEN, NOT_AUTHORIZED, SERVER_ERROR} from "@grest-ts/schema"
 import type {GGHeartbeatConfig} from "../socket/GGSocket"
 import {GGWsLogMode} from "./GGWsLogMode"
+import {log} from "./wsLog"
 
 export interface GGReconnectConfig {
     /** First retry delay. Default 500 ms. */
@@ -110,13 +111,6 @@ export function normalizeReconnect(r: boolean | GGReconnectConfig | undefined): 
         shouldRetry: cfg.shouldRetry ?? defaultShouldRetry,
         heartbeat: cfg.heartbeat === false ? undefined : (cfg.heartbeat ?? {}),
     }
-}
-
-const log = {
-    info: (name: string, msg: string, data?: unknown) => console.info(`[${name}]`, msg, data),
-    warn: (name: string, msg: string, data?: unknown) => console.warn(`[${name}]`, msg, data),
-    error: (name: string, msg: string, errorOrData?: unknown, data?: unknown) =>
-        console.error(`[${name}]`, msg, errorOrData, data),
 }
 
 export function createConnector<TSocket extends GGLiveSocket>(hooks: GGConnectorHooks<TSocket>): GGConnector<TSocket> {

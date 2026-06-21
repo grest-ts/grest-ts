@@ -25,13 +25,14 @@ import {
     GGContractMethod,
     GGPromise,
     SERVER_ERROR,
-    VALIDATION_ERROR,
 } from "@grest-ts/schema"
 import {GGWebSocketSchema} from "../schema/GGWebSocketSchema"
 import {GGSocketPool} from "./GGSocketPool"
 import {GGSocket, type GGHeartbeatConfig} from "../socket/GGSocket"
 import type {GGTransportMiddleware} from "@grest-ts/context";
 import {GGWsLogMode} from "./GGWsLogMode"
+import {validateWsQuery} from "./clientHandshake"
+import {log} from "./wsLog"
 import {
     createConnector,
     normalizeReconnect,
@@ -173,10 +174,6 @@ declare module "../schema/GGWebSocketSchema" {
     }
 }
 
-const log = {
-    info: (name: string, msg: string, data?: unknown) => console.info(`[${name}]`, msg, data),
-}
-
 GGWebSocketSchema.prototype.createClient = function (
     this: GGWebSocketSchema<any, any, any, any, any, any>,
     config?: GGWebSocketClientConfig<any>
@@ -194,16 +191,7 @@ GGWebSocketSchema.prototype.createClient = function (
     const serverToClientContract = contract.serverToClient
     const timeout = config?.timeout ?? 30_000
     const logMode = config?.logMode ?? GGWsLogMode.ALL
-
-    const validateQuery = (): any => {
-        if (!queryValidator) return config?.query
-        if (config?.query === undefined) return undefined
-        const parsed = queryValidator.safeParse(config.query, true)
-        if (parsed.success === false) {
-            throw new VALIDATION_ERROR(parsed.issues.toJSON(), {displayMessage: "Invalid query parameters"})
-        }
-        return parsed.value
-    }
+    const middlewares = [...schemaMiddlewares, ...(config?.middlewares ?? [])]
 
     // Outgoing — stable object; methods throw if called before/after connect.
     const outgoingImpl: Record<string, any> = {}
@@ -254,13 +242,11 @@ GGWebSocketSchema.prototype.createClient = function (
         reconnect: normalizeReconnect(config?.reconnect),
         open: async () => {
             const domain = await resolveWsDomain(config?.url, schemaName)
-            const validatedQuery = validateQuery()
-            const merged = [...schemaMiddlewares, ...(config?.middlewares ?? [])]
             return GGSocketPool.connect({
                 domain,
                 path: normalizedPath,
-                query: validatedQuery,
-                middlewares: merged,
+                query: validateWsQuery(queryValidator, config?.query),
+                middlewares,
             })
         },
         setup: async (s) => {

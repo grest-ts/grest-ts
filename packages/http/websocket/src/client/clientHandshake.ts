@@ -1,8 +1,10 @@
 import {GGContractExecutor, GGValidator, SERVER_ERROR, VALIDATION_ERROR} from "@grest-ts/schema";
-import {GGContextKey, GGOutbound, type GGTransportMiddleware} from "@grest-ts/context";
+import {GGContext, GGContextKey, GGContextStore, GGOutbound, type GGTransportMiddleware} from "@grest-ts/context";
 import {GGContextKeySynchronizer} from "@grest-ts/http";
 import {withTimeout} from "@grest-ts/common";
+import {GG_TRACE} from "@grest-ts/trace";
 import {SocketAdapter} from "../socket/SocketAdapter";
+import {GG_WS_CONNECTION} from "../server/GG_WS_CONNECTION";
 import {Message, MessageType} from "../socket/SocketMessage";
 
 export function buildWsUrl(domain: string, path: string, query: any): string {
@@ -59,6 +61,43 @@ export function reconstructHandshakeError(payload: any): Error {
     return new SERVER_ERROR({
         displayMessage: 'WebSocket handshake failed',
         originalError: payload,
+    });
+}
+
+/**
+ * Open one client socket: wait for the transport to connect, then run the in-band handshake
+ * inside a fresh context parented to the connecting one (so context-keyed credentials resolve
+ * when headers are built), and resolve `makeSocket(adapter, context)` once HANDSHAKE_OK lands.
+ * Shared by the typed (GGSocket) and raw (GGRawSocket) clients — they differ only in the
+ * context name and what they wrap the live adapter in.
+ */
+export function openClientConnection<T>(opts: {
+    adapter: SocketAdapter;
+    domain: string;
+    middlewares: readonly GGTransportMiddleware[] | undefined;
+    contextName: string;
+    handshakeTimeoutMs: number;
+    makeSocket: (adapter: SocketAdapter, context: GGContext) => T;
+}): Promise<T> {
+    const {adapter, domain, middlewares, contextName, handshakeTimeoutMs, makeSocket} = opts;
+    return new Promise<T>((resolve, reject) => {
+        adapter.onOpen(async () => {
+            try {
+                const context = new GGContext(contextName, GGContextStore.tryGetContext());
+                await context.run(async () => {
+                    GG_TRACE.init();
+                    GG_WS_CONNECTION.set({port: undefined, path: domain});
+                    await gateMiddlewares(middlewares);
+                    const headers = buildHandshakeHeaders(middlewares ?? []);
+                    adapter.send(Message.create(MessageType.HANDSHAKE, "", "", headers));
+                    await awaitHandshakeResponse(adapter, handshakeTimeoutMs);
+                    resolve(makeSocket(adapter, context));
+                });
+            } catch (error) {
+                reject(error);
+            }
+        });
+        adapter.onError(reject);
     });
 }
 

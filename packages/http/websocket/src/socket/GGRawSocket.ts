@@ -25,8 +25,8 @@ export interface GGRawSocketConfig {
     socketPath: string;
     /** Connection context (where the auth wire minted the principal); re-entered for callbacks. */
     connectionContext: GGContext;
-    /** Locator scope, re-entered before callbacks fire (WS events lose AsyncLocalStorage). */
-    scope: {ensureEntered(): void};
+    /** Locator scope, re-entered before callbacks fire (WS events lose AsyncLocalStorage). Server-only. */
+    scope?: {ensureEntered(): void};
     metrics?: GGSocketMetrics;
     log?: GGSocketLogger;
 }
@@ -37,7 +37,7 @@ export class GGRawSocket {
     private readonly apiName: string;
     private readonly socketPath: string;
     private readonly connectionContext: GGContext;
-    private readonly scope: {ensureEntered(): void};
+    private readonly scope?: {ensureEntered(): void};
     private readonly metrics?: GGSocketMetrics;
     private readonly log: GGSocketLogger;
 
@@ -57,7 +57,7 @@ export class GGRawSocket {
         this.log = config.log ?? consoleLogger;
 
         this.adapter.onClose(() => {
-            this.scope.ensureEntered();
+            this.scope?.ensureEntered();
             this.connectionContext.run(() => {
                 this.isActive = false;
                 if (this.isClosed) return;
@@ -77,7 +77,7 @@ export class GGRawSocket {
     public onMessage(handler: (data: Buffer) => void): this {
         this.adapter.onRawMessage!((d) => {
             this.lastActivity = Date.now();
-            this.scope.ensureEntered();
+            this.scope?.ensureEntered();
             this.connectionContext.run(() => handler(d as Buffer));
         });
         return this;
