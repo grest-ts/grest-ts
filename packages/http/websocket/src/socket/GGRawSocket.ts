@@ -70,15 +70,16 @@ export class GGRawSocket {
     }
 
     /**
-     * Deliver every inbound frame (binary or text) as a Buffer. Runs inside the
-     * connection context so the handler can read the authenticated principal.
-     * Any inbound frame is also proof of life for the heartbeat watchdog.
+     * Deliver every inbound frame as a Buffer plus `isBinary` (the WebSocket frame type — a
+     * text-vs-binary protocol like a terminal relies on it). Runs inside the connection context
+     * so the handler can read the authenticated principal. Any inbound frame is also proof of
+     * life for the heartbeat watchdog.
      */
-    public onMessage(handler: (data: Buffer) => void): this {
-        this.adapter.onRawMessage!((d) => {
+    public onMessage(handler: (data: Buffer, isBinary: boolean) => void): this {
+        this.adapter.onRawMessage!((d, isBinary) => {
             this.lastActivity = Date.now();
             this.scope?.ensureEntered();
-            this.connectionContext.run(() => handler(d as Buffer));
+            this.connectionContext.run(() => handler(d as Buffer, isBinary));
         });
         return this;
     }

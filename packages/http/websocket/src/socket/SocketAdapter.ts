@@ -38,6 +38,10 @@ export interface SocketAdapter {
      */
     sendRaw?(data: Uint8Array | string): void;
 
-    /** Receive raw frames as bytes — the raw byte-stream counterpart of `onMessage`. */
-    onRawMessage?(handler: (data: Uint8Array) => void): void;
+    /**
+     * Receive raw frames as bytes — the byte-stream counterpart of `onMessage`. `isBinary`
+     * preserves the WebSocket frame type (binary vs text), which an app protocol may rely on
+     * (e.g. a terminal: text control JSON vs binary keystrokes).
+     */
+    onRawMessage?(handler: (data: Uint8Array, isBinary: boolean) => void): void;
 }

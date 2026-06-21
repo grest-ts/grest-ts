@@ -260,17 +260,28 @@ describe("createClient (real client, end-to-end)", () => {
     })
 
     // A customClient "/cc-proxy/*" schema must catch upgrades at dynamic subpaths (exact-match
-    // would miss them), and the handler must see the concrete pathname via the upgrade — the
-    // foundation for proxying code-server, whose WS path varies under /code-server.
-    test("customClient wildcard prefix matches a subpath and exposes the real upgrade path", async () => {
+    // would miss them); the handler must see the concrete pathname, the frame type (text vs
+    // binary), and the peer address via the upgrade — the foundation for proxying code-server
+    // (dynamic path) and gating a loopback-only console.
+    test("customClient prefix: matches a subpath; handler gets upgrade path, isBinary, remoteAddress", async () => {
         const host = GG_TEST_RUNNER.get().discoveryServer.getRoutingUrl("CustomClientProxyApi")
         const subpath = "/cc-proxy/abc/deep/path"
         const ws = new WebSocket(host + subpath)
+        const inbox: string[] = []
+        let waiter: ((s: string) => void) | undefined
+        const next = () => new Promise<string>((res) => { const s = inbox.shift(); if (s !== undefined) res(s); else waiter = res })
+        ws.on("message", (d) => { const s = d.toString(); if (waiter) { const w = waiter; waiter = undefined; w(s) } else inbox.push(s) })
         try {
             await new Promise<void>((res, rej) => { ws.on("open", () => res()); ws.on("error", rej) })
-            const echoed = new Promise<string>((res) => ws.on("message", (d) => res(d.toString())))
-            ws.send("ping")   // a customClient socket streams immediately — no handshake
-            expect(await echoed).toBe(subpath)
+
+            ws.send("hello")                       // text frame
+            const [kind1, path1, addr1] = (await next()).split(" ")
+            expect(kind1).toBe("txt")
+            expect(path1).toBe(subpath)            // prefix matched; concrete subpath exposed
+            expect(["::1", "127.0.0.1", "::ffff:127.0.0.1"]).toContain(addr1)   // loopback peer
+
+            ws.send(Buffer.from([1, 2, 3]))        // binary frame
+            expect((await next()).split(" ")[0]).toBe("bin")
         } finally {
             ws.close()
         }

@@ -60,8 +60,8 @@ export interface GGRawWebSocketClient {
     /** Send an opaque frame. Throws `SERVER_ERROR` if called before connect(). */
     send(data: Uint8Array | string): void
 
-    /** Register an inbound-frame handler. Persists across reconnects. */
-    onMessage(handler: (data: Uint8Array) => void): this
+    /** Register an inbound-frame handler (`isBinary` = the WebSocket frame type). Persists across reconnects. */
+    onMessage(handler: (data: Uint8Array, isBinary: boolean) => void): this
 
     /** Gracefully close. Disables further auto-reconnect. */
     disconnect(): Promise<void>
@@ -99,7 +99,7 @@ GGRawWebSocketSchema.prototype.createClient = function (
     const logMode = config?.logMode ?? GGWsLogMode.ALL
     const handshakeTimeoutMs = config?.handshakeTimeoutMs ?? 5000
 
-    const messageHandlers: Array<(data: Uint8Array) => void> = []
+    const messageHandlers: Array<(data: Uint8Array, isBinary: boolean) => void> = []
     const middlewares = [...schemaMiddlewares, ...(config?.middlewares ?? [])]
 
     const connector = createConnector<GGRawSocket>({
@@ -140,7 +140,7 @@ GGRawWebSocketSchema.prototype.createClient = function (
             }
             socket.send(data)
         },
-        onMessage(handler: (data: Uint8Array) => void): any {
+        onMessage(handler: (data: Uint8Array, isBinary: boolean) => void): any {
             messageHandlers.push(handler)
             const socket = connector.current()
             if (socket) socket.onMessage(handler)

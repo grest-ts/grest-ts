@@ -43,13 +43,15 @@ export interface GGWsUpgrade {
     url: string;
     /** Upgrade request headers; multi-value headers are joined with ", ". */
     headers: Record<string, string | undefined>;
+    /** Remote peer address of the upgrade TCP socket — e.g. to gate a loopback-only endpoint. */
+    remoteAddress?: string;
 }
 
 function toUpgrade(req: http.IncomingMessage): GGWsUpgrade {
     const headers: Record<string, string | undefined> = {};
     for (const [k, v] of Object.entries(req.headers)) headers[k] = Array.isArray(v) ? v.join(", ") : v;
     const url = req.url ?? "";
-    return {path: url.split('?')[0], url, headers};
+    return {path: url.split('?')[0], url, headers, remoteAddress: req.socket.remoteAddress};
 }
 
 export interface GGSocketServerConfig<TContext, Query> {

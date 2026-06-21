@@ -123,8 +123,11 @@ export class MainRuntime extends GGRuntime {
         WsCookieApi.register(new WsCookieService().handleConnection);
         // Raw socket behind a connect-level Admin permission (same session wire).
         RawAdminApi.register((socket) => { socket.onMessage((data) => socket.send(data)); });
-        // customClient wildcard-prefix socket: echoes the concrete upgrade path (proves /cc-proxy/* matching).
-        CustomClientProxyApi.register((socket, _query, upgrade) => { socket.onMessage(() => socket.send(upgrade.path)); });
+        // customClient wildcard-prefix socket: echoes "<txt|bin> <upgrade.path> <remoteAddress>" —
+        // proves /cc-proxy/* matching, the concrete subpath, the frame type, and the peer address.
+        CustomClientProxyApi.register((socket, _query, upgrade) => {
+            socket.onMessage((_data, isBinary) => socket.send(`${isBinary ? "bin" : "txt"} ${upgrade.path} ${upgrade.remoteAddress}`));
+        });
 
         // WebSocket permission test fixtures — same x-test-scopes wire as the HTTP gate.
         const wsPermissionsService = new WsPermissionsService();

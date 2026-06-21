@@ -599,9 +599,9 @@ export const PtyStream = webSocketSchema(defineSocketContract("Pty", { raw: true
     .done()
 
 // server — handler runs after auth; UserContext.get() is available here
-PtyStream.register((socket, query) => {     // socket: send(bytes|string) / onMessage(Buffer) / onClose / close
+PtyStream.register((socket, query) => {     // socket: send(bytes|string) / onMessage((Buffer, isBinary)) / onClose / close
     const pty = spawn(query.vmId)
-    socket.onMessage((data) => pty.write(data))
+    socket.onMessage((data, isBinary) => pty.write(data))   // isBinary = WebSocket frame type (text vs binary)
     pty.onData((data) => socket.send(data))
     socket.onClose(() => pty.kill())
 }, { http: httpServer })
@@ -621,7 +621,7 @@ The client must let `connect()` resolve before streaming — frames sent before 
 `schema.createClient(config)` on a `{ raw: true }` schema returns a client whose `connect()` resolves `void` (there is no separate connection object — the byte methods are on the client):
 
 - `client.send(bytes)` — send an opaque frame (throws if called before `connect()`)
-- `client.onMessage(cb)` — register an inbound-frame handler; persists across reconnects
+- `client.onMessage((bytes, isBinary) => …)` — inbound-frame handler; `isBinary` is the WebSocket frame type (text vs binary). Persists across reconnects
 - `client.onClose(cb)` / `client.disconnect()` / `client.close()` — lifecycle
 - `client.onDisconnect(cb)` — fires on every socket drop, before any reconnect attempt
 - `client.onError(cb)`, `client.forceReconnect()`, `client.isConnected`
@@ -643,7 +643,7 @@ export const Desktop = webSocketSchema(defineSocketContract("Desktop", { raw: tr
 
 A foreign app often opens its socket at a **dynamic subpath** (code-server connects somewhere under `/code-server/…`). A trailing `/*` makes the path a prefix — it matches the base and anything beneath it (`/code-server` and `/code-server/…`, but not `/code-serverX`). Wildcard paths are **customClient-only** (a typed or `{ raw: true }` socket has a grest-ts client that needs one exact URL, so `.done()` rejects a wildcard there). Exact paths always win over prefixes; among prefixes the longest match wins.
 
-The `onConnection` handler's third argument is the `GGWsUpgrade` — `{ path, url, headers }` — giving the **concrete** request path (and headers) for that connection, which a proxy needs:
+The `onConnection` handler's third argument is the `GGWsUpgrade` — `{ path, url, headers, remoteAddress }` — giving the **concrete** request path, headers, and peer address for that connection: a proxy needs the path/headers to route upstream, and `remoteAddress` gates a loopback-only endpoint (`remoteAddress ∈ 127.0.0.1 / ::1`):
 
 ```typescript
 export const CodeServer = webSocketSchema(defineSocketContract("CodeServer", { raw: true, customClient: true, protocols: ["binary"] }))

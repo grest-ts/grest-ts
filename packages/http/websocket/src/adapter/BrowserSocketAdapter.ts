@@ -70,10 +70,12 @@ export class BrowserSocketAdapter implements SocketAdapter {
         this.ws.send(data as unknown as ArrayBufferView<ArrayBuffer>);
     }
 
-    onRawMessage(handler: (data: Uint8Array) => void): void {
+    onRawMessage(handler: (data: Uint8Array, isBinary: boolean) => void): void {
         this.ws.addEventListener('message', (event: MessageEvent) => {
             const d = event.data;
-            handler(typeof d === 'string' ? new TextEncoder().encode(d) : new Uint8Array(d as ArrayBuffer));
+            // A text frame arrives as a string; a binary frame as ArrayBuffer (binaryType above).
+            if (typeof d === 'string') handler(new TextEncoder().encode(d), false);
+            else handler(new Uint8Array(d as ArrayBuffer), true);
         });
     }
 }
