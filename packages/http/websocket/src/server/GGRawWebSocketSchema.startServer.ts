@@ -6,7 +6,7 @@
 import type {GGRawSocket} from "../socket/GGRawSocket"
 import {GGRawWebSocketSchema} from "../schema/GGRawWebSocketSchema"
 import {type GGTransportMiddleware} from "@grest-ts/context"
-import {GGSocketServer, type GGServerHeartbeatOption} from "./GGSocketServer"
+import {GGSocketServer, type GGServerHeartbeatOption, type GGWsUpgrade} from "./GGSocketServer"
 import {GGLocator} from "@grest-ts/locator"
 import {GG_HTTP_SERVER, GGHttpServer, GGHttpPermissionsChecker} from "@grest-ts/http"
 import {GG_NO_PERMISSIONS} from "@grest-ts/schema"
@@ -20,17 +20,18 @@ export interface RawWebSocketSchemaConfig {
 declare module "../schema/GGRawWebSocketSchema" {
     interface GGRawWebSocketSchema<TQuery> {
         /**
-         * Start the raw WebSocket server. The handshake (query validation + middleware/wire
+         * Start the byte-stream WebSocket server. The handshake (query validation + middleware/wire
          * auth + connect permission) runs first; `onConnection` then receives an authenticated
-         * GGRawSocket and the validated query, and owns the byte stream from there.
+         * GGRawSocket, the validated query, and the HTTP `upgrade` (its concrete path + headers —
+         * the access point for a customClient proxy), and owns the byte stream from there.
          */
         startServer(
-            onConnection: (socket: GGRawSocket, query: TQuery) => void | Promise<void>,
+            onConnection: (socket: GGRawSocket, query: TQuery, upgrade: GGWsUpgrade) => void | Promise<void>,
             config: RawWebSocketSchemaConfig
         ): GGSocketServer<unknown, TQuery, GGRawSocket>
 
         register(
-            onConnection: (socket: GGRawSocket, query: TQuery) => void | Promise<void>,
+            onConnection: (socket: GGRawSocket, query: TQuery, upgrade: GGWsUpgrade) => void | Promise<void>,
             config?: RawWebSocketSchemaConfig
         ): void
     }
@@ -38,7 +39,7 @@ declare module "../schema/GGRawWebSocketSchema" {
 
 GGRawWebSocketSchema.prototype.startServer = function (
     this: GGRawWebSocketSchema<any>,
-    onConnection: (socket: GGRawSocket, query: any) => void | Promise<void>,
+    onConnection: (socket: GGRawSocket, query: any, upgrade: GGWsUpgrade) => void | Promise<void>,
     config: RawWebSocketSchemaConfig
 ): GGSocketServer<unknown, any, GGRawSocket> {
     const normalizedPath = this.path.startsWith('/') ? this.path : '/' + this.path
@@ -69,8 +70,8 @@ GGRawWebSocketSchema.prototype.startServer = function (
         protocols: this.protocols,
     })
 
-    socketServer.onConnection(async (socket: GGRawSocket, queryArgs: any): Promise<void> => {
-        await onConnection(socket, queryArgs)
+    socketServer.onConnection(async (socket: GGRawSocket, queryArgs: any, upgrade: GGWsUpgrade): Promise<void> => {
+        await onConnection(socket, queryArgs, upgrade)
     })
 
     return socketServer
@@ -78,7 +79,7 @@ GGRawWebSocketSchema.prototype.startServer = function (
 
 GGRawWebSocketSchema.prototype.register = function (
     this: GGRawWebSocketSchema<any>,
-    onConnection: (socket: GGRawSocket, query: any) => void | Promise<void>,
+    onConnection: (socket: GGRawSocket, query: any, upgrade: GGWsUpgrade) => void | Promise<void>,
     config?: RawWebSocketSchemaConfig
 ): void {
     const http = config?.http ?? GGLocator.getScope().get(GG_HTTP_SERVER)

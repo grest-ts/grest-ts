@@ -19,6 +19,7 @@ import {AuthedSocketApi} from "./api/AuthedSocketApi"
 import {RawEchoApi} from "./api/RawEchoApi"
 import {RawEchoService} from "./services/RawEchoService"
 import {RawAdminApi} from "./api/RawAdminApi"
+import {CustomClientProxyApi} from "./api/CustomClientProxyApi"
 import {QuerySocketApi} from "./api/QuerySocketApi"
 import {EventsTestApi} from "./api/EventsTestApi"
 import {LanguageTestApi} from "./api/LanguageTestApi"
@@ -122,6 +123,8 @@ export class MainRuntime extends GGRuntime {
         WsCookieApi.register(new WsCookieService().handleConnection);
         // Raw socket behind a connect-level Admin permission (same session wire).
         RawAdminApi.register((socket) => { socket.onMessage((data) => socket.send(data)); });
+        // customClient wildcard-prefix socket: echoes the concrete upgrade path (proves /cc-proxy/* matching).
+        CustomClientProxyApi.register((socket, _query, upgrade) => { socket.onMessage(() => socket.send(upgrade.path)); });
 
         // WebSocket permission test fixtures — same x-test-scopes wire as the HTTP gate.
         const wsPermissionsService = new WsPermissionsService();

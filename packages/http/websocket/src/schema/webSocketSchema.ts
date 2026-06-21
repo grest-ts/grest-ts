@@ -212,7 +212,7 @@ class GGRawWebSocketSchemaBuilder<TQuery = undefined> {
     }
 
     done(): GGRawWebSocketSchema<TQuery> {
-        assertValidSocketPath(this._path, this._contract.name)
+        assertValidSocketPath(this._path, this._contract.name, this._contract.customClient)
         // A custom client is foreign and never sends the in-band handshake, so a wire that
         // delivers its credential there (an update() writer, e.g. GGHeader) could never arrive —
         // the socket would open unauthenticated while looking gated. Reject at build time; only
@@ -238,15 +238,29 @@ class GGRawWebSocketSchemaBuilder<TQuery = undefined> {
 }
 
 /**
- * A WS path is matched verbatim against the upgrade request's pathname (after a leading slash is
- * ensured), so a path that is empty or carries whitespace / a query / a fragment can never match a
- * real connection — the schema would silently accept zero clients. Reject it at build time.
+ * A WS path is matched against the upgrade request's pathname (after a leading slash is ensured),
+ * so a path that is empty or carries whitespace / a query / a fragment can never match a real
+ * connection — the schema would silently accept zero clients. Reject it at build time.
+ *
+ * A trailing `/*` makes the path a prefix (matches `/base` and anything under `/base/`), allowed
+ * only when `allowPrefix` is set — i.e. on a customClient contract, where a foreign client opens
+ * dynamic subpaths. A `*` anywhere else is rejected.
  */
-export function assertValidSocketPath(path: string, apiName: string): void {
-    if (path === "" || /\s/.test(path) || path.includes("?") || path.includes("#")) {
+export function assertValidSocketPath(path: string, apiName: string, allowPrefix = false): void {
+    const isPrefix = path.endsWith("/*")
+    const core = isPrefix ? path.slice(0, -2) : path
+    if (core === "" || /\s/.test(core) || core.includes("?") || core.includes("#") || core.includes("*")) {
         throw new Error(
             `webSocketSchema "${apiName}": invalid path ${JSON.stringify(path)} — a WebSocket path must be ` +
-            `non-empty and contain no whitespace, "?" or "#" (it is matched against the upgrade request pathname).`
+            `non-empty and contain no whitespace, "?" or "#" (it is matched against the upgrade request pathname). ` +
+            `A wildcard is only allowed as a trailing "/*".`
+        )
+    }
+    if (isPrefix && !allowPrefix) {
+        throw new Error(
+            `webSocketSchema "${apiName}": a wildcard prefix path (${JSON.stringify(path)}) is only valid for a ` +
+            `customClient contract — a foreign client opens dynamic subpaths, while a typed or grest-ts byte ` +
+            `socket connects at one exact path (its createClient builds that exact URL).`
         )
     }
 }

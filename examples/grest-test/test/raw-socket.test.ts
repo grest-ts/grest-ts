@@ -258,6 +258,23 @@ describe("createClient (real client, end-to-end)", () => {
             await expect(client.connect()).rejects.toBeInstanceOf(NOT_AUTHORIZED)
         })
     })
+
+    // A customClient "/cc-proxy/*" schema must catch upgrades at dynamic subpaths (exact-match
+    // would miss them), and the handler must see the concrete pathname via the upgrade — the
+    // foundation for proxying code-server, whose WS path varies under /code-server.
+    test("customClient wildcard prefix matches a subpath and exposes the real upgrade path", async () => {
+        const host = GG_TEST_RUNNER.get().discoveryServer.getRoutingUrl("CustomClientProxyApi")
+        const subpath = "/cc-proxy/abc/deep/path"
+        const ws = new WebSocket(host + subpath)
+        try {
+            await new Promise<void>((res, rej) => { ws.on("open", () => res()); ws.on("error", rej) })
+            const echoed = new Promise<string>((res) => ws.on("message", (d) => res(d.toString())))
+            ws.send("ping")   // a customClient socket streams immediately — no handshake
+            expect(await echoed).toBe(subpath)
+        } finally {
+            ws.close()
+        }
+    })
 })
 
 describe("customClient auth guard", () => {

@@ -29,6 +29,29 @@ import {GGRawSocket} from "../socket/GGRawSocket";
  */
 export type GGServerHeartbeatOption = GGHeartbeatConfig | false;
 
+/**
+ * The HTTP upgrade behind a byte-stream connection, handed to the `onConnection` handler.
+ * The point of access for a `customClient` proxy (e.g. code-server): `path` is the concrete
+ * request pathname — for a `"/base/*"` prefix schema, the actual subpath the foreign client
+ * opened — and `headers` are the upgrade headers (to forward upstream). Exposes a clean value,
+ * not the Node request object.
+ */
+export interface GGWsUpgrade {
+    /** Request pathname (no query). For a "/base/*" prefix socket, the concrete matched subpath. */
+    path: string;
+    /** Full request URL including the query string. */
+    url: string;
+    /** Upgrade request headers; multi-value headers are joined with ", ". */
+    headers: Record<string, string | undefined>;
+}
+
+function toUpgrade(req: http.IncomingMessage): GGWsUpgrade {
+    const headers: Record<string, string | undefined> = {};
+    for (const [k, v] of Object.entries(req.headers)) headers[k] = Array.isArray(v) ? v.join(", ") : v;
+    const url = req.url ?? "";
+    return {path: url.split('?')[0], url, headers};
+}
+
 export interface GGSocketServerConfig<TContext, Query> {
     path: string;
     apiName: string;
@@ -66,19 +89,36 @@ type ServerSocket = {teardown(): Promise<void>};
  */
 interface WsRegistry {
     readonly wssByPath: Map<string, WebSocketServer>
+    // Wildcard prefix routes (a `customClient` "/base/*" schema). Foreign apps (code-server,
+    // a proxied editor) open sockets at dynamic subpaths, so an exact match can't catch them.
+    readonly prefixRoutes: Array<{base: string; wss: WebSocketServer}>
 }
 
 const wsRegistryByHttpServer = new WeakMap<http.Server, WsRegistry>();
 
+/** Longest matching prefix wins; "/base/*" matches "/base" and anything under "/base/". */
+function matchPrefix(routes: ReadonlyArray<{base: string; wss: WebSocketServer}>, pathname: string): WebSocketServer | undefined {
+    let best: WebSocketServer | undefined;
+    let bestLen = -1;
+    for (const {base, wss} of routes) {
+        if ((pathname === base || pathname.startsWith(base + '/')) && base.length > bestLen) {
+            best = wss;
+            bestLen = base.length;
+        }
+    }
+    return best;
+}
+
 function ensureRegistry(httpServer: http.Server): WsRegistry {
     let registry = wsRegistryByHttpServer.get(httpServer);
     if (registry) return registry;
-    registry = {wssByPath: new Map()};
+    registry = {wssByPath: new Map(), prefixRoutes: []};
     wsRegistryByHttpServer.set(httpServer, registry);
     const captured = registry;
     httpServer.on('upgrade', (req, socket, head) => {
         const pathname = (req.url ?? '').split('?')[0];
-        const matched = captured.wssByPath.get(pathname);
+        // Exact match wins over any prefix; prefixes are only consulted as a fallback.
+        const matched = captured.wssByPath.get(pathname) ?? matchPrefix(captured.prefixRoutes, pathname);
         if (matched) {
             matched.handleUpgrade(req, socket, head, (ws) => {
                 matched.emit('connection', ws, req);
@@ -93,6 +133,14 @@ function ensureRegistry(httpServer: http.Server): WsRegistry {
 
 function attachUpgradeDispatch(httpServer: http.Server, path: string, wss: WebSocketServer): void {
     const registry = ensureRegistry(httpServer);
+    if (path.endsWith('/*')) {
+        const base = path.slice(0, -2);
+        if (registry.prefixRoutes.some(r => r.base === base)) {
+            throw new Error(`WebSocket prefix path "${path}" is already registered on this HTTP server.`);
+        }
+        registry.prefixRoutes.push({base, wss});
+        return;
+    }
     if (registry.wssByPath.has(path)) {
         throw new Error(`WebSocket path "${path}" is already registered on this HTTP server.`);
     }
@@ -101,9 +149,14 @@ function attachUpgradeDispatch(httpServer: http.Server, path: string, wss: WebSo
 
 function detachUpgradeDispatch(httpServer: http.Server, path: string): void {
     const registry = wsRegistryByHttpServer.get(httpServer);
-    if (registry) {
-        registry.wssByPath.delete(path);
+    if (!registry) return;
+    if (path.endsWith('/*')) {
+        const base = path.slice(0, -2);
+        const i = registry.prefixRoutes.findIndex(r => r.base === base);
+        if (i >= 0) registry.prefixRoutes.splice(i, 1);
+        return;
     }
+    registry.wssByPath.delete(path);
 }
 
 export class GGSocketServer<TContext, Query, TSocket extends ServerSocket = GGSocket> {
@@ -119,7 +172,7 @@ export class GGSocketServer<TContext, Query, TSocket extends ServerSocket = GGSo
     private readonly customClient: boolean;
 
     private readonly activeSockets: Set<ServerSocket> = new Set();
-    private readonly onConnectionHandlers: Array<(socket: TSocket, query: Query) => Promise<void>> = [];
+    private readonly onConnectionHandlers: Array<(socket: TSocket, query: Query, upgrade: GGWsUpgrade) => Promise<void>> = [];
 
     // Capture context at construction - WebSocket events lose AsyncLocalStorage context
     private readonly scope: GGLocatorScope;
@@ -151,7 +204,9 @@ export class GGSocketServer<TContext, Query, TSocket extends ServerSocket = GGSo
                     GG_DISCOVERY.get().registerRoutes([{
                         runtime: this.scope.serviceName,
                         api: this.apiName,
-                        pathPrefix: this.path,
+                        // Discovery routes by startsWith(pathPrefix); a "/base/*" wildcard schema
+                        // registers its base so subpath upgrades resolve to this server.
+                        pathPrefix: this.path.endsWith('/*') ? this.path.slice(0, -2) : this.path,
                         protocol: "ws",
                         // onStart fires after the http server has bound its port.
                         port: http.port!
@@ -171,7 +226,7 @@ export class GGSocketServer<TContext, Query, TSocket extends ServerSocket = GGSo
             });
     }
 
-    public onConnection(handler: (socket: TSocket, query: Query) => Promise<void>): void {
+    public onConnection(handler: (socket: TSocket, query: Query, upgrade: GGWsUpgrade) => Promise<void>): void {
         this.onConnectionHandlers.push(handler);
     }
 
@@ -202,6 +257,7 @@ export class GGSocketServer<TContext, Query, TSocket extends ServerSocket = GGSo
                 }
 
                 const adapter = new NodeSocketAdapter(ws);
+                const upgrade = toUpgrade(req);
 
                 // The cookie from the real upgrade request — a browser auto-attaches it to the
                 // upgrade GET, but cannot set it on the in-band handshake message, so this is the
@@ -216,14 +272,14 @@ export class GGSocketServer<TContext, Query, TSocket extends ServerSocket = GGSo
                     // could emit frames during the auth await, before the handler attaches its
                     // listener — pause the socket across that gap and resume once it's wired.
                     ws.pause();
-                    const authed = await this.runUpgradeAuth(req, queryArgs, cookie);
+                    const authed = await this.runUpgradeAuth(upgrade, queryArgs, cookie);
                     if (!authed.success) {
                         GGLog.warn(this, "REJECTED - upgrade auth failed", (authed as { success: false; error: any }).error);
                         if (GG_METRICS.has()) GGWebSocketMetrics.connections.inc(1, {...connectionLabels, result: 'HANDSHAKE_FAILED'});
                         ws.close(4001, "Unauthorized");
                         return;
                     }
-                    await this.openRawConnection(adapter, context, queryArgs, connectionLabels, false);
+                    await this.openRawConnection(adapter, context, queryArgs, upgrade, connectionLabels, false);
                     ws.resume();
                     return;
                 }
@@ -240,7 +296,7 @@ export class GGSocketServer<TContext, Query, TSocket extends ServerSocket = GGSo
                 }
 
                 if (this.raw) {
-                    await this.openRawConnection(adapter, context, queryArgs, connectionLabels, true);
+                    await this.openRawConnection(adapter, context, queryArgs, upgrade, connectionLabels, true);
                     return;
                 }
 
@@ -274,7 +330,7 @@ export class GGSocketServer<TContext, Query, TSocket extends ServerSocket = GGSo
                 // Run connection handlers inside the connectionScope so they can access context
                 for (const handler of this.onConnectionHandlers) {
                     try {
-                        await handler(socket as unknown as TSocket, queryArgs);
+                        await handler(socket as unknown as TSocket, queryArgs, upgrade);
                     } catch (error) {
                         GGLog.error(this, error instanceof Error ? error : new Error(String(error)));
                     }
@@ -297,14 +353,12 @@ export class GGSocketServer<TContext, Query, TSocket extends ServerSocket = GGSo
      * wire mints persists for the handlers.
      */
     private async runUpgradeAuth(
-        req: http.IncomingMessage,
+        upgrade: GGWsUpgrade,
         queryArgs: Query,
         cookie: string | undefined
     ): Promise<{ success: true } | { success: false; error: any }> {
         try {
-            const headers: Record<string, string | undefined> = {};
-            for (const [k, v] of Object.entries(req.headers)) headers[k] = Array.isArray(v) ? v.join(", ") : v;
-            const inbound: GGInbound = {headers, cookie, query: queryArgs as Record<string, string>};
+            const inbound: GGInbound = {headers: upgrade.headers, cookie, query: queryArgs as Record<string, string>};
             for (const middleware of this.middlewares) middleware.parse?.(inbound);
             try {
                 for (const middleware of this.middlewares) await middleware.process?.();
@@ -327,6 +381,7 @@ export class GGSocketServer<TContext, Query, TSocket extends ServerSocket = GGSo
         adapter: NodeSocketAdapter,
         context: GGContext,
         queryArgs: Query,
+        upgrade: GGWsUpgrade,
         connectionLabels: {api: string; path: string},
         sendHandshakeOk: boolean
     ): Promise<void> {
@@ -355,7 +410,7 @@ export class GGSocketServer<TContext, Query, TSocket extends ServerSocket = GGSo
 
         for (const handler of this.onConnectionHandlers) {
             try {
-                await handler(socket as unknown as TSocket, queryArgs);
+                await handler(socket as unknown as TSocket, queryArgs, upgrade);
             } catch (error) {
                 GGLog.error(this, error instanceof Error ? error : new Error(String(error)));
             }

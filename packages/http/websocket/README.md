@@ -639,6 +639,27 @@ export const Desktop = webSocketSchema(defineSocketContract("Desktop", { raw: tr
     .done()                                 // protocols optional; no grest-ts client
 ```
 
+#### Wildcard prefix paths + the upgrade
+
+A foreign app often opens its socket at a **dynamic subpath** (code-server connects somewhere under `/code-server/…`). A trailing `/*` makes the path a prefix — it matches the base and anything beneath it (`/code-server` and `/code-server/…`, but not `/code-serverX`). Wildcard paths are **customClient-only** (a typed or `{ raw: true }` socket has a grest-ts client that needs one exact URL, so `.done()` rejects a wildcard there). Exact paths always win over prefixes; among prefixes the longest match wins.
+
+The `onConnection` handler's third argument is the `GGWsUpgrade` — `{ path, url, headers }` — giving the **concrete** request path (and headers) for that connection, which a proxy needs:
+
+```typescript
+export const CodeServer = webSocketSchema(defineSocketContract("CodeServer", { raw: true, customClient: true, protocols: ["binary"] }))
+    .path("/code-server/*")
+    .use(RELAY_TOKEN_QUERY)
+    .done()
+
+CodeServer.register((socket, _query, upgrade) => {
+    const upstreamPath = upgrade.path.slice("/code-server".length)   // upgrade.path = "/code-server/abc/feedback"
+    const up = new WebSocket(`ws://127.0.0.1:8080${upstreamPath}`, { headers: upgrade.headers })
+    socket.onMessage((b) => up.send(b))
+    up.on("message", (b) => socket.send(b))
+    socket.onClose(() => up.close())
+}, { http: httpServer })
+```
+
 ## Message Protocol
 
 Under the hood, WebSocket communication uses a lightweight text-based protocol:
