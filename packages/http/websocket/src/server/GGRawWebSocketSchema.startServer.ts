@@ -43,11 +43,31 @@ GGRawWebSocketSchema.prototype.startServer = function (
 ): GGSocketServer<unknown, any, GGRawSocket> {
     const normalizedPath = this.path.startsWith('/') ? this.path : '/' + this.path
     const schemaName = this.name
-    const http = config.http ?? GGLocator.getScope().get(GG_HTTP_SERVER)
+    const middlewares: GGTransportMiddleware[] = [...this.middlewares, ...(config?.middlewares ?? [])]
 
+    // Passthrough auth runs against the HTTP upgrade request — there is no in-band handshake.
+    // A middleware with update() delivers its credential by having the grest-ts CLIENT write it
+    // into the handshake (the "fake header" path); a foreign passthrough client never does that,
+    // so the credential can't arrive and the socket would open UNAUTHENTICATED while looking gated.
+    // Fail loudly at registration rather than silently. Read the upgrade cookie/query/header with a
+    // parse-only middleware instead.
+    if (this.passthrough) {
+        const offender = middlewares.find(m => typeof m.update === "function")
+        if (offender) {
+            throw new Error(
+                `rawSocketSchema "${schemaName}": passthrough mode cannot use a credential delivered via ` +
+                `the grest-ts handshake (a middleware/wire with update(), e.g. GGHeader). A passthrough client ` +
+                `is foreign and never sends the in-band handshake, so this credential would never arrive and the ` +
+                `socket could open unauthenticated. Authenticate via a cookie or "?query=" credential (a parse-only ` +
+                `middleware) instead, or remove passthrough.`
+            )
+        }
+    }
+
+    const http = config.http ?? GGLocator.getScope().get(GG_HTTP_SERVER)
     const connectPermission = this.connectPermission ?? GG_NO_PERMISSIONS
     const permissionsChecker = new GGHttpPermissionsChecker(this.middlewares)
-    const middlewares: GGTransportMiddleware[] = [...this.middlewares, ...(config?.middlewares ?? [])]
+
     // Gate the handshake: resolve scopes and assert connectPermission, so a failed
     // permission (or a throwing resolver) rejects the handshake before the stream opens.
     middlewares.push({

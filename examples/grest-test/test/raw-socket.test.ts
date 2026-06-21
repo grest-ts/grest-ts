@@ -8,9 +8,11 @@
  */
 import WebSocket from "ws"
 import {GG_TEST_RUNNER, GGTest} from "@grest-ts/testkit"
+import {rawSocketSchema} from "@grest-ts/websocket"
 import {MainRuntime} from "../src/main"
 import {RawEchoApi} from "../src/api/RawEchoApi"
-import {CLIENT_AUTH_TOKEN} from "../src/api/AuthedSocketApi"
+import {AuthedSocketMiddleware, CLIENT_AUTH_TOKEN} from "../src/api/AuthedSocketApi"
+import {WS_SESSION} from "../src/api/WsCookieApi"
 import {GGContext} from "@grest-ts/context"
 import {NOT_AUTHORIZED} from "@grest-ts/schema"
 
@@ -253,5 +255,33 @@ describe("createRawClient (real client, end-to-end)", () => {
             })
             await expect(client.connect()).rejects.toBeInstanceOf(NOT_AUTHORIZED)
         })
+    })
+})
+
+describe("passthrough auth guard", () => {
+
+    // The danger passthrough introduces: a credential that's delivered via the grest-ts handshake
+    // (a middleware with update(), e.g. GGHeader) can never arrive from a foreign client, so the
+    // socket would open unauthenticated. Registration must fail loudly instead.
+    test("rejects an update()-based (handshake-delivered) credential at registration", () => {
+        const schema = rawSocketSchema("PassthroughBad", {
+            path: "ws/pt-bad",
+            use: [AuthedSocketMiddleware],   // has update() — the "fake header" path
+            passthrough: true,
+        })
+        expect(() => schema.startServer(() => {}, {} as any)).toThrow(/passthrough/i)
+    })
+
+    test("a parse-only credential (cookie wire) does not trip the guard", () => {
+        // WS_SESSION reads the upgrade cookie (parse-only, no update) — valid in passthrough.
+        const schema = rawSocketSchema("PassthroughOk", {
+            path: "ws/pt-ok",
+            use: [WS_SESSION],
+            passthrough: true,
+        })
+        let err: unknown
+        try { schema.startServer(() => {}, {} as any) } catch (e) { err = e }
+        // It may fail later (no http/locator in this unit context) but NOT on the passthrough guard.
+        expect(String((err as Error)?.message ?? "")).not.toMatch(/passthrough mode cannot/)
     })
 })
