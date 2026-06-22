@@ -13,8 +13,6 @@ export * from "./server/GG_WS_MESSAGE";
 export * from "./socket/GGSocket";
 export * from "./socket/GGRawSocket";
 export * from "./socket/SocketAdapter";
-export * from "./liveness/GGServerLiveness";
-export * from "./liveness/GGClientLiveness";
 
 // API Schema
 export * from "./schema/webSocketSchema";
