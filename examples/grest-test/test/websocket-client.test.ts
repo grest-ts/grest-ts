@@ -316,6 +316,67 @@ describe("WebSocket createClient (production client)", () => {
     })
 
     // ----------------------------------------------------------------------
+    // beforeConnect — volatile params resolved on EVERY attempt (rotating creds)
+    // ----------------------------------------------------------------------
+
+    describe("beforeConnect", () => {
+
+        test("is the query source on first connect (server sees beforeConnect's value)", async () => {
+            const client = QuerySocketApi.createClient({
+                url: clientUrl("QuerySocketApi"),
+                beforeConnect: () => ({query: {room: "minted", version: 7}}),
+            })
+            await client.connect()
+            try {
+                expect(await client.outgoing.echoRoom()).toBe("minted@7")
+            } finally {
+                await client.disconnect()
+            }
+        })
+
+        test("re-runs on every reconnect — a fresh query reaches the server each attempt", async () => {
+            let calls = 0
+            const client = QuerySocketApi.createClient({
+                url: clientUrl("QuerySocketApi"),
+                reconnect: {initialDelayMs: 10},
+                beforeConnect: () => { calls++; return {query: {room: "r" + calls, version: calls}} },
+            })
+            await client.connect()
+            try {
+                expect(calls).toBe(1)
+                expect(await client.outgoing.echoRoom()).toBe("r1@1")
+
+                client.forceReconnect()
+                for (let i = 0; i < 300 && (calls < 2 || !client.isConnected); i++) await wait(10)
+                expect(calls).toBe(2)
+                expect(await client.outgoing.echoRoom()).toBe("r2@2")   // fresh query, not the captured first one
+            } finally {
+                await client.disconnect()
+            }
+        })
+
+        test("an invalid query from beforeConnect on reconnect is terminal (onClose 'unrecoverable', no retry storm)", async () => {
+            let calls = 0
+            const closeReasons: string[] = []
+            const client = QuerySocketApi.createClient({
+                url: clientUrl("QuerySocketApi"),
+                reconnect: {initialDelayMs: 10},
+                beforeConnect: () => { calls++; return {query: {room: calls === 1 ? "ok" : "", version: 1}} },
+            })
+            client.onClose((reason) => closeReasons.push(reason))
+            await client.connect()
+            try {
+                client.forceReconnect()   // reconnect → beforeConnect returns an empty room → VALIDATION_ERROR
+                for (let i = 0; i < 300 && closeReasons.length === 0; i++) await wait(10)
+                expect(closeReasons).toContain("unrecoverable")
+                expect(client.isConnected).toBe(false)
+            } finally {
+                await client.disconnect()
+            }
+        })
+    })
+
+    // ----------------------------------------------------------------------
     // Auth middleware on schema (existing pattern — still supported)
     // ----------------------------------------------------------------------
 

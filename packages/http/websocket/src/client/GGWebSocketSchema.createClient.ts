@@ -36,12 +36,14 @@ import {log} from "./wsLog"
 import {
     createConnector,
     normalizeReconnect,
+    type GGConnectParams,
     type GGReconnectConfig,
     type GGWebSocketCloseReason,
 } from "./reconnectConnector"
 import {resolveWsDomain} from "./wsDiscovery"
 
 export type {GGHeartbeatConfig}
+export type {GGConnectParams}
 export type {GGReconnectConfig, GGWebSocketCloseReason}
 
 export interface GGWebSocketClientConfig<TQuery = undefined> {
@@ -81,6 +83,19 @@ export interface GGWebSocketClientConfig<TQuery = undefined> {
      * (fast path — no entry construction). Static for the client lifetime.
      */
     logMode?: GGWsLogMode
+
+    /**
+     * Resolve the volatile connection params before EVERY connect attempt (first connect and
+     * every reconnect) — for short-lived / rotating credentials (a freshly minted token, a signed
+     * URL). When set, it is the SOLE source of `url` / `query` / `middlewares`: its return is used
+     * outright, and the static `url` / `query` / `middlewares` above are ignored — so return the
+     * complete set each time. Schema `.use()` wires always apply on top.
+     *
+     * Runs inside the connect path: a throw is a failed attempt fed to `shouldRetry` (a transient
+     * mint failure backs off; `NOT_AUTHORIZED` / `FORBIDDEN` are terminal). The returned query is
+     * validated every attempt; an invalid query is terminal (fails the client).
+     */
+    beforeConnect?: () => GGConnectParams<TQuery> | Promise<GGConnectParams<TQuery>>
 }
 
 export interface GGWebSocketSetupTools<TServerToClientImpl, TClientToServer> {
@@ -191,7 +206,6 @@ GGWebSocketSchema.prototype.createClient = function (
     const serverToClientContract = contract.serverToClient
     const timeout = config?.timeout ?? 30_000
     const logMode = config?.logMode ?? GGWsLogMode.ALL
-    const middlewares = [...schemaMiddlewares, ...(config?.middlewares ?? [])]
 
     // Outgoing — stable object; methods throw if called before/after connect.
     const outgoingImpl: Record<string, any> = {}
@@ -241,12 +255,18 @@ GGWebSocketSchema.prototype.createClient = function (
         logMode,
         reconnect: normalizeReconnect(config?.reconnect),
         open: async () => {
-            const domain = await resolveWsDomain(config?.url, schemaName)
+            // beforeConnect (when set) is the sole source of url/query/middlewares — resolved here
+            // so it runs on first connect AND every reconnect (no stale captured-once credential).
+            const fresh = config?.beforeConnect ? await config.beforeConnect() : undefined
+            const url = fresh ? fresh.url : config?.url
+            const query = fresh ? fresh.query : config?.query
+            const clientMiddlewares = fresh ? fresh.middlewares : config?.middlewares
+            const domain = await resolveWsDomain(url, schemaName)
             return GGSocketPool.connect({
                 domain,
                 path: normalizedPath,
-                query: validateWsQuery(queryValidator, config?.query),
-                middlewares,
+                query: validateWsQuery(queryValidator, query),
+                middlewares: [...schemaMiddlewares, ...(clientMiddlewares ?? [])],
             })
         },
         setup: async (s) => {

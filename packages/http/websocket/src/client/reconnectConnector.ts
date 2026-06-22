@@ -9,10 +9,22 @@
  * fresh socket and how to `setup` handlers on it.
  */
 
-import {FORBIDDEN, NOT_AUTHORIZED, SERVER_ERROR} from "@grest-ts/schema"
+import {FORBIDDEN, NOT_AUTHORIZED, SERVER_ERROR, VALIDATION_ERROR} from "@grest-ts/schema"
+import type {GGTransportMiddleware} from "@grest-ts/context"
 import type {GGHeartbeatConfig} from "../socket/GGSocket"
 import {GGWsLogMode} from "./GGWsLogMode"
 import {log} from "./wsLog"
+
+/**
+ * Volatile connection inputs resolved by `beforeConnect` before every connect attempt.
+ * When `beforeConnect` is set it is the SOLE source of these — the static `config.url` /
+ * `query` / `middlewares` are not merged in. Return the complete set each time.
+ */
+export interface GGConnectParams<TQuery = undefined> {
+    url?: string
+    query?: TQuery
+    middlewares?: GGTransportMiddleware[]
+}
 
 export interface GGReconnectConfig {
     /** First retry delay. Default 500 ms. */
@@ -89,10 +101,15 @@ export interface NormalizedReconnect {
     heartbeat?: GGHeartbeatConfig
 }
 
-/** Default: don't retry if the server said "auth" — re-trying won't help. */
+/**
+ * Default: don't retry on errors a retry can't fix. Auth failures (NOT_AUTHORIZED / FORBIDDEN)
+ * and a query that fails validation (VALIDATION_ERROR — a malformed connect input, e.g. from
+ * beforeConnect) are terminal; everything else (a dropped link, a transient mint failure) retries.
+ */
 const defaultShouldRetry = (err: Error): boolean => {
     if (err instanceof NOT_AUTHORIZED) return false
     if (err instanceof FORBIDDEN) return false
+    if (err instanceof VALIDATION_ERROR) return false
     return true
 }
 

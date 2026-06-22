@@ -525,6 +525,26 @@ interface GGWebSocketClientConfig<TQuery> {
 
 Omitting `url` triggers service discovery via `@grest-ts/discovery` (Node only). In browsers, pass an explicit URL (use `""` for same-origin).
 
+### `beforeConnect` — rotating credentials
+
+`url` / `query` / `middlewares` in the config are captured once, so a **short-lived / rotating credential** (a per-connection minted token, a `?token=` query, a signed URL) goes stale and built-in reconnect re-handshakes with a dead value. `beforeConnect` resolves the volatile params *inside* the connect path, so it runs on the first connect **and every reconnect** — never stale:
+
+```typescript
+const client = EventsApi.createClient({
+    reconnect: true,
+    beforeConnect: async () => {
+        const a = await mintAccess()                  // fresh short-lived token (+ endpoint)
+        return { url: a.url, query: { token: a.token } }
+    },
+})
+await client.connect(({ incoming }) => incoming.on({ onEvent: async (e) => handle(e) }))
+```
+
+- **Sole source:** when set, `beforeConnect` is the *only* source of `url` / `query` / `middlewares` — its return is used outright and the static `url` / `query` / `middlewares` are ignored (one path, no merge). Return the complete set each time; schema `.use()` wires always apply on top.
+- **Validated every attempt:** the returned `query` is validated each connect; a `VALIDATION_ERROR` is **terminal** (won't retry — a malformed query won't fix itself).
+- **Errors:** on a reconnect, a throw feeds `shouldRetry` (transient mint failure → backoff; `NOT_AUTHORIZED` / `FORBIDDEN` / `VALIDATION_ERROR` → final `onClose("unrecoverable")`). On the first connect, a throw rejects `connect()` (the initial attempt isn't auto-retried).
+- Available on both the typed and raw (`{ raw: true }`) `createClient`. No reconnect loop or token-refresh plumbing in app code.
+
 ### Sending Modes (automatic from the contract)
 
 - **Request-response** — methods with `success` defined return `GGPromise<Success, Errors>`. The client sends a `REQ` and waits up to 30s for a reply.

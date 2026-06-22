@@ -20,6 +20,7 @@ import {buildWsUrl, openClientConnection, validateWsQuery} from "./clientHandsha
 import {
     createConnector,
     normalizeReconnect,
+    type GGConnectParams,
     type GGReconnectConfig,
     type GGWebSocketCloseReason,
 } from "./reconnectConnector"
@@ -27,6 +28,7 @@ import {resolveWsDomain} from "./wsDiscovery"
 import {GGWsLogMode} from "./GGWsLogMode"
 
 export type {GGHeartbeatConfig}
+export type {GGConnectParams}
 
 export interface GGRawWebSocketClientConfig<TQuery = undefined> {
     /**
@@ -48,6 +50,15 @@ export interface GGRawWebSocketClientConfig<TQuery = undefined> {
     logMode?: GGWsLogMode
     /** Handshake timeout in ms. Default 5000. */
     handshakeTimeoutMs?: number
+    /**
+     * Resolve the volatile connection params before EVERY connect attempt (first connect and every
+     * reconnect) — for short-lived / rotating credentials. When set, it is the SOLE source of
+     * `url` / `query` / `middlewares`: its return is used outright and the static fields above are
+     * ignored, so return the complete set each time. Schema `.use()` wires always apply on top.
+     * A throw is fed to `shouldRetry`; the returned query is validated every attempt (invalid =
+     * terminal).
+     */
+    beforeConnect?: () => GGConnectParams<TQuery> | Promise<GGConnectParams<TQuery>>
 }
 
 export interface GGRawWebSocketClient {
@@ -100,20 +111,25 @@ GGRawWebSocketSchema.prototype.createClient = function (
     const handshakeTimeoutMs = config?.handshakeTimeoutMs ?? 5000
 
     const messageHandlers: Array<(data: Uint8Array, isBinary: boolean) => void> = []
-    const middlewares = [...schemaMiddlewares, ...(config?.middlewares ?? [])]
 
     const connector = createConnector<GGRawSocket>({
         schemaName,
         logMode,
         reconnect: normalizeReconnect(config?.reconnect),
         open: async () => {
-            const domain = await resolveWsDomain(config?.url, schemaName)
-            const url = buildWsUrl(domain, normalizedPath, validateWsQuery(queryValidator, config?.query))
+            // beforeConnect (when set) is the sole source of url/query/middlewares — resolved here
+            // so it runs on first connect AND every reconnect (no stale captured-once credential).
+            const fresh = config?.beforeConnect ? await config.beforeConnect() : undefined
+            const cfgUrl = fresh ? fresh.url : config?.url
+            const query = fresh ? fresh.query : config?.query
+            const clientMiddlewares = fresh ? fresh.middlewares : config?.middlewares
+            const domain = await resolveWsDomain(cfgUrl, schemaName)
+            const url = buildWsUrl(domain, normalizedPath, validateWsQuery(queryValidator, query))
             const AdapterClass = await getDefaultAdapter()
             return openClientConnection({
                 adapter: new AdapterClass(url),
                 domain,
-                middlewares,
+                middlewares: [...schemaMiddlewares, ...(clientMiddlewares ?? [])],
                 contextName: "ws-raw-client-connection",
                 handshakeTimeoutMs,
                 makeSocket: (adapter, context) => new GGRawSocket(adapter, {
