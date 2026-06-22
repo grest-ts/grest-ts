@@ -67,4 +67,20 @@ describe('createClient discovery url resolution', () => {
         expect(res.msg).toBe("pong")
         expect(resolve).not.toHaveBeenCalled()
     })
+
+    it('a non-JSON response names the status and body in displayMessage (survives reconstruction)', async () => {
+        vi.stubGlobal("fetch", vi.fn(async () => new Response("<html>502 Bad Gateway</html>", {
+            status: 502, headers: {"content-type": "text/html"},
+        })))
+        const client = createClient(PingApi, {url: "http://explicit:1"})
+        const res = await client.ping({msg: "hi"}).asResult()
+        expect(res.success).toBe(false)
+        expect(res).toBeInstanceOf(SERVER_ERROR)
+        if (res instanceof SERVER_ERROR) {
+            // displayMessage survives createErrorObj reconstruction, so the consumer
+            // sees the status + body, not a bare "Failed to parse JSON".
+            expect(res.context?.displayMessage).toContain("HTTP 502")
+            expect(res.context?.displayMessage).toContain("502 Bad Gateway")
+        }
+    })
 })
