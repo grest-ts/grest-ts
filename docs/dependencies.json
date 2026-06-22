@@ -177,7 +177,7 @@
         "implementation": false,
         "npm": true
       },
-      "layer": 0,
+      "layer": 1,
       "color": "#59A14F",
       "category": "libs",
       "group": "db",
@@ -194,7 +194,7 @@
         "implementation": false,
         "npm": true
       },
-      "layer": 0,
+      "layer": 1,
       "color": "#59A14F",
       "category": "libs",
       "group": "db",
@@ -211,7 +211,7 @@
         "implementation": false,
         "npm": true
       },
-      "layer": 0,
+      "layer": 1,
       "color": "#59A14F",
       "category": "libs",
       "group": "db",
@@ -1277,11 +1277,31 @@
     },
     {
       "from": "testkit-vitest",
+      "to": "config"
+    },
+    {
+      "from": "testkit-vitest",
+      "to": "db-dynamodb"
+    },
+    {
+      "from": "testkit-vitest",
+      "to": "db-mysql"
+    },
+    {
+      "from": "testkit-vitest",
+      "to": "db-postgre"
+    },
+    {
+      "from": "testkit-vitest",
       "to": "discovery"
     },
     {
       "from": "testkit-vitest",
       "to": "discovery-local"
+    },
+    {
+      "from": "testkit-vitest",
+      "to": "http"
     },
     {
       "from": "testkit-vitest",
@@ -1301,7 +1321,19 @@
     },
     {
       "from": "testkit-vitest",
+      "to": "metrics"
+    },
+    {
+      "from": "testkit-vitest",
+      "to": "schema-file"
+    },
+    {
+      "from": "testkit-vitest",
       "to": "testkit"
+    },
+    {
+      "from": "testkit-vitest",
+      "to": "websocket"
     },
     {
       "from": "trace",
