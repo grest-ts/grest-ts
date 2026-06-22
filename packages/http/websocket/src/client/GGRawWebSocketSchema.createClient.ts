@@ -10,7 +10,6 @@
  * customClient schemas have no client here — their client is foreign by definition.
  */
 
-import {type GGTransportMiddleware} from "@grest-ts/context"
 import {SERVER_ERROR} from "@grest-ts/schema"
 import {GGRawWebSocketSchema} from "../schema/GGRawWebSocketSchema"
 import {GGRawSocket} from "../socket/GGRawSocket"
@@ -20,7 +19,9 @@ import {buildWsUrl, openClientConnection, validateWsQuery} from "./clientHandsha
 import {
     createConnector,
     normalizeReconnect,
+    resolveConnectParams,
     type GGConnectParams,
+    type GGWsConnectSource,
     type GGReconnectConfig,
     type GGWebSocketCloseReason,
 } from "./reconnectConnector"
@@ -44,38 +45,7 @@ export interface GGRawWebSocketClientOptions {
     handshakeTimeoutMs?: number
 }
 
-/**
- * Connection params come from exactly ONE of two mutually-exclusive sources (the union makes
- * mixing static fields and `beforeConnect` a compile error): static `url` / `query` /
- * `middlewares` captured once, or `beforeConnect` resolved before every attempt (for rotating
- * credentials — returns the complete set each time). Schema `.use()` wires apply on top of both.
- */
-export type GGRawWebSocketClientConfig<TQuery = undefined> = GGRawWebSocketClientOptions & (
-    | {
-        /**
-         * WebSocket server URL, e.g. "ws://localhost:3000" (or "" for same-origin in the browser).
-         * If omitted, uses service discovery (requires @grest-ts/discovery; node-only).
-         */
-        url?: string
-        /** Query parameters to include on connect; validated against the schema's `queryOnConnect`. */
-        query?: TQuery
-        /** Extra middlewares on top of the schema's, in order (e.g. a static auth token). */
-        middlewares?: GGTransportMiddleware[]
-        beforeConnect?: never
-    }
-    | {
-        /**
-         * Resolve the volatile connection params before EVERY connect attempt — returns the complete
-         * `url` / `query` / `middlewares` each time; the static fields above cannot be combined with
-         * it. A throw is fed to `shouldRetry` (`NOT_AUTHORIZED` / `FORBIDDEN` / `VALIDATION_ERROR`
-         * terminal); the returned query is validated every attempt.
-         */
-        beforeConnect: () => GGConnectParams<TQuery> | Promise<GGConnectParams<TQuery>>
-        url?: never
-        query?: never
-        middlewares?: never
-    }
-)
+export type GGRawWebSocketClientConfig<TQuery = undefined> = GGRawWebSocketClientOptions & GGWsConnectSource<TQuery>
 
 export interface GGRawWebSocketClient {
     /** True when the socket is connected and the handshake has completed. */
@@ -133,19 +103,16 @@ GGRawWebSocketSchema.prototype.createClient = function (
         logMode,
         reconnect: normalizeReconnect(config?.reconnect),
         open: async () => {
-            // Must resolve per-attempt here, never captured at createClient time — that is what
-            // keeps a rotating credential fresh across reconnects.
-            const fresh = config?.beforeConnect ? await config.beforeConnect() : undefined
-            const cfgUrl = fresh ? fresh.url : config?.url
-            const query = fresh ? fresh.query : config?.query
-            const clientMiddlewares = fresh ? fresh.middlewares : config?.middlewares
-            const domain = await resolveWsDomain(cfgUrl, schemaName)
-            const url = buildWsUrl(domain, normalizedPath, validateWsQuery(queryValidator, query))
+            // Resolve per-attempt (never captured at createClient time) — that is what keeps a
+            // rotating credential fresh across reconnects.
+            const params = await resolveConnectParams(config)
+            const domain = await resolveWsDomain(params.url, schemaName)
+            const url = buildWsUrl(domain, normalizedPath, validateWsQuery(queryValidator, params.query))
             const AdapterClass = await getDefaultAdapter()
             return openClientConnection({
                 adapter: new AdapterClass(url),
                 domain,
-                middlewares: [...schemaMiddlewares, ...(clientMiddlewares ?? [])],
+                middlewares: [...schemaMiddlewares, ...(params.middlewares ?? [])],
                 contextName: "ws-raw-client-connection",
                 handshakeTimeoutMs,
                 makeSocket: (adapter, context) => new GGRawSocket(adapter, {

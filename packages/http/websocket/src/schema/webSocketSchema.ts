@@ -113,7 +113,7 @@ class GGWebSocketSchemaBuilder<
 > {
     private readonly _contract: GGSocketContract
     private _path: string = ""
-    private _middlewares: GGTransportMiddleware[] = []
+    private readonly _middlewares: GGTransportMiddleware[] = []
     private _queryValidator?: GGValidator<any>
     private _connectPermission?: GGPermission
 
@@ -238,6 +238,15 @@ class GGRawWebSocketSchemaBuilder<TQuery = undefined> {
 }
 
 /**
+ * The base of a socket path: a `"/base/*"` wildcard prefix maps to `"/base"`, an exact path is
+ * itself. The single source of truth for stripping the wildcard suffix — used by path validation
+ * and by the discovery registration (which routes by `startsWith(base)`).
+ */
+export function wildcardPathBase(path: string): string {
+    return path.endsWith("/*") ? path.slice(0, -2) : path
+}
+
+/**
  * A WS path is matched against the upgrade request's pathname (after a leading slash is ensured),
  * so a path that is empty or carries whitespace / a query / a fragment can never match a real
  * connection — the schema would silently accept zero clients. Reject it at build time.
@@ -248,7 +257,7 @@ class GGRawWebSocketSchemaBuilder<TQuery = undefined> {
  */
 export function assertValidSocketPath(path: string, apiName: string, allowPrefix = false): void {
     const isPrefix = path.endsWith("/*")
-    const core = isPrefix ? path.slice(0, -2) : path
+    const core = wildcardPathBase(path)
     if (core === "" || /\s/.test(core) || core.includes("?") || core.includes("#") || core.includes("*")) {
         throw new Error(
             `webSocketSchema "${apiName}": invalid path ${JSON.stringify(path)} — a WebSocket path must be ` +

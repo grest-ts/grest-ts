@@ -29,14 +29,15 @@ import {
 import {GGWebSocketSchema} from "../schema/GGWebSocketSchema"
 import {GGSocketPool} from "./GGSocketPool"
 import {GGSocket, type GGHeartbeatConfig} from "../socket/GGSocket"
-import type {GGTransportMiddleware} from "@grest-ts/context";
 import {GGWsLogMode} from "./GGWsLogMode"
 import {validateWsQuery} from "./clientHandshake"
 import {log} from "./wsLog"
 import {
     createConnector,
     normalizeReconnect,
+    resolveConnectParams,
     type GGConnectParams,
+    type GGWsConnectSource,
     type GGReconnectConfig,
     type GGWebSocketCloseReason,
 } from "./reconnectConnector"
@@ -67,51 +68,7 @@ export interface GGWebSocketClientOptions {
     logMode?: GGWsLogMode
 }
 
-/**
- * Connection params come from exactly ONE of two mutually-exclusive sources (the union below
- * makes mixing them a compile error — you can't set both static fields and `beforeConnect`):
- *
- * - static: `url` / `query` / `middlewares`, captured once. For fixed connection params.
- * - dynamic: `beforeConnect`, resolved before every connect attempt. For short-lived / rotating
- *   credentials (a freshly minted token, a signed URL) — it returns the complete `url` / `query` /
- *   `middlewares` each attempt, so they're never stale. Schema `.use()` wires apply on top of both.
- */
-export type GGWebSocketClientConfig<TQuery = undefined> = GGWebSocketClientOptions & (
-    | {
-        /**
-         * WebSocket server URL, e.g. "ws://localhost:3000". If omitted, uses service discovery
-         * (requires @grest-ts/discovery). In browsers, pass an explicit URL (or "" for same-origin).
-         */
-        url?: string
-        /**
-         * Query parameters to include on connect. Typed from `queryOnConnect<T>()` if used; validated
-         * against the schema's query validator before connecting.
-         */
-        query?: TQuery
-        /**
-         * Extra middlewares on top of the schema's, in order — per-client concerns (e.g. a static
-         * auth token). For a credential that *refreshes*, prefer a context-key wire (auto-fresh on
-         * reconnect) or `beforeConnect`.
-         */
-        middlewares?: GGTransportMiddleware[]
-        beforeConnect?: never
-    }
-    | {
-        /**
-         * Resolve the volatile connection params before EVERY connect attempt (first connect and
-         * every reconnect). Returns the complete `url` / `query` / `middlewares` for that attempt;
-         * the static fields above cannot be combined with it. Schema `.use()` wires apply on top.
-         *
-         * Runs inside the connect path: a throw is a failed attempt fed to `shouldRetry` (a transient
-         * mint failure backs off; `NOT_AUTHORIZED` / `FORBIDDEN` / `VALIDATION_ERROR` are terminal).
-         * The returned query is validated every attempt.
-         */
-        beforeConnect: () => GGConnectParams<TQuery> | Promise<GGConnectParams<TQuery>>
-        url?: never
-        query?: never
-        middlewares?: never
-    }
-)
+export type GGWebSocketClientConfig<TQuery = undefined> = GGWebSocketClientOptions & GGWsConnectSource<TQuery>
 
 export interface GGWebSocketSetupTools<TServerToClientImpl, TClientToServer> {
     incoming: {
@@ -270,18 +227,15 @@ GGWebSocketSchema.prototype.createClient = function (
         logMode,
         reconnect: normalizeReconnect(config?.reconnect),
         open: async () => {
-            // Must resolve per-attempt here, never captured at createClient time — that is what
-            // keeps a rotating credential fresh across reconnects.
-            const fresh = config?.beforeConnect ? await config.beforeConnect() : undefined
-            const url = fresh ? fresh.url : config?.url
-            const query = fresh ? fresh.query : config?.query
-            const clientMiddlewares = fresh ? fresh.middlewares : config?.middlewares
+            // Resolve per-attempt (never captured at createClient time) — that is what keeps a
+            // rotating credential fresh across reconnects.
+            const {url, query, middlewares} = await resolveConnectParams(config)
             const domain = await resolveWsDomain(url, schemaName)
             return GGSocketPool.connect({
                 domain,
                 path: normalizedPath,
                 query: validateWsQuery(queryValidator, query),
-                middlewares: [...schemaMiddlewares, ...(clientMiddlewares ?? [])],
+                middlewares: [...schemaMiddlewares, ...(middlewares ?? [])],
             })
         },
         setup: async (s) => {

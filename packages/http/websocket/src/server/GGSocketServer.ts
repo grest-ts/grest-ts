@@ -21,6 +21,7 @@ import {GGContext, type GGInbound, type GGTransportMiddleware} from "@grest-ts/c
 import {GG_DISCOVERY} from "@grest-ts/discovery";
 import {GGHttpServer} from "@grest-ts/http";
 import {GGRawSocket} from "../socket/GGRawSocket";
+import {wildcardPathBase} from "../schema/webSocketSchema";
 
 /**
  * Per-connection liveness heartbeat: the server pings each client and reaps sockets
@@ -208,7 +209,7 @@ export class GGSocketServer<TContext, Query, TSocket extends ServerSocket = GGSo
                         api: this.apiName,
                         // Discovery routes by startsWith(pathPrefix); a "/base/*" wildcard schema
                         // registers its base so subpath upgrades resolve to this server.
-                        pathPrefix: this.path.endsWith('/*') ? this.path.slice(0, -2) : this.path,
+                        pathPrefix: wildcardPathBase(this.path),
                         protocol: "ws",
                         // onStart fires after the http server has bound its port.
                         port: http.port!

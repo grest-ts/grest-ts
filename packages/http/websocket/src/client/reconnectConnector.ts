@@ -16,14 +16,42 @@ import {GGWsLogMode} from "./GGWsLogMode"
 import {log} from "./wsLog"
 
 /**
- * Volatile connection inputs resolved by `beforeConnect` before every connect attempt.
- * When `beforeConnect` is set it is the SOLE source of these — the static `config.url` /
- * `query` / `middlewares` are not merged in. Return the complete set each time.
+ * The connection inputs for one attempt — either the static config fields or the return of
+ * `beforeConnect`. Schema `.use()` wires apply on top regardless.
  */
 export interface GGConnectParams<TQuery = undefined> {
+    /** Server URL, e.g. "ws://host:port" ("" for same-origin in the browser). Omit to use @grest-ts/discovery (node). */
     url?: string
+    /** Query params on connect, validated against the schema's `queryOnConnect`. */
     query?: TQuery
+    /** Extra middlewares on top of the schema's, in order (e.g. a static auth token). */
     middlewares?: GGTransportMiddleware[]
+}
+
+/**
+ * Connection params come from exactly ONE of two mutually-exclusive sources — the union makes
+ * setting a static field alongside `beforeConnect` a compile error:
+ *
+ * - static `url` / `query` / `middlewares`, captured once;
+ * - `beforeConnect`, resolved before EVERY connect attempt (first + every reconnect) — for
+ *   short-lived / rotating credentials. Returns the complete `GGConnectParams` each time, so a
+ *   minted token / signed URL is never stale.
+ */
+export type GGWsConnectSource<TQuery = undefined> =
+    | (GGConnectParams<TQuery> & {beforeConnect?: never})
+    | {
+        beforeConnect: () => GGConnectParams<TQuery> | Promise<GGConnectParams<TQuery>>
+        url?: never
+        query?: never
+        middlewares?: never
+    }
+
+/** Resolve one attempt's connect params: `beforeConnect` (sole source) if set, else the static config. */
+export async function resolveConnectParams<TQuery>(
+    source: GGWsConnectSource<TQuery> | undefined
+): Promise<GGConnectParams<TQuery>> {
+    if (source?.beforeConnect) return source.beforeConnect()
+    return source ?? {}
 }
 
 export interface GGReconnectConfig {
