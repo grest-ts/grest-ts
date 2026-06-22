@@ -55,20 +55,12 @@
   },
   "peerDependencies": {
     "@grest-ts/common": "0.0.63",
-    "@grest-ts/config": "0.0.63",
-    "@grest-ts/db-dynamodb": "0.0.63",
-    "@grest-ts/db-mysql": "0.0.63",
-    "@grest-ts/db-postgre": "0.0.63",
     "@grest-ts/discovery": "0.0.63",
     "@grest-ts/discovery-local": "0.0.63",
-    "@grest-ts/http": "0.0.63",
     "@grest-ts/ipc": "0.0.63",
     "@grest-ts/locator": "0.0.63",
     "@grest-ts/logger": "0.0.63",
     "@grest-ts/logger-console": "0.0.63",
-    "@grest-ts/metrics": "0.0.63",
-    "@grest-ts/schema-file": "0.0.63",
-    "@grest-ts/testkit": "0.0.63",
-    "@grest-ts/websocket": "0.0.63"
+    "@grest-ts/testkit": "0.0.63"
   }
 }

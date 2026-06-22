@@ -15,7 +15,7 @@ import {AppPermission} from "./PermissionsApi"
 // WsCookieApi's own credential wire over the same "session" cookie. Unlike CookieTestApi's
 // ambient SESSION, this one is required-or-throw: a missing cookie is unauthenticated, so
 // process() rejects the handshake with 401 rather than resolving to no scopes.
-const WS_SESSION = new GGCookie("session")
+export const WS_SESSION = new GGCookie("session")
 export const WS_SESSION_VALUE = new GGContextKey<string | undefined>("ws-session-value", IsString.orUndefined)
 
 export const WS_SESSION_HANDLER = WS_SESSION.define(() => ({

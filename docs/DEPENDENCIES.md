@@ -14,6 +14,9 @@ flowchart TB
         code-generator["code-generator 🟢"]
         config-aws["config-aws 🟢"]
         create-starter["create-starter "]
+        db-dynamodb["db-dynamodb 🟢"]
+        db-mysql["db-mysql 🟢"]
+        db-postgre["db-postgre 🟢"]
         discovery-kubernetes["discovery-kubernetes 🟢"]
         discovery-migration["discovery-migration 🟢"]
         discovery-static["discovery-static 🟢"]
@@ -30,9 +33,6 @@ flowchart TB
         trace-http["trace-http 🟢"]
     end
     subgraph L1[" "]
-        db-dynamodb["db-dynamodb 🟢"]
-        db-mysql["db-mysql 🟢"]
-        db-postgre["db-postgre 🟢"]
         events["events 🟢"]
         lock["lock 🟢"]
         openapi["openapi 🟢"]
@@ -197,21 +197,13 @@ flowchart TB
     testkit --> trace
     testkit-runtime --> locator
     testkit-vitest --> common
-    testkit-vitest --> config
-    testkit-vitest --> db-dynamodb
-    testkit-vitest --> db-mysql
-    testkit-vitest --> db-postgre
     testkit-vitest --> discovery
     testkit-vitest --> discovery-local
-    testkit-vitest --> http
     testkit-vitest --> ipc
     testkit-vitest --> locator
     testkit-vitest --> logger
     testkit-vitest --> logger-console
-    testkit-vitest --> metrics
-    testkit-vitest --> schema-file
     testkit-vitest --> testkit
-    testkit-vitest --> websocket
     trace --> context
     trace --> schema
     trace-http --> context
@@ -408,28 +400,20 @@ flowchart TB
     linkStyle 134 stroke:#EDC948,stroke-width:2px
     linkStyle 135 stroke:#EDC948,stroke-width:2px
     linkStyle 136 stroke:#EDC948,stroke-width:2px
-    linkStyle 137 stroke:#EDC948,stroke-width:2px
-    linkStyle 138 stroke:#EDC948,stroke-width:2px
-    linkStyle 139 stroke:#EDC948,stroke-width:2px
-    linkStyle 140 stroke:#EDC948,stroke-width:2px
-    linkStyle 141 stroke:#EDC948,stroke-width:2px
-    linkStyle 142 stroke:#EDC948,stroke-width:2px
-    linkStyle 143 stroke:#EDC948,stroke-width:2px
-    linkStyle 144 stroke:#EDC948,stroke-width:2px
-    linkStyle 145 stroke:#B07AA1,stroke-width:2px
-    linkStyle 146 stroke:#B07AA1,stroke-width:2px
-    linkStyle 147 stroke:#FF9DA7,stroke-width:2px
-    linkStyle 148 stroke:#FF9DA7,stroke-width:2px
-    linkStyle 149 stroke:#FF9DA7,stroke-width:2px
+    linkStyle 137 stroke:#B07AA1,stroke-width:2px
+    linkStyle 138 stroke:#B07AA1,stroke-width:2px
+    linkStyle 139 stroke:#FF9DA7,stroke-width:2px
+    linkStyle 140 stroke:#FF9DA7,stroke-width:2px
+    linkStyle 141 stroke:#FF9DA7,stroke-width:2px
+    linkStyle 142 stroke:#9C755F,stroke-width:2px
+    linkStyle 143 stroke:#9C755F,stroke-width:2px
+    linkStyle 144 stroke:#9C755F,stroke-width:2px
+    linkStyle 145 stroke:#9C755F,stroke-width:2px
+    linkStyle 146 stroke:#9C755F,stroke-width:2px
+    linkStyle 147 stroke:#9C755F,stroke-width:2px
+    linkStyle 148 stroke:#9C755F,stroke-width:2px
+    linkStyle 149 stroke:#9C755F,stroke-width:2px
     linkStyle 150 stroke:#9C755F,stroke-width:2px
-    linkStyle 151 stroke:#9C755F,stroke-width:2px
-    linkStyle 152 stroke:#9C755F,stroke-width:2px
-    linkStyle 153 stroke:#9C755F,stroke-width:2px
-    linkStyle 154 stroke:#9C755F,stroke-width:2px
-    linkStyle 155 stroke:#9C755F,stroke-width:2px
-    linkStyle 156 stroke:#9C755F,stroke-width:2px
-    linkStyle 157 stroke:#9C755F,stroke-width:2px
-    linkStyle 158 stroke:#9C755F,stroke-width:2px
 ```
 
 ---
@@ -648,7 +632,6 @@ flowchart TB
         events-azure["events-azure 🟢"]
         events-gcp["events-gcp 🟢"]
         poller["poller 🟢"]
-        testkit-vitest["testkit-vitest 🟢"]
     end
     subgraph Package[" "]
         config["config 🟢"]
@@ -667,7 +650,6 @@ flowchart TB
     events-azure --> config
     events-gcp --> config
     poller --> config
-    testkit-vitest --> config
     config --> common
     config --> locator
     config --> schema
@@ -681,7 +663,6 @@ flowchart TB
     style events-azure fill:#E15759,stroke:#E15759,color:#fff
     style events-gcp fill:#76B7B2,stroke:#76B7B2,color:#fff
     style poller fill:#D37295,stroke:#D37295,color:#fff
-    style testkit-vitest fill:#EDC948,stroke:#EDC948,color:#fff
     style common fill:#EDC948,stroke:#EDC948,color:#fff
     style locator fill:#9C755F,stroke:#9C755F,color:#fff
     style schema fill:#FFBE7D,stroke:#FFBE7D,color:#fff
@@ -694,10 +675,9 @@ flowchart TB
     linkStyle 6 stroke:#E15759,stroke-width:2px
     linkStyle 7 stroke:#76B7B2,stroke-width:2px
     linkStyle 8 stroke:#D37295,stroke-width:2px
-    linkStyle 9 stroke:#EDC948,stroke-width:2px
+    linkStyle 9 stroke:#B07AA1,stroke-width:2px
     linkStyle 10 stroke:#B07AA1,stroke-width:2px
     linkStyle 11 stroke:#B07AA1,stroke-width:2px
-    linkStyle 12 stroke:#B07AA1,stroke-width:2px
 ```
 
 ### Config Aws
@@ -800,9 +780,6 @@ flowchart TB
 
 ```mermaid
 flowchart TB
-    subgraph Dependents[" "]
-        testkit-vitest["testkit-vitest 🟢"]
-    end
     subgraph Package[" "]
         db-dynamodb["db-dynamodb 🟢"]
     end
@@ -812,31 +789,25 @@ flowchart TB
         logger["logger 🟢🌐"]
         schema["schema 🟢🌐"]
     end
-    testkit-vitest --> db-dynamodb
     db-dynamodb --> config
     db-dynamodb --> locator
     db-dynamodb --> logger
     db-dynamodb --> schema
     style db-dynamodb fill:#86BCB6,stroke:#86BCB6,color:#fff
-    style testkit-vitest fill:#EDC948,stroke:#EDC948,color:#fff
     style config fill:#B07AA1,stroke:#B07AA1,color:#fff
     style locator fill:#9C755F,stroke:#9C755F,color:#fff
     style logger fill:#86BCB6,stroke:#86BCB6,color:#fff
     style schema fill:#FFBE7D,stroke:#FFBE7D,color:#fff
-    linkStyle 0 stroke:#EDC948,stroke-width:2px
+    linkStyle 0 stroke:#86BCB6,stroke-width:2px
     linkStyle 1 stroke:#86BCB6,stroke-width:2px
     linkStyle 2 stroke:#86BCB6,stroke-width:2px
     linkStyle 3 stroke:#86BCB6,stroke-width:2px
-    linkStyle 4 stroke:#86BCB6,stroke-width:2px
 ```
 
 ### Db Mysql
 
 ```mermaid
 flowchart TB
-    subgraph Dependents[" "]
-        testkit-vitest["testkit-vitest 🟢"]
-    end
     subgraph Package[" "]
         db-mysql["db-mysql 🟢"]
     end
@@ -846,31 +817,25 @@ flowchart TB
         logger["logger 🟢🌐"]
         schema["schema 🟢🌐"]
     end
-    testkit-vitest --> db-mysql
     db-mysql --> config
     db-mysql --> locator
     db-mysql --> logger
     db-mysql --> schema
     style db-mysql fill:#8CD17D,stroke:#8CD17D,color:#fff
-    style testkit-vitest fill:#EDC948,stroke:#EDC948,color:#fff
     style config fill:#B07AA1,stroke:#B07AA1,color:#fff
     style locator fill:#9C755F,stroke:#9C755F,color:#fff
     style logger fill:#86BCB6,stroke:#86BCB6,color:#fff
     style schema fill:#FFBE7D,stroke:#FFBE7D,color:#fff
-    linkStyle 0 stroke:#EDC948,stroke-width:2px
+    linkStyle 0 stroke:#8CD17D,stroke-width:2px
     linkStyle 1 stroke:#8CD17D,stroke-width:2px
     linkStyle 2 stroke:#8CD17D,stroke-width:2px
     linkStyle 3 stroke:#8CD17D,stroke-width:2px
-    linkStyle 4 stroke:#8CD17D,stroke-width:2px
 ```
 
 ### Db Postgre
 
 ```mermaid
 flowchart TB
-    subgraph Dependents[" "]
-        testkit-vitest["testkit-vitest 🟢"]
-    end
     subgraph Package[" "]
         db-postgre["db-postgre 🟢"]
     end
@@ -880,22 +845,19 @@ flowchart TB
         logger["logger 🟢🌐"]
         schema["schema 🟢🌐"]
     end
-    testkit-vitest --> db-postgre
     db-postgre --> config
     db-postgre --> locator
     db-postgre --> logger
     db-postgre --> schema
     style db-postgre fill:#B6992D,stroke:#B6992D,color:#fff
-    style testkit-vitest fill:#EDC948,stroke:#EDC948,color:#fff
     style config fill:#B07AA1,stroke:#B07AA1,color:#fff
     style locator fill:#9C755F,stroke:#9C755F,color:#fff
     style logger fill:#86BCB6,stroke:#86BCB6,color:#fff
     style schema fill:#FFBE7D,stroke:#FFBE7D,color:#fff
-    linkStyle 0 stroke:#EDC948,stroke-width:2px
+    linkStyle 0 stroke:#B6992D,stroke-width:2px
     linkStyle 1 stroke:#B6992D,stroke-width:2px
     linkStyle 2 stroke:#B6992D,stroke-width:2px
     linkStyle 3 stroke:#B6992D,stroke-width:2px
-    linkStyle 4 stroke:#B6992D,stroke-width:2px
 ```
 
 ### Discovery
@@ -1219,7 +1181,6 @@ flowchart TB
         code-generator["code-generator 🟢"]
         http-file["http-file 🟢🌐"]
         openapi["openapi 🟢"]
-        testkit-vitest["testkit-vitest 🟢"]
         websocket["websocket 🟢🌐"]
     end
     subgraph Package[" "]
@@ -1241,7 +1202,6 @@ flowchart TB
     code-generator --> http
     http-file --> http
     openapi --> http
-    testkit-vitest --> http
     websocket --> http
     http --> common
     http --> context
@@ -1258,7 +1218,6 @@ flowchart TB
     style code-generator fill:#59A14F,stroke:#59A14F,color:#fff
     style http-file fill:#EDC948,stroke:#EDC948,color:#fff
     style openapi fill:#499894,stroke:#499894,color:#fff
-    style testkit-vitest fill:#EDC948,stroke:#EDC948,color:#fff
     style websocket fill:#9C755F,stroke:#9C755F,color:#fff
     style common fill:#EDC948,stroke:#EDC948,color:#fff
     style context fill:#9C755F,stroke:#9C755F,color:#fff
@@ -1274,8 +1233,8 @@ flowchart TB
     linkStyle 3 stroke:#59A14F,stroke-width:2px
     linkStyle 4 stroke:#EDC948,stroke-width:2px
     linkStyle 5 stroke:#499894,stroke-width:2px
-    linkStyle 6 stroke:#EDC948,stroke-width:2px
-    linkStyle 7 stroke:#9C755F,stroke-width:2px
+    linkStyle 6 stroke:#9C755F,stroke-width:2px
+    linkStyle 7 stroke:#59A14F,stroke-width:2px
     linkStyle 8 stroke:#59A14F,stroke-width:2px
     linkStyle 9 stroke:#59A14F,stroke-width:2px
     linkStyle 10 stroke:#59A14F,stroke-width:2px
@@ -1283,7 +1242,6 @@ flowchart TB
     linkStyle 12 stroke:#59A14F,stroke-width:2px
     linkStyle 13 stroke:#59A14F,stroke-width:2px
     linkStyle 14 stroke:#59A14F,stroke-width:2px
-    linkStyle 15 stroke:#59A14F,stroke-width:2px
 ```
 
 ### Http File
@@ -1649,7 +1607,6 @@ flowchart TB
         http["http 🟢🌐"]
         poller["poller 🟢"]
         runtime["runtime 🟢"]
-        testkit-vitest["testkit-vitest 🟢"]
         websocket["websocket 🟢🌐"]
     end
     subgraph Package[" "]
@@ -1663,7 +1620,6 @@ flowchart TB
     http --> metrics
     poller --> metrics
     runtime --> metrics
-    testkit-vitest --> metrics
     websocket --> metrics
     metrics --> common
     metrics --> locator
@@ -1672,7 +1628,6 @@ flowchart TB
     style http fill:#59A14F,stroke:#59A14F,color:#fff
     style poller fill:#D37295,stroke:#D37295,color:#fff
     style runtime fill:#A0CBE8,stroke:#A0CBE8,color:#fff
-    style testkit-vitest fill:#EDC948,stroke:#EDC948,color:#fff
     style websocket fill:#9C755F,stroke:#9C755F,color:#fff
     style common fill:#EDC948,stroke:#EDC948,color:#fff
     style locator fill:#9C755F,stroke:#9C755F,color:#fff
@@ -1680,10 +1635,9 @@ flowchart TB
     linkStyle 1 stroke:#59A14F,stroke-width:2px
     linkStyle 2 stroke:#D37295,stroke-width:2px
     linkStyle 3 stroke:#A0CBE8,stroke-width:2px
-    linkStyle 4 stroke:#EDC948,stroke-width:2px
-    linkStyle 5 stroke:#9C755F,stroke-width:2px
+    linkStyle 4 stroke:#9C755F,stroke-width:2px
+    linkStyle 5 stroke:#B6992D,stroke-width:2px
     linkStyle 6 stroke:#B6992D,stroke-width:2px
-    linkStyle 7 stroke:#B6992D,stroke-width:2px
 ```
 
 ### Openapi
@@ -1944,7 +1898,6 @@ flowchart TB
 flowchart TB
     subgraph Dependents[" "]
         logger-console["logger-console 🟢"]
-        testkit-vitest["testkit-vitest 🟢"]
     end
     subgraph Package[" "]
         schema-file["schema-file 🟢🌐"]
@@ -1953,15 +1906,12 @@ flowchart TB
         schema["schema 🟢🌐"]
     end
     logger-console --> schema-file
-    testkit-vitest --> schema-file
     schema-file --> schema
     style schema-file fill:#4E79A7,stroke:#4E79A7,color:#fff
     style logger-console fill:#8CD17D,stroke:#8CD17D,color:#fff
-    style testkit-vitest fill:#EDC948,stroke:#EDC948,color:#fff
     style schema fill:#FFBE7D,stroke:#FFBE7D,color:#fff
     linkStyle 0 stroke:#8CD17D,stroke-width:2px
-    linkStyle 1 stroke:#EDC948,stroke-width:2px
-    linkStyle 2 stroke:#4E79A7,stroke-width:2px
+    linkStyle 1 stroke:#4E79A7,stroke-width:2px
 ```
 
 ### Sql
@@ -2083,55 +2033,31 @@ flowchart TB
     end
     subgraph Dependencies[" "]
         common["common 🟢🌐"]
-        config["config 🟢"]
-        db-dynamodb["db-dynamodb 🟢"]
-        db-mysql["db-mysql 🟢"]
-        db-postgre["db-postgre 🟢"]
         discovery["discovery 🟢"]
         discovery-local["discovery-local 🟢"]
-        http["http 🟢🌐"]
         ipc["ipc 🟢"]
         locator["locator 🟢"]
         logger["logger 🟢🌐"]
         logger-console["logger-console 🟢"]
-        metrics["metrics 🟢"]
-        schema-file["schema-file 🟢🌐"]
         testkit["testkit 🟢"]
-        websocket["websocket 🟢🌐"]
     end
     testkit-vitest --> common
-    testkit-vitest --> config
-    testkit-vitest --> db-dynamodb
-    testkit-vitest --> db-mysql
-    testkit-vitest --> db-postgre
     testkit-vitest --> discovery
     testkit-vitest --> discovery-local
-    testkit-vitest --> http
     testkit-vitest --> ipc
     testkit-vitest --> locator
     testkit-vitest --> logger
     testkit-vitest --> logger-console
-    testkit-vitest --> metrics
-    testkit-vitest --> schema-file
     testkit-vitest --> testkit
-    testkit-vitest --> websocket
     style testkit-vitest fill:#EDC948,stroke:#EDC948,color:#fff
     style common fill:#EDC948,stroke:#EDC948,color:#fff
-    style config fill:#B07AA1,stroke:#B07AA1,color:#fff
-    style db-dynamodb fill:#86BCB6,stroke:#86BCB6,color:#fff
-    style db-mysql fill:#8CD17D,stroke:#8CD17D,color:#fff
-    style db-postgre fill:#B6992D,stroke:#B6992D,color:#fff
     style discovery fill:#499894,stroke:#499894,color:#fff
     style discovery-local fill:#A0CBE8,stroke:#A0CBE8,color:#fff
-    style http fill:#59A14F,stroke:#59A14F,color:#fff
     style ipc fill:#FF9DA7,stroke:#FF9DA7,color:#fff
     style locator fill:#9C755F,stroke:#9C755F,color:#fff
     style logger fill:#86BCB6,stroke:#86BCB6,color:#fff
     style logger-console fill:#8CD17D,stroke:#8CD17D,color:#fff
-    style metrics fill:#B6992D,stroke:#B6992D,color:#fff
-    style schema-file fill:#4E79A7,stroke:#4E79A7,color:#fff
     style testkit fill:#76B7B2,stroke:#76B7B2,color:#fff
-    style websocket fill:#9C755F,stroke:#9C755F,color:#fff
     linkStyle 0 stroke:#EDC948,stroke-width:2px
     linkStyle 1 stroke:#EDC948,stroke-width:2px
     linkStyle 2 stroke:#EDC948,stroke-width:2px
@@ -2140,14 +2066,6 @@ flowchart TB
     linkStyle 5 stroke:#EDC948,stroke-width:2px
     linkStyle 6 stroke:#EDC948,stroke-width:2px
     linkStyle 7 stroke:#EDC948,stroke-width:2px
-    linkStyle 8 stroke:#EDC948,stroke-width:2px
-    linkStyle 9 stroke:#EDC948,stroke-width:2px
-    linkStyle 10 stroke:#EDC948,stroke-width:2px
-    linkStyle 11 stroke:#EDC948,stroke-width:2px
-    linkStyle 12 stroke:#EDC948,stroke-width:2px
-    linkStyle 13 stroke:#EDC948,stroke-width:2px
-    linkStyle 14 stroke:#EDC948,stroke-width:2px
-    linkStyle 15 stroke:#EDC948,stroke-width:2px
 ```
 
 ### Trace
@@ -2231,7 +2149,6 @@ flowchart TB
     subgraph Dependents[" "]
         api-docs["api-docs 🟢"]
         asyncapi["asyncapi 🟢"]
-        testkit-vitest["testkit-vitest 🟢"]
     end
     subgraph Package[" "]
         websocket["websocket 🟢🌐"]
@@ -2249,7 +2166,6 @@ flowchart TB
     end
     api-docs --> websocket
     asyncapi --> websocket
-    testkit-vitest --> websocket
     websocket --> common
     websocket --> context
     websocket --> discovery
@@ -2262,7 +2178,6 @@ flowchart TB
     style websocket fill:#9C755F,stroke:#9C755F,color:#fff
     style api-docs fill:#4E79A7,stroke:#4E79A7,color:#fff
     style asyncapi fill:#F28E2B,stroke:#F28E2B,color:#fff
-    style testkit-vitest fill:#EDC948,stroke:#EDC948,color:#fff
     style common fill:#EDC948,stroke:#EDC948,color:#fff
     style context fill:#9C755F,stroke:#9C755F,color:#fff
     style discovery fill:#499894,stroke:#499894,color:#fff
@@ -2274,7 +2189,7 @@ flowchart TB
     style trace fill:#B07AA1,stroke:#B07AA1,color:#fff
     linkStyle 0 stroke:#4E79A7,stroke-width:2px
     linkStyle 1 stroke:#F28E2B,stroke-width:2px
-    linkStyle 2 stroke:#EDC948,stroke-width:2px
+    linkStyle 2 stroke:#9C755F,stroke-width:2px
     linkStyle 3 stroke:#9C755F,stroke-width:2px
     linkStyle 4 stroke:#9C755F,stroke-width:2px
     linkStyle 5 stroke:#9C755F,stroke-width:2px
@@ -2283,5 +2198,4 @@ flowchart TB
     linkStyle 8 stroke:#9C755F,stroke-width:2px
     linkStyle 9 stroke:#9C755F,stroke-width:2px
     linkStyle 10 stroke:#9C755F,stroke-width:2px
-    linkStyle 11 stroke:#9C755F,stroke-width:2px
 ```

@@ -25,7 +25,8 @@ interface HttpSchemaLike {
 interface WebSocketSchemaLike {
     name: string
     middlewares: readonly GGTransportMiddleware[]
-    contract: {
+    /** Absent for byte-stream schemas — only `connectPermission` applies there. */
+    contract?: {
         clientToServer: {methods: Record<string, GGContractMethod>}
         serverToClient: {methods: Record<string, GGContractMethod>}
     }
@@ -57,16 +58,18 @@ export function checkPermissionsAtStart(
     }
     for (const ws of webSocketSchemas) {
         const hasWire = hasPermissionWire(ws.middlewares)
-        const methods = ws.contract.clientToServer.methods
-        for (const name of Object.keys(methods)) {
-            surfaces.push({label: `${ws.name}.${name}`, permission: methods[name].permission, hasWire})
+        if (ws.contract) {
+            const methods = ws.contract.clientToServer.methods
+            for (const name of Object.keys(methods)) {
+                surfaces.push({label: `${ws.name}.${name}`, permission: methods[name].permission, hasWire})
+            }
+            const pushed = ws.contract.serverToClient.methods
+            for (const name of Object.keys(pushed)) {
+                if (isNonPublic(pushed[name].permission)) deadServerToClient.push(`  ${ws.name}.${name}`)
+            }
         }
         if (ws.connectPermission !== undefined) {
             surfaces.push({label: `${ws.name} (connectPermission)`, permission: ws.connectPermission, hasWire})
-        }
-        const pushed = ws.contract.serverToClient.methods
-        for (const name of Object.keys(pushed)) {
-            if (isNonPublic(pushed[name].permission)) deadServerToClient.push(`  ${ws.name}.${name}`)
         }
     }
 

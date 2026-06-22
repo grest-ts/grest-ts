@@ -13,7 +13,7 @@
 
 import type {GGTransportMiddleware} from "@grest-ts/context";
 import type {GGHttpSchema} from "@grest-ts/http";
-import type {GGWebSocketSchema} from "@grest-ts/websocket";
+import type {GGWebSocketSchema, GGRawWebSocketSchema} from "@grest-ts/websocket";
 import type {ANY_ERROR_CLS, GGSchema} from "@grest-ts/schema";
 import {JsonSchemaAdapter} from "./jsonSchemaAdapter";
 import type {
@@ -31,7 +31,7 @@ export interface BuildContractDocOptions {
     /** Group label → schemas in that group. Each can have HTTP, WS, or both. */
     groups: Record<string, {
         http?: GGHttpSchema<any, any>[];
-        ws?: GGWebSocketSchema<any, any, any, any, any>[];
+        ws?: (GGWebSocketSchema<any, any, any, any, any> | GGRawWebSocketSchema<any>)[];
         description?: string;
     }>;
 
@@ -204,18 +204,26 @@ function buildHttpMethod(
 
 // ── WS contract ────────────────────────────────────────────────────────
 
-function buildWsContract(wsSchema: GGWebSocketSchema<any, any, any, any, any>, ctx: BuildContext): ContractDoc {
-    const auth = extractWsAuth((wsSchema as any).middlewares ?? []);
+function buildWsContract(
+    wsSchema: GGWebSocketSchema<any, any, any, any, any> | GGRawWebSocketSchema<any>,
+    ctx: BuildContext,
+): ContractDoc {
+    const auth = extractWsAuth([...(wsSchema.middlewares ?? [])]);
     const methods: MethodDoc[] = [];
-    const contract = wsSchema.contract;
 
-    for (const methodName of Object.keys(contract.clientToServer.methods)) {
-        const m = contract.clientToServer.methods[methodName];
-        methods.push(buildWsMethod(methodName, m, "client-to-server", wsSchema.name, ctx));
-    }
-    for (const methodName of Object.keys(contract.serverToClient.methods)) {
-        const m = contract.serverToClient.methods[methodName];
-        methods.push(buildWsMethod(methodName, m, "server-to-client", wsSchema.name, ctx));
+    // Byte-stream schemas (raw, with or without customClient) carry no per-message contract.
+    // `"raw" in wsSchema` narrows the union (GGRawWebSocketSchema has `raw: true`,
+    // GGWebSocketSchema does not), so `.contract` is reachable without a cast.
+    if (!("raw" in wsSchema)) {
+        const contract = wsSchema.contract;
+        for (const methodName of Object.keys(contract.clientToServer.methods)) {
+            const m = contract.clientToServer.methods[methodName];
+            methods.push(buildWsMethod(methodName, m, "client-to-server", wsSchema.name, ctx));
+        }
+        for (const methodName of Object.keys(contract.serverToClient.methods)) {
+            const m = contract.serverToClient.methods[methodName];
+            methods.push(buildWsMethod(methodName, m, "server-to-client", wsSchema.name, ctx));
+        }
     }
 
     return {

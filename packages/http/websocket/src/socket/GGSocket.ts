@@ -10,6 +10,7 @@ import {GG_WS_MESSAGE} from "../server/GG_WS_MESSAGE";
 import {ERROR, GGPromise, ROUTE_NOT_FOUND, SERVER_ERROR} from "@grest-ts/schema";
 import {GGContext} from "@grest-ts/context";
 import {GG_TRACE} from "@grest-ts/trace";
+import {startSocketHeartbeat} from "../liveness/socketHeartbeat";
 
 /**
  * Handler configuration for socket messages.
@@ -343,47 +344,20 @@ export class GGSocket {
      * (Node), else application-level PING frames (browser) — chosen automatically.
      */
     public startHeartbeat(config: GGHeartbeatConfig = {}): () => void {
-        // Socket is already closed — starting heartbeat would leak intervals
-        // because the onCloseCallbacks push below won't fire (isCleanedUp guard).
-        if (!this.isActive) {
-            return () => {};
-        }
-
-        const intervalMs = config.intervalMs ?? DEFAULT_HEARTBEAT.intervalMs;
-        const timeoutMs = config.timeoutMs ?? DEFAULT_HEARTBEAT.timeoutMs;
-        const useProtocol = !!(this.socket.ping && this.socket.onPong);
-
-        this.lastActivity = Date.now();
-        // Protocol pongs never reach onMessage; stamp them here. App pongs are stamped there.
-        if (useProtocol) this.socket.onPong!(() => { this.lastActivity = Date.now(); });
-
-        const sendPing = useProtocol
-            ? () => { try { this.socket.ping!(); } catch (_) {} }
-            : () => { try { this.socket.send(Message.createControl(MessageType.PING)); } catch (_) {} };
-
-        const sender = setInterval(() => {
-            if (!this.isActive) return;
-            sendPing();
-        }, intervalMs);
-
-        const watchdog = setInterval(() => {
-            if (!this.isActive) return;
-            if (Date.now() - this.lastActivity > intervalMs + timeoutMs) {
-                this.log.warn(this, 'Heartbeat timeout - no response from peer; closing socket');
-                this.metrics?.recordHeartbeatTimeout({api: this.apiName, path: this.socketPath});
-                clearInterval(sender);
-                clearInterval(watchdog);
-                this.close();
-            }
-        }, timeoutMs);
-
-        const cleanup = () => {
-            clearInterval(sender);
-            clearInterval(watchdog);
-        };
-        this.onCloseCallbacks.push(cleanup);
-
-        return cleanup;
+        return startSocketHeartbeat(this.socket, {
+            config,
+            isActive: () => this.isActive,
+            stampActivity: () => { this.lastActivity = Date.now(); },
+            idleMs: () => Date.now() - this.lastActivity,
+            apiName: this.apiName,
+            socketPath: this.socketPath,
+            metrics: this.metrics,
+            log: this.log,
+            logSource: this,
+            close: () => this.close(),
+            registerCleanup: (fn) => this.onCloseCallbacks.push(fn),
+            appPing: () => { this.socket.send(Message.createControl(MessageType.PING)); },
+        });
     }
 
     // --------------------------------------------------------------------------------------

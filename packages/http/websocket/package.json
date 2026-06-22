@@ -16,6 +16,10 @@
         "import": "./src/index-node.ts"
       }
     },
+    "./internal": {
+      "types": "./src/index-internal.ts",
+      "import": "./src/index-internal.ts"
+    },
     "./testkit": {
       "types": "./testkit/index-testkit.ts",
       "import": "./testkit/index-testkit.ts"

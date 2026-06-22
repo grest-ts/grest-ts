@@ -4,7 +4,7 @@
  * of the browser bundle. The import stays dynamic so discovery remains an
  * optional integration, not a hard dependency of @grest-ts/websocket.
  */
-import {_registerWsDiscoveryUrlResolver} from "./GGWebSocketSchema.createClient"
+import {_registerWsDiscoveryUrlResolver} from "./wsDiscovery"
 
 _registerWsDiscoveryUrlResolver(async (apiName: string): Promise<string> => {
     const {GG_DISCOVERY} = await import("@grest-ts/discovery")

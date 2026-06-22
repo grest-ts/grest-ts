@@ -1,4 +1,5 @@
-import {assertValidSocketPath, defineSocketContract, webSocketSchema} from "@grest-ts/websocket"
+import {defineSocketContract, webSocketSchema} from "@grest-ts/websocket"
+import {assertValidSocketPath} from "@grest-ts/websocket/internal"
 import {IsString, SERVER_ERROR} from "@grest-ts/schema"
 
 const Contract = defineSocketContract("WsPathProbe", {

@@ -72,4 +72,13 @@ export class NodeSocketAdapter implements SocketAdapter {
     onPong(handler: () => void): void {
         this.ws.on('pong', handler);
     }
+
+    sendRaw(data: Uint8Array | string): void {
+        this.ws.send(data);
+    }
+
+    onRawMessage(handler: (data: Uint8Array, isBinary: boolean) => void): void {
+        // node `ws` delivers every frame as a Buffer (a Uint8Array subclass) plus the frame type.
+        this.ws.on('message', (raw: Buffer, isBinary: boolean) => handler(raw, isBinary));
+    }
 }

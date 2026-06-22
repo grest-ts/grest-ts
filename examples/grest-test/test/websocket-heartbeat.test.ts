@@ -8,7 +8,7 @@
 
 import {describe, it, expect} from "vitest"
 import {GGSocket} from "@grest-ts/websocket"
-import type {SocketAdapter} from "@grest-ts/websocket"
+import type {SocketAdapter} from "@grest-ts/websocket/internal"
 
 const wait = (ms: number) => new Promise(r => setTimeout(r, ms))
 

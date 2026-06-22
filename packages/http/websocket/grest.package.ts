@@ -7,6 +7,7 @@ definePackage({
     keywords: ["websocket", "realtime", "ws"],
     targets: {node: true, browser: true},
     extendsTestKit: true,
+    customExports: {"./internal": "./src/index-internal.ts"},
     peerDependencies: {
         "ws": "^8.19.0"
     }
