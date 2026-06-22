@@ -67,4 +67,19 @@ describe('createClient discovery url resolution', () => {
         expect(res.msg).toBe("pong")
         expect(resolve).not.toHaveBeenCalled()
     })
+
+    it('a non-JSON response body surfaces as SERVER_ERROR carrying the body in debugData', async () => {
+        vi.stubGlobal("fetch", vi.fn(async () => new Response("<html>502 Bad Gateway</html>", {
+            status: 502, headers: {"content-type": "text/html"},
+        })))
+        const client = createClient(PingApi, {url: "http://explicit:1"})
+        const res = await client.ping({msg: "hi"}).asResult()
+        expect(res.success).toBe(false)
+        expect(res).toBeInstanceOf(SERVER_ERROR)
+        if (res instanceof SERVER_ERROR) {
+            // The point: the unparseable body is preserved, not discarded.
+            expect(res.context?.displayMessage).toBe("Failed to parse JSON")
+            expect(res.getDebugContext()?.debugData).toEqual({text: "<html>502 Bad Gateway</html>"})
+        }
+    })
 })

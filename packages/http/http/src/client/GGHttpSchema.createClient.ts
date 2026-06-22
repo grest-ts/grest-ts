@@ -140,6 +140,12 @@ export function createClient<TContract extends GGContractApiDefinition, TContext
                 }).finally(() => clearTimeout(timeoutId));
                 const resData = await wireFormat.parseResponse(wireResponse);
 
+                // The parser returns a live ERROR instance when the body can't be parsed
+                // (or has the wrong shape) — already carrying the offending body in its
+                // debug context. Return it directly; the wire-JSON handling below would
+                // round-trip it through createErrorObj and drop that context.
+                if (resData instanceof ERROR) return resData;
+
                 // ---------------------------------------------
                 // Response handling
                 const schema = GGContractExecutor.getResponseSchema(contractFunction, resData);

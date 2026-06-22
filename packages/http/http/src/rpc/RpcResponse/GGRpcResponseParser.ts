@@ -1,4 +1,4 @@
-import {ERROR_JSON, OK, SERVER_ERROR} from "@grest-ts/schema";
+import {ERROR, ERROR_JSON, OK, SERVER_ERROR} from "@grest-ts/schema";
 import {ClientHttpRouteToRpcTransformClientConfig} from "../../schema/GGHttpSchema";
 
 export class GGRpcResponseParser {
@@ -7,7 +7,7 @@ export class GGRpcResponseParser {
 
     }
 
-    parseResponse = async (response: Response): Promise<OK<unknown> | ERROR_JSON<string, unknown>> => {
+    parseResponse = async (response: Response): Promise<OK<unknown> | ERROR_JSON<string, unknown> | ERROR<string, unknown>> => {
         const txt = await response.text();
         try {
             const json = txt ? JSON.parse(txt) : {};
