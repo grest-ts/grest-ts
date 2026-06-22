@@ -552,56 +552,6 @@ await client.connect(({ incoming }) => incoming.on({ onEvent: async (e) => handl
 
 Both apply symmetrically: the server can also send request-response messages via `serverToClient` methods that define `success`.
 
-### Direct socket access via `GGSocketPool`
-
-If you need to bypass contract validation (e.g. writing a generic proxy, debugging the wire protocol), `GGSocketPool` is still available. Prefer `createClient()` in application code.
-
-```typescript
-import { GGSocketPool } from "@grest-ts/websocket"
-
-const socket = await GGSocketPool.getOrConnect({
-    domain: "ws://localhost:3000",
-    path: "/ws/chat",
-    middlewares: ChatApi.middlewares
-})
-
-const result = await socket.send("ChatApi.sendMessage", { text: "Hello!", channelId: "general" }, true)
-socket.registerHandler({ path: "ChatApi.newMessage", handler: (msg) => { ... } })
-socket.close()
-```
-
-### Connection Pool Management
-
-```typescript
-// Pool size
-GGSocketPool.size          // Active connections
-GGSocketPool.pendingSize   // Connections being established
-
-// Close all connections gracefully (waits for pending requests)
-await GGSocketPool.closeAll()
-
-// Close all connections immediately
-await GGSocketPool.closeAll(false)
-
-// Remove specific connection from pool (does not close it)
-GGSocketPool.removeFromPool(key)
-
-// List all connection keys (for debugging)
-GGSocketPool.getConnectionKeys()
-```
-
-### Query Parameters on Connect
-
-```typescript
-const socket = await GGSocketPool.getOrConnect({
-    domain: "ws://localhost:3000",
-    path: "/ws/chat",
-    query: { room: "general", language: "en" },
-    middlewares: ChatApi.middlewares
-})
-// Connects to: ws://localhost:3000/ws/chat?room=general&language=en
-```
-
 ## Byte-stream sockets
 
 Some sockets aren't an RPC API — a PTY stream, a log tail, a binary stream. Build those by declaring `{ raw: true }` on the **contract** instead of message maps, then bind with the **same builder** and `.done()`: the connection-level config (`.path` / `.use(WIRE)` / `.queryOnConnect` / `.connectPermission`) is identical, so a byte-stream socket coexists with typed schemas on the same `GGHttpServer`. After the handshake there's no message contract — you own the wire as opaque frames. A byte-stream contract has two client modes:

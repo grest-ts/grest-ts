@@ -1,7 +1,7 @@
 import {describe, it, expect, vi, beforeEach} from 'vitest'
 import {GGContext} from '@grest-ts/context'
 import {GGHeader} from '@grest-ts/http'
-import {GGSocketPool} from '@grest-ts/websocket'
+import {GGSocketPool} from '@grest-ts/websocket/internal'
 
 const DELIM = ':'
 const HANDSHAKE = 'h'
