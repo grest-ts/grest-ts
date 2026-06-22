@@ -1,6 +1,6 @@
 import {describe, it, expect} from 'vitest';
 import {GGContractExecutor} from './GGContractExecutor';
-import {ERROR} from './ERROR';
+import {ERROR, SERVER_ERROR} from './ERROR';
 import {
     NOT_AUTHORIZED,
     FORBIDDEN,
@@ -656,6 +656,24 @@ describe('GGContractExecutor', () => {
 
             expect(result.success).toBe(false);
             expect(result.type).toBe('SERVER_ERROR');
+        });
+    });
+
+    describe('createErrorObj()', () => {
+        it('returns a live error instance as-is, preserving its debug context', () => {
+            // The client's response parser synthesises this for an unparseable body —
+            // the offending text lives only in debugData, so reconstructing from wire
+            // JSON would throw it away.
+            const rich = new SERVER_ERROR({displayMessage: 'Failed to parse JSON', debugData: {text: '<html>502 Bad Gateway</html>'}});
+            const out = GGContractExecutor.createErrorObj(rich as never);
+            expect(out).toBe(rich);
+            expect(out.getDebugContext()?.debugData).toEqual({text: '<html>502 Bad Gateway</html>'});
+        });
+
+        it('reconstructs a typed error from wire JSON', () => {
+            const out = GGContractExecutor.createErrorObj({success: false, type: 'NOT_FOUND', context: {displayMessage: 'gone'}} as never, [NOT_FOUND]);
+            expect(out.type).toBe('NOT_FOUND');
+            expect(out.context?.displayMessage).toBe('gone');
         });
     });
 });

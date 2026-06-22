@@ -107,6 +107,11 @@ export class GGContractExecutor {
      * Convert error response JSON to error class instance.
      */
     public static createErrorObj<Type extends string, Data>(result: ERROR_JSON<Type, Data>, customErrors?: ANY_ERROR_CLS[]): ERROR<Type, Data> | typeof SERVER_ERROR.infer {
+        // Already a live error instance (e.g. the response parser synthesised a
+        // SERVER_ERROR for an unparseable body). Reconstructing it from wire JSON
+        // would drop its debug context (originalError / debugData / debugMessage) —
+        // the very detail that explains the failure — so return it as-is.
+        if (result instanceof ERROR) return result
         // Find custom error - support both array and object format
         const factory: ANY_ERROR_CLS = this.SYSTEM_ERRORS[result.type] ?? customErrors?.find(e => e.TYPE === result.type)
         if (factory) {
