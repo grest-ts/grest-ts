@@ -33,10 +33,10 @@ export class GGFileDownloadResponseParser {
                 if (typeof json === "object" && "success" in json && "type" in json) {
                     return json;
                 } else {
-                    return new SERVER_ERROR({displayMessage: "Invalid error response format!", debugData: {json}});
+                    return new SERVER_ERROR({displayMessage: `Unexpected error response shape (HTTP ${response.status}) — not a grest error envelope: ${bodySnippet(txt)}`, debugData: {json}});
                 }
             } catch (err) {
-                return new SERVER_ERROR({displayMessage: "Failed to parse JSON error response", originalError: err, debugData: {text: txt}});
+                return new SERVER_ERROR({displayMessage: `Failed to parse error response as JSON (HTTP ${response.status}): ${bodySnippet(txt)}`, originalError: err, debugData: {text: txt}});
             }
         }
     }
@@ -46,4 +46,12 @@ function parseFilenameFromContentDisposition(header: string | null): string | un
     if (!header) return undefined;
     const match = header.match(/filename=([^\s;]+)/);
     return match ? decodeURIComponent(match[1]) : undefined;
+}
+
+/** Collapse whitespace and clip an error body to a short, log-safe snippet so a
+ *  non-JSON / wrong-shape error response can say what it actually was. */
+function bodySnippet(body: string, max = 300): string {
+    const clean = body.replace(/\s+/g, " ").trim();
+    if (!clean) return "(empty body)";
+    return clean.length > max ? clean.slice(0, max) + "…" : clean;
 }
