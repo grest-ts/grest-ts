@@ -119,7 +119,7 @@ function ensureRegistry(httpServer: http.Server): WsRegistry {
     const captured = registry;
     httpServer.on('upgrade', (req, socket, head) => {
         const pathname = (req.url ?? '').split('?')[0];
-        // Exact match wins over any prefix; prefixes are only consulted as a fallback.
+        // Exact registrations take precedence, so a specific path can override a broad "/x/*" prefix.
         const matched = captured.wssByPath.get(pathname) ?? matchPrefix(captured.prefixRoutes, pathname);
         if (matched) {
             matched.handleUpgrade(req, socket, head, (ws) => {

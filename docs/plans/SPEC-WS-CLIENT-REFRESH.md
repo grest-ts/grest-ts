@@ -24,37 +24,37 @@ entry), there is no way to swap in a fresh value on the next attempt: `config.ur
 
 ## Design
 
-Add to the client config (shared by the typed and raw `createClient`):
+Add to the client config (shared by the typed and raw `createClient`). The connection params
+come from exactly ONE of two **mutually-exclusive** sources, expressed as a discriminated union
+so mixing them is a **compile error** (not just a runtime "sole source" rule):
 
 ```ts
-interface GGWebSocketClientConfig<TQuery> {
-    url?: string
-    query?: TQuery
-    reconnect?: boolean | GGReconnectConfig
-    middlewares?: GGTransportMiddleware[]
-    /**
-     * Resolve the volatile connection params before EVERY connect attempt (the first
-     * connect and every reconnect). Use for short-lived / rotating credentials — mint a
-     * fresh token here and it's never stale.
-     *
-     * When set, it is the SOLE source of `url` / `query` / `middlewares` for that attempt:
-     * its return is used outright and the static `url` / `query` / `middlewares` are ignored
-     * (one path, no merge). Return the complete set each time. Schema `.use()` wires always
-     * apply on top.
-     *
-     * Runs inside the connect path. On a RECONNECT attempt a throw is fed to `shouldRetry`
-     * (transient mint failure → backoff; `NOT_AUTHORIZED` / `FORBIDDEN` / `VALIDATION_ERROR`
-     * → terminal, final close "unrecoverable"). On the FIRST connect a throw rejects
-     * `connect()` directly (the initial attempt is not retried — decision (a) below).
-     */
-    beforeConnect?: () => GGConnectParams<TQuery> | Promise<GGConnectParams<TQuery>>
-}
+type GGWebSocketClientConfig<TQuery> =
+    // behaviour, common to both modes
+    { reconnect?: boolean | GGReconnectConfig; timeout?: number; logMode?: GGWsLogMode } & (
+    // static: fixed connection params, captured once
+    | { url?: string; query?: TQuery; middlewares?: GGTransportMiddleware[]; beforeConnect?: never }
+    // dynamic: resolved before EVERY connect attempt (first + every reconnect) — for short-lived /
+    // rotating credentials. Returns the COMPLETE url/query/middlewares each time (never stale).
+    // Cannot be combined with the static fields above (they are `never` in this arm).
+    | {
+        beforeConnect: () => GGConnectParams<TQuery> | Promise<GGConnectParams<TQuery>>
+        url?: never; query?: never; middlewares?: never
+      }
+    )
 
 interface GGConnectParams<TQuery> {
     url?: string
     query?: TQuery
     middlewares?: GGTransportMiddleware[]
 }
+```
+
+`beforeConnect` runs inside the connect path. On a RECONNECT attempt a throw is fed to
+`shouldRetry` (transient mint failure → backoff; `NOT_AUTHORIZED` / `FORBIDDEN` /
+`VALIDATION_ERROR` → terminal, final close "unrecoverable"). On the FIRST connect a throw
+rejects `connect()` directly (the initial attempt is not retried — decision (a) below). Schema
+`.use()` wires always apply on top of either mode.
 ```
 
 ## Where it lives — the single-path guarantee
@@ -97,10 +97,10 @@ Two invariants make first == reconnect by construction:
 ## Semantics
 
 - **When:** before the first connect and before every reconnect attempt.
-- **Sole source (decision):** when `beforeConnect` is set it is the *only* source of
-  `url` / `query` / `middlewares` — its return is used outright and the static `url` /
-  `query` / `middlewares` are ignored (one path, no merge). Schema `.use()` wires always
-  apply on top. Callers return the complete set each attempt.
+- **Sole source, type-enforced (decision):** `url`/`query`/`middlewares` come from *either*
+  the static fields *or* `beforeConnect`, never both — the config is a discriminated union, so
+  setting a static field alongside `beforeConnect` is a **compile error**. `beforeConnect`
+  returns the complete set each attempt; schema `.use()` wires always apply on top.
 - **Validation every attempt (decision):** the returned `query` is validated on every
   attempt via `validateWsQuery`. A `VALIDATION_ERROR` is **terminal** (added to the
   default `shouldRetry`'s terminal set, alongside `NOT_AUTHORIZED` / `FORBIDDEN`) — a

@@ -30,16 +30,8 @@ import {GGWsLogMode} from "./GGWsLogMode"
 export type {GGHeartbeatConfig}
 export type {GGConnectParams}
 
-export interface GGRawWebSocketClientConfig<TQuery = undefined> {
-    /**
-     * WebSocket server URL, e.g. "ws://localhost:3000" (or "" for same-origin in the browser).
-     * If omitted, uses service discovery (requires @grest-ts/discovery; node-only).
-     */
-    url?: string
-    /** Query parameters to include on connect; validated against the schema's `queryOnConnect`. */
-    query?: TQuery
-    /** Extra middlewares merged on top of the schema's, in order (e.g. a static auth token). */
-    middlewares?: GGTransportMiddleware[]
+/** Behaviour config common to both connection-param modes (static and beforeConnect). */
+export interface GGRawWebSocketClientOptions {
     /**
      * Auto-reconnect on unexpected drops. Default on (with backoff + liveness).
      * Pass an object to tune, or `false` to disable. A reconnected byte stream is a fresh
@@ -50,16 +42,40 @@ export interface GGRawWebSocketClientConfig<TQuery = undefined> {
     logMode?: GGWsLogMode
     /** Handshake timeout in ms. Default 5000. */
     handshakeTimeoutMs?: number
-    /**
-     * Resolve the volatile connection params before EVERY connect attempt (first connect and every
-     * reconnect) — for short-lived / rotating credentials. When set, it is the SOLE source of
-     * `url` / `query` / `middlewares`: its return is used outright and the static fields above are
-     * ignored, so return the complete set each time. Schema `.use()` wires always apply on top.
-     * A throw is fed to `shouldRetry`; the returned query is validated every attempt (invalid =
-     * terminal).
-     */
-    beforeConnect?: () => GGConnectParams<TQuery> | Promise<GGConnectParams<TQuery>>
 }
+
+/**
+ * Connection params come from exactly ONE of two mutually-exclusive sources (the union makes
+ * mixing static fields and `beforeConnect` a compile error): static `url` / `query` /
+ * `middlewares` captured once, or `beforeConnect` resolved before every attempt (for rotating
+ * credentials — returns the complete set each time). Schema `.use()` wires apply on top of both.
+ */
+export type GGRawWebSocketClientConfig<TQuery = undefined> = GGRawWebSocketClientOptions & (
+    | {
+        /**
+         * WebSocket server URL, e.g. "ws://localhost:3000" (or "" for same-origin in the browser).
+         * If omitted, uses service discovery (requires @grest-ts/discovery; node-only).
+         */
+        url?: string
+        /** Query parameters to include on connect; validated against the schema's `queryOnConnect`. */
+        query?: TQuery
+        /** Extra middlewares on top of the schema's, in order (e.g. a static auth token). */
+        middlewares?: GGTransportMiddleware[]
+        beforeConnect?: never
+    }
+    | {
+        /**
+         * Resolve the volatile connection params before EVERY connect attempt — returns the complete
+         * `url` / `query` / `middlewares` each time; the static fields above cannot be combined with
+         * it. A throw is fed to `shouldRetry` (`NOT_AUTHORIZED` / `FORBIDDEN` / `VALIDATION_ERROR`
+         * terminal); the returned query is validated every attempt.
+         */
+        beforeConnect: () => GGConnectParams<TQuery> | Promise<GGConnectParams<TQuery>>
+        url?: never
+        query?: never
+        middlewares?: never
+    }
+)
 
 export interface GGRawWebSocketClient {
     /** True when the socket is connected and the handshake has completed. */
@@ -117,8 +133,8 @@ GGRawWebSocketSchema.prototype.createClient = function (
         logMode,
         reconnect: normalizeReconnect(config?.reconnect),
         open: async () => {
-            // beforeConnect (when set) is the sole source of url/query/middlewares — resolved here
-            // so it runs on first connect AND every reconnect (no stale captured-once credential).
+            // Must resolve per-attempt here, never captured at createClient time — that is what
+            // keeps a rotating credential fresh across reconnects.
             const fresh = config?.beforeConnect ? await config.beforeConnect() : undefined
             const cfgUrl = fresh ? fresh.url : config?.url
             const query = fresh ? fresh.query : config?.query

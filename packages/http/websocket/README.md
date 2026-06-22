@@ -540,7 +540,7 @@ const client = EventsApi.createClient({
 await client.connect(({ incoming }) => incoming.on({ onEvent: async (e) => handle(e) }))
 ```
 
-- **Sole source:** when set, `beforeConnect` is the *only* source of `url` / `query` / `middlewares` — its return is used outright and the static `url` / `query` / `middlewares` are ignored (one path, no merge). Return the complete set each time; schema `.use()` wires always apply on top.
+- **Sole source (type-enforced):** connection params come from *either* the static `url`/`query`/`middlewares` *or* `beforeConnect` — never both. The config is a discriminated union, so setting a static field alongside `beforeConnect` is a **compile error**. `beforeConnect` returns the complete set each attempt; schema `.use()` wires always apply on top.
 - **Validated every attempt:** the returned `query` is validated each connect; a `VALIDATION_ERROR` is **terminal** (won't retry — a malformed query won't fix itself).
 - **Errors:** on a reconnect, a throw feeds `shouldRetry` (transient mint failure → backoff; `NOT_AUTHORIZED` / `FORBIDDEN` / `VALIDATION_ERROR` → final `onClose("unrecoverable")`). On the first connect, a throw rejects `connect()` (the initial attempt isn't auto-retried).
 - Available on both the typed and raw (`{ raw: true }`) `createClient`. No reconnect loop or token-refresh plumbing in app code.

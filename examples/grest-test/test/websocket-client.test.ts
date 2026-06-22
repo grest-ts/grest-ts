@@ -322,9 +322,10 @@ describe("WebSocket createClient (production client)", () => {
     describe("beforeConnect", () => {
 
         test("is the query source on first connect (server sees beforeConnect's value)", async () => {
+            // beforeConnect is the sole source: it returns the url too (can't be combined with a
+            // static `url` — that's a compile error now).
             const client = QuerySocketApi.createClient({
-                url: clientUrl("QuerySocketApi"),
-                beforeConnect: () => ({query: {room: "minted", version: 7}}),
+                beforeConnect: () => ({url: clientUrl("QuerySocketApi"), query: {room: "minted", version: 7}}),
             })
             await client.connect()
             try {
@@ -337,9 +338,8 @@ describe("WebSocket createClient (production client)", () => {
         test("re-runs on every reconnect — a fresh query reaches the server each attempt", async () => {
             let calls = 0
             const client = QuerySocketApi.createClient({
-                url: clientUrl("QuerySocketApi"),
                 reconnect: {initialDelayMs: 10},
-                beforeConnect: () => { calls++; return {query: {room: "r" + calls, version: calls}} },
+                beforeConnect: () => { calls++; return {url: clientUrl("QuerySocketApi"), query: {room: "r" + calls, version: calls}} },
             })
             await client.connect()
             try {
@@ -359,9 +359,8 @@ describe("WebSocket createClient (production client)", () => {
             let calls = 0
             const closeReasons: string[] = []
             const client = QuerySocketApi.createClient({
-                url: clientUrl("QuerySocketApi"),
                 reconnect: {initialDelayMs: 10},
-                beforeConnect: () => { calls++; return {query: {room: calls === 1 ? "ok" : "", version: 1}} },
+                beforeConnect: () => { calls++; return {url: clientUrl("QuerySocketApi"), query: {room: calls === 1 ? "ok" : "", version: 1}} },
             })
             client.onClose((reason) => closeReasons.push(reason))
             await client.connect()

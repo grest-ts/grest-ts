@@ -46,25 +46,8 @@ export type {GGHeartbeatConfig}
 export type {GGConnectParams}
 export type {GGReconnectConfig, GGWebSocketCloseReason}
 
-export interface GGWebSocketClientConfig<TQuery = undefined> {
-    /**
-     * WebSocket server URL, e.g. "ws://localhost:3000".
-     * If omitted, uses service discovery (requires @grest-ts/discovery).
-     * In browsers, pass an explicit URL (or "" for same-origin).
-     */
-    url?: string
-    /**
-     * Query parameters to include on connect. Typed from `queryOnConnect<T>()` if used.
-     * If the schema declares a query validator, it's applied here before connecting.
-     */
-    query?: TQuery
-    /**
-     * Extra middlewares merged on top of the schema's middlewares, in order.
-     * Use this to attach per-client concerns (e.g. a static auth token) without
-     * requiring callers to set up a GGContext around connect(). Manual
-     * header manipulation is intentionally not exposed — middleware is the API.
-     */
-    middlewares?: GGTransportMiddleware[]
+/** Behaviour config common to both connection-param modes (static and beforeConnect). */
+export interface GGWebSocketClientOptions {
     /**
      * Default timeout in ms for request/response outgoing calls. Defaults to 30 000.
      * Fire-and-forget methods ignore this.
@@ -76,27 +59,59 @@ export interface GGWebSocketClientConfig<TQuery = undefined> {
      * Manual `disconnect()` / `close()` always wins over reconnect.
      */
     reconnect?: boolean | GGReconnectConfig
-
     /**
      * Wire-log verbosity. `ALL` (default) logs every frame and lifecycle
      * transition; `NON_OK` logs only sketchy outcomes; `OFF` is silent
      * (fast path — no entry construction). Static for the client lifetime.
      */
     logMode?: GGWsLogMode
-
-    /**
-     * Resolve the volatile connection params before EVERY connect attempt (first connect and
-     * every reconnect) — for short-lived / rotating credentials (a freshly minted token, a signed
-     * URL). When set, it is the SOLE source of `url` / `query` / `middlewares`: its return is used
-     * outright, and the static `url` / `query` / `middlewares` above are ignored — so return the
-     * complete set each time. Schema `.use()` wires always apply on top.
-     *
-     * Runs inside the connect path: a throw is a failed attempt fed to `shouldRetry` (a transient
-     * mint failure backs off; `NOT_AUTHORIZED` / `FORBIDDEN` are terminal). The returned query is
-     * validated every attempt; an invalid query is terminal (fails the client).
-     */
-    beforeConnect?: () => GGConnectParams<TQuery> | Promise<GGConnectParams<TQuery>>
 }
+
+/**
+ * Connection params come from exactly ONE of two mutually-exclusive sources (the union below
+ * makes mixing them a compile error — you can't set both static fields and `beforeConnect`):
+ *
+ * - static: `url` / `query` / `middlewares`, captured once. For fixed connection params.
+ * - dynamic: `beforeConnect`, resolved before every connect attempt. For short-lived / rotating
+ *   credentials (a freshly minted token, a signed URL) — it returns the complete `url` / `query` /
+ *   `middlewares` each attempt, so they're never stale. Schema `.use()` wires apply on top of both.
+ */
+export type GGWebSocketClientConfig<TQuery = undefined> = GGWebSocketClientOptions & (
+    | {
+        /**
+         * WebSocket server URL, e.g. "ws://localhost:3000". If omitted, uses service discovery
+         * (requires @grest-ts/discovery). In browsers, pass an explicit URL (or "" for same-origin).
+         */
+        url?: string
+        /**
+         * Query parameters to include on connect. Typed from `queryOnConnect<T>()` if used; validated
+         * against the schema's query validator before connecting.
+         */
+        query?: TQuery
+        /**
+         * Extra middlewares on top of the schema's, in order — per-client concerns (e.g. a static
+         * auth token). For a credential that *refreshes*, prefer a context-key wire (auto-fresh on
+         * reconnect) or `beforeConnect`.
+         */
+        middlewares?: GGTransportMiddleware[]
+        beforeConnect?: never
+    }
+    | {
+        /**
+         * Resolve the volatile connection params before EVERY connect attempt (first connect and
+         * every reconnect). Returns the complete `url` / `query` / `middlewares` for that attempt;
+         * the static fields above cannot be combined with it. Schema `.use()` wires apply on top.
+         *
+         * Runs inside the connect path: a throw is a failed attempt fed to `shouldRetry` (a transient
+         * mint failure backs off; `NOT_AUTHORIZED` / `FORBIDDEN` / `VALIDATION_ERROR` are terminal).
+         * The returned query is validated every attempt.
+         */
+        beforeConnect: () => GGConnectParams<TQuery> | Promise<GGConnectParams<TQuery>>
+        url?: never
+        query?: never
+        middlewares?: never
+    }
+)
 
 export interface GGWebSocketSetupTools<TServerToClientImpl, TClientToServer> {
     incoming: {
@@ -255,8 +270,8 @@ GGWebSocketSchema.prototype.createClient = function (
         logMode,
         reconnect: normalizeReconnect(config?.reconnect),
         open: async () => {
-            // beforeConnect (when set) is the sole source of url/query/middlewares — resolved here
-            // so it runs on first connect AND every reconnect (no stale captured-once credential).
+            // Must resolve per-attempt here, never captured at createClient time — that is what
+            // keeps a rotating credential fresh across reconnects.
             const fresh = config?.beforeConnect ? await config.beforeConnect() : undefined
             const url = fresh ? fresh.url : config?.url
             const query = fresh ? fresh.query : config?.query
