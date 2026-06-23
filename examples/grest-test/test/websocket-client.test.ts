@@ -338,6 +338,7 @@ describe("WebSocket createClient (production client)", () => {
         test("re-runs on every reconnect — a fresh query reaches the server each attempt", async () => {
             let calls = 0
             const client = QuerySocketApi.createClient({
+                dedicated: true,  // beforeConnect re-evaluation on reconnect is dedicated-only behaviour
                 reconnect: {initialDelayMs: 10},
                 beforeConnect: () => { calls++; return {url: clientUrl("QuerySocketApi"), query: {room: "r" + calls, version: calls}} },
             })
@@ -359,6 +360,7 @@ describe("WebSocket createClient (production client)", () => {
             let calls = 0
             const closeReasons: string[] = []
             const client = QuerySocketApi.createClient({
+                dedicated: true,  // beforeConnect re-evaluation on reconnect is dedicated-only behaviour
                 reconnect: {initialDelayMs: 10},
                 beforeConnect: () => { calls++; return {url: clientUrl("QuerySocketApi"), query: {room: calls === 1 ? "ok" : "", version: 1}} },
             })
@@ -437,7 +439,7 @@ describe("WebSocket createClient (production client)", () => {
         })
 
         test("no-op when reconnect is disabled — the live connection is left intact", async () => {
-            const client = ClientTestSocketApi.createClient({url: clientUrl(), reconnect: false})
+            const client = ClientTestSocketApi.createClient({url: clientUrl(), reconnect: false, dedicated: true})
             await client.connect()
             try {
                 client.forceReconnect()

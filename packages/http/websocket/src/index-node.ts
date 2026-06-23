@@ -1,4 +1,5 @@
 import "./_dedupCheck";
+import "./client/GGSocketPool.node";
 // Type helpers
 export * from "./socket/WebSocketTypes";
 

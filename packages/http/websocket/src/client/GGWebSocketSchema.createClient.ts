@@ -18,6 +18,14 @@
  * client without any persistent-handler state to go stale.
  *
  * Works in both browser and Node.js contexts.
+ *
+ * ## Pooling
+ *
+ * By default, clients sharing the same URL + auth headers share one physical
+ * WebSocket connection. Each client registers its own setup hook; all hooks
+ * re-run on reconnect. Disconnect one client and only its handlers are removed;
+ * the connection stays alive for the others. Pass `{dedicated: true}` to opt
+ * out and get an exclusive connection with independent lifecycle control.
  */
 
 import {
@@ -27,7 +35,7 @@ import {
     SERVER_ERROR,
 } from "@grest-ts/schema"
 import {GGWebSocketSchema} from "../schema/GGWebSocketSchema"
-import {GGSocketPool} from "./GGSocketPool"
+import {GGSocketPool, GGPoolEntry} from "./GGSocketPool"
 import {GGSocket, type GGHeartbeatConfig} from "../socket/GGSocket"
 import {GGWsLogMode} from "./GGWsLogMode"
 import {validateWsQuery} from "./clientHandshake"
@@ -66,6 +74,13 @@ export interface GGWebSocketClientOptions {
      * (fast path — no entry construction). Static for the client lifetime.
      */
     logMode?: GGWsLogMode
+    /**
+     * When true, opens a dedicated connection that is not shared with other
+     * clients at the same URL. Use when you need independent lifecycle control,
+     * custom reconnect settings, or multiple instances of the same contract at
+     * the same URL. Defaults to false (pooled).
+     */
+    dedicated?: boolean
 }
 
 export type GGWebSocketClientConfig<TQuery = undefined> = GGWebSocketClientOptions & GGWsConnectSource<TQuery>
@@ -178,14 +193,17 @@ GGWebSocketSchema.prototype.createClient = function (
     const serverToClientContract = contract.serverToClient
     const timeout = config?.timeout ?? 30_000
     const logMode = config?.logMode ?? GGWsLogMode.ALL
+    const dedicated = config?.dedicated === true
 
-    // Outgoing — stable object; methods throw if called before/after connect.
+    // Mutable socket getter — set to the right source once the connection path is known.
+    let getActiveSocket: () => GGSocket | undefined = () => undefined
+
     const outgoingImpl: Record<string, any> = {}
     for (const methodName of Object.keys(clientToServerContract.methods)) {
         const contractFn = clientToServerContract.methods[methodName] as GGContractMethod
         const hasResponse = contractFn.success !== undefined
         outgoingImpl[methodName] = async (data: any): Promise<any> => {
-            const socket = connector.current()
+            const socket = getActiveSocket()
             if (!socket) {
                 throw new SERVER_ERROR({
                     displayMessage: "WebSocket client is not connected. Call connect() first.",
@@ -197,7 +215,7 @@ GGWebSocketSchema.prototype.createClient = function (
     }
     const outgoing = clientToServerContract.implement(outgoingImpl as any, {skipLocatorRegistration: true})
 
-    const buildSetupTools = (s: GGSocket): GGWebSocketSetupTools<any, any> => ({
+    const buildSetupTools = (s: GGSocket, pooled: boolean): GGWebSocketSetupTools<any, any> => ({
         incoming: {
             on(handlers: Record<string, any>) {
                 for (const methodName of Object.keys(handlers)) {
@@ -207,56 +225,158 @@ GGWebSocketSchema.prototype.createClient = function (
                     if (!contractFn) {
                         throw new Error(`Method "${methodName}" is not defined in serverToClient of "${schemaName}"`)
                     }
+                    const path = `${schemaName}.${methodName}`
+                    if (pooled && s.hasHandler(path)) {
+                        throw new Error(
+                            `Handler "${path}" is already registered on this pooled socket. ` +
+                            `Only one instance of "${schemaName}" can share a connection at the same URL. ` +
+                            `Use {dedicated: true} if you need multiple independent clients.`
+                        )
+                    }
                     const wrapped = (data: any) => {
                         logMode === GGWsLogMode.ALL && log.info(schemaName, `ws← ${schemaName}.${methodName}`, {kind: "incoming", methodName, payload: data})
                         return new GGPromise(
                             GGContractExecutor.call(contractFn, data, undefined, async (validated) => userHandler(validated))
                         )
                     }
-                    s.registerHandler({path: `${schemaName}.${methodName}`, handler: wrapped})
+                    s.registerHandler({path, handler: wrapped})
                 }
             },
         },
         outgoing,
     })
 
+    // -------------------------------------------------------------------------
+    // Dedicated path — one exclusive socket per client, existing behaviour.
+    // -------------------------------------------------------------------------
+    if (dedicated) {
+        let savedSetup: GGWebSocketSetup<any, any> | undefined
+
+        const connector = createConnector<GGSocket>({
+            schemaName,
+            logMode,
+            reconnect: normalizeReconnect(config?.reconnect),
+            open: async () => {
+                const {url, query, middlewares} = await resolveConnectParams(config)
+                const domain = await resolveWsDomain(url, schemaName)
+                return GGSocketPool.connect({
+                    domain,
+                    path: normalizedPath,
+                    query: validateWsQuery(queryValidator, query),
+                    middlewares: [...schemaMiddlewares, ...(middlewares ?? [])],
+                })
+            },
+            setup: async (s) => {
+                if (savedSetup) await savedSetup(buildSetupTools(s, false))
+            },
+        })
+
+        getActiveSocket = () => connector.current()
+
+        const client: GGWebSocketClient<any, any> = {
+            outgoing,
+            get isConnected(): boolean { return connector.isConnected() },
+            async connect(setup?: GGWebSocketSetup<any, any>): Promise<void> {
+                if (connector.isConnected()) return
+                savedSetup = setup
+                await connector.connect()
+            },
+            disconnect: () => connector.disconnect(),
+            close: () => connector.close(),
+            onClose(cb): any { connector.onClose(cb); return this },
+            onDisconnect(cb): any { connector.onDisconnect(cb); return this },
+            onError(cb): any { connector.onError(cb); return this },
+            forceReconnect: () => connector.forceReconnect(),
+        }
+
+        return client
+    }
+
+    // -------------------------------------------------------------------------
+    // Pooled path — shared connection, keyed on URL + auth headers.
+    // -------------------------------------------------------------------------
+    const clientId = Symbol()
+    let poolEntry: GGPoolEntry | undefined
+    let poolKey: string | undefined
+    let poolConnected = false
+    let finallyDisconnected = false
     let savedSetup: GGWebSocketSetup<any, any> | undefined
 
-    const connector = createConnector<GGSocket>({
-        schemaName,
-        logMode,
-        reconnect: normalizeReconnect(config?.reconnect),
-        open: async () => {
-            // Resolve per-attempt (never captured at createClient time) — that is what keeps a
-            // rotating credential fresh across reconnects.
+    const onCloseCallbacks: Array<(reason: GGWebSocketCloseReason, error?: Error) => void> = []
+    const onDisconnectCallbacks: Array<(reason: "manual" | "drop") => void> = []
+    const onErrorCallbacks: Array<(error: Error) => void> = []
+
+    getActiveSocket = () => poolEntry?.current()
+
+    const client: GGWebSocketClient<any, any> = {
+        outgoing,
+        get isConnected(): boolean { return poolEntry?.isConnected() ?? false },
+
+        async connect(setup?: GGWebSocketSetup<any, any>): Promise<void> {
+            if (finallyDisconnected) {
+                throw new SERVER_ERROR({
+                    displayMessage: "WebSocket client has been closed and cannot be reconnected. Create a new client.",
+                })
+            }
+            if (poolConnected) return
+            savedSetup = setup
+
             const {url, query, middlewares} = await resolveConnectParams(config)
             const domain = await resolveWsDomain(url, schemaName)
-            return GGSocketPool.connect({
+            const poolConfig = {
                 domain,
                 path: normalizedPath,
                 query: validateWsQuery(queryValidator, query),
                 middlewares: [...schemaMiddlewares, ...(middlewares ?? [])],
-            })
-        },
-        setup: async (s) => {
-            if (savedSetup) await savedSetup(buildSetupTools(s))
-        },
-    })
+            }
 
-    const client: GGWebSocketClient<any, any> = {
-        outgoing,
-        get isConnected(): boolean { return connector.isConnected() },
-        async connect(setup?: GGWebSocketSetup<any, any>): Promise<void> {
-            if (connector.isConnected()) return
-            savedSetup = setup
-            await connector.connect()
+            const key = await GGSocketPool.buildKey(poolConfig)
+            const entry = GGSocketPool.getOrCreateEntry(poolConfig, key)
+
+            // Set poolEntry before attach so outgoing calls inside the setup
+            // callback (e.g. initial subscribe) can resolve the live socket.
+            poolEntry = entry
+            poolKey = key
+
+            entry.registerDisconnect(clientId, (reason) => {
+                for (const cb of onDisconnectCallbacks) try { cb(reason) } catch (_) {}
+            })
+            entry.registerClose(clientId, (reason, error) => {
+                for (const cb of onCloseCallbacks) try { cb(reason as GGWebSocketCloseReason, error) } catch (_) {}
+            })
+            entry.registerError(clientId, (error) => {
+                for (const cb of onErrorCallbacks) try { cb(error) } catch (_) {}
+            })
+
+            await entry.attach(clientId, async (socket) => {
+                if (savedSetup) await savedSetup(buildSetupTools(socket, true))
+            })
+
+            poolConnected = true
         },
-        disconnect: () => connector.disconnect(),
-        close: () => connector.close(),
-        onClose(cb): any { connector.onClose(cb); return this },
-        onDisconnect(cb): any { connector.onDisconnect(cb); return this },
-        onError(cb): any { connector.onError(cb); return this },
-        forceReconnect: () => connector.forceReconnect(),
+
+        async disconnect(): Promise<void> {
+            if (!poolKey || finallyDisconnected) return
+            finallyDisconnected = true
+            GGSocketPool.detach(poolKey, clientId, schemaName + ".", true)
+            poolEntry = undefined
+            for (const cb of onDisconnectCallbacks) try { cb("manual") } catch (_) {}
+            for (const cb of onCloseCallbacks) try { cb("manual", undefined) } catch (_) {}
+        },
+
+        close(): void {
+            if (!poolKey || finallyDisconnected) return
+            finallyDisconnected = true
+            GGSocketPool.detach(poolKey, clientId, schemaName + ".", false)
+            poolEntry = undefined
+            for (const cb of onDisconnectCallbacks) try { cb("manual") } catch (_) {}
+            for (const cb of onCloseCallbacks) try { cb("manual", undefined) } catch (_) {}
+        },
+
+        onClose(cb): any { onCloseCallbacks.push(cb); return this },
+        onDisconnect(cb): any { onDisconnectCallbacks.push(cb); return this },
+        onError(cb): any { onErrorCallbacks.push(cb); return this },
+        forceReconnect(): void { poolEntry?.forceReconnect() },
     }
 
     return client

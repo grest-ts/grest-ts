@@ -123,7 +123,7 @@ GGWebSocketSchema.prototype[CALL_ON_FACTORY] = function <TClientToServer extends
                 const domain = runner.discoveryServer.getRoutingUrl(name);
 
                 // Run socket connection inside ctx so middlewares can read context values
-                const socket = await ctx.run(() => withTimeout(GGSocketPool.getOrConnect({
+                const socket = await ctx.run(() => withTimeout(GGSocketPool.connect({
                     domain: domain,
                     path: normalizedPath,
                     middlewares: middlewares
