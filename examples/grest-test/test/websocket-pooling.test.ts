@@ -13,6 +13,7 @@
 
 import {GG_TEST_RUNNER, GGTest} from "@grest-ts/testkit"
 import {GGSocketPool} from "@grest-ts/websocket/internal"
+import {GGLocatorScope} from "@grest-ts/locator"
 import {MainRuntime} from "../src/main"
 import {ClientTestSocketApi} from "../src/api/ClientTestSocketApi"
 
@@ -178,6 +179,52 @@ describe("WebSocket connection pooling", () => {
 
         await clientA.disconnect()
         await clientB.disconnect()
+    })
+
+    // -----------------------------------------------------------------------
+    // Scope isolation: two GGLocatorScopes (two runtimes in same process)
+    // must never share a pool bucket
+    // -----------------------------------------------------------------------
+
+    test("scope isolation — two GGLocatorScopes maintain separate pool buckets", async () => {
+        const url = clientUrl()
+
+        // Simulate two co-process runtimes, each with their own GGLocatorScope.
+        const scopeA = new GGLocatorScope("RuntimeA-test")
+        const scopeB = new GGLocatorScope("RuntimeB-test")
+
+        const clientA = ClientTestSocketApi.createClient({url})
+        const clientB = ClientTestSocketApi.createClient({url})
+
+        // Each client's connect() runs inside its runtime's scope, so the pool
+        // storage strategy routes to a different bucket per scope.
+        await scopeA.run(() => clientA.connect())
+        await scopeB.run(() => clientB.connect())
+
+        // Each scope sees exactly its own 1 entry — not the other scope's.
+        expect(scopeA.run(() => GGSocketPool.size)).toBe(1)
+        expect(scopeB.run(() => GGSocketPool.size)).toBe(1)
+
+        // Disconnect in scope A — scope B's pool is completely unaffected.
+        await scopeA.run(() => clientA.disconnect())
+        expect(scopeA.run(() => GGSocketPool.size)).toBe(0)
+        expect(scopeB.run(() => GGSocketPool.size)).toBe(1)
+
+        await scopeB.run(() => clientB.disconnect())
+        expect(scopeB.run(() => GGSocketPool.size)).toBe(0)
+    })
+
+    test("scope teardown closes all pooled connections for that scope", async () => {
+        const url = clientUrl()
+        const scope = new GGLocatorScope("RuntimeTeardown-test")
+
+        const client = ClientTestSocketApi.createClient({url})
+        await scope.run(() => client.connect())
+        expect(scope.run(() => GGSocketPool.size)).toBe(1)
+
+        // runTeardowns() simulates what GGRuntime.teardown() does at shutdown.
+        await scope.run(() => scope.runTeardowns())
+        expect(scope.run(() => GGSocketPool.size)).toBe(0)
     })
 
     // -----------------------------------------------------------------------

@@ -216,5 +216,6 @@ export abstract class GGRuntime {
             });
             await Promise.allSettled(teardownPromises);
         }
+        await this.scope.runTeardowns();
     }
 }

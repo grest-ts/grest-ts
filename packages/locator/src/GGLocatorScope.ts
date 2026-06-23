@@ -177,6 +177,19 @@ export class GGLocatorScope {
         this.parent.registrationStacks.forEach((value, name) => this.registrationStacks.set(name, value))
     }
 
+    // -----------
+
+    private readonly _teardowns: Array<() => void | Promise<void>> = []
+
+    public addTeardown(fn: () => void | Promise<void>): void {
+        this._teardowns.push(fn)
+    }
+
+    public async runTeardowns(): Promise<void> {
+        const fns = this._teardowns.splice(0)
+        await Promise.allSettled(fns.map(fn => fn()))
+    }
+
 }
 
 /**
