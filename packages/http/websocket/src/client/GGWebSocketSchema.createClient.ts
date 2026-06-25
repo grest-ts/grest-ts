@@ -250,6 +250,9 @@ GGWebSocketSchema.prototype.createClient = function (
             return GGSocketPool.connect(poolConfig)
         },
         setup: async (s) => {
+            // Reset tracked paths for the new socket so stale entries from prior
+            // connections don't linger if the setup callback changes which handlers it registers.
+            if (isPooled) registeredHandlerPaths.clear()
             if (savedSetup) await savedSetup(buildSetupTools(s))
         },
         disposeSocket: isPooled ? async (s) => {
