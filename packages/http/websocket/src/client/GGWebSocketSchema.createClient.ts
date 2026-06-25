@@ -195,9 +195,6 @@ GGWebSocketSchema.prototype.createClient = function (
     }
     const outgoing = clientToServerContract.implement(outgoingImpl as any, {skipLocatorRegistration: true})
 
-    // Tracks handler paths registered on the current socket so they can be removed on dispose.
-    const registeredHandlerPaths = new Set<string>()
-
     const buildSetupTools = (s: GGSocket): GGWebSocketSetupTools<any, any> => ({
         incoming: {
             on(handlers: Record<string, any>) {
@@ -214,9 +211,7 @@ GGWebSocketSchema.prototype.createClient = function (
                             GGContractExecutor.call(contractFn, data, undefined, async (validated) => userHandler(validated))
                         )
                     }
-                    const path = `${schemaName}.${methodName}`
-                    s.registerHandler({path, handler: wrapped})
-                    if (isPooled) registeredHandlerPaths.add(path)
+                    s.registerHandler({path: `${schemaName}.${methodName}`, handler: wrapped})
                 }
             },
         },
@@ -250,16 +245,10 @@ GGWebSocketSchema.prototype.createClient = function (
             return GGSocketPool.connect(poolConfig)
         },
         setup: async (s) => {
-            // Reset tracked paths for the new socket so stale entries from prior
-            // connections don't linger if the setup callback changes which handlers it registers.
-            if (isPooled) registeredHandlerPaths.clear()
             if (savedSetup) await savedSetup(buildSetupTools(s))
         },
         disposeSocket: isPooled ? async (s) => {
-            for (const path of registeredHandlerPaths) {
-                s.unregisterHandler(path)
-            }
-            registeredHandlerPaths.clear()
+            s.unregisterHandlersByPrefix(schemaName + '.')
             if (currentRelease) {
                 await currentRelease()
                 currentRelease = undefined

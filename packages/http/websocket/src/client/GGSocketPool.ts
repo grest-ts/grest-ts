@@ -127,20 +127,11 @@ export class GGSocketPool {
         return fullUrl + "::" + headerKey;
     }
 
-    static async getOrConnect<Query>(
-        config: GGSocketPoolConfig<Query>
-    ): Promise<GGSocket> {
-        await gateMiddlewares(config.middlewares);
-        const key = this.buildPoolKey(config);
-
+    private static async getOrConnectByKey(key: string, config: GGSocketPoolConfig<any>): Promise<GGSocket> {
         const existing = this.sockets.get(key);
-        if (existing) {
-            return existing;
-        }
+        if (existing) return existing;
         const pending = this.pendingSockets.get(key);
-        if (pending) {
-            return pending;
-        }
+        if (pending) return pending;
 
         const connectionPromise = this.openSocket(this.buildUrl(config), config, config.domain);
         this.pendingSockets.set(key, connectionPromise);
@@ -160,6 +151,13 @@ export class GGSocketPool {
         }
     }
 
+    static async getOrConnect<Query>(
+        config: GGSocketPoolConfig<Query>
+    ): Promise<GGSocket> {
+        await gateMiddlewares(config.middlewares);
+        return this.getOrConnectByKey(this.buildPoolKey(config), config);
+    }
+
     /**
      * Acquire a pooled connection with reference counting.
      * The returned `release()` must be called when the client disconnects.
@@ -170,7 +168,7 @@ export class GGSocketPool {
     ): Promise<{socket: GGSocket, release: () => Promise<void>}> {
         await gateMiddlewares(config.middlewares);
         const key = this.buildPoolKey(config);
-        const socket = await this.getOrConnect(config);
+        const socket = await this.getOrConnectByKey(key, config);
 
         this.poolRefCounts.set(key, (this.poolRefCounts.get(key) ?? 0) + 1);
 

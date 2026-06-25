@@ -311,6 +311,12 @@ export class GGSocket {
         this.handlers.delete(path);
     }
 
+    public unregisterHandlersByPrefix(prefix: string): void {
+        for (const key of this.handlers.keys()) {
+            if (key.startsWith(prefix)) this.handlers.delete(key)
+        }
+    }
+
     public setUnknownMessageHandler(handler: (path: string, data: any) => void): void {
         this.unknownMessageHandler = handler;
     }
