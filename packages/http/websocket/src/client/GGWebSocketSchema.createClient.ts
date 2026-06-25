@@ -153,10 +153,10 @@ declare module "../schema/GGWebSocketSchema" {
     interface GGWebSocketSchema<TDef> {
         createClient(
             config?: GGWebSocketClientConfig<(TDef & GGDuplexContractDefinition)["connect"] extends {input: {infer: infer Q}} ? Q : undefined>
-        ): GGWebSocketClient<
-            GGContractClient<(TDef & GGDuplexContractDefinition)["clientToServer"]>,
-            GGContractImplementation<(TDef & GGDuplexContractDefinition)["serverToClient"]>
-        >
+        ): TDef extends GGDuplexContractDefinition ? GGWebSocketClient<
+            GGContractClient<TDef["clientToServer"]>,
+            GGContractImplementation<TDef["serverToClient"]>
+        > : never
     }
 }
 

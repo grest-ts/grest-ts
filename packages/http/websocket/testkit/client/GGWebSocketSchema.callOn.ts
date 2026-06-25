@@ -14,7 +14,7 @@ import {GGSocketPool} from "../../src/client/GGSocketPool";
 import {GGContext} from "@grest-ts/context";
 import {GG_TRACE} from "@grest-ts/trace";
 import {GGWebSocketSchema} from "../../src/schema/GGWebSocketSchema";
-import {GGContractClient, GGContractImplementation, GGDuplexContractDefinition, GGPromise, GGContractMethod} from "@grest-ts/schema";
+import {GGContractClient, GGDuplexContractDefinition, GGPromise, GGContractMethod} from "@grest-ts/schema";
 import {parseContractResponse} from "@grest-ts/http/testkit";
 
 // ============================================================================
@@ -71,7 +71,9 @@ export type GGSocketCallMap<TClientToServer, TServerToClient> =
 
 declare module "../../src/schema/GGWebSocketSchema" {
     interface GGWebSocketSchema<TDef> extends GGCallOnFactory {
-        [CALL_ON_FACTORY](ctx: GGContext): GGSocketCallMap<GGContractClient<(TDef & GGDuplexContractDefinition)["clientToServer"]>, GGContractImplementation<(TDef & GGDuplexContractDefinition)["serverToClient"]>>;
+        [CALL_ON_FACTORY](ctx: GGContext): TDef extends GGDuplexContractDefinition
+            ? GGSocketCallMap<GGContractClient<TDef["clientToServer"]>, GGContractClient<TDef["serverToClient"]>>
+            : never;
     }
 }
 

@@ -1,6 +1,6 @@
 ---
 name: grest-ts
-description: Use whenever the user is using or considering grest-ts (contract-first TypeScript framework). Trigger signals: package.json contains @grest-ts/*; mentions of grest-ts, GGContractClass, GGRuntime, httpSchema, GGTest, GGTestContext, mockOf, @mockable, @testable, GGContextKey, GGConfig; user asks to scaffold a grest-ts service, design an API contract, or write integration tests with testkit.
+description: Use whenever the user is using or considering grest-ts (contract-first TypeScript framework). Trigger signals: package.json contains @grest-ts/*; mentions of grest-ts, GGContractClass, GGRuntime, GGHttpSchema, GGTest, GGTestContext, mockOf, @mockable, @testable, GGContextKey, GGConfig; user asks to scaffold a grest-ts service, design an API contract, or write integration tests with testkit.
 ---
 
 # grest-ts coding rules

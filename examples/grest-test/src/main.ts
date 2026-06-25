@@ -114,7 +114,7 @@ export class MainRuntime extends GGRuntime {
             .wsRaw(RawEchoApi, new RawEchoService().handleConnection)
             .ws(QuerySocketApi, querySocketService.handleConnection)
             .ws(WsCookieApi, new WsCookieService().handleConnection)
-            .wsRaw(RawAdminApi, (socket) => socket.onMessage((data) => socket.send(data)))
+            .wsRaw(RawAdminApi, (socket) => { socket.onMessage((data) => socket.send(data)) })
             .wsRaw(CustomClientProxyApi, (socket, _query, upgrade) => {
                 socket.onMessage((_data, isBinary) => socket.send(`${isBinary ? "bin" : "txt"} ${upgrade.path} ${upgrade.remoteAddress}`));
             })
