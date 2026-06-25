@@ -106,6 +106,12 @@ export interface GGConnectorHooks<TSocket extends GGLiveSocket> {
     open(): Promise<TSocket>
     /** Wire handlers on a freshly opened socket. `isReconnect` is true for every open after the first. */
     setup(socket: TSocket, isReconnect: boolean): Promise<void> | void
+    /**
+     * Called instead of `socket.teardown()`/`socket.close()` when the client disconnects.
+     * When provided, the connector fires disconnect/close callbacks itself rather than relying on
+     * the socket's onClose event — use for pooled connections that must not close the shared socket.
+     */
+    disposeSocket?: (socket: TSocket) => void | Promise<void>
 }
 
 export interface GGConnector<TSocket extends GGLiveSocket> {
@@ -171,7 +177,15 @@ export function createConnector<TSocket extends GGLiveSocket>(hooks: GGConnector
     const onDisconnectCallbacks: Array<(reason: "manual" | "drop") => void> = []
     const onErrorCallbacks: Array<(error: Error) => void> = []
 
+    // Guards against double-fire when teardown() inside disposeSocket fires onClose,
+    // which calls fireOnDisconnect, before disconnect()/close() fires it explicitly.
+    let manualDisconnectFired = false
+
     const fireOnDisconnect = (reason: "manual" | "drop") => {
+        if (reason === "manual") {
+            if (manualDisconnectFired) return
+            manualDisconnectFired = true
+        }
         for (const cb of onDisconnectCallbacks) {
             try { cb(reason) } catch (_) {}
         }
@@ -206,9 +220,14 @@ export function createConnector<TSocket extends GGLiveSocket>(hooks: GGConnector
         const newSocket = await hooks.open()
 
         // #1: If user called disconnect() while we were awaiting the handshake,
-        //     close the freshly-opened socket immediately — don't leak it.
+        //     release the socket immediately — don't leak it.
         if (finallyClosed) {
-            newSocket.close()
+            if (hooks.disposeSocket) {
+                const result = hooks.disposeSocket(newSocket)
+                if (result instanceof Promise) result.catch(() => {})
+            } else {
+                newSocket.close()
+            }
             return
         }
 
@@ -334,7 +353,14 @@ export function createConnector<TSocket extends GGLiveSocket>(hooks: GGConnector
             const s = socket
             socket = undefined
             if (s) {
-                await s.teardown()
+                if (hooks.disposeSocket) {
+                    await hooks.disposeSocket(s)
+                    fireOnDisconnect("manual")
+                    fireFinalClose("manual")
+                } else {
+                    await s.teardown()
+                    // onClose fires → fireOnDisconnect + fireFinalClose
+                }
             } else {
                 fireOnDisconnect("manual")
                 fireFinalClose("manual")
@@ -350,7 +376,15 @@ export function createConnector<TSocket extends GGLiveSocket>(hooks: GGConnector
             const s = socket
             socket = undefined
             if (s) {
-                s.close()
+                if (hooks.disposeSocket) {
+                    const result = hooks.disposeSocket(s)
+                    if (result instanceof Promise) result.catch(() => {})
+                    fireOnDisconnect("manual")
+                    fireFinalClose("manual")
+                } else {
+                    s.close()
+                    // onClose fires → fireOnDisconnect + fireFinalClose
+                }
             } else {
                 fireOnDisconnect("manual")
                 fireFinalClose("manual")
@@ -366,7 +400,9 @@ export function createConnector<TSocket extends GGLiveSocket>(hooks: GGConnector
 
         forceReconnect(): void {
             // No-op without reconnect — dropping the socket would just terminally close it.
-            if (finallyClosed || !reconnect || !socket) return
+            // Also no-op for pooled sockets — closing a shared socket would drop all other
+            // pooled clients using it, which is not what the caller expects.
+            if (finallyClosed || !reconnect || !socket || hooks.disposeSocket) return
             // finallyClosed is false, so the onClose handler treats this as a "drop" and reconnects.
             socket.close()
         },

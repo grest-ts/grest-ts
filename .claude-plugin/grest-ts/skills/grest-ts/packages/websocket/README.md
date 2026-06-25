@@ -125,6 +125,25 @@ export const ChatApi = new GGWebSocketSchema({
 })
 ```
 
+### Extendable schemas (one socket, many modules)
+
+When several feature modules should share a single connection but stay decoupled (each owning its own events, no central registry), declare the connection once with `GGDuplexExtendableContract` + `GGWebSocketExtendableSchema`, then let each module `extend` it from its own file. Extensions of the same anchor multiplex over **one physical socket** (the path is registered once); `extend` only accepts a contract created from that anchor's contract, and duplicate module names throw.
+
+```typescript
+// chat.ts — the connection, declared once
+export const ChatContract = new GGDuplexExtendableContract("Chat", {connect: {input: IsChatQuery, errors: [SERVER_ERROR]}})
+export const ChatSocket = new GGWebSocketExtendableSchema({contract: ChatContract, path: "ws/chat", use: [USER_TOKEN_WIRE]})
+
+// messaging.ts — a module; path/use/connect are inherited
+export const Messaging = ChatContract.extend("Messaging", {
+    clientToServer: {send: {input: IsMsg, success: IsAck, errors: [SERVER_ERROR], permission: GG_NO_PERMISSIONS}},
+    serverToClient: {message: {input: IsMsg}},
+})
+export const MessagingSocket = ChatSocket.extend(Messaging)
+```
+
+`MessagingSocket` is an ordinary `GGWebSocketSchema` — bind it with `.ws(MessagingSocket, handler)` and consume it with `MessagingSocket.createClient()` exactly as usual; sibling modules registered on the same anchor share the path.
+
 ## Permissions
 
 `clientToServer` methods declare a `permission`; the gate runs **per incoming message**, before the handler. `serverToClient` methods are server-originated — set `GG_NO_PERMISSIONS` (the gate ignores it). The opt-in / infectious rule from HTTP applies: any non-`GG_NO_PERMISSIONS` c2s permission, or a `connect.permission`, on any WS schema registered on the same `GGHttpServer` triggers strict mode for the whole server — every HTTP and WS route on it must then declare.

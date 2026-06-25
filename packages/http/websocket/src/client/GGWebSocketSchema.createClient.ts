@@ -170,6 +170,7 @@ GGWebSocketSchema.prototype.createClient = function (
     const schemaName = this.name
     const normalizedPath = this.path.startsWith("/") ? this.path : "/" + this.path
     const schemaMiddlewares = this.middlewares || []
+    const isPooled = (this as GGWebSocketSchema<any>).group !== (this as GGWebSocketSchema<any>)
     const queryValidator = contract.connect.method.input
     const clientToServerContract = contract.clientToServer
     const serverToClientContract = contract.serverToClient
@@ -218,6 +219,8 @@ GGWebSocketSchema.prototype.createClient = function (
     })
 
     let savedSetup: GGWebSocketSetup<any, any> | undefined
+    // For pooled schemas: holds the release() from the latest acquirePooled() call.
+    let currentRelease: (() => Promise<void>) | undefined
 
     const connector = createConnector<GGSocket>({
         schemaName,
@@ -228,16 +231,29 @@ GGWebSocketSchema.prototype.createClient = function (
             // rotating credential fresh across reconnects.
             const {url, query, middlewares} = await resolveConnectParams(config)
             const domain = await resolveWsDomain(url, schemaName)
-            return GGSocketPool.connect({
+            const poolConfig = {
                 domain,
                 path: normalizedPath,
                 query: validateWsQuery(queryValidator, query),
                 middlewares: [...schemaMiddlewares, ...(middlewares ?? [])],
-            })
+            }
+            if (isPooled) {
+                const {socket, release} = await GGSocketPool.acquirePooled(poolConfig)
+                currentRelease = release
+                return socket
+            }
+            return GGSocketPool.connect(poolConfig)
         },
         setup: async (s) => {
             if (savedSetup) await savedSetup(buildSetupTools(s))
         },
+        disposeSocket: isPooled ? async (s) => {
+            s.unregisterHandlersByPrefix(schemaName + '.')
+            if (currentRelease) {
+                await currentRelease()
+                currentRelease = undefined
+            }
+        } : undefined,
     })
 
     const client: GGWebSocketClient<any, any> = {

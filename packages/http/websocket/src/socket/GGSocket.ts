@@ -81,6 +81,7 @@ export class GGSocket {
     private isActive = true;
     private isCleanedUp = false;
     private tearingDownPromise?: Promise<void>;
+    private heartbeatStarted = false;
 
     private lastActivity = Date.now();
 
@@ -310,6 +311,12 @@ export class GGSocket {
         this.handlers.delete(path);
     }
 
+    public unregisterHandlersByPrefix(prefix: string): void {
+        for (const key of this.handlers.keys()) {
+            if (key.startsWith(prefix)) this.handlers.delete(key)
+        }
+    }
+
     public setUnknownMessageHandler(handler: (path: string, data: any) => void): void {
         this.unknownMessageHandler = handler;
     }
@@ -344,6 +351,8 @@ export class GGSocket {
      * (Node), else application-level PING frames (browser) — chosen automatically.
      */
     public startHeartbeat(config: GGHeartbeatConfig = {}): () => void {
+        if (this.heartbeatStarted) return () => {}
+        this.heartbeatStarted = true
         return startSocketHeartbeat(this.socket, {
             config,
             isActive: () => this.isActive,
