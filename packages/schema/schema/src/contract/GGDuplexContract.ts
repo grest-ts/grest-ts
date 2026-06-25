@@ -7,7 +7,7 @@ export interface GGDuplexContractDefinition {
     serverToClient: GGContractApiDefinition
 }
 
-export class GGDuplexContractClass<TDef extends GGDuplexContractDefinition> {
+export class GGDuplexContract<TDef extends GGDuplexContractDefinition> {
 
     public readonly name: string
     public readonly connect: GGContractFunction<TDef["connect"]>

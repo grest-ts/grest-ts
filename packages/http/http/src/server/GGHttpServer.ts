@@ -98,12 +98,12 @@ export class GGHttpServer {
 
     constructor(config?: GGHttpServerAdapterConfig) {
 
-        this.runtimeName = GGLocator.getScope().serviceName;
         this.scope = GGLocator.getScope();
+        this.runtimeName = this.scope.serviceName;
         this.configuredPort = config?.port ?? (process.env.PORT ? Number(process.env.PORT) : 0);
         this.cors = config?.cors;
 
-        GGLocator.getScope().setWithLifecycle(config?.key ?? GG_HTTP_SERVER, this, {
+        this.scope.setWithLifecycle(config?.key ?? GG_HTTP_SERVER, this, {
             type: GGLocatorServiceType.HTTP,
             start: this.start.bind(this),
             teardown: this.teardown.bind(this)

@@ -25,6 +25,7 @@ import type {GGTransportMiddleware} from "@grest-ts/context";
  *         list: GGRpc.GET("list"),
  *         create: GGRpc.POST("create")
  *     })
+ * @deprecated
  */
 export function httpSchema<TContract extends GGContractApiDefinition>(
     contract: GGContractClass<TContract>
@@ -32,6 +33,9 @@ export function httpSchema<TContract extends GGContractApiDefinition>(
     return new GGHttpSchemaBuilder(contract)
 }
 
+/**
+ * @deprecated
+ */
 class GGHttpSchemaBuilder<TContract extends GGContractApiDefinition, TContext = undefined> {
 
     private readonly _contract: GGContractClass<TContract>

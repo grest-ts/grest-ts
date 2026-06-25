@@ -82,6 +82,7 @@ export function defineSocketContract(
  * @example
  * export const ChatApi = webSocketSchema(Chat).path("ws/chat").use(AUTH).done()
  * export const Pty = webSocketSchema(PtyContract).path("ws/pty").use(SESSION).queryOnConnect(IsQ).done()
+ * @deprecated
  */
 export function webSocketSchema<TDef extends GGSocketContractMethods>(
     contract: GGSocketContract<TDef>
@@ -103,6 +104,9 @@ export function webSocketSchema(
     return new GGWebSocketSchemaBuilder(contract)
 }
 
+/**
+ * @deprecated
+ */
 class GGWebSocketSchemaBuilder<
     TClientToServer,
     TServerToClient,

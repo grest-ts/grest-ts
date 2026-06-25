@@ -1,5 +1,5 @@
-import {GGRpc, httpSchema} from "@grest-ts/http"
-import {GGContractClass, IsObject, IsString, VALIDATION_ERROR, GG_NO_PERMISSIONS } from "@grest-ts/schema";
+import {GGHttpSchema, GGRpc, httpSchema} from "@grest-ts/http"
+import {GGContractClass, IsObject, IsString, VALIDATION_ERROR, GG_NO_PERMISSIONS} from "@grest-ts/schema";
 
 // ---------------------------------------------------------
 // Type Schemas
@@ -28,8 +28,10 @@ export const BenchmarkApiContract = new GGContractClass("BenchmarkApi", {
     }
 })
 
-export const BenchmarkApi = httpSchema(BenchmarkApiContract)
-    .pathPrefix("api/benchmark")
-    .routes({
+export const BenchmarkApi = new GGHttpSchema({
+    contract: BenchmarkApiContract,
+    pathPrefix: "api/benchmark",
+    routes: {
         hello: GGRpc.GET("hello")
-    })
+    }
+});

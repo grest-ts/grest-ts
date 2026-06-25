@@ -5,8 +5,10 @@ import {
     IsObject,
     IsString,
     NOT_AUTHORIZED,
-    SERVER_ERROR, GG_NO_PERMISSIONS } from "@grest-ts/schema"
+    SERVER_ERROR, GG_NO_PERMISSIONS, GGDuplexContract
+} from "@grest-ts/schema"
 import {GGContextKey, GGInbound, GGOutbound, GGTransportMiddleware} from "@grest-ts/context"
+import {GGHttpSchema, httpSchema} from "@grest-ts/http";
 
 // ---------------------------------------------------------
 // Context keys
@@ -60,7 +62,10 @@ export const AuthedSocketMiddleware: GGTransportMiddleware = {
 // Contract
 // ---------------------------------------------------------
 
-export const AuthedSocketApiContract = defineSocketContract("AuthedSocketApi", {
+export const AuthedSocketApiContract = new GGDuplexContract("AuthedSocketApi", {
+    connect: {
+        errors: [NOT_AUTHORIZED, SERVER_ERROR]
+    },
     clientToServer: {
         whoAmI: {
             success: IsAuthedUser,
@@ -71,10 +76,13 @@ export const AuthedSocketApiContract = defineSocketContract("AuthedSocketApi", {
     serverToClient: {},
 })
 
-export const AuthedSocketApi = webSocketSchema(AuthedSocketApiContract)
-    .path("ws/authed-test")
-    .use(AuthedSocketMiddleware)
-    .done()
+export const AuthedSocketApi = new GGHttpSchema({
+    contract: AuthedSocketApiContract,
+    use: [AuthedSocketMiddleware],
+    routes: {
+        "ws/authed-test": GGDuplex.duplex(AuthedSocketApiContract)
+    }
+});
 
-export type AuthedSocketIncoming = GGContractImplementation<typeof AuthedSocketApiContract.methods["clientToServer"]>
-export type AuthedSocketOutgoing = GGContractClient<typeof AuthedSocketApiContract.methods["serverToClient"]>
+export type AuthedSocketIncoming = GGContractImplementation<typeof AuthedSocketApiContract["clientToServer"]>
+export type AuthedSocketOutgoing = GGContractClient<typeof AuthedSocketApiContract["serverToClient"]>
