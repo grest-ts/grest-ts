@@ -81,6 +81,7 @@ export class GGSocket {
     private isActive = true;
     private isCleanedUp = false;
     private tearingDownPromise?: Promise<void>;
+    private heartbeatStarted = false;
 
     private lastActivity = Date.now();
 
@@ -344,6 +345,8 @@ export class GGSocket {
      * (Node), else application-level PING frames (browser) — chosen automatically.
      */
     public startHeartbeat(config: GGHeartbeatConfig = {}): () => void {
+        if (this.heartbeatStarted) return () => {}
+        this.heartbeatStarted = true
         return startSocketHeartbeat(this.socket, {
             config,
             isActive: () => this.isActive,

@@ -170,6 +170,7 @@ GGWebSocketSchema.prototype.createClient = function (
     const schemaName = this.name
     const normalizedPath = this.path.startsWith("/") ? this.path : "/" + this.path
     const schemaMiddlewares = this.middlewares || []
+    const isPooled = (this as GGWebSocketSchema<any>).group !== (this as GGWebSocketSchema<any>)
     const queryValidator = contract.connect.method.input
     const clientToServerContract = contract.clientToServer
     const serverToClientContract = contract.serverToClient
@@ -194,6 +195,9 @@ GGWebSocketSchema.prototype.createClient = function (
     }
     const outgoing = clientToServerContract.implement(outgoingImpl as any, {skipLocatorRegistration: true})
 
+    // Tracks handler paths registered on the current socket so they can be removed on dispose.
+    const registeredHandlerPaths = new Set<string>()
+
     const buildSetupTools = (s: GGSocket): GGWebSocketSetupTools<any, any> => ({
         incoming: {
             on(handlers: Record<string, any>) {
@@ -210,7 +214,9 @@ GGWebSocketSchema.prototype.createClient = function (
                             GGContractExecutor.call(contractFn, data, undefined, async (validated) => userHandler(validated))
                         )
                     }
-                    s.registerHandler({path: `${schemaName}.${methodName}`, handler: wrapped})
+                    const path = `${schemaName}.${methodName}`
+                    s.registerHandler({path, handler: wrapped})
+                    if (isPooled) registeredHandlerPaths.add(path)
                 }
             },
         },
@@ -218,6 +224,8 @@ GGWebSocketSchema.prototype.createClient = function (
     })
 
     let savedSetup: GGWebSocketSetup<any, any> | undefined
+    // For pooled schemas: holds the release() from the latest acquirePooled() call.
+    let currentRelease: (() => Promise<void>) | undefined
 
     const connector = createConnector<GGSocket>({
         schemaName,
@@ -228,16 +236,32 @@ GGWebSocketSchema.prototype.createClient = function (
             // rotating credential fresh across reconnects.
             const {url, query, middlewares} = await resolveConnectParams(config)
             const domain = await resolveWsDomain(url, schemaName)
-            return GGSocketPool.connect({
+            const poolConfig = {
                 domain,
                 path: normalizedPath,
                 query: validateWsQuery(queryValidator, query),
                 middlewares: [...schemaMiddlewares, ...(middlewares ?? [])],
-            })
+            }
+            if (isPooled) {
+                const {socket, release} = await GGSocketPool.acquirePooled(poolConfig)
+                currentRelease = release
+                return socket
+            }
+            return GGSocketPool.connect(poolConfig)
         },
         setup: async (s) => {
             if (savedSetup) await savedSetup(buildSetupTools(s))
         },
+        disposeSocket: isPooled ? async (s) => {
+            for (const path of registeredHandlerPaths) {
+                s.unregisterHandler(path)
+            }
+            registeredHandlerPaths.clear()
+            if (currentRelease) {
+                await currentRelease()
+                currentRelease = undefined
+            }
+        } : undefined,
     })
 
     const client: GGWebSocketClient<any, any> = {

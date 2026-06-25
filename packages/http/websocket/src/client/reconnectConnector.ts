@@ -106,6 +106,12 @@ export interface GGConnectorHooks<TSocket extends GGLiveSocket> {
     open(): Promise<TSocket>
     /** Wire handlers on a freshly opened socket. `isReconnect` is true for every open after the first. */
     setup(socket: TSocket, isReconnect: boolean): Promise<void> | void
+    /**
+     * Called instead of `socket.teardown()`/`socket.close()` when the client disconnects.
+     * When provided, the connector fires disconnect/close callbacks itself rather than relying on
+     * the socket's onClose event — use for pooled connections that must not close the shared socket.
+     */
+    disposeSocket?: (socket: TSocket) => void | Promise<void>
 }
 
 export interface GGConnector<TSocket extends GGLiveSocket> {
@@ -334,7 +340,14 @@ export function createConnector<TSocket extends GGLiveSocket>(hooks: GGConnector
             const s = socket
             socket = undefined
             if (s) {
-                await s.teardown()
+                if (hooks.disposeSocket) {
+                    await hooks.disposeSocket(s)
+                    fireOnDisconnect("manual")
+                    fireFinalClose("manual")
+                } else {
+                    await s.teardown()
+                    // onClose fires → fireOnDisconnect + fireFinalClose
+                }
             } else {
                 fireOnDisconnect("manual")
                 fireFinalClose("manual")
@@ -350,7 +363,15 @@ export function createConnector<TSocket extends GGLiveSocket>(hooks: GGConnector
             const s = socket
             socket = undefined
             if (s) {
-                s.close()
+                if (hooks.disposeSocket) {
+                    const result = hooks.disposeSocket(s)
+                    if (result instanceof Promise) result.catch(() => {})
+                    fireOnDisconnect("manual")
+                    fireFinalClose("manual")
+                } else {
+                    s.close()
+                    // onClose fires → fireOnDisconnect + fireFinalClose
+                }
             } else {
                 fireOnDisconnect("manual")
                 fireFinalClose("manual")

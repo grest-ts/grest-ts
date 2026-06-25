@@ -11,6 +11,7 @@ import {GG_TEST_RUNNER, GGTest} from "@grest-ts/testkit"
 import {MainRuntime} from "../src/main"
 import {MessagingSocket} from "../src/api/ChatMessagingApi"
 import {PresenceSocket} from "../src/api/ChatPresenceApi"
+import {GGSocketPool} from "@grest-ts/websocket/internal"
 
 const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 
@@ -54,5 +55,29 @@ describe("WebSocket extendable schemas (pooled path)", () => {
             await messaging.disconnect()
             await presence.disconnect()
         }
+    })
+
+    test("two extended clients share exactly one physical socket", async () => {
+        GGSocketPool.__clearForTesting()
+
+        const messaging = MessagingSocket.createClient({url: chatUrl()})
+        const presence = PresenceSocket.createClient({url: chatUrl()})
+
+        await messaging.connect(({incoming}) => {
+            incoming.on({message: async () => {}})
+        })
+        await presence.connect(({incoming}) => {
+            incoming.on({presenceChanged: async () => {}})
+        })
+
+        try {
+            expect(GGSocketPool.size).toBe(1)
+        } finally {
+            await messaging.disconnect()
+            await presence.disconnect()
+        }
+
+        // After both disconnect the pool is empty.
+        expect(GGSocketPool.size).toBe(0)
     })
 })

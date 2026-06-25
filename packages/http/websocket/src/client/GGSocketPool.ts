@@ -20,6 +20,7 @@ export interface GGSocketPoolConfig<Query> {
 export class GGSocketPool {
     private static sockets = new Map<string, GGSocket>();
     private static pendingSockets = new Map<string, Promise<GGSocket>>();
+    private static poolRefCounts = new Map<string, number>();
     private static adapter: any = null;
     private static adapterPromise: Promise<any> | null = null;
 
@@ -72,6 +73,7 @@ export class GGSocketPool {
     public static __clearForTesting(): void {
         this.sockets.clear();
         this.pendingSockets.clear();
+        this.poolRefCounts.clear();
         this.adapter = null;
         this.adapterPromise = null;
     }
@@ -118,16 +120,18 @@ export class GGSocketPool {
         return buildHandshakeHeaders(config.middlewares ?? []);
     }
 
+    private static buildPoolKey(config: GGSocketPoolConfig<any>): string {
+        const headers = this.buildHeaders(config);
+        const fullUrl = this.buildUrl(config);
+        const headerKey = Object.entries(headers).sort().map(([k, v]) => `${k}=${v}`).join('&');
+        return fullUrl + "::" + headerKey;
+    }
+
     static async getOrConnect<Query>(
         config: GGSocketPoolConfig<Query>
     ): Promise<GGSocket> {
         await gateMiddlewares(config.middlewares);
-        const headers = this.buildHeaders(config);
-        const fullUrl = this.buildUrl(config);
-
-        // Create connection key based on URL + headers
-        const headerKey = Object.entries(headers).sort().map(([k, v]) => `${k}=${v}`).join('&');
-        const key = fullUrl + "::" + headerKey;
+        const key = this.buildPoolKey(config);
 
         const existing = this.sockets.get(key);
         if (existing) {
@@ -138,7 +142,7 @@ export class GGSocketPool {
             return pending;
         }
 
-        const connectionPromise = this.openSocket(fullUrl, config, config.domain);
+        const connectionPromise = this.openSocket(this.buildUrl(config), config, config.domain);
         this.pendingSockets.set(key, connectionPromise);
 
         try {
@@ -147,12 +151,48 @@ export class GGSocketPool {
             this.pendingSockets.delete(key);
             socket.onClose(() => {
                 this.sockets.delete(key);
+                this.poolRefCounts.delete(key);
             });
             return socket;
         } catch (error) {
             this.pendingSockets.delete(key);
             throw error;
         }
+    }
+
+    /**
+     * Acquire a pooled connection with reference counting.
+     * The returned `release()` must be called when the client disconnects.
+     * The socket is only torn down when the last holder calls `release()`.
+     */
+    static async acquirePooled<Query>(
+        config: GGSocketPoolConfig<Query>
+    ): Promise<{socket: GGSocket, release: () => Promise<void>}> {
+        await gateMiddlewares(config.middlewares);
+        const key = this.buildPoolKey(config);
+        const socket = await this.getOrConnect(config);
+
+        this.poolRefCounts.set(key, (this.poolRefCounts.get(key) ?? 0) + 1);
+
+        let released = false;
+        const release = async () => {
+            if (released) return;
+            released = true;
+            const newCount = (this.poolRefCounts.get(key) ?? 1) - 1;
+            if (newCount <= 0) {
+                this.poolRefCounts.delete(key);
+                // Remove from pool eagerly so size is 0 before teardown's onClose fires.
+                const s = this.sockets.get(key);
+                if (s) {
+                    this.sockets.delete(key);
+                    await s.teardown();
+                }
+            } else {
+                this.poolRefCounts.set(key, newCount);
+            }
+        };
+
+        return {socket, release};
     }
 
     /**
