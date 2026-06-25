@@ -1,7 +1,7 @@
 {
   "//": "THIS FILE IS GENERATED - DO NOT EDIT",
   "name": "@grest-ts/metrics",
-  "version": "0.0.64",
+  "version": "0.0.65",
   "type": "module",
   "license": "MIT",
   "description": "Metrics library for Grest Framework",
@@ -49,10 +49,10 @@
     "node": ">=24"
   },
   "peerDependencies": {
-    "@grest-ts/common": "0.0.64",
-    "@grest-ts/locator": "0.0.64"
+    "@grest-ts/common": "0.0.65",
+    "@grest-ts/locator": "0.0.65"
   },
   "devDependencies": {
-    "@grest-ts/testkit": "0.0.64"
+    "@grest-ts/testkit": "0.0.65"
   }
 }
