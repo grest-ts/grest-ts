@@ -15,6 +15,26 @@ export type GGWebSocketHandler<TDef extends GGDuplexContractDefinition> = (
     query: GGConnectQuery<TDef["connect"]>
 ) => void
 
+// Schemas sharing a `group` (extensions of one GGWebSocketExtendableSchema) multiplex over a
+// single GGSocketServer: the first one bound creates it (registering the path once); later
+// siblings attach their connection contributor to the same server. A standalone schema is its
+// own group, so it keeps the strict one-server-per-path behaviour.
+const groupSocketServers = new WeakMap<object, WeakMap<object, GGSocketServer<any>>>();
+
+function groupSocketServer(group: object, http: object, create: () => GGSocketServer<any>): GGSocketServer<any> {
+    let byHttp = groupSocketServers.get(group);
+    if (!byHttp) {
+        byHttp = new WeakMap();
+        groupSocketServers.set(group, byHttp);
+    }
+    let server = byHttp.get(http);
+    if (!server) {
+        server = create();
+        byHttp.set(http, server);
+    }
+    return server;
+}
+
 export function startWebSocketServer(
     schema: GGWebSocketSchema<any>,
     onConnection: any,
@@ -23,13 +43,13 @@ export function startWebSocketServer(
     const contract = schema.contract
     const {schemaName, normalizedPath, middlewares, permissionsChecker, connectPermission, queryValidator} = prepareSocketServer(schema, config)
 
-    const socketServer = new GGSocketServer(config.http, {
+    const socketServer = groupSocketServer(schema.group, config.http, () => new GGSocketServer(config.http, {
         apiName: schemaName,
         path: normalizedPath,
         middlewares,
         queryValidator,
         heartbeat: config.heartbeat,
-    });
+    }));
 
     socketServer.onConnection(async (socket: GGSocket, queryArgs: any): Promise<void> => {
         const clientToServerContract = contract.clientToServer

@@ -41,6 +41,10 @@ import {BenchmarkService} from "./services/BenchmarkService"
 import {ClientTestSocketService} from "./services/ClientTestSocketService"
 import {AuthedSocketService} from "./services/AuthedSocketService"
 import {QuerySocketService} from "./services/QuerySocketService"
+import {MessagingSocket} from "./api/ChatMessagingApi"
+import {PresenceSocket} from "./api/ChatPresenceApi"
+import {ChatMessagingService} from "./services/ChatMessagingService"
+import {ChatPresenceService} from "./services/ChatPresenceService"
 import {GGConfigLocator, GGConfigStoreFile, GGConfigStoreLocal, GGResource, GGSecret, GGSetting} from "@grest-ts/config";
 import {GGMetricsLoader} from "@grest-ts/metrics";
 import {MainConfigApi} from "./MainConfig.api";
@@ -120,6 +124,8 @@ export class MainRuntime extends GGRuntime {
             })
             .ws(WsPermissionsApi, new WsPermissionsService().handleConnection)
             .ws(WsFeaturePermissionsApi, new WsFeaturePermissionsService().handleConnection)
+            .ws(MessagingSocket, new ChatMessagingService().handle)
+            .ws(PresenceSocket, new ChatPresenceService().handle)
 
         GGOpenApiDocs.register({http: httpServer, title: "Grest Test API", version: "1.0.0", specPath: "/openapi.json", docsPath: "/docs"});
 
