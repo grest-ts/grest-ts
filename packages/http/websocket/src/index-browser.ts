@@ -12,6 +12,8 @@ export * from "./socket/GGSocket";
 // API Schema
 export {GGWebSocketSchema} from "./schema/GGWebSocketSchema";
 export type {GGWebSocketSchemaConfig} from "./schema/GGWebSocketSchema";
+export {GGWebSocketExtendableSchema} from "./schema/GGWebSocketExtendableSchema";
+export type {GGWebSocketExtendableSchemaConfig} from "./schema/GGWebSocketExtendableSchema";
 export {GGRawWebSocketSchema} from "./schema/GGRawWebSocketSchema";
 export type {GGRawWebSocketSchemaConfig} from "./schema/GGRawWebSocketSchema";
 

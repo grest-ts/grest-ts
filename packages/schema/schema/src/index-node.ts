@@ -13,6 +13,7 @@ try {
 export * from "./contract/GGContractClass";
 export * from "./contract/GGContractFunction";
 export * from "./contract/GGDuplexContract";
+export * from "./contract/GGDuplexExtendableContract";
 export * from "./contract/GGRawSocketContract";
 export * from "./contract/GGContractExecutor";
 export * from "./contract/ERROR";

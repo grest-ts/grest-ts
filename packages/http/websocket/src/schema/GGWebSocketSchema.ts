@@ -7,6 +7,12 @@ export interface GGWebSocketSchemaConfig<TDef> {
     contract: GGDuplexContract<TDef & GGDuplexContractDefinition>
     path: string
     use?: readonly GGTransportMiddleware[]
+    /**
+     * Connection-pooling key. Schemas sharing a `group` multiplex over one physical socket
+     * (one per http.Server on the server, one per group on the client). Set by
+     * `GGWebSocketExtendableSchema.extend()`; defaults to the schema itself (a group of one).
+     */
+    group?: object
 }
 
 /**
@@ -26,6 +32,7 @@ export class GGWebSocketSchema<TDef> {
     public readonly name: string
     public readonly path: string
     public readonly middlewares: readonly GGTransportMiddleware[]
+    public readonly group: object
     public readonly contract: GGDuplexContract<TDef & GGDuplexContractDefinition>
     declare readonly clientToServer: TDef extends GGDuplexContractDefinition ? WebSocketIncoming<GGContractImplementation<TDef["clientToServer"]>> : never
     declare readonly serverToClient: TDef extends GGDuplexContractDefinition ? WebSocketOutgoing<GGContractClient<TDef["serverToClient"]>> : never
@@ -35,6 +42,7 @@ export class GGWebSocketSchema<TDef> {
         this.name = config.contract.name
         this.path = config.path
         this.middlewares = Object.freeze([...(config.use ?? [])])
+        this.group = config.group ?? this
         this.contract = config.contract
         Object.freeze(this)
     }
