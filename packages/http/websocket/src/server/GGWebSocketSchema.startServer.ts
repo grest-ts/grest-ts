@@ -6,13 +6,13 @@ import type {GGSocket} from "../socket/GGSocket"
 import {GGWebSocketSchema} from "../schema/GGWebSocketSchema";
 import {GGSocketServer} from "./GGSocketServer";
 import {WebSocketIncoming, WebSocketOutgoing} from "../socket/WebSocketTypes";
-import {GGContractClient, GGContractImplementation, GGDuplexContractDefinition} from "@grest-ts/schema";
+import {GGConnectQuery, GGContractClient, GGContractImplementation, GGDuplexContractDefinition} from "@grest-ts/schema";
 import {SocketServerConfig, prepareSocketServer} from "./prepareSocketServer";
 
 export type GGWebSocketHandler<TDef extends GGDuplexContractDefinition> = (
     incoming: WebSocketIncoming<GGContractImplementation<TDef["clientToServer"]>>,
     outgoing: WebSocketOutgoing<GGContractClient<TDef["serverToClient"]>>,
-    query: TDef["connect"] extends {input: {infer: infer Q}} ? Q : undefined
+    query: GGConnectQuery<TDef["connect"]>
 ) => void
 
 export function startWebSocketServer(

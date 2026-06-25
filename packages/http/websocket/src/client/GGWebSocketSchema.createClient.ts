@@ -21,6 +21,7 @@
  */
 
 import {
+    GGConnectQuery,
     GGContractClient,
     GGContractExecutor,
     GGContractImplementation,
@@ -152,7 +153,7 @@ export interface GGWebSocketClient<TClientToServer, TServerToClientImpl> {
 declare module "../schema/GGWebSocketSchema" {
     interface GGWebSocketSchema<TDef> {
         createClient(
-            config?: GGWebSocketClientConfig<(TDef & GGDuplexContractDefinition)["connect"] extends {input: {infer: infer Q}} ? Q : undefined>
+            config?: GGWebSocketClientConfig<GGConnectQuery<(TDef & GGDuplexContractDefinition)["connect"]>>
         ): TDef extends GGDuplexContractDefinition ? GGWebSocketClient<
             GGContractClient<TDef["clientToServer"]>,
             GGContractImplementation<TDef["serverToClient"]>

@@ -5,12 +5,12 @@
 import type {GGRawSocket} from "../socket/GGRawSocket"
 import {GGRawWebSocketSchema} from "../schema/GGRawWebSocketSchema"
 import {GGSocketServer, type GGWsUpgrade} from "./GGSocketServer"
-import {GGRawSocketContractDefinition} from "@grest-ts/schema"
+import {GGConnectQuery, GGRawSocketContractDefinition} from "@grest-ts/schema"
 import {SocketServerConfig, prepareSocketServer} from "./prepareSocketServer"
 
 export type GGRawWebSocketHandler<TDef extends GGRawSocketContractDefinition> = (
     socket: GGRawSocket,
-    query: TDef["connect"] extends {input: {infer: infer Q}} ? Q : undefined,
+    query: GGConnectQuery<TDef["connect"]>,
     upgrade: GGWsUpgrade
 ) => void | Promise<void>
 

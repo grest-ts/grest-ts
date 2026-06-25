@@ -10,7 +10,7 @@
  * customClient schemas have no client here — their client is foreign by definition.
  */
 
-import {GGRawSocketContractDefinition, SERVER_ERROR} from "@grest-ts/schema"
+import {GGConnectQuery, GGRawSocketContractDefinition, SERVER_ERROR} from "@grest-ts/schema"
 import {GGRawWebSocketSchema} from "../schema/GGRawWebSocketSchema"
 import {GGRawSocket} from "../socket/GGRawSocket"
 import type {GGHeartbeatConfig} from "../socket/GGSocket"
@@ -82,7 +82,7 @@ export interface GGRawWebSocketClient {
 declare module "../schema/GGRawWebSocketSchema" {
     interface GGRawWebSocketSchema<TDef> {
         createClient(
-            config?: GGRawWebSocketClientConfig<(TDef & GGRawSocketContractDefinition)["connect"] extends {input: {infer: infer Q}} ? Q : undefined>
+            config?: GGRawWebSocketClientConfig<GGConnectQuery<(TDef & GGRawSocketContractDefinition)["connect"]>>
         ): GGRawWebSocketClient
     }
 }

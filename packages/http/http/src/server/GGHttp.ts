@@ -7,12 +7,12 @@ import {registerHttpSchema} from "./GGHttpSchema.startServer";
 export class GGHttp {
 
     /**
-     * Protected (not private) so that plugin modules can access the underlying server
-     * via module augmentation (e.g. @grest-ts/openapi adds .openApi() to the builder).
+     * Protected (not private) so plugin packages can reach them from `declare module`
+     * augmentations (@grest-ts/openapi's .openApi(), @grest-ts/websocket's .ws()/.wsRaw()).
      * Do not tighten back to private.
      */
     protected readonly httpServer: GGHttpServer
-    private readonly middlewares: GGTransportMiddleware[] = [];
+    protected readonly middlewares: GGTransportMiddleware[] = [];
 
     constructor(httpServer: GGHttpServer) {
         this.httpServer = httpServer;
@@ -31,15 +31,6 @@ export class GGHttp {
             http: this.httpServer,
             middlewares: this.middlewares,
         });
-        return this;
-    }
-
-    /**
-     * @internal Hook the websocket package uses to implement .ws()/.wsRaw() via module
-     * augmentation — it needs the server and accumulated middlewares without exposing them.
-     */
-    public _bind(register: (server: GGHttpServer, middlewares: readonly GGTransportMiddleware[]) => void): this {
-        register(this.httpServer, this.middlewares);
         return this;
     }
 }

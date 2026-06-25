@@ -1,7 +1,7 @@
 /**
  * Augments GGHttp with .ws()/.wsRaw() — the registration surface for typed and raw sockets,
  * symmetric with .http(). Lives in the websocket package (which depends on @grest-ts/http) to
- * avoid a circular dependency; GGHttp exposes _bind() so this can reach the server + middlewares.
+ * avoid a circular dependency; reaches GGHttp's protected httpServer/middlewares via augmentation.
  */
 
 import {GGHttp} from "@grest-ts/http"
@@ -25,13 +25,11 @@ declare module "@grest-ts/http" {
 }
 
 GGHttp.prototype.ws = function (this: GGHttp, schema: GGWebSocketSchema<any>, handler: any): GGHttp {
-    return this._bind((http, middlewares) => {
-        startWebSocketServer(schema, handler, {http, middlewares: [...middlewares]})
-    })
+    startWebSocketServer(schema, handler, {http: this.httpServer, middlewares: this.middlewares})
+    return this
 }
 
 GGHttp.prototype.wsRaw = function (this: GGHttp, schema: GGRawWebSocketSchema<any>, handler: any): GGHttp {
-    return this._bind((http, middlewares) => {
-        startRawWebSocketServer(schema, handler, {http, middlewares: [...middlewares]})
-    })
+    startRawWebSocketServer(schema, handler, {http: this.httpServer, middlewares: this.middlewares})
+    return this
 }
