@@ -1,6 +1,6 @@
-import {GGRpc, GGHeader, httpSchema, GGHttpSchema} from "@grest-ts/http"
-import {defineSocketContract, GGWebSocketSchema, webSocketSchema} from "@grest-ts/websocket"
-import {FORBIDDEN, GGContractClass, GGContractClient, GGContractImplementation, GG_NO_PERMISSIONS, IsArray, IsEnum, IsObject, IsString, NOT_AUTHORIZED, SERVER_ERROR, GGDuplexContract} from "@grest-ts/schema"
+import {GGRpc, GGHeader, GGHttpSchema} from "@grest-ts/http"
+import {GGWebSocketSchema} from "@grest-ts/websocket"
+import {FORBIDDEN, GGContractClass, GG_NO_PERMISSIONS, IsArray, IsEnum, IsObject, IsString, NOT_AUTHORIZED, SERVER_ERROR, GGDuplexContract} from "@grest-ts/schema"
 import {enumOf, type Values} from "@grest-ts/common"
 
 export const WirePermission = enumOf({
@@ -87,7 +87,7 @@ export const WireOrgScopedApiContract = new GGContractClass("WireOrgScopedApi", 
 
 export const WireOrgScopedApi = new GGHttpSchema({
     contract: WireOrgScopedApiContract,
-    pathPrefix: "api/wire-org-scoped",
+    pathPrefix: "api/wire-org",
     use: [USER_TOKEN_WIRE, ORG_TOKEN_WIRE],
     routes: {
         orgInfo: GGRpc.GET("info"),
@@ -110,9 +110,6 @@ export const WireLiveApiContract = new GGDuplexContract("WireLiveApi", {
 
 export const WireLiveApi = new GGWebSocketSchema({
     contract: WireLiveApiContract,
-    path: "api/wire-live",
+    path: "ws/wire-live",
     use: [USER_TOKEN_WIRE],
 })
-
-export type WireLiveIncoming = GGContractImplementation<typeof WireLiveApiContract["clientToServer"]>
-export type WireLiveOutgoing = GGContractClient<typeof WireLiveApiContract["serverToClient"]>

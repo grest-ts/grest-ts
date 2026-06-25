@@ -11,8 +11,9 @@
  *   - Multiple contracts on one server
  */
 
-import {defineSocketContract, webSocketSchema} from "@grest-ts/websocket";
+import {GGWebSocketSchema} from "@grest-ts/websocket";
 import {
+    GGDuplexContract,
     IsString, IsNumber, IsBoolean, IsArray, IsObject, IsLiteral,
     IsDiscriminated, VALIDATION_ERROR, SERVER_ERROR, ERROR, GG_NO_PERMISSIONS } from "@grest-ts/schema";
 
@@ -51,7 +52,8 @@ export const IsPresenceUpdate = IsDiscriminated("status", {
 // Chat contract — demonstrates request/response and fire-and-forget
 // ---------------------------------------------------------------------------
 
-export const ChatContract = defineSocketContract("ChatApi", {
+export const ChatContract = new GGDuplexContract("ChatApi", {
+    connect: {},
     clientToServer: {
         // REQUEST/RESPONSE — client sends, expects a reply
         sendMessage: {
@@ -102,7 +104,8 @@ export const ChatContract = defineSocketContract("ChatApi", {
 // Notification contract — demonstrates server-push only
 // ---------------------------------------------------------------------------
 
-export const NotificationContract = defineSocketContract("NotificationApi", {
+export const NotificationContract = new GGDuplexContract("NotificationApi", {
+    connect: {},
     clientToServer: {
         subscribe: {
             input: IsObject({
@@ -145,12 +148,14 @@ export const AsyncApiBearerAuth = {
 // Schemas
 // ---------------------------------------------------------------------------
 
-export const ChatApiSchema = webSocketSchema(ChatContract)
-    .path("ws/chat")
-    .use(AsyncApiBearerAuth)
-    .done();
+export const ChatApiSchema = new GGWebSocketSchema({
+    contract: ChatContract,
+    path: "ws/chat",
+    use: [AsyncApiBearerAuth],
+});
 
-export const NotificationApiSchema = webSocketSchema(NotificationContract)
-    .path("ws/notifications")
-    .use(AsyncApiBearerAuth)
-    .done();
+export const NotificationApiSchema = new GGWebSocketSchema({
+    contract: NotificationContract,
+    path: "ws/notifications",
+    use: [AsyncApiBearerAuth],
+});

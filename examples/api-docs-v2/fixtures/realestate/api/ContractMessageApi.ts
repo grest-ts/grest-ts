@@ -1,4 +1,4 @@
-import {GGRpc, httpSchema} from "@grest-ts/http";
+import {GGRpc, GGHttpSchema} from "@grest-ts/http";
 import {FORBIDDEN, GGContractClass, IsArray, IsEmail, IsLiteral, IsNumber, IsObject, IsString, IsTuple, NOT_AUTHORIZED, NOT_FOUND, SERVER_ERROR, VALIDATION_ERROR } from "@grest-ts/schema";
 import {GG_COMPANY_AUTH_TOKEN} from "../middleware/CompanyAuthHeader";
 import {IsApartmentId, IsBuildingId, IsClientId, IsContractId, IsContractMessageId, IsDate, IsTemplateId, IsInvoiceId, IsLanguage, IsUserId} from "../Brands";
@@ -252,11 +252,11 @@ export const ContractMessageApiContract = new GGContractClass("ContractMessageAp
 // API Definition
 // ---------------------------------------------------------
 
-export const ContractMessageApi = httpSchema(ContractMessageApiContract)
-    .pathPrefix("gg/contractMessage")
-    .use(GG_USER_AUTH)
-    .use(GG_COMPANY_AUTH_TOKEN)
-    .routes({
+export const ContractMessageApi = new GGHttpSchema({
+    contract: ContractMessageApiContract,
+    pathPrefix: "gg/contractMessage",
+    use: [GG_USER_AUTH, GG_COMPANY_AUTH_TOKEN],
+    routes: {
         list: GGRpc.POST("list"),
         sendWelcomeEmail: GGRpc.POST("sendWelcomeEmail"),
         listReadyToSendInvoices: GGRpc.POST("listReadyToSendInvoices"),
@@ -267,5 +267,6 @@ export const ContractMessageApi = httpSchema(ContractMessageApiContract)
         sendContractEndingEmail: GGRpc.POST("sendContractEndingEmail"),
         getEmailAddresses: GGRpc.POST("getEmailAddresses"),
         sendCustomEmail: GGRpc.POST("sendCustomEmail")
-    })
+    },
+})
 

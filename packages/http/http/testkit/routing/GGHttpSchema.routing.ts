@@ -8,11 +8,11 @@ import {GGHttpSchema} from "../../src/schema/GGHttpSchema";
 import {GGContractApiDefinition} from "@grest-ts/schema";
 
 // WeakMap to store per-instance routing selectors
-const routingSelectors = new WeakMap<GGHttpSchema<any, any>, GGLocalRoutingStrategySelector>()
+const routingSelectors = new WeakMap<GGHttpSchema<any>, GGLocalRoutingStrategySelector>()
 
 // Module augmentation
 declare module "../../src/schema/GGHttpSchema" {
-    interface GGHttpSchema<TContract extends GGContractApiDefinition, TContext = {}> {
+    interface GGHttpSchema<TContract extends GGContractApiDefinition> {
         /**
          * Routing selector for this API (for testing)
          */
@@ -22,7 +22,7 @@ declare module "../../src/schema/GGHttpSchema" {
 
 // Add routing to HttpApiSchema prototype
 Object.defineProperty(GGHttpSchema.prototype, 'routing', {
-    get(this: GGHttpSchema<any, any>) {
+    get(this: GGHttpSchema<any>) {
         let selector = routingSelectors.get(this)
         if (!selector) {
             selector = new GGLocalRoutingStrategySelector(this.name)

@@ -55,7 +55,7 @@ const localeCodec = HeaderType.codecTo(IsGGIntlLocaleContext, {
  * Wire binding for GG_INTL_LOCALE: reads the standard Accept-Language request header into
  * the locale key (server) and writes it back from the key (client). The Accept-Language
  * value is parsed into {locale, language, country}; a browser sends it automatically.
- * Bind with httpSchema(...).use(intlLocaleHeader()).
+ * Bind with new GGHttpSchema({contract, pathPrefix, use: [intlLocaleHeader()], routes}).
  */
 export function intlLocaleHeader(): GGTransportMiddleware {
     return {

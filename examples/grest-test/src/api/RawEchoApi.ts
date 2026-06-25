@@ -1,5 +1,5 @@
-import {defineSocketContract, webSocketSchema} from "@grest-ts/websocket"
-import {IsObject, IsString} from "@grest-ts/schema"
+import {GGRawWebSocketSchema} from "@grest-ts/websocket"
+import {GGRawSocketContract, IsObject, IsString, NOT_AUTHORIZED, SERVER_ERROR} from "@grest-ts/schema"
 import {AuthedSocketMiddleware} from "./AuthedSocketApi"
 
 /**
@@ -7,8 +7,15 @@ import {AuthedSocketMiddleware} from "./AuthedSocketApi"
  * AuthedSocketApi — proving a raw socket rides the exact same handshake auth as a
  * schema socket. After auth, the server owns the wire and echoes bytes.
  */
-export const RawEchoApi = webSocketSchema(defineSocketContract("RawEchoApi", {raw: true}))
-    .path("ws/raw-echo")
-    .use(AuthedSocketMiddleware)
-    .queryOnConnect(IsObject({room: IsString}))
-    .done()
+export const RawEchoApiContract = new GGRawSocketContract("RawEchoApi", {
+    connect: {
+        input: IsObject({room: IsString}),
+        errors: [NOT_AUTHORIZED, SERVER_ERROR],
+    },
+})
+
+export const RawEchoApi = new GGRawWebSocketSchema({
+    contract: RawEchoApiContract,
+    path: "ws/raw-echo",
+    use: [AuthedSocketMiddleware],
+})

@@ -1,5 +1,5 @@
 import {GGContractClass, IsObject, IsString, IsArray, IsBoolean, IsNumber, SERVER_ERROR } from "@grest-ts/schema"
-import {GGRpc, httpSchema} from "@grest-ts/http"
+import {GGRpc, GGHttpSchema} from "@grest-ts/http"
 import {UNAUTHORIZED, NOT_FOUND, NAME_TAKEN} from "./errors"
 import {IsProject, IsProjectRepo, IsLayoutProfile, IsProjectId, IsProjectImageId} from "./schemas"
 import {GG_USER_TOKEN, GG_ORG_TOKEN} from "../auth/AuthContext"
@@ -120,11 +120,11 @@ export const ProjectApiContract = new GGContractClass("ProjectApi", {
     },
 })
 
-export const ProjectApi = httpSchema(ProjectApiContract)
-    .pathPrefix("api")
-    .use(GG_USER_TOKEN)
-    .use(GG_ORG_TOKEN)
-    .routes({
+export const ProjectApi = new GGHttpSchema({
+    contract: ProjectApiContract,
+    pathPrefix: "api",
+    use: [GG_USER_TOKEN, GG_ORG_TOKEN],
+    routes: {
         create: GGRpc.POST("projects"),
         get: GGRpc.POST("projects/get"),
         list: GGRpc.GET("projects"),
@@ -136,4 +136,5 @@ export const ProjectApi = httpSchema(ProjectApiContract)
         generateKeyPair: GGRpc.POST("projects/generate-key-pair"),
         githubInstallUrl: GGRpc.GET("github/install-url"),
         githubListRepos: GGRpc.GET("github/repos"),
-    })
+    },
+})

@@ -27,7 +27,7 @@ export interface ToAsyncApiOptions {
  * (success + each error type), correctly modelling that both parties can receive
  * any of them.
  */
-type AnySocketSchema = GGWebSocketSchema<any, any, any, any, any> | GGRawWebSocketSchema<any>;
+type AnySocketSchema = GGWebSocketSchema<any> | GGRawWebSocketSchema<any>;
 
 function isRaw(schema: AnySocketSchema): schema is GGRawWebSocketSchema<any> {
     return "raw" in schema;
@@ -54,8 +54,9 @@ export function toAsyncApi(
 
         // Connection-level permission overrides middleware-derived security
         // for the channel: handshake gate enforces it before the socket opens.
-        const connectSecurity = wsSchema.connectPermission !== undefined
-            ? permissionToSecurity(wsSchema.connectPermission, securitySchemes as any)
+        const connectPermission = wsSchema.contract.connect.method.permission;
+        const connectSecurity = connectPermission !== undefined
+            ? permissionToSecurity(connectPermission, securitySchemes as any)
             : null;
         const effectiveChannelSecurity = connectSecurity ?? channelSecurity;
 

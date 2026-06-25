@@ -20,7 +20,7 @@ import {GGHttpServer} from "./GGHttpServer";
 import {GGLog} from "@grest-ts/logger";
 import {GGHttpPermissionsChecker} from "../schema/GGHttpPermissionsChecker";
 
-export interface GGHttpSchemaConfig {
+export interface GGHttpRegisterConfig {
     /**
      * The HTTP request handler to register with.
      */
@@ -31,29 +31,18 @@ export interface GGHttpSchemaConfig {
     middlewares?: GGTransportMiddleware[];
 }
 
-declare module "../schema/GGHttpSchema" {
-    interface GGHttpSchema<TContract extends GGContractApiDefinition> {
-        /**
-         * Start server with direct implementation.
-         * Uses parseRequest from use classes without transform.
-         * For custom transforms, use createServer() instead.
-         */
-        register(implementation: GGContractImplementation<TContract>, config?: GGHttpSchemaConfig): void
-    }
-}
-
-GGHttpSchema.prototype.register = function <TContract extends GGContractApiDefinition>(
-    this: GGHttpSchema<TContract>,
+export function registerHttpSchema<TContract extends GGContractApiDefinition>(
+    schema: GGHttpSchema<TContract>,
     implementation: GGContractImplementation<TContract>,
-    config?: GGHttpSchemaConfig
-) {
-    return setupRoutes(this, implementation, config)
+    config?: GGHttpRegisterConfig
+): void {
+    setupRoutes(schema, implementation, config)
 }
 
 function setupRoutes<TContract extends GGContractApiDefinition>(
     httpSchema: GGHttpSchema<TContract>,
     implementation: GGContractImplementation<TContract>,
-    config?: GGHttpSchemaConfig
+    config?: GGHttpRegisterConfig
 ) {
     config ??= {};
     config.middlewares ??= [];
@@ -63,7 +52,7 @@ function setupRoutes<TContract extends GGContractApiDefinition>(
     const server = config.http ?? GGLocator.getScope().get(GG_HTTP_SERVER);
     if (!server) throw new Error(`No HTTP server found. Make sure to register GGHttpServerAdapter in the scope or pass handler via config`)
 
-    server._registerSchema(httpSchema as GGHttpSchema<any, any>);
+    server._registerSchema(httpSchema as GGHttpSchema<any>);
 
     const pathPrefix = "/" + httpSchema.pathPrefix + "/"
     const apiMiddlewares = httpSchema.apiMiddlewares;

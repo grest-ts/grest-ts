@@ -10,7 +10,7 @@ import {checkWiresImplemented} from "./checkers/checkWiresImplemented";
 import {checkPermissionsAtStart} from "./checkers/checkPermissionsAtStart";
 import {checkWireConflicts} from "./checkers/checkWireConflicts";
 import "../schema/GGWireContextKey.node";
-import {GGContractMethod, GGPermission} from "@grest-ts/schema";
+import {GGContractMethod} from "@grest-ts/schema";
 import type {GGTransportMiddleware} from "@grest-ts/context";
 // Forward declaration — actual type lives in @grest-ts/websocket to avoid circular dep.
 // GGHttpServer only stores the array; callers cast as needed. `contract` is absent for
@@ -18,12 +18,12 @@ import type {GGTransportMiddleware} from "@grest-ts/context";
 type AnyWebSocketSchema = {
     name: string;
     path: string;
-    contract?: {
-        clientToServer: {methods: Record<string, GGContractMethod>};
-        serverToClient: {methods: Record<string, GGContractMethod>};
+    contract: {
+        connect: {method: GGContractMethod};
+        clientToServer?: {methods: Record<string, GGContractMethod>};
+        serverToClient?: {methods: Record<string, GGContractMethod>};
     };
     middlewares: readonly GGTransportMiddleware[];
-    connectPermission?: GGPermission;
 };
 
 export interface GGCorsConfig {
@@ -81,7 +81,7 @@ export class GGHttpServer {
      * Mutable during compose(); frozen and exposed as ReadonlyArray once the server starts.
      * Framework-internal — only setupRoutes() (in GGHttpSchema.startServer.ts) should push here.
      */
-    private readonly _registeredSchemas: GGHttpSchema<any, any>[] = [];
+    private readonly _registeredSchemas: GGHttpSchema<any>[] = [];
     private readonly _registeredWebSocketSchemas: AnyWebSocketSchema[] = [];
 
     public readonly httpServer: http.Server;
@@ -192,7 +192,7 @@ export class GGHttpServer {
     // =========================================================================
 
     /** @internal Called by setupRoutes() during compose(). Do not call directly. */
-    public _registerSchema(schema: GGHttpSchema<any, any>): void {
+    public _registerSchema(schema: GGHttpSchema<any>): void {
         this._registeredSchemas.push(schema);
     }
 
@@ -200,18 +200,18 @@ export class GGHttpServer {
      * All GGHttpSchema instances registered on this server, in registration order.
      * Available from the moment compose() begins; frozen (no further push allowed) once start() is called.
      */
-    get registeredSchemas(): ReadonlyArray<GGHttpSchema<any, any>> {
+    get registeredSchemas(): ReadonlyArray<GGHttpSchema<any>> {
         return this._registeredSchemas;
     }
 
-    /** @internal Called by GGWebSocketSchema.startServer(). Do not call directly. */
+    /** @internal Called by GGHttp.ws()/.wsRaw(). Do not call directly. */
     public _registerWebSocketSchema(schema: AnyWebSocketSchema): void {
         this._registeredWebSocketSchemas.push(schema);
     }
 
     /**
      * All GGWebSocketSchema instances registered on this server, in registration order.
-     * Populated automatically by GGWebSocketSchema.startServer() / .register().
+     * Populated when a socket schema is registered via GGHttp.ws()/.wsRaw().
      */
     get registeredWebSocketSchemas(): ReadonlyArray<AnyWebSocketSchema> {
         return this._registeredWebSocketSchemas;

@@ -1,17 +1,8 @@
-import {WebSocketIncoming, WebSocketOutgoing} from "@grest-ts/websocket"
-import {
-    WsFeatureIncoming,
-    WsFeatureOutgoing,
-    WsPermissionsIncoming,
-    WsPermissionsOutgoing,
-} from "../api/WsPermissionsApi"
-
-type Incoming = WebSocketIncoming<WsPermissionsIncoming>
-type Outgoing = WebSocketOutgoing<WsPermissionsOutgoing>
+import {WsFeaturePermissionsApi, WsPermissionsApi} from "../api/WsPermissionsApi"
 
 export class WsPermissionsService {
 
-    public handleConnection = (incoming: Incoming, outgoing: Outgoing): void => {
+    public handleConnection = (incoming: typeof WsPermissionsApi.clientToServer, outgoing: typeof WsPermissionsApi.serverToClient): void => {
         incoming.on({
             publicMessage: async (text) => `pub:${text}`,
             needsRead: async (text) => `read:${text}`,
@@ -30,12 +21,9 @@ export class WsPermissionsService {
     }
 }
 
-type FeatureIncoming = WebSocketIncoming<WsFeatureIncoming>
-type FeatureOutgoing = WebSocketOutgoing<WsFeatureOutgoing>
-
 export class WsFeaturePermissionsService {
 
-    public handleConnection = (incoming: FeatureIncoming, _outgoing: FeatureOutgoing): void => {
+    public handleConnection = (incoming: typeof WsFeaturePermissionsApi.clientToServer, _outgoing: typeof WsFeaturePermissionsApi.serverToClient): void => {
         incoming.on({
             ping: async () => "pong",
         })

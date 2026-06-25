@@ -37,7 +37,7 @@ export interface ContractDoc {
     headers?: ParamDoc[];
     /** Cookies the transport middleware reads, via a cookie() binding (name + value schema). */
     cookies?: ParamDoc[];
-    /** WS only — populated when the schema declares `.connectPermission(...)`. */
+    /** WS only — populated when the contract declares `connect.permission`. */
     connectPermission?: PermissionDoc;
     methods: MethodDoc[];
 }

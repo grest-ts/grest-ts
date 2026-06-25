@@ -1,5 +1,5 @@
 import {GGContractClass, IsObject, IsString, IsArray, SERVER_ERROR } from "@grest-ts/schema"
-import {GGRpc, httpSchema} from "@grest-ts/http"
+import {GGRpc, GGHttpSchema} from "@grest-ts/http"
 import {UNAUTHORIZED, NOT_FOUND} from "./errors"
 import {IsAgent, IsTaskId, IsAgentId} from "./schemas"
 import {GG_USER_TOKEN, GG_ORG_TOKEN} from "../auth/AuthContext"
@@ -55,15 +55,16 @@ export const AgentApiContract = new GGContractClass("AgentApi", {
     },
 })
 
-export const AgentApi = httpSchema(AgentApiContract)
-    .pathPrefix("api")
-    .use(GG_USER_TOKEN)
-    .use(GG_ORG_TOKEN)
-    .routes({
+export const AgentApi = new GGHttpSchema({
+    contract: AgentApiContract,
+    pathPrefix: "api",
+    use: [GG_USER_TOKEN, GG_ORG_TOKEN],
+    routes: {
         launch: GGRpc.POST("agents/launch"),
         list: GGRpc.POST("agents/list"),
         stop: GGRpc.POST("agents/stop"),
         resume: GGRpc.POST("agents/resume"),
         delete: GGRpc.POST("agents/delete"),
         purge: GGRpc.POST("agents/purge"),
-    })
+    },
+})

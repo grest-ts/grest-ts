@@ -17,8 +17,8 @@
  * gated on `typeof describe !== 'undefined'`.
  */
 import {GGRuntime} from "@grest-ts/runtime"
-import {GGHttpServer, GGRpc, httpSchema} from "@grest-ts/http"
-import {GGContractClass, GGContractImplementation, IsObject, SERVER_ERROR, GG_NO_PERMISSIONS } from "@grest-ts/schema"
+import {GGHttp, GGHttpServer, GGRpc, GGHttpSchema} from "@grest-ts/http"
+import {GGContractClass, IsObject, SERVER_ERROR, GG_NO_PERMISSIONS } from "@grest-ts/schema"
 import {callOn, GG_TEST_RUNNER, GGTest} from "@grest-ts/testkit"
 
 // ---------------------------------------------------------
@@ -37,13 +37,15 @@ const CrashTestApiContract = new GGContractClass("CrashTestApi", {
     },
 })
 
-type ICrashTestApi = GGContractImplementation<typeof CrashTestApiContract["methods"]>
+type ICrashTestApi = typeof CrashTestApiContract.infer
 
-const CrashTestApi = httpSchema(CrashTestApiContract)
-    .pathPrefix("api/crash-test")
-    .routes({
+const CrashTestApi = new GGHttpSchema({
+    contract: CrashTestApiContract,
+    pathPrefix: "api/crash-test",
+    routes: {
         crashSelf: GGRpc.POST("crash"),
-    })
+    },
+})
 
 class CrashTestService implements ICrashTestApi {
     public async crashSelf(): Promise<{}> {
@@ -61,8 +63,8 @@ export class CrashTestRuntime extends GGRuntime {
     public static readonly NAME = "crashTest"
 
     protected compose(): void {
-        new GGHttpServer()
-        CrashTestApi.register(new CrashTestService())
+        new GGHttp(new GGHttpServer())
+            .http(CrashTestApi, new CrashTestService())
     }
 }
 

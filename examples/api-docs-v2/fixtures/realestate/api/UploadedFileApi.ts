@@ -1,4 +1,4 @@
-import {GGRpc, httpSchema} from "@grest-ts/http";
+import {GGRpc, GGHttpSchema} from "@grest-ts/http";
 import {GGFileUpload} from "@grest-ts/http-file";
 import {IsArray, IsObject, IsString, IsNumber, IsEnum, GGContractClass, FORBIDDEN, NOT_AUTHORIZED, NOT_FOUND, SERVER_ERROR, VALIDATION_ERROR } from "@grest-ts/schema";
 import {IsFile} from "@grest-ts/schema-file";
@@ -112,15 +112,16 @@ export const UploadedFileApiContract = new GGContractClass("UploadedFileApi", {
 // API Definition
 // ---------------------------------------------------------
 
-export const UploadedFileApi = httpSchema(UploadedFileApiContract)
-    .pathPrefix("gg/uploadedFiles")
-    .use(GG_USER_AUTH)
-    .use(GG_COMPANY_AUTH_TOKEN)
-    .routes({
+export const UploadedFileApi = new GGHttpSchema({
+    contract: UploadedFileApiContract,
+    pathPrefix: "gg/uploadedFiles",
+    use: [GG_USER_AUTH, GG_COMPANY_AUTH_TOKEN],
+    routes: {
         list: GGRpc.POST("list"),
         upload: GGFileUpload.POST("upload"),
         delete: GGRpc.POST("delete"),
         renameFolder: GGRpc.POST("renameFolder"),
         renameFile: GGRpc.POST("renameFile")
-    })
+    },
+})
 

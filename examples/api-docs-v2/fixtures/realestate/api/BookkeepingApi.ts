@@ -1,4 +1,4 @@
-import {GGRpc, httpSchema} from "@grest-ts/http";
+import {GGRpc, GGHttpSchema} from "@grest-ts/http";
 import {FORBIDDEN, GGContractClass, IsArray, IsBoolean, IsObject, IsString, NOT_AUTHORIZED, SERVER_ERROR, VALIDATION_ERROR } from "@grest-ts/schema";
 import {GG_COMPANY_AUTH_TOKEN} from "../middleware/CompanyAuthHeader";
 import {IsBookkeepingIntegrationId, IsClientId, IsDate, IsExpenseId, IsInvoiceId} from "../Brands";
@@ -142,15 +142,16 @@ export const BookkeepingApiContract = new GGContractClass("BookkeepingApi", {
 // API Definition
 // ---------------------------------------------------------
 
-export const BookkeepingApi = httpSchema(BookkeepingApiContract)
-    .pathPrefix("gg/bookkeeping")
-    .use(GG_USER_AUTH)
-    .use(GG_COMPANY_AUTH_TOKEN)
-    .routes({
+export const BookkeepingApi = new GGHttpSchema({
+    contract: BookkeepingApiContract,
+    pathPrefix: "gg/bookkeeping",
+    use: [GG_USER_AUTH, GG_COMPANY_AUTH_TOKEN],
+    routes: {
         syncClients: GGRpc.POST("syncClients"),
         syncInvoices: GGRpc.POST("syncInvoices"),
         getIntegrations: GGRpc.POST("getIntegrations"),
         sendInvoice: GGRpc.POST("sendInvoice"),
         sendExpense: GGRpc.POST("sendExpense")
-    })
+    },
+})
 

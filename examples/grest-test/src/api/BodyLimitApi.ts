@@ -1,4 +1,4 @@
-import {GGRpc, httpSchema} from "@grest-ts/http"
+import {GGRpc, GGHttpSchema} from "@grest-ts/http"
 import {GGContractClass, IsNumber, IsObject, IsString, SERVER_ERROR} from "@grest-ts/schema"
 
 // Fixture for the request body-size-limit transport feature:
@@ -25,10 +25,12 @@ export const BodyLimitContract = new GGContractClass("BodyLimit", {
     },
 })
 
-export const BodyLimitApi = httpSchema(BodyLimitContract)
-    .pathPrefix("api/body-limit")
-    .routes({
+export const BodyLimitApi = new GGHttpSchema({
+    contract: BodyLimitContract,
+    pathPrefix: "api/body-limit",
+    routes: {
         echoDefault: GGRpc.POST("echo-default"),
         echoSmall: GGRpc.POST("echo-small"),
         echoBig: GGRpc.POST("echo-big"),
-    })
+    },
+})

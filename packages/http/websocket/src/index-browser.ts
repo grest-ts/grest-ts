@@ -10,10 +10,10 @@ export * from "./server/GG_WS_MESSAGE";
 export * from "./socket/GGSocket";
 
 // API Schema
-export {defineSocketContract, webSocketSchema} from "./schema/webSocketSchema";
-export type {GGSocketContract, GGSocketContractMethods, GGRawSocketContract, GGRawSocketContractDef} from "./schema/webSocketSchema";
 export {GGWebSocketSchema} from "./schema/GGWebSocketSchema";
+export type {GGWebSocketSchemaConfig} from "./schema/GGWebSocketSchema";
 export {GGRawWebSocketSchema} from "./schema/GGRawWebSocketSchema";
+export type {GGRawWebSocketSchemaConfig} from "./schema/GGRawWebSocketSchema";
 
 // Client
 export * from "./client/GGWebSocketSchema.createClient";

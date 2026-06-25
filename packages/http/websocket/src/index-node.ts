@@ -14,10 +14,11 @@ export * from "./socket/GGSocket";
 export * from "./socket/GGRawSocket";
 
 // API Schema
-export {defineSocketContract, webSocketSchema} from "./schema/webSocketSchema";
-export type {GGSocketContract, GGSocketContractMethods, GGRawSocketContract, GGRawSocketContractDef} from "./schema/webSocketSchema";
 export {GGWebSocketSchema} from "./schema/GGWebSocketSchema";
+export type {GGWebSocketSchemaConfig} from "./schema/GGWebSocketSchema";
 export {GGRawWebSocketSchema} from "./schema/GGRawWebSocketSchema";
+export type {GGRawWebSocketSchemaConfig} from "./schema/GGRawWebSocketSchema";
+export {assertValidSocketPath, wildcardPathBase} from "./schema/socketPath";
 
 // Server
 export type {GGWsUpgrade, GGServerHeartbeatOption} from "./server/GGSocketServer";
@@ -30,8 +31,7 @@ export * from "./client/GGRawWebSocketSchema.createClient";
 export * from "./client/GGWsLogMode";
 
 // Extensions
-import "./server/GGWebSocketSchema.startServer";
-import "./server/GGRawWebSocketSchema.startServer";
+import "./server/GGHttp.ws";
 import "./client/GGWebSocketSchema.createClient";
 import "./client/GGRawWebSocketSchema.createClient";
 import "./client/GGWebSocketSchema.createClient.node";

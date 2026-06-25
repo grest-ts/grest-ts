@@ -1,5 +1,5 @@
 import {
-    IFileUploadTestApi,
+    FileUploadTestApiContract,
     UploadFileRequest,
     UploadFileResponse,
     UploadMultipleRequest,
@@ -13,6 +13,8 @@ import {
 } from "../api/FileUploadTestApi";
 import {GGFile} from "@grest-ts/schema-file";
 import {SERVER_ERROR} from "@grest-ts/schema";
+
+type IFileUploadTestApi = typeof FileUploadTestApiContract.infer
 
 export class FileUploadTestService implements IFileUploadTestApi {
 

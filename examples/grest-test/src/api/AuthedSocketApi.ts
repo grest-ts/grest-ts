@@ -1,15 +1,11 @@
-import {defineSocketContract, GGWebSocketSchema, webSocketSchema} from "@grest-ts/websocket"
+import {GGWebSocketSchema} from "@grest-ts/websocket"
 import {
-    GGContractClient,
-    GGContractImplementation,
     IsObject,
     IsString,
     NOT_AUTHORIZED,
     SERVER_ERROR, GG_NO_PERMISSIONS, GGDuplexContract
 } from "@grest-ts/schema"
 import {GGContextKey, GGInbound, GGOutbound, GGTransportMiddleware} from "@grest-ts/context"
-import {GGHttpSchema, httpSchema} from "@grest-ts/http";
-import {USER_TOKEN_WIRE, WireLiveApiContract} from "./WireAuthApi";
 
 // ---------------------------------------------------------
 // Context keys
@@ -82,6 +78,3 @@ export const AuthedSocketApi = new GGWebSocketSchema({
     path: "ws/authed-test",
     use: [AuthedSocketMiddleware],
 })
-
-export type AuthedSocketIncoming = GGContractImplementation<typeof AuthedSocketApiContract["clientToServer"]>
-export type AuthedSocketOutgoing = GGContractClient<typeof AuthedSocketApiContract["serverToClient"]>

@@ -17,13 +17,12 @@ export class WireAuthRuntime extends GGRuntime {
         USER_TOKEN_WIRE_HANDLER.create(userService)
         ORG_TOKEN_WIRE_HANDLER.create(orgService)
 
+        // WS uses the same USER_TOKEN_WIRE; no config — the schema's wire is the resolver.
         new GGHttp(server)
             .http(WireUserApi, userService)
             .http(WirePublicApi, new WirePublicService())
             .http(WireOrgScopedApi, orgService)
-
-        // WS uses the same USER_TOKEN_WIRE; no config — the schema's wire is the resolver.
-        WireLiveApi.register(new WireLiveService().handleConnection)
+            .ws(WireLiveApi, new WireLiveService().handleConnection)
     }
 }
 

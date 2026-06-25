@@ -1,4 +1,4 @@
-import {GGRpc, httpSchema} from "@grest-ts/http";
+import {GGRpc, GGHttpSchema} from "@grest-ts/http";
 import {GGFileDownload, GGFileUpload} from "@grest-ts/http-file";
 import {FORBIDDEN, GGContractClass, IsArray, IsBit, IsEnum, IsLiteral, IsNumber, IsObject, IsString, IsTuple, NOT_AUTHORIZED, NOT_FOUND, SERVER_ERROR, VALIDATION_ERROR } from "@grest-ts/schema";
 import {IsFile} from "@grest-ts/schema-file";
@@ -197,11 +197,11 @@ export const TemplateApiContract = new GGContractClass("TemplateApi", {
 // API Definition
 // ---------------------------------------------------------
 
-export const TemplateApi = httpSchema(TemplateApiContract)
-    .pathPrefix("gg/template")
-    .use(GG_USER_AUTH)
-    .use(GG_COMPANY_AUTH_TOKEN)
-    .routes({
+export const TemplateApi = new GGHttpSchema({
+    contract: TemplateApiContract,
+    pathPrefix: "gg/template",
+    use: [GG_USER_AUTH, GG_COMPANY_AUTH_TOKEN],
+    routes: {
         list: GGRpc.POST("list"),
         getForSelect: GGRpc.POST("getForSelect"),
         sync: GGFileUpload.POST("sync"),
@@ -209,4 +209,5 @@ export const TemplateApi = httpSchema(TemplateApiContract)
         delete: GGRpc.POST("delete"),
         downloadFile: GGFileDownload.GET("downloadFile"),
         getSystemTemplate: GGRpc.POST("getSystemTemplate")
-    })
+    },
+})

@@ -1,11 +1,13 @@
-import {FORBIDDEN, GGContractImplementation, NOT_FOUND} from "@grest-ts/schema"
+import {FORBIDDEN, NOT_FOUND} from "@grest-ts/schema"
 import {AddChecklistRequest, ChecklistApiContract, ChecklistItem, EditChecklistRequest, tChecklistId} from "../../common/api-user/ChecklistApi";
 import {ItemMarkedEvent} from "../../common/api-user/ChecklistNotificationApi";
 import {AddressResolverService} from "./AddressResolverService";
 import {tLatitude, tLongitude, tUint} from "@grest-ts/schema";
 import {UserContext} from "../UserContext";
 
-export class ChecklistService implements GGContractImplementation<typeof ChecklistApiContract["methods"]> {
+type IChecklistApi = typeof ChecklistApiContract.infer
+
+export class ChecklistService implements IChecklistApi {
     private items: Map<tChecklistId, ChecklistItem> = new Map()
     private nextItemId = 1
     private onItemMarkedCallback?: (event: ItemMarkedEvent) => void

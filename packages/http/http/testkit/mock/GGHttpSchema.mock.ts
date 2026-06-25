@@ -6,7 +6,7 @@ import {GGHttpCodec, GGHttpSchema} from "../../src/schema/GGHttpSchema";
 import {GGContractApiDefinition} from "@grest-ts/schema";
 
 declare module "../../src/schema/GGHttpSchema" {
-    interface GGHttpSchema<TContract extends GGContractApiDefinition, TContext = {}> {
+    interface GGHttpSchema<TContract extends GGContractApiDefinition> {
         readonly mock: ApiMockMethods<TContract>
         readonly spy: ApiSpyMethods<TContract>
     }
@@ -21,7 +21,7 @@ type ApiSpyMethods<TContract> = {
 }
 
 Object.defineProperty(GGHttpSchema.prototype, 'mock', {
-    get(this: GGHttpSchema<any, any>) {
+    get(this: GGHttpSchema<any>) {
         const name = this.name;
         const methods = this.codec;
         const fullPathPrefix = "/" + this.pathPrefix + "/"
@@ -45,7 +45,7 @@ Object.defineProperty(GGHttpSchema.prototype, 'mock', {
 })
 
 Object.defineProperty(GGHttpSchema.prototype, 'spy', {
-    get(this: GGHttpSchema<any, any>) {
+    get(this: GGHttpSchema<any>) {
         const fullPathPrefix = "/" + this.pathPrefix + "/"
         const name = this.name;
         const methods = this.codec;

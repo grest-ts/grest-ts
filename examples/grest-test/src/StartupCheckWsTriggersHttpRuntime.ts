@@ -8,8 +8,8 @@ class ZeroConfigImpl {
 }
 
 /**
- * Mixed HTTP + WS on the same GGHttpServer. The WS schema declares
- * `connectPermission` (`GG_NO_PERMISSIONS` — explicit-public still counts as
+ * Mixed HTTP + WS on the same GGHttpServer. The WS contract declares
+ * `connect.permission` (`GG_NO_PERMISSIONS` — explicit-public still counts as
  * a declaration), flipping the server into strict mode. The HTTP API
  * registered on the same server omits `permission`, so the start must fail
  * naming the HTTP routes.
@@ -18,9 +18,9 @@ export class StartupCheckWsTriggersHttpRuntime extends GGRuntime {
     public static readonly NAME = "startup-check-ws-triggers-http"
 
     protected compose(): void {
-        const httpServer = new GGHttpServer()
-        new GGHttp(httpServer).http(StartupCheckZeroConfigApi, new ZeroConfigImpl())
-        StartupCheckWsConnectGatedApi.register(() => {}, {http: httpServer})
+        new GGHttp(new GGHttpServer())
+            .http(StartupCheckZeroConfigApi, new ZeroConfigImpl())
+            .ws(StartupCheckWsConnectGatedApi, () => {})
     }
 }
 

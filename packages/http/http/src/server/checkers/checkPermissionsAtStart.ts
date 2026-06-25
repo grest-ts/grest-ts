@@ -25,12 +25,12 @@ interface HttpSchemaLike {
 interface WebSocketSchemaLike {
     name: string
     middlewares: readonly GGTransportMiddleware[]
-    /** Absent for byte-stream schemas — only `connectPermission` applies there. */
-    contract?: {
-        clientToServer: {methods: Record<string, GGContractMethod>}
-        serverToClient: {methods: Record<string, GGContractMethod>}
+    contract: {
+        connect: {method: GGContractMethod}
+        // Absent on byte-stream (raw) schemas — they carry only `connect`.
+        clientToServer?: {methods: Record<string, GGContractMethod>}
+        serverToClient?: {methods: Record<string, GGContractMethod>}
     }
-    connectPermission?: GGPermission
 }
 
 function isNonPublic(permission: GGPermission | undefined): boolean {
@@ -58,18 +58,21 @@ export function checkPermissionsAtStart(
     }
     for (const ws of webSocketSchemas) {
         const hasWire = hasPermissionWire(ws.middlewares)
-        if (ws.contract) {
-            const methods = ws.contract.clientToServer.methods
-            for (const name of Object.keys(methods)) {
-                surfaces.push({label: `${ws.name}.${name}`, permission: methods[name].permission, hasWire})
-            }
-            const pushed = ws.contract.serverToClient.methods
-            for (const name of Object.keys(pushed)) {
-                if (isNonPublic(pushed[name].permission)) deadServerToClient.push(`  ${ws.name}.${name}`)
+        const connectPermission = ws.contract.connect.method.permission
+        if (connectPermission !== undefined) {
+            surfaces.push({label: `${ws.name} (connect)`, permission: connectPermission, hasWire})
+        }
+        const clientToServer = ws.contract.clientToServer?.methods
+        if (clientToServer) {
+            for (const name of Object.keys(clientToServer)) {
+                surfaces.push({label: `${ws.name}.${name}`, permission: clientToServer[name].permission, hasWire})
             }
         }
-        if (ws.connectPermission !== undefined) {
-            surfaces.push({label: `${ws.name} (connectPermission)`, permission: ws.connectPermission, hasWire})
+        const serverToClient = ws.contract.serverToClient?.methods
+        if (serverToClient) {
+            for (const name of Object.keys(serverToClient)) {
+                if (isNonPublic(serverToClient[name].permission)) deadServerToClient.push(`  ${ws.name}.${name}`)
+            }
         }
     }
 

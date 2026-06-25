@@ -1,5 +1,5 @@
 import {GGContractClass, IsObject, IsString, VALIDATION_ERROR, SERVER_ERROR } from "@grest-ts/schema"
-import {httpSchema, GGRpc} from "@grest-ts/http"
+import {GGHttpSchema, GGRpc} from "@grest-ts/http"
 
 // --- Types ---
 
@@ -25,8 +25,10 @@ export const HelloApiContract = new GGContractClass("HelloApi", {
 
 // --- HTTP Schema ---
 
-export const HelloApi = httpSchema(HelloApiContract)
-    .pathPrefix("api/hello")
-    .routes({
+export const HelloApi = new GGHttpSchema({
+    contract: HelloApiContract,
+    pathPrefix: "api/hello",
+    routes: {
         hello: GGRpc.POST("hello")
-    })
+    }
+})

@@ -111,25 +111,15 @@ export class MainRuntime extends GGRuntime {
             .ws(ConfigTestSocketApi, configTestService.handleSocketConnection)
             .ws(ClientTestSocketApi, clientTestSocketService.handleConnection)
             .ws(AuthedSocketApi, authedSocketService.handleConnection)
-            .ws(RawEchoApi, new RawEchoService().handleConnection)
+            .wsRaw(RawEchoApi, new RawEchoService().handleConnection)
             .ws(QuerySocketApi, querySocketService.handleConnection)
             .ws(WsCookieApi, new WsCookieService().handleConnection)
-            .ws(RawAdminApi, (socket) => socket.onMessage((data) => socket.send(data)))
-            .ws(CustomClientProxyApi, (socket, _query, upgrade) => {
+            .wsRaw(RawAdminApi, (socket) => socket.onMessage((data) => socket.send(data)))
+            .wsRaw(CustomClientProxyApi, (socket, _query, upgrade) => {
                 socket.onMessage((_data, isBinary) => socket.send(`${isBinary ? "bin" : "txt"} ${upgrade.path} ${upgrade.remoteAddress}`));
             })
             .ws(WsPermissionsApi, new WsPermissionsService().handleConnection)
             .ws(WsFeaturePermissionsApi, new WsFeaturePermissionsService().handleConnection)
-
-            .use(XXX)
-            .http() // use XXX applies from here.
-
-            .sub(reg => reg // This is for cases when some API-s need their own 'use' handlers, but we don't want to make those global.
-                .http(/*...*/) // Needs use XXX
-                .use(YYY) // Adds additional YYY - so next things must match both XXX, YYY
-                .http(/*..*/)
-                .ws(/* .. */)
-            )
 
         GGOpenApiDocs.register({http: httpServer, title: "Grest Test API", version: "1.0.0", specPath: "/openapi.json", docsPath: "/docs"});
 

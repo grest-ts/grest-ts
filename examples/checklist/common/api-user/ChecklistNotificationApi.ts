@@ -1,5 +1,5 @@
-import {defineSocketContract, webSocketSchema} from "@grest-ts/websocket"
-import {IsBoolean, IsObject, IsString, SERVER_ERROR, VALIDATION_ERROR, GG_NO_PERMISSIONS } from "@grest-ts/schema";
+import {GGWebSocketSchema} from "@grest-ts/websocket"
+import {IsBoolean, IsObject, IsString, NOT_AUTHORIZED, SERVER_ERROR, VALIDATION_ERROR, GG_NO_PERMISSIONS, GGDuplexContract } from "@grest-ts/schema";
 import {IsChecklistItem} from "./ChecklistApi"
 import {GG_USER_AUTH_TOKEN} from "./auth/UserAuth"
 
@@ -21,7 +21,10 @@ export const IsUpdateItemRequest = IsObject({
     reason: IsString.orUndefined
 })
 
-export const ChecklistNotificationApiContract = defineSocketContract("ChecklistNotificationApi", {
+export const ChecklistNotificationApiContract = new GGDuplexContract("ChecklistNotificationApi", {
+    connect: {
+        errors: [NOT_AUTHORIZED, SERVER_ERROR]
+    },
     clientToServer: {
         updateItem: {
             input: IsUpdateItemRequest,
@@ -44,8 +47,9 @@ export const ChecklistNotificationApiContract = defineSocketContract("ChecklistN
     }
 })
 
-export const ChecklistNotificationApi = webSocketSchema(ChecklistNotificationApiContract)
-    .path("ws/checklist/notifications")
-    .use(GG_USER_AUTH_TOKEN)
-    .done()
+export const ChecklistNotificationApi = new GGWebSocketSchema({
+    contract: ChecklistNotificationApiContract,
+    path: "ws/checklist/notifications",
+    use: [GG_USER_AUTH_TOKEN],
+})
 

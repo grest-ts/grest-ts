@@ -21,7 +21,7 @@ import {GGContext, type GGInbound, type GGTransportMiddleware} from "@grest-ts/c
 import {GG_DISCOVERY} from "@grest-ts/discovery";
 import {GGHttpServer} from "@grest-ts/http";
 import {GGRawSocket} from "../socket/GGRawSocket";
-import {wildcardPathBase} from "../schema/webSocketSchema";
+import {wildcardPathBase} from "../schema/socketPath";
 
 /**
  * Per-connection liveness heartbeat: the server pings each client and reaps sockets

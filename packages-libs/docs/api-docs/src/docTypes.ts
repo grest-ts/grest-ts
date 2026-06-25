@@ -124,7 +124,7 @@ export interface ContractDoc {
      * binding's declared cookie name + value schema.
      */
     cookies?: ParamDoc[];
-    /** WS only — populated when the schema declares `.connectPermission(...)`. */
+    /** WS only — populated when the contract declares `connect.permission`. */
     connectPermission?: PermissionDoc;
     methods: MethodDoc[];
 }

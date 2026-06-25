@@ -1,4 +1,4 @@
-import {GGRpc, httpSchema} from "@grest-ts/http";
+import {GGRpc, GGHttpSchema} from "@grest-ts/http";
 import {IsArray, IsObject, IsString, IsNumber, IsTuple, IsLiteral, GGContractClass, FORBIDDEN, NOT_AUTHORIZED, NOT_FOUND, SERVER_ERROR, VALIDATION_ERROR } from "@grest-ts/schema";
 import {GG_COMPANY_AUTH_TOKEN} from "../middleware/CompanyAuthHeader";
 import {IsEmailId} from "../Brands";
@@ -70,13 +70,14 @@ export const ExpenseEmailApiContract = new GGContractClass("ExpenseEmailApi", {
 // API Definition
 // ---------------------------------------------------------
 
-export const ExpenseEmailApi = httpSchema(ExpenseEmailApiContract)
-    .pathPrefix("gg/expenseEmail")
-    .use(GG_USER_AUTH)
-    .use(GG_COMPANY_AUTH_TOKEN)
-    .routes({
+export const ExpenseEmailApi = new GGHttpSchema({
+    contract: ExpenseEmailApiContract,
+    pathPrefix: "gg/expenseEmail",
+    use: [GG_USER_AUTH, GG_COMPANY_AUTH_TOKEN],
+    routes: {
         list: GGRpc.POST("list"),
         get: GGRpc.POST("get"),
         delete: GGRpc.POST("delete")
-    })
+    },
+})
 

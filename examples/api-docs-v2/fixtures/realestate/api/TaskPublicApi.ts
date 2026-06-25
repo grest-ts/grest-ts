@@ -1,4 +1,4 @@
-import {GGRpc, httpSchema} from "@grest-ts/http";
+import {GGRpc, GGHttpSchema} from "@grest-ts/http";
 import {GGFileUpload} from "@grest-ts/http-file";
 import {IsArray, IsObject, IsString, IsLiteral, GGContractClass, NOT_FOUND, VALIDATION_ERROR, SERVER_ERROR } from "@grest-ts/schema";
 import {IsFile} from "@grest-ts/schema-file";
@@ -73,10 +73,12 @@ export const TaskPublicApiContract = new GGContractClass("TaskPublicApi", {
 // API Definition (no auth middleware)
 // ---------------------------------------------------------
 
-export const TaskPublicApi = httpSchema(TaskPublicApiContract)
-    .pathPrefix("gg/task/public")
-    .routes({
+export const TaskPublicApi = new GGHttpSchema({
+    contract: TaskPublicApiContract,
+    pathPrefix: "gg/task/public",
+    routes: {
         getByToken: GGRpc.POST("getByToken"),
         respond: GGRpc.POST("respond"),
         uploadFile: GGFileUpload.POST("uploadFile")
-    })
+    },
+})

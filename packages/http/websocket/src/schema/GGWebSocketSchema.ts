@@ -1,64 +1,41 @@
 import type {GGTransportMiddleware} from "@grest-ts/context";
-import {GGContractApiDefinition, GGContractClass, GGPermission, GGValidator} from "@grest-ts/schema";
+import {GGContractClient, GGContractImplementation, GGDuplexContract, GGDuplexContractDefinition} from "@grest-ts/schema";
+import type {WebSocketIncoming, WebSocketOutgoing} from "../socket/WebSocketTypes";
+import {assertValidSocketPath} from "./socketPath";
 
-/**
- * WebSocket API Schema - pure data definition with typed context
- *
- * Type parameters:
- * - TClientToServer: Client-facing type for clientToServer methods (returns GGPromise)
- * - TServerToClient: Client-facing type for serverToClient methods (returns GGPromise)
- * - TContext: Accumulated context type (parse return types)
- * - TQuery: Query parameters on connect
- * - TClientToServerImpl: Server implementation type for clientToServer handlers (returns Promise)
- */
-export class GGWebSocketSchema<
-    TClientToServer,
-    TServerToClient,
-    TContext = {},
-    TQuery = undefined,
-    TClientToServerImpl = TClientToServer,
-    TServerToClientImpl = TServerToClient
-> {
-    public readonly name: string
-    public readonly path: string
-    public readonly middlewares: readonly GGTransportMiddleware[]
-    public readonly queryValidator?: GGValidator<TQuery>
-    public readonly connectPermission?: GGPermission
-    private readonly contractFactory: () => GGWebSocketContractRuntime
-    private contractCache: GGWebSocketContractRuntime | null = null
-
-    constructor(
-        name: string,
-        path: string,
-        contractFactory: () => GGWebSocketContractRuntime,
-        middlewares: readonly GGTransportMiddleware[] = [],
-        queryValidator?: GGValidator<TQuery>,
-        connectPermission?: GGPermission
-    ) {
-        this.name = name
-        this.path = path
-        this.middlewares = middlewares
-        this.queryValidator = queryValidator
-        this.connectPermission = connectPermission
-        this.contractFactory = contractFactory
-        Object.freeze(this.middlewares)
-    }
-
-    get contract(): GGWebSocketContractRuntime {
-        if (!this.contractCache) {
-            this.contractCache = this.contractFactory()
-        }
-        Object.freeze(this)
-        return this.contractCache
-    }
+export interface GGWebSocketSchemaConfig<TDef> {
+    contract: GGDuplexContract<TDef & GGDuplexContractDefinition>
+    path: string
+    use?: readonly GGTransportMiddleware[]
 }
 
 /**
- * Runtime contract structure for WebSocket APIs.
- * Contains GGContractClass instances for proper validation via implement().
+ * Typed-duplex WebSocket API schema — binds a `GGDuplexContract` to a transport (path + auth
+ * wires). Connection-level concerns (handshake query, connect permission, connect errors) live
+ * on `contract.connect`. `startServer`/`createClient` are attached by the server/client modules.
+ *
+ * The type parameter is intentionally unconstrained: a class declaration and its cross-module
+ * `declare module` augmentations (.startServer/.createClient/.callOn) cannot share a *constrained*
+ * type parameter (TS2428), so the `GGDuplexContractDefinition` bound is applied on the field/config
+ * types via intersection instead.
+ *
+ * `clientToServer`/`serverToClient` are type-only handles for deriving the server handler
+ * types (`typeof MySocket.clientToServer` / `.serverToClient`) — no runtime field, no value.
  */
-export interface GGWebSocketContractRuntime {
-    apiName: string
-    clientToServer: GGContractClass<GGContractApiDefinition>
-    serverToClient: GGContractClass<GGContractApiDefinition>
+export class GGWebSocketSchema<TDef> {
+    public readonly name: string
+    public readonly path: string
+    public readonly middlewares: readonly GGTransportMiddleware[]
+    public readonly contract: GGDuplexContract<TDef & GGDuplexContractDefinition>
+    declare readonly clientToServer: TDef extends GGDuplexContractDefinition ? WebSocketIncoming<GGContractImplementation<TDef["clientToServer"]>> : never
+    declare readonly serverToClient: TDef extends GGDuplexContractDefinition ? WebSocketOutgoing<GGContractClient<TDef["serverToClient"]>> : never
+
+    constructor(config: GGWebSocketSchemaConfig<TDef>) {
+        assertValidSocketPath(config.path, config.contract.name)
+        this.name = config.contract.name
+        this.path = config.path
+        this.middlewares = Object.freeze([...(config.use ?? [])])
+        this.contract = config.contract
+        Object.freeze(this)
+    }
 }

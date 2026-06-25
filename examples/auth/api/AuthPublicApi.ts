@@ -1,4 +1,4 @@
-import {GGRpc, httpSchema} from "@grest-ts/http"
+import {GGRpc, GGHttpSchema} from "@grest-ts/http"
 import {ERROR, EXISTS, GG_NO_PERMISSIONS, GGContractClass, IsEmail, IsObject, IsString, NOT_AUTHORIZED, SERVER_ERROR, VALIDATION_ERROR} from "@grest-ts/schema"
 import {IsGGAuthTokensResult} from "@grest-ts/auth"
 import {IsUser} from "./auth/UserAuth"
@@ -53,10 +53,12 @@ export const AuthPublicApiContract = new GGContractClass("AuthPublicApi", {
     },
 })
 
-export const AuthPublicApi = httpSchema(AuthPublicApiContract)
-    .pathPrefix("pub/auth")
-    .routes({
+export const AuthPublicApi = new GGHttpSchema({
+    contract: AuthPublicApiContract,
+    pathPrefix: "pub/auth",
+    routes: {
         register: GGRpc.POST("register"),
         login: GGRpc.POST("login"),
         refresh: GGRpc.POST("refresh"),
-    })
+    }
+})

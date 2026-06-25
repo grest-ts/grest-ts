@@ -1,4 +1,4 @@
-import {GGRpc, httpSchema} from "@grest-ts/http";
+import {GGRpc, GGHttpSchema} from "@grest-ts/http";
 import {IsArray, IsObject, IsString, IsNumber, IsEnum, IsLiteral, IsTuple, GGContractClass, FORBIDDEN, NOT_AUTHORIZED, NOT_FOUND, SERVER_ERROR, VALIDATION_ERROR } from "@grest-ts/schema";
 import {IsCreatedAndChangedBy} from "./UserApi";
 import {GG_COMPANY_AUTH_TOKEN} from "../middleware/CompanyAuthHeader";
@@ -477,11 +477,11 @@ export const TaskApiContract = new GGContractClass("TaskApi", {
 // API Definition
 // ---------------------------------------------------------
 
-export const TaskApi = httpSchema(TaskApiContract)
-    .pathPrefix("gg/task")
-    .use(GG_USER_AUTH)
-    .use(GG_COMPANY_AUTH_TOKEN)
-    .routes({
+export const TaskApi = new GGHttpSchema({
+    contract: TaskApiContract,
+    pathPrefix: "gg/task",
+    use: [GG_USER_AUTH, GG_COMPANY_AUTH_TOKEN],
+    routes: {
         list: GGRpc.POST("list"),
         listRelated: GGRpc.POST("listRelated"),
         get: GGRpc.POST("get"),
@@ -498,4 +498,5 @@ export const TaskApi = httpSchema(TaskApiContract)
         editComment: GGRpc.POST("editComment"),
         editDelegationDescription: GGRpc.POST("editDelegationDescription"),
         calendar: GGRpc.POST("calendar")
-    })
+    },
+})

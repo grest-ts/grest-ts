@@ -12,7 +12,7 @@
  */
 
 import type {GGHttpSchema} from "@grest-ts/http";
-import type {GGTransportMiddleware} from "@grest-ts/context";
+import type {GGHeaderSchema, GGTransportMiddleware} from "@grest-ts/context";
 import type {GGWebSocketSchema} from "@grest-ts/websocket";
 import type {ANY_ERROR_CLS, GGPermission, GGSchema} from "@grest-ts/schema";
 import {GG_ANY_PERMISSION, GG_NO_PERMISSIONS} from "@grest-ts/schema";
@@ -31,8 +31,8 @@ export interface BuildContractDocOptions {
 
     /** Group label → schemas in that group. Each can have HTTP, WS, or both. */
     groups: Record<string, {
-        http?: GGHttpSchema<any, any>[];
-        ws?: GGWebSocketSchema<any, any, any, any, any>[];
+        http?: GGHttpSchema<any>[];
+        ws?: GGWebSocketSchema<any>[];
         description?: string;
     }>;
 
@@ -109,7 +109,7 @@ export function buildContractDoc(options: BuildContractDocOptions): ApiDocsDocum
 
 // ── HTTP contract ──────────────────────────────────────────────────────
 
-function buildHttpContract(httpSchema: GGHttpSchema<any, any>, ctx: BuildContext): ContractDoc {
+function buildHttpContract(httpSchema: GGHttpSchema<any>, ctx: BuildContext): ContractDoc {
     const auth = extractHttpAuth(httpSchema.apiMiddlewares as readonly GGTransportMiddleware[]);
     const headers = extractHttpHeaders(httpSchema.apiMiddlewares as readonly GGTransportMiddleware[], ctx, httpSchema.name);
     const cookies = extractCookies(httpSchema.apiMiddlewares as readonly GGTransportMiddleware[], ctx, httpSchema.name);
@@ -210,7 +210,7 @@ function buildHttpMethod(
 
 // ── WS contract ────────────────────────────────────────────────────────
 
-function buildWsContract(wsSchema: GGWebSocketSchema<any, any, any, any, any>, ctx: BuildContext): ContractDoc {
+function buildWsContract(wsSchema: GGWebSocketSchema<any>, ctx: BuildContext): ContractDoc {
     const wsMiddlewares: any[] = (wsSchema as any).middlewares ?? [];
     const auth = extractWsAuth(wsMiddlewares);
     const headers = extractWsHeaders(wsMiddlewares, ctx, wsSchema.name);
@@ -227,8 +227,9 @@ function buildWsContract(wsSchema: GGWebSocketSchema<any, any, any, any, any>, c
         methods.push(buildWsMethod(methodName, m, "server-to-client", wsSchema.name, ctx));
     }
 
-    const connectPermission = wsSchema.connectPermission !== undefined
-        ? buildPermissionDoc(wsSchema.connectPermission)
+    const connectPerm = wsSchema.contract.connect.method.permission;
+    const connectPermission = connectPerm !== undefined
+        ? buildPermissionDoc(connectPerm)
         : undefined;
     return {
         name: wsSchema.name,
@@ -496,7 +497,7 @@ function extractWsHeaders(
 // in the docs without anyone writing prose about it.
 
 function extractCookies(
-    middlewares: readonly {cookieParams?: Record<string, GGSchema<any>>}[],
+    middlewares: readonly {cookieParams?: Record<string, GGHeaderSchema>}[],
     ctx: BuildContext,
     contractName: string,
 ): ParamDoc[] {
@@ -513,7 +514,7 @@ function extractCookies(
 
 function toHeaderParam(
     name: string,
-    _schema: GGSchema<any>,
+    _schema: GGHeaderSchema,
     desc: import("@grest-ts/schema").GGSchemaDescription,
     ctx: BuildContext,
     contractName: string,

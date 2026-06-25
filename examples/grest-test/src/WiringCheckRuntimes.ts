@@ -28,8 +28,8 @@ export class WireConflictRuntime extends GGRuntime {
 export class WsDeadPushRuntime extends GGRuntime {
     public static readonly NAME = "wiring-ws-dead-push"
     protected compose(): void {
-        const httpServer = new GGHttpServer()
-        WsDeadPushApi.register(() => ({ping: async () => "ok"}), {http: httpServer})
+        new GGHttp(new GGHttpServer())
+            .ws(WsDeadPushApi, (incoming) => incoming.on({ping: async () => "ok"}))
     }
 }
 

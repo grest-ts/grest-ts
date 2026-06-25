@@ -1,15 +1,13 @@
-import {WebSocketIncoming, WebSocketOutgoing} from "@grest-ts/websocket"
-import {ClientTestSocketIncoming, ClientTestSocketOutgoing} from "../api/ClientTestSocketApi"
+import {ClientTestSocketApi} from "../api/ClientTestSocketApi"
 
-type Incoming = WebSocketIncoming<ClientTestSocketIncoming>
-type Outgoing = WebSocketOutgoing<ClientTestSocketOutgoing>
+type Outgoing = typeof ClientTestSocketApi.serverToClient
 
 export class ClientTestSocketService {
 
     private counter = 0
     private readonly connections = new Set<Outgoing>()
 
-    public handleConnection = (incoming: Incoming, outgoing: Outgoing): void => {
+    public handleConnection = (incoming: typeof ClientTestSocketApi.clientToServer, outgoing: Outgoing): void => {
         this.connections.add(outgoing)
         outgoing.onClose(() => {
             this.connections.delete(outgoing)

@@ -1,5 +1,5 @@
 import {GGContractClass, IsObject, IsString, IsLiteral, SERVER_ERROR } from "@grest-ts/schema"
-import {GGRpc, httpSchema} from "@grest-ts/http"
+import {GGRpc, GGHttpSchema} from "@grest-ts/http"
 import {UNAUTHORIZED, NOT_FOUND} from "./errors"
 import {GG_USER_TOKEN, GG_ORG_TOKEN} from "../auth/AuthContext"
 import {IsTaskId, IsServiceName} from "./schemas"
@@ -25,10 +25,11 @@ export const TerminalAccessApiContract = new GGContractClass("TerminalAccessApi"
     },
 })
 
-export const TerminalAccessApi = httpSchema(TerminalAccessApiContract)
-    .pathPrefix("api")
-    .use(GG_USER_TOKEN)
-    .use(GG_ORG_TOKEN)
-    .routes({
+export const TerminalAccessApi = new GGHttpSchema({
+    contract: TerminalAccessApiContract,
+    pathPrefix: "api",
+    use: [GG_USER_TOKEN, GG_ORG_TOKEN],
+    routes: {
         getAccessToken: GGRpc.POST("terminal/access-token"),
-    })
+    },
+})

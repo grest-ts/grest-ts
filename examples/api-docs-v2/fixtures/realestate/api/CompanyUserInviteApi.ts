@@ -1,4 +1,4 @@
-import {GGRpc, httpSchema} from "@grest-ts/http";
+import {GGRpc, GGHttpSchema} from "@grest-ts/http";
 import {IsArray, IsObject, IsString, IsNumber, IsEnum, GGContractClass, NOT_AUTHORIZED, NOT_FOUND, SERVER_ERROR, VALIDATION_ERROR } from "@grest-ts/schema";
 import {GG_COMPANY_AUTH_TOKEN} from "../middleware/CompanyAuthHeader";
 import {IsCompanyId} from "./CompanyApi";
@@ -108,15 +108,16 @@ export const CompanyUserInviteApiContract = new GGContractClass("CompanyUserInvi
 // API Definition
 // ---------------------------------------------------------
 
-export const CompanyUserInviteApi = httpSchema(CompanyUserInviteApiContract)
-    .pathPrefix("gg/companyUserInvite")
-    .use(GG_USER_AUTH)
-    .use(GG_COMPANY_AUTH_TOKEN)
-    .routes({
+export const CompanyUserInviteApi = new GGHttpSchema({
+    contract: CompanyUserInviteApiContract,
+    pathPrefix: "gg/companyUserInvite",
+    use: [GG_USER_AUTH, GG_COMPANY_AUTH_TOKEN],
+    routes: {
         list: GGRpc.POST("list"),
         get: GGRpc.POST("get"),
         update: GGRpc.POST("update"),
         acceptInvite: GGRpc.POST("acceptInvite"),
         rejectInvite: GGRpc.POST("rejectInvite")
-    })
+    },
+})
 

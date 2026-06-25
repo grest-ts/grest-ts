@@ -4,12 +4,13 @@ import {
     GG_ANY_PERMISSION,
     GG_NO_PERMISSIONS,
     GGContractClass,
+    GGDuplexContract,
     IsString,
     NOT_AUTHORIZED,
     SERVER_ERROR,
 } from "@grest-ts/schema";
-import {GGRpc, httpSchema} from "@grest-ts/http";
-import {defineSocketContract, webSocketSchema} from "@grest-ts/websocket";
+import {GGRpc, GGHttpSchema} from "@grest-ts/http";
+import {GGWebSocketSchema} from "@grest-ts/websocket";
 import {buildContractDoc} from "../src/buildContractDoc";
 
 function findMethod(doc: ReturnType<typeof buildContractDoc>, contractName: string, methodName: string) {
@@ -38,7 +39,7 @@ describe("buildContractDoc — permission rendering", () => {
         const C = new GGContractClass("Pub", {
             ping: {success: IsString, errors: [SERVER_ERROR], permission: GG_NO_PERMISSIONS},
         });
-        const Api = httpSchema(C as any).pathPrefix("pub").routes({ping: GGRpc.GET("ping")});
+        const Api = new GGHttpSchema({contract: C as any, pathPrefix: "pub", routes: {ping: GGRpc.GET("ping")}});
         const doc = buildContractDoc({title: "T", groups: {default: {http: [Api]}}});
         const m = findMethod(doc, "Pub", "ping");
         expect(m?.permission).toEqual({
@@ -51,7 +52,7 @@ describe("buildContractDoc — permission rendering", () => {
         const C = new GGContractClass("Any", {
             x: {success: IsString, errors: [NOT_AUTHORIZED, FORBIDDEN, SERVER_ERROR], permission: GG_ANY_PERMISSION},
         });
-        const Api = httpSchema(C as any).pathPrefix("any").routes({x: GGRpc.GET("x")});
+        const Api = new GGHttpSchema({contract: C as any, pathPrefix: "any", routes: {x: GGRpc.GET("x")}});
         const doc = buildContractDoc({title: "T", groups: {default: {http: [Api]}}});
         const m = findMethod(doc, "Any", "x");
         expect(m?.permission?.tree).toEqual({kind: "anyAuth"});
@@ -62,7 +63,7 @@ describe("buildContractDoc — permission rendering", () => {
         const C = new GGContractClass("S", {
             x: {success: IsString, errors: [NOT_AUTHORIZED, FORBIDDEN, SERVER_ERROR], permission: "items:read"},
         });
-        const Api = httpSchema(C as any).pathPrefix("s").routes({x: GGRpc.GET("x")});
+        const Api = new GGHttpSchema({contract: C as any, pathPrefix: "s", routes: {x: GGRpc.GET("x")}});
         const doc = buildContractDoc({title: "T", groups: {default: {http: [Api]}}});
         const m = findMethod(doc, "S", "x");
         expect(m?.permission?.tree).toEqual({kind: "scope", scope: "items:read"});
@@ -73,7 +74,7 @@ describe("buildContractDoc — permission rendering", () => {
         const C = new GGContractClass("All", {
             x: {success: IsString, errors: [NOT_AUTHORIZED, FORBIDDEN, SERVER_ERROR], permission: {allOf: ["a", "b"]}},
         });
-        const Api = httpSchema(C as any).pathPrefix("all").routes({x: GGRpc.GET("x")});
+        const Api = new GGHttpSchema({contract: C as any, pathPrefix: "all", routes: {x: GGRpc.GET("x")}});
         const doc = buildContractDoc({title: "T", groups: {default: {http: [Api]}}});
         const m = findMethod(doc, "All", "x");
         expect(m?.permission?.text).toBe("Requires `a` **and** `b`.");
@@ -83,7 +84,7 @@ describe("buildContractDoc — permission rendering", () => {
         const C = new GGContractClass("AnyO", {
             x: {success: IsString, errors: [NOT_AUTHORIZED, FORBIDDEN, SERVER_ERROR], permission: {anyOf: ["a", "b"]}},
         });
-        const Api = httpSchema(C as any).pathPrefix("anyo").routes({x: GGRpc.GET("x")});
+        const Api = new GGHttpSchema({contract: C as any, pathPrefix: "anyo", routes: {x: GGRpc.GET("x")}});
         const doc = buildContractDoc({title: "T", groups: {default: {http: [Api]}}});
         const m = findMethod(doc, "AnyO", "x");
         expect(m?.permission?.text).toBe("Requires `a` **or** `b`.");
@@ -97,14 +98,15 @@ describe("buildContractDoc — permission rendering", () => {
                 permission: {anyOf: [{allOf: ["a", "b"]}, "c"]},
             },
         });
-        const Api = httpSchema(C as any).pathPrefix("nest").routes({x: GGRpc.GET("x")});
+        const Api = new GGHttpSchema({contract: C as any, pathPrefix: "nest", routes: {x: GGRpc.GET("x")}});
         const doc = buildContractDoc({title: "T", groups: {default: {http: [Api]}}});
         const m = findMethod(doc, "Nest", "x");
         expect(m?.permission?.text).toBe("Requires (`a` **and** `b`) **or** `c`.");
     });
 
     it("WS clientToServer method gets permission; serverToClient does not", () => {
-        const C = defineSocketContract("Sock", {
+        const C = new GGDuplexContract("Sock", {
+            connect: {},
             clientToServer: {
                 send: {input: IsString, success: IsString, errors: [NOT_AUTHORIZED, FORBIDDEN, SERVER_ERROR], permission: "chat:write"},
             },
@@ -112,7 +114,7 @@ describe("buildContractDoc — permission rendering", () => {
                 push: {input: IsString, permission: GG_NO_PERMISSIONS},
             },
         });
-        const Api = webSocketSchema(C).path("ws/sock").done();
+        const Api = new GGWebSocketSchema({contract: C, path: "ws/sock"});
         const doc = buildContractDoc({title: "T", groups: {default: {ws: [Api]}}});
         const sendDoc = findMethod(doc, "Sock", "send");
         const pushDoc = findMethod(doc, "Sock", "push");
@@ -123,16 +125,14 @@ describe("buildContractDoc — permission rendering", () => {
     });
 
     it("WS schema.connectPermission propagates to ContractDoc", () => {
-        const C = defineSocketContract("Feat", {
+        const C = new GGDuplexContract("Feat", {
+            connect: {permission: {anyOf: ["admin", "owner"]}, errors: [NOT_AUTHORIZED, FORBIDDEN, SERVER_ERROR]},
             clientToServer: {
                 ping: {success: IsString, errors: [NOT_AUTHORIZED, FORBIDDEN, SERVER_ERROR], permission: "chat:read"},
             },
             serverToClient: {},
         });
-        const Api = webSocketSchema(C)
-            .path("ws/feat")
-            .connectPermission({anyOf: ["admin", "owner"]})
-            .done();
+        const Api = new GGWebSocketSchema({contract: C, path: "ws/feat"});
         const doc = buildContractDoc({title: "T", groups: {default: {ws: [Api]}}});
         const contractDoc = findContract(doc, "Feat");
         expect(contractDoc?.connectPermission?.text).toBe("Requires `admin` **or** `owner`.");

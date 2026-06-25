@@ -1,4 +1,4 @@
-import {GGRpc, httpSchema} from "@grest-ts/http";
+import {GGRpc, GGHttpSchema} from "@grest-ts/http";
 import {FORBIDDEN, GGContractClass, IsArray, IsEnum, IsLiteral, IsNumber, IsObject, IsString, IsTuple, NOT_AUTHORIZED, NOT_FOUND, SERVER_ERROR, VALIDATION_ERROR } from "@grest-ts/schema";
 import {GG_USER_AUTH} from "../middleware/UserAuthHeader";
 import {IsUserId} from "../Brands";
@@ -179,19 +179,23 @@ export const UserAuthApiContract = new GGContractClass("UserAuthApi", {
 // API Definitions
 // ---------------------------------------------------------
 
-export const UserPublicApi = httpSchema(UserPublicApiContract)
-    .pathPrefix("gg/users")
-    .routes({
+export const UserPublicApi = new GGHttpSchema({
+    contract: UserPublicApiContract,
+    pathPrefix: "gg/users",
+    routes: {
         login: GGRpc.POST("login")
-    })
+    },
+})
 
-export const UserAuthApi = httpSchema(UserAuthApiContract)
-    .pathPrefix("gg/users/admin")
-    .use(GG_USER_AUTH)
-    .routes({
+export const UserAuthApi = new GGHttpSchema({
+    contract: UserAuthApiContract,
+    pathPrefix: "gg/users/admin",
+    use: [GG_USER_AUTH],
+    routes: {
         list: GGRpc.POST("list"),
         get: GGRpc.POST("get"),
         create: GGRpc.POST("create"),
         update: GGRpc.POST("update")
-    })
+    },
+})
 

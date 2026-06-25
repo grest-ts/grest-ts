@@ -1,12 +1,10 @@
 import {
-    defineSocketContract,
-    webSocketSchema,
+    GGWebSocketSchema,
 } from "@grest-ts/websocket"
 import {
     FORBIDDEN,
     GG_NO_PERMISSIONS,
-    GGContractClient,
-    GGContractImplementation,
+    GGDuplexContract,
     IsString,
     NOT_AUTHORIZED,
     SERVER_ERROR,
@@ -16,8 +14,9 @@ import {AppPermission, TEST_RESOLVER_THROW_SCOPE, TEST_SCOPES_WIRE} from "./Perm
 /** See PermissionsApi.TEST_RESOLVER_THROW_SCOPE — same sentinel, reused for WS. */
 export const WS_TEST_RESOLVER_THROW_SCOPE = TEST_RESOLVER_THROW_SCOPE
 
-// ---- Contract: a multiplex socket (no connectPermission). ----
-export const WsPermissionsApiContract = defineSocketContract("WsPermissionsApi", {
+// ---- Contract: a multiplex socket (no connect permission). ----
+export const WsPermissionsApiContract = new GGDuplexContract("WsPermissionsApi", {
+    connect: {errors: [SERVER_ERROR]},
     clientToServer: {
         publicMessage: {
             input: IsString,
@@ -54,13 +53,18 @@ export const WsPermissionsApiContract = defineSocketContract("WsPermissionsApi",
     },
 })
 
-export const WsPermissionsApi = webSocketSchema(WsPermissionsApiContract)
-    .path("ws/permissions-test")
-    .use(TEST_SCOPES_WIRE)
-    .done()
+export const WsPermissionsApi = new GGWebSocketSchema({
+    contract: WsPermissionsApiContract,
+    path: "ws/permissions-test",
+    use: [TEST_SCOPES_WIRE],
+})
 
 // ---- A second contract gated AT THE CONNECTION LEVEL. ----
-export const WsFeaturePermissionsApiContract = defineSocketContract("WsFeaturePermissionsApi", {
+export const WsFeaturePermissionsApiContract = new GGDuplexContract("WsFeaturePermissionsApi", {
+    connect: {
+        permission: AppPermission.Admin,
+        errors: [NOT_AUTHORIZED, FORBIDDEN, SERVER_ERROR],
+    },
     clientToServer: {
         ping: {
             success: IsString,
@@ -71,13 +75,8 @@ export const WsFeaturePermissionsApiContract = defineSocketContract("WsFeaturePe
     serverToClient: {},
 })
 
-export const WsFeaturePermissionsApi = webSocketSchema(WsFeaturePermissionsApiContract)
-    .path("ws/feature-permissions-test")
-    .use(TEST_SCOPES_WIRE)
-    .connectPermission(AppPermission.Admin)
-    .done()
-
-export type WsPermissionsIncoming = GGContractImplementation<typeof WsPermissionsApiContract.methods["clientToServer"]>
-export type WsPermissionsOutgoing = GGContractClient<typeof WsPermissionsApiContract.methods["serverToClient"]>
-export type WsFeatureIncoming = GGContractImplementation<typeof WsFeaturePermissionsApiContract.methods["clientToServer"]>
-export type WsFeatureOutgoing = GGContractClient<typeof WsFeaturePermissionsApiContract.methods["serverToClient"]>
+export const WsFeaturePermissionsApi = new GGWebSocketSchema({
+    contract: WsFeaturePermissionsApiContract,
+    path: "ws/feature-permissions-test",
+    use: [TEST_SCOPES_WIRE],
+})

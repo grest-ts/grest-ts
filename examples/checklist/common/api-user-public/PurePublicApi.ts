@@ -1,4 +1,4 @@
-import {GGRpc, httpSchema} from "@grest-ts/http"
+import {GGRpc, GGHttpSchema} from "@grest-ts/http"
 import {GGContractClass, IsBoolean, IsObject, SERVER_ERROR, GG_NO_PERMISSIONS } from "@grest-ts/schema";
 
 // ---------------------------------------------------------
@@ -21,8 +21,10 @@ export const PurePublicApiContract = new GGContractClass("PurePublicApi", {
     }
 })
 
-export const StatusApi = httpSchema(PurePublicApiContract)
-    .pathPrefix("status")
-    .routes({
+export const StatusApi = new GGHttpSchema({
+    contract: PurePublicApiContract,
+    pathPrefix: "status",
+    routes: {
         status: GGRpc.GET("status")
-    })
+    }
+})

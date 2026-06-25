@@ -1,4 +1,4 @@
-import {GGRpc, GGHeader, httpSchema} from "@grest-ts/http"
+import {GGRpc, GGHeader, GGHttpSchema} from "@grest-ts/http"
 import {GGContextKey} from "@grest-ts/context"
 import {
     GG_ANY_PERMISSION,
@@ -96,14 +96,16 @@ export const PermissionsApiContract = new GGContractClass("PermissionsApi", {
     },
 })
 
-export const PermissionsApi = httpSchema(PermissionsApiContract)
-    .pathPrefix("api/permissions")
-    .use(TEST_SCOPES_WIRE)
-    .routes({
+export const PermissionsApi = new GGHttpSchema({
+    contract: PermissionsApiContract,
+    pathPrefix: "api/permissions",
+    use: [TEST_SCOPES_WIRE],
+    routes: {
         anyAuth:            GGRpc.GET("any"),
         needsRead:          GGRpc.GET("read"),
         needsReadAndWrite:  GGRpc.GET("read-write"),
         needsReadOrAdmin:   GGRpc.GET("read-or-admin"),
         nested:             GGRpc.GET("nested"),
         checksInside:       GGRpc.POST("checks-inside"),
-    })
+    },
+})

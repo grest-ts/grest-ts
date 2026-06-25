@@ -1,7 +1,6 @@
-import {defineSocketContract, webSocketSchema} from "@grest-ts/websocket"
+import {GGWebSocketSchema} from "@grest-ts/websocket"
 import {
-    GGContractClient,
-    GGContractImplementation,
+    GGDuplexContract,
     IsBoolean,
     IsNumber,
     IsObject,
@@ -37,7 +36,8 @@ export type Question = typeof IsQuestion.infer
 // Contract — demonstrates all four websocket messaging modes
 // ---------------------------------------------------------
 
-export const ClientTestSocketApiContract = defineSocketContract("ClientTestSocketApi", {
+export const ClientTestSocketApiContract = new GGDuplexContract("ClientTestSocketApi", {
+    connect: {errors: [SERVER_ERROR]},
     clientToServer: {
         // Req/res: client → server, waits for typed response
         echo: {
@@ -82,9 +82,7 @@ export const ClientTestSocketApiContract = defineSocketContract("ClientTestSocke
     },
 })
 
-export const ClientTestSocketApi = webSocketSchema(ClientTestSocketApiContract)
-    .path("ws/client-test")
-    .done()
-
-export type ClientTestSocketIncoming = GGContractImplementation<typeof ClientTestSocketApiContract.methods["clientToServer"]>
-export type ClientTestSocketOutgoing = GGContractClient<typeof ClientTestSocketApiContract.methods["serverToClient"]>
+export const ClientTestSocketApi = new GGWebSocketSchema({
+    contract: ClientTestSocketApiContract,
+    path: "ws/client-test",
+})

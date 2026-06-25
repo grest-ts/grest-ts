@@ -1,4 +1,4 @@
-import {GGRpc, httpSchema} from "@grest-ts/http";
+import {GGRpc, GGHttpSchema} from "@grest-ts/http";
 import {FORBIDDEN, GGContractClass, GGIssueInvalid, IsArray, IsDiscriminated, IsEnum, IsLiteral, IsNumber, IsObject, IsString, IsTuple, NOT_AUTHORIZED, NOT_FOUND, SERVER_ERROR, VALIDATION_ERROR } from "@grest-ts/schema";
 import {IsCreatedAndChangedBy} from "./UserApi";
 import {GG_COMPANY_AUTH_TOKEN} from "../middleware/CompanyAuthHeader";
@@ -204,15 +204,16 @@ export const ClientApiContract = new GGContractClass("ClientApi", {
 // API Definition
 // ---------------------------------------------------------
 
-export const ClientApi = httpSchema(ClientApiContract)
-    .pathPrefix("gg/client")
-    .use(GG_USER_AUTH)
-    .use(GG_COMPANY_AUTH_TOKEN)
-    .routes({
+export const ClientApi = new GGHttpSchema({
+    contract: ClientApiContract,
+    pathPrefix: "gg/client",
+    use: [GG_USER_AUTH, GG_COMPANY_AUTH_TOKEN],
+    routes: {
         getForSelect: GGRpc.POST("getForSelect"),
         list: GGRpc.POST("list"),
         get: GGRpc.POST("get"),
         sync: GGRpc.POST("sync"),
         delete: GGRpc.POST("delete")
-    })
+    },
+})
 

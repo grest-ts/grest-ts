@@ -1,5 +1,5 @@
-import {defineSocketContract, webSocketSchema} from "@grest-ts/websocket"
-import {FORBIDDEN, IsNumber, IsObject, IsString, NOT_AUTHORIZED, SERVER_ERROR, GG_NO_PERMISSIONS} from "@grest-ts/schema"
+import {GGWebSocketSchema} from "@grest-ts/websocket"
+import {FORBIDDEN, IsNumber, IsObject, IsString, NOT_AUTHORIZED, SERVER_ERROR, GG_NO_PERMISSIONS, GGDuplexContract} from "@grest-ts/schema"
 import {USER_TOKEN_WIRE, UserPermission} from "./auth/UserAuth"
 
 export const IsLivePongEvent = IsObject({
@@ -20,7 +20,10 @@ export const IsBannerPongEvent = IsObject({
 })
 export type BannerPongEvent = typeof IsBannerPongEvent.infer
 
-export const LiveApiContract = defineSocketContract("LiveApi", {
+export const LiveApiContract = new GGDuplexContract("LiveApi", {
+    connect: {
+        errors: [NOT_AUTHORIZED, SERVER_ERROR],
+    },
     clientToServer: {
         // Anyone authenticated can ping.
         ping: {
@@ -50,7 +53,8 @@ export const LiveApiContract = defineSocketContract("LiveApi", {
     },
 })
 
-export const LiveApi = webSocketSchema(LiveApiContract)
-    .path("ws/live")
-    .use(USER_TOKEN_WIRE)
-    .done()
+export const LiveApi = new GGWebSocketSchema({
+    contract: LiveApiContract,
+    path: "ws/live",
+    use: [USER_TOKEN_WIRE],
+})

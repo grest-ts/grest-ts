@@ -3,7 +3,7 @@ import {
     IsString, IsNumber, IsArray, IsObject,
     IsEmail, IsDate, IsUrl,
     ERROR, GGContractClass, GG_NO_PERMISSIONS } from "@grest-ts/schema";
-import {GGRpc, httpSchema} from "@grest-ts/http";
+import {GGRpc, GGHttpSchema} from "@grest-ts/http";
 import {toOpenApi} from "../src/toOpenApi";
 
 // ---------------------------------------------------------------------------
@@ -43,14 +43,16 @@ const ItemContract = new GGContractClass("ItemApi", {
     }
 });
 
-const ItemApi = httpSchema(ItemContract)
-    .pathPrefix("api/items")
-    .routes({
+const ItemApi = new GGHttpSchema({
+    contract: ItemContract,
+    pathPrefix: "api/items",
+    routes: {
         list: GGRpc.GET(""),
         get: GGRpc.GET(":id"),
         create: GGRpc.POST(""),
         deleteItem: GGRpc.DELETE(":id")
-    });
+    }
+});
 
 describe("toOpenApi", () => {
 
@@ -148,7 +150,7 @@ describe("toOpenApi", () => {
                 permission: GG_NO_PERMISSIONS
             }
         });
-        const S = httpSchema(C).pathPrefix("mc").routes({do: GGRpc.POST("do")});
+        const S = new GGHttpSchema({contract: C, pathPrefix: "mc", routes: {do: GGRpc.POST("do")}});
         const d = toOpenApi([S]);
         const op = (d.paths as any)?.["/mc/do"]?.post;
 
@@ -174,12 +176,12 @@ describe("toOpenApi", () => {
             createItem: {permission: GG_NO_PERMISSIONS},
             deleteItem: {permission: GG_NO_PERMISSIONS},
         });
-        const S2 = httpSchema(C2).pathPrefix("x").routes({
+        const S2 = new GGHttpSchema({contract: C2, pathPrefix: "x", routes: {
             list: GGRpc.GET("list"),
             getWatchedValue: GGRpc.GET("gw"),
             createItem: GGRpc.POST("create"),
             deleteItem: GGRpc.DELETE("delete")
-        });
+        }});
         const d2 = toOpenApi([S2]);
         for (const [method, expected] of cases) {
             it(`${method} → "${expected}"`, () => {
@@ -202,9 +204,9 @@ describe("toOpenApi", () => {
                 permission: GG_NO_PERMISSIONS
             }
         });
-        const SearchApi = httpSchema(SearchContract).pathPrefix("search").routes({
+        const SearchApi = new GGHttpSchema({contract: SearchContract, pathPrefix: "search", routes: {
             search: GGRpc.GET("items")
-        });
+        }});
         const d = toOpenApi([SearchApi]);
         const op = (d.paths as any)?.["/search/items"]?.get;
 
@@ -229,10 +231,10 @@ describe("toOpenApi", () => {
                 permission: GG_NO_PERMISSIONS
             },
         });
-        const RefApi = httpSchema(RefContract).pathPrefix("ref").routes({
+        const RefApi = new GGHttpSchema({contract: RefContract, pathPrefix: "ref", routes: {
             get:  GGRpc.GET(":id"),
             list: GGRpc.GET(""),
-        });
+        }});
         const d = toOpenApi([RefApi]);
 
         it("named schema extracted to components/schemas", () => {
@@ -261,9 +263,9 @@ describe("toOpenApi", () => {
                     permission: GG_NO_PERMISSIONS
                 }
             });
-            const InlineApi = httpSchema(InlineContract).pathPrefix("il").routes({
+            const InlineApi = new GGHttpSchema({contract: InlineContract, pathPrefix: "il", routes: {
                 get: GGRpc.GET("")
-            });
+            }});
             const d2 = toOpenApi([InlineApi]);
             const data = (d2.paths as any)?.["/il"]?.get?.responses?.["200"]
                 ?.content?.["application/json"]?.schema?.properties?.data;
@@ -285,9 +287,9 @@ describe("toOpenApi", () => {
                 permission: GG_NO_PERMISSIONS
             }
         });
-        const FormatApi = httpSchema(FormatContract).pathPrefix("fmt").routes({
+        const FormatApi = new GGHttpSchema({contract: FormatContract, pathPrefix: "fmt", routes: {
             get: GGRpc.GET("")
-        });
+        }});
         const d = toOpenApi([FormatApi]);
 
         it("IsEmail produces format:email component", () => {
@@ -325,7 +327,7 @@ describe("toOpenApi", () => {
                 method: "POST" as const, path: "do",
                 createForClient: () => ({} as any), createForServer: () => ({} as any)
             };
-            const S = httpSchema(C).pathPrefix("tp").routes({do: codecNoMethod as any});
+            const S = new GGHttpSchema({contract: C, pathPrefix: "tp", routes: {do: codecNoMethod as any}});
             expect(() => toOpenApi([S])).toThrowError(/ThirdParty\.do/);
         });
 
@@ -335,7 +337,7 @@ describe("toOpenApi", () => {
                 createForClient: () => ({} as any), createForServer: () => ({} as any),
                 toOpenApiOperation: () => ({operationId: "do", parameters: [] as any[]})
             };
-            const S2 = httpSchema(C).pathPrefix("tp2").routes({do: codecNoResponses as any});
+            const S2 = new GGHttpSchema({contract: C, pathPrefix: "tp2", routes: {do: codecNoResponses as any}});
             expect(() => toOpenApi([S2])).toThrowError(/no responses/);
         });
     });

@@ -2,7 +2,7 @@
  * HTTP API for the chain services demo.
  */
 
-import {GGRpc, httpSchema} from "@grest-ts/http";
+import {GGRpc, GGHttpSchema} from "@grest-ts/http";
 import {GGContractClass, IsObject, IsString, IsNumber, IsArray, IsBoolean, SERVER_ERROR, VALIDATION_ERROR, GG_NO_PERMISSIONS } from "@grest-ts/schema";
 import {intlLocaleHeader} from "@grest-ts/intl";
 
@@ -71,11 +71,13 @@ export const ChainApiContract = new GGContractClass("ChainApi", {
     }
 });
 
-export const ChainApi = httpSchema(ChainApiContract)
-    .pathPrefix("api/chain")
-    .use(intlLocaleHeader())
-    .routes({
+export const ChainApi = new GGHttpSchema({
+    contract: ChainApiContract,
+    pathPrefix: "api/chain",
+    use: [intlLocaleHeader()],
+    routes: {
         planTravel: GGRpc.POST("plan-travel"),
         compareDestinations: GGRpc.POST("compare-destinations"),
         quickWeatherCheck: GGRpc.POST("quick-weather-check")
-    });
+    },
+});

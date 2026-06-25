@@ -1,4 +1,4 @@
-import {GGRpc, httpSchema} from "@grest-ts/http";
+import {GGRpc, GGHttpSchema} from "@grest-ts/http";
 import {IsArray, IsObject, IsString, IsNumber, IsBoolean, IsEnum, IsLiteral, GGContractClass, FORBIDDEN, NOT_AUTHORIZED, SERVER_ERROR, VALIDATION_ERROR } from "@grest-ts/schema";
 import {GG_COMPANY_AUTH_TOKEN} from "../middleware/CompanyAuthHeader";
 import {IsApartmentFeatureId, IsApartmentId, IsClientId, IsContractId, IsDate, IsExpenseFileId, IsExpenseId, IsInvoiceId, IsInvoiceRowId, IsOwnerExpenseId, IsPaymentId, IsYearMonth} from "../Brands";
@@ -372,13 +372,14 @@ export const BookkeepingReportsApiContract = new GGContractClass("BookkeepingRep
 // API Definition
 // ---------------------------------------------------------
 
-export const BookkeepingReportsApi = httpSchema(BookkeepingReportsApiContract)
-    .pathPrefix("gg/bookkeepingReports")
-    .use(GG_USER_AUTH)
-    .use(GG_COMPANY_AUTH_TOKEN)
-    .routes({
+export const BookkeepingReportsApi = new GGHttpSchema({
+    contract: BookkeepingReportsApiContract,
+    pathPrefix: "gg/bookkeepingReports",
+    use: [GG_USER_AUTH, GG_COMPANY_AUTH_TOKEN],
+    routes: {
         monthReport: GGRpc.POST("monthReport"),
         balanceReport: GGRpc.POST("balanceReport"),
         ownerSalesReport: GGRpc.POST("ownerSalesReport")
-    })
+    },
+})
 

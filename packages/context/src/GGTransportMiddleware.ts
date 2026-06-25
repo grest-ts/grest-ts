@@ -1,4 +1,9 @@
-import type {GGSchema} from "@grest-ts/schema";
+import type {GGSchemaDescription} from "@grest-ts/schema";
+
+// Structural, not GGSchema<T>: GGSchema is invariant in T, so a typed field would reject branded header schemas.
+export interface GGHeaderSchema {
+    toSchemaDescription(): GGSchemaDescription;
+}
 
 /**
  * Inbound credentials a server reads. Headers are flattened to a single value by the
@@ -34,11 +39,11 @@ export interface GGResponse {
 export interface GGTransportMiddleware {
 
     /** Inbound headers this middleware reads/writes — CORS Allow-Headers + OpenAPI/AsyncAPI docs. */
-    readonly headers?: Record<string, GGSchema<string | undefined>>;
+    readonly headers?: Record<string, GGHeaderSchema>;
     /** Response headers this middleware sets — CORS Expose-Headers + OpenAPI response-header docs. */
-    readonly responseHeaders?: Record<string, GGSchema<string | undefined>>;
+    readonly responseHeaders?: Record<string, GGHeaderSchema>;
     /** Cookies this middleware reads — emitted as `in: cookie` OpenAPI params. */
-    readonly cookieParams?: Record<string, GGSchema<string | undefined>>;
+    readonly cookieParams?: Record<string, GGHeaderSchema>;
 
     /** Client: write outbound credentials. */
     update?(outbound: GGOutbound): void;

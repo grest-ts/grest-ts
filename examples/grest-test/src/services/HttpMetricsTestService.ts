@@ -1,7 +1,9 @@
-import {HttpMetricsResponse, IHttpMetricsTestApi} from "../api/HttpMetricsTestApi";
+import {HttpMetricsResponse, HttpMetricsTestApiContract} from "../api/HttpMetricsTestApi";
 import {GGHttpMetrics} from "@grest-ts/http";
 import {GGJsonMetricsExporter, GGNestedMetricsExporter} from "@grest-ts/metrics";
 import {GGWebSocketMetrics} from "@grest-ts/websocket";
+
+type IHttpMetricsTestApi = typeof HttpMetricsTestApiContract.infer
 
 export class HttpMetricsTestService implements IHttpMetricsTestApi {
 

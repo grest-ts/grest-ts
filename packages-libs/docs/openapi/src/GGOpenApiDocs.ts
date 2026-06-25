@@ -50,7 +50,7 @@ export interface GGOpenApiDocsOptions extends ToOpenApiOptions {
      *     title: "My API", specPath: "/openapi.json", docsPath: "/docs"
      * });
      */
-    schemas?: GGHttpSchema<any, any>[];
+    schemas?: GGHttpSchema<any>[];
 
     /**
      * Serve Swagger UI assets from a CDN instead of the bundled swagger-ui-dist package.
@@ -153,7 +153,7 @@ export class GGOpenApiDocs {
     }
 
     private buildSpec(): OpenAPIV3_1.Document {
-        const schemas = this.options.schemas ?? (this.server.registeredSchemas as GGHttpSchema<any, any>[]);
+        const schemas = this.options.schemas ?? (this.server.registeredSchemas as GGHttpSchema<any>[]);
         return toOpenApi(schemas, this.options);
     }
 

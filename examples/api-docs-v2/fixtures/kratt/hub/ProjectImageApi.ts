@@ -1,5 +1,5 @@
 import {GGContractClass, IsObject, IsString, IsNumber, IsLiteral, IsArray, SERVER_ERROR } from "@grest-ts/schema"
-import {GGRpc, httpSchema} from "@grest-ts/http"
+import {GGRpc, GGHttpSchema} from "@grest-ts/http"
 import {UNAUTHORIZED, NOT_FOUND} from "./errors"
 import {GG_USER_TOKEN, GG_ORG_TOKEN} from "../auth/AuthContext"
 import {IsProjectImageId, IsProjectId, IsBaseImageId, IsTaskId} from "./schemas"
@@ -63,12 +63,13 @@ export const ProjectImageApiContract = new GGContractClass("ProjectImageApi", {
     },
 })
 
-export const ProjectImageApi = httpSchema(ProjectImageApiContract)
-    .pathPrefix("api")
-    .use(GG_USER_TOKEN)
-    .use(GG_ORG_TOKEN)
-    .routes({
+export const ProjectImageApi = new GGHttpSchema({
+    contract: ProjectImageApiContract,
+    pathPrefix: "api",
+    use: [GG_USER_TOKEN, GG_ORG_TOKEN],
+    routes: {
         list: GGRpc.POST("project-images/list"),
         get: GGRpc.POST("project-images/get"),
         delete: GGRpc.POST("project-images/delete"),
-    })
+    },
+})

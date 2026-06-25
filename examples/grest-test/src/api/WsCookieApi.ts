@@ -1,11 +1,10 @@
-import {defineSocketContract, webSocketSchema} from "@grest-ts/websocket"
+import {GGWebSocketSchema} from "@grest-ts/websocket"
 import {GGContextKey} from "@grest-ts/context"
 import {GGCookie} from "@grest-ts/http"
 import {
     FORBIDDEN,
     GG_NO_PERMISSIONS,
-    GGContractClient,
-    GGContractImplementation,
+    GGDuplexContract,
     IsString,
     NOT_AUTHORIZED,
     SERVER_ERROR,
@@ -31,7 +30,11 @@ export const WS_SESSION_HANDLER = WS_SESSION.define(() => ({
     },
 }))
 
-export const WsCookieApiContract = defineSocketContract("WsCookieApi", {
+export const WsCookieApiContract = new GGDuplexContract("WsCookieApi", {
+    connect: {
+        permission: AppPermission.Read,
+        errors: [NOT_AUTHORIZED, FORBIDDEN, SERVER_ERROR],
+    },
     clientToServer: {
         // Echoes the session value the upgrade cookie populated — proves the read path.
         whoami: {
@@ -50,12 +53,9 @@ export const WsCookieApiContract = defineSocketContract("WsCookieApi", {
 })
 
 // WS_SESSION.process() throws NOT_AUTHORIZED on a missing cookie (401, unauthenticated);
-// connectPermission(Read) then gates the authenticated connection's scopes.
-export const WsCookieApi = webSocketSchema(WsCookieApiContract)
-    .path("ws/cookie-test")
-    .use(WS_SESSION)
-    .connectPermission(AppPermission.Read)
-    .done()
-
-export type WsCookieIncoming = GGContractImplementation<typeof WsCookieApiContract.methods["clientToServer"]>
-export type WsCookieOutgoing = GGContractClient<typeof WsCookieApiContract.methods["serverToClient"]>
+// connect.permission (Read) then gates the authenticated connection's scopes.
+export const WsCookieApi = new GGWebSocketSchema({
+    contract: WsCookieApiContract,
+    path: "ws/cookie-test",
+    use: [WS_SESSION],
+})

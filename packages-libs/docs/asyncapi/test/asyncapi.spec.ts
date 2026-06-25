@@ -4,16 +4,17 @@ import {toAsyncApi} from "../src/toAsyncApi";
 // Import the grest-test WebSocket APIs as real test fixtures
 import {ConfigTestSocketApi} from "../../../../examples/grest-test/src/api/ConfigTestSocketApi";
 
-import {webSocketSchema, defineSocketContract} from "@grest-ts/websocket";
+import {GGWebSocketSchema} from "@grest-ts/websocket";
 import type {GGSchema} from "@grest-ts/schema";
-import {IsString, IsObject, IsNumber, SERVER_ERROR, VALIDATION_ERROR, IsBearerToken, GG_NO_PERMISSIONS } from "@grest-ts/schema";
+import {IsString, IsObject, IsNumber, SERVER_ERROR, VALIDATION_ERROR, IsBearerToken, GG_NO_PERMISSIONS, GGDuplexContract } from "@grest-ts/schema";
 import type {GGTransportMiddleware} from "@grest-ts/context";
 
 // ---------------------------------------------------------------------------
 // A rich WebSocket showcase contract for snapshot testing
 // ---------------------------------------------------------------------------
 
-const ChatContract = defineSocketContract("ChatApi", {
+const ChatContract = new GGDuplexContract("ChatApi", {
+    connect: {},
     clientToServer: {
         sendMessage: {
             input: IsObject({
@@ -55,10 +56,11 @@ const ChatAuthMiddleware: GGTransportMiddleware = {
     }
 };
 
-const ChatApi = webSocketSchema(ChatContract)
-    .path("ws/chat")
-    .use(ChatAuthMiddleware)
-    .done();
+const ChatApi = new GGWebSocketSchema({
+    contract: ChatContract,
+    path: "ws/chat",
+    use: [ChatAuthMiddleware],
+});
 
 // ---------------------------------------------------------------------------
 // Tests

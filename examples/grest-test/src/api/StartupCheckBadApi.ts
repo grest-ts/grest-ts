@@ -1,11 +1,12 @@
-import {GGRpc, httpSchema} from "@grest-ts/http"
+import {GGRpc, GGHttpSchema} from "@grest-ts/http"
 import {
     GG_NO_PERMISSIONS,
     GGContractClass,
+    GGDuplexContract,
     IsString,
     SERVER_ERROR,
 } from "@grest-ts/schema"
-import {defineSocketContract, webSocketSchema} from "@grest-ts/websocket"
+import {GGWebSocketSchema} from "@grest-ts/websocket"
 
 /**
  * Fixture: every method declared GG_NO_PERMISSIONS. Strict mode is triggered
@@ -16,12 +17,14 @@ export const StartupCheckAllPublicContract = new GGContractClass("StartupCheckAl
     pong: {success: IsString, errors: [SERVER_ERROR], permission: GG_NO_PERMISSIONS},
 })
 
-export const StartupCheckAllPublicApi = httpSchema(StartupCheckAllPublicContract)
-    .pathPrefix("api/startup-check-all-public")
-    .routes({
+export const StartupCheckAllPublicApi = new GGHttpSchema({
+    contract: StartupCheckAllPublicContract,
+    pathPrefix: "api/startup-check-all-public",
+    routes: {
         ping: GGRpc.GET("ping"),
         pong: GGRpc.GET("pong"),
-    })
+    },
+})
 
 /**
  * Fixture: nothing declares a permission. No usePermissions wiring either.
@@ -32,12 +35,14 @@ export const StartupCheckZeroConfigContract = new GGContractClass("StartupCheckZ
     world: {success: IsString, errors: [SERVER_ERROR]},
 })
 
-export const StartupCheckZeroConfigApi = httpSchema(StartupCheckZeroConfigContract)
-    .pathPrefix("api/startup-check-zero-config")
-    .routes({
+export const StartupCheckZeroConfigApi = new GGHttpSchema({
+    contract: StartupCheckZeroConfigContract,
+    pathPrefix: "api/startup-check-zero-config",
+    routes: {
         hello: GGRpc.GET("hello"),
         world: GGRpc.GET("world"),
-    })
+    },
+})
 
 /**
  * Fixture: one contract declares permissions, another does not. When mounted
@@ -48,40 +53,45 @@ export const StartupCheckDeclaredContract = new GGContractClass("StartupCheckDec
     publicOne: {success: IsString, errors: [SERVER_ERROR], permission: GG_NO_PERMISSIONS},
 })
 
-export const StartupCheckDeclaredApi = httpSchema(StartupCheckDeclaredContract)
-    .pathPrefix("api/startup-check-declared")
-    .routes({
+export const StartupCheckDeclaredApi = new GGHttpSchema({
+    contract: StartupCheckDeclaredContract,
+    pathPrefix: "api/startup-check-declared",
+    routes: {
         publicOne: GGRpc.GET("public"),
-    })
+    },
+})
 
 export const StartupCheckUndeclaredContract = new GGContractClass("StartupCheckUndeclared", {
     forgotten: {success: IsString, errors: [SERVER_ERROR]},
 })
 
-export const StartupCheckUndeclaredApi = httpSchema(StartupCheckUndeclaredContract)
-    .pathPrefix("api/startup-check-undeclared")
-    .routes({
+export const StartupCheckUndeclaredApi = new GGHttpSchema({
+    contract: StartupCheckUndeclaredContract,
+    pathPrefix: "api/startup-check-undeclared",
+    routes: {
         forgotten: GGRpc.GET("forgotten"),
-    })
+    },
+})
 
 /**
- * WS fixture used to verify the cross-transport infectious rule: `connectPermission`
+ * WS fixture used to verify the cross-transport infectious rule: connect.permission
  * is set (to `GG_NO_PERMISSIONS`, which still counts as "declared"), so strict
  * mode flips on for the entire `GGHttpServer` — any HTTP route registered on
  * the same server that omitted `permission` must fail the startup check.
  *
- * connectPermission is intentionally `GG_NO_PERMISSIONS` rather than a real
+ * connect.permission is intentionally `GG_NO_PERMISSIONS` rather than a real
  * scope so the orphan-resolver check stays quiet — the test then isolates the
  * "WS declaration infects HTTP" path.
  */
-export const StartupCheckWsConnectGatedContract = defineSocketContract("StartupCheckWsConnectGated", {
+export const StartupCheckWsConnectGatedContract = new GGDuplexContract("StartupCheckWsConnectGated", {
+    connect: {permission: GG_NO_PERMISSIONS},
     clientToServer: {
         ping: {success: IsString, errors: [SERVER_ERROR]},
     },
     serverToClient: {},
 })
 
-export const StartupCheckWsConnectGatedApi = webSocketSchema(StartupCheckWsConnectGatedContract)
-    .path("ws/startup-check-connect-gated")
-    .connectPermission(GG_NO_PERMISSIONS)
-    .done()
+export const StartupCheckWsConnectGatedApi = new GGWebSocketSchema({
+    contract: StartupCheckWsConnectGatedContract,
+    path: "ws/startup-check-connect-gated",
+})

@@ -56,10 +56,9 @@ export class AppRuntime extends GGRuntime {
             .http(OrgApi, orgService)
             .http(OrgScopedApi, orgService)
             .http(BannerApi, bannerService)
-
-        // The schema knows USER_TOKEN_WIRE; per-message permission gates come from the
-        // contract. No explicit middleware/resolver list.
-        LiveApi.register(liveService.handleConnection)
+            // The schema knows USER_TOKEN_WIRE; per-message permission gates come from the
+            // contract. No explicit middleware/resolver list.
+            .ws(LiveApi, liveService.handleConnection)
     }
 }
 

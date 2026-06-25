@@ -1,14 +1,16 @@
 import type {GGPostgres, QueryResultRow} from "@grest-ts/db-postgre";
 import {BlockCheckRequest, BlockCheckResponse, BlockerApiContract, BlockUserRequest} from "../../common/api-internal/BlockerApi";
 import {BlockerUserApiContract} from "../../common/api-user/BlockerUserApi";
-import {GGContractImplementation} from "@grest-ts/schema";
 
 interface BlockedUserRow extends QueryResultRow {
     username: string;
     reason: string | null;
 }
 
-export class BlockerService implements GGContractImplementation<typeof BlockerApiContract["methods"]>, GGContractImplementation<typeof BlockerUserApiContract["methods"]> {
+type IBlockerApi = typeof BlockerApiContract.infer
+type IBlockerUserApi = typeof BlockerUserApiContract.infer
+
+export class BlockerService implements IBlockerApi, IBlockerUserApi {
     private readonly db: GGPostgres;
 
     constructor(db: GGPostgres) {

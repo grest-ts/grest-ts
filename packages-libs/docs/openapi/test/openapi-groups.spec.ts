@@ -1,7 +1,7 @@
 import {describe, it, expect, beforeEach} from "vitest";
 import {
     IsString, IsNumber, IsObject, ERROR, GGContractClass, GG_NO_PERMISSIONS } from "@grest-ts/schema";
-import {GGRpc, httpSchema, GGHttpServer} from "@grest-ts/http";
+import {GGRpc, GGHttpSchema, GGHttpServer} from "@grest-ts/http";
 import {GGOpenApiDocsGroups} from "../src/GGOpenApiDocsGroups";
 
 const NOT_FOUND = ERROR.define("NOT_FOUND", 404);
@@ -22,9 +22,9 @@ const OrderContract = new GGContractClass("OrderApi", {
     }
 });
 
-const UserApi    = httpSchema(UserContract).pathPrefix("api/users").routes({get: GGRpc.GET(":id")});
-const ProfileApi = httpSchema(ProfileContract).pathPrefix("api/profiles").routes({get: GGRpc.GET(":id")});
-const OrderApi   = httpSchema(OrderContract).pathPrefix("api/orders").routes({list: GGRpc.GET("")});
+const UserApi    = new GGHttpSchema({contract: UserContract, pathPrefix: "api/users", routes: {get: GGRpc.GET(":id")}});
+const ProfileApi = new GGHttpSchema({contract: ProfileContract, pathPrefix: "api/profiles", routes: {get: GGRpc.GET(":id")}});
+const OrderApi   = new GGHttpSchema({contract: OrderContract, pathPrefix: "api/orders", routes: {list: GGRpc.GET("")}});
 
 // Minimal stub of GGHttpServer.registerRoute — we only need to capture registrations.
 function newStubServer(): {routes: Map<string, Function>, server: GGHttpServer} {

@@ -1,4 +1,4 @@
-import {GGRpc, httpSchema} from "@grest-ts/http";
+import {GGRpc, GGHttpSchema} from "@grest-ts/http";
 import {IsArray, IsObject, IsString, IsNumber, IsEnum, IsLiteral, IsTuple, GGContractClass, FORBIDDEN, NOT_AUTHORIZED, NOT_FOUND, SERVER_ERROR, VALIDATION_ERROR } from "@grest-ts/schema";
 import {GG_COMPANY_AUTH_TOKEN} from "../middleware/CompanyAuthHeader";
 import {IsApartmentId, IsClientId, IsContractId, IsDate, IsInvoiceFutureRowId, IsInvoiceId, IsUserId} from "../Brands";
@@ -124,14 +124,15 @@ export const InvoiceFutureRowApiContract = new GGContractClass("InvoiceFutureRow
 // API Definition
 // ---------------------------------------------------------
 
-export const InvoiceFutureRowApi = httpSchema(InvoiceFutureRowApiContract)
-    .pathPrefix("gg/invoiceFutureRow")
-    .use(GG_USER_AUTH)
-    .use(GG_COMPANY_AUTH_TOKEN)
-    .routes({
+export const InvoiceFutureRowApi = new GGHttpSchema({
+    contract: InvoiceFutureRowApiContract,
+    pathPrefix: "gg/invoiceFutureRow",
+    use: [GG_USER_AUTH, GG_COMPANY_AUTH_TOKEN],
+    routes: {
         list: GGRpc.POST("list"),
         get: GGRpc.POST("get"),
         sync: GGRpc.POST("sync"),
         delete: GGRpc.POST("delete")
-    })
+    },
+})
 

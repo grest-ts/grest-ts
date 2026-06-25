@@ -1,5 +1,5 @@
 import {GGContractClass, SERVER_ERROR } from "@grest-ts/schema"
-import {GGRpc, httpSchema} from "@grest-ts/http"
+import {GGRpc, GGHttpSchema} from "@grest-ts/http"
 import {UNAUTHORIZED} from "../hub/errors"
 import {GG_INTERNAL_TOKEN} from "../auth/internalAuth"
 import {
@@ -31,14 +31,16 @@ export const NotifyApiContract = new GGContractClass("NotifyApi", {
     },
 })
 
-export const NotifyApi = httpSchema(NotifyApiContract)
-    .pathPrefix("internal/notify")
-    .use(GG_INTERNAL_TOKEN)
-    .routes({
+export const NotifyApi = new GGHttpSchema({
+    contract: NotifyApiContract,
+    pathPrefix: "internal/notify",
+    use: [GG_INTERNAL_TOKEN],
+    routes: {
         notifyTask:         GGRpc.POST("task"),
         notifyAgent:        GGRpc.POST("agent"),
         notifyService:      GGRpc.POST("service"),
         notifyBaseImage:    GGRpc.POST("base-image"),
         notifyProjectImage: GGRpc.POST("project-image"),
         notifyTaskOverview: GGRpc.POST("task-overview"),
-    })
+    },
+})

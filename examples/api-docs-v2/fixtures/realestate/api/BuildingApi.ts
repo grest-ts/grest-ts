@@ -1,4 +1,4 @@
-import {GGRpc, httpSchema} from "@grest-ts/http";
+import {GGRpc, GGHttpSchema} from "@grest-ts/http";
 import {FORBIDDEN, GGContractClass, IsArray, IsEnum, IsObject, IsString, NOT_AUTHORIZED, NOT_FOUND, SERVER_ERROR, VALIDATION_ERROR } from "@grest-ts/schema";
 import {GG_COMPANY_AUTH_TOKEN} from "../middleware/CompanyAuthHeader";
 import {IsBuildingId, IsTemplateId} from "../Brands";
@@ -99,14 +99,15 @@ export const BuildingApiContract = new GGContractClass("BuildingApi", {
 // API Definition
 // ---------------------------------------------------------
 
-export const BuildingApi = httpSchema(BuildingApiContract)
-    .pathPrefix("gg/building")
-    .use(GG_USER_AUTH)
-    .use(GG_COMPANY_AUTH_TOKEN)
-    .routes({
+export const BuildingApi = new GGHttpSchema({
+    contract: BuildingApiContract,
+    pathPrefix: "gg/building",
+    use: [GG_USER_AUTH, GG_COMPANY_AUTH_TOKEN],
+    routes: {
         getForSelect: GGRpc.POST("getForSelect"),
         sync: GGRpc.POST("sync"),
         get: GGRpc.POST("get"),
         delete: GGRpc.POST("delete")
-    })
+    },
+})
 

@@ -1,4 +1,4 @@
-import {EXISTS, GGContractImplementation, NOT_AUTHORIZED, NOT_FOUND} from "@grest-ts/schema"
+import {EXISTS, NOT_AUTHORIZED, NOT_FOUND} from "@grest-ts/schema"
 import {GGAuthRefreshToken} from "@grest-ts/auth"
 import {AuthPublicApiContract, AuthResponse, InvalidCredentialsError, LoginRequest, RefreshRequest, RegisterRequest} from "../../../api/AuthPublicApi"
 import {UpdateProfileRequest, UserApiContract} from "../../../api/UserApi"
@@ -8,8 +8,10 @@ import {UserTable} from "../tables/UserTable"
 
 const BANNER_USERS = new Set(["alice", "carol"])
 
-export class UserService implements GGContractImplementation<typeof AuthPublicApiContract["methods"]>,
-    GGContractImplementation<typeof UserApiContract["methods"]> {
+type IAuthPublicApi = typeof AuthPublicApiContract.infer
+type IUserApi = typeof UserApiContract.infer
+
+export class UserService implements IAuthPublicApi, IUserApi {
 
     private readonly table = new UserTable()
     private onProfileUpdated: ((user: User) => void) | undefined

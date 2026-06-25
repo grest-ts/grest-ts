@@ -1,5 +1,5 @@
 /**
- * Raw byte-stream WebSocket sockets (webSocketSchema.bytes()).
+ * Raw byte-stream WebSocket sockets (GGRawWebSocketSchema).
  *
  * The critical guarantee under test: a raw socket runs the EXACT same handshake auth
  * as a schema socket. A real `ws` connection is opened by hand (like the cookie test),
@@ -8,7 +8,8 @@
  */
 import WebSocket from "ws"
 import {GG_TEST_RUNNER, GGTest} from "@grest-ts/testkit"
-import {defineSocketContract, webSocketSchema} from "@grest-ts/websocket"
+import {GGRawWebSocketSchema} from "@grest-ts/websocket"
+import {GGRawSocketContract} from "@grest-ts/schema"
 import {MainRuntime} from "../src/main"
 import {RawEchoApi} from "../src/api/RawEchoApi"
 import {AuthedSocketMiddleware, CLIENT_AUTH_TOKEN} from "../src/api/AuthedSocketApi"
@@ -22,7 +23,7 @@ const HANDSHAKE = "h", HANDSHAKE_OK = "k", HANDSHAKE_ERR = "x", REQ = "r", RES =
 const frame = (type: string, path: string, id: string, data: unknown): string =>
     `${type}${DELIM}${path}${DELIM}${id}${DELIM}${data !== undefined ? JSON.stringify(data) : ""}`
 
-describe("raw socket (webSocketSchema.bytes)", () => {
+describe("raw socket (GGRawWebSocketSchema)", () => {
 
     GGTest.startWorker(MainRuntime)
 
@@ -294,19 +295,19 @@ describe("customClient auth guard", () => {
     // handshake (a middleware with update(), e.g. GGHeader) can never arrive from a foreign
     // client, so the socket would open unauthenticated. Registration must fail loudly instead.
     test("rejects an update()-based (handshake-delivered) credential at build time", () => {
-        expect(() => webSocketSchema(defineSocketContract("CustomClientBad", {raw: true, customClient: true}))
-            .path("ws/cc-bad")
-            .use(AuthedSocketMiddleware)   // has update() — the "fake header" path
-            .done()
-        ).toThrow(/customClient/i)
+        expect(() => new GGRawWebSocketSchema({
+            contract: new GGRawSocketContract("CustomClientBad", {connect: {}, customClient: true}),
+            path: "ws/cc-bad",
+            use: [AuthedSocketMiddleware],   // has update() — the "fake header" path
+        })).toThrow(/customClient/i)
     })
 
     test("a parse-only credential (cookie wire) does not trip the guard", () => {
         // WS_SESSION reads the upgrade cookie (parse-only, no update) — valid with a custom client.
-        expect(() => webSocketSchema(defineSocketContract("CustomClientOk", {raw: true, customClient: true}))
-            .path("ws/cc-ok")
-            .use(WS_SESSION)
-            .done()
-        ).not.toThrow()
+        expect(() => new GGRawWebSocketSchema({
+            contract: new GGRawSocketContract("CustomClientOk", {connect: {}, customClient: true}),
+            path: "ws/cc-ok",
+            use: [WS_SESSION],
+        })).not.toThrow()
     })
 })

@@ -1,5 +1,5 @@
 import {GGContractClass, IsObject, IsString, IsNumber, IsLiteral, IsArray, SERVER_ERROR } from "@grest-ts/schema"
-import {GGRpc, httpSchema} from "@grest-ts/http"
+import {GGRpc, GGHttpSchema} from "@grest-ts/http"
 import {GG_RELAY_TOKEN} from "./RelayAuthContext.js"
 import {IsAgentId} from "../hub/schemas.js"
 
@@ -93,10 +93,11 @@ export const RelayAgentApiContract = new GGContractClass("RelayAgentApi", {
     },
 })
 
-export const RelayAgentApi = httpSchema(RelayAgentApiContract)
-    .pathPrefix("api/agents")
-    .use(GG_RELAY_TOKEN)
-    .routes({
+export const RelayAgentApi = new GGHttpSchema({
+    contract: RelayAgentApiContract,
+    pathPrefix: "api/agents",
+    use: [GG_RELAY_TOKEN],
+    routes: {
         list: GGRpc.GET("list"),
         launch: GGRpc.POST("launch"),
         stop: GGRpc.POST("stop"),
@@ -104,4 +105,5 @@ export const RelayAgentApi = httpSchema(RelayAgentApiContract)
         delete: GGRpc.POST("delete"),
         purge: GGRpc.POST("purge"),
         suspendAll: GGRpc.POST("suspend-all"),
-    })
+    },
+})

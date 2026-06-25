@@ -1,48 +1,51 @@
 import type {GGTransportMiddleware} from "@grest-ts/context";
-import type {GGPermission, GGValidator} from "@grest-ts/schema";
+import {GGRawSocketContract, GGRawSocketContractDefinition} from "@grest-ts/schema";
+import {assertValidSocketPath} from "./socketPath";
 
-export interface GGRawWebSocketSchemaConfig<TQuery> {
-    name: string;
-    path: string;
-    middlewares: readonly GGTransportMiddleware[];
-    queryValidator?: GGValidator<TQuery>;
-    connectPermission?: GGPermission;
-    /**
-     * Custom-client mode — auth runs against the HTTP upgrade request, no in-band handshake,
-     * no HANDSHAKE_OK, no grest-ts client. For foreign clients that can't speak the grest-ts
-     * handshake (noVNC, a proxied editor webview). `false` is the grest-ts-both-ends variant.
-     */
-    customClient: boolean;
-    /** Subprotocols to echo back (customClient only); first client-requested match wins. */
-    protocols?: readonly string[];
+export interface GGRawWebSocketSchemaConfig<TDef> {
+    contract: GGRawSocketContract<TDef & GGRawSocketContractDefinition>
+    path: string
+    use?: readonly GGTransportMiddleware[]
 }
 
 /**
- * Byte-stream WebSocket API schema — opaque bytes, no message contract.
+ * Byte-stream WebSocket API schema — opaque bytes, no message contract. Carries the same
+ * connection-level concerns as a typed schema (path, auth wires, connect query/permission/errors
+ * via `contract.connect`); once authenticated, the application owns the wire as an opaque byte
+ * stream. `startServer`/`createClient` are attached by the server/client modules.
  *
- * Carries the same connection-level concerns as a typed schema (path, auth wires, query
- * validation, connect permission): once the connection is authenticated, the application owns
- * the wire as an opaque byte stream. Built only via `webSocketSchema(contract).…done()` from a
- * `{raw: true}` contract — never constructed directly. `startServer`/`createClient` are
- * attached by the server and client extension modules.
+ * The type parameter is intentionally unconstrained — see GGWebSocketSchema for why (TS2428).
  */
-export class GGRawWebSocketSchema<TQuery = undefined> {
+export class GGRawWebSocketSchema<TDef> {
     public readonly name: string;
     public readonly path: string;
     public readonly middlewares: readonly GGTransportMiddleware[];
-    public readonly queryValidator?: GGValidator<TQuery>;
-    public readonly connectPermission?: GGPermission;
+    public readonly contract: GGRawSocketContract<TDef & GGRawSocketContractDefinition>;
     public readonly customClient: boolean;
     public readonly protocols?: readonly string[];
     public readonly raw = true as const;
 
-    constructor(config: GGRawWebSocketSchemaConfig<TQuery>) {
-        this.name = config.name;
+    constructor(config: GGRawWebSocketSchemaConfig<TDef>) {
+        const contract = config.contract
+        assertValidSocketPath(config.path, contract.name, contract.customClient)
+        // A custom client is foreign and never sends the in-band handshake, so a wire that
+        // delivers its credential there (an update() writer, e.g. GGHeader) could never arrive —
+        // the socket would open unauthenticated while looking gated. Only upgrade-readable
+        // credentials (cookie, ?query=) are legal with a custom client.
+        const use = config.use ?? []
+        if (contract.customClient && use.some(m => typeof m.update === "function")) {
+            throw new Error(
+                `GGRawWebSocketSchema "${contract.name}": a customClient byte socket cannot use a credential ` +
+                `delivered via the grest-ts handshake (a wire with update(), e.g. GGHeader). A custom client is ` +
+                `foreign and never sends the in-band handshake, so this credential could never arrive and the ` +
+                `socket would open unauthenticated. Authenticate via a cookie or "?query=" credential instead.`
+            )
+        }
+        this.name = contract.name;
         this.path = config.path;
-        this.middlewares = Object.freeze([...config.middlewares]);
-        this.queryValidator = config.queryValidator;
-        this.connectPermission = config.connectPermission;
-        this.customClient = config.customClient;
-        this.protocols = config.protocols ? Object.freeze([...config.protocols]) : undefined;
+        this.middlewares = Object.freeze([...use]);
+        this.contract = contract;
+        this.customClient = contract.customClient;
+        this.protocols = contract.protocols ? Object.freeze([...contract.protocols]) : undefined;
     }
 }

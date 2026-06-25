@@ -13,7 +13,7 @@
  */
 
 import {GGRuntime} from "@grest-ts/runtime";
-import {GGHttpServer} from "@grest-ts/http";
+import {GGHttp, GGHttpServer} from "@grest-ts/http";
 import {GGMetricsLoader} from "@grest-ts/metrics";
 
 import {ChainApi} from "./api/ChainApi";
@@ -35,9 +35,8 @@ export class ChainRuntime extends GGRuntime {
         const serviceB = new CityService(serviceC);
         const serviceA = new TravelPlannerService(serviceB);
 
-        // HTTP server and API registration
-        new GGHttpServer();
-        ChainApi.register(serviceA);
+        new GGHttp(new GGHttpServer())
+            .http(ChainApi, serviceA);
     }
 }
 

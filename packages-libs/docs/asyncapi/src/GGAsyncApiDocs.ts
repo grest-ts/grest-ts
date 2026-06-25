@@ -27,7 +27,7 @@ export interface GGAsyncApiDocsOptions extends ToAsyncApiOptions {
     /**
      * Explicit schema list. When provided, overrides server.registeredWebSocketSchemas.
      */
-    schemas?: GGWebSocketSchema<any, any, any, any, any>[];
+    schemas?: GGWebSocketSchema<any>[];
 
     /**
      * The HTTP server to register the docs routes on.
@@ -106,7 +106,7 @@ export class GGAsyncApiDocs {
 
     private buildSpec(): AsyncAPIDocument {
         const schemas = this.options.schemas
-            ?? (this.server.registeredWebSocketSchemas as GGWebSocketSchema<any, any, any, any, any>[]);
+            ?? (this.server.registeredWebSocketSchemas as GGWebSocketSchema<any>[]);
         return toAsyncApi(schemas, this.options);
     }
 

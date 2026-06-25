@@ -30,8 +30,8 @@ export interface BuildContractDocOptions {
 
     /** Group label → schemas in that group. Each can have HTTP, WS, or both. */
     groups: Record<string, {
-        http?: GGHttpSchema<any, any>[];
-        ws?: (GGWebSocketSchema<any, any, any, any, any> | GGRawWebSocketSchema<any>)[];
+        http?: GGHttpSchema<any>[];
+        ws?: (GGWebSocketSchema<any> | GGRawWebSocketSchema<any>)[];
         description?: string;
     }>;
 
@@ -108,7 +108,7 @@ export function buildContractDoc(options: BuildContractDocOptions): ApiDocsDocum
 
 // ── HTTP contract ──────────────────────────────────────────────────────
 
-function buildHttpContract(httpSchema: GGHttpSchema<any, any>, ctx: BuildContext): ContractDoc {
+function buildHttpContract(httpSchema: GGHttpSchema<any>, ctx: BuildContext): ContractDoc {
     const auth = extractHttpAuth(httpSchema.apiMiddlewares as readonly GGTransportMiddleware[]);
     const methods: MethodDoc[] = [];
 
@@ -205,7 +205,7 @@ function buildHttpMethod(
 // ── WS contract ────────────────────────────────────────────────────────
 
 function buildWsContract(
-    wsSchema: GGWebSocketSchema<any, any, any, any, any> | GGRawWebSocketSchema<any>,
+    wsSchema: GGWebSocketSchema<any> | GGRawWebSocketSchema<any>,
     ctx: BuildContext,
 ): ContractDoc {
     const auth = extractWsAuth([...(wsSchema.middlewares ?? [])]);

@@ -1,5 +1,5 @@
-import {GGRpc, httpSchema} from "@grest-ts/http"
-import {GGContractClass, GGContractImplementation, IsBoolean, IsNumber, IsObject, IsString, SERVER_ERROR, VALIDATION_ERROR, GG_NO_PERMISSIONS } from "@grest-ts/schema";
+import {GGRpc, GGHttpSchema} from "@grest-ts/http"
+import {GGContractClass, IsBoolean, IsNumber, IsObject, IsString, SERVER_ERROR, VALIDATION_ERROR, GG_NO_PERMISSIONS } from "@grest-ts/schema";
 import {IsTestObjectSettings} from "../MainConfig.api";
 
 // ---------------------------------------------------------
@@ -62,13 +62,13 @@ export const ConfigTestApiContract = new GGContractClass("ConfigTestApi", {
     }
 })
 
-export type IConfigTestApi = GGContractImplementation<typeof ConfigTestApiContract["methods"]>
-
-export const ConfigTestApi = httpSchema(ConfigTestApiContract)
-    .pathPrefix("api/config-test")
-    .routes({
+export const ConfigTestApi = new GGHttpSchema({
+    contract: ConfigTestApiContract,
+    pathPrefix: "api/config-test",
+    routes: {
         getWatchedValue: GGRpc.GET("watched-value"),
         getObjectConfig: GGRpc.GET("object-config"),
         logMessage: GGRpc.POST("log"),
         logDelayed: GGRpc.POST("log-delayed")
-    })
+    },
+})

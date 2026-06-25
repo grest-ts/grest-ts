@@ -1,5 +1,5 @@
 import {GGContractClass, IsObject, IsString, IsArray, SERVER_ERROR } from "@grest-ts/schema"
-import {GGRpc, httpSchema} from "@grest-ts/http"
+import {GGRpc, GGHttpSchema} from "@grest-ts/http"
 import {INVALID_CREDENTIALS, UNAUTHORIZED, NOT_FOUND} from "./errors"
 import {IsUser, IsOrganization, IsOrgId} from "./schemas"
 import {GG_USER_TOKEN, GG_ORG_TOKEN} from "../auth/AuthContext"
@@ -67,15 +67,16 @@ export const AuthApiContract = new GGContractClass("AuthApi", {
 
 // Login has no auth. listOrgs/selectOrg/refreshUserToken/me need user token only.
 // refreshOrgToken needs both user token and org token.
-export const AuthApi = httpSchema(AuthApiContract)
-    .pathPrefix("api/auth")
-    .use(GG_USER_TOKEN)
-    .use(GG_ORG_TOKEN)
-    .routes({
+export const AuthApi = new GGHttpSchema({
+    contract: AuthApiContract,
+    pathPrefix: "api/auth",
+    use: [GG_USER_TOKEN, GG_ORG_TOKEN],
+    routes: {
         login: GGRpc.POST("login"),
         listOrgs: GGRpc.GET("orgs"),
         selectOrg: GGRpc.POST("select-org"),
         refreshUserToken: GGRpc.POST("refresh-user"),
         refreshOrgToken: GGRpc.POST("refresh-org"),
         me: GGRpc.GET("me"),
-    })
+    },
+})

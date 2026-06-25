@@ -1,6 +1,6 @@
 import {GGContextKey, type GGInbound, type GGOutbound} from "@grest-ts/context"
 import {GGContractClass, IsObject, IsString, IsNumber, SERVER_ERROR, type GGSchema } from "@grest-ts/schema"
-import {GGRpc, httpSchema} from "@grest-ts/http"
+import {GGRpc, GGHttpSchema} from "@grest-ts/http"
 import {NOT_FOUND, UNAUTHORIZED} from "./errors"
 import {IsTaskId} from "./schemas"
 
@@ -70,9 +70,11 @@ export const HostingResolveApiContract = new GGContractClass("HostingResolveApi"
     },
 })
 
-export const HostingResolveApi = httpSchema(HostingResolveApiContract)
-    .pathPrefix("internal")
-    .use(GG_HOSTING_PROXY_SECRET)
-    .routes({
+export const HostingResolveApi = new GGHttpSchema({
+    contract: HostingResolveApiContract,
+    pathPrefix: "internal",
+    use: [GG_HOSTING_PROXY_SECRET],
+    routes: {
         resolve: GGRpc.POST("hosting/resolve"),
-    })
+    },
+})

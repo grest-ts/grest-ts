@@ -1,17 +1,9 @@
 import {ChecklistService} from "./ChecklistService"
-import {ChecklistNotificationApiContract, ItemMarkedEvent, UpdateItemResponse} from "../../common/api-user/ChecklistNotificationApi"
+import {ChecklistNotificationApi, ItemMarkedEvent, UpdateItemResponse} from "../../common/api-user/ChecklistNotificationApi"
 import {ChecklistItem} from "../../common/api-user/ChecklistApi"
 import {GGLog} from "@grest-ts/logger"
-import {WebSocketIncoming, WebSocketOutgoing} from "@grest-ts/websocket"
 import {tUserId} from "../../common/api-user/auth/UserAuth";
 import {UserContext} from "../UserContext";
-import {GGContractClient, GGContractImplementation} from "@grest-ts/schema";
-
-// Type for the incoming handler object (implementation returns Promise)
-type IncomingHandler = WebSocketIncoming<GGContractImplementation<typeof ChecklistNotificationApiContract.methods["clientToServer"]>>
-
-// Type for the outgoing object (server->client methods)
-type OutgoingConnection = WebSocketOutgoing<GGContractClient<typeof ChecklistNotificationApiContract.methods["serverToClient"]>>
 
 /**
  * Service that manages real-time WebSocket notifications for checklist updates.
@@ -19,7 +11,7 @@ type OutgoingConnection = WebSocketOutgoing<GGContractClient<typeof ChecklistNot
  */
 export class NotificationService {
     // Track all connected WebSocket clients, organized by token (simplified for demo)
-    private connectedClients = new Map<tUserId, Set<OutgoingConnection>>()
+    private connectedClients = new Map<tUserId, Set<typeof ChecklistNotificationApi.serverToClient>>()
 
     private checklistService: ChecklistService
 
@@ -33,7 +25,7 @@ export class NotificationService {
         })
     }
 
-    public handleConnection = (incoming: IncomingHandler, outgoing: OutgoingConnection): void => {
+    public handleConnection = (incoming: typeof ChecklistNotificationApi.clientToServer, outgoing: typeof ChecklistNotificationApi.serverToClient): void => {
         const user = UserContext.assert()
 
         // Add this connection to the user's set of connections
@@ -77,7 +69,7 @@ export class NotificationService {
         GGLog.info(this, 'WebSocket connected for user token: ' + user.id.substring(0, 8) + '...')
     }
 
-    private handleDisconnection(userId: tUserId, outgoing: OutgoingConnection): void {
+    private handleDisconnection(userId: tUserId, outgoing: typeof ChecklistNotificationApi.serverToClient): void {
         const userConnections = this.connectedClients.get(userId)
         if (userConnections) {
             userConnections.delete(outgoing)

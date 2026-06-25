@@ -1,7 +1,7 @@
 import {describe, expect, it} from "vitest";
-import {GG_NO_PERMISSIONS, GGContractClass, IsString, NOT_AUTHORIZED, SERVER_ERROR} from "@grest-ts/schema";
-import {GGCookie, GGHeader, GGRpc, httpSchema} from "@grest-ts/http";
-import {defineSocketContract, webSocketSchema} from "@grest-ts/websocket";
+import {GG_NO_PERMISSIONS, GGContractClass, GGDuplexContract, IsString, NOT_AUTHORIZED, SERVER_ERROR} from "@grest-ts/schema";
+import {GGCookie, GGHeader, GGRpc, GGHttpSchema} from "@grest-ts/http";
+import {GGWebSocketSchema} from "@grest-ts/websocket";
 import {buildContractDoc} from "../src/buildContractDoc";
 
 function findContract(doc: ReturnType<typeof buildContractDoc>, name: string) {
@@ -17,7 +17,7 @@ describe("buildContractDoc — cookie surfacing", () => {
         const C = new GGContractClass("CookieHttp", {
             me: {success: IsString, errors: [NOT_AUTHORIZED, SERVER_ERROR], permission: GG_NO_PERMISSIONS},
         });
-        const Api = httpSchema(C as any).pathPrefix("acct").use(new GGCookie("access")).routes({me: GGRpc.GET("me")});
+        const Api = new GGHttpSchema({contract: C as any, pathPrefix: "acct", use: [new GGCookie("access")], routes: {me: GGRpc.GET("me")}});
         const doc = buildContractDoc({title: "T", groups: {default: {http: [Api]}}});
         const c = findContract(doc, "CookieHttp");
         expect(c?.cookies?.map(x => x.name)).toEqual(["access"]);
@@ -28,7 +28,7 @@ describe("buildContractDoc — cookie surfacing", () => {
         const C = new GGContractClass("CookieNamed", {
             me: {success: IsString, errors: [SERVER_ERROR], permission: GG_NO_PERMISSIONS},
         });
-        const Api = httpSchema(C as any).pathPrefix("acct2").use(new GGCookie("sid")).routes({me: GGRpc.GET("me")});
+        const Api = new GGHttpSchema({contract: C as any, pathPrefix: "acct2", use: [new GGCookie("sid")], routes: {me: GGRpc.GET("me")}});
         const doc = buildContractDoc({title: "T", groups: {default: {http: [Api]}}});
         expect(findContract(doc, "CookieNamed")?.cookies?.map(x => x.name)).toEqual(["sid"]);
     });
@@ -37,7 +37,7 @@ describe("buildContractDoc — cookie surfacing", () => {
         const C = new GGContractClass("HeaderOnly", {
             me: {success: IsString, errors: [SERVER_ERROR], permission: GG_NO_PERMISSIONS},
         });
-        const Api = httpSchema(C as any).pathPrefix("h").use(new GGHeader("x-access")).routes({me: GGRpc.GET("me")});
+        const Api = new GGHttpSchema({contract: C as any, pathPrefix: "h", use: [new GGHeader("x-access")], routes: {me: GGRpc.GET("me")}});
         const doc = buildContractDoc({title: "T", groups: {default: {http: [Api]}}});
         const c = findContract(doc, "HeaderOnly");
         expect(c?.cookies ?? []).toEqual([]);
@@ -45,11 +45,12 @@ describe("buildContractDoc — cookie surfacing", () => {
     });
 
     it("WS cookie() binding is surfaced on the connection contract", () => {
-        const C = defineSocketContract("CookieWs", {
+        const C = new GGDuplexContract("CookieWs", {
+            connect: {},
             clientToServer: {whoami: {success: IsString, errors: [SERVER_ERROR], permission: GG_NO_PERMISSIONS}},
             serverToClient: {},
         });
-        const Api = webSocketSchema(C).path("ws/acct").use(new GGCookie("access")).done();
+        const Api = new GGWebSocketSchema({contract: C, path: "ws/acct", use: [new GGCookie("access")]});
         const doc = buildContractDoc({title: "T", groups: {default: {ws: [Api]}}});
         expect(findContract(doc, "CookieWs")?.cookies?.map(x => x.name)).toEqual(["access"]);
     });

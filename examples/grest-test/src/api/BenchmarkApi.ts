@@ -1,4 +1,4 @@
-import {GGHttpSchema, GGRpc, httpSchema} from "@grest-ts/http"
+import {GGHttpSchema, GGRpc} from "@grest-ts/http"
 import {GGContractClass, IsObject, IsString, VALIDATION_ERROR, GG_NO_PERMISSIONS} from "@grest-ts/schema";
 
 // ---------------------------------------------------------
