@@ -1,6 +1,5 @@
 /**
- * Server extension for HttpApiSchema - adds register method.
- * This file should only be imported in server (Node.js) context.
+ * Server-side registerHttpSchema for GGHttpSchema. Node.js only.
  */
 
 import http from "http";
@@ -15,26 +14,19 @@ import {GG_HTTP_REQUEST} from "./GG_HTTP_REQUEST";
 import {GG_COOKIE_WRITES} from "../schema/GGCookie";
 import {GG_METRICS} from "@grest-ts/metrics";
 import {GGHttpMetrics} from "./GGHttpMetrics";
-import {GG_HTTP_SERVER} from "./GG_HTTP_SERVER";
 import {GGHttpServer} from "./GGHttpServer";
 import {GGLog} from "@grest-ts/logger";
 import {GGHttpPermissionsChecker} from "../schema/GGHttpPermissionsChecker";
 
 export interface GGHttpRegisterConfig {
-    /**
-     * The HTTP request handler to register with.
-     */
-    http?: GGHttpServer;
-    /**
-     * Additional middlewares to apply to all routes.
-     */
+    http: GGHttpServer;
     middlewares?: GGTransportMiddleware[];
 }
 
 export function registerHttpSchema<TContract extends GGContractApiDefinition>(
     schema: GGHttpSchema<TContract>,
     implementation: GGContractImplementation<TContract>,
-    config?: GGHttpRegisterConfig
+    config: GGHttpRegisterConfig
 ): void {
     setupRoutes(schema, implementation, config)
 }
@@ -42,16 +34,11 @@ export function registerHttpSchema<TContract extends GGContractApiDefinition>(
 function setupRoutes<TContract extends GGContractApiDefinition>(
     httpSchema: GGHttpSchema<TContract>,
     implementation: GGContractImplementation<TContract>,
-    config?: GGHttpRegisterConfig
+    config: GGHttpRegisterConfig
 ) {
-    config ??= {};
-    config.middlewares ??= [];
-
     if (!httpSchema.contract) throw new Error(`HttpApiSchema "${httpSchema.name}" has no contract.`);
 
-    const server = config.http ?? GGLocator.getScope().get(GG_HTTP_SERVER);
-    if (!server) throw new Error(`No HTTP server found. Make sure to register GGHttpServerAdapter in the scope or pass handler via config`)
-
+    const server = config.http;
     server._registerSchema(httpSchema as GGHttpSchema<any>);
 
     const pathPrefix = "/" + httpSchema.pathPrefix + "/"

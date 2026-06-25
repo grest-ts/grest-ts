@@ -1,21 +1,12 @@
 /**
- * Server extension for GGRawWebSocketSchema — adds startServer.
- * Node.js only.
+ * Server-side startRawWebSocketServer for GGRawWebSocketSchema. Node.js only.
  */
 
 import type {GGRawSocket} from "../socket/GGRawSocket"
 import {GGRawWebSocketSchema} from "../schema/GGRawWebSocketSchema"
-import {type GGTransportMiddleware} from "@grest-ts/context"
-import {GGSocketServer, type GGServerHeartbeatOption, type GGWsUpgrade} from "./GGSocketServer"
-import {GGLocator} from "@grest-ts/locator"
-import {GG_HTTP_SERVER, GGHttpServer, GGHttpPermissionsChecker} from "@grest-ts/http"
-import {GG_NO_PERMISSIONS, GGRawSocketContractDefinition} from "@grest-ts/schema"
-
-export interface RawWebSocketSchemaConfig {
-    http?: GGHttpServer;
-    middlewares?: GGTransportMiddleware[];
-    heartbeat?: GGServerHeartbeatOption;
-}
+import {GGSocketServer, type GGWsUpgrade} from "./GGSocketServer"
+import {GGRawSocketContractDefinition} from "@grest-ts/schema"
+import {SocketServerConfig, prepareSocketServer} from "./prepareSocketServer"
 
 export type GGRawWebSocketHandler<TDef extends GGRawSocketContractDefinition> = (
     socket: GGRawSocket,
@@ -26,38 +17,22 @@ export type GGRawWebSocketHandler<TDef extends GGRawSocketContractDefinition> = 
 export function startRawWebSocketServer(
     schema: GGRawWebSocketSchema<any>,
     onConnection: (socket: GGRawSocket, query: any, upgrade: GGWsUpgrade) => void | Promise<void>,
-    config: RawWebSocketSchemaConfig
-): GGSocketServer<unknown, any, GGRawSocket> {
-    const normalizedPath = schema.path.startsWith('/') ? schema.path : '/' + schema.path
-    const schemaName = schema.name
-    const middlewares: GGTransportMiddleware[] = [...schema.middlewares, ...(config?.middlewares ?? [])]
+    config: SocketServerConfig
+): GGSocketServer<any, GGRawSocket> {
+    const {schemaName, normalizedPath, middlewares, queryValidator} = prepareSocketServer(schema, config)
 
-    const http = config.http ?? GGLocator.getScope().get(GG_HTTP_SERVER)
-    http._registerWebSocketSchema(schema as any)
-    const connectMethod = schema.contract.connect.method
-    const connectPermission = connectMethod.permission ?? GG_NO_PERMISSIONS
-    const permissionsChecker = new GGHttpPermissionsChecker(schema.middlewares)
-
-    // Gate the handshake: resolve scopes and assert connectPermission, so a failed
-    // permission (or a throwing resolver) rejects the handshake before the stream opens.
-    middlewares.push({
-        async process() {
-            await permissionsChecker.assert(schemaName, "", connectPermission)
-        },
-    })
-
-    const socketServer = new GGSocketServer<unknown, any, GGRawSocket>(http, {
+    const socketServer = new GGSocketServer<any, GGRawSocket>(config.http, {
         apiName: schemaName,
         path: normalizedPath,
         middlewares,
-        queryValidator: connectMethod.input,
-        heartbeat: config?.heartbeat,
+        queryValidator,
+        heartbeat: config.heartbeat,
         raw: true,
         customClient: schema.customClient,
         protocols: schema.protocols,
     })
 
-    socketServer.onConnection(async (socket: GGRawSocket, queryArgs: any, upgrade: GGWsUpgrade): Promise<void> => {
+    socketServer.onConnection(async (socket, queryArgs, upgrade): Promise<void> => {
         await onConnection(socket, queryArgs, upgrade)
     })
 

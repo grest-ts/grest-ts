@@ -55,7 +55,7 @@ function toUpgrade(req: http.IncomingMessage): GGWsUpgrade {
     return {path: url.split('?')[0], url, headers, remoteAddress: req.socket.remoteAddress};
 }
 
-export interface GGSocketServerConfig<TContext, Query> {
+export interface GGSocketServerConfig<Query> {
     path: string;
     apiName: string;
     queryValidator?: GGValidator<Query>;
@@ -162,7 +162,7 @@ function detachUpgradeDispatch(httpServer: http.Server, path: string): void {
     registry.wssByPath.delete(path);
 }
 
-export class GGSocketServer<TContext, Query, TSocket extends ServerSocket = GGSocket> {
+export class GGSocketServer<Query, TSocket extends ServerSocket = GGSocket> {
 
     private readonly wss: WebSocketServer;
     private readonly http: GGHttpServer;
@@ -180,7 +180,7 @@ export class GGSocketServer<TContext, Query, TSocket extends ServerSocket = GGSo
     // Capture context at construction - WebSocket events lose AsyncLocalStorage context
     private readonly scope: GGLocatorScope;
 
-    constructor(http: GGHttpServer, config: GGSocketServerConfig<TContext, Query>) {
+    constructor(http: GGHttpServer, config: GGSocketServerConfig<Query>) {
         this.scope = GGLocator.getScope();
         this.path = config.path;
         this.apiName = config.apiName;
