@@ -11,9 +11,13 @@ How to use the HTTP package for building type-safe HTTP and WebSocket APIs.
 
 ### Basic API Structure
 
+A schema is a plain object passed to `new GGHttpSchema({...})`: a `contract`, a
+`pathPrefix`, a `routes` map (one verb helper per contract method), and an optional
+`use` array of wires (omit it for a public API).
+
 ```typescript
 // MyApi.ts
-import { GGRpc, httpSchema } from "@grest-ts/http"
+import { GGRpc, GGHttpSchema } from "@grest-ts/http"
 import { GGContractClass, IsArray, IsObject, IsString, IsBoolean, IsUint, NOT_FOUND, FORBIDDEN, VALIDATION_ERROR, SERVER_ERROR } from "@grest-ts/schema"
 
 // ---------------------------------------------------------
@@ -80,16 +84,21 @@ export const MyApiContract = new GGContractClass("MyApi", {
     }
 })
 
-export const MyApi = httpSchema(MyApiContract)
-    .pathPrefix("api/items")
-    .routes({
+export const MyApi = new GGHttpSchema({
+    contract: MyApiContract,
+    pathPrefix: "api/items",
+    routes: {
         list: GGRpc.GET("list"),
         get: GGRpc.GET("get/:id"),
         create: GGRpc.POST("create"),
         update: GGRpc.PUT("update"),
         delete: GGRpc.DELETE("delete/:id")
-    })
+    }
+})
 ```
+
+Every key in `routes` must match a method key on the contract. The verb helpers
+(`GGRpc.GET/POST/PUT/DELETE`) are unchanged.
 
 ### HTTP Methods
 
@@ -118,12 +127,14 @@ export const MyApiContract = new GGContractClass("MyApi", {
     }
 })
 
-export const MyApi = httpSchema(MyApiContract)
-    .pathPrefix("api")
-    .routes({
+export const MyApi = new GGHttpSchema({
+    contract: MyApiContract,
+    pathPrefix: "api",
+    routes: {
         getUser: GGRpc.GET("users/:userId"),
         getUserPost: GGRpc.GET("users/:userId/posts/:postId")
-    })
+    }
+})
 ```
 
 ### Query Parameters
@@ -168,7 +179,7 @@ export const MyApiContract = new GGContractClass("MyApi", {
 
 ## Permissions
 
-Contract methods may declare a `permission`. The framework gates every request against the declared permission **before the handler runs**, so missing or wrong scopes can never reach service code. The caller's scopes come from the **wires** the schema `.use()`s (see "Authentication & Context" below) — a smart wire verifies the credential and exposes the caller's grants via its `permissions()` resolver. There is no separate `.usePermissions(...)` step and no auth-middleware chain; the schema's wires ARE the source of scopes.
+Contract methods may declare a `permission`. The framework gates every request against the declared permission **before the handler runs**, so missing or wrong scopes can never reach service code. The caller's scopes come from the **wires** the schema lists in `use: [...]` (see "Authentication & Context" below) — a smart wire verifies the credential and exposes the caller's grants via its `permissions()` resolver. There is no separate `.usePermissions(...)` step and no auth-middleware chain; the schema's wires ARE the source of scopes.
 
 Declarations are opt-in but *infectious*: once any route on the server declares a `permission`, every route on the server must declare one — the runtime refuses to start otherwise (see "Hard guarantee" below).
 
@@ -179,20 +190,22 @@ export const ItemApiContract = new GGContractClass("ItemApi", {
     delete: { input: IsItemIdParam, errors: [NOT_AUTHORIZED, FORBIDDEN, SERVER_ERROR], permission: ItemPermission.DELETE },
 })
 
-// schema: .use() the wire that authenticates + resolves scopes for these routes
-export const ItemApi = httpSchema(ItemApiContract)
-    .pathPrefix("api/items")
-    .use(USER_TOKEN_WIRE)
-    .routes({ list: GGRpc.GET("list"), delete: GGRpc.DELETE("delete/:id") })
+// schema: list the wire that authenticates + resolves scopes for these routes
+export const ItemApi = new GGHttpSchema({
+    contract: ItemApiContract,
+    pathPrefix: "api/items",
+    use: [USER_TOKEN_WIRE],
+    routes: { list: GGRpc.GET("list"), delete: GGRpc.DELETE("delete/:id") },
+})
 ```
 
 The gate reads the method's `permission`, collects the caller's grants from every wire on the schema (each wire's `permissions()`), pools them into one set, checks `satisfies(method.permission, pooledGrants)`, and throws `NOT_AUTHORIZED` (a wire couldn't authenticate) or `FORBIDDEN` (authenticated, wrong scopes).
 
-**Multi-wire composition (AND across sources).** A schema may `.use()` more than one auth wire (e.g. a user wire AND an org wire). Each wire's server handler runs at the request boundary, so **every** wire must authenticate — any one throwing rejects the request. That is the AND across sources. For scope checks the grants from all wires are **pooled** into one set, and the method's `permission` must be satisfied by that union; grants are matched by string against the pool, with no per-wire ownership of permission strings. A route that declares a non-public `permission` on a schema that `.use()`s **no** permission-resolving wire can never be satisfied (its pooled grants are always empty), so it fails at startup — see the hard guarantee below.
+**Multi-wire composition (AND across sources).** A schema may list more than one auth wire in `use: [...]` (e.g. a user wire AND an org wire). Each wire's server handler runs at the request boundary, so **every** wire must authenticate — any one throwing rejects the request. That is the AND across sources. For scope checks the grants from all wires are **pooled** into one set, and the method's `permission` must be satisfied by that union; grants are matched by string against the pool, with no per-wire ownership of permission strings. A route that declares a non-public `permission` on a schema with **no** permission-resolving wire can never be satisfied (its pooled grants are always empty), so it fails at startup — see the hard guarantee below.
 
 **Hard guarantee.** At server start the framework walks every HTTP / WS route registered on the `GGHttpServer`, before it accepts traffic. Two guarantees hold:
 
-- **Wires are implemented (always).** A `.use()`d wire that was never implemented (no `.define(...).create(deps)` in `compose()`) fails the start — a listed wire must work or the request fails loud. This runs regardless of whether any permission is declared.
+- **Wires are implemented (always).** A `use`d wire that was never implemented (no `.define(...).create(deps)` in `compose()`) fails the start — a listed wire must work or the request fails loud. This runs regardless of whether any permission is declared.
 - **Permission coverage (strict mode).** If any route declared a permission, **strict mode** is on for the whole server: every route must declare `permission` — use `GG_NO_PERMISSIONS` for intentionally public ones. Routes that omit it fail the start and are listed by name.
 
 The coverage check is per-server (HTTP routes + WS schemas on the same `GGHttpServer`), so a permission declared anywhere is infectious across sibling chains. The only way to opt out is to declare nothing — projects with no auth pay zero ceremony, but the moment one route opts in, the framework forces consistency.
@@ -203,9 +216,10 @@ The coverage check is per-server (HTTP routes + WS schemas on the same `GGHttpSe
 
 Authentication and per-request context ride on **wires**. A wire (`GGHeader` / `GGCookie`)
 *is* a context key and a transport middleware at once: it reads a value off the inbound
-request and attaches to a schema with a single `.use(WIRE)`. The schema declares the wire
-once and every method on it parses (and, for credentials, verifies) that wire — you can't
-forget it on a method, and "is this endpoint protected?" is readable off the schema.
+request and attaches to a schema by listing it in the schema's `use: [WIRE]` array. The
+schema declares the wire once and every method on it parses (and, for credentials, verifies)
+that wire — you can't forget it on a method, and "is this endpoint protected?" is readable
+off the schema.
 
 There are two tiers, decided by whether the wire is `.define()`d server-side:
 
@@ -270,15 +284,17 @@ export const USER_TOKEN_WIRE_HANDLER = USER_TOKEN_WIRE.define((users: UserServic
 }))
 ```
 
-`.use()` the wire on every schema whose routes need it, and `.create()` its handler once in
-the runtime's `compose()`:
+List the wire in `use: [...]` on every schema whose routes need it, and `.create()` its
+handler once in the runtime's `compose()`:
 
 ```typescript
 // api/UserApi.ts
-export const UserApi = httpSchema(UserApiContract)
-    .pathPrefix("api/users")
-    .use(USER_TOKEN_WIRE)              // every route here verifies the token
-    .routes({ me: GGRpc.GET("me"), updateProfile: GGRpc.PUT("profile") })
+export const UserApi = new GGHttpSchema({
+    contract: UserApiContract,
+    pathPrefix: "api/users",
+    use: [USER_TOKEN_WIRE],            // every route here verifies the token
+    routes: { me: GGRpc.GET("me"), updateProfile: GGRpc.PUT("profile") },
+})
 ```
 
 ```typescript
@@ -312,9 +328,12 @@ bare wire (no `.define()`). The value lands in the wire and persists through the
 // shared api/
 export const CLIENT_VERSION_WIRE = new GGHeader("x-client-version")   // ambient
 
-httpSchema(MyContract)
-    .use(CLIENT_VERSION_WIRE)
-    .routes({ ... })
+new GGHttpSchema({
+    contract: MyContract,
+    pathPrefix: "api",
+    use: [CLIENT_VERSION_WIRE],
+    routes: { ... },
+})
 
 // in a handler — read it directly:
 const version = CLIENT_VERSION_WIRE.get()   // string | undefined
@@ -356,7 +375,7 @@ export const ClientInfoMiddleware: GGTransportMiddleware = {
     },
 }
 
-httpSchema(MyContract).use(ClientInfoMiddleware).routes({ ... })
+new GGHttpSchema({ contract: MyContract, pathPrefix: "api", use: [ClientInfoMiddleware], routes: { ... } })
 ```
 
 ### Client — sending the credential
@@ -378,9 +397,10 @@ For the no-session case (a static service-to-service API key), the underlying pr
 
 ### Public API (No Auth)
 
-A public route simply lives on a schema that does **not** `.use()` an auth wire — "what's
-public?" is answered by looking at the schema, not by reading handler code. (There is no
-"optional auth": anonymous and authenticated variants live on separate schemas.)
+A public route simply lives on a schema that lists **no** auth wire in `use` (omit the field
+entirely) — "what's public?" is answered by looking at the schema, not by reading handler
+code. (There is no "optional auth": anonymous and authenticated variants live on separate
+schemas.)
 
 ```typescript
 export const PublicApiContract = new GGContractClass("PublicApi", {
@@ -388,12 +408,14 @@ export const PublicApiContract = new GGContractClass("PublicApi", {
     login:  { input: IsLoginRequest, success: IsLoginResponse, errors: [VALIDATION_ERROR, SERVER_ERROR], permission: GG_NO_PERMISSIONS },
 })
 
-export const PublicApi = httpSchema(PublicApiContract)
-    .pathPrefix("pub")                 // no .use(WIRE) → public
-    .routes({
+export const PublicApi = new GGHttpSchema({
+    contract: PublicApiContract,
+    pathPrefix: "pub",                 // no `use` → public
+    routes: {
         status: GGRpc.GET("status"),
         login: GGRpc.POST("login"),
-    })
+    },
+})
 ```
 
 (`permission: GG_NO_PERMISSIONS` is only needed once any route on the server declares a
@@ -452,14 +474,33 @@ export class MyService {
 }
 ```
 
+## Server Implementation
+
+The implementation is a plain class. `typeof Contract.infer` gives its method shape — keep
+the alias next to the class:
+
+```typescript
+import type { BenchmarkRequest, BenchmarkResponse } from "../api/BenchmarkApi"
+import { BenchmarkApiContract } from "../api/BenchmarkApi"
+
+type IBenchmarkApi = typeof BenchmarkApiContract.infer
+
+export class BenchmarkService implements IBenchmarkApi {
+    public async hello(request: BenchmarkRequest): Promise<BenchmarkResponse> {
+        return { res: "Hello " + request.name }
+    }
+}
+```
+
 ## HTTP Server Setup
 
-### Using GGHttp (Fluent API)
+### Registering with GGHttp
 
-Auth wiring is **not** a chain on `GGHttp` — the schema carries the wire (`.use(WIRE)`) and
-the runtime binds the wire's deps once via `WIRE_HANDLER.create(deps)`. `GGHttp.use(...)` is
-reserved for *ambient* middleware (e.g. client-info, trace) that should apply to every API
-registered on that builder.
+`GGHttp` is the single entry point: `new GGHttp(httpServer).http(Schema, impl)`, chained per
+API. Auth wiring is **not** a chain on `GGHttp` — the schema carries the wire (`use: [WIRE]`)
+and the runtime binds the wire's deps once via `WIRE_HANDLER.create(deps)`. `GGHttp.use(...)`
+is reserved for *ambient* middleware (e.g. client-info, trace) that applies to every API
+registered **after** it on that builder.
 
 ```typescript
 import { GGHttp, GGHttpServer } from "@grest-ts/http"
@@ -473,20 +514,8 @@ protected compose(): void {
     new GGHttp(httpServer)
         .use(ClientInfoMiddleware)            // ambient middleware for every API below (optional)
         .http(PublicApi, publicService)       // no wire on its schema → public
-        .http(MyApi, myService)               // MyApi schema .use(USER_TOKEN_WIRE)
+        .http(MyApi, myService)               // MyApi schema uses USER_TOKEN_WIRE
         .http(UserAuthApi, userService)
-}
-```
-
-### Using GGHttpSchema.register (Direct)
-
-```typescript
-import { GGHttpServer } from "@grest-ts/http"
-
-protected compose(): void {
-    const httpServer = new GGHttpServer()
-    MyApi.register(myService, { http: httpServer })
-    OtherApi.register(otherService, { http: httpServer })
 }
 ```
 
@@ -509,19 +538,22 @@ protected compose(): void {
 ### CORS Headers
 
 CORS `Access-Control-Allow-Headers` are auto-discovered from the wires and middleware a
-schema `.use()`s. Only `Content-Type` is included by default (it's set by the framework's
-RPC layer). All other headers — including `Authorization` — are registered automatically
-from each wire/middleware's declared header names.
+schema lists in `use`. Only `Content-Type` is included by default (it's set by the
+framework's RPC layer). All other headers — including `Authorization` — are registered
+automatically from each wire/middleware's declared header names.
 
-A `GGHeader` wire carries its own header name, so `.use()`ing it is enough — no extra CORS
-wiring:
+A `GGHeader` wire carries its own header name, so listing it in `use` is enough — no extra
+CORS wiring:
 
 ```typescript
 export const ORG_TOKEN_WIRE = new GGHeader("x-org-token", {})   // smart wire, custom header
 
-httpSchema(Contract)
-    .use(ORG_TOKEN_WIRE)      // "x-org-token" added to CORS Allow-Headers automatically
-    .routes({ ... })
+new GGHttpSchema({
+    contract: Contract,
+    pathPrefix: "api",
+    use: [ORG_TOKEN_WIRE],    // "x-org-token" added to CORS Allow-Headers automatically
+    routes: { ... },
+})
 ```
 
 A custom middleware declares the headers it reads via `headers` and the response headers it
@@ -554,25 +586,27 @@ that JavaScript cannot read (so XSS can't steal it). It is **server-minted**: th
 server emits `Set-Cookie`, the browser stores and resends it, and JS never touches it.
 
 A cookie is a **`GGCookie` wire** — it IS its own context key. Its name is the cookie
-name. Attach it with one `.use(SESSION)` on the schema; read it with `SESSION.get()` in any
-handler; write it with the static `GGCookie.setCookie(SESSION, …)` / `clearCookie(SESSION)`
+name. Attach it by listing `SESSION` in the schema's `use`; read it with `SESSION.get()` in
+any handler; write it with the static `GGCookie.setCookie(SESSION, …)` / `clearCookie(SESSION)`
 from a route that declared `.updatesCookie(SESSION)`:
 
 ```typescript
 // shared api/
-import {GGRpc, httpSchema, GGCookie} from "@grest-ts/http"
+import {GGRpc, GGHttpSchema, GGCookie} from "@grest-ts/http"
 
 // The wire's name IS the cookie name. No cookie policy in the shared API.
 export const SESSION = new GGCookie("session")
 
-export const AuthApi = httpSchema(AuthContract)
-    .use(SESSION)
-    .pathPrefix("api/auth")
-    .routes({
+export const AuthApi = new GGHttpSchema({
+    contract: AuthContract,
+    pathPrefix: "api/auth",
+    use: [SESSION],
+    routes: {
         login:  GGRpc.POST("login").updatesCookie(SESSION),   // may write the cookie
         logout: GGRpc.POST("logout").updatesCookie(SESSION),  // may write (clear)
         me:     GGRpc.GET("me"),                              // read-only -> no declaration
-    })
+    },
+})
 ```
 
 ```typescript
@@ -593,7 +627,7 @@ export class AuthService {
 ```
 
 **Read vs write.** Reading is implicit — `SESSION.get()` works on any route whose schema
-`.use()`d the cookie. **Writing is explicit**: only a route that declared
+lists the cookie in `use`. **Writing is explicit**: only a route that declared
 `.updatesCookie(SESSION)` may write it. A `GGCookie.setCookie(SESSION, …)` call from a route
 that *didn't* declare it throws `SERVER_ERROR`, so a deep service function can't silently
 mint or change someone's session — the capability is visible at the API boundary. The
@@ -660,8 +694,8 @@ Same-origin calls and the default need nothing.
 
 The same `GGCookie` wire works on a WebSocket schema, read-only: a browser auto-attaches
 the httpOnly cookie to the WS **upgrade** request, and the runtime fills `inbound.cookie`
-from that real upgrade header (never from the spoofable in-band handshake message). `.use()`
-the same `SESSION` wire on the WS schema and read it at handshake with `SESSION.get()` — no
+from that real upgrade header (never from the spoofable in-band handshake message). List the
+same `SESSION` wire in the WS schema's `use` and read it at handshake with `SESSION.get()` — no
 client code, no ticket dance. There is no `Set-Cookie` over a socket, so the wire only reads
 there (`.updatesCookie` is an HTTP route concept). See `@grest-ts/websocket` → "Cookies".
 
@@ -730,54 +764,45 @@ const title = await client.get({ id: "item-123" }).map(item => item.title)
 
 ## WebSocket APIs
 
+The websocket package documents the WS model in depth; this is the short version. A WS schema
+follows the same object-config shape as HTTP: a `GGDuplexContract` (with `connect`,
+`clientToServer`, `serverToClient`), a `path`, and an optional `use` array of wires.
+
 ### Defining WebSocket API
 
 ```typescript
-import { defineSocketContract, webSocketSchema } from "@grest-ts/websocket"
-import { IsObject, IsString, IsBoolean, SERVER_ERROR, VALIDATION_ERROR } from "@grest-ts/schema"
+import { GGWebSocketSchema } from "@grest-ts/websocket"
+import { GGDuplexContract, IsObject, IsString, IsBoolean, GG_NO_PERMISSIONS, NOT_AUTHORIZED, SERVER_ERROR, VALIDATION_ERROR } from "@grest-ts/schema"
 
-// Message schemas
-export const IsItemMarkedEvent = IsObject({
-    item: IsItem,
-    markedBy: IsString
-})
+export const IsItemMarkedEvent = IsObject({ item: IsItem, markedBy: IsString })
 export type ItemMarkedEvent = typeof IsItemMarkedEvent.infer
 
-export const IsUpdateItemRequest = IsObject({
-    item: IsItem,
-    reason: IsString.orUndefined
-})
+export const IsUpdateItemRequest = IsObject({ item: IsItem, reason: IsString.orUndefined })
+export const IsUpdateItemResponse = IsObject({ success: IsBoolean, message: IsString })
 
-export const IsUpdateItemResponse = IsObject({
-    success: IsBoolean,
-    message: IsString
-})
-
-// Contract definition
-export const NotificationApiContract = defineSocketContract("NotificationApi", {
+export const NotificationApiContract = new GGDuplexContract("NotificationApi", {
+    connect: {
+        errors: [NOT_AUTHORIZED, SERVER_ERROR],   // thrown at handshake (auth, etc.)
+    },
     clientToServer: {
         updateItem: {
             input: IsUpdateItemRequest,
             success: IsUpdateItemResponse,
-            errors: [VALIDATION_ERROR, SERVER_ERROR]
+            errors: [VALIDATION_ERROR, SERVER_ERROR],
+            permission: GG_NO_PERMISSIONS,
         },
-        ping: {}
+        ping: { permission: GG_NO_PERMISSIONS },
     },
     serverToClient: {
-        itemMarked: {
-            input: IsItemMarkedEvent
-        },
-        areYouThere: {
-            success: IsBoolean,
-            errors: [SERVER_ERROR]
-        }
-    }
+        itemMarked: { input: IsItemMarkedEvent },
+    },
 })
 
-export const NotificationApi = webSocketSchema(NotificationApiContract)
-    .path("ws/notifications")
-    .use(USER_TOKEN_WIRE)        // same wire as the HTTP schemas — verified at handshake
-    .done()
+export const NotificationApi = new GGWebSocketSchema({
+    contract: NotificationApiContract,
+    path: "ws/notifications",
+    use: [USER_TOKEN_WIRE],        // same wire as the HTTP schemas — verified at handshake
+})
 ```
 
 The wire works identically on WebSocket: it reads + verifies the credential off the upgrade
@@ -786,89 +811,69 @@ full WS auth + permissions model.
 
 ### WebSocket Server Handler
 
+The handler is a `handleConnection(incoming, outgoing)` method. Type both params with
+`typeof NotificationApi.clientToServer` / `serverToClient` — register incoming handlers with
+`incoming.on({...})`, push to the client by calling methods on `outgoing`.
+
 ```typescript
-import { WebSocketIncoming, WebSocketOutgoing } from "@grest-ts/websocket"
-
 export class NotificationService {
-    private connections = new Map<string, Set<WebSocketOutgoing<any>>>()
+    private connections = new Set<typeof NotificationApi.serverToClient>()
 
-    handleConnection = (incoming: WebSocketIncoming<any>, outgoing: WebSocketOutgoing<any>): void => {
+    handleConnection = (incoming: typeof NotificationApi.clientToServer, outgoing: typeof NotificationApi.serverToClient): void => {
         const user = USER_DATA.get()   // durable principal minted by the wire at handshake
+        this.connections.add(outgoing)
+        outgoing.onClose(() => this.connections.delete(outgoing))
 
-        // Track connection
-        if (!this.connections.has(user.id)) {
-            this.connections.set(user.id, new Set())
-        }
-        this.connections.get(user.id)!.add(outgoing)
-
-        // Handle incoming messages
         incoming.on({
-            updateItem: async (request) => {
-                // Process update
-                return { success: true, message: "Updated" }
-            },
-            ping: async () => {
-                // Handle ping
-            }
-        })
-
-        // Handle disconnect
-        outgoing.onClose(() => {
-            this.connections.get(user.id)?.delete(outgoing)
+            updateItem: async (request) => ({ success: true, message: "Updated" }),
+            ping: async () => {},
         })
     }
 
-    // Broadcast to user
-    notifyUser(userId: string, event: ItemMarkedEvent): void {
-        const userConnections = this.connections.get(userId)
-        userConnections?.forEach(conn => conn.itemMarked(event))
+    // Broadcast a server→client push to every connection
+    notifyAll(event: ItemMarkedEvent): void {
+        for (const conn of this.connections) conn.itemMarked(event)
     }
 }
 ```
 
 ### WebSocket in Runtime
 
+WS schemas register on the same `GGHttp` builder via `.ws(Schema, handleConnection)` (use
+`.wsRaw(...)` for an unstructured socket):
+
 ```typescript
-import { GGHttpServer } from "@grest-ts/http"
+import { GGHttp, GGHttpServer } from "@grest-ts/http"
 
 protected compose(): void {
     const httpServer = new GGHttpServer()
 
-    // One wire handler covers every schema that .use()s it — HTTP and WS alike.
+    // One wire handler covers every schema that uses it — HTTP and WS alike.
     USER_TOKEN_WIRE_HANDLER.create(userService)
 
     new GGHttp(httpServer)
         .http(MyApi, myService)
-
-    // Register WebSocket on the same HTTP server
-    NotificationApi.register(notificationService.handleConnection, { http: httpServer })
+        .ws(NotificationApi, notificationService.handleConnection)
 }
 ```
 
 ### WebSocket Client
 
+Same `Schema.createClient({url})` as HTTP. `connect()` opens the socket (its optional setup
+callback registers `incoming.on({...})` handlers for server→client pushes); call
+`client.outgoing.<method>(...)` to send.
+
 ```typescript
-import { GGSocketPool } from "@grest-ts/websocket"
+const client = NotificationApi.createClient({ url: "ws://localhost:3000" })
 
-// Connect via socket pool (reuses connections for same URL + headers)
-const socket = await GGSocketPool.getOrConnect({
-    domain: "ws://localhost:3000",
-    path: "/ws/notifications",
-    middlewares: NotificationApi.middlewares
+await client.connect(({ incoming }) => {
+    incoming.on({
+        itemMarked: async ({ item, markedBy }) => { /* handle server push */ },
+    })
 })
 
-// Send messages via the socket
-const response = await socket.send("NotificationApi.updateItem", { item, reason: "Updated via UI" }, true)
+const res = await client.outgoing.updateItem({ item, reason: "Updated via UI" })
 
-// Handle disconnect
-socket.onClose(() => {
-    console.log("Disconnected")
-})
-
-// Close connection
-socket.close()
-
-// Close all pooled connections
-await GGSocketPool.closeAll()
+await client.disconnect()
 ```
 

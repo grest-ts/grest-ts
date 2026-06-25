@@ -14,7 +14,7 @@ Contracts live in a shared `api/` package, imported by both server and client.
 ```typescript
 // api/src/api/ItemApi.ts
 import {GGContractClass, IsObject, IsString, IsBoolean, IsArray, IsUint, NOT_FOUND, VALIDATION_ERROR, SERVER_ERROR} from "@grest-ts/schema"
-import {httpSchema, GGRpc} from "@grest-ts/http"
+import {GGHttpSchema, GGRpc} from "@grest-ts/http"
 
 // --- Type schemas ---
 export const IsItem = IsObject({
@@ -52,21 +52,23 @@ export const ItemApiContract = new GGContractClass("ItemApi", {
 })
 
 // --- HTTP binding ---
-export const ItemApi = httpSchema(ItemApiContract)
-    .pathPrefix("api/items")
-    .routes({
+export const ItemApi = new GGHttpSchema({
+    contract: ItemApiContract,
+    pathPrefix: "api/items",
+    routes: {
         list:   GGRpc.GET("list"),
         get:    GGRpc.GET("get/:id"),
         create: GGRpc.POST("create"),
         delete: GGRpc.DELETE("delete/:id"),
-    })
+    },
+})
 ```
 
 **Rules:**
 - `GGContractClass(name, methods)` — first arg is a string name, second is a map of method definitions.
 - Every method must have at least `errors`. `input` and `success` are optional.
 - `success` with no value means the method returns `void`.
-- `httpSchema(...).pathPrefix(...).routes({...})` — every route key must match a method key in the contract.
+- `new GGHttpSchema({contract, pathPrefix, routes})` — every route key must match a method key in the contract (add a `use: [WIRE]` array for auth wires; omit it for a public API).
 - HTTP verbs: `GGRpc.GET`, `GGRpc.POST`, `GGRpc.PUT`, `GGRpc.DELETE`.
 - GET/DELETE: input fields become query params (or path params when named in path with `:param`).
 - POST/PUT: input becomes JSON body.
@@ -566,14 +568,14 @@ const item = await client.get({id: 1}).orDefault(() => defaultItem)
 | What | Package | Import |
 |---|---|---|
 | Schema validators, contract, errors | `@grest-ts/schema` | `IsObject`, `IsString`, `GGContractClass`, `ERROR`, `NOT_FOUND`, … |
-| HTTP binding & client | `@grest-ts/http` | `httpSchema`, `GGRpc`, `GGHttp`, `GGHttpServer` |
+| HTTP binding & client | `@grest-ts/http` | `GGHttpSchema`, `GGRpc`, `GGHttp`, `GGHttpServer` |
 | Runtime bootstrap | `@grest-ts/runtime` | `GGRuntime` |
 | Test framework | `@grest-ts/testkit` | `GGTest`, `GGTestContext`, `mockOf`, `spyOn`, `callOn` |
 | @mockable / @testable decorators | `@grest-ts/testkit-runtime` | `mockable`, `testable` |
 | Per-request context | `@grest-ts/context` | `GGContextKey` |
 | Config management | `@grest-ts/config` | `GGConfig`, `GGResource`, `GGSecret` |
 | Logging | `@grest-ts/logger`, `@grest-ts/logger-console` | `GG_LOG`, `GGLoggerConsole` |
-| WebSocket | `@grest-ts/websocket` | `defineSocketContract`, `webSocketSchema` |
+| WebSocket | `@grest-ts/websocket` | `GGWebSocketSchema`, `GGRawWebSocketSchema` (contracts: `GGDuplexContract`, `GGRawSocketContract` from `@grest-ts/schema`) |
 | MySQL | `@grest-ts/db-mysql` | `GGMysql`, `GGMysqlConfig` |
 | PostgreSQL | `@grest-ts/db-postgre` | `GGPostgre` |
 
