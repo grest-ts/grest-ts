@@ -93,9 +93,8 @@ await presence.connect(({incoming})  => incoming.on({presenceChanged: ...}))
 ## New types
 
 `packages/schema/.../GGDuplexExtendableContract.ts`
-- `new GGDuplexExtendableContract(name, {connect, clientToServer?, serverToClient?})`
-  — base duplex contract holding `connect` (+ optional shared methods) and a registry
-  of child names.
+- `new GGDuplexExtendableContract(name, {connect})` — base duplex contract holding
+  `connect` and a registry of child names.
 - `.extend(name, {clientToServer, serverToClient})` → a `GGDuplexContract` that reuses
   the base's `connect` by reference, carries its own method maps (typed to just those),
   and holds `parent = <base>`. Throws on duplicate `name`.

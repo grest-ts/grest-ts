@@ -40,13 +40,4 @@ describe('GGDuplexExtendableContract', () => {
         expect(() => base.extend('Dup', {serverToClient: {b: {}}}))
             .toThrow(/Duplicate extension "Dup"/);
     });
-
-    it('merges shared base methods into each child', () => {
-        const base = new GGDuplexExtendableContract('Chat', {
-            connect: {errors: [SERVER_ERROR]},
-            clientToServer: {ping: {errors: [SERVER_ERROR]}},
-        });
-        const child = base.extend('X', {clientToServer: {pong: {errors: [SERVER_ERROR]}}});
-        expect(Object.keys(child.clientToServer.methods).sort()).toEqual(['ping', 'pong']);
-    });
 });
