@@ -16,7 +16,7 @@ For production systems handling large files or high throughput, consider uploadi
 ## Quick Example
 
 ```typescript
-import { httpSchema } from "@grest-ts/http"
+import { GGHttpSchema } from "@grest-ts/http"
 import { GGFileUpload, GGFileDownload } from "@grest-ts/http-file"
 import { GGContractClass, IsObject, IsString, IsArray, VALIDATION_ERROR, SERVER_ERROR } from "@grest-ts/schema"
 import { IsFile } from "@grest-ts/schema-file"
@@ -42,13 +42,15 @@ const FileApiContract = new GGContractClass("FileApi", {
     }
 })
 
-export const FileApi = httpSchema(FileApiContract)
-    .pathPrefix("api/files")
-    .routes({
+export const FileApi = new GGHttpSchema({
+    contract: FileApiContract,
+    pathPrefix: "api/files",
+    routes: {
         upload:      GGFileUpload.POST("upload"),
         uploadBatch: GGFileUpload.POST("upload-batch"),
         download:    GGFileDownload.GET("download")
-    })
+    }
+})
 ```
 
 That's it — the codecs handle multipart encoding, binary streaming, content headers, and filename preservation on both sides.
@@ -143,13 +145,13 @@ GGFileDownload.POST(path)
 ### GET vs POST downloads
 
 ```typescript
-.routes({
+routes: {
     // GET — parameters sent as query string
     downloadById: GGFileDownload.GET("download"),
 
     // POST — parameters sent as JSON body
     generateReport: GGFileDownload.POST("generate-report")
-})
+}
 ```
 
 Use `GET` for simple key-based lookups. Use `POST` when the request body is complex.
@@ -193,9 +195,9 @@ This is handled automatically by bundlers via the `browser` export condition —
 Upload routes support path parameters:
 
 ```typescript
-.routes({
+routes: {
     uploadAvatar: GGFileUpload.POST("users/:userId/avatar")
-})
+}
 
 // Client call:
 await api.uploadAvatar({ userId: "123", avatar: file })

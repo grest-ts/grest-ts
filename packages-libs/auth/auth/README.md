@@ -10,7 +10,7 @@ issues, verifies, and rotates JWTs; the client keeps them fresh and attaches the
 You write no interceptors and no "is my token expired?" checks.
 
 The design rests on the **smart wire**. A token is a `GGHeader` declared once in your api package.
-The same wire is `.use()`d on a contract (so requests carry it), given server behaviour with
+The same wire is listed in a schema's `use` (so requests carry it), given server behaviour with
 `.define()` (verify + permission gate), and given client behaviour by the session (attach +
 keep-fresh). There are no middleware chains, no `usePermissions`, no `scopeResolver` — the contract
 already carries per-route permissions, and the wire carries the token.
@@ -18,7 +18,7 @@ already carries per-route permissions, and the wire carries the token.
 ```
                  api package (shared)
                  ┌──────────────────────────────┐
-   GGHeader  →   │ USER_TOKEN_WIRE = new GGHeader│   ← contracts .use() it
+   GGHeader  →   │ USER_TOKEN_WIRE = new GGHeader│   ← schemas use:[it]
                  └──────────────────────────────┘
        server .define()  │              │  client (session) .defineClient()
    verify token,         │              │  attach token, refresh when stale
@@ -75,10 +75,10 @@ export const USER_TOKEN_WIRE = new GGHeader("authorization", {scheme: "bearer"})
 
 ---
 
-## 2. Contracts — `.use()` the wire, declare per-route permissions
+## 2. Contracts — `use` the wire, declare per-route permissions
 
-A wire on a schema is **required-or-throw**: every route on a schema that `.use()`s a wire must
-carry a valid token. Public routes (login/refresh/register) live on a schema with no wire and
+A wire listed in a schema's `use` is **required-or-throw**: every route on that schema must
+carry a valid token. Public routes (login/refresh/register) live on a schema with no `use` and
 `permission: GG_NO_PERMISSIONS`.
 
 ```ts
@@ -87,15 +87,19 @@ import {IsGGAuthTokensResult} from "@grest-ts/auth"
 
 export const IsAuthResponse = IsObject({tokens: IsGGAuthTokensResult, data: IsUser})
 
-export const AuthPublicApi = httpSchema(AuthPublicApiContract)  // login/register/refresh
-  .pathPrefix("pub/auth")
-  .routes({register: GGRpc.POST("register"), login: GGRpc.POST("login"), refresh: GGRpc.POST("refresh")})
+export const AuthPublicApi = new GGHttpSchema({                 // login/register/refresh
+  contract: AuthPublicApiContract,
+  pathPrefix: "pub/auth",                                       // no `use` → public
+  routes: {register: GGRpc.POST("register"), login: GGRpc.POST("login"), refresh: GGRpc.POST("refresh")},
+})
 
 // api/UserApi.ts  — PROTECTED: every route carries + verifies the user token
-export const UserApi = httpSchema(UserApiContract)
-  .pathPrefix("api/users")
-  .use(USER_TOKEN_WIRE)
-  .routes({me: GGRpc.GET("me"), updateProfile: GGRpc.PUT("profile")})
+export const UserApi = new GGHttpSchema({
+  contract: UserApiContract,
+  pathPrefix: "api/users",
+  use: [USER_TOKEN_WIRE],
+  routes: {me: GGRpc.GET("me"), updateProfile: GGRpc.PUT("profile")},
+})
 ```
 
 In the contract, each method declares its own `permission` (a value from your permission enum, or
@@ -192,7 +196,7 @@ class UserService {
 ### Wiring in `compose()`
 
 No middleware chains. Bind each wire handler's deps into the runtime once with `.create(deps)`, then
-register the contracts. Startup refuses to serve a `.use()`d wire whose handler was never created.
+register the contracts. Startup refuses to serve a `use`d wire whose handler was never created.
 
 ```ts
 export class AppRuntime extends GGRuntime {
@@ -293,11 +297,18 @@ the `Authorization` header in memory regardless of mode.
 
 ## 5. Sockets — same wire, same story
 
-`.use()` the same wire on a socket schema; per-message permissions are declared on the contract.
-The handshake is gated to a fresh token, and every reconnect re-gates.
+List the same wire in the socket schema's `use`; per-message permissions are declared on the
+contract. The handshake is gated to a fresh token, and every reconnect re-gates.
 
 ```ts
-export const LiveApi = webSocketSchema(LiveApiContract).path("ws/live").use(USER_TOKEN_WIRE).done()
+// authed socket → connect.errors = [NOT_AUTHORIZED, SERVER_ERROR]
+export const LiveApiContract = new GGDuplexContract("LiveApi", {
+  connect: {errors: [NOT_AUTHORIZED, SERVER_ERROR]},
+  clientToServer: {/* … per-message permissions … */},
+  serverToClient: {/* … */},
+})
+
+export const LiveApi = new GGWebSocketSchema({contract: LiveApiContract, path: "ws/live", use: [USER_TOKEN_WIRE]})
 
 const socket = LiveApi.createClient({url: WS_URL})
 await socket.connect()        // handshake auto-gated to a fresh token; reconnects too
@@ -319,13 +330,19 @@ export const IsOrgUser = IsObject({orgId: IsOrgId, permissions: IsArray(IsEnum(O
 
 // api/OrgApi.ts — one schema to MINT the org token (user-authed only), one for org-scoped reads.
 // A wire is required-or-throw, so the route that hands out the org token can't also require it.
-export const OrgApi = httpSchema(OrgApiContract).pathPrefix("api/orgs")
-  .use(USER_TOKEN_WIRE)                                        // mint behind the user token
-  .routes({listOrgs: GGRpc.GET("list"), selectOrg: GGRpc.POST("select")})
+export const OrgApi = new GGHttpSchema({
+  contract: OrgApiContract,
+  pathPrefix: "api/orgs",
+  use: [USER_TOKEN_WIRE],                                      // mint behind the user token
+  routes: {listOrgs: GGRpc.GET("list"), selectOrg: GGRpc.POST("select")},
+})
 
-export const OrgScopedApi = httpSchema(OrgScopedApiContract).pathPrefix("api/org")
-  .use(USER_TOKEN_WIRE).use(ORG_TOKEN_WIRE)                   // both tokens; AND across sources
-  .routes({orgInfo: GGRpc.GET("info")})                       // permission: OrgPermission.ORG_MEMBER
+export const OrgScopedApi = new GGHttpSchema({
+  contract: OrgScopedApiContract,
+  pathPrefix: "api/org",
+  use: [USER_TOKEN_WIRE, ORG_TOKEN_WIRE],                     // both tokens; AND across sources
+  routes: {orgInfo: GGRpc.GET("info")},                       // permission: OrgPermission.ORG_MEMBER
+})
 ```
 
 ```ts

@@ -82,7 +82,7 @@ Contracts are the single source of truth. They define input/output types with ru
 ```typescript
 // api/src/api/ItemApi.ts
 import {GGContractClass, IsObject, IsString, IsNumber, IsArray, VALIDATION_ERROR, NOT_FOUND, SERVER_ERROR} from "@grest-ts/schema"
-import {httpSchema, GGRpc} from "@grest-ts/http"
+import {GGHttpSchema, GGRpc} from "@grest-ts/http"
 
 export const IsItem = IsObject({
     id: IsNumber,
@@ -107,12 +107,14 @@ export const ItemApiContract = new GGContractClass("ItemApi", {
     }
 })
 
-export const ItemApi = httpSchema(ItemApiContract)
-    .pathPrefix("api/items")
-    .routes({
+export const ItemApi = new GGHttpSchema({
+    contract: ItemApiContract,
+    pathPrefix: "api/items",
+    routes: {
         list: GGRpc.GET("list"),
         create: GGRpc.POST("create")
-    })
+    }
+})
 ```
 
 ### 2. Implement It

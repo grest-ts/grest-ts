@@ -221,12 +221,14 @@ const ItemApiContract = new GGContractClass("ItemApi", {
     }
 })
 
-export const ItemApi = httpSchema(ItemApiContract)
-    .pathPrefix("api/items")
-    .routes({
+export const ItemApi = new GGHttpSchema({
+    contract: ItemApiContract,
+    pathPrefix: "api/items",
+    routes: {
         list: GGRpc.GET("list"),
         create: GGRpc.POST("create")
-    })
+    }
+})
 
 ```
 
@@ -244,13 +246,13 @@ export class AppRuntime extends GGRuntime {
     public static readonly NAME = "app"
 
     protected compose(): void {
-        new GGHttp().http(ItemApi, new ItemApiImpl())
+        new GGHttp(new GGHttpServer()).http(ItemApi, new ItemApiImpl())
     }
 }
 
 // Simple implementation examples
-type ItemApiContract = GGContractImplementation<typeof ItemApiContract.methods>;
-export class ItemApiImpl implements ItemApiContract {
+type IItemApi = typeof ItemApiContract.infer;
+export class ItemApiImpl implements IItemApi {
 
     private readonly geocoder = new GeocodingService();
 
