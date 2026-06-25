@@ -1,5 +1,5 @@
 import {GGContractClass, IsObject, IsString, IsNumber, IsBoolean, IsLiteral, IsArray, SERVER_ERROR } from "@grest-ts/schema"
-import {GGRpc, httpSchema} from "@grest-ts/http"
+import {GGRpc, GGHttpSchema} from "@grest-ts/http"
 import {UNAUTHORIZED, NOT_FOUND, NAME_TAKEN, AGENT_NOT_RUNNING} from "./errors"
 import {GG_USER_TOKEN, GG_ORG_TOKEN} from "../auth/AuthContext"
 import {IsTaskId, IsProjectId, IsProjectImageId, IsBaseImageId, IsServiceName} from "./schemas"
@@ -232,11 +232,11 @@ export const TaskApiContract = new GGContractClass("TaskApi", {
     },
 })
 
-export const TaskApi = httpSchema(TaskApiContract)
-    .pathPrefix("api")
-    .use(GG_USER_TOKEN)
-    .use(GG_ORG_TOKEN)
-    .routes({
+export const TaskApi = new GGHttpSchema({
+    contract: TaskApiContract,
+    pathPrefix: "api",
+    use: [GG_USER_TOKEN, GG_ORG_TOKEN],
+    routes: {
         list: GGRpc.GET("tasks"),
         get: GGRpc.POST("tasks/get"),
         spawn: GGRpc.POST("tasks/spawn"),
@@ -254,4 +254,5 @@ export const TaskApi = httpSchema(TaskApiContract)
         restartService: GGRpc.POST("tasks/restart-service"),
         stopService: GGRpc.POST("tasks/stop-service"),
         setServicesPublic: GGRpc.POST("tasks/set-services-public"),
-    })
+    },
+})

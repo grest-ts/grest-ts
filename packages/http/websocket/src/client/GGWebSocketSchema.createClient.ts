@@ -3,7 +3,7 @@
  *
  * Mirrors the server's onConnection handler exactly:
  *
- *   server: ChatApi.register((incoming, outgoing) => {
+ *   server: new GGHttp(httpServer).ws(ChatApi, (incoming, outgoing) => {
  *       incoming.on({ ... })
  *   })
  *
@@ -21,8 +21,12 @@
  */
 
 import {
+    GGConnectQuery,
+    GGContractClient,
     GGContractExecutor,
+    GGContractImplementation,
     GGContractMethod,
+    GGDuplexContractDefinition,
     GGPromise,
     SERVER_ERROR,
 } from "@grest-ts/schema"
@@ -147,33 +151,26 @@ export interface GGWebSocketClient<TClientToServer, TServerToClientImpl> {
 }
 
 declare module "../schema/GGWebSocketSchema" {
-    interface GGWebSocketSchema<
-        TClientToServer,
-        TServerToClient,
-        TContext = {},
-        TQuery = undefined,
-        TClientToServerImpl = TClientToServer,
-        TServerToClientImpl = TServerToClient
-    > {
+    interface GGWebSocketSchema<TDef> {
         createClient(
-            config?: GGWebSocketClientConfig<TQuery>
-        ): GGWebSocketClient<TClientToServer, TServerToClientImpl>
+            config?: GGWebSocketClientConfig<GGConnectQuery<(TDef & GGDuplexContractDefinition)["connect"]>>
+        ): TDef extends GGDuplexContractDefinition ? GGWebSocketClient<
+            GGContractClient<TDef["clientToServer"]>,
+            GGContractImplementation<TDef["serverToClient"]>
+        > : never
     }
 }
 
 GGWebSocketSchema.prototype.createClient = function (
-    this: GGWebSocketSchema<any, any, any, any, any, any>,
+    this: GGWebSocketSchema<any>,
     config?: GGWebSocketClientConfig<any>
 ): GGWebSocketClient<any, any> {
     const contract = this.contract
-    if (!contract) {
-        throw new Error(`WebSocketSchema "${this.name}" has no contract.`)
-    }
 
     const schemaName = this.name
     const normalizedPath = this.path.startsWith("/") ? this.path : "/" + this.path
     const schemaMiddlewares = this.middlewares || []
-    const queryValidator = this.queryValidator
+    const queryValidator = contract.connect.method.input
     const clientToServerContract = contract.clientToServer
     const serverToClientContract = contract.serverToClient
     const timeout = config?.timeout ?? 30_000

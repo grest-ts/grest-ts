@@ -14,7 +14,7 @@
  *   - Error responses with typed data schemas
  */
 
-import {GGContractClass, GGContractImplementation, GG_NO_PERMISSIONS } from "@grest-ts/schema";
+import {GGContractClass, GG_NO_PERMISSIONS } from "@grest-ts/schema";
 import {
     IsString, IsNumber, IsBoolean, IsArray, IsObject, IsLiteral,
     IsUnion, IsRecord, IsTuple, IsAny, IsUnknown, IsBit,
@@ -26,7 +26,7 @@ import {
 } from "@grest-ts/schema";
 import {GGFileUpload, GGFileDownload} from "@grest-ts/http-file";
 import {IsFile} from "@grest-ts/schema-file";
-import {httpSchema, GGRpc} from "@grest-ts/http";
+import {GGHttpSchema, GGRpc} from "@grest-ts/http";
 import {IsPassword} from "@grest-ts/schema";
 
 // ---------------------------------------------------------------------------
@@ -267,10 +267,11 @@ export const ShowcaseApiContract = new GGContractClass("ShowcaseApi", {
     },
 });
 
-export const ShowcaseApi = httpSchema(ShowcaseApiContract)
-    .pathPrefix("api/showcase")
-    .use(ShowcaseBearerAuth)
-    .routes({
+export const ShowcaseApi = new GGHttpSchema({
+    contract: ShowcaseApiContract,
+    pathPrefix: "api/showcase",
+    use: [ShowcaseBearerAuth],
+    routes: {
         listUsers: GGRpc.GET("users"),
         getUser: GGRpc.GET("users/:id"),
         createUser: GGRpc.POST("users"),
@@ -281,6 +282,5 @@ export const ShowcaseApi = httpSchema(ShowcaseApiContract)
         uploadAvatar: GGFileUpload.POST("users/:id/avatar"),
         downloadAvatar: GGFileDownload.GET("users/:id/avatar"),
         getLatestEvent: GGRpc.GET("events/latest"),
-    });
-
-export type IShowcaseApi = GGContractImplementation<typeof ShowcaseApiContract["methods"]>;
+    },
+});

@@ -55,9 +55,8 @@ export class ChecklistRuntime extends MyRuntime {
                     await blockerClient.blockUser(request);
                 }
             })
+            .ws(ChecklistNotificationApi, new NotificationService(checklistService).handleConnection)
             .openApi({title: "Checklist Auth API", version: "1.0.0", specPath: "/openapi.json", docsPath: "/docs"})
-
-        ChecklistNotificationApi.register(new NotificationService(checklistService).handleConnection);
 
         // AsyncAPI docs — dedicated server for WebSocket API documentation
         const asyncApiDocsServer = new GGHttpServer({key: new GGLocatorKey("asyncapi-docs")});

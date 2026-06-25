@@ -1,4 +1,4 @@
-import {FORBIDDEN, GGContractImplementation, NOT_AUTHORIZED, NOT_FOUND} from "@grest-ts/schema"
+import {FORBIDDEN, NOT_AUTHORIZED, NOT_FOUND} from "@grest-ts/schema"
 import {GGAuthAccessToken} from "@grest-ts/auth"
 import {OrgApiContract, OrgScopedApiContract, SelectOrgRequest, SelectOrgResponse} from "../../../api/OrgApi"
 import {Org, OrgPermission, OrgUser} from "../../../api/auth/OrgAuth"
@@ -6,8 +6,10 @@ import {ORG_USER} from "../auth/OrgAuthHandler"
 import {USER_DATA} from "../auth/UserAuthHandler"
 import {OrgTable} from "../tables/OrgTable"
 
-export class OrgService implements GGContractImplementation<typeof OrgApiContract["methods"]>,
-    GGContractImplementation<typeof OrgScopedApiContract["methods"]> {
+type IOrgApi = typeof OrgApiContract.infer
+type IOrgScopedApi = typeof OrgScopedApiContract.infer
+
+export class OrgService implements IOrgApi, IOrgScopedApi {
     private readonly table = new OrgTable()
 
     constructor(private readonly orgTokenEngine: GGAuthAccessToken<OrgUser>) {

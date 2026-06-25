@@ -1,12 +1,13 @@
-import {defineSocketContract, webSocketSchema} from "@grest-ts/websocket"
-import {GGContractClient, GGContractImplementation, SERVER_ERROR, GG_NO_PERMISSIONS } from "@grest-ts/schema";
+import {GGWebSocketSchema} from "@grest-ts/websocket"
+import {GGDuplexContract, SERVER_ERROR, GG_NO_PERMISSIONS} from "@grest-ts/schema";
 import {IsConfigTestResponse} from "./ConfigTestApi";
 
 // ---------------------------------------------------------
 // Contract
 // ---------------------------------------------------------
 
-export const ConfigTestSocketApiContract = defineSocketContract("ConfigTestSocketApi", {
+export const ConfigTestSocketApiContract = new GGDuplexContract("ConfigTestSocketApi", {
+    connect: {errors: [SERVER_ERROR]},
     clientToServer: {
         getWatchedValue: {
             success: IsConfigTestResponse,
@@ -22,10 +23,7 @@ export const ConfigTestSocketApiContract = defineSocketContract("ConfigTestSocke
     }
 })
 
-export const ConfigTestSocketApi = webSocketSchema(ConfigTestSocketApiContract)
-    .path("ws/config-test")
-    .done()
-
-// Type exports for use in services (implementation types return Promise)
-export type ConfigTestSocketApiClientToServer = GGContractImplementation<typeof ConfigTestSocketApiContract.methods["clientToServer"]>
-export type ConfigTestSocketApiServerToClient = GGContractClient<typeof ConfigTestSocketApiContract.methods["serverToClient"]>
+export const ConfigTestSocketApi = new GGWebSocketSchema({
+    contract: ConfigTestSocketApiContract,
+    path: "ws/config-test",
+})

@@ -1,7 +1,8 @@
 import {BenchmarkApiContract, BenchmarkRequest, BenchmarkResponse} from "../api/BenchmarkApi";
-import {GGContractImplementation} from "@grest-ts/schema";
 
-export class BenchmarkService implements GGContractImplementation<typeof BenchmarkApiContract["methods"]> {
+type IBenchmarkApi = typeof BenchmarkApiContract.infer
+
+export class BenchmarkService implements IBenchmarkApi {
 
     public async hello(request: BenchmarkRequest): Promise<BenchmarkResponse> {
         return {

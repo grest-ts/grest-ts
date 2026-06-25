@@ -24,8 +24,8 @@ const DIST_UI = existsSync(join(HERE, "..", "dist-ui"))
  * contracts; both are optional so a group can be HTTP-only, WS-only, or mixed.
  */
 export interface ApiDocsGroup {
-    http?: GGHttpSchema<any, any>[];
-    ws?: GGWebSocketSchema<any, any, any, any, any>[];
+    http?: GGHttpSchema<any>[];
+    ws?: GGWebSocketSchema<any>[];
     description?: string;
 }
 
@@ -50,9 +50,9 @@ export interface ApiDocSpec {
     /** Group label → schemas. Renders as sidebar sections. */
     groups?: Record<string, ApiDocsGroup>;
     /** Shorthand: ungrouped HTTP schemas — placed under one "API" group. */
-    http?: GGHttpSchema<any, any>[];
+    http?: GGHttpSchema<any>[];
     /** Shorthand: ungrouped WebSocket schemas. */
-    ws?: GGWebSocketSchema<any, any, any, any, any>[];
+    ws?: GGWebSocketSchema<any>[];
 }
 
 export interface GGApiDocsOptions {

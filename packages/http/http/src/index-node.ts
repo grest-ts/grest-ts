@@ -21,7 +21,6 @@ export * from "./server/GG_HTTP_REQUEST";
 
 // API Schema
 export * from "./schema/GGHttpSchema";
-export * from "./schema/httpSchema";
 export * from "./schema/GGCookie";
 export * from "./schema/GGWireContextKey";
 export * from "./schema/GGWireContextKey.node";
@@ -52,5 +51,4 @@ export * from "./server/GGHttpSchema.startServer";
 // Extensions
 import "./client/GGHttpSchema.createClient";
 import "./client/GGHttpSchema.createClient.node";
-import "./server/GGHttpSchema.startServer";
 import "./schema/GGWireContextKey.node";

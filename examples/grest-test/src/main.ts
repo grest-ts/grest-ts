@@ -26,7 +26,7 @@ import {LanguageTestApi} from "./api/LanguageTestApi"
 import {MiddlewareTestApi} from "./api/MiddlewareTestApi"
 import {CookieTestApi} from "./api/CookieTestApi"
 import {CookieTestService} from "./services/CookieTestService"
-import {WsCookieApi, WS_SESSION_HANDLER} from "./api/WsCookieApi"
+import {WS_SESSION_HANDLER, WsCookieApi} from "./api/WsCookieApi"
 import {WsCookieService} from "./services/WsCookieService"
 import {FileUploadTestApi} from "./api/FileUploadTestApi"
 import {BenchmarkApi} from "./api/BenchmarkApi"
@@ -92,48 +92,34 @@ export class MainRuntime extends GGRuntime {
         const authedSocketService = new AuthedSocketService();
         const querySocketService = new QuerySocketService();
 
-        const httpServer = new GGHttpServer();
-        ConfigTestApi.register(configTestService);
-        MetricsTestApi.register(metricsTestService);
-        HttpMetricsTestApi.register(httpMetricsTestService);
-        EventsTestApi.register(eventsTestService);
-        LanguageTestApi.register(languageTestService);
-        MiddlewareTestApi.register(middlewareTestService);
-        FileUploadTestApi.register(fileUploadTestService);
-        BenchmarkApi.register(benchmarkService);
-        ConfigTestSocketApi.register(configTestService.handleSocketConnection);
-        ClientTestSocketApi.register(clientTestSocketService.handleConnection);
-        AuthedSocketApi.register(authedSocketService.handleConnection);
-        RawEchoApi.register(new RawEchoService().handleConnection);
-        QuerySocketApi.register(querySocketService.handleConnection);
+        const httpServer = new GGHttpServer()
 
-        // Permissions API — the schema's x-test-scopes credential wire authenticates each
-        // request (required-or-throw) and yields the caller's scopes to the always-on gate.
         TEST_SCOPES_WIRE_HANDLER.create({});
-        new GGHttp(httpServer)
-            .http(PermissionsApi, new PermissionsTestService());
-
-        // Cookie API — SESSION is an ambient cookie wire (no handler): public routes read
-        // SESSION.get() directly and emit Set-Cookie via GGCookie.setCookie(SESSION, …).
-        CookieTestApi.register(new CookieTestService());
-
-        // WS cookie API — its own required-throw session wire over the same "session" cookie:
-        // a missing cookie rejects the handshake with NOT_AUTHORIZED (401).
         WS_SESSION_HANDLER.create({});
-        WsCookieApi.register(new WsCookieService().handleConnection);
-        // Raw socket behind a connect-level Admin permission (same session wire).
-        RawAdminApi.register((socket) => { socket.onMessage((data) => socket.send(data)); });
-        // customClient wildcard-prefix socket: echoes "<txt|bin> <upgrade.path> <remoteAddress>" —
-        // proves /cc-proxy/* matching, the concrete subpath, the frame type, and the peer address.
-        CustomClientProxyApi.register((socket, _query, upgrade) => {
-            socket.onMessage((_data, isBinary) => socket.send(`${isBinary ? "bin" : "txt"} ${upgrade.path} ${upgrade.remoteAddress}`));
-        });
 
-        // WebSocket permission test fixtures — same x-test-scopes wire as the HTTP gate.
-        const wsPermissionsService = new WsPermissionsService();
-        WsPermissionsApi.register(wsPermissionsService.handleConnection);
-        const wsFeaturePermissionsService = new WsFeaturePermissionsService();
-        WsFeaturePermissionsApi.register(wsFeaturePermissionsService.handleConnection);
+        new GGHttp(httpServer)
+            .http(ConfigTestApi, configTestService)
+            .http(MetricsTestApi, metricsTestService)
+            .http(HttpMetricsTestApi, httpMetricsTestService)
+            .http(EventsTestApi, eventsTestService)
+            .http(LanguageTestApi, languageTestService)
+            .http(MiddlewareTestApi, middlewareTestService)
+            .http(FileUploadTestApi, fileUploadTestService)
+            .http(BenchmarkApi, benchmarkService)
+            .http(PermissionsApi, new PermissionsTestService())
+            .http(CookieTestApi, new CookieTestService())
+            .ws(ConfigTestSocketApi, configTestService.handleSocketConnection)
+            .ws(ClientTestSocketApi, clientTestSocketService.handleConnection)
+            .ws(AuthedSocketApi, authedSocketService.handleConnection)
+            .wsRaw(RawEchoApi, new RawEchoService().handleConnection)
+            .ws(QuerySocketApi, querySocketService.handleConnection)
+            .ws(WsCookieApi, new WsCookieService().handleConnection)
+            .wsRaw(RawAdminApi, (socket) => { socket.onMessage((data) => socket.send(data)) })
+            .wsRaw(CustomClientProxyApi, (socket, _query, upgrade) => {
+                socket.onMessage((_data, isBinary) => socket.send(`${isBinary ? "bin" : "txt"} ${upgrade.path} ${upgrade.remoteAddress}`));
+            })
+            .ws(WsPermissionsApi, new WsPermissionsService().handleConnection)
+            .ws(WsFeaturePermissionsApi, new WsFeaturePermissionsService().handleConnection)
 
         GGOpenApiDocs.register({http: httpServer, title: "Grest Test API", version: "1.0.0", specPath: "/openapi.json", docsPath: "/docs"});
 
@@ -185,21 +171,11 @@ export class MainRuntime extends GGRuntime {
                 version: "1.0.0",
                 description: "Mixed HTTP + WebSocket APIs rendered natively from grest-ts contracts — brand intersection types, typed errors, reuse detection, color-coded WS direction.",
                 groups: {
-                    "HTTP":      {http: [ShowcaseApi]},
-                    "Realtime":  {ws:   [ChatApiSchema, NotificationApiSchema]},
+                    "HTTP": {http: [ShowcaseApi]},
+                    "Realtime": {ws: [ChatApiSchema, NotificationApiSchema]},
                 },
             }],
         });
-
-        // new GGHttp()
-        //     .http(ConfigTestApi, configTestService)
-        //     .http(MetricsTestApi, metricsTestService)
-        //     .http(HttpMetricsTestApi, httpMetricsTestService)
-        //     .http(EventsTestApi, eventsTestService)
-        //     .http(LanguageTestApi, languageTestService)
-        //     .http(MiddlewareTestApi, middlewareTestService)
-        //     .websocket(ConfigTestSocketApi, configTestService.handleSocketConnection.bind(configTestService))
-
     }
 }
 

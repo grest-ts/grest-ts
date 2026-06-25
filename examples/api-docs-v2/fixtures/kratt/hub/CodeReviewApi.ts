@@ -1,5 +1,5 @@
 import {GGContractClass, IsObject, IsString, IsNumber, IsBoolean, IsArray, SERVER_ERROR } from "@grest-ts/schema"
-import {GGRpc, httpSchema} from "@grest-ts/http"
+import {GGRpc, GGHttpSchema} from "@grest-ts/http"
 import {UNAUTHORIZED, NOT_FOUND} from "./errors"
 import {GG_USER_TOKEN, GG_ORG_TOKEN} from "../auth/AuthContext"
 import {IsTaskId} from "./schemas"
@@ -132,15 +132,16 @@ export const CodeReviewApiContract = new GGContractClass("CodeReviewApi", {
     },
 })
 
-export const CodeReviewApi = httpSchema(CodeReviewApiContract)
-    .pathPrefix("api")
-    .use(GG_USER_TOKEN)
-    .use(GG_ORG_TOKEN)
-    .routes({
+export const CodeReviewApi = new GGHttpSchema({
+    contract: CodeReviewApiContract,
+    pathPrefix: "api",
+    use: [GG_USER_TOKEN, GG_ORG_TOKEN],
+    routes: {
         changedFiles: GGRpc.POST("code-review/changed-files"),
         commits: GGRpc.POST("code-review/commits"),
         fileDiff: GGRpc.POST("code-review/file-diff"),
         saveFile: GGRpc.POST("code-review/save-file"),
         discardFile: GGRpc.POST("code-review/discard-file"),
         fileTree: GGRpc.POST("code-review/file-tree"),
-    })
+    },
+})

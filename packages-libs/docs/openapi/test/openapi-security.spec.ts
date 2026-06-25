@@ -8,7 +8,7 @@ import {
     NOT_AUTHORIZED,
     SERVER_ERROR,
 } from "@grest-ts/schema";
-import {GGRpc, httpSchema} from "@grest-ts/http";
+import {GGRpc, GGHttpSchema} from "@grest-ts/http";
 import {toOpenApi} from "../src/toOpenApi";
 
 function makeApi(name: string, methodName: string, permission: any) {
@@ -19,8 +19,10 @@ function makeApi(name: string, methodName: string, permission: any) {
             permission,
         },
     });
-    return httpSchema(contract as any).pathPrefix(name.toLowerCase()).routes({
-        [methodName]: GGRpc.GET(methodName),
+    return new GGHttpSchema({
+        contract: contract as any,
+        pathPrefix: name.toLowerCase(),
+        routes: {[methodName]: GGRpc.GET(methodName)},
     });
 }
 

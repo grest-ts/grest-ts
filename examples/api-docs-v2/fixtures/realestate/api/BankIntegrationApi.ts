@@ -1,4 +1,4 @@
-import {GGRpc, httpSchema} from "@grest-ts/http";
+import {GGRpc, GGHttpSchema} from "@grest-ts/http";
 import {IsArray, IsObject, IsString, IsNumber, IsEnum, IsLiteral, IsBoolean, GGContractClass, FORBIDDEN, NOT_AUTHORIZED, SERVER_ERROR, VALIDATION_ERROR } from "@grest-ts/schema";
 import {GG_COMPANY_AUTH_TOKEN} from "../middleware/CompanyAuthHeader";
 import {IsBankIntegrationId, IsBankStatementId, IsBankStatementRowId, IsClientId, IsContractId, IsDate, IsPaymentId} from "../Brands";
@@ -139,16 +139,17 @@ export const BankIntegrationApiContract = new GGContractClass("BankIntegrationAp
 // API Definition
 // ---------------------------------------------------------
 
-export const BankIntegrationApi = httpSchema(BankIntegrationApiContract)
-    .pathPrefix("gg/bankIntegration")
-    .use(GG_USER_AUTH)
-    .use(GG_COMPANY_AUTH_TOKEN)
-    .routes({
+export const BankIntegrationApi = new GGHttpSchema({
+    contract: BankIntegrationApiContract,
+    pathPrefix: "gg/bankIntegration",
+    use: [GG_USER_AUTH, GG_COMPANY_AUTH_TOKEN],
+    routes: {
         getIntegrations: GGRpc.POST("getIntegrations"),
         getBankAccountStatement: GGRpc.POST("getBankAccountStatement"),
         parseUploadedBankAccountStatementFile: GGRpc.POST("parseUploadedBankAccountStatementFile"),
         importBankAccountStatement: GGRpc.POST("importBankAccountStatement")
-    })
+    },
+})
 
 // ---------------------------------------------------------
 // Internal-only types (not HTTP-exposed)

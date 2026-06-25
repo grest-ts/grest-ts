@@ -1,5 +1,5 @@
-import {GGRpc, httpSchema} from "@grest-ts/http"
-import {GGContractClass, GGContractImplementation, IsBoolean, IsLiteral, IsObject, IsString, SERVER_ERROR, VALIDATION_ERROR, GG_NO_PERMISSIONS } from "@grest-ts/schema";
+import {GGRpc, GGHttpSchema} from "@grest-ts/http"
+import {GGContractClass, IsBoolean, IsLiteral, IsObject, IsString, SERVER_ERROR, VALIDATION_ERROR, GG_NO_PERMISSIONS } from "@grest-ts/schema";
 import {intlLocaleHeader} from "@grest-ts/intl"
 import {GGContextKey, GGInbound, GGOutbound, GGTransportMiddleware} from "@grest-ts/context";
 
@@ -121,17 +121,15 @@ export const MiddlewareTestApiContract = new GGContractClass("MiddlewareTestApi"
     }
 })
 
-export type IMiddlewareTestApi = GGContractImplementation<typeof MiddlewareTestApiContract["methods"]>
-
 /**
  * API with effect chain that accumulates context types
  */
-export const MiddlewareTestApi = httpSchema(MiddlewareTestApiContract)
-    .pathPrefix("api/middleware-test")
-    .use(intlLocaleHeader())
-    .use(ClientInfoEffect)            // TContext = { locale: string, clientInfo: ClientInfo }
-    .use(FeatureFlagsEffect)          // TContext = { ..., features: FeatureFlags }
-    .routes({
+export const MiddlewareTestApi = new GGHttpSchema({
+    contract: MiddlewareTestApiContract,
+    pathPrefix: "api/middleware-test",
+    use: [intlLocaleHeader(), ClientInfoEffect, FeatureFlagsEffect],
+    routes: {
         echo: GGRpc.POST("echo"),
         getLanguage: GGRpc.GET("language"),
-    })
+    },
+})

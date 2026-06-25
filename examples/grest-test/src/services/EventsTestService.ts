@@ -1,7 +1,9 @@
 import {SERVER_ERROR} from "@grest-ts/schema";
-import {CreateTestRequest, CreateTestResponse, IEventsTestApi, StartTestRequest} from "../api/EventsTestApi";
+import {CreateTestRequest, CreateTestResponse, EventsTestApiContract, StartTestRequest} from "../api/EventsTestApi";
 import {EventsTestEvents, tTestId} from "../events/EventsTestEvents";
 import type {EventPublisherClient} from "@grest-ts/events";
+
+type IEventsTestApi = typeof EventsTestApiContract.infer
 
 export class EventsTestService implements IEventsTestApi {
     private testCounter = 0;

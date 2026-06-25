@@ -1,4 +1,4 @@
-import {GGRpc, httpSchema} from "@grest-ts/http"
+import {GGRpc, GGHttpSchema} from "@grest-ts/http"
 import {FORBIDDEN, GGContractClass, IsObject, IsString, NOT_AUTHORIZED, NOT_FOUND, SERVER_ERROR, VALIDATION_ERROR, GG_NO_PERMISSIONS } from "@grest-ts/schema";
 import {GG_USER_AUTH_TOKEN} from "./auth/UserAuth";
 
@@ -30,10 +30,12 @@ export const UserAuthApiContract = new GGContractClass("UserAuthApi", {
     }
 })
 
-export const UserAuthApi = httpSchema(UserAuthApiContract)
-    .pathPrefix("api/users")
-    .use(GG_USER_AUTH_TOKEN)
-    .routes({
+export const UserAuthApi = new GGHttpSchema({
+    contract: UserAuthApiContract,
+    pathPrefix: "api/users",
+    use: [GG_USER_AUTH_TOKEN],
+    routes: {
         changePassword: GGRpc.POST("changePassword"),
         me: GGRpc.GET("me")
-    })
+    }
+})

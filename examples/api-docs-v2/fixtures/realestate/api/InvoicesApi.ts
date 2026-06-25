@@ -1,4 +1,4 @@
-import {GGRpc, httpSchema} from "@grest-ts/http";
+import {GGRpc, GGHttpSchema} from "@grest-ts/http";
 import {GGFileDownload} from "@grest-ts/http-file";
 import {FORBIDDEN, GGContractClass, IsArray, IsBit, IsBoolean, IsEnum, IsLiteral, IsNumber, IsObject, IsString, IsTuple, NOT_AUTHORIZED, NOT_FOUND, SERVER_ERROR, VALIDATION_ERROR } from "@grest-ts/schema";
 import {IsFile} from "@grest-ts/schema-file";
@@ -631,11 +631,11 @@ export const InvoicesApiContract = new GGContractClass("InvoicesApi", {
 // API Definition
 // ---------------------------------------------------------
 
-export const InvoicesApi = httpSchema(InvoicesApiContract)
-    .pathPrefix("gg/invoice")
-    .use(GG_USER_AUTH)
-    .use(GG_COMPANY_AUTH_TOKEN)
-    .routes({
+export const InvoicesApi = new GGHttpSchema({
+    contract: InvoicesApiContract,
+    pathPrefix: "gg/invoice",
+    use: [GG_USER_AUTH, GG_COMPANY_AUTH_TOKEN],
+    routes: {
         list: GGRpc.POST("list"),
         get: GGRpc.POST("get"),
         delete: GGRpc.POST("delete"),
@@ -648,5 +648,6 @@ export const InvoicesApi = httpSchema(InvoicesApiContract)
         downloadEInvoices: GGFileDownload.GET("downloadEInvoices"),
         prepareCreate: GGRpc.POST("prepareCreate"),
         finalizeCreate: GGRpc.POST("finalizeCreate")
-    })
+    },
+})
 

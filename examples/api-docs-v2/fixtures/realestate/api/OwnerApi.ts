@@ -1,4 +1,4 @@
-import {GGRpc, httpSchema} from "@grest-ts/http";
+import {GGRpc, GGHttpSchema} from "@grest-ts/http";
 import {FORBIDDEN, GGContractClass, IsArray, IsDiscriminated, IsEmail, IsEnum, IsLiteral, IsNumber, IsObject, IsString, IsTuple, NOT_AUTHORIZED, NOT_FOUND, SERVER_ERROR, VALIDATION_ERROR } from "@grest-ts/schema";
 import {GG_COMPANY_AUTH_TOKEN} from "../middleware/CompanyAuthHeader";
 import {IsCountry2, IsVatNo, regCodeError, vatCodeError} from "../Brands";
@@ -168,15 +168,16 @@ export const OwnerApiContract = new GGContractClass("OwnerApi", {
 // API Definition
 // ---------------------------------------------------------
 
-export const OwnerApi = httpSchema(OwnerApiContract)
-    .pathPrefix("gg/owner")
-    .use(GG_USER_AUTH)
-    .use(GG_COMPANY_AUTH_TOKEN)
-    .routes({
+export const OwnerApi = new GGHttpSchema({
+    contract: OwnerApiContract,
+    pathPrefix: "gg/owner",
+    use: [GG_USER_AUTH, GG_COMPANY_AUTH_TOKEN],
+    routes: {
         getForSelect: GGRpc.POST("getForSelect"),
         list: GGRpc.POST("list"),
         get: GGRpc.POST("get"),
         delete: GGRpc.POST("delete"),
         sync: GGRpc.POST("sync")
-    })
+    },
+})
 

@@ -21,7 +21,7 @@ export interface GGAsyncApiDocsGroupsOptions extends ToAsyncApiOptions {
      * Map of group label → WebSocket schemas in that group. Each group
      * becomes its own AsyncAPI spec, served at `${specPathPrefix}/${slug}.json`.
      */
-    groups: Record<string, GGWebSocketSchema<any, any, any, any, any>[]>;
+    groups: Record<string, GGWebSocketSchema<any>[]>;
 
     /** Path prefix for spec endpoints. e.g. `/asyncapi` → `/asyncapi/users.json`. */
     specPathPrefix: string;

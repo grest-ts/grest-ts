@@ -1,5 +1,5 @@
-import {GGRpc, httpSchema} from "@grest-ts/http"
-import {GGContractClass, GGContractImplementation, IsBoolean, IsNumber, IsObject, SERVER_ERROR, VALIDATION_ERROR, GG_NO_PERMISSIONS } from "@grest-ts/schema";
+import {GGRpc, GGHttpSchema} from "@grest-ts/http"
+import {GGContractClass, IsBoolean, IsNumber, IsObject, SERVER_ERROR, VALIDATION_ERROR, GG_NO_PERMISSIONS } from "@grest-ts/schema";
 
 // ---------------------------------------------------------
 // Type Schemas
@@ -68,14 +68,14 @@ export const MetricsTestApiContract = new GGContractClass("MetricsTestApi", {
     }
 })
 
-export type IMetricsTestApi = GGContractImplementation<typeof MetricsTestApiContract["methods"]>
-
-export const MetricsTestApi = httpSchema(MetricsTestApiContract)
-    .pathPrefix("api/metrics-test")
-    .routes({
+export const MetricsTestApi = new GGHttpSchema({
+    contract: MetricsTestApiContract,
+    pathPrefix: "api/metrics-test",
+    routes: {
         getMetrics: GGRpc.GET("metrics"),
         incrementCounter: GGRpc.POST("counter/increment"),
         setGauge: GGRpc.POST("gauge/set"),
         recordDuration: GGRpc.POST("histogram/record"),
         resetMetrics: GGRpc.POST("reset")
-    })
+    },
+})

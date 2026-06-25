@@ -1,4 +1,4 @@
-import {GGRpc, httpSchema} from "@grest-ts/http";
+import {GGRpc, GGHttpSchema} from "@grest-ts/http";
 import {IsArray, IsObject, IsString, IsNumber, IsLiteral, IsTuple, GGContractClass, FORBIDDEN, NOT_AUTHORIZED, NOT_FOUND, SERVER_ERROR, VALIDATION_ERROR } from "@grest-ts/schema";
 import {GG_COMPANY_AUTH_TOKEN} from "../middleware/CompanyAuthHeader";
 import {IsBankIntegrationId, IsBankStatementId, IsBankStatementRowId, IsDate, IsPaymentId} from "../Brands";
@@ -127,13 +127,14 @@ export const BankStatementApiContract = new GGContractClass("BankStatementApi", 
 // API Definition
 // ---------------------------------------------------------
 
-export const BankStatementApi = httpSchema(BankStatementApiContract)
-    .pathPrefix("gg/bankStatement")
-    .use(GG_USER_AUTH)
-    .use(GG_COMPANY_AUTH_TOKEN)
-    .routes({
+export const BankStatementApi = new GGHttpSchema({
+    contract: BankStatementApiContract,
+    pathPrefix: "gg/bankStatement",
+    use: [GG_USER_AUTH, GG_COMPANY_AUTH_TOKEN],
+    routes: {
         list: GGRpc.POST("list"),
         get: GGRpc.POST("get"),
         sync: GGRpc.POST("sync")
-    })
+    },
+})
 

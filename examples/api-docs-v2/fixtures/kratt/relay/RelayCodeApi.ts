@@ -1,5 +1,5 @@
 import {GGContractClass, IsObject, IsString, IsNumber, IsBoolean, IsArray, SERVER_ERROR } from "@grest-ts/schema"
-import {GGRpc, httpSchema} from "@grest-ts/http"
+import {GGRpc, GGHttpSchema} from "@grest-ts/http"
 import {GG_RELAY_TOKEN} from "./RelayAuthContext.js"
 
 const IsWorkspaceIdRequest = IsObject({
@@ -130,14 +130,16 @@ export const RelayCodeApiContract = new GGContractClass("RelayCodeApi", {
     },
 })
 
-export const RelayCodeApi = httpSchema(RelayCodeApiContract)
-    .pathPrefix("api/code")
-    .use(GG_RELAY_TOKEN)
-    .routes({
+export const RelayCodeApi = new GGHttpSchema({
+    contract: RelayCodeApiContract,
+    pathPrefix: "api/code",
+    use: [GG_RELAY_TOKEN],
+    routes: {
         changedFiles: GGRpc.POST("changed-files"),
         commits: GGRpc.POST("commits"),
         fileDiff: GGRpc.POST("file-diff"),
         saveFile: GGRpc.POST("save-file"),
         discardFile: GGRpc.POST("discard-file"),
         fileTree: GGRpc.POST("file-tree"),
-    })
+    },
+})

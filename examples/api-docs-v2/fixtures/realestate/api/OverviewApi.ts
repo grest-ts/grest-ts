@@ -1,4 +1,4 @@
-import {GGRpc, httpSchema} from "@grest-ts/http";
+import {GGRpc, GGHttpSchema} from "@grest-ts/http";
 import {IsArray, IsObject, IsNumber, IsRecord, IsString, GGContractClass, FORBIDDEN, NOT_AUTHORIZED, SERVER_ERROR, VALIDATION_ERROR } from "@grest-ts/schema";
 import {GG_COMPANY_AUTH_TOKEN} from "../middleware/CompanyAuthHeader";
 import {GG_USER_AUTH} from "../middleware/UserAuthHeader";
@@ -62,11 +62,12 @@ export const OverviewApiContract = new GGContractClass("OverviewApi", {
 // API Definition
 // ---------------------------------------------------------
 
-export const OverviewApi = httpSchema(OverviewApiContract)
-    .pathPrefix("gg/overview")
-    .use(GG_USER_AUTH)
-    .use(GG_COMPANY_AUTH_TOKEN)
-    .routes({
+export const OverviewApi = new GGHttpSchema({
+    contract: OverviewApiContract,
+    pathPrefix: "gg/overview",
+    use: [GG_USER_AUTH, GG_COMPANY_AUTH_TOKEN],
+    routes: {
         getOverview: GGRpc.POST("getOverview")
-    })
+    },
+})
 

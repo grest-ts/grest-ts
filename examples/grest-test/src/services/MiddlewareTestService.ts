@@ -1,5 +1,7 @@
-import {GG_CLIENT_INFO, GG_FEATURE_FLAGS, IMiddlewareTestApi, MiddlewareTestRequest, MiddlewareTestResponse} from "../api/MiddlewareTestApi";
+import {GG_CLIENT_INFO, GG_FEATURE_FLAGS, MiddlewareTestApiContract, MiddlewareTestRequest, MiddlewareTestResponse} from "../api/MiddlewareTestApi";
 import {GG_INTL_LOCALE} from "@grest-ts/intl";
+
+type IMiddlewareTestApi = typeof MiddlewareTestApiContract.infer
 
 export class MiddlewareTestService implements IMiddlewareTestApi {
 

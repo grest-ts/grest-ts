@@ -4,7 +4,14 @@ import type http from "http";
 import type {GGContextKey, GGTransportMiddleware} from "@grest-ts/context";
 import type {OpenAPIV3_1} from "openapi-types";
 
-export class GGHttpSchema<TContract extends GGContractApiDefinition, TContext> {
+export interface GGHttpSchemaConfig<TContract extends GGContractApiDefinition> {
+    contract: GGContractClass<TContract>
+    pathPrefix: string
+    use?: readonly GGTransportMiddleware[]
+    routes: Record<keyof TContract, GGHttpCodec>
+}
+
+export class GGHttpSchema<TContract extends GGContractApiDefinition> {
 
     public readonly name: string
     public readonly pathPrefix: string
@@ -12,17 +19,12 @@ export class GGHttpSchema<TContract extends GGContractApiDefinition, TContext> {
     public readonly codec: Record<keyof TContract, GGHttpCodec>
     public readonly contract: GGContractClass<TContract>
 
-    constructor(
-        pathPrefix: string,
-        contract: GGContractClass<TContract>,
-        wireCodec: Record<keyof TContract, GGHttpCodec>,
-        middlewares: readonly GGTransportMiddleware[] = []
-    ) {
-        this.name = contract.name
-        this.pathPrefix = pathPrefix
-        this.apiMiddlewares = middlewares
-        this.codec = wireCodec
-        this.contract = contract
+    constructor(config: GGHttpSchemaConfig<TContract>) {
+        this.name = config.contract.name
+        this.pathPrefix = config.pathPrefix
+        this.apiMiddlewares = config.use ?? []
+        this.codec = config.routes
+        this.contract = config.contract
         Object.freeze(this.apiMiddlewares)
         Object.freeze(this.codec)
         Object.freeze(this)

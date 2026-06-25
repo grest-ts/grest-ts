@@ -1,4 +1,4 @@
-import {GGRpc, httpSchema} from "@grest-ts/http";
+import {GGRpc, GGHttpSchema} from "@grest-ts/http";
 import {IsAny, IsArray, IsObject, IsString, IsNumber, IsEnum, IsLiteral, IsTuple, GGContractClass, FORBIDDEN, NOT_AUTHORIZED, SERVER_ERROR, VALIDATION_ERROR } from "@grest-ts/schema";
 import {GG_COMPANY_AUTH_TOKEN} from "../middleware/CompanyAuthHeader";
 import {IsDate, IsUserId} from "../Brands";
@@ -100,13 +100,14 @@ export const AuditLogApiContract = new GGContractClass("AuditLogApi", {
 // API Definition
 // ---------------------------------------------------------
 
-export const AuditLogApi = httpSchema(AuditLogApiContract)
-    .pathPrefix("gg/auditLog")
-    .use(GG_USER_AUTH)
-    .use(GG_COMPANY_AUTH_TOKEN)
-    .routes({
+export const AuditLogApi = new GGHttpSchema({
+    contract: AuditLogApiContract,
+    pathPrefix: "gg/auditLog",
+    use: [GG_USER_AUTH, GG_COMPANY_AUTH_TOKEN],
+    routes: {
         list: GGRpc.POST("list")
-    })
+    },
+})
 
 // ---------------------------------------------------------
 // Types used by AuditLog service

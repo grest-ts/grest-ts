@@ -1,4 +1,4 @@
-import {GGRpc, httpSchema, GGCookie} from "@grest-ts/http"
+import {GGRpc, GGHttpSchema, GGCookie} from "@grest-ts/http"
 import {GGContractClass, GG_NO_PERMISSIONS, IsBoolean, IsObject, IsString, SERVER_ERROR} from "@grest-ts/schema"
 
 // The session cookie IS its own context key. Write via GGCookie.setCookie(SESSION, …).
@@ -30,12 +30,14 @@ export const CookieTestContract = new GGContractClass("CookieTestApi", {
     },
 })
 
-export const CookieTestApi = httpSchema(CookieTestContract)
-    .use(SESSION)
-    .pathPrefix("cookie")
-    .routes({
+export const CookieTestApi = new GGHttpSchema({
+    contract: CookieTestContract,
+    pathPrefix: "cookie",
+    use: [SESSION],
+    routes: {
         login: GGRpc.POST("login").updatesCookie(SESSION),
         me: GGRpc.GET("me"),                                  // read-only -> no declaration
         logout: GGRpc.POST("logout").updatesCookie(SESSION),
         tamper: GGRpc.POST("tamper"),                         // writes without declaring -> SERVER_ERROR
-    })
+    },
+})

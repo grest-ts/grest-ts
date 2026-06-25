@@ -1,6 +1,6 @@
 import {describe, it, expect, vi, afterEach} from 'vitest'
 import {GGContractClass, IsObject, IsString, SERVER_ERROR} from '@grest-ts/schema'
-import {httpSchema} from '../schema/httpSchema'
+import {GGHttpSchema} from '../schema/GGHttpSchema'
 import {GGRpc} from '../rpc/GGHttpRouteRPC'
 import {createClient, _registerDiscoveryUrlResolver} from './GGHttpSchema.createClient'
 import {discoveryUrlResolver} from './GGHttpSchema.createClient.node'
@@ -13,9 +13,11 @@ const PingContract = new GGContractClass("CreateClientTestApi", {
     },
 })
 
-const PingApi = httpSchema(PingContract)
-    .pathPrefix("api/ping")
-    .routes({ping: GGRpc.POST("ping")})
+const PingApi = new GGHttpSchema({
+    contract: PingContract,
+    pathPrefix: "api/ping",
+    routes: {ping: GGRpc.POST("ping")},
+})
 
 function okResponse(): Response {
     return new Response(JSON.stringify({success: true, type: "OK", data: {msg: "pong"}}), {

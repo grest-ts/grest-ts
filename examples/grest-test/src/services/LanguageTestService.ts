@@ -1,5 +1,7 @@
-import {ILanguageTestApi, LanguageTestRequest, LanguageTestResponse} from "../api/LanguageTestApi";
+import {LanguageTestApiContract, LanguageTestRequest, LanguageTestResponse} from "../api/LanguageTestApi";
 import {GG_INTL_LOCALE} from "@grest-ts/intl";
+
+type ILanguageTestApi = typeof LanguageTestApiContract.infer
 
 export class LanguageTestService implements ILanguageTestApi {
 

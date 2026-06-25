@@ -28,7 +28,7 @@ export interface GGOpenApiDocsGroupsOptions extends ToOpenApiOptions {
      * Map of group label → schemas in that group. Each group becomes its own
      * OpenAPI spec, served at `${specPathPrefix}/${slug}.json` (kebab-case slug).
      */
-    groups: Record<string, GGHttpSchema<any, any>[]>;
+    groups: Record<string, GGHttpSchema<any>[]>;
 
     /**
      * Path prefix for spec endpoints. e.g. `/openapi` →
@@ -118,7 +118,7 @@ export class GGOpenApiDocsGroups {
 
     private buildSpec(group: string): OpenAPIV3_1.Document {
         if (group === COMBINED_KEY) {
-            const all: GGHttpSchema<any, any>[] = [];
+            const all: GGHttpSchema<any>[] = [];
             for (const name of this.groupKeys) all.push(...this.options.groups[name]);
             return toOpenApi(all, this.options);
         }

@@ -1,4 +1,4 @@
-import {GGRpc, httpSchema} from "@grest-ts/http"
+import {GGRpc, GGHttpSchema} from "@grest-ts/http"
 import {FORBIDDEN, GGContractClass, IsArray, IsNumber, IsObject, IsString, NOT_AUTHORIZED, NOT_FOUND, SERVER_ERROR, GG_NO_PERMISSIONS} from "@grest-ts/schema"
 import {USER_TOKEN_WIRE} from "./auth/UserAuth"
 import {IsOrg, IsOrgId, ORG_TOKEN_WIRE, OrgPermission} from "./auth/OrgAuth"
@@ -36,13 +36,15 @@ export const OrgApiContract = new GGContractClass("OrgApi", {
     },
 })
 
-export const OrgApi = httpSchema(OrgApiContract)
-    .pathPrefix("api/orgs")
-    .use(USER_TOKEN_WIRE)
-    .routes({
+export const OrgApi = new GGHttpSchema({
+    contract: OrgApiContract,
+    pathPrefix: "api/orgs",
+    use: [USER_TOKEN_WIRE],
+    routes: {
         listOrgs: GGRpc.GET("list"),
         selectOrg: GGRpc.POST("select"),
-    })
+    }
+})
 
 // Org-scoped: requires BOTH the user token AND the org token (AND across sources). The
 // `ORG_MEMBER` permission routes to ORG_TOKEN_WIRE; the user wire still authenticates.
@@ -54,10 +56,11 @@ export const OrgScopedApiContract = new GGContractClass("OrgScopedApi", {
     },
 })
 
-export const OrgScopedApi = httpSchema(OrgScopedApiContract)
-    .pathPrefix("api/org")
-    .use(USER_TOKEN_WIRE)
-    .use(ORG_TOKEN_WIRE)
-    .routes({
+export const OrgScopedApi = new GGHttpSchema({
+    contract: OrgScopedApiContract,
+    pathPrefix: "api/org",
+    use: [USER_TOKEN_WIRE, ORG_TOKEN_WIRE],
+    routes: {
         orgInfo: GGRpc.GET("info"),
-    })
+    }
+})

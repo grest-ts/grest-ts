@@ -1,6 +1,6 @@
-import {GGRpc, GGHeader, httpSchema} from "@grest-ts/http"
-import {defineSocketContract, webSocketSchema} from "@grest-ts/websocket"
-import {FORBIDDEN, GGContractClass, GGContractClient, GGContractImplementation, GG_NO_PERMISSIONS, IsArray, IsEnum, IsObject, IsString, NOT_AUTHORIZED, SERVER_ERROR} from "@grest-ts/schema"
+import {GGRpc, GGHeader, GGHttpSchema} from "@grest-ts/http"
+import {GGWebSocketSchema} from "@grest-ts/websocket"
+import {FORBIDDEN, GGContractClass, GG_NO_PERMISSIONS, IsArray, IsEnum, IsObject, IsString, NOT_AUTHORIZED, SERVER_ERROR, GGDuplexContract} from "@grest-ts/schema"
 import {enumOf, type Values} from "@grest-ts/common"
 
 export const WirePermission = enumOf({
@@ -40,14 +40,16 @@ export const WireUserApiContract = new GGContractClass("WireUserApi", {
     },
 })
 
-export const WireUserApi = httpSchema(WireUserApiContract)
-    .pathPrefix("api/wire-user")
-    .use(USER_TOKEN_WIRE)
-    .routes({
+export const WireUserApi = new GGHttpSchema({
+    contract: WireUserApiContract,
+    pathPrefix: "api/wire-user",
+    use: [USER_TOKEN_WIRE],
+    routes: {
         me: GGRpc.GET("me"),
         adminOnly: GGRpc.GET("admin"),
         echoToken: GGRpc.GET("echo"),
-    })
+    }
+})
 
 export const WirePublicApiContract = new GGContractClass("WirePublicApi", {
     ping: {
@@ -57,11 +59,13 @@ export const WirePublicApiContract = new GGContractClass("WirePublicApi", {
     },
 })
 
-export const WirePublicApi = httpSchema(WirePublicApiContract)
-    .pathPrefix("api/wire-public")
-    .routes({
+export const WirePublicApi = new GGHttpSchema({
+    contract: WirePublicApiContract,
+    pathPrefix: "api/wire-public",
+    routes: {
         ping: GGRpc.GET("ping"),
-    })
+    }
+})
 
 // ---- second wire (org-like), for multi-wire AND-across-sources -------------------------------
 export const OrgWirePermission = enumOf({
@@ -81,16 +85,20 @@ export const WireOrgScopedApiContract = new GGContractClass("WireOrgScopedApi", 
     },
 })
 
-export const WireOrgScopedApi = httpSchema(WireOrgScopedApiContract)
-    .pathPrefix("api/wire-org")
-    .use(USER_TOKEN_WIRE)
-    .use(ORG_TOKEN_WIRE)
-    .routes({
+export const WireOrgScopedApi = new GGHttpSchema({
+    contract: WireOrgScopedApiContract,
+    pathPrefix: "api/wire-org",
+    use: [USER_TOKEN_WIRE, ORG_TOKEN_WIRE],
+    routes: {
         orgInfo: GGRpc.GET("info"),
-    })
+    }
+})
 
 // ---- WebSocket smart-wire schema: the user wire authenticates at handshake; per-message gate ----
-export const WireLiveApiContract = defineSocketContract("WireLiveApi", {
+export const WireLiveApiContract = new GGDuplexContract("WireLiveApi", {
+    connect: {
+        errors: [NOT_AUTHORIZED, SERVER_ERROR],
+    },
     clientToServer: {
         // Anyone authenticated (the wire is required-or-throw at handshake) can call.
         whoami: {success: IsString, errors: [NOT_AUTHORIZED, SERVER_ERROR], permission: GG_NO_PERMISSIONS},
@@ -100,10 +108,8 @@ export const WireLiveApiContract = defineSocketContract("WireLiveApi", {
     serverToClient: {},
 })
 
-export const WireLiveApi = webSocketSchema(WireLiveApiContract)
-    .path("ws/wire-live")
-    .use(USER_TOKEN_WIRE)
-    .done()
-
-export type WireLiveIncoming = GGContractImplementation<typeof WireLiveApiContract.methods["clientToServer"]>
-export type WireLiveOutgoing = GGContractClient<typeof WireLiveApiContract.methods["serverToClient"]>
+export const WireLiveApi = new GGWebSocketSchema({
+    contract: WireLiveApiContract,
+    path: "ws/wire-live",
+    use: [USER_TOKEN_WIRE],
+})

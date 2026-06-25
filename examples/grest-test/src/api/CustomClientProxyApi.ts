@@ -1,4 +1,5 @@
-import {defineSocketContract, webSocketSchema} from "@grest-ts/websocket"
+import {GGRawWebSocketSchema} from "@grest-ts/websocket"
+import {GGRawSocketContract, SERVER_ERROR} from "@grest-ts/schema"
 
 /**
  * customClient byte socket on a wildcard prefix path — mirrors how a foreign app (e.g. code-server)
@@ -6,6 +7,12 @@ import {defineSocketContract, webSocketSchema} from "@grest-ts/websocket"
  * so the schema declares `/cc-proxy/*`. Public (no auth) for the test; the handler echoes back the
  * concrete upgrade path to prove prefix matching + GGWsUpgrade access.
  */
-export const CustomClientProxyApi = webSocketSchema(defineSocketContract("CustomClientProxyApi", {raw: true, customClient: true}))
-    .path("/cc-proxy/*")
-    .done()
+export const CustomClientProxyApiContract = new GGRawSocketContract("CustomClientProxyApi", {
+    connect: {errors: [SERVER_ERROR]},
+    customClient: true,
+})
+
+export const CustomClientProxyApi = new GGRawWebSocketSchema({
+    contract: CustomClientProxyApiContract,
+    path: "/cc-proxy/*",
+})

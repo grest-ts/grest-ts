@@ -4,7 +4,7 @@ import {isBrowser} from "@grest-ts/common";
 
 
 declare module "../schema/GGHttpSchema" {
-    interface GGHttpSchema<TContract extends GGContractApiDefinition, TContext = {}> {
+    interface GGHttpSchema<TContract extends GGContractApiDefinition> {
         createClient(config?: GGHttpClientConfig): GGContractClient<TContract>
     }
 }
@@ -65,15 +65,15 @@ export function _registerDiscoveryUrlResolver(resolver: (apiName: string) => Pro
     discoveryUrlResolver = resolver
 }
 
-GGHttpSchema.prototype.createClient = function <TContract extends GGContractApiDefinition, TContext>(
-    this: GGHttpSchema<TContract, TContext>,
+GGHttpSchema.prototype.createClient = function <TContract extends GGContractApiDefinition>(
+    this: GGHttpSchema<TContract>,
     config?: GGHttpClientConfig
 ): GGContractClient<TContract> {
     return createClient(this, config);
 }
 
-export function createClient<TContract extends GGContractApiDefinition, TContext>(
-    httpSchema: GGHttpSchema<TContract, TContext>,
+export function createClient<TContract extends GGContractApiDefinition>(
+    httpSchema: GGHttpSchema<TContract>,
     config?: GGHttpClientConfig
 ): GGContractClient<TContract> {
     config ??= {};

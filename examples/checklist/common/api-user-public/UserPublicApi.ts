@@ -1,4 +1,4 @@
-import {GGRpc, httpSchema} from "@grest-ts/http"
+import {GGRpc, GGHttpSchema} from "@grest-ts/http"
 import {ERROR, EXISTS, FORBIDDEN, GGContractClass, IsEmail, IsObject, IsString, SERVER_ERROR, VALIDATION_ERROR, GG_NO_PERMISSIONS } from "@grest-ts/schema";
 
 const IsUserId = IsString.brand("UserId")
@@ -49,10 +49,12 @@ export const UserPublicApiContract = new GGContractClass("UserPublicApi", {
     }
 })
 
-export const UserPublicApi = httpSchema(UserPublicApiContract)
-    .pathPrefix("pub/users")
-    .routes({
+export const UserPublicApi = new GGHttpSchema({
+    contract: UserPublicApiContract,
+    pathPrefix: "pub/users",
+    routes: {
         register: GGRpc.POST("register"),
         login: GGRpc.POST("login")
-    })
+    }
+})
 

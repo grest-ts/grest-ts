@@ -1,4 +1,4 @@
-import {GGRpc, httpSchema} from "@grest-ts/http";
+import {GGRpc, GGHttpSchema} from "@grest-ts/http";
 import {IsArray, IsBoolean, IsObject, IsString, IsNumber, IsEnum, IsLiteral, IsTuple, GGContractClass, FORBIDDEN, NOT_AUTHORIZED, NOT_FOUND, SERVER_ERROR, VALIDATION_ERROR } from "@grest-ts/schema";
 import {FORBIDDEN_BOOKKEEPING_LOCKED} from "../ApiError";
 import {IsCreatedAndChangedBy} from "./UserApi";
@@ -292,16 +292,17 @@ export const ExpenseApiContract = new GGContractClass("ExpenseApi", {
 // API Definition
 // ---------------------------------------------------------
 
-export const ExpenseApi = httpSchema(ExpenseApiContract)
-    .pathPrefix("gg/expense")
-    .use(GG_USER_AUTH)
-    .use(GG_COMPANY_AUTH_TOKEN)
-    .routes({
+export const ExpenseApi = new GGHttpSchema({
+    contract: ExpenseApiContract,
+    pathPrefix: "gg/expense",
+    use: [GG_USER_AUTH, GG_COMPANY_AUTH_TOKEN],
+    routes: {
         list: GGRpc.POST("list"),
         get: GGRpc.POST("get"),
         getByFile: GGRpc.POST("getByFile"),
         getRow: GGRpc.POST("getRow"),
         sync: GGRpc.POST("sync"),
         delete: GGRpc.POST("delete")
-    })
+    },
+})
 

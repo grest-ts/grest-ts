@@ -1,21 +1,25 @@
 import {describe, expect, test} from "vitest";
 import {GG_NO_PERMISSIONS, GGContractClass, IsString, NOT_AUTHORIZED, SERVER_ERROR} from "@grest-ts/schema";
-import {GGCookie, GGHeader, GGRpc, httpSchema} from "@grest-ts/http";
+import {GGCookie, GGHeader, GGRpc, GGHttpSchema} from "@grest-ts/http";
 import {toOpenApi} from "@grest-ts/openapi";
 
 const Contract = new GGContractClass("WhoAmI", {
     whoami: {success: IsString, errors: [NOT_AUTHORIZED, SERVER_ERROR], permission: GG_NO_PERMISSIONS},
 });
 
-const CookieApi = httpSchema(Contract)
-    .pathPrefix("c")
-    .use(new GGCookie("access"))
-    .routes({whoami: GGRpc.GET("whoami")});
+const CookieApi = new GGHttpSchema({
+    contract: Contract,
+    pathPrefix: "c",
+    use: [new GGCookie("access")],
+    routes: {whoami: GGRpc.GET("whoami")},
+});
 
-const HeaderApi = httpSchema(Contract)
-    .pathPrefix("h")
-    .use(new GGHeader("authorization", {scheme: "bearer"}))
-    .routes({whoami: GGRpc.GET("whoami")});
+const HeaderApi = new GGHttpSchema({
+    contract: Contract,
+    pathPrefix: "h",
+    use: [new GGHeader("authorization", {scheme: "bearer"})],
+    routes: {whoami: GGRpc.GET("whoami")},
+});
 
 const paramsOf = (schema: any, path: string) => {
     const doc = toOpenApi([schema], {title: "t", version: "1.0.0"});

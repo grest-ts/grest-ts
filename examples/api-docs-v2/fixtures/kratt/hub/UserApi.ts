@@ -1,6 +1,6 @@
 import {GGContractClass, IsObject, IsString, IsArray, SERVER_ERROR } from "@grest-ts/schema"
 import {IsFile} from "@grest-ts/schema-file"
-import {GGRpc, httpSchema} from "@grest-ts/http"
+import {GGRpc, GGHttpSchema} from "@grest-ts/http"
 import {GGFileUpload} from "@grest-ts/http-file"
 import {UNAUTHORIZED, NOT_FOUND, ALREADY_EXISTS} from "./errors"
 import {IsUser, IsUserId} from "./schemas"
@@ -65,10 +65,11 @@ export const UserApiContract = new GGContractClass("UserApi", {
     },
 })
 
-export const UserApi = httpSchema(UserApiContract)
-    .pathPrefix("api")
-    .use(GG_USER_TOKEN)
-    .routes({
+export const UserApi = new GGHttpSchema({
+    contract: UserApiContract,
+    pathPrefix: "api",
+    use: [GG_USER_TOKEN],
+    routes: {
         list: GGRpc.GET("users"),
         get: GGRpc.POST("users/get"),
         create: GGRpc.POST("users"),
@@ -76,4 +77,5 @@ export const UserApi = httpSchema(UserApiContract)
         delete: GGRpc.POST("users/delete"),
         setClaudeCredentials: GGFileUpload.POST("users/set-claude-credentials"),
         setClaudeConfig: GGRpc.POST("users/set-claude-config"),
-    })
+    },
+})

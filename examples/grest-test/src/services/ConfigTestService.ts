@@ -1,11 +1,10 @@
-import {ConfigTestResponse, DelayedLogRequest, IConfigTestApi, LogRequest, LogResponse, ObjectConfigResponse} from "../api/ConfigTestApi";
+import {ConfigTestResponse, ConfigTestApiContract, DelayedLogRequest, LogRequest, LogResponse, ObjectConfigResponse} from "../api/ConfigTestApi";
 import {MainConfigApi, TestObjectSettings} from "../MainConfig.api";
-import {ConfigTestSocketApiClientToServer, ConfigTestSocketApiServerToClient} from "../api/ConfigTestSocketApi";
-import {WebSocketIncoming, WebSocketOutgoing} from "@grest-ts/websocket";
+import {ConfigTestSocketApi} from "../api/ConfigTestSocketApi";
 import {GGLog} from "@grest-ts/logger";
 
-type IncomingHandler = WebSocketIncoming<ConfigTestSocketApiClientToServer>
-type OutgoingConnection = WebSocketOutgoing<ConfigTestSocketApiServerToClient>
+type IConfigTestApi = typeof ConfigTestApiContract.infer
+type OutgoingConnection = typeof ConfigTestSocketApi.serverToClient
 
 export class ConfigTestService implements IConfigTestApi {
     private watchedTimeout: number | undefined;
@@ -53,7 +52,7 @@ export class ConfigTestService implements IConfigTestApi {
         }, request.delayMs);
     }
 
-    public handleSocketConnection = (incoming: IncomingHandler, outgoing: OutgoingConnection): void => {
+    public handleSocketConnection = (incoming: typeof ConfigTestSocketApi.clientToServer, outgoing: OutgoingConnection): void => {
         this.connectedClients.add(outgoing);
 
         incoming.on({

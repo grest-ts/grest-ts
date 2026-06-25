@@ -1,4 +1,4 @@
-import {GGRpc, httpSchema} from "@grest-ts/http";
+import {GGRpc, GGHttpSchema} from "@grest-ts/http";
 import {GGFileDownload, GGFileUpload} from "@grest-ts/http-file";
 import {FORBIDDEN, GGContractClass, IsArray, IsBoolean, IsEnum, IsLiteral, IsNumber, IsObject, IsString, IsTuple, NOT_AUTHORIZED, NOT_FOUND, SERVER_ERROR, VALIDATION_ERROR } from "@grest-ts/schema";
 import {IsFile} from "@grest-ts/schema-file";
@@ -187,11 +187,11 @@ export const ExpenseFileApiContract = new GGContractClass("ExpenseFileApi", {
 // API Definition
 // ---------------------------------------------------------
 
-export const ExpenseFileApi = httpSchema(ExpenseFileApiContract)
-    .pathPrefix("gg/expenseFile")
-    .use(GG_USER_AUTH)
-    .use(GG_COMPANY_AUTH_TOKEN)
-    .routes({
+export const ExpenseFileApi = new GGHttpSchema({
+    contract: ExpenseFileApiContract,
+    pathPrefix: "gg/expenseFile",
+    use: [GG_USER_AUTH, GG_COMPANY_AUTH_TOKEN],
+    routes: {
         list: GGRpc.POST("list"),
         get: GGRpc.POST("get"),
         sync: GGRpc.POST("sync"),
@@ -200,5 +200,6 @@ export const ExpenseFileApi = httpSchema(ExpenseFileApiContract)
         download: GGFileDownload.GET("download"),
         parseExpenseFromFile: GGRpc.POST("parseExpenseFromFile"),
         reportIssue: GGRpc.POST("reportIssue")
-    })
+    },
+})
 

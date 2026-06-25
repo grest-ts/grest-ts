@@ -1,5 +1,5 @@
-import {GGRpc, httpSchema} from "@grest-ts/http"
-import {GGContractClass, GGContractImplementation, IsObject, IsString, SERVER_ERROR, VALIDATION_ERROR, GG_NO_PERMISSIONS } from "@grest-ts/schema";
+import {GGRpc, GGHttpSchema} from "@grest-ts/http"
+import {GGContractClass, IsObject, IsString, SERVER_ERROR, VALIDATION_ERROR, GG_NO_PERMISSIONS } from "@grest-ts/schema";
 
 // ---------------------------------------------------------
 // Type Schemas
@@ -43,11 +43,11 @@ export const EventsTestApiContract = new GGContractClass("EventsTestApi", {
     }
 })
 
-export type IEventsTestApi = GGContractImplementation<typeof EventsTestApiContract["methods"]>
-
-export const EventsTestApi = httpSchema(EventsTestApiContract)
-    .pathPrefix("api/events-test")
-    .routes({
+export const EventsTestApi = new GGHttpSchema({
+    contract: EventsTestApiContract,
+    pathPrefix: "api/events-test",
+    routes: {
         publishSomething: GGRpc.POST("create"),
         publishSomethingElse: GGRpc.POST("start")
-    })
+    },
+})

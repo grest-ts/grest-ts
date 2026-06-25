@@ -1,5 +1,5 @@
 import {GGContractClass, IsObject, IsString, IsArray, SERVER_ERROR } from "@grest-ts/schema"
-import {GGRpc, httpSchema} from "@grest-ts/http"
+import {GGRpc, GGHttpSchema} from "@grest-ts/http"
 import {UNAUTHORIZED, NOT_FOUND, ALREADY_EXISTS} from "./errors"
 import {IsOrgUser, IsOrgUserId, IsUserId} from "./schemas"
 import {GG_USER_TOKEN, GG_ORG_TOKEN} from "../auth/AuthContext"
@@ -44,14 +44,15 @@ export const OrgUserApiContract = new GGContractClass("OrgUserApi", {
     },
 })
 
-export const OrgUserApi = httpSchema(OrgUserApiContract)
-    .pathPrefix("api")
-    .use(GG_USER_TOKEN)
-    .use(GG_ORG_TOKEN)
-    .routes({
+export const OrgUserApi = new GGHttpSchema({
+    contract: OrgUserApiContract,
+    pathPrefix: "api",
+    use: [GG_USER_TOKEN, GG_ORG_TOKEN],
+    routes: {
         get: GGRpc.POST("org-users/get"),
         list: GGRpc.GET("org-users"),
         add: GGRpc.POST("org-users"),
         update: GGRpc.POST("org-users/update"),
         remove: GGRpc.POST("org-users/remove"),
-    })
+    },
+})

@@ -1,4 +1,4 @@
-import {GGRpc, httpSchema} from "@grest-ts/http";
+import {GGRpc, GGHttpSchema} from "@grest-ts/http";
 import {IsArray, IsObject, IsString, IsNumber, IsEnum, IsLiteral, IsDiscriminated, GGContractClass, FORBIDDEN, NOT_AUTHORIZED, SERVER_ERROR, VALIDATION_ERROR } from "@grest-ts/schema";
 import {GG_COMPANY_AUTH_TOKEN} from "../middleware/CompanyAuthHeader";
 import {IsClientId, IsContractId, IsDate, IsInvoiceId, IsPaymentId} from "../Brands";
@@ -105,11 +105,12 @@ export const BalanceApiContract = new GGContractClass("BalanceApi", {
 // API Definition
 // ---------------------------------------------------------
 
-export const BalanceApi = httpSchema(BalanceApiContract)
-    .pathPrefix("gg/balance")
-    .use(GG_USER_AUTH)
-    .use(GG_COMPANY_AUTH_TOKEN)
-    .routes({
+export const BalanceApi = new GGHttpSchema({
+    contract: BalanceApiContract,
+    pathPrefix: "gg/balance",
+    use: [GG_USER_AUTH, GG_COMPANY_AUTH_TOKEN],
+    routes: {
         balance: GGRpc.POST("balance")
-    })
+    },
+})
 

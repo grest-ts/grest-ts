@@ -1,9 +1,7 @@
-import {WebSocketIncoming, WebSocketOutgoing} from "@grest-ts/websocket"
-import {GGContractClient, GGContractImplementation} from "@grest-ts/schema"
-import {QueryArgs, QuerySocketApiContract} from "../api/QuerySocketApi"
+import {QueryArgs, QuerySocketApi} from "../api/QuerySocketApi"
 
-type Incoming = WebSocketIncoming<GGContractImplementation<typeof QuerySocketApiContract.methods["clientToServer"]>>
-type Outgoing = WebSocketOutgoing<GGContractClient<typeof QuerySocketApiContract.methods["serverToClient"]>>
+type Incoming = typeof QuerySocketApi.clientToServer
+type Outgoing = typeof QuerySocketApi.serverToClient
 
 export class QuerySocketService {
 

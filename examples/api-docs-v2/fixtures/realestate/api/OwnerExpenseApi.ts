@@ -1,4 +1,4 @@
-import {GGRpc, httpSchema} from "@grest-ts/http";
+import {GGRpc, GGHttpSchema} from "@grest-ts/http";
 import {IsArray, IsObject, IsString, IsNumber, IsLiteral, IsTuple, GGContractClass, FORBIDDEN, NOT_AUTHORIZED, NOT_FOUND, SERVER_ERROR, VALIDATION_ERROR } from "@grest-ts/schema";
 import {GG_COMPANY_AUTH_TOKEN} from "../middleware/CompanyAuthHeader";
 import {IsApartmentId, IsDate, IsOwnerExpenseId, IsUserId} from "../Brands";
@@ -103,14 +103,15 @@ export const OwnerExpenseApiContract = new GGContractClass("OwnerExpenseApi", {
 // API Definition
 // ---------------------------------------------------------
 
-export const OwnerExpenseApi = httpSchema(OwnerExpenseApiContract)
-    .pathPrefix("gg/ownerExpense")
-    .use(GG_USER_AUTH)
-    .use(GG_COMPANY_AUTH_TOKEN)
-    .routes({
+export const OwnerExpenseApi = new GGHttpSchema({
+    contract: OwnerExpenseApiContract,
+    pathPrefix: "gg/ownerExpense",
+    use: [GG_USER_AUTH, GG_COMPANY_AUTH_TOKEN],
+    routes: {
         list: GGRpc.POST("list"),
         get: GGRpc.POST("get"),
         sync: GGRpc.POST("sync"),
         delete: GGRpc.POST("delete")
-    })
+    },
+})
 

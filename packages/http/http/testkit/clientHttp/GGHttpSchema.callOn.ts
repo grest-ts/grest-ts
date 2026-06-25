@@ -35,14 +35,14 @@ export type GGHttpCallMap<TContract extends Record<string, GGContractMethod>> =
     HttpCallWithInput<TContract> & HttpCallWithoutInput<TContract>;
 
 declare module "../../src/schema/GGHttpSchema" {
-    interface GGHttpSchema<TContract, TContext = {}> extends GGCallOnFactory {
+    interface GGHttpSchema<TContract extends GGContractApiDefinition> extends GGCallOnFactory {
         [CALL_ON_FACTORY](ctx: GGContext): GGHttpCallMap<TContract>;
     }
 }
 
 const classCache: WeakMap<any, any> = new WeakMap();
 
-GGHttpSchema.prototype[CALL_ON_FACTORY] = function <TContract extends GGContractApiDefinition>(this: GGHttpSchema<TContract, any>, ctx: GGContext): GGHttpCallMap<TContract> {
+GGHttpSchema.prototype[CALL_ON_FACTORY] = function <TContract extends GGContractApiDefinition>(this: GGHttpSchema<TContract>, ctx: GGContext): GGHttpCallMap<TContract> {
     if (!classCache.has(this)) {
         classCache.set(this, createClient(this, {noValidation: true}));
     }

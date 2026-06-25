@@ -1,4 +1,4 @@
-import {GGRpc, httpSchema} from "@grest-ts/http";
+import {GGRpc, GGHttpSchema} from "@grest-ts/http";
 import {IsArray, IsObject, IsString, IsNumber, IsEnum, IsBit, IsLiteral, IsTuple, IsPartialRecord, IsRecord, GGContractClass, FORBIDDEN, NOT_AUTHORIZED, NOT_FOUND, SERVER_ERROR, VALIDATION_ERROR } from "@grest-ts/schema";
 import {GG_COMPANY_AUTH_TOKEN} from "../middleware/CompanyAuthHeader";
 import {IsBankIntegrationId, IsCountry2, IsEmail, IsRegCode, IsVatNo, regCodeError, vatCodeError} from "../Brands";
@@ -247,16 +247,17 @@ export const CompanyApiContract = new GGContractClass("CompanyApi", {
 // API Definition
 // ---------------------------------------------------------
 
-export const CompanyApi = httpSchema(CompanyApiContract)
-    .pathPrefix("gg/company")
-    .use(GG_USER_AUTH)
-    .use(GG_COMPANY_AUTH_TOKEN)
-    .routes({
+export const CompanyApi = new GGHttpSchema({
+    contract: CompanyApiContract,
+    pathPrefix: "gg/company",
+    use: [GG_USER_AUTH, GG_COMPANY_AUTH_TOKEN],
+    routes: {
         list: GGRpc.POST("list"),
         getForSelect: GGRpc.POST("getForSelect"),
         get: GGRpc.POST("get"),
         create: GGRpc.POST("create"),
         update: GGRpc.POST("update"),
         deleteFileEmail: GGRpc.POST("deleteFileEmail")
-    })
+    },
+})
 

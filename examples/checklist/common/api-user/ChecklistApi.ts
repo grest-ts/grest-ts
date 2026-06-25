@@ -1,4 +1,4 @@
-import {GGRpc, httpSchema} from "@grest-ts/http"
+import {GGRpc, GGHttpSchema} from "@grest-ts/http"
 import {FORBIDDEN, GGContractClass, IsArray, IsBoolean, IsLatitude, IsLongitude, IsObject, IsString, IsUint, NOT_AUTHORIZED, NOT_FOUND, SERVER_ERROR, VALIDATION_ERROR, GG_NO_PERMISSIONS } from "@grest-ts/schema";
 import {GG_USER_AUTH_TOKEN} from "./auth/UserAuth";
 
@@ -86,14 +86,16 @@ export const ChecklistApiContract = new GGContractClass("ChecklistApi", {
     }
 })
 
-export const ChecklistApi = httpSchema(ChecklistApiContract)
-    .pathPrefix("api/checklist")
-    .use(GG_USER_AUTH_TOKEN)
-    .routes({
+export const ChecklistApi = new GGHttpSchema({
+    contract: ChecklistApiContract,
+    pathPrefix: "api/checklist",
+    use: [GG_USER_AUTH_TOKEN],
+    routes: {
         list: GGRpc.GET("list"),
         add: GGRpc.POST("add"),
         get: GGRpc.GET("get/"),
         edit: GGRpc.PUT("edit"),
         delete: GGRpc.DELETE("delete/:id"),
         markDone: GGRpc.POST("markDone/:id")
-    })
+    }
+})

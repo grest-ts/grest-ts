@@ -133,10 +133,11 @@ export const ChatAuth = {
     }
 };
 
-export const ChatApiSchema = webSocketSchema(ChatContract)
-    .path("ws/chat")
-    .use(ChatAuth)
-    .done();
+export const ChatApiSchema = new GGWebSocketSchema({
+    contract: ChatContract,
+    path: "ws/chat",
+    use: [ChatAuth],
+});
 ```
 
 Plain (non-security) handshake headers are emitted under the channel's `bindings.ws.headers` schema instead.

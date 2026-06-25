@@ -1,5 +1,7 @@
-import {IMetricsTestApi, MetricsResponse, IncrementRequest} from "../api/MetricsTestApi";
+import {MetricsTestApiContract, MetricsResponse, IncrementRequest} from "../api/MetricsTestApi";
 import {MainMetrics} from "../MainMetrics";
+
+type IMetricsTestApi = typeof MetricsTestApiContract.infer
 
 export class MetricsTestService implements IMetricsTestApi {
 

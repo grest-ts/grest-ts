@@ -1,12 +1,8 @@
-import {WebSocketIncoming, WebSocketOutgoing} from "@grest-ts/websocket"
-import {AuthedSocketIncoming, AuthedSocketOutgoing, SERVER_AUTHED_USER} from "../api/AuthedSocketApi"
-
-type Incoming = WebSocketIncoming<AuthedSocketIncoming>
-type Outgoing = WebSocketOutgoing<AuthedSocketOutgoing>
+import {AuthedSocketApi, SERVER_AUTHED_USER} from "../api/AuthedSocketApi"
 
 export class AuthedSocketService {
 
-    public handleConnection = (incoming: Incoming, _outgoing: Outgoing): void => {
+    public handleConnection = (incoming: typeof AuthedSocketApi.clientToServer, _outgoing: typeof AuthedSocketApi.serverToClient): void => {
         incoming.on({
             whoAmI: async () => {
                 // Middleware set SERVER_AUTHED_USER during handshake; it inherits

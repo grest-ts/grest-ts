@@ -1,5 +1,5 @@
 import {GGContractClass, IsArray, IsObject, IsString, SERVER_ERROR } from "@grest-ts/schema"
-import {GGRpc, httpSchema} from "@grest-ts/http"
+import {GGRpc, GGHttpSchema} from "@grest-ts/http"
 import {ALREADY_EXISTS, NOT_FOUND, UNAUTHORIZED} from "./errors"
 import {IsOrganization, IsOrgId} from "./schemas"
 import {GG_USER_TOKEN} from "../auth/AuthContext"
@@ -53,14 +53,16 @@ export const OrganizationApiContract = new GGContractClass("OrganizationApi", {
     },
 })
 
-export const OrganizationApi = httpSchema(OrganizationApiContract)
-    .pathPrefix("api")
-    .use(GG_USER_TOKEN)
-    .routes({
+export const OrganizationApi = new GGHttpSchema({
+    contract: OrganizationApiContract,
+    pathPrefix: "api",
+    use: [GG_USER_TOKEN],
+    routes: {
         list: GGRpc.GET("organizations"),
         get: GGRpc.POST("organizations/get"),
         create: GGRpc.POST("organizations"),
         update: GGRpc.POST("organizations/update"),
         delete: GGRpc.POST("organizations/delete"),
         setHetznerCredentials: GGRpc.POST("organizations/set-hetzner-credentials"),
-    })
+    },
+})

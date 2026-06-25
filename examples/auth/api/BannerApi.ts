@@ -1,4 +1,4 @@
-import {GGRpc, httpSchema} from "@grest-ts/http"
+import {GGRpc, GGHttpSchema} from "@grest-ts/http"
 import {FORBIDDEN, GGContractClass, IsNumber, IsObject, IsString, NOT_AUTHORIZED, SERVER_ERROR, GG_NO_PERMISSIONS} from "@grest-ts/schema"
 import {USER_TOKEN_WIRE, UserPermission} from "./auth/UserAuth"
 
@@ -23,10 +23,12 @@ export const BannerApiContract = new GGContractClass("BannerApi", {
     },
 })
 
-export const BannerApi = httpSchema(BannerApiContract)
-    .pathPrefix("api/banner")
-    .use(USER_TOKEN_WIRE)
-    .routes({
+export const BannerApi = new GGHttpSchema({
+    contract: BannerApiContract,
+    pathPrefix: "api/banner",
+    use: [USER_TOKEN_WIRE],
+    routes: {
         bannerStatus: GGRpc.GET("status"),
         clickBanner: GGRpc.POST("click"),
-    })
+    }
+})

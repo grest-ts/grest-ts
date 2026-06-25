@@ -1,92 +1,34 @@
 /**
- * Server extension for WebSocketSchema - adds startServer and register methods
- * This file should only be imported in server (Node.js) context
+ * Server-side startWebSocketServer for GGWebSocketSchema. Node.js only.
  */
 
 import type {GGSocket} from "../socket/GGSocket"
 import {GGWebSocketSchema} from "../schema/GGWebSocketSchema";
-import {type GGTransportMiddleware} from "@grest-ts/context";
-import {GGSocketServer, type GGServerHeartbeatOption} from "./GGSocketServer";
-import {GGLocator} from "@grest-ts/locator";
+import {GGSocketServer} from "./GGSocketServer";
 import {WebSocketIncoming, WebSocketOutgoing} from "../socket/WebSocketTypes";
-import {GG_HTTP_SERVER, GGHttpServer} from "@grest-ts/http";
-import {GGHttpPermissionsChecker} from "@grest-ts/http";
-import {GG_NO_PERMISSIONS} from "@grest-ts/schema";
+import {GGConnectQuery, GGContractClient, GGContractImplementation, GGDuplexContractDefinition} from "@grest-ts/schema";
+import {SocketServerConfig, prepareSocketServer} from "./prepareSocketServer";
 
-export interface WebSocketSchemaConfig {
-    /**
-     * The HTTP server adapter to attach the WebSocket server to.
-     * If not provided, will look up from locator.
-     */
-    http?: GGHttpServer;
-    /**
-     * Additional middlewares to apply to all connections.
-     */
-    middlewares?: GGTransportMiddleware[];
-    /**
-     * Per-connection liveness heartbeat (server pings each client, reaps dead sockets).
-     * On by default; pass `false` to disable or an object to tune interval/timeout/mode.
-     */
-    heartbeat?: GGServerHeartbeatOption;
-}
+export type GGWebSocketHandler<TDef extends GGDuplexContractDefinition> = (
+    incoming: WebSocketIncoming<GGContractImplementation<TDef["clientToServer"]>>,
+    outgoing: WebSocketOutgoing<GGContractClient<TDef["serverToClient"]>>,
+    query: GGConnectQuery<TDef["connect"]>
+) => void
 
-declare module "../schema/GGWebSocketSchema" {
-    interface GGWebSocketSchema<TClientToServer, TServerToClient, TContext = {}, TQuery = undefined, TClientToServerImpl = TClientToServer, TServerToClientImpl = TServerToClient> {
-        /**
-         * Start the WebSocket server for this API.
-         * The onConnection handler receives validated query parameters as its 3rd argument
-         * (only populated when the schema declares `queryOnConnect(validator)`).
-         */
-        startServer(
-            onConnection: (incoming: WebSocketIncoming<TClientToServerImpl>, outgoing: WebSocketOutgoing<TServerToClient>, query: TQuery) => void,
-            config: WebSocketSchemaConfig
-        ): GGSocketServer<TContext, TQuery>
-
-        /**
-         * Register this WebSocket API with the default HTTP server.
-         * Uses GGHttpServerAdapter from locator if not explicitly provided.
-         */
-        register(
-            onConnection: (incoming: WebSocketIncoming<TClientToServerImpl>, outgoing: WebSocketOutgoing<TServerToClient>, query: TQuery) => void,
-            config?: WebSocketSchemaConfig
-        ): void
-    }
-}
-
-GGWebSocketSchema.prototype.startServer = function (
-    this: GGWebSocketSchema<any, any, any, any, any, any>,
+export function startWebSocketServer(
+    schema: GGWebSocketSchema<any>,
     onConnection: any,
-    config: WebSocketSchemaConfig
-): GGSocketServer<any, any> {
-    const contract = this.contract
-    if (!contract) {
-        throw new Error(`WebSocketSchema "${this.name}" has no contract.`)
-    }
+    config: SocketServerConfig
+): GGSocketServer<any> {
+    const contract = schema.contract
+    const {schemaName, normalizedPath, middlewares, permissionsChecker, connectPermission, queryValidator} = prepareSocketServer(schema, config)
 
-    const normalizedPath = this.path.startsWith('/') ? this.path : '/' + this.path
-    const schemaName = this.name
-    const http = config.http ?? GGLocator.getScope().get(GG_HTTP_SERVER);
-    http._registerWebSocketSchema(this as any);
-
-    const connectPermission = this.connectPermission ?? GG_NO_PERMISSIONS
-    const permissionsChecker = new GGHttpPermissionsChecker(this.middlewares);
-    const middlewares: GGTransportMiddleware[] = [...this.middlewares, ...(config?.middlewares ?? [])]
-    // Gate the handshake: resolve scopes and assert connectPermission here so a failed
-    // permission (or a throwing resolver) rejects the handshake. onConnection runs after
-    // HANDSHAKE_OK, so a check there can't reject — it only re-snapshots scopes per-message.
-    middlewares.push({
-        async process() {
-            await permissionsChecker.assert(schemaName, "", connectPermission)
-        },
-    })
-
-    // @TODO We might want some lookup here based on path/middlewares etc. If I use same socket for multiple paths, we need to reuse also same GGSocketServer.
-    const socketServer = new GGSocketServer(http, {
+    const socketServer = new GGSocketServer(config.http, {
         apiName: schemaName,
         path: normalizedPath,
         middlewares,
-        queryValidator: this.queryValidator,
-        heartbeat: config?.heartbeat,
+        queryValidator,
+        heartbeat: config.heartbeat,
     });
 
     socketServer.onConnection(async (socket: GGSocket, queryArgs: any): Promise<void> => {
@@ -97,17 +39,7 @@ GGWebSocketSchema.prototype.startServer = function (
             on(handlers: any) {
                 const impl: Record<string, any> = {};
                 for (const methodName of Object.keys(clientToServerContract.methods)) {
-                    const methodDef = clientToServerContract.methods[methodName] as any;
-                    const params = methodDef.params;
-                    impl[methodName] = (data: any) => {
-                        // If method has params info, unpack data object to positional args
-                        if (params && params.length > 0 && data && typeof data === 'object') {
-                            const args = params.map((p: any) => data[p.name]);
-                            return handlers[methodName](...args);
-                        }
-                        // Single or no parameter - pass directly
-                        return handlers[methodName](data);
-                    };
+                    impl[methodName] = (data: any) => handlers[methodName](data);
                 }
 
                 const incomingInstance = clientToServerContract.implement(impl, {skipLocatorRegistration: true});
@@ -145,24 +77,3 @@ GGWebSocketSchema.prototype.startServer = function (
 
     return socketServer;
 }
-
-GGWebSocketSchema.prototype.register = function (
-    this: GGWebSocketSchema<any, any, any, any, any, any>,
-    onConnection: any,
-    config?: WebSocketSchemaConfig
-): void {
-    let httpServer = config?.http;
-    if (!httpServer) {
-        httpServer = GGLocator.getScope().get(GG_HTTP_SERVER);
-    }
-    if (!httpServer) {
-        throw new Error(`No HTTP server found. Make sure to register GGHttpServerAdapter in the scope or pass it via config`)
-    }
-
-    this.startServer(onConnection, {
-        http: httpServer,
-        middlewares: config?.middlewares,
-        heartbeat: config?.heartbeat,
-    });
-}
-

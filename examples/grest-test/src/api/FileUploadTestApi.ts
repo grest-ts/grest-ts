@@ -1,6 +1,6 @@
-import {httpSchema} from "@grest-ts/http"
+import {GGHttpSchema} from "@grest-ts/http"
 import {GGFileUpload, GGFileDownload} from "@grest-ts/http-file"
-import {GGContractClass, GGContractImplementation, IsArray, IsLiteral, IsNumber, IsObject, IsString, IsUnion, VALIDATION_ERROR, SERVER_ERROR, GG_NO_PERMISSIONS } from "@grest-ts/schema";
+import {GGContractClass, IsArray, IsLiteral, IsNumber, IsObject, IsString, IsUnion, VALIDATION_ERROR, SERVER_ERROR, GG_NO_PERMISSIONS } from "@grest-ts/schema";
 import {IsFile} from "@grest-ts/schema-file";
 
 // ---------------------------------------------------------
@@ -135,15 +135,15 @@ export const FileUploadTestApiContract = new GGContractClass("FileUploadTestApi"
     }
 })
 
-export type IFileUploadTestApi = GGContractImplementation<typeof FileUploadTestApiContract["methods"]>
-
-export const FileUploadTestApi = httpSchema(FileUploadTestApiContract)
-    .pathPrefix("api/file-upload-test")
-    .routes({
+export const FileUploadTestApi = new GGHttpSchema({
+    contract: FileUploadTestApiContract,
+    pathPrefix: "api/file-upload-test",
+    routes: {
         uploadFile: GGFileUpload.POST("upload"),
         uploadMultiple: GGFileUpload.POST("upload-multiple"),
         uploadImage: GGFileUpload.POST("upload-image"),
         uploadViaUnion: GGFileUpload.POST("upload-via-union"),
         downloadFile: GGFileDownload.POST("download"),
         downloadById: GGFileDownload.GET("download-by-id")
-    })
+    },
+})

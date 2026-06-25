@@ -1,4 +1,4 @@
-import {EXISTS, FORBIDDEN, GGContractClient, GGContractImplementation, NOT_AUTHORIZED, NOT_FOUND, SERVER_ERROR} from "@grest-ts/schema"
+import {EXISTS, FORBIDDEN, GGContractClient, NOT_AUTHORIZED, NOT_FOUND, SERVER_ERROR} from "@grest-ts/schema"
 import {BadUsernameError, InvalidCredentialsError, LoginRequest, LoginResponse, RegisterRequest, UserPublicApiContract} from "../../common/api-user-public/UserPublicApi";
 import {ChangePasswordRequest, UserAuthApiContract} from "../../common/api-user/UserAuthApi";
 import {BlockerApiContract} from "../../common/api-internal/BlockerApi";
@@ -24,7 +24,10 @@ interface MaxIdRow extends QueryResultRow {
     max_id: number | null;
 }
 
-export class UserService implements GGContractImplementation<typeof UserPublicApiContract["methods"]>, GGContractImplementation<typeof UserAuthApiContract["methods"]> {
+type IUserPublicApi = typeof UserPublicApiContract.infer
+type IUserAuthApi = typeof UserAuthApiContract.infer
+
+export class UserService implements IUserPublicApi, IUserAuthApi {
     private readonly db: GGPostgres;
     private readonly blockerClient: GGContractClient<typeof BlockerApiContract["methods"]>;
     private readonly userEvents: EventPublisherClient<GGEventApi<typeof UserEventsContract["methods"]>>;

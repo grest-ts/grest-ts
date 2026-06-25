@@ -1,4 +1,4 @@
-import {GGRpc, httpSchema} from "@grest-ts/http";
+import {GGRpc, GGHttpSchema} from "@grest-ts/http";
 import {GGContractClass, SERVER_ERROR, VALIDATION_ERROR, GG_NO_PERMISSIONS } from "@grest-ts/schema";
 import {IsBlockUserRequest} from "../api-internal/BlockerApi";
 import {GG_USER_AUTH_TOKEN} from "./auth/UserAuth";
@@ -16,9 +16,11 @@ export const BlockerUserApiContract = new GGContractClass("BlockerUserApi", {
     }
 })
 
-export const BlockerUserApi = httpSchema(BlockerUserApiContract)
-    .pathPrefix("api/blocker")
-    .use(GG_USER_AUTH_TOKEN)
-    .routes({
+export const BlockerUserApi = new GGHttpSchema({
+    contract: BlockerUserApiContract,
+    pathPrefix: "api/blocker",
+    use: [GG_USER_AUTH_TOKEN],
+    routes: {
         blockUser: GGRpc.POST("blockUser")
-    })
+    }
+})

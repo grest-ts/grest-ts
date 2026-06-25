@@ -16,6 +16,9 @@ export interface GGContractMethod<Request = any, Response = any, ErrorsUnion ext
 
 export type GGContractApiDefinition = Record<string, GGContractMethod>
 
+/** The query type a socket `connect` declares via its `input` schema, or `undefined` if it has none. */
+export type GGConnectQuery<TConnect> = TConnect extends {input: {infer: infer Q}} ? Q : undefined
+
 export type GGContractImplementation<ContractMethods extends Record<string, GGContractMethod>> = {
     [K in keyof ContractMethods]: GGContractImplementationMethod<ContractMethods[K]>
 }

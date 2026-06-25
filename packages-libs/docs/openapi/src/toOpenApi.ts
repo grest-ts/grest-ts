@@ -21,7 +21,7 @@ export interface ToOpenApiOptions {
  * the same schema object is used across multiple operations.
  */
 export function toOpenApi(
-    schemas: GGHttpSchema<any, any>[],
+    schemas: GGHttpSchema<any>[],
     options: ToOpenApiOptions = {}
 ): OpenAPIV3_1.Document {
     const registry = new SchemaRegistry();
@@ -195,8 +195,8 @@ function toSecuritySchemeName(title: string): string {
 function buildOperation(
     apiName: string,
     methodName: string,
-    codec: GGHttpSchema<any, any>["codec"][string],
-    contract: NonNullable<GGHttpSchema<any, any>["contract"]>["methods"][string],
+    codec: GGHttpSchema<any>["codec"][string],
+    contract: NonNullable<GGHttpSchema<any>["contract"]>["methods"][string],
     registry: SchemaRegistry
 ): OpenAPIV3_1.OperationObject {
     if (!codec.toOpenApiOperation) {
@@ -305,7 +305,7 @@ function enrichResponsesWithHeaders(
  * These are always merged on top of whatever responses the codec provides.
  */
 function buildErrorResponses(
-    contract: NonNullable<GGHttpSchema<any, any>["contract"]>["methods"][string],
+    contract: NonNullable<GGHttpSchema<any>["contract"]>["methods"][string],
     registry: SchemaRegistry
 ): OpenAPIV3_1.ResponsesObject {
     const responses: OpenAPIV3_1.ResponsesObject = {};

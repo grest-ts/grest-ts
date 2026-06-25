@@ -1,4 +1,4 @@
-import {GGRpc, httpSchema} from "@grest-ts/http"
+import {GGRpc, GGHttpSchema} from "@grest-ts/http"
 import {GGContractClass, IsObject, IsString, IsNumber, SERVER_ERROR } from "@grest-ts/schema"
 
 export const IsHealthResponse = IsObject({
@@ -18,8 +18,10 @@ export const HealthApiContract = new GGContractClass("HealthApi", {
     }
 })
 
-export const HealthApi = httpSchema(HealthApiContract)
-    .pathPrefix("api")
-    .routes({
+export const HealthApi = new GGHttpSchema({
+    contract: HealthApiContract,
+    pathPrefix: "api",
+    routes: {
         health: GGRpc.GET("health"),
-    })
+    },
+})

@@ -14,7 +14,7 @@ import {GGSocketPool} from "../../src/client/GGSocketPool";
 import {GGContext} from "@grest-ts/context";
 import {GG_TRACE} from "@grest-ts/trace";
 import {GGWebSocketSchema} from "../../src/schema/GGWebSocketSchema";
-import {GGContractMethod, GGPromise} from "@grest-ts/schema";
+import {GGContractClient, GGDuplexContractDefinition, GGPromise, GGContractMethod} from "@grest-ts/schema";
 import {parseContractResponse} from "@grest-ts/http/testkit";
 
 // ============================================================================
@@ -70,8 +70,10 @@ export type GGSocketCallMap<TClientToServer, TServerToClient> =
 // ============================================================================
 
 declare module "../../src/schema/GGWebSocketSchema" {
-    interface GGWebSocketSchema<TClientToServer, TServerToClient, TContext, TQuery, TClientToServerImpl, TServerToClientImpl> extends GGCallOnFactory {
-        [CALL_ON_FACTORY](ctx: GGContext): GGSocketCallMap<TClientToServer, TServerToClient>;
+    interface GGWebSocketSchema<TDef> extends GGCallOnFactory {
+        [CALL_ON_FACTORY](ctx: GGContext): TDef extends GGDuplexContractDefinition
+            ? GGSocketCallMap<GGContractClient<TDef["clientToServer"]>, GGContractClient<TDef["serverToClient"]>>
+            : never;
     }
 }
 
@@ -79,17 +81,13 @@ declare module "../../src/schema/GGWebSocketSchema" {
 // Implementation
 // ============================================================================
 
-GGWebSocketSchema.prototype[CALL_ON_FACTORY] = function <TClientToServer extends Record<string, GGContractMethod>, TServerToClient extends Record<string, GGContractMethod>>(
-    this: GGWebSocketSchema<TClientToServer, TServerToClient, any, any, any, any>,
+GGWebSocketSchema.prototype[CALL_ON_FACTORY] = function (
+    this: GGWebSocketSchema<any>,
     ctx: GGContext
-): GGSocketCallMap<TClientToServer, TServerToClient> {
+): GGSocketCallMap<any, any> {
     const contract = this.contract;
     const name = this.name;
     const middlewares = this.middlewares || [];
-
-    if (!contract) {
-        throw new Error(`WebSocketSchema "${name}" has no contract.`);
-    }
 
     const state: { socket: GGSocket | undefined } = {socket: undefined};
     const normalizedPath = this.path.startsWith('/') ? this.path : '/' + this.path;
@@ -167,7 +165,7 @@ GGWebSocketSchema.prototype[CALL_ON_FACTORY] = function <TClientToServer extends
         };
     }
 
-    return api as GGSocketCallMap<TClientToServer, TServerToClient>;
+    return api as GGSocketCallMap<any, any>;
 };
 
 // ============================================================================
