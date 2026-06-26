@@ -20,6 +20,10 @@ export default withMermaid(defineConfig({
         theme: {dark: "github-dark", light: "github-light"},
     },
 
+    vite: {
+        server: {allowedHosts: true},
+    },
+
     themeConfig: {
         logo: "/logo.png",
         sidebar,
