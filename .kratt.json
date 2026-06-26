@@ -7,7 +7,9 @@
     {"kind": "bash:setup", "bash": "docker exec -i gg-postgres psql -U postgres -d checklist < examples/checklist/checklist/schema/checklist.postgres.sql"},
     {"kind": "bash:setup", "bash": "docker exec -i gg-postgres psql -U postgres -d blocker < examples/checklist/blocker/schema/blocker.postgres.sql"},
     {"kind": "backend", "name": "auth", "bash": "PORT=4600 npm start", "dir": "examples/auth/server", "port": 4600, "healthcheck": true, "expose": "auth"},
-    {"kind": "frontend", "name": "auth-client", "bash": "npm run dev", "dir": "examples/auth/client", "port": 3001, "expose": true}
+    {"kind": "frontend", "name": "auth-client", "bash": "npm run dev", "dir": "examples/auth/client", "port": 3001, "expose": true},
+    {"kind": "bash:up", "bash": "npm run generate", "dir": "docs-web"},
+    {"kind": "frontend", "name": "docs", "bash": "npm run dev -- --port 5173 --host", "dir": "docs-web", "port": 5173, "expose": "docs", "build": {"bash": "npm run build", "sources": ["build/*"], "zip": false}}
   ],
   "prBranch": "dev",
   "branches": ["dev","release"]
