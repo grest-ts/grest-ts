@@ -13,7 +13,7 @@
 
 import type {GGHttpSchema} from "@grest-ts/http";
 import type {GGHeaderSchema, GGTransportMiddleware} from "@grest-ts/context";
-import type {GGWebSocketSchema} from "@grest-ts/websocket";
+import type {GGWebSocketSchema, GGRawWebSocketSchema} from "@grest-ts/websocket";
 import type {ANY_ERROR_CLS, GGPermission, GGSchema} from "@grest-ts/schema";
 import {GG_ANY_PERMISSION, GG_NO_PERMISSIONS} from "@grest-ts/schema";
 import {JsonSchemaAdapter} from "./jsonSchemaAdapter";
@@ -32,7 +32,7 @@ export interface BuildContractDocOptions {
     /** Group label → schemas in that group. Each can have HTTP, WS, or both. */
     groups: Record<string, {
         http?: GGHttpSchema<any>[];
-        ws?: GGWebSocketSchema<any>[];
+        ws?: (GGWebSocketSchema<any> | GGRawWebSocketSchema<any>)[];
         description?: string;
     }>;
 
@@ -210,21 +210,31 @@ function buildHttpMethod(
 
 // ── WS contract ────────────────────────────────────────────────────────
 
-function buildWsContract(wsSchema: GGWebSocketSchema<any>, ctx: BuildContext): ContractDoc {
+function buildWsContract(
+    wsSchema: GGWebSocketSchema<any> | GGRawWebSocketSchema<any>,
+    ctx: BuildContext,
+): ContractDoc {
     const wsMiddlewares: any[] = (wsSchema as any).middlewares ?? [];
     const auth = extractWsAuth(wsMiddlewares);
     const headers = extractWsHeaders(wsMiddlewares, ctx, wsSchema.name);
     const cookies = extractCookies(wsMiddlewares, ctx, wsSchema.name);
     const methods: MethodDoc[] = [];
-    const contract = wsSchema.contract;
 
-    for (const methodName of Object.keys(contract.clientToServer.methods)) {
-        const m = contract.clientToServer.methods[methodName];
-        methods.push(buildWsMethod(methodName, m, "client-to-server", wsSchema.name, ctx));
-    }
-    for (const methodName of Object.keys(contract.serverToClient.methods)) {
-        const m = contract.serverToClient.methods[methodName];
-        methods.push(buildWsMethod(methodName, m, "server-to-client", wsSchema.name, ctx));
+    // Raw byte-stream schemas (`raw: true`) carry no per-message contract — only `connect`.
+    // The narrowing reaches `.contract.clientToServer` safely; raw schemas render as a single
+    // synthetic `connect` method so the byte stream is still visible in the method-driven UI.
+    if ("raw" in wsSchema) {
+        methods.push(buildRawConnectMethod(wsSchema, ctx));
+    } else {
+        const contract = wsSchema.contract;
+        for (const methodName of Object.keys(contract.clientToServer.methods)) {
+            const m = contract.clientToServer.methods[methodName];
+            methods.push(buildWsMethod(methodName, m, "client-to-server", wsSchema.name, ctx));
+        }
+        for (const methodName of Object.keys(contract.serverToClient.methods)) {
+            const m = contract.serverToClient.methods[methodName];
+            methods.push(buildWsMethod(methodName, m, "server-to-client", wsSchema.name, ctx));
+        }
     }
 
     const connectPerm = wsSchema.contract.connect.method.permission;
@@ -277,6 +287,29 @@ function buildWsMethod(
     }
     if (contract.success) {
         method.successResponse = schemaRefFor(contract.success.toSchemaDescription(), contractName, methodName, "success", ctx);
+    }
+    return method;
+}
+
+/**
+ * Raw byte-stream sockets have no message contract, so they render as a single `connect`
+ * method: the handshake's query input + connect errors, with a note that the body is an
+ * opaque byte stream (and whether it's a foreign `customClient` upgrade).
+ */
+function buildRawConnectMethod(wsSchema: GGRawWebSocketSchema<any>, ctx: BuildContext): MethodDoc {
+    const connect = wsSchema.contract.connect.method;
+    const customClient = wsSchema.customClient;
+    const method: MethodDoc = {
+        name: "connect",
+        summary: "Connect (raw byte stream)",
+        description: customClient
+            ? "Opaque byte-stream socket for a foreign client — auth runs at the HTTP upgrade (no grest-ts handshake), then the application owns the wire."
+            : "Opaque byte-stream socket — once connected, the application owns the wire as raw bytes (no per-message contract).",
+        wsByteStream: {customClient},
+        errors: collectErrors(connect.errors, wsSchema.name, "connect", ctx),
+    };
+    if (connect.input) {
+        method.wsInput = schemaRefFor(connect.input.toSchemaDescription(), wsSchema.name, "connect", "input", ctx);
     }
     return method;
 }

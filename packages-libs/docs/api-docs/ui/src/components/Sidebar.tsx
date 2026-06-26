@@ -1,6 +1,6 @@
 import {useMemo, useState} from "react";
 import type {ApiDocsDocument, ContractDoc, MethodDoc} from "../docTypes";
-import {PatternBadge} from "./Badges";
+import {ActionBadge, PatternBadge} from "./Badges";
 import {buildBrandIndex, type MethodRef} from "../lib/brandIndex";
 import {useActiveSlug} from "../lib/activeSlug";
 import {MethodTree} from "./MethodTree";
@@ -363,29 +363,4 @@ function TreeBranch() {
             <span className="absolute left-0 top-1/2 w-2.5 h-px bg-gray-300" />
         </span>
     );
-}
-
-/** Verb (HTTP) or direction (WS) — colored short label, fixed-width column. */
-function ActionBadge({method}: {method: MethodDoc}) {
-    if (method.httpMethod) {
-        const colors: Record<string, string> = {
-            GET: "text-blue-600",
-            POST: "text-green-600",
-            PUT: "text-amber-600",
-            PATCH: "text-amber-600",
-            DELETE: "text-red-600",
-        };
-        return (
-            <span className={`text-[10px] font-bold w-12 inline-block ${colors[method.httpMethod] ?? "text-gray-500"}`}>
-                {method.httpMethod}
-            </span>
-        );
-    }
-    if (method.wsDirection === "client-to-server") {
-        return <span className="w-12 inline-block text-[10px] font-bold text-orange-600">OUT</span>;
-    }
-    if (method.wsDirection === "server-to-client") {
-        return <span className="w-12 inline-block text-[10px] font-bold text-indigo-600">IN</span>;
-    }
-    return <span className="w-12 inline-block" />;
 }

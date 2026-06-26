@@ -6,9 +6,10 @@
  */
 
 import {useMemo} from "react";
-import type {ContractDoc, MethodDoc} from "../docTypes";
+import type {ContractDoc} from "../docTypes";
 import type {MethodRef} from "../lib/brandIndex";
 import {useActiveSlug} from "../lib/activeSlug";
+import {ActionBadge, PatternBadge} from "./Badges";
 
 interface Props {
     refs: MethodRef[];
@@ -124,8 +125,6 @@ function MethodLink({ref_, highlightType, onNavigated, onNavigate}: {
     );
 }
 
-// Local copies of the tiny presentational pieces so this file is self-contained.
-
 function TreeBranch() {
     return (
         <span className="relative inline-block w-3 h-4 shrink-0" aria-hidden>
@@ -140,45 +139,4 @@ function ContractKindTag({kind}: {kind: ContractDoc["kind"]}) {
         return <span className="text-[9px] font-bold uppercase bg-purple-100 text-purple-700 px-1 rounded">WS</span>;
     }
     return <span className="text-[9px] font-bold uppercase bg-sky-100 text-sky-700 px-1 rounded">HTTP</span>;
-}
-
-function ActionBadge({method}: {method: MethodDoc}) {
-    if (method.httpMethod) {
-        const colors: Record<string, string> = {
-            GET: "text-blue-600",
-            POST: "text-green-600",
-            PUT: "text-amber-600",
-            PATCH: "text-amber-600",
-            DELETE: "text-red-600",
-        };
-        return (
-            <span className={`text-[10px] font-bold w-12 inline-block ${colors[method.httpMethod] ?? "text-gray-500"}`}>
-                {method.httpMethod}
-            </span>
-        );
-    }
-    if (method.wsDirection === "client-to-server") {
-        return <span className="w-12 inline-block text-[10px] font-bold text-orange-600">OUT</span>;
-    }
-    if (method.wsDirection === "server-to-client") {
-        return <span className="w-12 inline-block text-[10px] font-bold text-indigo-600">IN</span>;
-    }
-    return <span className="w-12 inline-block" />;
-}
-
-function PatternBadge({method}: {method: MethodDoc}) {
-    if (method.httpMethod) return null;
-    const isEvent = method.wsPattern === "fire-and-forget" || method.wsPattern === "server-push";
-    if (isEvent) {
-        return (
-            <span className="text-[9px] font-semibold uppercase tracking-wider text-amber-700 bg-amber-50 px-1 rounded">
-                event
-            </span>
-        );
-    }
-    return (
-        <span className="text-[9px] font-semibold uppercase tracking-wider text-slate-500 bg-slate-100 px-1 rounded">
-            req
-        </span>
-    );
 }
