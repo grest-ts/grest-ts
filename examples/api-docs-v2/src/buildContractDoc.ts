@@ -213,8 +213,11 @@ function buildWsContract(
 
     // Byte-stream schemas (raw, with or without customClient) carry no per-message contract.
     // `"raw" in wsSchema` narrows the union (GGRawWebSocketSchema has `raw: true`,
-    // GGWebSocketSchema does not), so `.contract` is reachable without a cast.
-    if (!("raw" in wsSchema)) {
+    // GGWebSocketSchema does not), so `.contract` is reachable without a cast. They render
+    // as a single synthetic `connect` method so the byte stream is still visible in the UI.
+    if ("raw" in wsSchema) {
+        methods.push(buildRawConnectMethod(wsSchema, ctx));
+    } else {
         const contract = wsSchema.contract;
         for (const methodName of Object.keys(contract.clientToServer.methods)) {
             const m = contract.clientToServer.methods[methodName];
@@ -263,6 +266,29 @@ function buildWsMethod(
     }
     if (contract.success) {
         method.successResponse = schemaRefFor(contract.success.toSchemaDescription(), contractName, methodName, "success", ctx);
+    }
+    return method;
+}
+
+/**
+ * Raw byte-stream sockets have no message contract, so they render as a single `connect`
+ * method: the handshake's query input + connect errors, with a note that the body is an
+ * opaque byte stream (and whether it's a foreign `customClient` upgrade).
+ */
+function buildRawConnectMethod(wsSchema: GGRawWebSocketSchema<any>, ctx: BuildContext): MethodDoc {
+    const connect = wsSchema.contract.connect.method;
+    const customClient = wsSchema.customClient;
+    const method: MethodDoc = {
+        name: "connect",
+        summary: "Connect (raw byte stream)",
+        description: customClient
+            ? "Opaque byte-stream socket for a foreign client — auth runs at the HTTP upgrade (no grest-ts handshake), then the application owns the wire."
+            : "Opaque byte-stream socket — once connected, the application owns the wire as raw bytes (no per-message contract).",
+        wsByteStream: {customClient},
+        errors: collectErrors(connect.errors, wsSchema.name, "connect", ctx),
+    };
+    if (connect.input) {
+        method.wsInput = schemaRefFor(connect.input.toSchemaDescription(), wsSchema.name, "connect", "input", ctx);
     }
     return method;
 }

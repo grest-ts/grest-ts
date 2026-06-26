@@ -8,7 +8,7 @@
 import {buildApiDocs} from "@grest-ts/api-docs"
 import {join, resolve} from "path"
 import {ShowcaseApi} from "../examples/grest-test/src/api/OpenApiShowcaseApi"
-import {ChatApiSchema, NotificationApiSchema} from "../examples/grest-test/src/api/AsyncApiShowcaseApi"
+import {ChatApiSchema, NotificationApiSchema, LogStreamApiSchema, TerminalProxyApiSchema} from "../examples/grest-test/src/api/AsyncApiShowcaseApi"
 
 const OUT_DIR = resolve(import.meta.dirname, "src", "public", "api-docs-demo")
 
@@ -24,7 +24,7 @@ await buildApiDocs({
         description: "Live demo of @grest-ts/api-docs rendering mixed HTTP + WebSocket contracts from the grest-test example service.",
         groups: {
             "HTTP":     {http: [ShowcaseApi]},
-            "Realtime": {ws:   [ChatApiSchema, NotificationApiSchema]},
+            "Realtime": {ws:   [ChatApiSchema, NotificationApiSchema, LogStreamApiSchema, TerminalProxyApiSchema]},
         },
     }],
 })

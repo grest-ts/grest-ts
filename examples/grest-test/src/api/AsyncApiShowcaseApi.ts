@@ -11,9 +11,9 @@
  *   - Multiple contracts on one server
  */
 
-import {GGWebSocketSchema} from "@grest-ts/websocket";
+import {GGWebSocketSchema, GGRawWebSocketSchema} from "@grest-ts/websocket";
 import {
-    GGDuplexContract,
+    GGDuplexContract, GGRawSocketContract,
     IsString, IsNumber, IsBoolean, IsArray, IsObject, IsLiteral,
     IsDiscriminated, VALIDATION_ERROR, SERVER_ERROR, ERROR, GG_NO_PERMISSIONS } from "@grest-ts/schema";
 
@@ -158,4 +158,34 @@ export const NotificationApiSchema = new GGWebSocketSchema({
     contract: NotificationContract,
     path: "ws/notifications",
     use: [AsyncApiBearerAuth],
+});
+
+// ---------------------------------------------------------------------------
+// Raw byte-stream contracts — opaque wire, no per-message contract
+// ---------------------------------------------------------------------------
+
+export const LogStreamContract = new GGRawSocketContract("LogStreamApi", {
+    connect: {
+        input: IsObject({
+            service: IsString.nonEmpty.docs({title: "Service name", description: "Service whose logs to stream", example: "billing"}),
+            level: IsString.orUndefined.docs({title: "Min log level", example: "warn"}),
+        }).docs({title: "Log stream connect", description: "Handshake query selecting which log stream to tail"}),
+        errors: [VALIDATION_ERROR, SERVER_ERROR],
+    },
+});
+
+export const LogStreamApiSchema = new GGRawWebSocketSchema({
+    contract: LogStreamContract,
+    path: "ws/raw-logs",
+    use: [AsyncApiBearerAuth],
+});
+
+export const TerminalProxyContract = new GGRawSocketContract("TerminalProxyApi", {
+    connect: {errors: [SERVER_ERROR]},
+    customClient: true,
+});
+
+export const TerminalProxyApiSchema = new GGRawWebSocketSchema({
+    contract: TerminalProxyContract,
+    path: "/raw-terminal/*",
 });

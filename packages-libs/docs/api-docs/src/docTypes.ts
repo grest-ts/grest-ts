@@ -170,6 +170,8 @@ export interface MethodDoc {
     wsDirection?: "client-to-server" | "server-to-client";
     wsPattern?: "request-response" | "fire-and-forget" | "server-push" | "server-initiated-request";
     wsInput?: SchemaRef;
+    /** Raw byte-stream socket connect — no per-message contract. `customClient` ⇒ foreign-client HTTP upgrade. */
+    wsByteStream?: {customClient: boolean};
 
     // ── Shared ──
     /** Response shape on success; absent ⇒ void. */

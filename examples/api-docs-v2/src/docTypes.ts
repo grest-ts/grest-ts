@@ -128,6 +128,7 @@ export interface MethodDoc {
     wsDirection?: "client-to-server" | "server-to-client";
     wsPattern?: "request-response" | "fire-and-forget" | "server-push" | "server-initiated-request";
     wsInput?: SchemaRef;
+    wsByteStream?: {customClient: boolean};
 
     // ── Shared ──
     /** Response shape on success; absent ⇒ void. */

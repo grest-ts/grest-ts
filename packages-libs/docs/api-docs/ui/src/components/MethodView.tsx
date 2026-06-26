@@ -117,7 +117,7 @@ function RequestPane({method, doc, highlightType, usageIndex, contractName}: {
             )}
             {method.wsInput && (
                 <SchemaPane
-                    label={method.wsDirection === "client-to-server" ? "Send" : "Receive"}
+                    label={method.wsByteStream ? "Connect" : method.wsDirection === "client-to-server" ? "Send" : "Receive"}
                     schemaRef={method.wsInput}
                     doc={doc}
                     highlightType={highlightType}
@@ -405,15 +405,30 @@ function MethodHeader({contract, method}: {contract: ContractDoc; method: Method
                 <span>{method.summary ?? method.name}</span>
             </div>
             <div className="flex items-center gap-3 mb-3 flex-wrap">
-                <DirectionChip direction={method.wsDirection ?? "client-to-server"} />
+                {method.wsByteStream
+                    ? <ByteStreamChip customClient={method.wsByteStream.customClient} />
+                    : <DirectionChip direction={method.wsDirection ?? "client-to-server"} />}
                 <code className="text-lg font-mono text-gray-800">{contract.path}</code>
-                <PatternBadge method={method} size="sm" />
+                {!method.wsByteStream && <PatternBadge method={method} size="sm" />}
             </div>
             <h1 className="text-2xl font-bold">{method.summary ?? method.name}</h1>
-            {/* Plain-language helper — removes any guesswork about who sends what */}
-            <p className="text-sm text-gray-500 mt-2">
-                {directionExplainer(method.wsDirection, method.wsPattern)}
-            </p>
+            {/* Plain-language helper — removes any guesswork about who sends what.
+                Raw sockets carry their own prose in method.description, shown above. */}
+            {!method.wsByteStream && (
+                <p className="text-sm text-gray-500 mt-2">
+                    {directionExplainer(method.wsDirection, method.wsPattern)}
+                </p>
+            )}
+        </div>
+    );
+}
+
+// No direction segment: a raw socket is an opaque bidirectional wire, not client→server or server→client.
+function ByteStreamChip({customClient}: {customClient: boolean}) {
+    return (
+        <div className="inline-flex items-stretch text-xs font-semibold rounded-md overflow-hidden border border-violet-300 shadow-sm">
+            <span className="px-2 py-1 bg-violet-500 text-white uppercase tracking-wider">Byte stream</span>
+            {customClient && <span className="px-2 py-1 bg-violet-100 text-violet-900 uppercase tracking-wider">Custom client</span>}
         </div>
     );
 }

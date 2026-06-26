@@ -3,7 +3,7 @@ import {join, dirname, extname} from "path";
 import {fileURLToPath} from "url";
 import type {GGHttpSchema} from "@grest-ts/http";
 import {GGHttpServer, GG_HTTP_SERVER} from "@grest-ts/http";
-import type {GGWebSocketSchema} from "@grest-ts/websocket";
+import type {GGWebSocketSchema, GGRawWebSocketSchema} from "@grest-ts/websocket";
 import {GGLocator} from "@grest-ts/locator";
 import {GG_DISCOVERY} from "@grest-ts/discovery";
 import {buildContractDoc, type BuildContractDocOptions} from "./buildContractDoc";
@@ -25,7 +25,7 @@ const DIST_UI = existsSync(join(HERE, "..", "dist-ui"))
  */
 export interface ApiDocsGroup {
     http?: GGHttpSchema<any>[];
-    ws?: GGWebSocketSchema<any>[];
+    ws?: (GGWebSocketSchema<any> | GGRawWebSocketSchema<any>)[];
     description?: string;
 }
 
@@ -52,7 +52,7 @@ export interface ApiDocSpec {
     /** Shorthand: ungrouped HTTP schemas — placed under one "API" group. */
     http?: GGHttpSchema<any>[];
     /** Shorthand: ungrouped WebSocket schemas. */
-    ws?: GGWebSocketSchema<any>[];
+    ws?: (GGWebSocketSchema<any> | GGRawWebSocketSchema<any>)[];
 }
 
 export interface GGApiDocsOptions {
