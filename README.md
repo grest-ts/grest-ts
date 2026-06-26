@@ -37,13 +37,22 @@ Being transparent: grest-ts is a new framework. Everything described here works 
 The framework is designed by a developer who co-founded and scaled a tech company well past unicorn, solving the same infrastructure problems at every stage of growth.
 grest-ts is the distillation of those lessons into a framework — what he wishes existed from day one.
 
-It's currently battle-tested on one production project: a real estate management platform with real users and non-trivial complexity —
+It's currently battle-tested across multiple production projects:
+
+One example is a real estate management platform with real users and non-trivial complexity —
 JWT auth with multi-level permissions, multi-tenancy, bank integrations, automated invoice processing,
 expense documents parsing (pdf), S3 file management, SQS background jobs, bookkeeping system integrations,
 audit logging, and a full React + Vite frontend consuming 100+ typed API contracts.
-That's one project more than most frameworks have at launch, but still one project.
+
+Another example is cloud based dev machines with AI — a complex agent-orchestration system built on grest-ts, leaning heavily on
+real-time WebSockets, long-running services, multi-runtime coordination, and live process streaming.
+
+Between the two, the framework is exercised across both classic CRUD-heavy business software and
+real-time, stateful infrastructure.
+
+That's more than most frameworks have at launch, but it's still early.
 APIs may evolve, rough edges exist, and you'd be an early adopter. If that excites rather than scares you — welcome.
-Fair warning though: once you get used to how testing works here, you'll miss it everywhere else.
+Fair warning though: once you get used to how apis and testing works here, you'll miss it everywhere else.
 
 ---
 
