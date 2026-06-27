@@ -6,5 +6,6 @@ definePackage({
     publishToNpm: true,
     keywords: ["logging", "logger"],
     targets: { node: true, browser: true },
-    extendsTestKit: true
+    extendsTestKit: true,
+    hasTests: true,
 })
