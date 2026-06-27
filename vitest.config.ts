@@ -23,6 +23,7 @@ export default defineConfig({
       'packages/discovery/discovery-local',
       'packages/http/http',
       'packages/locator',
+      'packages/logger/logger',
       'packages/schema/schema',
       'packages/trace/trace',
       'packages/trace/trace-http',
