@@ -1,4 +1,4 @@
-import type {GGSchemaDescription} from "@grest-ts/schema";
+import {IsNumber, IsObject, IsString, type GGSchemaDescription} from "@grest-ts/schema";
 
 // Structural, not GGSchema<T>: GGSchema is invariant in T, so a typed field would reject branded header schemas.
 export interface GGHeaderSchema {
@@ -26,6 +26,41 @@ export interface GGOutbound {
     headers: Record<string, string>;
 }
 
+/**
+ * Pin a server's TLS cert by SHA-256 fingerprint — the verification, not the dial target
+ * (host/port live on GGConnectionSettings). Node only: browsers can't access the TLS layer.
+ */
+export const IsTlsPin = IsObject({
+    fingerprint256: IsString.docs({title: "Server cert SHA-256 fingerprint", description: "Hex, ':'-separated or not."}),
+    servername: IsString.orUndefined.docs({title: "SNI servername", description: "Optional; omitted by default."}),
+});
+export type GGTlsPin = typeof IsTlsPin.infer;
+
+/** A client certificate to present for mutual TLS (mTLS). PEM strings. */
+export const IsClientCert = IsObject({
+    cert: IsString.docs({title: "Client certificate (PEM)"}),
+    key: IsString.docs({title: "Client private key (PEM)"}),
+    passphrase: IsString.orUndefined.docs({title: "Private key passphrase", description: "Only if the key is encrypted."}),
+});
+export type GGClientCert = typeof IsClientCert.infer;
+
+/**
+ * Transport-level request settings beyond headers: where to dial and how to secure the
+ * connection. A middleware writes the fields it controls (via `connectionSettings`); the node
+ * transport maps them onto the underlying dispatcher. Plain data, extensible (proxy, ca, mTLS,
+ * timeouts, …) without new hooks. Today every field is node-only. "Where" (host/port) is kept
+ * separate from "how to verify" (tlsPin) so a known URL can be pinned, or a per-request host
+ * dialed, independently.
+ */
+export const IsConnectionSettings = IsObject({
+    host: IsString.orUndefined.docs({title: "Dial host", description: "Overrides the client URL's host — for url-less clients or a per-request target. The client URL supplies it when omitted."}),
+    port: IsNumber.orUndefined.docs({title: "Dial port", example: 9600}),
+    tlsPin: IsTlsPin.orUndefined,
+    ca: IsString.orUndefined.docs({title: "Trusted CA certificate(s) (PEM)", description: "Verify the server against these roots instead of the system defaults (e.g. a private PKI). Replaces the default CA list. Ignored when tlsPin is set."}),
+    clientCert: IsClientCert.orUndefined.docs({title: "Client certificate for mTLS"}),
+});
+export type GGConnectionSettings = typeof IsConnectionSettings.infer;
+
 /** Response headers a server writes. `string[]` carries multiple set-cookie lines. */
 export interface GGResponse {
     headers: Record<string, string | string[]>;
@@ -45,8 +80,11 @@ export interface GGTransportMiddleware {
     /** Cookies this middleware reads — emitted as `in: cookie` OpenAPI params. */
     readonly cookieParams?: Record<string, GGHeaderSchema>;
 
-    /** Client: write outbound credentials. */
+    /** Client: write outbound credentials (request headers). */
     update?(outbound: GGOutbound): void;
+
+    /** Client: contribute transport-level request settings beyond headers (dial target, TLS pin). */
+    connectionSettings?(settings: GGConnectionSettings): void;
 
     /** Server: read inbound credentials into context. */
     parse?(inbound: GGInbound): void;

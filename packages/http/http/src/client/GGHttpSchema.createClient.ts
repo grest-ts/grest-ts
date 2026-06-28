@@ -1,6 +1,7 @@
 import {ANY_ERROR, ERROR, GGContractApiDefinition, GGContractClient, GGContractExecutor, GGContractImplementation, GGPromise, OK, SERVER_ERROR} from "@grest-ts/schema"
 import {ClientHttpRouteToRpcTransformClientCodec, GGHttpCodec, GGHttpSchema} from "../schema/GGHttpSchema";
 import {isBrowser} from "@grest-ts/common";
+import type {GGConnectionSettings} from "@grest-ts/context";
 
 
 declare module "../schema/GGHttpSchema" {
@@ -30,6 +31,8 @@ export type GGHttpTransport = (
         body: string | FormData | undefined
         signal: AbortSignal
         credentials?: "omit" | "same-origin" | "include"
+        /** Transport-level dial settings (e.g. TLS pin) contributed by middleware and/or client config. */
+        connectionSettings?: GGConnectionSettings
     }
 ) => Promise<Response>
 
@@ -51,6 +54,12 @@ export interface GGHttpClientConfig {
      * just the schema-built path.
      */
     transport?: GGHttpTransport
+    /**
+     * Connection settings (e.g. TLS pin) fixed for this client's lifetime — the direct
+     * alternative to a `GGConnectionSettingsKey` middleware. Node-only: setting this on a
+     * browser client throws when a request is issued (the browser can't access the TLS layer).
+     */
+    connectionSettings?: GGConnectionSettings
 }
 
 /**
@@ -63,6 +72,18 @@ let discoveryUrlResolver: ((apiName: string) => Promise<string>) | undefined
 
 export function _registerDiscoveryUrlResolver(resolver: (apiName: string) => Promise<string>): void {
     discoveryUrlResolver = resolver
+}
+
+/**
+ * Node-only default transport (pinned-TLS dialing). Attached by the node entry via
+ * ./GGHttpSchema.createClient.node; node-only because it imports `node:https`/`node:tls`.
+ * When registered it replaces `defaultFetchTransport` as the default (an explicit
+ * `config.transport` still wins). It falls back to `fetch` when no TLS pin is set.
+ */
+let nodeDefaultTransport: GGHttpTransport | undefined
+
+export function _registerNodeDefaultTransport(transport: GGHttpTransport): void {
+    nodeDefaultTransport = transport
 }
 
 GGHttpSchema.prototype.createClient = function <TContract extends GGContractApiDefinition>(
@@ -84,7 +105,7 @@ export function createClient<TContract extends GGContractApiDefinition>(
     // A custom transport implies "I take over the wire layer" — discovery is
     // off the table (the transport knows how to find the target), and the
     // default base URL becomes "" so the transport sees just the request path.
-    const transport: GGHttpTransport = config.transport ?? defaultFetchTransport;
+    const transport: GGHttpTransport = config.transport ?? nodeDefaultTransport ?? defaultFetchTransport;
     if (config.transport && config.url === undefined) {
         config.url = "";
     }
@@ -129,6 +150,14 @@ export function createClient<TContract extends GGContractApiDefinition>(
                 // ---------------------------------------------
                 // Execution
                 const fetchRequest = await wireFormat.createRequest(validatedInput);
+
+                const connectionSettings = config.connectionSettings || fetchRequest.connectionSettings
+                    ? {...config.connectionSettings, ...fetchRequest.connectionSettings}
+                    : undefined;
+                if (connectionSettings && isBrowser() && Object.keys(connectionSettings).length > 0) {
+                    throw new SERVER_ERROR({displayMessage: "connectionSettings (e.g. TLS pinning) is node-only — the browser can't access the TLS layer, so it can't honor them."});
+                }
+
                 const controller = new AbortController();
                 const timeoutId = setTimeout(() => controller.abort(), config.timeout);
                 const wireResponse = await transport(baseUrl + fetchRequest.url, {
@@ -136,7 +165,8 @@ export function createClient<TContract extends GGContractApiDefinition>(
                     signal: controller.signal,
                     headers: fetchRequest.headers,
                     body: fetchRequest.body,
-                    credentials: config.credentials
+                    credentials: config.credentials,
+                    connectionSettings
                 }).finally(() => clearTimeout(timeoutId));
                 const resData = await wireFormat.parseResponse(wireResponse);
 

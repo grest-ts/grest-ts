@@ -4,7 +4,8 @@
  * The import stays dynamic so discovery remains an optional integration, not a
  * hard dependency of @grest-ts/http.
  */
-import {_registerDiscoveryUrlResolver} from "./GGHttpSchema.createClient"
+import {_registerDiscoveryUrlResolver, _registerNodeDefaultTransport} from "./GGHttpSchema.createClient"
+import {nodeDefaultTransport} from "./nodeConnectionTransport.node"
 
 export const discoveryUrlResolver = async (apiName: string): Promise<string> => {
     const {GG_DISCOVERY} = await import('@grest-ts/discovery')
@@ -12,3 +13,4 @@ export const discoveryUrlResolver = async (apiName: string): Promise<string> => 
 }
 
 _registerDiscoveryUrlResolver(discoveryUrlResolver)
+_registerNodeDefaultTransport(nodeDefaultTransport)
