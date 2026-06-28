@@ -762,6 +762,44 @@ const item = await client.get({ id: "item-123" }).or((error) => {
 const title = await client.get({ id: "item-123" }).map(item => item.title)
 ```
 
+### Connection settings — pinned-TLS dialing (node only)
+
+A node client can dial a server over HTTPS and **pin its certificate by SHA-256 fingerprint** —
+useful for self-signed, service-to-service targets (e.g. a fingerprint that rotates per server
+start). No custom `transport` needed: create the client URL-less (`url: ""`) so the host comes
+from the pin, and supply `connectionSettings` from either source.
+
+**Per-client (fixed for the client's lifetime):**
+
+```typescript
+const client = RelayApi.createClient({
+    url: "",
+    connectionSettings: { tlsPin: { host: "10.0.0.4", port: 9600, fingerprint256: "ab:cd:…" } },
+})
+await client.someMethod(args)   // dials 10.0.0.4:9600, rejects any cert whose fingerprint differs
+```
+
+**Per-request (varies, via a middleware key):** a `GGConnectionSettingsKey` is a context key *and*
+a transport middleware. Attach it to the schema and set its value inside the ambient request
+context (the runtime establishes that context at the request boundary — don't create one per call):
+
+```typescript
+export const RELAY_CONN = new GGConnectionSettingsKey("relayConn")   // app owns it; make as many as needed
+export const RelayApi = new GGHttpSchema({ contract, pathPrefix: "...", routes, use: [RELAY_CONN] })
+
+// within the request scope:
+RELAY_CONN.set({ tlsPin: { host, port, fingerprint256 } })
+await client.someMethod(args)
+```
+
+Both sources merge into one bag; when both are set, the per-request `KEY.set(...)` wins. Repeated
+calls to the same fingerprint pool one keep-alive agent; drop stale sockets after a restart with
+`invalidateTlsPinAgent(fingerprint256)`.
+
+> **Node only.** Browsers give JS no access to the TLS layer, so pinning is impossible there. A
+> client created in a browser with non-empty `connectionSettings` (from either source) throws when
+> a request is issued, rather than silently sending unpinned.
+
 ## WebSocket APIs
 
 The websocket package documents the WS model in depth; this is the short version. A WS schema
