@@ -9,6 +9,7 @@ definePackage({
     extendsTestKit: true,
     hasTests: true,
     dependencies: {
-        "find-my-way": "^9.4.0"
+        "find-my-way": "^9.4.0",
+        "undici": "^7.24.0"
     }
 })
