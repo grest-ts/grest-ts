@@ -1,7 +1,7 @@
 {
   "//": "THIS FILE IS GENERATED - DO NOT EDIT",
   "name": "@grest-ts/trace-http",
-  "version": "0.0.67",
+  "version": "0.0.68",
   "type": "module",
   "license": "MIT",
   "description": "Tracing support for GGContext",
@@ -47,8 +47,8 @@
     "node": ">=24"
   },
   "peerDependencies": {
-    "@grest-ts/context": "0.0.67",
-    "@grest-ts/schema": "0.0.67",
-    "@grest-ts/trace": "0.0.67"
+    "@grest-ts/context": "0.0.68",
+    "@grest-ts/schema": "0.0.68",
+    "@grest-ts/trace": "0.0.68"
   }
 }

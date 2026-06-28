@@ -1,7 +1,7 @@
 {
   "//": "THIS FILE IS GENERATED - DO NOT EDIT",
   "name": "@grest-ts/auth",
-  "version": "0.0.67",
+  "version": "0.0.68",
   "type": "module",
   "license": "MIT",
   "description": "Authentication library for Node.js and browser — JWT signing, IdP strategies, HTTP/WS guards, and client-side session management",
@@ -58,8 +58,8 @@
     "jose": "^5.9.6"
   },
   "peerDependencies": {
-    "@grest-ts/http": "0.0.67",
-    "@grest-ts/schema": "0.0.67",
+    "@grest-ts/http": "0.0.68",
+    "@grest-ts/schema": "0.0.68",
     "bcrypt": "^6.0.0"
   },
   "devDependencies": {

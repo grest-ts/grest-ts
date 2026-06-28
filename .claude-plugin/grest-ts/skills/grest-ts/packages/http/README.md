@@ -762,6 +762,29 @@ const item = await client.get({ id: "item-123" }).or((error) => {
 const title = await client.get({ id: "item-123" }).map(item => item.title)
 ```
 
+### Connection settings — TLS / dialing (node only)
+
+For node service-to-service calls, `connectionSettings` controls where a client dials and how it
+secures the connection: `host`/`port` (dial target), `tlsPin: { fingerprint256, servername? }`
+(pin a self-signed cert by SHA-256), `ca` (verify against a private CA), `clientCert: { cert, key,
+passphrase? }` (mTLS). Provide it per-client (config) or per-request (a `GGConnectionSettingsKey`
+set in context); when both are set the per-request value wins.
+
+```typescript
+// per-client: pin a self-signed target (url-less → host/port come from the pin)
+MyApi.createClient({ url: "", connectionSettings: { host: "10.0.0.4", port: 9600, tlsPin: { fingerprint256: "ab:cd:…" } } })
+// or: ca / mTLS against a URL
+MyApi.createClient({ url: "https://service.example", connectionSettings: { ca: caPem, clientCert: { cert, key } } })
+
+// per-request: app-owned key on the schema (use: [CONN]), set inside the request scope
+const CONN = new GGConnectionSettingsKey("conn")
+CONN.set({ host, port, tlsPin: { fingerprint256 } })
+```
+
+Node-only: the transport is `fetch` through an undici dispatcher, so settings need TLS-layer access
+a browser can't give — a browser client with non-empty `connectionSettings` throws rather than
+silently un-securing. `invalidateTlsPinAgent(fingerprint256)` drops a pooled agent after a restart.
+
 ## WebSocket APIs
 
 The websocket package documents the WS model in depth; this is the short version. A WS schema
