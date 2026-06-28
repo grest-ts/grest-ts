@@ -46,7 +46,7 @@ export * from "./schema/GGHttpPermissionsChecker";
 // Client
 export * from "./client/GGContextKeySynchronizer";
 export * from "./client/GGHttpSchema.createClient";
-export * from "./client/pinnedTls.node";
+export * from "./client/nodeConnectionTransport.node";
 export * from "./server/GGHttpSchema.startServer";
 
 

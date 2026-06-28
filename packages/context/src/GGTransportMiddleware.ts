@@ -26,21 +26,27 @@ export interface GGOutbound {
     headers: Record<string, string>;
 }
 
-/** Pin a server's TLS cert by SHA-256 fingerprint (node only — browsers can't access the TLS layer). */
+/**
+ * Pin a server's TLS cert by SHA-256 fingerprint — the verification, not the dial target
+ * (host/port live on GGConnectionSettings). Node only: browsers can't access the TLS layer.
+ */
 export const IsTlsPin = IsObject({
-    host: IsString.docs({title: "Host/IP to dial", description: "The host comes from here, not the client's base URL."}),
-    port: IsNumber.docs({title: "Port", example: 9600}),
     fingerprint256: IsString.docs({title: "Server cert SHA-256 fingerprint", description: "Hex, ':'-separated or not."}),
     servername: IsString.orUndefined.docs({title: "SNI servername", description: "Optional; omitted by default."}),
 });
 export type GGTlsPin = typeof IsTlsPin.infer;
 
 /**
- * Transport-level request settings beyond headers — what host to dial, how to secure it.
- * A middleware writes the fields it controls (via `connectionSettings`); the transport reads
- * them. Plain data, extensible (proxy, ca, …) without new hooks. Today every field is node-only.
+ * Transport-level request settings beyond headers: where to dial and how to secure the
+ * connection. A middleware writes the fields it controls (via `connectionSettings`); the node
+ * transport maps them onto the underlying dispatcher. Plain data, extensible (proxy, ca, mTLS,
+ * timeouts, …) without new hooks. Today every field is node-only. "Where" (host/port) is kept
+ * separate from "how to verify" (tlsPin) so a known URL can be pinned, or a per-request host
+ * dialed, independently.
  */
 export const IsConnectionSettings = IsObject({
+    host: IsString.orUndefined.docs({title: "Dial host", description: "Overrides the client URL's host — for url-less clients or a per-request target. The client URL supplies it when omitted."}),
+    port: IsNumber.orUndefined.docs({title: "Dial port", example: 9600}),
     tlsPin: IsTlsPin.orUndefined,
 });
 export type GGConnectionSettings = typeof IsConnectionSettings.infer;

@@ -764,19 +764,30 @@ const title = await client.get({ id: "item-123" }).map(item => item.title)
 
 ### Connection settings — pinned-TLS dialing (node only)
 
-A node client can dial a server over HTTPS and **pin its certificate by SHA-256 fingerprint** —
-useful for self-signed, service-to-service targets (e.g. a fingerprint that rotates per server
-start). No custom `transport` needed: create the client URL-less (`url: ""`) so the host comes
-from the pin, and supply `connectionSettings` from either source.
+`connectionSettings` controls **where a node client dials and how it secures the connection**,
+beyond the request itself. The node transport is ordinary `fetch` dialing through an undici
+dispatcher built from these settings, so the wire stays correct (real responses, streaming,
+`FormData`, redirects). Today it carries a dial target (`host`/`port`) and a TLS pin — the dial
+target ("where") is kept separate from `tlsPin` ("how to verify"), and the bag is open to future
+settings (proxy, custom CA, mTLS) without new API. The main use is **pinning a server cert by
+SHA-256 fingerprint** for self-signed, service-to-service targets (e.g. a fingerprint that rotates
+per server start). No custom `transport` needed.
 
 **Per-client (fixed for the client's lifetime):**
 
 ```typescript
+// dial host/port from the pin → create the client URL-less
 const client = RelayApi.createClient({
     url: "",
-    connectionSettings: { tlsPin: { host: "10.0.0.4", port: 9600, fingerprint256: "ab:cd:…" } },
+    connectionSettings: { host: "10.0.0.4", port: 9600, tlsPin: { fingerprint256: "ab:cd:…" } },
 })
 await client.someMethod(args)   // dials 10.0.0.4:9600, rejects any cert whose fingerprint differs
+
+// or pin a server you address by URL (host comes from the URL; the pin only verifies)
+const client2 = RelayApi.createClient({
+    url: "https://relay.internal:9600",
+    connectionSettings: { tlsPin: { fingerprint256: "ab:cd:…" } },
+})
 ```
 
 **Per-request (varies, via a middleware key):** a `GGConnectionSettingsKey` is a context key *and*
@@ -787,13 +798,13 @@ context (the runtime establishes that context at the request boundary — don't 
 export const RELAY_CONN = new GGConnectionSettingsKey("relayConn")   // app owns it; make as many as needed
 export const RelayApi = new GGHttpSchema({ contract, pathPrefix: "...", routes, use: [RELAY_CONN] })
 
-// within the request scope:
-RELAY_CONN.set({ tlsPin: { host, port, fingerprint256 } })
+// within the request scope (per-request host + fingerprint):
+RELAY_CONN.set({ host, port, tlsPin: { fingerprint256 } })
 await client.someMethod(args)
 ```
 
 Both sources merge into one bag; when both are set, the per-request `KEY.set(...)` wins. Repeated
-calls to the same fingerprint pool one keep-alive agent; drop stale sockets after a restart with
+calls to the same fingerprint reuse a pooled connection; drop stale sockets after a restart with
 `invalidateTlsPinAgent(fingerprint256)`.
 
 > **Node only.** Browsers give JS no access to the TLS layer, so pinning is impossible there. A

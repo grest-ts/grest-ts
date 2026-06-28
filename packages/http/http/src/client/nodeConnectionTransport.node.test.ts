@@ -11,7 +11,7 @@ import {GGHttpSchema} from '../schema/GGHttpSchema'
 import {GGRpc} from '../rpc/GGHttpRouteRPC'
 import {createClient} from './GGHttpSchema.createClient'
 import {GGConnectionSettingsKey} from '../schema/GGConnectionSettingsKey'
-import {invalidateTlsPinAgent} from './pinnedTls.node'
+import {invalidateTlsPinAgent} from './nodeConnectionTransport.node'
 // Side-effect import: registers nodeDefaultTransport as the default for url-less node clients.
 import './GGHttpSchema.createClient.node'
 
@@ -105,7 +105,7 @@ describe('pinned-TLS node transport', () => {
     it('accepts a server whose cert fingerprint matches the pin', async () => {
         const client = createClient(PingApi, {url: ""})
         const res = await inScope(
-            {tlsPin: {host: "127.0.0.1", port: serverA.port, fingerprint256: serverA.fingerprint256}},
+            {host: "127.0.0.1", port: serverA.port, tlsPin: {fingerprint256: serverA.fingerprint256}},
             () => client.ping({msg: "hi"}),
         )
         expect(res.msg).toBe("from-A")
@@ -116,14 +116,16 @@ describe('pinned-TLS node transport', () => {
         const client = createClient(PingApi, {url: ""})
         const bogus = "a".repeat(64)
         const res = await inScope(
-            {tlsPin: {host: "127.0.0.1", port: serverA.port, fingerprint256: bogus}},
+            {host: "127.0.0.1", port: serverA.port, tlsPin: {fingerprint256: bogus}},
             () => client.ping({msg: "hi"}).asResult(),
         )
         expect(res.success).toBe(false)
         expect(res).toBeInstanceOf(SERVER_ERROR)
         if (res instanceof SERVER_ERROR) {
-            const original = res.getDebugContext()?.originalError as Error | undefined
-            expect(original?.message ?? "").toMatch(/fingerprint mismatch/i)
+            // fetch surfaces a connector failure as `TypeError: fetch failed` with the real cause attached.
+            const original = res.getDebugContext()?.originalError as (Error & {cause?: Error}) | undefined
+            const chain = `${original?.message ?? ""} ${original?.cause?.message ?? ""}`
+            expect(chain).toMatch(/fingerprint mismatch/i)
         }
         expect(serverA.reqCount()).toBe(before)
     })
@@ -131,11 +133,11 @@ describe('pinned-TLS node transport', () => {
     it('isolates concurrent ops in separate context scopes — no cross-context bleed', async () => {
         const client = createClient(PingApi, {url: ""})
         const callA = inScope(
-            {tlsPin: {host: "127.0.0.1", port: serverA.port, fingerprint256: serverA.fingerprint256}},
+            {host: "127.0.0.1", port: serverA.port, tlsPin: {fingerprint256: serverA.fingerprint256}},
             () => client.ping({msg: "a"}),
         )
         const callB = inScope(
-            {tlsPin: {host: "127.0.0.1", port: serverB.port, fingerprint256: serverB.fingerprint256}},
+            {host: "127.0.0.1", port: serverB.port, tlsPin: {fingerprint256: serverB.fingerprint256}},
             () => client.ping({msg: "b"}),
         )
         const [resA, resB] = await Promise.all([callA, callB])
@@ -143,22 +145,23 @@ describe('pinned-TLS node transport', () => {
         expect(resB.msg).toBe("from-B")
     })
 
-    it('pools one agent per fingerprint; invalidate drops the pooled sockets', async () => {
+    it('reuses a pooled connection per fingerprint; invalidate forces a fresh one', async () => {
         // Dedicated server with a fresh fingerprint — the agent cache is module-global, so a
         // fingerprint dialed by another test would already have a pooled socket.
         const c = genCert(dir, "serverC")
         const serverC = await startServer(c.cert, c.key, "from-C")
         try {
             const client = createClient(PingApi, {url: ""})
-            const pin = {tlsPin: {host: "127.0.0.1", port: serverC.port, fingerprint256: serverC.fingerprint256}}
+            const pin = {host: "127.0.0.1", port: serverC.port, tlsPin: {fingerprint256: serverC.fingerprint256}}
             await inScope(pin, () => client.ping({msg: "1"}))
+            await new Promise(r => setTimeout(r, 150))   // let undici return the socket to the pool
+            const afterFirst = serverC.connCount()
             await inScope(pin, () => client.ping({msg: "2"}))
-            // keepAlive + same fingerprint → the second sequential request reuses one socket.
-            expect(serverC.connCount()).toBe(1)
+            expect(serverC.connCount()).toBe(afterFirst)   // same fingerprint → pooled socket reused
 
             invalidateTlsPinAgent(serverC.fingerprint256)
             await inScope(pin, () => client.ping({msg: "3"}))
-            expect(serverC.connCount()).toBe(2)
+            expect(serverC.connCount()).toBe(afterFirst + 1)   // fresh agent → new connection
         } finally {
             await serverC.close()
         }
@@ -172,7 +175,7 @@ describe('pinned-TLS node transport', () => {
         })
         const client = createClient(PublicApi, {
             url: "",
-            connectionSettings: {tlsPin: {host: "127.0.0.1", port: serverA.port, fingerprint256: serverA.fingerprint256}},
+            connectionSettings: {host: "127.0.0.1", port: serverA.port, tlsPin: {fingerprint256: serverA.fingerprint256}},
         })
         const res = await client.ping({msg: "hi"})
         expect(res.msg).toBe("from-A")
@@ -182,10 +185,10 @@ describe('pinned-TLS node transport', () => {
         const client = createClient(PingApi, {
             url: "",
             // config defaults to server A, but the in-scope pin targets server B and must win.
-            connectionSettings: {tlsPin: {host: "127.0.0.1", port: serverA.port, fingerprint256: serverA.fingerprint256}},
+            connectionSettings: {host: "127.0.0.1", port: serverA.port, tlsPin: {fingerprint256: serverA.fingerprint256}},
         })
         const res = await inScope(
-            {tlsPin: {host: "127.0.0.1", port: serverB.port, fingerprint256: serverB.fingerprint256}},
+            {host: "127.0.0.1", port: serverB.port, tlsPin: {fingerprint256: serverB.fingerprint256}},
             () => client.ping({msg: "hi"}),
         )
         expect(res.msg).toBe("from-B")
@@ -208,7 +211,7 @@ describe('pinned-TLS node transport', () => {
 
         const pinnedClient = createClient(PingApi, {
             url: "",
-            connectionSettings: {tlsPin: {host: "127.0.0.1", port: serverA.port, fingerprint256: serverA.fingerprint256}},
+            connectionSettings: {host: "127.0.0.1", port: serverA.port, tlsPin: {fingerprint256: serverA.fingerprint256}},
         })
         const res = await pinnedClient.ping({msg: "hi"}).asResult()
         expect(res.success).toBe(false)
