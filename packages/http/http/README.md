@@ -764,67 +764,25 @@ const title = await client.get({ id: "item-123" }).map(item => item.title)
 
 ### Connection settings — TLS / dialing (node only)
 
-`connectionSettings` controls **where a node client dials and how it secures the connection**,
-beyond the request itself. The node transport is ordinary `fetch` dialing through an undici
-dispatcher built from these settings, so the wire stays correct (real responses, streaming,
-`FormData`, redirects). The dial target (`host`/`port`, "where") is kept separate from the TLS
-fields ("how to verify"), and the bag is open to future settings (proxy, http2, …) without new API.
-Today it carries:
-
-- `tlsPin: { fingerprint256, servername? }` — **pin a server cert by SHA-256 fingerprint** (for
-  self-signed, service-to-service targets, e.g. a fingerprint that rotates per server start).
-- `ca` — verify the server against a **custom CA** (private PKI) instead of the system roots.
-- `clientCert: { cert, key, passphrase? }` — present a **client certificate for mTLS**.
-
-No custom `transport` needed.
-
-**Per-client (fixed for the client's lifetime):**
+For node service-to-service calls, `connectionSettings` controls where a client dials and how it
+secures the connection: `host`/`port` (dial target), `tlsPin: { fingerprint256, servername? }`
+(pin a self-signed cert by SHA-256), `ca` (verify against a private CA), `clientCert: { cert, key,
+passphrase? }` (mTLS). Provide it per-client (config) or per-request (a `GGConnectionSettingsKey`
+set in context); when both are set the per-request value wins.
 
 ```typescript
-// dial host/port from the pin → create the client URL-less
-const client = RelayApi.createClient({
-    url: "",
-    connectionSettings: { host: "10.0.0.4", port: 9600, tlsPin: { fingerprint256: "ab:cd:…" } },
-})
-await client.someMethod(args)   // dials 10.0.0.4:9600, rejects any cert whose fingerprint differs
+// per-client: pin a self-signed target (url-less → host/port come from the pin)
+RelayApi.createClient({ url: "", connectionSettings: { host: "10.0.0.4", port: 9600, tlsPin: { fingerprint256: "ab:cd:…" } } })
+// or: ca / mTLS against a URL
+RelayApi.createClient({ url: "https://svc.internal", connectionSettings: { ca: caPem, clientCert: { cert, key } } })
 
-// or pin a server you address by URL (host comes from the URL; the pin only verifies)
-const client2 = RelayApi.createClient({
-    url: "https://relay.internal:9600",
-    connectionSettings: { tlsPin: { fingerprint256: "ab:cd:…" } },
-})
-```
-
-**Custom CA / mTLS** (same `connectionSettings`, either source):
-
-```typescript
-// trust a private CA instead of the system roots
-RelayApi.createClient({ url: "https://svc.internal", connectionSettings: { ca: caPem } })
-
-// present a client cert for mutual TLS
-RelayApi.createClient({ url: "https://svc.internal", connectionSettings: { clientCert: { cert, key } } })
-```
-
-**Per-request (varies, via a middleware key):** a `GGConnectionSettingsKey` is a context key *and*
-a transport middleware. Attach it to the schema and set its value inside the ambient request
-context (the runtime establishes that context at the request boundary — don't create one per call):
-
-```typescript
-export const RELAY_CONN = new GGConnectionSettingsKey("relayConn")   // app owns it; make as many as needed
-export const RelayApi = new GGHttpSchema({ contract, pathPrefix: "...", routes, use: [RELAY_CONN] })
-
-// within the request scope (per-request host + fingerprint):
+// per-request: app-owned key on the schema (use: [RELAY_CONN]), set inside the request scope
 RELAY_CONN.set({ host, port, tlsPin: { fingerprint256 } })
-await client.someMethod(args)
 ```
 
-Both sources merge into one bag; when both are set, the per-request `KEY.set(...)` wins. Repeated
-calls to the same fingerprint reuse a pooled connection; drop stale sockets after a restart with
-`invalidateTlsPinAgent(fingerprint256)`.
-
-> **Node only.** Browsers give JS no access to the TLS layer, so pinning is impossible there. A
-> client created in a browser with non-empty `connectionSettings` (from either source) throws when
-> a request is issued, rather than silently sending unpinned.
+Node-only: the transport is `fetch` through an undici dispatcher, so settings need TLS-layer access
+a browser can't give — a browser client with non-empty `connectionSettings` throws rather than
+silently un-securing. `invalidateTlsPinAgent(fingerprint256)` drops a pooled agent after a restart.
 
 ## WebSocket APIs
 
