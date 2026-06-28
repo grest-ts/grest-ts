@@ -1,7 +1,7 @@
 import {ERROR, ERROR_JSON, GGContractApiDefinition, GGContractClass, GGContractMethod, GGSchema, GGSchemaDescription, OK} from "@grest-ts/schema";
 import type {HttpMethod} from "@grest-ts/common";
 import type http from "http";
-import type {GGContextKey, GGTransportMiddleware} from "@grest-ts/context";
+import type {GGConnectionSettings, GGContextKey, GGTransportMiddleware} from "@grest-ts/context";
 import type {OpenAPIV3_1} from "openapi-types";
 
 export interface GGHttpSchemaConfig<TContract extends GGContractApiDefinition> {
@@ -51,6 +51,7 @@ export interface GGHttpFetchRequest {
     method: HttpMethod;
     headers: Record<string, string>;
     body: string | FormData | undefined;
+    connectionSettings?: GGConnectionSettings;
 }
 
 // --------------------------------------------------------------------------------------------------------

@@ -25,6 +25,7 @@ export * from "./schema/GGCookie";
 export * from "./schema/GGWireContextKey";
 export * from "./schema/GGWireContextKey.node";
 export * from "./schema/GGHeader";
+export * from "./schema/GGConnectionSettingsKey";
 export * from "./rpc/GGHttpRouteRPC";
 export * from "./rpc/openApiSuccessResponse";
 export * from "./rpc/openApiHelpers";
@@ -45,6 +46,7 @@ export * from "./schema/GGHttpPermissionsChecker";
 // Client
 export * from "./client/GGContextKeySynchronizer";
 export * from "./client/GGHttpSchema.createClient";
+export * from "./client/pinnedTls.node";
 export * from "./server/GGHttpSchema.startServer";
 
 

@@ -1,4 +1,4 @@
-import type {GGSchemaDescription} from "@grest-ts/schema";
+import {IsNumber, IsObject, IsString, type GGSchemaDescription} from "@grest-ts/schema";
 
 // Structural, not GGSchema<T>: GGSchema is invariant in T, so a typed field would reject branded header schemas.
 export interface GGHeaderSchema {
@@ -26,6 +26,25 @@ export interface GGOutbound {
     headers: Record<string, string>;
 }
 
+/** Pin a server's TLS cert by SHA-256 fingerprint (node only — browsers can't access the TLS layer). */
+export const IsTlsPin = IsObject({
+    host: IsString.docs({title: "Host/IP to dial", description: "The host comes from here, not the client's base URL."}),
+    port: IsNumber.docs({title: "Port", example: 9600}),
+    fingerprint256: IsString.docs({title: "Server cert SHA-256 fingerprint", description: "Hex, ':'-separated or not."}),
+    servername: IsString.orUndefined.docs({title: "SNI servername", description: "Optional; omitted by default."}),
+});
+export type GGTlsPin = typeof IsTlsPin.infer;
+
+/**
+ * Transport-level request settings beyond headers — what host to dial, how to secure it.
+ * A middleware writes the fields it controls (via `connectionSettings`); the transport reads
+ * them. Plain data, extensible (proxy, ca, …) without new hooks. Today every field is node-only.
+ */
+export const IsConnectionSettings = IsObject({
+    tlsPin: IsTlsPin.orUndefined,
+});
+export type GGConnectionSettings = typeof IsConnectionSettings.infer;
+
 /** Response headers a server writes. `string[]` carries multiple set-cookie lines. */
 export interface GGResponse {
     headers: Record<string, string | string[]>;
@@ -45,8 +64,11 @@ export interface GGTransportMiddleware {
     /** Cookies this middleware reads — emitted as `in: cookie` OpenAPI params. */
     readonly cookieParams?: Record<string, GGHeaderSchema>;
 
-    /** Client: write outbound credentials. */
+    /** Client: write outbound credentials (request headers). */
     update?(outbound: GGOutbound): void;
+
+    /** Client: contribute transport-level request settings beyond headers (dial target, TLS pin). */
+    connectionSettings?(settings: GGConnectionSettings): void;
 
     /** Server: read inbound credentials into context. */
     parse?(inbound: GGInbound): void;

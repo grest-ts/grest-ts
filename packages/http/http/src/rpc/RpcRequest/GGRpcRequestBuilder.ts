@@ -1,7 +1,7 @@
 import type {HttpMethod} from "@grest-ts/common";
 import {GGContractMethod} from "@grest-ts/schema";
 import {ClientHttpRouteToRpcTransformClientConfig, GGHttpFetchRequest} from "../../schema/GGHttpSchema";
-import {GGContextKey, type GGTransportMiddleware} from "@grest-ts/context";
+import {GGContextKey, type GGConnectionSettings, type GGTransportMiddleware} from "@grest-ts/context";
 import {GGContextKeySynchronizer} from "../../client/GGContextKeySynchronizer";
 
 export class GGRpcRequestBuilder {
@@ -51,6 +51,9 @@ export class GGRpcRequestBuilder {
             }
         }
         this.middlewares?.forEach(mw => mw.update?.(result))
+        const settings: GGConnectionSettings = {}
+        this.middlewares?.forEach(mw => mw.connectionSettings?.(settings))
+        result.connectionSettings = settings
         return result
     }
 
