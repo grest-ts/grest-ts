@@ -48,13 +48,14 @@ interface TestServer {
     close: () => Promise<void>
 }
 
+function openssl(...args: string[]): void {
+    execFileSync("openssl", args, {stdio: "ignore"})
+}
+
 function genCert(dir: string, name: string): {cert: string; key: string} {
     const certPath = join(dir, `${name}.cert.pem`)
     const keyPath = join(dir, `${name}.key.pem`)
-    execFileSync("openssl", [
-        "req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "1",
-        "-keyout", keyPath, "-out", certPath, "-subj", `/CN=${name}`,
-    ], {stdio: "ignore"})
+    openssl("req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "1", "-keyout", keyPath, "-out", certPath, "-subj", `/CN=${name}`)
     return {cert: readFileSync(certPath, "utf8"), key: readFileSync(keyPath, "utf8")}
 }
 
@@ -63,10 +64,7 @@ interface TestCa {keyPath: string; crtPath: string; crt: string}
 function genCa(dir: string, name: string): TestCa {
     const keyPath = join(dir, `${name}.ca.key`)
     const crtPath = join(dir, `${name}.ca.crt`)
-    execFileSync("openssl", [
-        "req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "1",
-        "-keyout", keyPath, "-out", crtPath, "-subj", `/CN=${name}-ca`,
-    ], {stdio: "ignore"})
+    openssl("req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "1", "-keyout", keyPath, "-out", crtPath, "-subj", `/CN=${name}-ca`)
     return {keyPath, crtPath, crt: readFileSync(crtPath, "utf8")}
 }
 
@@ -74,14 +72,14 @@ function genSignedCert(dir: string, name: string, ca: TestCa, sanIp?: string): {
     const keyPath = join(dir, `${name}.key`)
     const csrPath = join(dir, `${name}.csr`)
     const crtPath = join(dir, `${name}.crt`)
-    execFileSync("openssl", ["req", "-newkey", "rsa:2048", "-nodes", "-keyout", keyPath, "-out", csrPath, "-subj", `/CN=${name}`], {stdio: "ignore"})
+    openssl("req", "-newkey", "rsa:2048", "-nodes", "-keyout", keyPath, "-out", csrPath, "-subj", `/CN=${name}`)
     const args = ["x509", "-req", "-in", csrPath, "-CA", ca.crtPath, "-CAkey", ca.keyPath, "-CAcreateserial", "-days", "1", "-out", crtPath]
     if (sanIp) {
         const extPath = join(dir, `${name}.ext`)
         writeFileSync(extPath, `subjectAltName=IP:${sanIp}\n`)
         args.push("-extfile", extPath)
     }
-    execFileSync("openssl", args, {stdio: "ignore"})
+    openssl(...args)
     return {cert: readFileSync(crtPath, "utf8"), key: readFileSync(keyPath, "utf8")}
 }
 

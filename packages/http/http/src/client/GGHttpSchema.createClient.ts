@@ -151,8 +151,10 @@ export function createClient<TContract extends GGContractApiDefinition>(
                 // Execution
                 const fetchRequest = await wireFormat.createRequest(validatedInput);
 
-                const connectionSettings = {...config.connectionSettings, ...fetchRequest.connectionSettings};
-                if (isBrowser() && Object.keys(connectionSettings).length > 0) {
+                const connectionSettings = config.connectionSettings || fetchRequest.connectionSettings
+                    ? {...config.connectionSettings, ...fetchRequest.connectionSettings}
+                    : undefined;
+                if (connectionSettings && isBrowser() && Object.keys(connectionSettings).length > 0) {
                     throw new SERVER_ERROR({displayMessage: "connectionSettings (e.g. TLS pinning) is node-only — the browser can't access the TLS layer, so it can't honor them."});
                 }
 

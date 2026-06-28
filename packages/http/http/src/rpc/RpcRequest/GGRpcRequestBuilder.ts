@@ -50,10 +50,15 @@ export class GGRpcRequestBuilder {
                 await GGContextKeySynchronizer.waitFor(mw)
             }
         }
-        this.middlewares?.forEach(mw => mw.update?.(result))
-        const settings: GGConnectionSettings = {}
-        this.middlewares?.forEach(mw => mw.connectionSettings?.(settings))
-        result.connectionSettings = settings
+        let settings: GGConnectionSettings | undefined
+        for (const mw of this.middlewares ?? []) {
+            mw.update?.(result)
+            if (mw.connectionSettings) {
+                settings ??= {}
+                mw.connectionSettings(settings)
+            }
+        }
+        if (settings) result.connectionSettings = settings
         return result
     }
 

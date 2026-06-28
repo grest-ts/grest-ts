@@ -65,10 +65,11 @@ function buildAgent(s: GGConnectionSettings): Agent {
                     return cb(new Error("pinned TLS requires an https target"), null)
                 }
                 if (!tls.isSessionReused()) {
-                    const actual = tls.getPeerX509Certificate()?.fingerprint256
-                    if (!actual || normalizeFingerprint(actual) !== expected) {
+                    const raw = tls.getPeerX509Certificate()?.fingerprint256
+                    const actual = raw ? normalizeFingerprint(raw) : undefined
+                    if (actual !== expected) {
                         tls.destroy()
-                        return cb(new Error(`pinned TLS: cert fingerprint mismatch — expected ${expected}, got ${actual ? normalizeFingerprint(actual) : "<none>"}`), null)
+                        return cb(new Error(`pinned TLS: cert fingerprint mismatch — expected ${expected}, got ${actual ?? "<none>"}`), null)
                     }
                 }
                 cb(null, socket)
@@ -77,11 +78,15 @@ function buildAgent(s: GGConnectionSettings): Agent {
     })
 }
 
-/** Stable key per distinct TLS config, so each pools its own connections. */
+/**
+ * Stable key per distinct TLS config, so each pools its own connections. Pin-only (the common,
+ * high-frequency case) keys off the cheap fingerprint; CA/mTLS hash the (larger) PEM material.
+ */
 function agentKey(s: GGConnectionSettings): string {
-    return createHash("sha256").update(JSON.stringify([
-        s.tlsPin ? normalizeFingerprint(s.tlsPin.fingerprint256) : null,
-        s.tlsPin?.servername ?? null,
+    const pin = s.tlsPin ? `${normalizeFingerprint(s.tlsPin.fingerprint256)}|${s.tlsPin.servername ?? ""}` : ""
+    if (!s.ca && !s.clientCert) return `pin:${pin}`
+    return "tls:" + createHash("sha256").update(JSON.stringify([
+        pin,
         s.ca ?? null,
         s.clientCert?.cert ?? null,
         s.clientCert?.key ?? null,

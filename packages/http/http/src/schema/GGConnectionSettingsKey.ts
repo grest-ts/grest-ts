@@ -6,7 +6,7 @@ import {GGContextKey, IsConnectionSettings, type GGConnectionSettings, type GGTr
  *
  *   export const CONN = new GGConnectionSettingsKey("conn")
  *   // schema: use: [CONN]
- *   CONN.set({tlsPin: {host, port, fingerprint256}})   // inside the request scope, then call the client
+ *   CONN.set({host, port, tlsPin: {fingerprint256}})   // inside the request scope, then call the client
  *
  * Apps create their own instances (one per target class) — there is no framework singleton.
  * Browser-safe: it only reads ambient context and copies plain data; the node transport
