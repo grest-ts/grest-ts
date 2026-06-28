@@ -1,7 +1,7 @@
 import {describe, it, expect, beforeAll, afterAll, afterEach, vi} from 'vitest'
 import https from 'node:https'
 import {execFileSync} from 'node:child_process'
-import {mkdtempSync, readFileSync, rmSync} from 'node:fs'
+import {mkdtempSync, readFileSync, rmSync, writeFileSync} from 'node:fs'
 import {tmpdir} from 'node:os'
 import {join} from 'node:path'
 import {X509Certificate} from 'node:crypto'
@@ -58,10 +58,37 @@ function genCert(dir: string, name: string): {cert: string; key: string} {
     return {cert: readFileSync(certPath, "utf8"), key: readFileSync(keyPath, "utf8")}
 }
 
-async function startServer(cert: string, key: string, replyMsg: string): Promise<TestServer> {
+interface TestCa {keyPath: string; crtPath: string; crt: string}
+
+function genCa(dir: string, name: string): TestCa {
+    const keyPath = join(dir, `${name}.ca.key`)
+    const crtPath = join(dir, `${name}.ca.crt`)
+    execFileSync("openssl", [
+        "req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "1",
+        "-keyout", keyPath, "-out", crtPath, "-subj", `/CN=${name}-ca`,
+    ], {stdio: "ignore"})
+    return {keyPath, crtPath, crt: readFileSync(crtPath, "utf8")}
+}
+
+function genSignedCert(dir: string, name: string, ca: TestCa, sanIp?: string): {cert: string; key: string} {
+    const keyPath = join(dir, `${name}.key`)
+    const csrPath = join(dir, `${name}.csr`)
+    const crtPath = join(dir, `${name}.crt`)
+    execFileSync("openssl", ["req", "-newkey", "rsa:2048", "-nodes", "-keyout", keyPath, "-out", csrPath, "-subj", `/CN=${name}`], {stdio: "ignore"})
+    const args = ["x509", "-req", "-in", csrPath, "-CA", ca.crtPath, "-CAkey", ca.keyPath, "-CAcreateserial", "-days", "1", "-out", crtPath]
+    if (sanIp) {
+        const extPath = join(dir, `${name}.ext`)
+        writeFileSync(extPath, `subjectAltName=IP:${sanIp}\n`)
+        args.push("-extfile", extPath)
+    }
+    execFileSync("openssl", args, {stdio: "ignore"})
+    return {cert: readFileSync(crtPath, "utf8"), key: readFileSync(keyPath, "utf8")}
+}
+
+async function startServer(cert: string, key: string, replyMsg: string, extra: https.ServerOptions = {}): Promise<TestServer> {
     let reqCount = 0
     let connCount = 0
-    const server = https.createServer({cert, key}, (_req, res) => {
+    const server = https.createServer({cert, key, ...extra}, (_req, res) => {
         reqCount++
         res.writeHead(200, {"content-type": "application/json"})
         res.end(JSON.stringify({success: true, type: "OK", data: {msg: replyMsg}}))
@@ -228,5 +255,68 @@ describe('pinned-TLS node transport', () => {
         const plainClient = createClient(PingApi, {url: "http://example.test"})
         const ok = await plainClient.ping({msg: "hi"})
         expect(ok.msg).toBe("fetched")
+    })
+})
+
+describe('connection settings — custom CA & mTLS', () => {
+
+    let dir: string
+    let srvCa: TestCa
+    let server: {cert: string; key: string}
+    let clientPem: {cert: string; key: string}
+    let caServer: TestServer
+    let mtlsServer: TestServer
+
+    beforeAll(async () => {
+        dir = mkdtempSync(join(tmpdir(), "gg-tls-"))
+        srvCa = genCa(dir, "srv")
+        server = genSignedCert(dir, "server", srvCa, "127.0.0.1")   // SAN so hostname verification passes
+        const clientCa = genCa(dir, "client")
+        clientPem = genSignedCert(dir, "clientcert", clientCa)
+        caServer = await startServer(server.cert, server.key, "from-ca-server")
+        mtlsServer = await startServer(server.cert, server.key, "from-mtls-server", {
+            requestCert: true,
+            rejectUnauthorized: true,
+            ca: clientCa.crt,   // verify the client cert against this CA
+        })
+    })
+
+    afterAll(async () => {
+        await caServer?.close()
+        await mtlsServer?.close()
+        if (dir) rmSync(dir, {recursive: true, force: true})
+    })
+
+    it('verifies the server against a custom ca', async () => {
+        const client = createClient(PingApi, {
+            url: "",
+            connectionSettings: {host: "127.0.0.1", port: caServer.port, ca: srvCa.crt},
+        })
+        const res = await client.ping({msg: "hi"})
+        expect(res.msg).toBe("from-ca-server")
+    })
+
+    it('rejects a server signed by an untrusted ca (no ca provided)', async () => {
+        const client = createClient(PingApi, {url: `https://127.0.0.1:${caServer.port}`})
+        const res = await client.ping({msg: "hi"}).asResult()
+        expect(res.success).toBe(false)
+    })
+
+    it('presents a client certificate for mTLS', async () => {
+        const client = createClient(PingApi, {
+            url: "",
+            connectionSettings: {host: "127.0.0.1", port: mtlsServer.port, ca: srvCa.crt, clientCert: clientPem},
+        })
+        const res = await client.ping({msg: "hi"})
+        expect(res.msg).toBe("from-mtls-server")
+    })
+
+    it('mTLS server rejects a client with no certificate', async () => {
+        const client = createClient(PingApi, {
+            url: "",
+            connectionSettings: {host: "127.0.0.1", port: mtlsServer.port, ca: srvCa.crt},
+        })
+        const res = await client.ping({msg: "hi"}).asResult()
+        expect(res.success).toBe(false)
     })
 })

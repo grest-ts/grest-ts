@@ -762,16 +762,21 @@ const item = await client.get({ id: "item-123" }).or((error) => {
 const title = await client.get({ id: "item-123" }).map(item => item.title)
 ```
 
-### Connection settings — pinned-TLS dialing (node only)
+### Connection settings — TLS / dialing (node only)
 
 `connectionSettings` controls **where a node client dials and how it secures the connection**,
 beyond the request itself. The node transport is ordinary `fetch` dialing through an undici
 dispatcher built from these settings, so the wire stays correct (real responses, streaming,
-`FormData`, redirects). Today it carries a dial target (`host`/`port`) and a TLS pin — the dial
-target ("where") is kept separate from `tlsPin` ("how to verify"), and the bag is open to future
-settings (proxy, custom CA, mTLS) without new API. The main use is **pinning a server cert by
-SHA-256 fingerprint** for self-signed, service-to-service targets (e.g. a fingerprint that rotates
-per server start). No custom `transport` needed.
+`FormData`, redirects). The dial target (`host`/`port`, "where") is kept separate from the TLS
+fields ("how to verify"), and the bag is open to future settings (proxy, http2, …) without new API.
+Today it carries:
+
+- `tlsPin: { fingerprint256, servername? }` — **pin a server cert by SHA-256 fingerprint** (for
+  self-signed, service-to-service targets, e.g. a fingerprint that rotates per server start).
+- `ca` — verify the server against a **custom CA** (private PKI) instead of the system roots.
+- `clientCert: { cert, key, passphrase? }` — present a **client certificate for mTLS**.
+
+No custom `transport` needed.
 
 **Per-client (fixed for the client's lifetime):**
 
@@ -788,6 +793,16 @@ const client2 = RelayApi.createClient({
     url: "https://relay.internal:9600",
     connectionSettings: { tlsPin: { fingerprint256: "ab:cd:…" } },
 })
+```
+
+**Custom CA / mTLS** (same `connectionSettings`, either source):
+
+```typescript
+// trust a private CA instead of the system roots
+RelayApi.createClient({ url: "https://svc.internal", connectionSettings: { ca: caPem } })
+
+// present a client cert for mutual TLS
+RelayApi.createClient({ url: "https://svc.internal", connectionSettings: { clientCert: { cert, key } } })
 ```
 
 **Per-request (varies, via a middleware key):** a `GGConnectionSettingsKey` is a context key *and*

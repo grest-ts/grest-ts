@@ -36,6 +36,14 @@ export const IsTlsPin = IsObject({
 });
 export type GGTlsPin = typeof IsTlsPin.infer;
 
+/** A client certificate to present for mutual TLS (mTLS). PEM strings. */
+export const IsClientCert = IsObject({
+    cert: IsString.docs({title: "Client certificate (PEM)"}),
+    key: IsString.docs({title: "Client private key (PEM)"}),
+    passphrase: IsString.orUndefined.docs({title: "Private key passphrase", description: "Only if the key is encrypted."}),
+});
+export type GGClientCert = typeof IsClientCert.infer;
+
 /**
  * Transport-level request settings beyond headers: where to dial and how to secure the
  * connection. A middleware writes the fields it controls (via `connectionSettings`); the node
@@ -48,6 +56,8 @@ export const IsConnectionSettings = IsObject({
     host: IsString.orUndefined.docs({title: "Dial host", description: "Overrides the client URL's host — for url-less clients or a per-request target. The client URL supplies it when omitted."}),
     port: IsNumber.orUndefined.docs({title: "Dial port", example: 9600}),
     tlsPin: IsTlsPin.orUndefined,
+    ca: IsString.orUndefined.docs({title: "Trusted CA certificate(s) (PEM)", description: "Verify the server against these roots instead of the system defaults (e.g. a private PKI). Replaces the default CA list. Ignored when tlsPin is set."}),
+    clientCert: IsClientCert.orUndefined.docs({title: "Client certificate for mTLS"}),
 });
 export type GGConnectionSettings = typeof IsConnectionSettings.infer;
 

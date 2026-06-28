@@ -1,6 +1,7 @@
-import {Agent, buildConnector, type Dispatcher} from "undici"
+import {createHash} from "node:crypto"
 import type {TLSSocket} from "node:tls"
-import type {GGConnectionSettings, GGTlsPin} from "@grest-ts/context"
+import {Agent, buildConnector, type Dispatcher} from "undici"
+import type {GGConnectionSettings} from "@grest-ts/context"
 import type {GGHttpTransport} from "./GGHttpSchema.createClient"
 
 /**
@@ -18,22 +19,42 @@ function normalizeFingerprint(input: string): string {
     return input.replace(/:/g, "").toLowerCase()
 }
 
+/** Which settings shape the TLS connection (and therefore the dispatcher). */
+function needsDispatcher(s: GGConnectionSettings): boolean {
+    return !!(s.tlsPin || s.ca || s.clientCert)
+}
+
+/** tls.connect options shared by both the pinned and the standard connector. */
+function connectOptions(s: GGConnectionSettings) {
+    return {
+        ca: s.ca,
+        cert: s.clientCert?.cert,
+        key: s.clientCert?.key,
+        passphrase: s.clientCert?.passphrase,
+    }
+}
+
 /**
- * undici Agent whose connector accepts only a server cert whose SHA-256 fingerprint matches.
- * Self-signed pinning is a unit:
- *  - `rejectUnauthorized: false` skips the CA-chain check — the fingerprint replaces it.
- *  - the peer cert's fingerprint is verified once the socket connects; on mismatch the socket is
- *    destroyed before any request bytes flow. A resumed TLS session doesn't re-send the cert
- *    (`getPeerX509Certificate()` is undefined) and proves knowledge of the original master secret,
- *    so the re-check is safely skipped.
- * `rejectUnauthorized: false` WITHOUT the fingerprint check is a full MITM hole.
+ * Build the undici Agent for a set of TLS settings.
+ *  - tlsPin → self-signed pinning: `rejectUnauthorized: false` (skip the CA chain — the fingerprint
+ *    replaces it) + verify the peer cert's fingerprint once connected, destroying the socket on
+ *    mismatch before any request bytes flow. A resumed TLS session doesn't re-send the cert and
+ *    proves knowledge of the original master secret, so the re-check is safely skipped.
+ *    `rejectUnauthorized: false` WITHOUT the fingerprint check is a full MITM hole.
+ *  - otherwise → standard verification, optionally against a custom `ca` and presenting a
+ *    `clientCert` for mTLS.
  */
-function createPinnedAgent(pin: GGTlsPin): Agent {
+function buildAgent(s: GGConnectionSettings): Agent {
+    const connect = connectOptions(s)
+    const pin = s.tlsPin
+    if (!pin) {
+        return new Agent({connect})
+    }
     const expected = normalizeFingerprint(pin.fingerprint256)
     if (!/^[0-9a-f]{64}$/.test(expected)) {
         throw new Error(`pinned TLS: fingerprint must be 64 hex chars (got "${pin.fingerprint256}")`)
     }
-    const baseConnector = buildConnector({rejectUnauthorized: false, servername: pin.servername})
+    const baseConnector = buildConnector({...connect, rejectUnauthorized: false, servername: pin.servername})
     return new Agent({
         connect(opts, cb) {
             baseConnector(opts, (err, socket) => {
@@ -56,12 +77,24 @@ function createPinnedAgent(pin: GGTlsPin): Agent {
     })
 }
 
-// One pinned Agent per fingerprint. Fingerprints rotate per server start, so entries are
-// per-server-run; invalidate() drops stale sockets after a restart, and the LRU cap + idle TTL
-// bound the map for long-lived multi-target processes that never invalidate.
-class PinnedAgentCache {
+/** Stable key per distinct TLS config, so each pools its own connections. */
+function agentKey(s: GGConnectionSettings): string {
+    return createHash("sha256").update(JSON.stringify([
+        s.tlsPin ? normalizeFingerprint(s.tlsPin.fingerprint256) : null,
+        s.tlsPin?.servername ?? null,
+        s.ca ?? null,
+        s.clientCert?.cert ?? null,
+        s.clientCert?.key ?? null,
+        s.clientCert?.passphrase ?? null,
+    ])).digest("hex")
+}
 
-    private readonly agents = new Map<string, {agent: Agent; lastUsed: number}>()
+// One Agent per distinct TLS config. Pinned fingerprints rotate per server start, so those entries
+// are per-server-run; invalidate() drops them after a restart, and the LRU cap + idle TTL bound the
+// map for long-lived multi-target processes that never invalidate.
+class TlsAgentCache {
+
+    private readonly agents = new Map<string, {agent: Agent; fingerprint?: string; lastUsed: number}>()
     private readonly sweepTimer: NodeJS.Timeout
 
     constructor() {
@@ -69,8 +102,8 @@ class PinnedAgentCache {
         this.sweepTimer.unref()
     }
 
-    get(pin: GGTlsPin): Agent {
-        const key = normalizeFingerprint(pin.fingerprint256)
+    get(settings: GGConnectionSettings): Agent {
+        const key = agentKey(settings)
         const existing = this.agents.get(key)
         if (existing) {
             existing.lastUsed = Date.now()
@@ -78,8 +111,9 @@ class PinnedAgentCache {
             this.agents.set(key, existing)
             return existing.agent
         }
-        const agent = createPinnedAgent(pin)
-        this.agents.set(key, {agent, lastUsed: Date.now()})
+        const agent = buildAgent(settings)
+        const fingerprint = settings.tlsPin ? normalizeFingerprint(settings.tlsPin.fingerprint256) : undefined
+        this.agents.set(key, {agent, fingerprint, lastUsed: Date.now()})
         while (this.agents.size > DEFAULT_MAX_AGENTS) {
             const lru = this.agents.keys().next().value
             if (lru === undefined) break
@@ -88,8 +122,11 @@ class PinnedAgentCache {
         return agent
     }
 
-    invalidate(fingerprint: string): void {
-        this.drop(normalizeFingerprint(fingerprint))
+    invalidateFingerprint(fingerprint: string): void {
+        const fp = normalizeFingerprint(fingerprint)
+        for (const [key, entry] of this.agents) {
+            if (entry.fingerprint === fp) this.drop(key)
+        }
     }
 
     private sweepIdle(): void {
@@ -108,20 +145,20 @@ class PinnedAgentCache {
     }
 }
 
-const PIN_CACHE = new PinnedAgentCache()
+const AGENT_CACHE = new TlsAgentCache()
 
-/** Drop the pooled pinned dispatcher for a fingerprint so stale sockets don't linger after a restart. */
+/** Drop the pooled dispatcher(s) for a pinned fingerprint so stale sockets don't linger after a restart. */
 export function invalidateTlsPinAgent(fingerprint256: string): void {
-    PIN_CACHE.invalidate(fingerprint256)
+    AGENT_CACHE.invalidateFingerprint(fingerprint256)
 }
 
 /**
  * Map connection settings onto an undici dispatcher — the single extensibility seam. Future
- * settings (proxy → ProxyAgent, ca/clientCert → Agent connect options, http2 → allowH2, …) add a
- * branch here, with no change to the transport or the middleware hook.
+ * settings (proxy → ProxyAgent, http2 → allowH2, …) add a branch here, with no change to the
+ * transport or the middleware hook.
  */
 function dispatcherFor(settings: GGConnectionSettings): Dispatcher | undefined {
-    if (settings.tlsPin) return PIN_CACHE.get(settings.tlsPin)
+    if (needsDispatcher(settings)) return AGENT_CACHE.get(settings)
     return undefined
 }
 
