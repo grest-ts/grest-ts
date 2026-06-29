@@ -110,39 +110,37 @@ class RawPair implements SocketAdapter {
     onRawMessage(h: (d: Uint8Array, isBinary: boolean) => void): void { this.raw.push(h) }
 }
 
-function rawLinkedPair(heartbeatPing?: string): {client: GGRawSocket; server: GGRawSocket; a: RawPair; b: RawPair} {
+function rawLinkedPair(): {client: GGRawSocket; server: GGRawSocket; a: RawPair; b: RawPair} {
     const a = new RawPair(), b = new RawPair()
     a.peer = b; b.peer = a
     const ctx = new GGContext("raw-heartbeat-test")
-    const client = new GGRawSocket(a, {apiName: "Test", socketPath: "/ws/test", connectionContext: ctx, heartbeatPing})
+    const client = new GGRawSocket(a, {apiName: "Test", socketPath: "/ws/test", connectionContext: ctx})
     const server = new GGRawSocket(b, {apiName: "Test", socketPath: "/ws/test", connectionContext: ctx})
-    client.onMessage(() => {})                  // an inbound frame is the only liveness signal here
-    server.onMessage(() => server.send("pong")) // a real handler pongs each app ping
     return {client, server, a, b}
 }
 
-describe("GGRawSocket heartbeat (app-level ping for byte streams)", () => {
+describe("GGRawSocket heartbeat (framework keepalive for byte streams)", () => {
 
-    it("with heartbeatPing, a peer that answers keeps the link open", async () => {
-        const {client, server} = rawLinkedPair("ping")
+    it("a live link stays open: the peer auto-pongs the framework keepalive ping, no app code", async () => {
+        const {client, server} = rawLinkedPair()
         let closed = false
         client.onClose(() => { closed = true })
 
         client.startHeartbeat({intervalMs: 40, timeoutMs: 25})
-        await wait(250)
+        await wait(250)               // ~6 ping cycles; server GGRawSocket auto-pongs each
         expect(closed).toBe(false)
 
         client.close(); server.close()
     })
 
-    it("with heartbeatPing, a silently half-open link is self-closed by the watchdog", async () => {
-        const {client, server, b} = rawLinkedPair("ping")
+    it("a silently half-open link is self-closed by the watchdog", async () => {
+        const {client, server, b} = rawLinkedPair()
         let closed = false
         client.onClose(() => { closed = true })
 
         client.startHeartbeat({intervalMs: 40, timeoutMs: 25})
         await wait(120)
-        expect(closed).toBe(false)    // alive while the peer pongs
+        expect(closed).toBe(false)    // alive while the peer auto-pongs
 
         b.dead = true                 // server stops answering — no close event
         await wait(200)               // > intervalMs + timeoutMs with no inbound frame
@@ -151,15 +149,17 @@ describe("GGRawSocket heartbeat (app-level ping for byte streams)", () => {
         client.close(); server.close()
     })
 
-    it("without heartbeatPing (the old behaviour), the watchdog self-disables — a dead link goes undetected", async () => {
-        const {client, server, b} = rawLinkedPair(undefined)   // no app ping, no protocol ping
-        let closed = false
-        client.onClose(() => { closed = true })
+    it("keepalive frames are absorbed by the framework — never delivered to app handlers", async () => {
+        const {client, server} = rawLinkedPair()
+        const clientSeen: string[] = []; const serverSeen: string[] = []
+        client.onMessage((d) => clientSeen.push(d.toString()))
+        server.onMessage((d) => serverSeen.push(d.toString()))
 
         client.startHeartbeat({intervalMs: 40, timeoutMs: 25})
-        b.dead = true
-        await wait(200)
-        expect(closed).toBe(false)    // nothing probes the link, so the silent drop is never noticed
+        await wait(150)               // several ping/pong round-trips
+
+        expect(serverSeen).toEqual([]) // PING auto-ponged, never surfaced to the server app
+        expect(clientSeen).toEqual([]) // PONG swallowed, never surfaced to the client app
 
         client.close(); server.close()
     })

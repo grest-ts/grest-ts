@@ -43,15 +43,6 @@ export interface GGRawWebSocketClientOptions {
     logMode?: GGWsLogMode
     /** Handshake timeout in ms. Default 5000. */
     handshakeTimeoutMs?: number
-    /**
-     * App-level keepalive frame sent on the heartbeat interval while the link is idle. A browser
-     * can't send a protocol WS ping, so a raw byte stream needs an in-band frame to probe a
-     * half-open connection (e.g. after the laptop wakes from sleep). Any inbound frame proves
-     * liveness, so the frame must be one the server's handler recognises and replies to; silence
-     * past the heartbeat timeout drops the socket and reconnects. Without it the watchdog
-     * self-disables in the browser. No-op on a Node client (protocol ping is used instead).
-     */
-    heartbeatPing?: Uint8Array | string
 }
 
 export type GGRawWebSocketClientConfig<TQuery = undefined> = GGRawWebSocketClientOptions & GGWsConnectSource<TQuery>
@@ -130,7 +121,6 @@ GGRawWebSocketSchema.prototype.createClient = function (
                     apiName: schemaName,
                     socketPath: normalizedPath,
                     connectionContext: context,
-                    heartbeatPing: config?.heartbeatPing,
                 }),
             })
         },

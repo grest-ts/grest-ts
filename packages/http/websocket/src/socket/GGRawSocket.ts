@@ -13,6 +13,7 @@ import type {GGContext} from "@grest-ts/context";
 import {GGSocketLogger, GGSocketMetrics, type GGHeartbeatConfig} from "./GGSocket";
 import {SocketAdapter} from "./SocketAdapter";
 import {startSocketHeartbeat} from "../liveness/socketHeartbeat";
+import {RAW_PING, RAW_PONG, rawKeepaliveKind} from "../liveness/rawKeepalive";
 
 const consoleLogger: GGSocketLogger = {
     debug(_source, message, ...args) { console.debug("[GGRawSocket]", message, ...args) },
@@ -29,14 +30,6 @@ export interface GGRawSocketConfig {
     scope?: {ensureEntered(): void};
     metrics?: GGSocketMetrics;
     log?: GGSocketLogger;
-    /**
-     * App-level keepalive frame, sent on the heartbeat interval to probe the link. A raw stream
-     * has no framework ping, and a browser can't send a protocol WS ping — so without this the
-     * watchdog self-disables and a half-open link is never detected client-side. Any inbound frame
-     * (ideally a pong the server's handler sends back) counts as proof of life. Set on the client
-     * (browser); omit on the server, where the Node adapter's protocol ping covers liveness.
-     */
-    heartbeatPing?: Uint8Array | string;
 }
 
 export class GGRawSocket {
@@ -48,13 +41,13 @@ export class GGRawSocket {
     private readonly scope?: {ensureEntered(): void};
     private readonly metrics?: GGSocketMetrics;
     private readonly log: GGSocketLogger;
-    private readonly heartbeatPing?: Uint8Array | string;
 
     private isActive = true;
     private isClosed = false;
     private lastActivity = Date.now();
 
     private readonly onCloseCallbacks: Array<() => void> = [];
+    private readonly messageHandlers: Array<(data: Buffer, isBinary: boolean) => void> = [];
 
     constructor(adapter: SocketAdapter, config: GGRawSocketConfig) {
         this.adapter = adapter;
@@ -64,7 +57,20 @@ export class GGRawSocket {
         this.scope = config.scope;
         this.metrics = config.metrics;
         this.log = config.log ?? consoleLogger;
-        this.heartbeatPing = config.heartbeatPing;
+
+        // One inbound listener fans out to all app handlers and transparently absorbs the
+        // framework's keepalive frames (auto-pong a PING, swallow a PONG) so the application
+        // never sees them — the raw counterpart of GGSocket's control-frame PING/PONG.
+        this.adapter.onRawMessage!((d, isBinary) => {
+            this.lastActivity = Date.now();
+            const kind = rawKeepaliveKind(d, isBinary);
+            if (kind === "ping") { this.send(RAW_PONG); return; }
+            if (kind === "pong") return;
+            this.scope?.ensureEntered();
+            this.connectionContext.run(() => {
+                for (const h of this.messageHandlers) h(d as Buffer, isBinary);
+            });
+        });
 
         this.adapter.onClose(() => {
             this.scope?.ensureEntered();
@@ -80,17 +86,13 @@ export class GGRawSocket {
     }
 
     /**
-     * Deliver every inbound frame as a Buffer plus `isBinary` (the WebSocket frame type — a
-     * text-vs-binary protocol like a terminal relies on it). Runs inside the connection context
-     * so the handler can read the authenticated principal. Any inbound frame is also proof of
-     * life for the heartbeat watchdog.
+     * Register a handler for inbound frames, delivered as a Buffer plus `isBinary` (the WebSocket
+     * frame type — a text-vs-binary protocol like a terminal relies on it). Handlers run inside the
+     * connection context so they can read the authenticated principal; multiple may be registered.
+     * Framework keepalive frames are absorbed before dispatch, so handlers never see them.
      */
     public onMessage(handler: (data: Buffer, isBinary: boolean) => void): this {
-        this.adapter.onRawMessage!((d, isBinary) => {
-            this.lastActivity = Date.now();
-            this.scope?.ensureEntered();
-            this.connectionContext.run(() => handler(d as Buffer, isBinary));
-        });
+        this.messageHandlers.push(handler);
         return this;
     }
 
@@ -122,7 +124,10 @@ export class GGRawSocket {
             logSource: this,
             close: () => this.close(),
             registerCleanup: (fn) => this.onCloseCallbacks.push(fn),
-            appPing: this.heartbeatPing !== undefined ? () => this.send(this.heartbeatPing!) : undefined,
+            // A raw stream has no protocol ping in the browser; probe with the framework's reserved
+            // keepalive frame (the peer auto-pongs in the dispatch above). On Node, protocol ping is
+            // preferred and this is ignored.
+            appPing: () => this.send(RAW_PING),
         });
     }
 
