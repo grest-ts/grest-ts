@@ -90,8 +90,9 @@ export function openClientConnection<T>(opts: {
                     await gateMiddlewares(middlewares);
                     const headers = buildHandshakeHeaders(middlewares ?? []);
                     adapter.send(Message.create(MessageType.HANDSHAKE, "", "", headers));
-                    await awaitHandshakeResponse(adapter, handshakeTimeoutMs);
-                    resolve(makeSocket(adapter, context));
+                    // Build on OK, not after it: ws can deliver OK and a following server frame
+                    // back-to-back, so the socket's listener must exist the instant OK lands.
+                    resolve(await awaitHandshakeResponse(adapter, handshakeTimeoutMs, () => makeSocket(adapter, context)));
                 });
             } catch (error) {
                 reject(error);
@@ -102,17 +103,18 @@ export function openClientConnection<T>(opts: {
 }
 
 /**
- * Listen for the handshake response. The caller is responsible for actually SENDING
- * the HANDSHAKE frame (timing differs between the two clients).
+ * Listen for the handshake response. The caller actually SENDS the HANDSHAKE frame.
+ * `build` runs synchronously when HANDSHAKE_OK is parsed (before the next frame is
+ * dispatched) and its result resolves the promise.
  */
-export function awaitHandshakeResponse(adapter: SocketAdapter, timeoutMs: number): Promise<void> {
-    return withTimeout(new Promise<void>((resolve, reject) => {
+export function awaitHandshakeResponse<T>(adapter: SocketAdapter, timeoutMs: number, build: () => T): Promise<T> {
+    return withTimeout(new Promise<T>((resolve, reject) => {
         const onMsg = (data: string) => {
             const msg = Message.parse(data);
             if (!msg) return;
             if (msg.type === MessageType.HANDSHAKE_OK) {
                 adapter.offMessage(onMsg);
-                resolve();
+                resolve(build());
             } else if (msg.type === MessageType.HANDSHAKE_ERR) {
                 adapter.offMessage(onMsg);
                 reject(reconstructHandshakeError(msg.data));

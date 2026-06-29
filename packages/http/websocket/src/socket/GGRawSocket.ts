@@ -77,6 +77,9 @@ export class GGRawSocket {
 
     private readonly onCloseCallbacks: Array<() => void> = [];
     private readonly messageHandlers: Array<(data: Buffer, isBinary: boolean) => void> = [];
+    // Frames received before the first onMessage handler exists — held, then flushed on
+    // registration, so a peer's first frame isn't lost in that window.
+    private readonly pendingInbound: Array<[Buffer, boolean]> = [];
 
     constructor(adapter: SocketAdapter, config: GGRawSocketConfig) {
         this.adapter = adapter;
@@ -101,6 +104,10 @@ export class GGRawSocket {
             }
             this.scope?.ensureEntered();
             this.connectionContext.run(() => {
+                if (this.messageHandlers.length === 0) {
+                    this.pendingInbound.push([d as Buffer, isBinary]);
+                    return;
+                }
                 for (const h of this.messageHandlers) h(d as Buffer, isBinary);
             });
         });
@@ -123,9 +130,19 @@ export class GGRawSocket {
      * frame type — a text-vs-binary protocol like a terminal relies on it). Handlers run inside the
      * connection context so they can read the authenticated principal; multiple may be registered.
      * Framework keepalive frames are absorbed before dispatch, so handlers never see them.
+     * The first registration flushes `pendingInbound` (frames that arrived before it).
      */
     public onMessage(handler: (data: Buffer, isBinary: boolean) => void): this {
         this.messageHandlers.push(handler);
+        if (this.pendingInbound.length > 0) {
+            const buffered = this.pendingInbound.splice(0, this.pendingInbound.length);
+            this.scope?.ensureEntered();
+            this.connectionContext.run(() => {
+                for (const [data, isBinary] of buffered) {
+                    for (const h of this.messageHandlers) h(data, isBinary);
+                }
+            });
+        }
         return this;
     }
 

@@ -375,10 +375,9 @@ export class GGSocketServer<Query, TSocket extends ServerSocket = GGSocket> {
     }
 
     /**
-     * Raw mode: the handshake (query + auth) already passed. Build a GGRawSocket, let the
-     * connection handlers attach their byte listeners, THEN send HANDSHAKE_OK (when the client
-     * speaks the grest-ts handshake) — so it only starts streaming once the server is listening
-     * (no first-frame race). Custom clients get no HANDSHAKE_OK (`sendHandshakeOk=false`).
+     * HANDSHAKE_OK must go out BEFORE the connection handlers run: the client discards
+     * frames until it sees OK, so a handler's initial frame (e.g. a snapshot) is lost if
+     * sent first. Custom clients get no HANDSHAKE_OK (`sendHandshakeOk=false`).
      */
     private async openRawConnection(
         adapter: NodeSocketAdapter,
@@ -414,6 +413,8 @@ export class GGSocketServer<Query, TSocket extends ServerSocket = GGSocket> {
             if (GG_METRICS.has()) GGWebSocketMetrics.connectionsActive.dec(1, connectionLabels);
         });
 
+        if (sendHandshakeOk) adapter.send(Message.create(MessageType.HANDSHAKE_OK, "", "", null));
+
         for (const handler of this.onConnectionHandlers) {
             try {
                 await handler(socket as unknown as TSocket, queryArgs, upgrade);
@@ -421,8 +422,6 @@ export class GGSocketServer<Query, TSocket extends ServerSocket = GGSocket> {
                 GGLog.error(this, error instanceof Error ? error : new Error(String(error)));
             }
         }
-
-        if (sendHandshakeOk) adapter.send(Message.create(MessageType.HANDSHAKE_OK, "", "", null));
     }
 
     private createLogger(): GGSocketLogger {
