@@ -375,18 +375,9 @@ export class GGSocketServer<Query, TSocket extends ServerSocket = GGSocket> {
     }
 
     /**
-     * Raw mode: the handshake (query + auth) already passed. Build a GGRawSocket, send
-     * HANDSHAKE_OK, THEN run the connection handlers — mirroring the typed path
-     * (`adapter.send(HANDSHAKE_OK)` before `onConnectionHandlers`).
-     *
-     * Order matters and the client side dictates it: until HANDSHAKE_OK arrives the client is
-     * still in its handshake wait and discards every other frame; only afterwards does it build
-     * its GGRawSocket and attach the byte listener. So a handler that sends an initial frame
-     * (e.g. a one-shot snapshot) MUST run after HANDSHAKE_OK or the client never sees it. The
-     * reverse race — the client's first frame landing before a handler has attached its
-     * listener — can't bite: the client only sends once HANDSHAKE_OK has made the round trip,
-     * by which time the handlers (run synchronously right after the send) are already listening.
-     * Custom clients get no HANDSHAKE_OK (`sendHandshakeOk=false`).
+     * HANDSHAKE_OK must go out BEFORE the connection handlers run: the client discards
+     * frames until it sees OK, so a handler's initial frame (e.g. a snapshot) is lost if
+     * sent first. Custom clients get no HANDSHAKE_OK (`sendHandshakeOk=false`).
      */
     private async openRawConnection(
         adapter: NodeSocketAdapter,

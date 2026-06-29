@@ -90,11 +90,8 @@ export function openClientConnection<T>(opts: {
                     await gateMiddlewares(middlewares);
                     const headers = buildHandshakeHeaders(middlewares ?? []);
                     adapter.send(Message.create(MessageType.HANDSHAKE, "", "", headers));
-                    // Build the socket SYNCHRONOUSLY when HANDSHAKE_OK lands (inside the same
-                    // message callback) so its inbound listener is attached before the next frame.
-                    // ws can emit the OK and an immediately-following server frame (e.g. an initial
-                    // snapshot) back-to-back without draining microtasks between them; building in a
-                    // post-await microtask would miss that frame.
+                    // Build on OK, not after it: ws can deliver OK and a following server frame
+                    // back-to-back, so the socket's listener must exist the instant OK lands.
                     resolve(await awaitHandshakeResponse(adapter, handshakeTimeoutMs, () => makeSocket(adapter, context)));
                 });
             } catch (error) {
@@ -106,13 +103,9 @@ export function openClientConnection<T>(opts: {
 }
 
 /**
- * Listen for the handshake response. The caller is responsible for actually SENDING
- * the HANDSHAKE frame (timing differs between the two clients).
- *
- * `build` runs synchronously the moment HANDSHAKE_OK is parsed — in the same message
- * callback, right after the handshake listener is removed — so whatever it wires up
- * (the socket's inbound listener) is in place before the next frame on the wire is
- * dispatched. Its result becomes the resolved value.
+ * Listen for the handshake response. The caller actually SENDS the HANDSHAKE frame.
+ * `build` runs synchronously when HANDSHAKE_OK is parsed (before the next frame is
+ * dispatched) and its result resolves the promise.
  */
 export function awaitHandshakeResponse<T>(adapter: SocketAdapter, timeoutMs: number, build: () => T): Promise<T> {
     return withTimeout(new Promise<T>((resolve, reject) => {

@@ -77,10 +77,8 @@ export class GGRawSocket {
 
     private readonly onCloseCallbacks: Array<() => void> = [];
     private readonly messageHandlers: Array<(data: Buffer, isBinary: boolean) => void> = [];
-    // Inbound frames that arrived before any handler was registered. A peer can legitimately
-    // send the first frame (e.g. an initial snapshot right after HANDSHAKE_OK) in the window
-    // between the socket being built and the connection handler attaching its `onMessage` — hold
-    // them here and flush on the first registration so that frame isn't lost.
+    // Frames received before the first onMessage handler exists — held, then flushed on
+    // registration, so a peer's first frame isn't lost in that window.
     private readonly pendingInbound: Array<[Buffer, boolean]> = [];
 
     constructor(adapter: SocketAdapter, config: GGRawSocketConfig) {
@@ -132,9 +130,7 @@ export class GGRawSocket {
      * frame type — a text-vs-binary protocol like a terminal relies on it). Handlers run inside the
      * connection context so they can read the authenticated principal; multiple may be registered.
      * Framework keepalive frames are absorbed before dispatch, so handlers never see them.
-     *
-     * The first registration flushes any frames buffered before a handler existed (see
-     * `pendingInbound`), so an initial frame a peer sent on connect is delivered in order.
+     * The first registration flushes `pendingInbound` (frames that arrived before it).
      */
     public onMessage(handler: (data: Buffer, isBinary: boolean) => void): this {
         this.messageHandlers.push(handler);
