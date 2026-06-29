@@ -20,6 +20,27 @@ const consoleLogger: GGSocketLogger = {
     error(_source, ...args) { console.error("[GGRawSocket]", ...args) },
 };
 
+// Framework-reserved keepalive frames. A browser can't send a protocol WS ping (the native API
+// hides ping/pong), so a raw stream probes a half-open link with an in-band frame instead. Unlike
+// the typed GGSocket — which has a control-frame channel — a raw payload is opaque, so these ride
+// the wire as ordinary text frames. NUL-wrapping makes collision with real app text (JSON control,
+// log lines) effectively impossible, and they're filtered out of BOTH directions below so the
+// application never sees them — the raw equivalent of GGSocket's transparent PING/PONG.
+const NUL = String.fromCharCode(0);
+const RAW_PING = NUL + "gg-raw-ping" + NUL;
+const RAW_PONG = NUL + "gg-raw-pong" + NUL;
+// Both sentinels are equal-length single-byte strings, so one length gate filters candidates
+// without decoding ordinary (often large) text frames.
+const SENTINEL_LEN = RAW_PING.length;
+
+function rawKeepaliveKind(data: Uint8Array, isBinary: boolean): "ping" | "pong" | undefined {
+    if (isBinary || data.length !== SENTINEL_LEN) return undefined;
+    const text = new TextDecoder().decode(data);
+    if (text === RAW_PING) return "ping";
+    if (text === RAW_PONG) return "pong";
+    return undefined;
+}
+
 export interface GGRawSocketConfig {
     apiName: string;
     socketPath: string;
@@ -29,6 +50,14 @@ export interface GGRawSocketConfig {
     scope?: {ensureEntered(): void};
     metrics?: GGSocketMetrics;
     log?: GGSocketLogger;
+    /**
+     * App-level keepalive (the reserved sentinel ping/pong). Default on. Set false for a
+     * `customClient` socket: the peer is a foreign client that doesn't speak the sentinel, and a
+     * customClient stream is meant to be an untouched byte passthrough — so the framework neither
+     * injects nor inspects for keepalive frames here. Protocol-level (Node `ping`) liveness is
+     * unaffected and still reaps dead peers.
+     */
+    appKeepalive?: boolean;
 }
 
 export class GGRawSocket {
@@ -40,12 +69,14 @@ export class GGRawSocket {
     private readonly scope?: {ensureEntered(): void};
     private readonly metrics?: GGSocketMetrics;
     private readonly log: GGSocketLogger;
+    private readonly appKeepalive: boolean;
 
     private isActive = true;
     private isClosed = false;
     private lastActivity = Date.now();
 
     private readonly onCloseCallbacks: Array<() => void> = [];
+    private readonly messageHandlers: Array<(data: Buffer, isBinary: boolean) => void> = [];
 
     constructor(adapter: SocketAdapter, config: GGRawSocketConfig) {
         this.adapter = adapter;
@@ -55,6 +86,24 @@ export class GGRawSocket {
         this.scope = config.scope;
         this.metrics = config.metrics;
         this.log = config.log ?? consoleLogger;
+        this.appKeepalive = config.appKeepalive ?? true;
+
+        // One inbound listener fans out to all app handlers and, unless this is a foreign
+        // (customClient) passthrough, transparently absorbs the framework's keepalive frames
+        // (auto-pong a PING, swallow a PONG) so the application never sees them — the raw
+        // counterpart of GGSocket's control-frame PING/PONG.
+        this.adapter.onRawMessage!((d, isBinary) => {
+            this.lastActivity = Date.now();
+            if (this.appKeepalive) {
+                const kind = rawKeepaliveKind(d, isBinary);
+                if (kind === "ping") { this.send(RAW_PONG); return; }
+                if (kind === "pong") return;
+            }
+            this.scope?.ensureEntered();
+            this.connectionContext.run(() => {
+                for (const h of this.messageHandlers) h(d as Buffer, isBinary);
+            });
+        });
 
         this.adapter.onClose(() => {
             this.scope?.ensureEntered();
@@ -70,17 +119,13 @@ export class GGRawSocket {
     }
 
     /**
-     * Deliver every inbound frame as a Buffer plus `isBinary` (the WebSocket frame type — a
-     * text-vs-binary protocol like a terminal relies on it). Runs inside the connection context
-     * so the handler can read the authenticated principal. Any inbound frame is also proof of
-     * life for the heartbeat watchdog.
+     * Register a handler for inbound frames, delivered as a Buffer plus `isBinary` (the WebSocket
+     * frame type — a text-vs-binary protocol like a terminal relies on it). Handlers run inside the
+     * connection context so they can read the authenticated principal; multiple may be registered.
+     * Framework keepalive frames are absorbed before dispatch, so handlers never see them.
      */
     public onMessage(handler: (data: Buffer, isBinary: boolean) => void): this {
-        this.adapter.onRawMessage!((d, isBinary) => {
-            this.lastActivity = Date.now();
-            this.scope?.ensureEntered();
-            this.connectionContext.run(() => handler(d as Buffer, isBinary));
-        });
+        this.messageHandlers.push(handler);
         return this;
     }
 
@@ -112,6 +157,10 @@ export class GGRawSocket {
             logSource: this,
             close: () => this.close(),
             registerCleanup: (fn) => this.onCloseCallbacks.push(fn),
+            // A raw stream has no protocol ping in the browser; probe with the framework's reserved
+            // keepalive frame (the peer auto-pongs in the dispatch above). On Node, protocol ping is
+            // preferred and this is ignored; a customClient passthrough opts out entirely.
+            appPing: this.appKeepalive ? () => this.send(RAW_PING) : undefined,
         });
     }
 

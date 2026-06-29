@@ -7,7 +7,8 @@
  */
 
 import {describe, it, expect} from "vitest"
-import {GGSocket} from "@grest-ts/websocket"
+import {GGSocket, GGRawSocket} from "@grest-ts/websocket"
+import {GGContext} from "@grest-ts/context"
 import type {SocketAdapter} from "@grest-ts/websocket/internal"
 
 const wait = (ms: number) => new Promise(r => setTimeout(r, ms))
@@ -86,5 +87,100 @@ describe("GGSocket heartbeat", () => {
         expect(adapter.sent.some(f => f.startsWith("p:"))).toBe(false)   // no app PING frame
 
         socket.close()
+    })
+})
+
+/** Linked raw byte-stream adapter (no protocol ping — the browser case). `dead` simulates a
+ *  silent half-open link: frames are dropped and NO close event is delivered. */
+class RawPair implements SocketAdapter {
+    peer!: RawPair
+    dead = false
+    private raw: Array<(d: Uint8Array, isBinary: boolean) => void> = []
+    private cls: Array<() => void> = []
+    send(): void {}
+    sendRaw(m: Uint8Array | string): void {
+        if (this.dead) return
+        const buf = typeof m === "string" ? Buffer.from(m) : m
+        const p = this.peer
+        queueMicrotask(() => { if (!p.dead) p.raw.forEach(h => h(buf, false)) })
+    }
+    close(): void { this.cls.forEach(h => h()) }
+    onOpen(): void {} onMessage(): void {} onClose(h: () => void): void { this.cls.push(h) } onError(): void {}
+    offOpen(): void {} offMessage(): void {} offClose(): void {} offError(): void {}
+    onRawMessage(h: (d: Uint8Array, isBinary: boolean) => void): void { this.raw.push(h) }
+}
+
+function rawLinkedPair(): {client: GGRawSocket; server: GGRawSocket; a: RawPair; b: RawPair} {
+    const a = new RawPair(), b = new RawPair()
+    a.peer = b; b.peer = a
+    const ctx = new GGContext("raw-heartbeat-test")
+    const client = new GGRawSocket(a, {apiName: "Test", socketPath: "/ws/test", connectionContext: ctx})
+    const server = new GGRawSocket(b, {apiName: "Test", socketPath: "/ws/test", connectionContext: ctx})
+    return {client, server, a, b}
+}
+
+describe("GGRawSocket heartbeat (framework keepalive for byte streams)", () => {
+
+    it("a live link stays open: the peer auto-pongs the framework keepalive ping, no app code", async () => {
+        const {client, server} = rawLinkedPair()
+        let closed = false
+        client.onClose(() => { closed = true })
+
+        client.startHeartbeat({intervalMs: 40, timeoutMs: 25})
+        await wait(250)               // ~6 ping cycles; server GGRawSocket auto-pongs each
+        expect(closed).toBe(false)
+
+        client.close(); server.close()
+    })
+
+    it("a silently half-open link is self-closed by the watchdog", async () => {
+        const {client, server, b} = rawLinkedPair()
+        let closed = false
+        client.onClose(() => { closed = true })
+
+        client.startHeartbeat({intervalMs: 40, timeoutMs: 25})
+        await wait(120)
+        expect(closed).toBe(false)    // alive while the peer auto-pongs
+
+        b.dead = true                 // server stops answering — no close event
+        await wait(200)               // > intervalMs + timeoutMs with no inbound frame
+        expect(closed).toBe(true)
+
+        client.close(); server.close()
+    })
+
+    it("keepalive frames are absorbed by the framework — never delivered to app handlers", async () => {
+        const {client, server} = rawLinkedPair()
+        const clientSeen: string[] = []; const serverSeen: string[] = []
+        client.onMessage((d) => clientSeen.push(d.toString()))
+        server.onMessage((d) => serverSeen.push(d.toString()))
+
+        client.startHeartbeat({intervalMs: 40, timeoutMs: 25})
+        await wait(150)               // several ping/pong round-trips
+
+        expect(serverSeen).toEqual([]) // PING auto-ponged, never surfaced to the server app
+        expect(clientSeen).toEqual([]) // PONG swallowed, never surfaced to the client app
+
+        client.close(); server.close()
+    })
+
+    // Mirrors the private RAW_PING sentinel — a customClient peer must see it verbatim.
+    const SENTINEL_PING = String.fromCharCode(0) + "gg-raw-ping" + String.fromCharCode(0)
+
+    it("appKeepalive:false (customClient): a sentinel-shaped frame passes through untouched, no auto-pong", async () => {
+        const a = new RawPair(), b = new RawPair()
+        a.peer = b; b.peer = a
+        const server = new GGRawSocket(b, {apiName: "X", socketPath: "/x", connectionContext: new GGContext("raw-custom"), appKeepalive: false})
+        const delivered: string[] = []; const backToPeer: string[] = []
+        server.onMessage((d) => delivered.push(d.toString()))
+        a.onRawMessage((d) => backToPeer.push(Buffer.from(d).toString()))
+
+        a.sendRaw(SENTINEL_PING)      // foreign peer happens to send sentinel-shaped bytes
+        await wait(10)
+
+        expect(delivered).toEqual([SENTINEL_PING]) // passthrough: app sees it, not absorbed
+        expect(backToPeer).toEqual([])             // and the framework sent no pong
+
+        server.close()
     })
 })
