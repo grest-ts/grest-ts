@@ -375,10 +375,18 @@ export class GGSocketServer<Query, TSocket extends ServerSocket = GGSocket> {
     }
 
     /**
-     * Raw mode: the handshake (query + auth) already passed. Build a GGRawSocket, let the
-     * connection handlers attach their byte listeners, THEN send HANDSHAKE_OK (when the client
-     * speaks the grest-ts handshake) — so it only starts streaming once the server is listening
-     * (no first-frame race). Custom clients get no HANDSHAKE_OK (`sendHandshakeOk=false`).
+     * Raw mode: the handshake (query + auth) already passed. Build a GGRawSocket, send
+     * HANDSHAKE_OK, THEN run the connection handlers — mirroring the typed path
+     * (`adapter.send(HANDSHAKE_OK)` before `onConnectionHandlers`).
+     *
+     * Order matters and the client side dictates it: until HANDSHAKE_OK arrives the client is
+     * still in its handshake wait and discards every other frame; only afterwards does it build
+     * its GGRawSocket and attach the byte listener. So a handler that sends an initial frame
+     * (e.g. a one-shot snapshot) MUST run after HANDSHAKE_OK or the client never sees it. The
+     * reverse race — the client's first frame landing before a handler has attached its
+     * listener — can't bite: the client only sends once HANDSHAKE_OK has made the round trip,
+     * by which time the handlers (run synchronously right after the send) are already listening.
+     * Custom clients get no HANDSHAKE_OK (`sendHandshakeOk=false`).
      */
     private async openRawConnection(
         adapter: NodeSocketAdapter,
@@ -414,6 +422,8 @@ export class GGSocketServer<Query, TSocket extends ServerSocket = GGSocket> {
             if (GG_METRICS.has()) GGWebSocketMetrics.connectionsActive.dec(1, connectionLabels);
         });
 
+        if (sendHandshakeOk) adapter.send(Message.create(MessageType.HANDSHAKE_OK, "", "", null));
+
         for (const handler of this.onConnectionHandlers) {
             try {
                 await handler(socket as unknown as TSocket, queryArgs, upgrade);
@@ -421,8 +431,6 @@ export class GGSocketServer<Query, TSocket extends ServerSocket = GGSocket> {
                 GGLog.error(this, error instanceof Error ? error : new Error(String(error)));
             }
         }
-
-        if (sendHandshakeOk) adapter.send(Message.create(MessageType.HANDSHAKE_OK, "", "", null));
     }
 
     private createLogger(): GGSocketLogger {

@@ -77,6 +77,11 @@ export class GGRawSocket {
 
     private readonly onCloseCallbacks: Array<() => void> = [];
     private readonly messageHandlers: Array<(data: Buffer, isBinary: boolean) => void> = [];
+    // Inbound frames that arrived before any handler was registered. A peer can legitimately
+    // send the first frame (e.g. an initial snapshot right after HANDSHAKE_OK) in the window
+    // between the socket being built and the connection handler attaching its `onMessage` — hold
+    // them here and flush on the first registration so that frame isn't lost.
+    private readonly pendingInbound: Array<[Buffer, boolean]> = [];
 
     constructor(adapter: SocketAdapter, config: GGRawSocketConfig) {
         this.adapter = adapter;
@@ -101,6 +106,10 @@ export class GGRawSocket {
             }
             this.scope?.ensureEntered();
             this.connectionContext.run(() => {
+                if (this.messageHandlers.length === 0) {
+                    this.pendingInbound.push([d as Buffer, isBinary]);
+                    return;
+                }
                 for (const h of this.messageHandlers) h(d as Buffer, isBinary);
             });
         });
@@ -123,9 +132,21 @@ export class GGRawSocket {
      * frame type — a text-vs-binary protocol like a terminal relies on it). Handlers run inside the
      * connection context so they can read the authenticated principal; multiple may be registered.
      * Framework keepalive frames are absorbed before dispatch, so handlers never see them.
+     *
+     * The first registration flushes any frames buffered before a handler existed (see
+     * `pendingInbound`), so an initial frame a peer sent on connect is delivered in order.
      */
     public onMessage(handler: (data: Buffer, isBinary: boolean) => void): this {
         this.messageHandlers.push(handler);
+        if (this.pendingInbound.length > 0) {
+            const buffered = this.pendingInbound.splice(0, this.pendingInbound.length);
+            this.scope?.ensureEntered();
+            this.connectionContext.run(() => {
+                for (const [data, isBinary] of buffered) {
+                    for (const h of this.messageHandlers) h(data, isBinary);
+                }
+            });
+        }
         return this;
     }
 
