@@ -29,6 +29,14 @@ export interface GGRawSocketConfig {
     scope?: {ensureEntered(): void};
     metrics?: GGSocketMetrics;
     log?: GGSocketLogger;
+    /**
+     * App-level keepalive frame, sent on the heartbeat interval to probe the link. A raw stream
+     * has no framework ping, and a browser can't send a protocol WS ping — so without this the
+     * watchdog self-disables and a half-open link is never detected client-side. Any inbound frame
+     * (ideally a pong the server's handler sends back) counts as proof of life. Set on the client
+     * (browser); omit on the server, where the Node adapter's protocol ping covers liveness.
+     */
+    heartbeatPing?: Uint8Array | string;
 }
 
 export class GGRawSocket {
@@ -40,6 +48,7 @@ export class GGRawSocket {
     private readonly scope?: {ensureEntered(): void};
     private readonly metrics?: GGSocketMetrics;
     private readonly log: GGSocketLogger;
+    private readonly heartbeatPing?: Uint8Array | string;
 
     private isActive = true;
     private isClosed = false;
@@ -55,6 +64,7 @@ export class GGRawSocket {
         this.scope = config.scope;
         this.metrics = config.metrics;
         this.log = config.log ?? consoleLogger;
+        this.heartbeatPing = config.heartbeatPing;
 
         this.adapter.onClose(() => {
             this.scope?.ensureEntered();
@@ -112,6 +122,7 @@ export class GGRawSocket {
             logSource: this,
             close: () => this.close(),
             registerCleanup: (fn) => this.onCloseCallbacks.push(fn),
+            appPing: this.heartbeatPing !== undefined ? () => this.send(this.heartbeatPing!) : undefined,
         });
     }
 

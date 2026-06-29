@@ -7,7 +7,8 @@
  */
 
 import {describe, it, expect} from "vitest"
-import {GGSocket} from "@grest-ts/websocket"
+import {GGSocket, GGRawSocket} from "@grest-ts/websocket"
+import {GGContext} from "@grest-ts/context"
 import type {SocketAdapter} from "@grest-ts/websocket/internal"
 
 const wait = (ms: number) => new Promise(r => setTimeout(r, ms))
@@ -86,5 +87,80 @@ describe("GGSocket heartbeat", () => {
         expect(adapter.sent.some(f => f.startsWith("p:"))).toBe(false)   // no app PING frame
 
         socket.close()
+    })
+})
+
+/** Linked raw byte-stream adapter (no protocol ping — the browser case). `dead` simulates a
+ *  silent half-open link: frames are dropped and NO close event is delivered. */
+class RawPair implements SocketAdapter {
+    peer!: RawPair
+    dead = false
+    private raw: Array<(d: Uint8Array, isBinary: boolean) => void> = []
+    private cls: Array<() => void> = []
+    send(): void {}
+    sendRaw(m: Uint8Array | string): void {
+        if (this.dead) return
+        const buf = typeof m === "string" ? Buffer.from(m) : m
+        const p = this.peer
+        queueMicrotask(() => { if (!p.dead) p.raw.forEach(h => h(buf, false)) })
+    }
+    close(): void { this.cls.forEach(h => h()) }
+    onOpen(): void {} onMessage(): void {} onClose(h: () => void): void { this.cls.push(h) } onError(): void {}
+    offOpen(): void {} offMessage(): void {} offClose(): void {} offError(): void {}
+    onRawMessage(h: (d: Uint8Array, isBinary: boolean) => void): void { this.raw.push(h) }
+}
+
+function rawLinkedPair(heartbeatPing?: string): {client: GGRawSocket; server: GGRawSocket; a: RawPair; b: RawPair} {
+    const a = new RawPair(), b = new RawPair()
+    a.peer = b; b.peer = a
+    const ctx = new GGContext("raw-heartbeat-test")
+    const client = new GGRawSocket(a, {apiName: "Test", socketPath: "/ws/test", connectionContext: ctx, heartbeatPing})
+    const server = new GGRawSocket(b, {apiName: "Test", socketPath: "/ws/test", connectionContext: ctx})
+    client.onMessage(() => {})                  // an inbound frame is the only liveness signal here
+    server.onMessage(() => server.send("pong")) // a real handler pongs each app ping
+    return {client, server, a, b}
+}
+
+describe("GGRawSocket heartbeat (app-level ping for byte streams)", () => {
+
+    it("with heartbeatPing, a peer that answers keeps the link open", async () => {
+        const {client, server} = rawLinkedPair("ping")
+        let closed = false
+        client.onClose(() => { closed = true })
+
+        client.startHeartbeat({intervalMs: 40, timeoutMs: 25})
+        await wait(250)
+        expect(closed).toBe(false)
+
+        client.close(); server.close()
+    })
+
+    it("with heartbeatPing, a silently half-open link is self-closed by the watchdog", async () => {
+        const {client, server, b} = rawLinkedPair("ping")
+        let closed = false
+        client.onClose(() => { closed = true })
+
+        client.startHeartbeat({intervalMs: 40, timeoutMs: 25})
+        await wait(120)
+        expect(closed).toBe(false)    // alive while the peer pongs
+
+        b.dead = true                 // server stops answering — no close event
+        await wait(200)               // > intervalMs + timeoutMs with no inbound frame
+        expect(closed).toBe(true)
+
+        client.close(); server.close()
+    })
+
+    it("without heartbeatPing (the old behaviour), the watchdog self-disables — a dead link goes undetected", async () => {
+        const {client, server, b} = rawLinkedPair(undefined)   // no app ping, no protocol ping
+        let closed = false
+        client.onClose(() => { closed = true })
+
+        client.startHeartbeat({intervalMs: 40, timeoutMs: 25})
+        b.dead = true
+        await wait(200)
+        expect(closed).toBe(false)    // nothing probes the link, so the silent drop is never noticed
+
+        client.close(); server.close()
     })
 })
