@@ -13,13 +13,33 @@ import type {GGContext} from "@grest-ts/context";
 import {GGSocketLogger, GGSocketMetrics, type GGHeartbeatConfig} from "./GGSocket";
 import {SocketAdapter} from "./SocketAdapter";
 import {startSocketHeartbeat} from "../liveness/socketHeartbeat";
-import {RAW_PING, RAW_PONG, rawKeepaliveKind} from "../liveness/rawKeepalive";
 
 const consoleLogger: GGSocketLogger = {
     debug(_source, message, ...args) { console.debug("[GGRawSocket]", message, ...args) },
     warn(_source, message, ...args) { console.warn("[GGRawSocket]", message, ...args) },
     error(_source, ...args) { console.error("[GGRawSocket]", ...args) },
 };
+
+// Framework-reserved keepalive frames. A browser can't send a protocol WS ping (the native API
+// hides ping/pong), so a raw stream probes a half-open link with an in-band frame instead. Unlike
+// the typed GGSocket — which has a control-frame channel — a raw payload is opaque, so these ride
+// the wire as ordinary text frames. NUL-wrapping makes collision with real app text (JSON control,
+// log lines) effectively impossible, and they're filtered out of BOTH directions below so the
+// application never sees them — the raw equivalent of GGSocket's transparent PING/PONG.
+const NUL = String.fromCharCode(0);
+const RAW_PING = NUL + "gg-raw-ping" + NUL;
+const RAW_PONG = NUL + "gg-raw-pong" + NUL;
+// Both sentinels are equal-length single-byte strings, so one length gate filters candidates
+// without decoding ordinary (often large) text frames.
+const SENTINEL_LEN = RAW_PING.length;
+
+function rawKeepaliveKind(data: Uint8Array, isBinary: boolean): "ping" | "pong" | undefined {
+    if (isBinary || data.length !== SENTINEL_LEN) return undefined;
+    const text = new TextDecoder().decode(data);
+    if (text === RAW_PING) return "ping";
+    if (text === RAW_PONG) return "pong";
+    return undefined;
+}
 
 export interface GGRawSocketConfig {
     apiName: string;
