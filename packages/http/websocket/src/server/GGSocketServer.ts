@@ -396,6 +396,9 @@ export class GGSocketServer<Query, TSocket extends ServerSocket = GGSocket> {
             scope: this.scope,
             metrics: this.createMetrics(),
             log: this.createLogger(),
+            // A customClient peer is foreign and doesn't speak the keepalive sentinel; keep its
+            // byte stream an untouched passthrough (protocol ping still covers liveness).
+            appKeepalive: !this.customClient,
         });
         this.activeSockets.add(socket);
 

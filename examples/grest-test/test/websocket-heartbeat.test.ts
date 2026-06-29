@@ -163,4 +163,24 @@ describe("GGRawSocket heartbeat (framework keepalive for byte streams)", () => {
 
         client.close(); server.close()
     })
+
+    // Mirrors the private RAW_PING sentinel — a customClient peer must see it verbatim.
+    const SENTINEL_PING = String.fromCharCode(0) + "gg-raw-ping" + String.fromCharCode(0)
+
+    it("appKeepalive:false (customClient): a sentinel-shaped frame passes through untouched, no auto-pong", async () => {
+        const a = new RawPair(), b = new RawPair()
+        a.peer = b; b.peer = a
+        const server = new GGRawSocket(b, {apiName: "X", socketPath: "/x", connectionContext: new GGContext("raw-custom"), appKeepalive: false})
+        const delivered: string[] = []; const backToPeer: string[] = []
+        server.onMessage((d) => delivered.push(d.toString()))
+        a.onRawMessage((d) => backToPeer.push(Buffer.from(d).toString()))
+
+        a.sendRaw(SENTINEL_PING)      // foreign peer happens to send sentinel-shaped bytes
+        await wait(10)
+
+        expect(delivered).toEqual([SENTINEL_PING]) // passthrough: app sees it, not absorbed
+        expect(backToPeer).toEqual([])             // and the framework sent no pong
+
+        server.close()
+    })
 })

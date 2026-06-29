@@ -50,6 +50,14 @@ export interface GGRawSocketConfig {
     scope?: {ensureEntered(): void};
     metrics?: GGSocketMetrics;
     log?: GGSocketLogger;
+    /**
+     * App-level keepalive (the reserved sentinel ping/pong). Default on. Set false for a
+     * `customClient` socket: the peer is a foreign client that doesn't speak the sentinel, and a
+     * customClient stream is meant to be an untouched byte passthrough — so the framework neither
+     * injects nor inspects for keepalive frames here. Protocol-level (Node `ping`) liveness is
+     * unaffected and still reaps dead peers.
+     */
+    appKeepalive?: boolean;
 }
 
 export class GGRawSocket {
@@ -61,6 +69,7 @@ export class GGRawSocket {
     private readonly scope?: {ensureEntered(): void};
     private readonly metrics?: GGSocketMetrics;
     private readonly log: GGSocketLogger;
+    private readonly appKeepalive: boolean;
 
     private isActive = true;
     private isClosed = false;
@@ -77,15 +86,19 @@ export class GGRawSocket {
         this.scope = config.scope;
         this.metrics = config.metrics;
         this.log = config.log ?? consoleLogger;
+        this.appKeepalive = config.appKeepalive ?? true;
 
-        // One inbound listener fans out to all app handlers and transparently absorbs the
-        // framework's keepalive frames (auto-pong a PING, swallow a PONG) so the application
-        // never sees them — the raw counterpart of GGSocket's control-frame PING/PONG.
+        // One inbound listener fans out to all app handlers and, unless this is a foreign
+        // (customClient) passthrough, transparently absorbs the framework's keepalive frames
+        // (auto-pong a PING, swallow a PONG) so the application never sees them — the raw
+        // counterpart of GGSocket's control-frame PING/PONG.
         this.adapter.onRawMessage!((d, isBinary) => {
             this.lastActivity = Date.now();
-            const kind = rawKeepaliveKind(d, isBinary);
-            if (kind === "ping") { this.send(RAW_PONG); return; }
-            if (kind === "pong") return;
+            if (this.appKeepalive) {
+                const kind = rawKeepaliveKind(d, isBinary);
+                if (kind === "ping") { this.send(RAW_PONG); return; }
+                if (kind === "pong") return;
+            }
             this.scope?.ensureEntered();
             this.connectionContext.run(() => {
                 for (const h of this.messageHandlers) h(d as Buffer, isBinary);
@@ -146,8 +159,8 @@ export class GGRawSocket {
             registerCleanup: (fn) => this.onCloseCallbacks.push(fn),
             // A raw stream has no protocol ping in the browser; probe with the framework's reserved
             // keepalive frame (the peer auto-pongs in the dispatch above). On Node, protocol ping is
-            // preferred and this is ignored.
-            appPing: () => this.send(RAW_PING),
+            // preferred and this is ignored; a customClient passthrough opts out entirely.
+            appPing: this.appKeepalive ? () => this.send(RAW_PING) : undefined,
         });
     }
 
