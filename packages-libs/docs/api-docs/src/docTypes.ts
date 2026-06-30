@@ -7,7 +7,6 @@
  * (service/groups/contracts/methods/errors) is invented here.
  */
 
-import type {GGSchemaNodeKind, GGSchemaDescription} from "@grest-ts/schema";
 import type {GGSchemaDocs} from "@grest-ts/schema";
 
 // ── Schema layer ───────────────────────────────────────────────────────
@@ -53,9 +52,6 @@ export type JsonSchemaNodeKind =
     | { kind: 'unknown' }
     | { kind: 'file'; accept?: readonly string[]; maxSize?: number }
     | { kind: 'password'; minLength: number; maxLength: number };
-
-// Re-export for caller convenience.
-export type { GGSchemaNodeKind, GGSchemaDescription, GGSchemaDocs };
 
 /** Reference into the shared schema dictionary OR an inline schema description. */
 export type SchemaRef =
