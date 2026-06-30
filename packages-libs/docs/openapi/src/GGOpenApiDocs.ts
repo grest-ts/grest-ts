@@ -302,7 +302,3 @@ GGHttp.prototype.openApi = function (
     new GGOpenApiDocs(this.httpServer, options); // auto-registers in constructor
     return this;
 };
-
-// Keep backward-compatible overload that still accepts an explicit schema list.
-// This is useful for toOpenApi() in CI scripts and standalone GGOpenApiDocs usage.
-export type {GGHttpSchema};
