@@ -334,7 +334,7 @@ export function App() {
                     <div>
                         <div style={{display: "flex", alignItems: "center", gap: 10, marginBottom: 10}}>
                             <span style={{width: 7, height: 7, borderRadius: "50%", background: "#7c3aed", display: "inline-block"}}/>
-                            <strong style={{fontSize: 13}}>{session.derived.org.get().name}</strong>
+                            <strong style={{fontSize: 13}}>{session.derived.org.get()?.name}</strong>
                             <span style={{fontSize: 11, color: "#888"}}>{session.derived.org.description}</span>
                             <button style={{...btn, fontSize: 11}} onClick={deselectOrg}>Deselect</button>
                         </div>

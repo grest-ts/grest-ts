@@ -48,6 +48,6 @@ if (false as boolean) {
     session.login({username: "alice", password: "secret123"})            // authenticate + store tokens
     session.isLoggedIn()                                                 // boolean: active session?
     session.hasPermission(UserPermission.CAN_UPDATE_RED_BANNER_COUNTER)  // UX gate only — server re-checks
-    session.get().email                                                 // current user identity
+    ;(session.get() as User).email                                      // current user identity
     session.logout()                                                    // clear session + tokens
 }
