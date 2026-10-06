@@ -243,13 +243,17 @@ cleanupGeneratedFiles();
 cleanupCaches();
 cleanupWindowsNulFile();
 
-console.log("\n\n--------------------------------------------\n📦 Running gg config generation (tsconfig, package, vitest config etc...)");
-execSync("npm run generate", {stdio: "inherit", cwd: import.meta.dirname});
-console.log("✅ Config generation completed");
-
+// Must precede `npm run generate`: the packager derives testkit-vitest's
+// peerDependencies from extensions.d.ts's imports, and that file is gitignored —
+// absent on a fresh checkout, the generated peerDependencies silently lose every
+// package only referenced there.
 console.log("\n\n--------------------------------------------\n📦 Regenerating testkit extension references...");
 generateTestkitExtensions();
 console.log("✅ Extension references generated");
+
+console.log("\n\n--------------------------------------------\n📦 Running gg config generation (tsconfig, package, vitest config etc...)");
+execSync("npm run generate", {stdio: "inherit", cwd: import.meta.dirname});
+console.log("✅ Config generation completed");
 
 console.log("\n\n--------------------------------------------\n📦 Running type check...");
 execSync("npm run typecheck", {stdio: "inherit", cwd: import.meta.dirname});
