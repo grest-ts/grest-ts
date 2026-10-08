@@ -4,6 +4,78 @@ import {GGLocator, GGLocatorKey, GGLocatorServiceType} from "@grest-ts/locator"
 import {GGLog} from "@grest-ts/logger"
 import type {GGDynamoDbConfig, GGDynamoDbHostData, GGDynamoDbUserData} from "./GGDynamoDbConfig"
 
+/** One page of rows plus an opaque continuation token. `cursor` is absent once
+ *  the index is exhausted. */
+export interface GGDynamoDbPage<T> {
+    items: T[]
+    cursor: string | undefined
+}
+
+// DynamoDB caps a single Query/Scan response at 1MB however many rows match,
+// handing back LastEvaluatedKey instead — so one command is never proof of a
+// complete result. Ceiling for the calls that drain every page themselves.
+const MAX_AUTO_PAGED_ITEMS = 10_000
+
+// The cursor is DynamoDB's LastEvaluatedKey, which callers pass back through an
+// API boundary. Encoded so it reads as one opaque string rather than something
+// a client might try to construct.
+function encodeCursor(key: Record<string, unknown>): string {
+    return Buffer.from(JSON.stringify(key), "utf8").toString("base64url")
+}
+
+function decodeCursor(cursor: string): Record<string, unknown> {
+    let parsed: unknown
+    try {
+        parsed = JSON.parse(Buffer.from(cursor, "base64url").toString("utf8"))
+    } catch {
+        throw new Error("GGDynamoDb: malformed cursor")
+    }
+    if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+        throw new Error("GGDynamoDb: malformed cursor")
+    }
+    return parsed as Record<string, unknown>
+}
+
+/**
+ * Follows DynamoDB's pagination to the end, concatenating every page.
+ *
+ * An explicit `limit` bounds the walk and the result; without one the result is capped at
+ * `MAX_AUTO_PAGED_ITEMS` and THROWS past it, because a result set that large is
+ * a listing that should be paging rather than one a service holds in memory.
+ * `describe` names the caller in that error.
+ */
+export async function drainPages<T>(
+    fetch: (cursor: string | undefined) => Promise<GGDynamoDbPage<T>>,
+    limit: number | undefined,
+    describe: string,
+): Promise<T[]> {
+    const items: T[] = []
+    let cursor: string | undefined
+    do {
+        // DynamoDB's `Limit` is per request, so a bounded caller has to shrink
+        // it as pages accumulate or page two over-fetches.
+        const remaining = limit === undefined ? undefined : limit - items.length
+        if (remaining !== undefined && remaining <= 0) break
+
+        const page = await fetch(cursor)
+        items.push(...page.items)
+        cursor = page.cursor
+
+        // `remaining` rides the request as DynamoDB's `Limit`, but enforce the
+        // bound here too: the contract is "at most `limit` rows" regardless of
+        // what the source chose to hand back.
+        if (limit !== undefined && items.length >= limit) return items.slice(0, limit)
+
+        if (limit === undefined && items.length > MAX_AUTO_PAGED_ITEMS) {
+            throw new Error(
+                `${describe} exceeded ${MAX_AUTO_PAGED_ITEMS} rows — ` +
+                `page it explicitly with queryPage()/scanPage() instead of loading it all`,
+            )
+        }
+    } while (cursor)
+    return items
+}
+
 /**
  * DynamoDB connection — owns the SDK client, exposes raw `get/put/...`
  * primitives. Schema-bound table operations live on `GGDynamoDbTable`.
@@ -208,27 +280,83 @@ export class GGDynamoDb {
         await this.getClient().send(new DeleteCommand({TableName: table, Key: key}))
     }
 
-    async query<T>(
+    /**
+     * One page of a query, plus the cursor to continue it. Use this for a
+     * listing whose caller pages (an API endpoint, a UI list); use `query`
+     * when the caller needs the whole result set.
+     *
+     * `descending` walks the sort key backwards (newest-first on a timestamp
+     * SK). A page can come back empty but still carry a `cursor` — follow the
+     * cursor, not the item count.
+     */
+    async queryPage<T>(
         table: string,
         indexName: string | undefined,
         keyCondition: string,
         values: Record<string, unknown>,
-        opts?: {limit?: number},
-    ): Promise<T[]> {
+        opts?: {limit?: number, descending?: boolean, cursor?: string},
+    ): Promise<GGDynamoDbPage<T>> {
         const result = await this.getClient().send(new QueryCommand({
             TableName: table,
             IndexName: indexName,
             KeyConditionExpression: keyCondition,
             ExpressionAttributeValues: values,
             Limit: opts?.limit,
+            ...(opts?.descending && {ScanIndexForward: false}),
+            ...(opts?.cursor && {ExclusiveStartKey: decodeCursor(opts.cursor)}),
         }))
-        return (result.Items ?? []) as T[]
+        return {
+            items: (result.Items ?? []) as T[],
+            cursor: result.LastEvaluatedKey ? encodeCursor(result.LastEvaluatedKey) : undefined,
+        }
     }
 
-    async scan<T>(table: string): Promise<T[]> {
-        const result = await this.getClient().send(new ScanCommand({TableName: table}))
-        return (result.Items ?? []) as T[]
+    /**
+     * Every matching row, following DynamoDB's continuation to the end.
+     *
+     * An explicit `limit` bounds the walk; without one it is capped at
+     * `MAX_AUTO_PAGED_ITEMS` and THROWS past it, because a result set that
+     * large is a listing that should be paging (`queryPage`) rather than one
+     * hub should hold in memory.
+     */
+    async query<T>(
+        table: string,
+        indexName: string | undefined,
+        keyCondition: string,
+        values: Record<string, unknown>,
+        opts?: {limit?: number, descending?: boolean},
+    ): Promise<T[]> {
+        return drainPages(
+            cursor => this.queryPage<T>(table, indexName, keyCondition, values, {
+                limit: opts?.limit, descending: opts?.descending, cursor,
+            }),
+            opts?.limit,
+            `GGDynamoDb '${this.config.name}' query on table '${table}'${indexName ? ` index '${indexName}'` : ""}`,
+        )
     }
+
+    /** One page of a full-table scan. See `queryPage`. */
+    async scanPage<T>(table: string, opts?: {limit?: number, cursor?: string}): Promise<GGDynamoDbPage<T>> {
+        const result = await this.getClient().send(new ScanCommand({
+            TableName: table,
+            Limit: opts?.limit,
+            ...(opts?.cursor && {ExclusiveStartKey: decodeCursor(opts.cursor)}),
+        }))
+        return {
+            items: (result.Items ?? []) as T[],
+            cursor: result.LastEvaluatedKey ? encodeCursor(result.LastEvaluatedKey) : undefined,
+        }
+    }
+
+    /** Every row in the table, paged to the end. Capped like `query`. */
+    async scan<T>(table: string, opts?: {limit?: number}): Promise<T[]> {
+        return drainPages(
+            cursor => this.scanPage<T>(table, {limit: opts?.limit, cursor}),
+            opts?.limit,
+            `GGDynamoDb '${this.config.name}' scan on table '${table}'`,
+        )
+    }
+
 
     /**
      * Escape hatch — exposes a fresh raw low-level client (no
