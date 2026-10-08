@@ -1,9 +1,11 @@
 import type {GGSchema} from "@grest-ts/schema"
-import type {GGDynamoDb} from "./GGDynamoDb"
+import type {GGDynamoDb, GGDynamoDbPage} from "./GGDynamoDb"
 
 /**
  * Schema-bound table gateway. Owns one DynamoDB table; all reads/writes
- * go through it. Validates against the schema on `put` / `putConditional`
+ * go through it. `query` / `scan` follow DynamoDB's 1MB continuation to the
+ * end (capped — see `GGDynamoDb.query`); `queryPage` / `scanPage` hand the
+ * cursor to the caller instead. Validates against the schema on `put` / `putConditional`
  * — shape mistakes throw at the write boundary instead of becoming silent
  * DDB corruption. Reads are NOT validated (deliberate; pre-launch).
  *
@@ -100,8 +102,24 @@ export class GGDynamoDbTable<
         indexName: string | undefined,
         keyCondition: string,
         values: Record<string, unknown>,
+        opts?: {limit?: number, descending?: boolean},
     ): Promise<T[]> {
-        return this.db.query<T>(this.tableName, indexName, keyCondition, values)
+        return this.db.query<T>(this.tableName, indexName, keyCondition, values, opts)
+    }
+
+    /**
+     * One page of `query`, plus the cursor to continue it — for a listing whose
+     * caller pages rather than one that wants the whole result set. `descending`
+     * walks the sort key backwards, which is how a timestamp SK yields
+     * newest-first without sorting in memory.
+     */
+    async queryPage(
+        indexName: string | undefined,
+        keyCondition: string,
+        values: Record<string, unknown>,
+        opts?: {limit?: number, descending?: boolean, cursor?: string},
+    ): Promise<GGDynamoDbPage<T>> {
+        return this.db.queryPage<T>(this.tableName, indexName, keyCondition, values, opts)
     }
 
     /**
@@ -121,6 +139,11 @@ export class GGDynamoDbTable<
 
     async scan(): Promise<T[]> {
         return this.db.scan<T>(this.tableName)
+    }
+
+    /** One page of a full-table scan. See `queryPage`. */
+    async scanPage(opts?: {limit?: number, cursor?: string}): Promise<GGDynamoDbPage<T>> {
+        return this.db.scanPage<T>(this.tableName, opts)
     }
 
     private buildKey(pk: T[PK], sk: unknown): Record<string, unknown> {
