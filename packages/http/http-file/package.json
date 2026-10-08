@@ -48,7 +48,7 @@
     "download"
   ],
   "engines": {
-    "node": ">=24"
+    "node": ">=26"
   },
   "dependencies": {
     "busboy": "^1.6.0"

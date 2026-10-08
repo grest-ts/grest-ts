@@ -40,7 +40,7 @@
     "testkit"
   ],
   "engines": {
-    "node": ">=24"
+    "node": ">=26"
   },
   "peerDependencies": {
     "@grest-ts/locator": "0.0.71"

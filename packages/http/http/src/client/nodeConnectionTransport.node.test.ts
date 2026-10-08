@@ -11,9 +11,9 @@ import {GGHttpSchema} from '../schema/GGHttpSchema'
 import {GGRpc} from '../rpc/GGHttpRouteRPC'
 import {createClient} from './GGHttpSchema.createClient'
 import {GGConnectionSettingsKey} from '../schema/GGConnectionSettingsKey'
-import {invalidateTlsPinAgent} from './nodeConnectionTransport.node'
+import {invalidateTlsPinAgent} from './nodeConnectionTransport.node.js'
 // Side-effect import: registers nodeDefaultTransport as the default for url-less node clients.
-import './GGHttpSchema.createClient.node'
+import './GGHttpSchema.createClient.node.js'
 
 const PingContract = new GGContractClass("PinnedTlsTestApi", {
     ping: {

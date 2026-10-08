@@ -34,7 +34,7 @@
     "starter"
   ],
   "engines": {
-    "node": ">=24"
+    "node": ">=26"
   },
   "bin": "./index.mjs"
 }

@@ -14,7 +14,7 @@
 import {GG_NO_PERMISSIONS, GGContractMethod, GGPermission} from "@grest-ts/schema"
 import type {GGTransportMiddleware} from "@grest-ts/context"
 import {GGWireContextKey} from "../../schema/GGWireContextKey"
-import "../../schema/GGWireContextKey.node"
+import "../../schema/GGWireContextKey.node.js"
 
 interface HttpSchemaLike {
     name: string

@@ -50,9 +50,9 @@
     "helpers"
   ],
   "engines": {
-    "node": ">=24"
+    "node": ">=26"
   },
   "dependencies": {
-    "fast-glob": "^3.3.3"
+    "tinyglobby": "^0.2.17"
   }
 }

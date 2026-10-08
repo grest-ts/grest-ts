@@ -8,7 +8,7 @@ definePackage({
     hasTests: true,
     publishToNpm: true,
     dependencies: {
-        "fast-glob": "^3.3.3",
-        "ts-morph": "^27.0.2"
+        "tinyglobby": "^0.2.17",
+        "ts-morph": "^28.0.0"
     }
 })

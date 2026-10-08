@@ -36,4 +36,4 @@ export * from "./client/GGWsLogMode";
 import "./server/GGHttp.ws";
 import "./client/GGWebSocketSchema.createClient";
 import "./client/GGRawWebSocketSchema.createClient";
-import "./client/GGWebSocketSchema.createClient.node";
+import "./client/GGWebSocketSchema.createClient.node.js";

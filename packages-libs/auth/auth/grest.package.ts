@@ -8,7 +8,7 @@ definePackage({
     publishToNpm: true,
     hasTests: true,
     dependencies: {
-        "jose": "^5.9.6",
+        "jose": "^6.2.12",
     },
     peerDependencies: {
         "bcrypt": "^6.0.0",

@@ -9,7 +9,7 @@ import type {GGHttpSchema} from "../schema/GGHttpSchema";
 import {checkWiresImplemented} from "./checkers/checkWiresImplemented";
 import {checkPermissionsAtStart} from "./checkers/checkPermissionsAtStart";
 import {checkWireConflicts} from "./checkers/checkWireConflicts";
-import "../schema/GGWireContextKey.node";
+import "../schema/GGWireContextKey.node.js";
 import {GGContractMethod} from "@grest-ts/schema";
 import type {GGTransportMiddleware} from "@grest-ts/context";
 // Forward declaration — actual type lives in @grest-ts/websocket to avoid circular dep.

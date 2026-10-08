@@ -4,7 +4,7 @@
 import {execSync, exec} from "child_process";
 import {promisify} from "util";
 import path from "path";
-import fg from "fast-glob";
+import {globSync} from "tinyglobby";
 import fs from "fs";
 import * as esbuild from "esbuild";
 import {generateTestkitExtensions} from "#scripts/packager/generate-testkit-extensions";
@@ -23,7 +23,7 @@ async function runPool<T>(items: T[], limit: number, fn: (item: T) => Promise<vo
 /** Names of every package that opts into a browser target (`browser: true` in grest.package.ts). */
 function getBrowserPackages(): string[] {
     const root = import.meta.dirname;
-    const pkgFiles = fg.sync("**/grest.package.ts", {cwd: root, absolute: true, ignore: ["**/node_modules/**"]});
+    const pkgFiles = globSync("**/grest.package.ts", {cwd: root, absolute: true, ignore: ["**/node_modules/**"]});
     const names: string[] = [];
     for (const file of pkgFiles) {
         const src = fs.readFileSync(file, "utf-8");
@@ -37,7 +37,7 @@ function getBrowserPackages(): string[] {
 function cleanupGeneratedFiles() {
     console.log("\n\n--------------------------------------------\n📦 Cleaning up possible typescript generated files...");
     const pattern = path.join(import.meta.dirname, "**/*.ts").replace(/\\/g, "/");
-    const tsFiles = fg.sync(pattern, {
+    const tsFiles = globSync(pattern, {
         absolute: true,
         ignore: ["**/node_modules/**", "**/dist/**", "**/*.d.ts"]
     });
@@ -70,7 +70,7 @@ function cleanupCaches() {
     let deletedCount = 0;
 
     for (const pattern of patterns) {
-        const files = fg.sync(path.join(import.meta.dirname, pattern).replace(/\\/g, "/"), {
+        const files = globSync(path.join(import.meta.dirname, pattern).replace(/\\/g, "/"), {
             absolute: true,
             ignore: ["**/node_modules/**"],
             onlyFiles: false
@@ -206,7 +206,7 @@ async function checkBrowserTypes() {
 async function checkIsolatedConfigs() {
     console.log("\n\n--------------------------------------------\n📦 Type checking per-package test/ + testkit/ configs in isolation...");
     const root = import.meta.dirname;
-    const configs = fg.sync(
+    const configs = globSync(
         ["{packages,packages-libs,packages-tooling}/**/test/tsconfig.json", "{packages,packages-libs,packages-tooling}/**/testkit/tsconfig.json"],
         {cwd: root, absolute: true, ignore: ["**/node_modules/**", "**/src/**"]},
     ).sort();

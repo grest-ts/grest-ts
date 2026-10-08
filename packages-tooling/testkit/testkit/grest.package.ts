@@ -8,6 +8,6 @@ definePackage({
     hasTests: true,
     publishToNpm: true,
     peerDependencies: {
-        "esbuild": ">=0.27.0"
+        "esbuild": ">=0.28.0"
     }
 })

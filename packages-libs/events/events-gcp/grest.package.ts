@@ -7,6 +7,6 @@ definePackage({
     targets: {node: true},
     implementationFor: "@grest-ts/events",
     dependencies: {
-        "@google-cloud/pubsub": "^5.2.3"
+        "@google-cloud/pubsub": "^6.2.0"
     }
 })

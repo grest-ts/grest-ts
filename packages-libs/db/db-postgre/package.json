@@ -46,7 +46,7 @@
     "sql"
   ],
   "engines": {
-    "node": ">=24"
+    "node": ">=26"
   },
   "dependencies": {
     "pg": "^8.18.0"

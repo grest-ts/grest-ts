@@ -15,20 +15,20 @@
     "@grest-ts/browser": "file:../../../exports/browser",
     "@grest-ts/logger": "file:../../../packages/logger",
     "@grest-ts/validator": "file:../../../packages/validator",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "react-router-dom": "^6.28.0"
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "react-router-dom": "^7.18.4"
   },
   "devDependencies": {
-    "@testing-library/jest-dom": "^6.6.3",
-    "@testing-library/react": "^16.1.0",
-    "@testing-library/user-event": "^14.5.2",
-    "@types/react": "^18.3.18",
-    "@types/react-dom": "^18.3.5",
-    "@vitejs/plugin-react": "^4.3.4",
-    "jsdom": "^25.0.1",
-    "msw": "^2.12.10",
+    "@testing-library/jest-dom": "^7.0.1",
+    "@testing-library/react": "^16.3.3",
+    "@testing-library/user-event": "^14.6.7",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "~5.1.4",
+    "jsdom": "^30.1.2",
+    "msw": "^3.0.2",
     "typescript": "^6.0.3",
-    "vite": "^6.0.7"
+    "vite": "^7.3.1"
   }
 }

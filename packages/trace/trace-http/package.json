@@ -44,7 +44,7 @@
     "observability"
   ],
   "engines": {
-    "node": ">=24"
+    "node": ">=26"
   },
   "peerDependencies": {
     "@grest-ts/context": "0.0.71",

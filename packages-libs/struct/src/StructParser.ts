@@ -1,4 +1,4 @@
-import fg from 'fast-glob';
+import {globSync} from 'tinyglobby';
 import * as path from "node:path";
 import * as fs from "node:fs";
 import {CallExpression, NewExpression, Node, ObjectLiteralExpression, Project, PropertyAssignment, SourceFile, SyntaxKind} from 'ts-morph';
@@ -41,7 +41,7 @@ export class StructParser {
     }
 
     public static parse(cwd = process.cwd(), pattern = '**/*.struct.ts'): StructMeta[] {
-        const files = fg.sync('**/*' + this.SUFFIX, {cwd, absolute: true});
+        const files = globSync('**/*' + this.SUFFIX, {cwd, absolute: true});
 
         const project = new Project({
             // tsConfigFilePath: path.join(cwd, 'tsconfig.json'),

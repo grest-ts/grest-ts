@@ -3,7 +3,7 @@
  * .use()s and that is .define()d must have a .create()d handler on this runtime.
  */
 import {GGWireContextKey} from "../../schema/GGWireContextKey"
-import {wireIsDefined} from "../../schema/GGWireContextKey.node"
+import {wireIsDefined} from "../../schema/GGWireContextKey.node.js"
 
 interface HttpSchemaLike {
     name: string

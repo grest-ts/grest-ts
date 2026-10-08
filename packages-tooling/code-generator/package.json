@@ -43,13 +43,13 @@
     "server"
   ],
   "engines": {
-    "node": ">=24"
+    "node": ">=26"
   },
   "bin": {
     "grest": "./bin/grest.cjs"
   },
   "dependencies": {
-    "fast-glob": "^3.3.3"
+    "tinyglobby": "^0.2.17"
   },
   "peerDependencies": {
     "@grest-ts/common": "0.0.71",

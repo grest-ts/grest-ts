@@ -19,10 +19,10 @@ definePackage({
     },
     dependencies: {
         "@sinclair/typebox": "^0.34.48",
-        "commander": "^14.0.3",
+        "commander": "^15.0.0",
         "arktype": "^2.1.29",
         "cbor-x": "^1.6.0",
-        "msgpackr": "^1.11.8",
+        "msgpackr": "^2.1.0",
         "typia": "^11.0.3",
         "zod": "^4.3.6",
         "ajv": "^8.18.0",
@@ -30,6 +30,6 @@ definePackage({
         "turbo-json-parse": "^2.3.0",
         "ts-runtime-checks": "^0.6.2",
         "ts-patch": "^3.3.0",
-        "protobufjs": "^7.4.0"
+        "protobufjs": "^8.8.0"
     }
 })

@@ -52,10 +52,10 @@
     "idp"
   ],
   "engines": {
-    "node": ">=24"
+    "node": ">=26"
   },
   "dependencies": {
-    "jose": "^5.9.6"
+    "jose": "^6.2.12"
   },
   "peerDependencies": {
     "@grest-ts/http": "0.0.71",
