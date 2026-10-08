@@ -47,10 +47,10 @@ jobs:
           # master (FF requires master's tip to be reachable).
           fetch-depth: 0
 
-      - name: Setup Node 25
+      - name: Setup Node 26
         uses: actions/setup-node@v4
         with:
-          node-version: 25
+          node-version: 26
 
       - name: Install dependencies
         run: npm install
