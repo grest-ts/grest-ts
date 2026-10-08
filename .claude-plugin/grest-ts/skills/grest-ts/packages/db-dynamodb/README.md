@@ -10,7 +10,7 @@ Thin wrapper around the [AWS SDK v3 DynamoDB client](https://github.com/aws/aws-
 The package gives you three layers:
 
 - **`GGDynamoDbConfig`** — config wrapper. Defines the `GGResource` (region/endpoint) and `GGSecret` (credentials) keys for one DynamoDB connection. Use inside `GGConfig.define()`.
-- **`GGDynamoDb`** — the connection. Owns the SDK client, exposes raw `get` / `put` / `query` / `scan` / `delete` primitives plus a conditional-put helper.
+- **`GGDynamoDb`** — the connection. Owns the SDK client, exposes raw `get` / `put` / `query` / `queryPage` / `scan` / `scanPage` / `delete` primitives plus a conditional-put helper.
 - **`GGDynamoDbTable<T, PK>`** — schema-bound table gateway. Validates against a `GGSchema` on every write. Subclass it to add typed helpers for an entity (e.g. `getByOrgId`).
 
 ## Defining the Config
@@ -113,6 +113,32 @@ await db.delete("users", { userId: "u_123" })
 const all = await db.scan<UserRow>("users")
 ```
 
+## Paging
+
+DynamoDB caps a single `Query` / `Scan` response at **1MB** however many rows match, handing back a `LastEvaluatedKey` instead of an error. A single command is therefore never proof of a complete result.
+
+`query` and `scan` follow that continuation to the end, so they return every matching row. Because "every row" has no natural bound, they **throw** past 10 000 rows rather than quietly loading a result set that large — that is the signal to page explicitly instead:
+
+```typescript
+// Whole result set — for aggregates (counts, sums) that a partial set makes wrong.
+const all = await db.query<UserRow>("users", "by-org-index", "orgId = :org", { ":org": "o_abc" })
+
+// One page at a time — for a listing whose caller pages (an API endpoint, a UI list).
+const page = await db.queryPage<UserRow>(
+    "users",
+    "by-org-index",
+    "orgId = :org",
+    { ":org": "o_abc" },
+    { limit: 30, descending: true },   // descending walks the sort key backwards
+)
+page.items    // UserRow[]
+page.cursor   // pass back as `cursor`; undefined once the index is exhausted
+```
+
+The `cursor` is opaque — hand it to a client and take it back, don't build one.
+
+**Picking between them:** if the caller renders a list, use `queryPage`. If a partial answer would be *wrong* rather than just short — a total, a uniqueness check, a cleanup sweep — use `query` and let the cap tell you when the data outgrew the approach. A GSI partitioned so widely that one partition can hold an unbounded number of rows (per-org, per-tenant) is usually the real problem the cap is pointing at.
+
 ## Schema-Bound Tables
 
 For application code, prefer `GGDynamoDbTable`. It binds a table to a schema and validates every write — shape mistakes throw at the boundary instead of becoming silent DynamoDB corruption.
@@ -190,7 +216,7 @@ await raw.send(new CreateTableCommand({ /* ... */ }))
 
 ## Reads Are Not Validated
 
-Schema validation is applied on `put` and `putConditional` only. Reads (`get`, `query`, `scan`) return whatever the table holds, cast to `T`. This is deliberate — it keeps the read path fast and avoids forcing a migration when a column is added. If you need read-side validation, wrap the call site.
+Schema validation is applied on `put` and `putConditional` only. Reads (`get`, `query`, `queryPage`, `scan`, `scanPage`) return whatever the table holds, cast to `T`. This is deliberate — it keeps the read path fast and avoids forcing a migration when a column is added. If you need read-side validation, wrap the call site.
 
 ## Config Shape Reference
 
