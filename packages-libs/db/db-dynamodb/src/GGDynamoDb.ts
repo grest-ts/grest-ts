@@ -23,15 +23,25 @@ function encodeCursor(key: Record<string, unknown>): string {
     return Buffer.from(JSON.stringify(key), "utf8").toString("base64url")
 }
 
+/** A cursor that didn't come from `queryPage`/`scanPage`. Its own type because
+ *  the value is client-supplied through an API boundary, and the caller should
+ *  be able to answer it with "bad request" rather than a 500. */
+export class GGDynamoDbCursorError extends Error {
+    constructor() {
+        super("GGDynamoDb: malformed cursor")
+        this.name = "GGDynamoDbCursorError"
+    }
+}
+
 function decodeCursor(cursor: string): Record<string, unknown> {
     let parsed: unknown
     try {
         parsed = JSON.parse(Buffer.from(cursor, "base64url").toString("utf8"))
     } catch {
-        throw new Error("GGDynamoDb: malformed cursor")
+        throw new GGDynamoDbCursorError()
     }
     if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
-        throw new Error("GGDynamoDb: malformed cursor")
+        throw new GGDynamoDbCursorError()
     }
     return parsed as Record<string, unknown>
 }
