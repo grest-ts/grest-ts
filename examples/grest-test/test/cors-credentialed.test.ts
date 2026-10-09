@@ -44,6 +44,17 @@ describe("corsResponseHeaders (credentialed CORS)", () => {
         expect(h["Access-Control-Allow-Origin"]).not.toBe("*")
     })
 
+    test("a preflight result is cacheable, so a call does not pay an OPTIONS per request", () => {
+        const h = corsResponseHeaders("https://app.example.com", undefined, ALLOW, "")
+        expect(Number(h["Access-Control-Max-Age"])).toBeGreaterThan(0)
+    })
+
+    test("a disallowed origin gets no Max-Age — nothing to cache", () => {
+        const h = corsResponseHeaders("https://evil.example",
+            {origins: ["https://app.example.com"]}, ALLOW, "")
+        expect(h["Access-Control-Max-Age"]).toBeUndefined()
+    })
+
     test("the literal null origin is never reflected, even if allowlisted", () => {
         const h = corsResponseHeaders("null",
             {origins: ["null"], credentials: true}, ALLOW, "")

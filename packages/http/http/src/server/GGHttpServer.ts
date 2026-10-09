@@ -278,6 +278,13 @@ export class GGHttpServer {
 export type GGHttpRequestCallback = (req: http.IncomingMessage, res: http.ServerResponse) => Promise<void>;
 
 /**
+ * How long a browser may reuse a preflight result. Without it browsers fall back to their
+ * own default (~5s in Chrome), so a cross-origin API pays an extra OPTIONS round-trip on
+ * practically every call. What this answers with is static per origin, so it is cacheable.
+ */
+const PREFLIGHT_MAX_AGE_SEC = 600;
+
+/**
  * Computes CORS response headers for a request Origin. Pure (no req/res) so it is
  * unit-testable. Default (no config) = permissive `*`, no credentials. With config =
  * allowlisted: only a matching Origin is echoed (never `*`), `credentials` adds
@@ -304,6 +311,7 @@ export function corsResponseHeaders(
     }
     headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, PATCH, DELETE, OPTIONS';
     headers['Access-Control-Allow-Headers'] = allowHeaders;
+    headers['Access-Control-Max-Age'] = String(PREFLIGHT_MAX_AGE_SEC);
     if (exposeHeaders) headers['Access-Control-Expose-Headers'] = exposeHeaders;
     return headers;
 }
