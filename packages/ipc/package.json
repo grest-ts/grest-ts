@@ -41,7 +41,7 @@
     "proxy"
   ],
   "engines": {
-    "node": ">=24"
+    "node": ">=26"
   },
   "dependencies": {
     "find-my-way": "^9.4.0",

@@ -1,11 +1,11 @@
 import {describe, test, expect} from "vitest"
-import {SignJWT, generateKeyPair, type JWTVerifyGetKey, type KeyLike} from "jose"
+import {SignJWT, generateKeyPair, type JWTVerifyGetKey, type CryptoKey} from "jose"
 import {NOT_AUTHORIZED} from "@grest-ts/schema"
 import {GoogleIdp} from "../../../../index-node"
 
 const CLIENT_ID = "client-123.apps.googleusercontent.com"
 
-async function googleToken(privateKey: KeyLike, overrides: {
+async function googleToken(privateKey: CryptoKey, overrides: {
     issuer?: string
     audience?: string
     expEpochSec?: number

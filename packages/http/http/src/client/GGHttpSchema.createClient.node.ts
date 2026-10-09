@@ -5,7 +5,7 @@
  * hard dependency of @grest-ts/http.
  */
 import {_registerDiscoveryUrlResolver, _registerNodeDefaultTransport} from "./GGHttpSchema.createClient"
-import {nodeDefaultTransport} from "./nodeConnectionTransport.node"
+import {nodeDefaultTransport} from "./nodeConnectionTransport.node.js"
 
 export const discoveryUrlResolver = async (apiName: string): Promise<string> => {
     const {GG_DISCOVERY} = await import('@grest-ts/discovery')

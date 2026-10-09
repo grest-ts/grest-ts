@@ -56,11 +56,11 @@
     "rest"
   ],
   "engines": {
-    "node": ">=24"
+    "node": ">=26"
   },
   "dependencies": {
     "find-my-way": "^9.4.0",
-    "undici": "^7.24.0"
+    "undici": "^8.11.2"
   },
   "peerDependencies": {
     "@grest-ts/common": "0.0.71",

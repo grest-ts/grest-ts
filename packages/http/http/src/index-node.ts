@@ -23,7 +23,7 @@ export * from "./server/GG_HTTP_REQUEST";
 export * from "./schema/GGHttpSchema";
 export * from "./schema/GGCookie";
 export * from "./schema/GGWireContextKey";
-export * from "./schema/GGWireContextKey.node";
+export * from "./schema/GGWireContextKey.node.js";
 export * from "./schema/GGHeader";
 export * from "./schema/GGConnectionSettingsKey";
 export * from "./rpc/GGHttpRouteRPC";
@@ -46,11 +46,11 @@ export * from "./schema/GGHttpPermissionsChecker";
 // Client
 export * from "./client/GGContextKeySynchronizer";
 export * from "./client/GGHttpSchema.createClient";
-export * from "./client/nodeConnectionTransport.node";
+export * from "./client/nodeConnectionTransport.node.js";
 export * from "./server/GGHttpSchema.startServer";
 
 
 // Extensions
 import "./client/GGHttpSchema.createClient";
-import "./client/GGHttpSchema.createClient.node";
-import "./schema/GGWireContextKey.node";
+import "./client/GGHttpSchema.createClient.node.js";
+import "./schema/GGWireContextKey.node.js";

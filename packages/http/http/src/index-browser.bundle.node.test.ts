@@ -37,7 +37,7 @@ describe('browser bundle safety', () => {
             if (/(?:from|import)\s+["']node:/.test(code)) offenders.push(`${file} imports a node:* module`)
 
             for (const spec of localImports(file)) {
-                if (/\.node$/.test(spec)) {
+                if (/\.node(\.js)?$/.test(spec)) {
                     offenders.push(`${file} imports node-only module "${spec}"`)
                     continue
                 }

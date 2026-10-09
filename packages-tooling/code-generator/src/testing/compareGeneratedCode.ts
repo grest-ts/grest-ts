@@ -13,7 +13,7 @@ import * as path from 'path'
 import {execSync} from 'child_process'
 import {compareCodeV2, formatComparisonV2Result} from '../core/CodeComparer'
 import {checkDoubleEmptyLines} from './codeQualityChecks'
-import fg from 'fast-glob'
+import {globSync} from 'tinyglobby'
 import {runGG} from "./runGG";
 
 export function compareGeneratedCode(testDir: string, configPath: string): void {
@@ -25,7 +25,7 @@ export function compareGeneratedCode(testDir: string, configPath: string): void 
     beforeAll(() => {
         runGG(testDir, configPath);
     }, 30000) // 30 second timeout for generation
-    const expectedFiles = fg.sync('**/*.expected.ts', {
+    const expectedFiles = globSync('**/*.expected.ts', {
         cwd: configDir,
         absolute: true,
         ignore: ['**/node_modules/**']
@@ -36,7 +36,7 @@ export function compareGeneratedCode(testDir: string, configPath: string): void 
     }
 
     // Find all generated files
-    const generatedFiles = fg.sync('**/*.gen.ts', {
+    const generatedFiles = globSync('**/*.gen.ts', {
         cwd: configDir,
         absolute: true,
         ignore: ['**/node_modules/**']

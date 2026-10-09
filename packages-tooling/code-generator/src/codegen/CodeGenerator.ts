@@ -13,7 +13,7 @@
  * - @grest-ts/events/codegen - Event/SNS APIs
  */
 
-import fg from 'fast-glob'
+import {globSync} from 'tinyglobby'
 import path from 'path'
 import {GGExtensionDiscovery} from '@grest-ts/common'
 import {TypeExtractor} from '../core/TypeExtractor'
@@ -68,7 +68,7 @@ export class CodeGenerator {
             cwd: config._configDir || process.cwd(),
         }
 
-        const apiFiles = fg.sync(config.findPattern!, searchOptions) as string[]
+        const apiFiles = globSync(config.findPattern!, searchOptions) as string[]
 
         if (apiFiles.length === 0) {
             console.log(`No files found matching: ${config.findPattern}`)

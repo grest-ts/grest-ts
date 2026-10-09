@@ -46,7 +46,7 @@
     "binary"
   ],
   "engines": {
-    "node": ">=24"
+    "node": ">=26"
   },
   "peerDependencies": {
     "@grest-ts/schema": "0.0.71"

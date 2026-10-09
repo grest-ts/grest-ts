@@ -46,16 +46,16 @@
     "performance"
   ],
   "engines": {
-    "node": ">=24"
+    "node": ">=26"
   },
   "dependencies": {
     "@sinclair/typebox": "^0.34.48",
     "ajv": "^8.18.0",
     "arktype": "^2.1.29",
     "cbor-x": "^1.6.0",
-    "commander": "^14.0.3",
-    "msgpackr": "^1.11.8",
-    "protobufjs": "^7.4.0",
+    "commander": "^15.0.0",
+    "msgpackr": "^2.1.0",
+    "protobufjs": "^8.8.0",
     "ts-patch": "^3.3.0",
     "ts-runtime-checks": "^0.6.2",
     "turbo-json-parse": "^2.3.0",

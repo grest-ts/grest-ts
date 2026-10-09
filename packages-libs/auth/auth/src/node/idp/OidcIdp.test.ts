@@ -1,12 +1,12 @@
 import {describe, test, expect} from "vitest"
-import {SignJWT, generateKeyPair, type KeyLike} from "jose"
+import {SignJWT, generateKeyPair, type CryptoKey} from "jose"
 import {NOT_AUTHORIZED} from "@grest-ts/schema"
 import {OidcIdp, OktaIdp} from "../../index-node"
 
 const ISSUER = "https://example.okta.com/oauth2/default"
 const CLIENT = "0oaclient123"
 
-async function oidcToken(privateKey: KeyLike, overrides: {
+async function oidcToken(privateKey: CryptoKey, overrides: {
     issuer?: string
     audience?: string
     expEpochSec?: number

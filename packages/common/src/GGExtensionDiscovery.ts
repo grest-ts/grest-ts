@@ -1,4 +1,4 @@
-import fg from 'fast-glob';
+import {glob} from 'tinyglobby';
 import * as fs from 'fs';
 import * as path from 'path';
 import {pathToFileURL} from 'url';
@@ -66,7 +66,7 @@ export class GGExtensionDiscovery {
         // Also scan monorepo packages/ directories (for framework development)
         const monorepoRoot = this.findMonorepoRoot(cwd);
         if (monorepoRoot) {
-            const monorepoExtensions = await fg([
+            const monorepoExtensions = await glob([
                 `packages/*/${this.filePattern}`,
                 `packages/*/*/${this.filePattern}`,
                 `packages-*/*/${this.filePattern}`,

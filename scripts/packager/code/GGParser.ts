@@ -1,4 +1,4 @@
-import fg from "fast-glob"
+import {glob} from "tinyglobby"
 import { readFile } from "fs/promises"
 import { dirname, join, relative } from "path"
 import { existsSync } from "fs"
@@ -87,7 +87,7 @@ export class GGParser {
      * Find all grest.package.ts files in the workspace
      */
     private async findPackageFiles(): Promise<string[]> {
-        return fg("**/grest.package.ts", {
+        return glob("**/grest.package.ts", {
             cwd: this.rootDir,
             absolute: true,
             ignore: ["**/node_modules/**", "**/dist/**"]
@@ -164,16 +164,16 @@ export class GGParser {
                 // *.unpublished-packages.d.ts intentionally references private packages
                 // (testkit-vitest's unpublished-plugins supplement); excluded so those
                 // imports don't become peerDependencies and break npm publish validation.
-                ? fg("**/*.ts", { cwd: srcDir, absolute: true, ignore: ["**/*.test.ts", "**/*.spec.ts", "**/*.unpublished-packages.d.ts"] })
+                ? glob("**/*.ts", { cwd: srcDir, absolute: true, ignore: ["**/*.test.ts", "**/*.spec.ts", "**/*.unpublished-packages.d.ts"] })
                 : Promise.resolve([]),
             existsSync(testkitDir)
-                ? fg("**/*.ts", { cwd: testkitDir, absolute: true })
+                ? glob("**/*.ts", { cwd: testkitDir, absolute: true })
                 : Promise.resolve([]),
             existsSync(vitestDir)
-                ? fg("**/*.ts", { cwd: vitestDir, absolute: true })
+                ? glob("**/*.ts", { cwd: vitestDir, absolute: true })
                 : Promise.resolve([]),
             existsSync(testDir)
-                ? fg("**/*.ts", { cwd: testDir }).then(files => files.length > 0)
+                ? glob("**/*.ts", { cwd: testDir }).then(files => files.length > 0)
                 : Promise.resolve(false)
         ])
 

@@ -10,6 +10,6 @@ definePackage({
     hasTests: true,
     dependencies: {
         "find-my-way": "^9.4.0",
-        "undici": "^7.24.0"
+        "undici": "^8.11.2"
     }
 })

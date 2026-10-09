@@ -45,7 +45,7 @@
     "asyncapi3"
   ],
   "engines": {
-    "node": ">=24"
+    "node": ">=26"
   },
   "peerDependencies": {
     "@grest-ts/http": "0.0.71",

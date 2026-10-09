@@ -12,7 +12,7 @@ definePackage({
         "grest": "./bin/grest.cjs"
     },
     dependencies: {
-        "fast-glob": "^3.3.3"
+        "tinyglobby": "^0.2.17"
     },
     vitestConfig: {
         test: {

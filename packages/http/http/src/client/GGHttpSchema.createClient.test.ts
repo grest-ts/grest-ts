@@ -3,7 +3,7 @@ import {GGContractClass, IsObject, IsString, SERVER_ERROR} from '@grest-ts/schem
 import {GGHttpSchema} from '../schema/GGHttpSchema'
 import {GGRpc} from '../rpc/GGHttpRouteRPC'
 import {createClient, _registerDiscoveryUrlResolver} from './GGHttpSchema.createClient'
-import {discoveryUrlResolver} from './GGHttpSchema.createClient.node'
+import {discoveryUrlResolver} from './GGHttpSchema.createClient.node.js'
 
 const PingContract = new GGContractClass("CreateClientTestApi", {
     ping: {
