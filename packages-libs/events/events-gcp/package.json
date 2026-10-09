@@ -40,7 +40,7 @@
     "google-cloud"
   ],
   "engines": {
-    "node": ">=26"
+    "node": ">=24"
   },
   "dependencies": {
     "@google-cloud/pubsub": "^6.2.0"

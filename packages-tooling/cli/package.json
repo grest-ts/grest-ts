@@ -33,7 +33,7 @@
     "tooling"
   ],
   "engines": {
-    "node": ">=26"
+    "node": ">=24"
   },
   "bin": "./index.mjs"
 }

@@ -22,7 +22,7 @@
     "testing"
   ],
   "engines": {
-    "node": ">=26"
+    "node": ">=24"
   },
   "imports": {
     "#scripts/*": "./scripts/*"
@@ -61,7 +61,7 @@
     "test:coverage": "vitest run --coverage"
   },
   "devDependencies": {
-    "@types/node": "^26.6.4",
+    "@types/node": "^24.19.1",
     "@types/ws": "^8.18.2",
     "@vitest/coverage-v8": "^5.0.3",
     "@vitest/ui": "^5.0.3",

@@ -50,7 +50,7 @@
     "nosql"
   ],
   "engines": {
-    "node": ">=26"
+    "node": ">=24"
   },
   "dependencies": {
     "@aws-sdk/client-dynamodb": "^3.750.0",

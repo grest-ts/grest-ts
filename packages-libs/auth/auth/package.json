@@ -52,7 +52,7 @@
     "idp"
   ],
   "engines": {
-    "node": ">=26"
+    "node": ">=24"
   },
   "dependencies": {
     "jose": "^6.2.12"
