@@ -46,7 +46,7 @@
     "contracts"
   ],
   "engines": {
-    "node": ">=26"
+    "node": ">=24"
   },
   "peerDependencies": {
     "@grest-ts/context": "0.0.73",

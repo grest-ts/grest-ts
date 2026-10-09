@@ -50,7 +50,7 @@
     "helpers"
   ],
   "engines": {
-    "node": ">=26"
+    "node": ">=24"
   },
   "dependencies": {
     "tinyglobby": "^0.2.17"

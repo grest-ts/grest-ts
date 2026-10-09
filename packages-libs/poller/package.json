@@ -48,7 +48,7 @@
     "scheduler"
   ],
   "engines": {
-    "node": ">=26"
+    "node": ">=24"
   },
   "peerDependencies": {
     "@grest-ts/config": "0.0.73",
