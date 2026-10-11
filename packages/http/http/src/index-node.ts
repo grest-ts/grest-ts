@@ -26,6 +26,7 @@ export * from "./schema/GGWireContextKey";
 export * from "./schema/GGWireContextKey.node.js";
 export * from "./schema/GGHeader";
 export * from "./schema/GGConnectionSettingsKey";
+export * from "./schema/GGLoopbackGuard";
 export * from "./rpc/GGHttpRouteRPC";
 export * from "./rpc/openApiSuccessResponse";
 export * from "./rpc/openApiHelpers";

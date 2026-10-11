@@ -288,7 +288,7 @@ export class GGSocketServer<Query, TSocket extends ServerSocket = GGSocket> {
                 }
 
                 // Wait for handshake message with headers
-                const handshakeResult = await this.handleHandshake(context, adapter, queryArgs, cookie);
+                const handshakeResult = await this.handleHandshake(context, adapter, queryArgs, cookie, upgrade.remoteAddress);
 
                 if (!handshakeResult.success) {
                     GGLog.warn(this, "REJECTED - handshake failed", (handshakeResult as { success: false; error: any }).error);
@@ -361,7 +361,7 @@ export class GGSocketServer<Query, TSocket extends ServerSocket = GGSocket> {
         cookie: string | undefined
     ): Promise<{ success: true } | { success: false; error: any }> {
         try {
-            const inbound: GGInbound = {headers: upgrade.headers, cookie, query: queryArgs as Record<string, string>};
+            const inbound: GGInbound = {headers: upgrade.headers, cookie, query: queryArgs as Record<string, string>, peerAddress: upgrade.remoteAddress};
             for (const middleware of this.middlewares) middleware.parse?.(inbound);
             try {
                 for (const middleware of this.middlewares) await middleware.process?.();
@@ -461,7 +461,8 @@ export class GGSocketServer<Query, TSocket extends ServerSocket = GGSocket> {
         context: GGContext,
         adapter: NodeSocketAdapter,
         queryArgs: Query,
-        cookie: string | undefined
+        cookie: string | undefined,
+        remoteAddress: string | undefined
     ): Promise<{ success: true } | { success: false; error: any }> {
         type HandshakeResult = { success: true } | { success: false; error: any };
         return withTimeout<HandshakeResult>(
@@ -478,7 +479,8 @@ export class GGSocketServer<Query, TSocket extends ServerSocket = GGSocket> {
                                 const inbound: GGInbound = {
                                     headers: msg.data || {},
                                     cookie,
-                                    query: queryArgs as Record<string, string>
+                                    query: queryArgs as Record<string, string>,
+                                    peerAddress: remoteAddress
                                 };
                                 for (const middleware of this.middlewares) middleware.parse?.(inbound);
                                 // Drop ephemeral raw credentials before the connection opens (and even
