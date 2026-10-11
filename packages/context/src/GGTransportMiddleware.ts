@@ -19,6 +19,14 @@ export interface GGInbound {
      */
     cookie?: string;
     query: Record<string, string | undefined>;
+    /**
+     * The transport's remote peer address, as the OS reports it (HTTP `req.socket.remoteAddress`,
+     * WebSocket the upgrade socket's address). Server-populated from the connection, never from a
+     * client-supplied header, so it is not spoofable — on WebSocket it comes from the real upgrade,
+     * not the in-band message. `undefined` when the transport can't report it (e.g. a closed socket).
+     * A middleware gating a loopback-only endpoint reads this.
+     */
+    peerAddress?: string;
 }
 
 /** Outbound credentials a client writes — request headers (HTTP) or handshake headers (WS). */

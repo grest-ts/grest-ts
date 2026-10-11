@@ -17,7 +17,8 @@ export async function applyRequestMiddleware(
     const inbound: GGInbound = {
         headers: flatten(req.headers),
         cookie: typeof req.headers.cookie === "string" ? req.headers.cookie : undefined,
-        query: flatten(queryArgs)
+        query: flatten(queryArgs),
+        peerAddress: req.socket?.remoteAddress
     };
     for (const mw of middlewares) mw.parse?.(inbound);
     // finally: a rejecting process() (e.g. anonymous → NOT_AUTHORIZED) must still drop every
