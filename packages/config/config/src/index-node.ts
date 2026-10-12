@@ -10,3 +10,4 @@ export * from "./keys/GGSetting";
 export * from "./keys/GGSecret";
 export * from "./keys/GGResource";
 export {assureValidConfigPath} from "./assureValidConfigPath";
+export {readConfigPath} from "./configPath";

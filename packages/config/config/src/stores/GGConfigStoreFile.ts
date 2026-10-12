@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import {GGConfigStore} from "../GGConfigStore";
 import {GGConfigKey} from "../GGConfigKey";
+import {readConfigPath} from "../configPath";
 import {dirname, join} from "node:path";
 import {fileURLToPath} from "node:url";
 
@@ -50,15 +51,7 @@ export class GGConfigStoreFile<Key extends GGConfigKey> extends GGConfigStore<Ke
         const fileJson = JSON.parse(fileContent);
         this.#valuesCache.clear();
         this.keys.forEach(key => {
-            const path = key.name.split("/");
-            let val: any = undefined;
-            if (path.length > 1) {
-                val = fileJson;
-                for (let i = 1; i < path.length; i++) {
-                    val = val?.[path[i]]
-                }
-            }
-            this.#valuesCache.set(key, this.resolveValue(key, val, isInitialLoad));
+            this.#valuesCache.set(key, this.resolveValue(key, readConfigPath(fileJson, key.name), isInitialLoad));
         });
     }
 

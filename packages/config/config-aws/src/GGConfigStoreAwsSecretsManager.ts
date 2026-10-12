@@ -1,6 +1,5 @@
 import {SecretsManagerClient, GetSecretValueCommand} from "@aws-sdk/client-secrets-manager";
-import {GGConfigStore} from "@grest-ts/config";
-import {GGConfigKey} from "@grest-ts/config";
+import {GGConfigStore, GGConfigKey, readConfigPath} from "@grest-ts/config";
 
 export interface GGConfigStoreAwsSecretsManagerOptions {
     readonly secretName: string;
@@ -12,7 +11,7 @@ export interface GGConfigStoreAwsSecretsManagerOptions {
 /**
  * AWS Secrets Manager config store.
  * Fetches a single JSON blob from Secrets Manager at startup and serves values from cache.
- * Path resolution is identical to GGConfigStoreFile: key.name.split("/") walks the JSON tree.
+ * Path resolution is identical to GGConfigStoreFile (readConfigPath): `/app/db/host` → `json.app.db.host`.
  */
 export class GGConfigStoreAwsSecretsManager<Key extends GGConfigKey> extends GGConfigStore<Key> {
 
@@ -47,15 +46,7 @@ export class GGConfigStoreAwsSecretsManager<Key extends GGConfigKey> extends GGC
         const secretJson = JSON.parse(response.SecretString);
 
         this.keys.forEach(key => {
-            const path = key.name.split("/");
-            let val: any = undefined;
-            if (path.length > 1) {
-                val = secretJson;
-                for (let i = 1; i < path.length; i++) {
-                    val = val?.[path[i]];
-                }
-            }
-            this.#valuesCache.set(key, this.resolveValue(key, val, true));
+            this.#valuesCache.set(key, this.resolveValue(key, readConfigPath(secretJson, key.name), true));
         });
 
         await super.start();
