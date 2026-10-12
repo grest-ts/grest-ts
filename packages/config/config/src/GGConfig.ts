@@ -1,7 +1,8 @@
 import {GGConfigDefinition} from "./GGConfigLocator";
 import {AsyncLocalStorage} from "node:async_hooks";
-import {GGConfigKey} from "./GGConfigKey";
+import {GGConfigKey, GGConfigKeyConstructor} from "./GGConfigKey";
 import {ConstructorOf} from "@grest-ts/common";
+import {readConfigPath, writeConfigPath} from "./configPath";
 
 export interface GGConfigKeyCreationContext {
     name: string
@@ -9,6 +10,35 @@ export interface GGConfigKeyCreationContext {
 }
 
 const defineContext = new AsyncLocalStorage<GGConfigKeyCreationContext>();
+
+export interface GGConfigKeyInfo {
+    readonly name: string
+    /** Key type NAME, e.g. "[GGSetting]". */
+    readonly type: string
+    /** No default and the schema rejects undefined: every store must provide it. */
+    readonly required: boolean
+    readonly default: unknown
+    readonly description: string | undefined
+    readonly definedAt: string | undefined
+}
+
+export interface GGConfigCheckResult {
+    /** Required keys the document doesn't provide. */
+    readonly missing: string[]
+    /** Keys whose provided value fails the key's schema. */
+    readonly invalid: { name: string, issues: unknown }[]
+    /** Keys the document doesn't provide, falling back to their default. */
+    readonly defaulted: string[]
+    /** Document paths no key reads. */
+    readonly unknown: string[]
+    /** No missing or invalid keys: a store loading this document would start. */
+    readonly ok: boolean
+}
+
+export interface GGConfigDocumentOptions {
+    /** Limit to these key types (the ones a single store serves). Default: all. */
+    readonly types?: readonly GGConfigKeyConstructor[]
+}
 
 export class GGConfig {
 
@@ -41,6 +71,61 @@ export class GGConfig {
         return store;
     }
 
+    public static describe(config: GGConfigDefinition<any>, options?: GGConfigDocumentOptions): GGConfigKeyInfo[] {
+        return this.keysOf(config, options).map(key => ({
+            name: key.name,
+            type: key.getStoreKey(),
+            required: isRequired(key),
+            default: key.getDefault(),
+            description: key.description,
+            definedAt: key.definedAt,
+        }));
+    }
+
+    /**
+     * Checks a JSON config document (what a file / Secrets Manager store would load) against the
+     * definition, without starting a store. A required key set to null counts as missing, so a
+     * template() skeleton reports exactly what is left to fill in.
+     */
+    public static check(config: GGConfigDefinition<any>, document: unknown, options?: GGConfigDocumentOptions): GGConfigCheckResult {
+        const keys = this.keysOf(config, options);
+        const missing: string[] = [];
+        const invalid: { name: string, issues: unknown }[] = [];
+        const defaulted: string[] = [];
+        for (const key of keys) {
+            const value = readConfigPath(document, key.name);
+            const unset = value === undefined || (value === null && !key.schema.safeParse(null).success);
+            if (unset) {
+                if (isRequired(key)) missing.push(key.name);
+                else if (key.getDefault() !== undefined) defaulted.push(key.name);
+                continue;
+            }
+            const check = key.schema.safeParse(value);
+            if (check.success === false) invalid.push({name: key.name, issues: check.issues.toJSON()});
+        }
+        const unknown: string[] = [];
+        collectUnknown(document, "", keys.map(k => k.name), unknown);
+        return {missing, invalid, defaulted, unknown, ok: missing.length === 0 && invalid.length === 0};
+    }
+
+    /** JSON skeleton of a document: required keys as null; defaults only when asked for. */
+    public static template(config: GGConfigDefinition<any>, options?: GGConfigDocumentOptions & { includeDefaults?: boolean }): Record<string, unknown> {
+        const result: Record<string, unknown> = {};
+        for (const key of this.keysOf(config, options)) {
+            if (isRequired(key)) writeConfigPath(result, key.name, null);
+            else if (options?.includeDefaults && key.getDefault() !== undefined) writeConfigPath(result, key.name, key.getDefault());
+        }
+        return result;
+    }
+
+    private static keysOf(config: GGConfigDefinition<any>, options?: GGConfigDocumentOptions): GGConfigKey[] {
+        const keys: GGConfigKey[] = [];
+        config.__getKeysMap().forEach((list: GGConfigKey[], type: GGConfigKeyConstructor) => {
+            if (!options?.types || options.types.includes(type)) keys.push(...list);
+        });
+        return keys.sort((a, b) => a.name.localeCompare(b.name));
+    }
+
     public static toJSON(config: GGConfigDefinition<any>): Record<string, unknown> {
         const result: Record<string, Record<string, unknown>> = {};
         this.collectKeys(config, result);
@@ -69,4 +154,20 @@ export class GGConfig {
         }
     }
 
+}
+
+function isRequired(key: GGConfigKey): boolean {
+    return key.getDefault() === undefined && !key.schema.safeParse(undefined).success;
+}
+
+function collectUnknown(node: unknown, path: string, keyNames: readonly string[], out: string[]): void {
+    if (keyNames.includes(path)) return;
+    const isBranch = path === "" || keyNames.some(name => name.startsWith(path + "/"));
+    if (!isBranch) {
+        out.push(path);
+        return;
+    }
+    if (node && typeof node === "object" && !Array.isArray(node)) {
+        for (const [k, v] of Object.entries(node)) collectUnknown(v, path + "/" + k, keyNames, out);
+    }
 }
