@@ -57,6 +57,30 @@ describe('GGConfig.check', () => {
     });
 });
 
+describe('GGConfig.check agrees with the stores', () => {
+    const Edge = GGConfig.define("/doc_edge/", () => ({
+        port: new GGSetting("port", IsPosInt, 4000, "HTTP port"),
+        badDefault: new GGSetting("mode", IsPosInt, -1, "Default the schema rejects"),
+        ctor: new GGSecret("constructor", IsString, "Name shared with Object.prototype"),
+    }));
+
+    it('validates a null on a defaulted key instead of falling back', () => {
+        const result = GGConfig.check(Edge, {doc_edge: {port: null, mode: 1, constructor: "x"}});
+        expect(result.invalid.map(i => i.name)).toEqual(["/doc_edge/port"]);
+        expect(result.ok).toBe(false);
+    });
+
+    it('validates the default a missing key falls back to', () => {
+        const result = GGConfig.check(Edge, {doc_edge: {constructor: "x"}});
+        expect(result.defaulted).toEqual(["/doc_edge/mode", "/doc_edge/port"]);
+        expect(result.invalid.map(i => i.name)).toEqual(["/doc_edge/mode"]);
+    });
+
+    it('does not resolve inherited Object.prototype members', () => {
+        expect(GGConfig.check(Edge, {doc_edge: {mode: 1}}).missing).toEqual(["/doc_edge/constructor"]);
+    });
+});
+
 describe('GGConfig.template', () => {
     it('emits required keys as null', () => {
         expect(GGConfig.template(Config)).toEqual({doc_app: {app_url: null, token: null, db: {host: null}}});

@@ -7,7 +7,9 @@ export function readConfigPath(doc: unknown, keyName: string): unknown {
     if (path.length <= 1) return undefined;
     let val: any = doc;
     for (let i = 1; i < path.length; i++) {
-        val = val?.[path[i]];
+        // Own properties only: a key named `constructor` must not resolve to Object.prototype's.
+        if (val === null || typeof val !== "object" || !Object.hasOwn(val, path[i])) return undefined;
+        val = val[path[i]];
     }
     return val;
 }

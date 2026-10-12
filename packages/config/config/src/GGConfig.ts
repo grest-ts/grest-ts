@@ -23,15 +23,12 @@ export interface GGConfigKeyInfo {
 }
 
 export interface GGConfigCheckResult {
-    /** Required keys the document doesn't provide. */
     readonly missing: string[]
-    /** Keys whose provided value fails the key's schema. */
     readonly invalid: { name: string, issues: unknown }[]
-    /** Keys the document doesn't provide, falling back to their default. */
     readonly defaulted: string[]
     /** Document paths no key reads. */
     readonly unknown: string[]
-    /** No missing or invalid keys: a store loading this document would start. */
+    /** A store loading this document would start. */
     readonly ok: boolean
 }
 
@@ -93,18 +90,23 @@ export class GGConfig {
         const invalid: { name: string, issues: unknown }[] = [];
         const defaulted: string[] = [];
         for (const key of keys) {
-            const value = readConfigPath(document, key.name);
-            const unset = value === undefined || (value === null && !key.schema.safeParse(null).success);
-            if (unset) {
-                if (isRequired(key)) missing.push(key.name);
-                else if (key.getDefault() !== undefined) defaulted.push(key.name);
-                continue;
+            let value = readConfigPath(document, key.name);
+            const required = isRequired(key);
+            // Only a required key's null is a template placeholder; anywhere else null is a real value the stores validate.
+            if (value === undefined || (value === null && required && !key.schema.safeParse(null).success)) {
+                if (required) {
+                    missing.push(key.name);
+                    continue;
+                }
+                value = key.getDefault();
+                if (value !== undefined) defaulted.push(key.name);
             }
             const check = key.schema.safeParse(value);
             if (check.success === false) invalid.push({name: key.name, issues: check.issues.toJSON()});
         }
         const unknown: string[] = [];
         collectUnknown(document, "", keys.map(k => k.name), unknown);
+        unknown.sort();
         return {missing, invalid, defaulted, unknown, ok: missing.length === 0 && invalid.length === 0};
     }
 
@@ -123,7 +125,7 @@ export class GGConfig {
         config.__getKeysMap().forEach((list: GGConfigKey[], type: GGConfigKeyConstructor) => {
             if (!options?.types || options.types.includes(type)) keys.push(...list);
         });
-        return keys.sort((a, b) => a.name.localeCompare(b.name));
+        return keys.sort((a, b) => a.name < b.name ? -1 : a.name > b.name ? 1 : 0);
     }
 
     public static toJSON(config: GGConfigDefinition<any>): Record<string, unknown> {
