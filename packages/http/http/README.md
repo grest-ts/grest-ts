@@ -535,6 +535,31 @@ protected compose(): void {
 }
 ```
 
+### Call Interceptors & Method Meta
+
+`server.intercept(fn)` wraps every HTTP contract call on that server — after the wires and the
+permission gate, with the validated input. Pair it with `meta`, a per-method field the framework
+carries but never reads, to drive cross-cutting policy (approvals, audit, rate limits) from the
+contract instead of from each implementation.
+
+```typescript
+declare module "@grest-ts/schema" {
+    interface GGContractMethodMeta { audit?: string }
+}
+
+export const OrderApiContract = new GGContractClass("OrderApi", {
+    cancel: {input: IsObject({orderId: IsString}), errors: [SERVER_ERROR], meta: {audit: "order.cancelled"}},
+})
+
+new GGHttpServer().intercept(async (call, next) => {
+    const result = await next(call.input)     // pass replaced input to change what the impl sees; throw to reject
+    if (call.contract.meta?.audit) await auditLog.write(call.contract.meta.audit, call.input)
+    return result
+})
+```
+
+The first registered interceptor runs outermost.
+
 ### CORS Headers
 
 CORS `Access-Control-Allow-Headers` are auto-discovered from the wires and middleware a

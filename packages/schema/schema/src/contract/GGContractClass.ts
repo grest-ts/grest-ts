@@ -6,12 +6,20 @@ import {FORBIDDEN, NOT_AUTHORIZED, VALIDATION_ERROR} from "./standardErrors";
 import {GG_NO_PERMISSIONS, GGPermission} from "./permission/GGPermission";
 import {GGPermissionChecker} from "./permission/GGPermissionChecker";
 
+/**
+ * Per-method metadata the framework carries but never interprets — read it in a server
+ * call interceptor. Apps declare their fields by augmentation:
+ * `declare module "@grest-ts/schema" { interface GGContractMethodMeta { audit?: string } }`
+ */
+export interface GGContractMethodMeta {}
+
 export interface GGContractMethod<Request = any, Response = any, ErrorsUnion extends ANY_ERROR_CLS = any> {
     input?: GGSchema<Request>
     success?: GGSchema<Response>;
     errors?: ErrorsUnion[];
     permission?: GGPermission;
     maxBodyBytes?: number;
+    meta?: GGContractMethodMeta;
 }
 
 export type GGContractApiDefinition = Record<string, GGContractMethod>

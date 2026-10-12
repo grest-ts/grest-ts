@@ -26,6 +26,20 @@ type AnyWebSocketSchema = {
     middlewares: readonly GGTransportMiddleware[];
 };
 
+export interface GGHttpCall {
+    readonly api: string;
+    readonly method: string;
+    readonly contract: GGContractMethod;
+    readonly input: unknown;
+}
+
+/**
+ * Wraps every contract call on the server — after the wires and the permission gate,
+ * with the validated input. Call `next` to proceed (optionally with replaced input),
+ * or throw to reject.
+ */
+export type GGHttpCallInterceptor = (call: GGHttpCall, next: (input: unknown) => Promise<unknown>) => Promise<unknown>;
+
 export interface GGCorsConfig {
     /**
      * Allowed cross-origin origins. Either an exact-match list or a predicate.
@@ -76,6 +90,7 @@ export class GGHttpServer {
 
     private readonly _onStart: Array<() => void> = [];
     private readonly _onTeardown: Array<() => void> = [];
+    private readonly _interceptors: GGHttpCallInterceptor[] = [];
 
     /**
      * Mutable during compose(); frozen and exposed as ReadonlyArray once the server starts.
@@ -215,6 +230,20 @@ export class GGHttpServer {
      */
     get registeredWebSocketSchemas(): ReadonlyArray<AnyWebSocketSchema> {
         return this._registeredWebSocketSchemas;
+    }
+
+    /** First registered runs outermost. */
+    public intercept(interceptor: GGHttpCallInterceptor): this {
+        this._interceptors.push(interceptor);
+        return this;
+    }
+
+    /** @internal Called by setupRoutes() per request. Do not call directly. */
+    public _invoke(call: GGHttpCall, impl: (input: unknown) => Promise<unknown>): Promise<unknown> {
+        const run = (i: number, input: unknown): Promise<unknown> => i === this._interceptors.length
+            ? impl(input)
+            : this._interceptors[i]({...call, input}, next => run(i + 1, next));
+        return run(0, call.input);
     }
 
     public registerRoute(method: HttpMethod, path: string, handler: GGHttpRequestCallback, owner?: string): void {

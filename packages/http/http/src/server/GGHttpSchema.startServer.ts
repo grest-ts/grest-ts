@@ -107,7 +107,9 @@ function setupRoutes<TContract extends GGContractApiDefinition>(
                     const rawInput = await requestParser.readRequest(req)
                     await permissionsChecker.assert(httpSchema.name, methodName, contractFunctionSchema.permission)
                     try {
-                        rpcResult = {success: true, type: "OK", data: await implFn(requestParser.validateInput(rawInput))}
+                        const input = requestParser.validateInput(rawInput)
+                        const call = {api: httpSchema.name, method: methodName, contract: contractFunctionSchema, input}
+                        rpcResult = {success: true, type: "OK", data: await server._invoke(call, implFn)}
                         // GGLog.debug(httpSchema, "Response", rpcResult) // This is very slow to log this (like 3x performance loss)
                     } catch (error: unknown) {
                         rpcResult = ERROR.fromUnknown(error);
