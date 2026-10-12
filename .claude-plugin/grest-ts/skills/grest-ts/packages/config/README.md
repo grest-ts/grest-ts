@@ -112,6 +112,20 @@ name: new GGSetting('name', IsString, 'default', 'App name')
 env:  new GGSetting('env', IsLiteral('dev', 'staging', 'prod'), 'dev', 'Environment')
 ```
 
+### Checking a config document without starting
+
+The definition is code, so it can describe and check a deployment's config document (the JSON a file or Secrets Manager store loads) before anything runs:
+
+```typescript
+GGConfig.describe(AppConfig)            // [{name, type, required, default, description, definedAt}, ...]
+GGConfig.template(AppConfig)            // {app: {db: {password: null}, ...}} — required keys as null
+GGConfig.check(AppConfig, documentJson) // {missing, invalid, defaulted, unknown, ok}
+```
+
+`check` resolves paths exactly like the stores, so `ok: true` means a store loading this document would start. A required key left `null` counts as missing — `check(template())` lists what is still to fill in. `unknown` lists paths no key reads (stale or misspelled keys). Pass `{types: [GGSecret, GGResource]}` to scope any of them to the key types one store serves.
+
+Prefer `GGResource` over a `GGSetting` default for anything deployment-specific (URLs, domains, bucket names): a resource has no default, so a deployment that forgets it fails at startup instead of silently using another environment's value.
+
 ## Storage Backends
 
 `GGConfigLocator` maps key types to stores. Each key type must have a store registered before start.
