@@ -603,7 +603,8 @@ public async list(): Promise<Item[]> { ... }
 // ✅ Arrow function properties instead:
 public list = async (): Promise<Item[]> => { ... }
 
-// ❌ Global mocks (jest.mock / vitest.mock)
+// ❌ Module mocks in integration tests (jest.mock / vi.mock) — use @mockable + mockOf.
+//    Fine in a plain unit test of a single class.
 jest.mock("./GeocoderService")
 
 // ❌ Missing SERVER_ERROR in contract errors

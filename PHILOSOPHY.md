@@ -144,10 +144,12 @@ is 1. `times(0)` asserts the method is never called.
 A `@mockable` method with no mock registered runs for real. Mocks are opt-in per action, so
 the same runtime serves tests that mock a dependency and tests that use it.
 
-### No module mocking
+### No module mocking in integration tests
 
-No `vi.mock` / `jest.mock`. Module mocks replace code by import path, survive refactors
-badly, and bypass the contract. Use `@mockable` at the boundary you own, or a contract mock.
+Inside a booted runtime, don't `vi.mock` / `jest.mock`. A module mock replaces code by import
+path behind the framework's back — it reaches the runtime's workers unpredictably, leaks
+across tests and bypasses the contract. Use `@mockable` at the boundary, or a contract mock.
+In a plain unit test of one class, module mocking is a normal tool.
 
 ### `NODE_ENV=production` selects the real config stores
 

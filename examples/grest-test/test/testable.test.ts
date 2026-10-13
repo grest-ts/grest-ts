@@ -113,7 +113,7 @@ describe("testable tests - full runtime integration", () => {
             });
     });
 
-    test("times(n) is exact: fewer calls fail validation", async () => {
+    test("times(n) is exact: fewer or more calls fail", async () => {
         const interceptor = mockOf(WeatherService).getWeather.times(2)
             .andReturn({temperature: 1, condition: "clear", humidity: 1})
             .createInterceptor() as GGCallInterceptor
@@ -121,6 +121,7 @@ describe("testable tests - full runtime integration", () => {
         expect(() => interceptor.validate()).toThrow(/too few/)
         await interceptor.onRequest({city: "Oslo"})
         expect(() => interceptor.validate()).not.toThrow()
+        await expect(interceptor.onRequest({city: "Oslo"})).rejects.toThrow(/too many/)
     })
 
     test("andReturn with a function answers each call from its input", async () => {
