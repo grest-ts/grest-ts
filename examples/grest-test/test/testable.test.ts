@@ -112,6 +112,18 @@ describe("testable tests - full runtime integration", () => {
                 reason: expect.stringContaining("95")
             });
     });
+
+    test("andReturn with a function answers each call from its input", async () => {
+        await client
+            .compareDestinations({destinations: ["Hot City", "Cold City"]})
+            .with(
+                mockOf(WeatherService).getWeather.times(2)
+                    .andReturn(({city}) => ({temperature: city === "Hot City" ? 95 : 35, condition: "clear", humidity: 50})),
+                mockOf(WeatherService).getTimezone.times(2)
+                    .andReturn({timezone: "UTC", offset: 0})
+            )
+            .toMatchObject({recommended: "Hot City", reason: expect.stringContaining("95")});
+    });
 });
 
 // ============================================================================
