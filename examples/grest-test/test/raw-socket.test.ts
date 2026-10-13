@@ -303,7 +303,7 @@ describe("customClient auth guard", () => {
     })
 
     test("a parse-only credential (cookie wire) does not trip the guard", () => {
-        // WS_SESSION reads the upgrade cookie (parse-only, no update) — valid with a custom client.
+        // WS_SESSION reads the upgrade cookie — valid with a custom client.
         expect(() => new GGRawWebSocketSchema({
             contract: new GGRawSocketContract("CustomClientOk", {connect: {}, customClient: true}),
             path: "ws/cc-ok",
