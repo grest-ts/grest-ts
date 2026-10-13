@@ -1,5 +1,6 @@
 import type {GGTransportMiddleware} from "@grest-ts/context";
 import {GGRawSocketContract, GGRawSocketContractDefinition} from "@grest-ts/schema";
+import {GGCookie} from "@grest-ts/http";
 import {assertValidSocketPath} from "./socketPath";
 
 export interface GGRawWebSocketSchemaConfig<TDef> {
@@ -31,9 +32,10 @@ export class GGRawWebSocketSchema<TDef> {
         // A custom client is foreign and never sends the in-band handshake, so a wire that
         // delivers its credential there (an update() writer, e.g. GGHeader) could never arrive —
         // the socket would open unauthenticated while looking gated. Only upgrade-readable
-        // credentials (cookie, ?query=) are legal with a custom client.
+        // credentials (cookie, ?query=) are legal with a custom client; a GGCookie's update()
+        // only serves HTTP callers — the server reads it from the real upgrade regardless.
         const use = config.use ?? []
-        if (contract.customClient && use.some(m => typeof m.update === "function")) {
+        if (contract.customClient && use.some(m => typeof m.update === "function" && !(m instanceof GGCookie))) {
             throw new Error(
                 `GGRawWebSocketSchema "${contract.name}": a customClient byte socket cannot use a credential ` +
                 `delivered via the grest-ts handshake (a wire with update(), e.g. GGHeader). A custom client is ` +

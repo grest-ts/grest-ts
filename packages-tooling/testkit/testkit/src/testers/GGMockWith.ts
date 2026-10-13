@@ -18,7 +18,7 @@ export class GGMockWith<RequestBody = any, ResponseData = any, ErrorsUnion = any
     private _times: number = 1;
 
     private readonly expectations: GGExpectations<RequestBody> = new GGExpectations();
-    private returnData?: ResponseData | ErrorsUnion | (() => ResponseData | ErrorsUnion);
+    private returnData?: ResponseData | ErrorsUnion | ((input: Raw<RequestBody>) => Raw<ResponseData | ErrorsUnion>);
 
     constructor(interceptorFactory: InterceptorFactory, config: Record<string, any>) {
         this.interceptorFactory = interceptorFactory;
@@ -80,7 +80,8 @@ export class GGMockWith<RequestBody = any, ResponseData = any, ErrorsUnion = any
         return this;
     }
 
-    public andReturn(data: Raw<ResponseData | ErrorsUnion> | (() => Raw<ResponseData | ErrorsUnion>)): this {
+    /** A function is called per call with that call's input, so one mock can answer each call differently. */
+    public andReturn(data: Raw<ResponseData | ErrorsUnion> | ((input: Raw<RequestBody>) => Raw<ResponseData | ErrorsUnion>)): this {
         this.returnData = data as any;
         return this;
     }

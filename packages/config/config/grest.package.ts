@@ -7,5 +7,6 @@ definePackage({
     keywords: ["configuration", "secrets", "settings"],
     targets: {node: true},
     extendsTestKit: true,
+    hasTests: true,
     allowedPackages: ["@grest-ts/common", "@grest-ts/schema", "@grest-ts/locator"]
 })

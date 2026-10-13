@@ -1,4 +1,4 @@
-import {GGContextKey, type GGInbound, type GGResponse} from "@grest-ts/context"
+import {GGContextKey, type GGInbound, type GGOutbound, type GGResponse} from "@grest-ts/context"
 import {type GGSchema, IsAny, IsString, SERVER_ERROR} from "@grest-ts/schema"
 import {GGWireContextKey} from "./GGWireContextKey"
 
@@ -48,6 +48,8 @@ interface PendingCookie {
  * first constructor argument (case-sensitive — unlike a header it is not lowercased). To write
  * the cookie, call GGCookie.setCookie(key, …) from a route that declared .updatesCookie(key);
  * this wire flushes it as Set-Cookie (HTTP only — a WebSocket has no response to set a cookie on).
+ * Client side, a value in context is sent as this cookie — for Node callers; a browser sends its
+ * own cookie jar and drops a scripted Cookie header.
  */
 export class GGCookie extends GGWireContextKey {
 
@@ -63,6 +65,13 @@ export class GGCookie extends GGWireContextKey {
     public parse(inbound: GGInbound): void {
         const value = _readCookie(inbound.cookie, this.name)
         if (value !== undefined) this.set(value)
+    }
+
+    public update(outbound: GGOutbound): void {
+        const value = this.get()
+        if (value === undefined) return
+        const pair = `${this.name}=${encodeURIComponent(value)}`
+        outbound.headers["cookie"] = outbound.headers["cookie"] ? `${outbound.headers["cookie"]}; ${pair}` : pair
     }
 
     public respond(res: GGResponse): void {

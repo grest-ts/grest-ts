@@ -6,6 +6,7 @@ export * from "./GGConfigKey";
 export * from "./GGConfigStore";
 export * from "./stores/GGConfigStoreFile";
 export * from "./stores/GGConfigStoreLocal";
+export * from "./stores/GGConfigStoreEnv";
 export * from "./keys/GGSetting";
 export * from "./keys/GGSecret";
 export * from "./keys/GGResource";

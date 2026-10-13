@@ -40,9 +40,14 @@ await alice.checklist.add({...})
     .toMatchObject({...});
 ```
 
-- **mock**: Replace service response for this request only
+- **mock**: Replace the service response while this test action runs
 - **spy**: Call through to real service, assert on input/output
 - Works across service boundaries at API level
+
+A mock is bound to the *time* its action runs, not to one request's async context: any
+call to that method during the action hits it, including calls from parallel requests.
+That is expected — isolating mocks per concurrent request would cost a lot of machinery
+for a case tests rarely need. Run actions that mock the same method sequentially.
 
 When you split a service, mocks at contract level keep working. Mocks at implementation level break.
 
@@ -111,6 +116,59 @@ Same test, different modes:
 - **Call through**: Real services, real DBs
 - **Mock**: Replace specific service responses
 - **Spy**: Call through + assert on inputs/outputs
+
+## Settled Decisions
+
+Questions that come up repeatedly. These are deliberate; revisit only with a concrete failure.
+
+### Test level: component tests first, unit tests for logic
+
+Default to integration/component tests: boot the runtime(s), call the contract, mock only
+the part of the system you want to skip — usually a third party you don't build a full fake
+for (`@mockable` around an SDK, `Api.mock.x` for another service). That is less setup than
+constructing a class and injecting fakes into it, and it tests several classes together the
+way they run. A unit test (one class, deps faked by hand) is for pure logic with many
+cases — parsers, validators, calculations — not for wiring.
+
+Consequence: `mockOf` / `spyOn` work only inside a booted runtime. That is the point, not a
+gap. When an integration test can't reach a detail cheaply, test that detail as a unit test
+of the pure function rather than mocking the world around a class.
+
+### `.times(n)` is exact
+
+`times(n)` fails the test when the mock is called more *or fewer* than `n` times. The default
+is 1. `times(0)` asserts the method is never called.
+
+### Unmocked `@mockable` calls go through
+
+A `@mockable` method with no mock registered runs for real. Mocks are opt-in per action, so
+the same runtime serves tests that mock a dependency and tests that use it.
+
+### No module mocking in integration tests
+
+Inside a booted runtime, don't `vi.mock` / `jest.mock`. A module mock replaces code by import
+path behind the framework's back — it reaches the runtime's workers unpredictably, leaks
+across tests and bypasses the contract. Use `@mockable` at the boundary, or a contract mock.
+In a plain unit test of one class, module mocking is a normal tool.
+
+### `NODE_ENV=production` selects the real config stores
+
+`GGConfigLocator` uses the local config unless `NODE_ENV === "production"`. A production
+deployment must set it; forgetting usually crashes at start (local endpoints don't exist),
+which is acceptable. This keeps dev and test zero-config.
+
+### Ambient wire values flow to downstream calls
+
+An ambient wire (`GGHeader`/`GGCookie` never `.define()`d) keeps its inbound value in
+context, and any client whose schema uses the same wire sends it on. That propagation is the
+purpose of an ambient wire. Verified wires (`.define()`d) hold a credential, which is
+cleared before the handler runs, so credentials are not forwarded.
+
+### Locator for infrastructure, explicit wiring for domain
+
+Framework infrastructure (logging, config, discovery, metrics) is ambient via the locator.
+Domain services are wired explicitly in `compose()` — constructed there and passed to whoever
+needs them. Read a domain locator key in `compose()`, not inside a method.
 
 ## Why Not Existing Solutions?
 
