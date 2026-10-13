@@ -169,11 +169,12 @@ export abstract class GGCallInterceptor implements IGGTestInterceptor {
     // -------------------------------------------
 
     public validate(): void {
-        if (this.noOfTimesCalled === 0 && this.times > 0) {
+        if (this.noOfTimesCalled < this.times) {
             throw new GGTestError({
-                test: "Expected to be called, but was not.",
-                expected: "To be called",
-                received: "-",
+                context: `[${this.getKey()}]`,
+                test: "Interceptor called too few times!",
+                expected: `Called ${this.times} time(s)`,
+                received: `Called ${this.noOfTimesCalled} time(s)`,
                 sourceFile: this.definedInSourceFile
             });
         }

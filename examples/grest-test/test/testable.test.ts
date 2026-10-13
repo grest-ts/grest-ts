@@ -14,7 +14,7 @@
  * 5. Spy mode for validation without mocking
  */
 
-import {callOn, GGTest, mockOf, spyOn} from "@grest-ts/testkit";
+import {callOn, GGTest, mockOf, spyOn, GGCallInterceptor} from "@grest-ts/testkit";
 import {ChainRuntime} from "../src/chain";
 import {ChainApi} from "../src/api/ChainApi";
 import {TravelPlannerService} from "../src/services/chain/TravelPlannerService";
@@ -112,6 +112,16 @@ describe("testable tests - full runtime integration", () => {
                 reason: expect.stringContaining("95")
             });
     });
+
+    test("times(n) is exact: fewer calls fail validation", async () => {
+        const interceptor = mockOf(WeatherService).getWeather.times(2)
+            .andReturn({temperature: 1, condition: "clear", humidity: 1})
+            .createInterceptor() as GGCallInterceptor
+        await interceptor.onRequest({city: "Oslo"})
+        expect(() => interceptor.validate()).toThrow(/too few/)
+        await interceptor.onRequest({city: "Oslo"})
+        expect(() => interceptor.validate()).not.toThrow()
+    })
 
     test("andReturn with a function answers each call from its input", async () => {
         await client
