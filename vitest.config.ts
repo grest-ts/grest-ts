@@ -20,6 +20,7 @@ export default defineConfig({
       'packages-tooling/testkit/testkit',
       'packages-tooling/testkit/testkit-vitest',
       'packages/common',
+      'packages/config/config',
       'packages/context',
       'packages/discovery/discovery-local',
       'packages/http/http',
