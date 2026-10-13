@@ -179,6 +179,15 @@ new GGConfigLocator(AppConfig)
     .add(GGSetting, new GGConfigStoreFile('./config/settings.json', import.meta.url))
 ```
 
+### GGConfigStoreEnv
+
+Reads environment variables, for processes whose deployment hands them config as env (systemd `EnvironmentFile`, containers). Key `/app/db/host` reads `{prefix}DB_HOST`: the config root is dropped and `/` becomes `_`. An unset or empty variable falls back to the key's default. A value the schema rejects as a plain string is JSON-parsed, so numbers, booleans and objects work. Values are read once at start.
+
+```typescript
+new GGConfigLocator(AppConfig)
+    .add([GGSetting, GGResource], new GGConfigStoreEnv({prefix: "MYAPP_"}))
+```
+
 ### GGConfigStoreAwsSecretsManager
 
 See [@grest-ts/config-aws](../config-aws/README.md).

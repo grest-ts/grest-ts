@@ -1,7 +1,7 @@
 {
   "//": "THIS FILE IS GENERATED - DO NOT EDIT",
   "name": "@grest-ts/config",
-  "version": "0.0.76",
+  "version": "0.0.77",
   "type": "module",
   "license": "MIT",
   "description": "Configuration management for Grest Framework - resources, secrets, and settings",
@@ -20,7 +20,10 @@
     "testkit"
   ],
   "scripts": {
-    "typecheck": "tsc --noEmit -p src"
+    "typecheck": "tsc --noEmit -p src",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "test:coverage:html": "vitest run --coverage --reporter=html"
   },
   "publishConfig": {
     "access": "public"
@@ -49,11 +52,11 @@
     "node": ">=24"
   },
   "peerDependencies": {
-    "@grest-ts/common": "0.0.76",
-    "@grest-ts/locator": "0.0.76",
-    "@grest-ts/schema": "0.0.76"
+    "@grest-ts/common": "0.0.77",
+    "@grest-ts/locator": "0.0.77",
+    "@grest-ts/schema": "0.0.77"
   },
   "devDependencies": {
-    "@grest-ts/testkit": "0.0.76"
+    "@grest-ts/testkit": "0.0.77"
   }
 }

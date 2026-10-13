@@ -21,6 +21,27 @@ describe("cookie binding", () => {
         })
     })
 
+    test("update sends the context value as the cookie, beside cookies already on the request", () => {
+        inRequest([], () => {
+            const sid = new GGCookie("sid")
+            const theme = new GGCookie("theme")
+            sid.set("a b")
+            theme.set("dark")
+            const outbound = {headers: {} as Record<string, string>}
+            sid.update!(outbound)
+            theme.update!(outbound)
+            expect(outbound.headers).toEqual({cookie: "sid=a%20b; theme=dark"})
+        })
+    })
+
+    test("update without a value leaves the request alone", () => {
+        inRequest([], () => {
+            const outbound = {headers: {} as Record<string, string>}
+            new GGCookie("sid").update!(outbound)
+            expect(outbound.headers).toEqual({})
+        })
+    })
+
     test("a declared write with per-mint options emits a hardened Set-Cookie", () => {
         inRequest(["sid"], () => {
             const mw = new GGCookie("sid")

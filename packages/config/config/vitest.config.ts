@@ -1,4 +1,8 @@
-import { defineConfig, mergeConfig } from 'vitest/config';
-import baseConfig from '../../vitest.config.base';
+// ---------------------------------------------
+// THIS FILE IS GENERATED - DO NOT EDIT
+// ---------------------------------------------
 
-export default mergeConfig(baseConfig, defineConfig({}));
+import {defineConfig, mergeConfig} from 'vitest/config';
+import baseConfig from '../../../vitest.config.base';
+
+export default defineConfig(mergeConfig(baseConfig, {}));

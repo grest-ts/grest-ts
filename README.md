@@ -264,8 +264,8 @@ test("resolves address when adding item", async () => {
 
 This works for anything — payment gateways, email senders, external API wrappers, file storage. Put `@mockable` on the class, mock it per-request in tests.
 
-**Why this is different from `jest.mock`:** Most mocking libraries replace modules globally — every test in the file shares the same mock, and parallel tests can interfere with each other. Here, mocks
-are scoped to a single request via `AsyncLocalStorage`. Two tests running in parallel with different mocks on the same service will never conflict. And in production, `@mockable` has zero overhead —
+**Why this is different from `jest.mock`:** A module mock replaces code by import path for the whole file, behind the framework's back. Here, a mock is part of one test action: it is active while that
+action runs and gone afterwards, and tests in other files never see it. Calls made during the action — including parallel ones — share it, so run actions that mock the same method one after another. And in production, `@mockable` has zero overhead —
 the decorator checks for test context and if there isn't one (production), it calls the original method directly with no wrapping cost.
 
 ### @testable — Call Any Class Directly

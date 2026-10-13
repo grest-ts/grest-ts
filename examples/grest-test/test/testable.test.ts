@@ -14,7 +14,7 @@
  * 5. Spy mode for validation without mocking
  */
 
-import {callOn, GGTest, mockOf, spyOn} from "@grest-ts/testkit";
+import {callOn, GGTest, mockOf, spyOn, GGCallInterceptor} from "@grest-ts/testkit";
 import {ChainRuntime} from "../src/chain";
 import {ChainApi} from "../src/api/ChainApi";
 import {TravelPlannerService} from "../src/services/chain/TravelPlannerService";
@@ -111,6 +111,29 @@ describe("testable tests - full runtime integration", () => {
                 recommended: "Hot City",
                 reason: expect.stringContaining("95")
             });
+    });
+
+    test("times(n) is exact: fewer or more calls fail", async () => {
+        const interceptor = mockOf(WeatherService).getWeather.times(2)
+            .andReturn({temperature: 1, condition: "clear", humidity: 1})
+            .createInterceptor() as GGCallInterceptor
+        await interceptor.onRequest({city: "Oslo"})
+        expect(() => interceptor.validate()).toThrow(/too few/)
+        await interceptor.onRequest({city: "Oslo"})
+        expect(() => interceptor.validate()).not.toThrow()
+        await expect(interceptor.onRequest({city: "Oslo"})).rejects.toThrow(/too many/)
+    })
+
+    test("andReturn with a function answers each call from its input", async () => {
+        await client
+            .compareDestinations({destinations: ["Hot City", "Cold City"]})
+            .with(
+                mockOf(WeatherService).getWeather.times(2)
+                    .andReturn(({city}) => ({temperature: city === "Hot City" ? 95 : 35, condition: "clear", humidity: 50})),
+                mockOf(WeatherService).getTimezone.times(2)
+                    .andReturn({timezone: "UTC", offset: 0})
+            )
+            .toMatchObject({recommended: "Hot City", reason: expect.stringContaining("95")});
     });
 });
 

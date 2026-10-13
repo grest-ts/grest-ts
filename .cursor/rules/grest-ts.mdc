@@ -245,6 +245,8 @@ protected compose(): void {
 
 ## 5. Integration tests
 
+Default to integration/component tests: boot the runtime, call the contract, and mock only the part you want to skip — usually a third party (`@mockable` around its SDK) or another service (`Api.mock.x`). Several classes are tested together the way they run, with less setup than injecting fakes into a constructed class. Write a unit test (one class, hand-made fakes) only for pure logic with many cases — parsers, validators, calculations.
+
 ```typescript
 // server/test/integration/item.test.ts
 import {GGTest} from "@grest-ts/testkit"
@@ -411,11 +413,11 @@ test("spy — call through but validate", async () => {
 - `.toEqual(...)` / `.toMatchObject(...)` after `mockOf(S).method` — validates the input the mock received.
 - `.andReturn(value)` — the mock returns this value instead of calling real code.
 - `.andReturn(new MY_ERROR())` — mock returns an error.
-- `.times(n)` — expect exactly n calls.
+- `.times(n)` — expect exactly n calls (fewer or more fails); `.times(0)` = never called.
 - `.sleep(ms)` — add delay before returning.
 - `spyOn(S).method` — calls real method but validates input/output.
 - `.responseToMatchObject(...)` — on a spyOn interceptor, validates the real return value.
-- Mocks are **scoped to the single request** via AsyncLocalStorage — parallel tests never interfere.
+- A mock is active while its action runs — any call to that method in that window hits it, including from parallel requests. Unmocked `@mockable` calls run for real.
 - `.with(interceptor)` accepts a single interceptor or an array of interceptors.
 
 ### @testable — call any class directly from tests
@@ -607,7 +609,8 @@ public async list(): Promise<Item[]> { ... }
 // ✅ Arrow function properties instead:
 public list = async (): Promise<Item[]> => { ... }
 
-// ❌ Global mocks (jest.mock / vitest.mock)
+// ❌ Module mocks in integration tests (jest.mock / vi.mock) — use @mockable + mockOf.
+//    Fine in a plain unit test of a single class.
 jest.mock("./GeocoderService")
 
 // ❌ Missing SERVER_ERROR in contract errors

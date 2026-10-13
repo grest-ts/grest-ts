@@ -126,9 +126,10 @@ export abstract class GGCallInterceptor implements IGGTestInterceptor {
      * - For spy: returns undefined (signal to pass through)
      */
     public async onRequest(body: any): Promise<any> {
+        let transformed: any;
         try {
             this.checkNoOfTimesCalled();
-            const transformed = this.transformInput(body);
+            transformed = this.transformInput(body);
             this.inputExpectations?.check(transformed);
         } catch (error: any) {
             const errorType = this.passThrough ? "SPY_REQUEST_VALIDATION_FAILED" : "MOCK_VALIDATION_FAILED";
@@ -138,7 +139,7 @@ export abstract class GGCallInterceptor implements IGGTestInterceptor {
 
         if (!this.passThrough) {
             await this.sleepIfNeeded();
-            return this.returnData;
+            return typeof this.returnData === "function" ? this.returnData(transformed) : this.returnData;
         }
 
         return undefined;
@@ -168,11 +169,12 @@ export abstract class GGCallInterceptor implements IGGTestInterceptor {
     // -------------------------------------------
 
     public validate(): void {
-        if (this.noOfTimesCalled === 0 && this.times > 0) {
+        if (this.noOfTimesCalled < this.times) {
             throw new GGTestError({
-                test: "Expected to be called, but was not.",
-                expected: "To be called",
-                received: "-",
+                context: `[${this.getKey()}]`,
+                test: "Interceptor called too few times!",
+                expected: `Called ${this.times} time(s)`,
+                received: `Called ${this.noOfTimesCalled} time(s)`,
                 sourceFile: this.definedInSourceFile
             });
         }
