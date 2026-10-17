@@ -1,3 +1,4 @@
+import {randomBytes} from "node:crypto"
 import {NOT_AUTHORIZED} from "@grest-ts/schema"
 import {BcryptHasher} from "./BcryptHasher"
 import type {PasswordHasher} from "./PasswordHasher"
@@ -28,6 +29,7 @@ export class PasswordIdp implements IdpStrategy<PasswordCredential> {
     public readonly provider: string
     private readonly lookup: (username: string) => Promise<PasswordRecord | undefined>
     private readonly hasher: PasswordHasher
+    private dummyHash: Promise<string> | undefined
 
     constructor(options: PasswordIdpOptions) {
         this.lookup = options.lookup
@@ -37,7 +39,9 @@ export class PasswordIdp implements IdpStrategy<PasswordCredential> {
 
     public authenticate = async (input: PasswordCredential): Promise<ExternalIdentity> => {
         const record = await this.lookup(input.username)
-        if (!record || !(await this.hasher.verify(input.password, record.passwordHash))) {
+        // An unknown user still pays for one verify, so response time doesn't reveal which usernames exist.
+        const passwordHash = record?.passwordHash ?? await (this.dummyHash ??= this.hasher.hash(randomBytes(32).toString("hex")))
+        if (!(await this.hasher.verify(input.password, passwordHash)) || !record) {
             throw new NOT_AUTHORIZED({displayMessage: "Invalid username or password", debugMessage: "CREDENTIALS_INVALID"})
         }
         return {provider: this.provider, subject: record.subject, claims: {}}
