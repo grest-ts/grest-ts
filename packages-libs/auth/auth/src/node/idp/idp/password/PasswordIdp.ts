@@ -1,3 +1,4 @@
+import {randomBytes} from "node:crypto"
 import {NOT_AUTHORIZED} from "@grest-ts/schema"
 import {BcryptHasher} from "./BcryptHasher"
 import type {PasswordHasher} from "./PasswordHasher"
@@ -28,18 +29,30 @@ export class PasswordIdp implements IdpStrategy<PasswordCredential> {
     public readonly provider: string
     private readonly lookup: (username: string) => Promise<PasswordRecord | undefined>
     private readonly hasher: PasswordHasher
+    private dummyHash: Promise<string> | undefined
 
     constructor(options: PasswordIdpOptions) {
         this.lookup = options.lookup
         this.hasher = options.hasher ?? new BcryptHasher()
         this.provider = options.provider ?? "password"
+        // Eager, so the first unknown-user login doesn't also pay for the hash() and stand out.
+        this.getDummyHash().catch(() => undefined)
     }
 
     public authenticate = async (input: PasswordCredential): Promise<ExternalIdentity> => {
         const record = await this.lookup(input.username)
-        if (!record || !(await this.hasher.verify(input.password, record.passwordHash))) {
+        // An unknown user still pays for one verify, so response time doesn't reveal which usernames exist.
+        const passwordHash = record?.passwordHash ?? await this.getDummyHash()
+        if (!(await this.hasher.verify(input.password, passwordHash)) || !record) {
             throw new NOT_AUTHORIZED({displayMessage: "Invalid username or password", debugMessage: "CREDENTIALS_INVALID"})
         }
         return {provider: this.provider, subject: record.subject, claims: {}}
+    }
+
+    private getDummyHash(): Promise<string> {
+        return this.dummyHash ??= this.hasher.hash(randomBytes(32).toString("hex")).catch((err: unknown) => {
+            this.dummyHash = undefined
+            throw err
+        })
     }
 }

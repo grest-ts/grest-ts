@@ -44,6 +44,8 @@ export interface GGCorsConfig {
 export interface GGHttpServerAdapterConfig {
     key?: GGLocatorKey<GGHttpServer>;
     port?: number;
+    /** Interface to bind. Defaults to `0.0.0.0`; pass `127.0.0.1` for a loopback-only listener. */
+    host?: string;
     /**
      * Cross-origin policy. Omitted (default) keeps the permissive
      * `Access-Control-Allow-Origin: *` with no credentials — backward compatible.
@@ -72,6 +74,7 @@ export class GGHttpServer {
     protected readonly scope: GGLocatorScope;
     protected readonly runtimeName: string;
     private readonly configuredPort: number;
+    private readonly configuredHost: string;
     private readonly cors?: GGCorsConfig;
 
     private readonly _onStart: Array<() => void> = [];
@@ -101,6 +104,7 @@ export class GGHttpServer {
         this.scope = GGLocator.getScope();
         this.runtimeName = this.scope.serviceName;
         this.configuredPort = config?.port ?? (process.env.PORT ? Number(process.env.PORT) : 0);
+        this.configuredHost = config?.host ?? '0.0.0.0';
         this.cors = config?.cors;
 
         this.scope.setWithLifecycle(config?.key ?? GG_HTTP_SERVER, this, {
@@ -235,14 +239,17 @@ export class GGHttpServer {
         checkWireConflicts(this.registeredSchemas, this.registeredWebSocketSchemas);
         checkWiresImplemented(this.registeredSchemas, this.registeredWebSocketSchemas);
         checkPermissionsAtStart(this.registeredSchemas, this.registeredWebSocketSchemas);
-        this._port = await new Promise((resolve) => {
-            this.httpServer.listen(this.configuredPort, '0.0.0.0', () => {
+        this._port = await new Promise((resolve, reject) => {
+            this.httpServer.once('error', reject);
+            this.httpServer.listen(this.configuredPort, this.configuredHost, () => {
+                this.httpServer.removeListener('error', reject);
                 const port = (this.httpServer.address() as any).port;
                 resolve(port);
             });
         });
         this._onStart.forEach(callback => callback());
         GGLog.info(this, `HTTP server started`, {
+            host: this.configuredHost,
             port: this._port,
             runtime: this.runtimeName
         });

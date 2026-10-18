@@ -1,4 +1,4 @@
-import {describe, test, expect} from "vitest"
+import {describe, test, expect, vi} from "vitest"
 import {NOT_AUTHORIZED} from "@grest-ts/schema"
 import {BcryptHasher, PasswordIdp, type PasswordRecord} from "."
 
@@ -29,6 +29,24 @@ describe("PasswordIdp", () => {
         const idp = await idpWith("alice", "s3cret")
         await expect(idp.authenticate({username: "nobody", password: "s3cret"}))
             .rejects.toBeInstanceOf(NOT_AUTHORIZED)
+    })
+
+    test("an unknown user still runs a hash verify (no timing oracle for which usernames exist)", async () => {
+        const idp = await idpWith("alice", "s3cret")
+        const verify = vi.spyOn(hasher, "verify")
+        await expect(idp.authenticate({username: "nobody", password: "s3cret"})).rejects.toBeInstanceOf(NOT_AUTHORIZED)
+        expect(verify).toHaveBeenCalledTimes(1)
+        verify.mockRestore()
+    })
+
+    test("a failed dummy hash is retried, not cached", async () => {
+        let failNext = true
+        const flaky = {
+            hash: async (p: string) => { if (failNext) { failNext = false; throw new Error("hasher down") } return hasher.hash(p) },
+            verify: hasher.verify.bind(hasher),
+        }
+        const idp = new PasswordIdp({hasher: flaky, lookup: async () => undefined})
+        await expect(idp.authenticate({username: "nobody", password: "x"})).rejects.toBeInstanceOf(NOT_AUTHORIZED)
     })
 
     test("provider defaults to 'password' and is overridable", async () => {

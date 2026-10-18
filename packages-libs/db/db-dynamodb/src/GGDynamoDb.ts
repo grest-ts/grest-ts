@@ -1,5 +1,5 @@
 import {DynamoDBClient, ListTablesCommand} from "@aws-sdk/client-dynamodb"
-import {DynamoDBDocumentClient, GetCommand, PutCommand, QueryCommand, DeleteCommand, ScanCommand} from "@aws-sdk/lib-dynamodb"
+import {DynamoDBDocumentClient, GetCommand, PutCommand, QueryCommand, DeleteCommand, ScanCommand, UpdateCommand} from "@aws-sdk/lib-dynamodb"
 import {GGLocator, GGLocatorKey, GGLocatorServiceType} from "@grest-ts/locator"
 import {GGLog} from "@grest-ts/logger"
 import type {GGDynamoDbConfig, GGDynamoDbHostData, GGDynamoDbUserData} from "./GGDynamoDbConfig"
@@ -282,6 +282,34 @@ export class GGDynamoDb {
             return true
         } catch (err) {
             if ((err as {name?: string}).name === "ConditionalCheckFailedException") return false
+            throw err
+        }
+    }
+
+    /**
+     * Sets only `fields` on an item that still exists, so concurrent writes to its other attributes
+     * survive — a get-modify-put would revert them, or recreate an item deleted in between.
+     * Returns the updated item, or undefined when it no longer exists.
+     */
+    async updateFields<T>(table: string, key: Record<string, unknown>, fields: Record<string, unknown>): Promise<T | undefined> {
+        const names = Object.keys(fields)
+        const keyNames = Object.keys(key)
+        try {
+            const result = await this.getClient().send(new UpdateCommand({
+                TableName: table,
+                Key: key,
+                UpdateExpression: "SET " + names.map((_, i) => `#f${i} = :f${i}`).join(", "),
+                ConditionExpression: keyNames.map((_, i) => `attribute_exists(#k${i})`).join(" AND "),
+                ExpressionAttributeNames: Object.fromEntries([
+                    ...names.map((n, i) => [`#f${i}`, n]),
+                    ...keyNames.map((n, i) => [`#k${i}`, n]),
+                ]),
+                ExpressionAttributeValues: Object.fromEntries(names.map((n, i) => [`:f${i}`, fields[n]])),
+                ReturnValues: "ALL_NEW",
+            }))
+            return result.Attributes as T
+        } catch (err) {
+            if ((err as {name?: string}).name === "ConditionalCheckFailedException") return undefined
             throw err
         }
     }
