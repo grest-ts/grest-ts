@@ -5,7 +5,7 @@ import type {GGDynamoDb, GGDynamoDbPage} from "./GGDynamoDb"
  * Schema-bound table gateway. Owns one DynamoDB table; all reads/writes
  * go through it. `query` / `scan` follow DynamoDB's 1MB continuation to the
  * end (capped — see `GGDynamoDb.query`); `queryPage` / `scanPage` hand the
- * cursor to the caller instead. Validates against the schema on `put` / `putConditional`
+ * cursor to the caller instead. Validates against the schema on `put` / `putConditional` / `updateFields`
  * — shape mistakes throw at the write boundary instead of becoming silent
  * DDB corruption. Reads are NOT validated (deliberate; pre-launch).
  *
@@ -76,6 +76,19 @@ export class GGDynamoDbTable<
     ): Promise<boolean> {
         const validated = this.validate(item, "putConditional")
         return this.db.putConditional(this.tableName, validated, conditionExpression, values, attributeNames)
+    }
+
+    /**
+     * Validated partial write: `fields` merged onto `current` must pass the schema, and only `fields`
+     * are written — onto the row only if it still exists. `undefined` values leave the field as is.
+     * Returns the updated row, or undefined when the row is gone.
+     */
+    async updateFields(current: T, fields: Partial<T>): Promise<T | undefined> {
+        const merged = this.validate({...current, ...defined(fields)}, "updateFields") as Record<string, unknown>
+        const set = Object.fromEntries(Object.keys(defined(fields)).filter(k => merged[k] !== undefined).map(k => [k, merged[k]]))
+        const key = this.buildKey(current[this.pkField], this.skField ? (current as Record<string, unknown>)[this.skField] : undefined)
+        if (Object.keys(set).length === 0) return this.db.get<T>(this.tableName, key)
+        return this.db.updateFields<T>(this.tableName, key, set)
     }
 
     /**
@@ -170,4 +183,8 @@ export class GGDynamoDbTable<
         }
         return result.value
     }
+}
+
+function defined<T extends object>(fields: Partial<T>): Partial<T> {
+    return Object.fromEntries(Object.entries(fields).filter(([, v]) => v !== undefined)) as Partial<T>
 }
