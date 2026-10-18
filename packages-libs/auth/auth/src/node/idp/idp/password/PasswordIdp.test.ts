@@ -39,6 +39,16 @@ describe("PasswordIdp", () => {
         verify.mockRestore()
     })
 
+    test("a failed dummy hash is retried, not cached", async () => {
+        let failNext = true
+        const flaky = {
+            hash: async (p: string) => { if (failNext) { failNext = false; throw new Error("hasher down") } return hasher.hash(p) },
+            verify: hasher.verify.bind(hasher),
+        }
+        const idp = new PasswordIdp({hasher: flaky, lookup: async () => undefined})
+        await expect(idp.authenticate({username: "nobody", password: "x"})).rejects.toBeInstanceOf(NOT_AUTHORIZED)
+    })
+
     test("provider defaults to 'password' and is overridable", async () => {
         const record: PasswordRecord = {subject: "u", passwordHash: await hasher.hash("p")}
         const idp = new PasswordIdp({hasher, provider: "local", lookup: async () => record})
