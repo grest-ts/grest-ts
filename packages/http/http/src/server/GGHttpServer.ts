@@ -239,14 +239,17 @@ export class GGHttpServer {
         checkWireConflicts(this.registeredSchemas, this.registeredWebSocketSchemas);
         checkWiresImplemented(this.registeredSchemas, this.registeredWebSocketSchemas);
         checkPermissionsAtStart(this.registeredSchemas, this.registeredWebSocketSchemas);
-        this._port = await new Promise((resolve) => {
+        this._port = await new Promise((resolve, reject) => {
+            this.httpServer.once('error', reject);
             this.httpServer.listen(this.configuredPort, this.configuredHost, () => {
+                this.httpServer.removeListener('error', reject);
                 const port = (this.httpServer.address() as any).port;
                 resolve(port);
             });
         });
         this._onStart.forEach(callback => callback());
         GGLog.info(this, `HTTP server started`, {
+            host: this.configuredHost,
             port: this._port,
             runtime: this.runtimeName
         });
