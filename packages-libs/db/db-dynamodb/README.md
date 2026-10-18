@@ -171,6 +171,14 @@ await users.put({ userId: "u_1", orgId: "o_1", name: "Alice", version: 1 })
 const u = await users.get("u_1")
 ```
 
+### Partial Updates
+
+`put` replaces the whole row, so a get-modify-put silently reverts any concurrent change to the fields it didn't mean to touch (and recreates a row deleted in between). `updateFields` writes only the given fields, onto the row only if it still exists, after validating them merged onto the row you read:
+
+```typescript
+const updated = await users.updateFields(current, { name: "Alicia" }) // undefined if the row is gone
+```
+
 ### Composite Keys
 
 Pass the sort-key field name as the fifth constructor argument. Override `get` / `delete` in subclasses to tighten the sort-key type:
@@ -216,7 +224,7 @@ await raw.send(new CreateTableCommand({ /* ... */ }))
 
 ## Reads Are Not Validated
 
-Schema validation is applied on `put` and `putConditional` only. Reads (`get`, `query`, `queryPage`, `scan`, `scanPage`) return whatever the table holds, cast to `T`. This is deliberate — it keeps the read path fast and avoids forcing a migration when a column is added. If you need read-side validation, wrap the call site.
+Schema validation is applied on `put`, `putConditional` and `updateFields` only. Reads (`get`, `query`, `queryPage`, `scan`, `scanPage`) return whatever the table holds, cast to `T`. This is deliberate — it keeps the read path fast and avoids forcing a migration when a column is added. If you need read-side validation, wrap the call site.
 
 ## Config Shape Reference
 
