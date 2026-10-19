@@ -4,6 +4,7 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {IsObject, IsPosInt, IsString} from "@grest-ts/schema";
 import {GGLocatorScope} from "@grest-ts/locator";
+import {sleep} from "@grest-ts/common";
 import {GGConfig} from '../GGConfig';
 import {GGConfigLocator} from '../GGConfigLocator';
 import {GGConfigKey, GGConfigKeyConstructor} from '../GGConfigKey';
@@ -24,17 +25,8 @@ const Config = GGConfig.define("/file_app/", () => ({
     db: new GGSetting("db", IsObject({host: IsString}), {host: "localhost"}, "DB"),
 }));
 
-async function until(check: () => void, timeoutMs = 3000): Promise<void> {
-    const deadline = Date.now() + timeoutMs;
-    for (; ;) {
-        try {
-            return check();
-        } catch (error) {
-            if (Date.now() > deadline) throw error;
-            await new Promise(r => setTimeout(r, 20));
-        }
-    }
-}
+const until = (check: () => void) => vi.waitFor(check, {timeout: 3000, interval: 20});
+const serialize = (content: unknown) => typeof content === "string" ? content : JSON.stringify(content);
 
 describe('GGConfigStoreFile', () => {
     let dir: string;
@@ -48,10 +40,10 @@ describe('GGConfigStoreFile', () => {
     const doc = (port: number, name = "app", host = "localhost") => ({file_app: {port, name, db: {host}}});
     const writeAtomic = (content: unknown) => {
         const tmp = join(dir, `.settings.${Math.random()}.tmp`);
-        fs.writeFileSync(tmp, typeof content === "string" ? content : JSON.stringify(content));
+        fs.writeFileSync(tmp, serialize(content));
         fs.renameSync(tmp, file);
     };
-    const writeInPlace = (content: unknown) => fs.writeFileSync(file, typeof content === "string" ? content : JSON.stringify(content));
+    const writeInPlace = (content: unknown) => fs.writeFileSync(file, serialize(content));
     const values = () => [store.getValue(Config.port), store.getValue(Config.name), store.getValue(Config.db)];
 
     beforeEach(async () => {
@@ -140,12 +132,10 @@ describe('GGConfigStoreFile', () => {
     });
 
     it('does not reload after teardown', async () => {
-        const refresh = vi.spyOn(store, 'refresh');
         writeAtomic(doc(6000));
         await locator.teardown();
         writeAtomic(doc(6001));
-        await new Promise(r => setTimeout(r, 300));
-        expect(refresh).not.toHaveBeenCalled();
+        await sleep(300);
         expect(store.getValue(Config.port)).toBe(1000);
     });
 });

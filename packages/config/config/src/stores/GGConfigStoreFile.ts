@@ -34,13 +34,9 @@ export class GGConfigStoreFile<Key extends GGConfigKey> extends GGConfigStore<Ke
             if (filename && filename !== name) return;
             if (this.#debounceTimer) clearTimeout(this.#debounceTimer);
             // Adding debounce so file writes would have time to correctly complete.
-            this.#debounceTimer = setTimeout(() => {
-                this.#debounceTimer = null;
-                if (!this.isStarted) return;
-                this.refresh(false).catch(error => GG_CONFIG.get().onReloadError(error));
-            }, 100);
+            this.#debounceTimer = setTimeout(() => this.refresh(false).catch(this.#reportReloadError), 100);
         });
-        this.#watcher.on('error', error => GG_CONFIG.get().onReloadError(error));
+        this.#watcher.on('error', this.#reportReloadError);
     }
 
     public override async teardown(): Promise<void> {
@@ -48,10 +44,8 @@ export class GGConfigStoreFile<Key extends GGConfigKey> extends GGConfigStore<Ke
             this.#watcher.close();
             this.#watcher = null;
         }
-        if (this.#debounceTimer) {
-            clearTimeout(this.#debounceTimer);
-            this.#debounceTimer = null;
-        }
+        clearTimeout(this.#debounceTimer ?? undefined);
+        this.#debounceTimer = null;
         await super.teardown();
     }
 
@@ -76,8 +70,10 @@ export class GGConfigStoreFile<Key extends GGConfigKey> extends GGConfigStore<Ke
         this.#valuesCache = values;
         if (isInitialLoad) return;
         const changed = this.keys.filter(key => !isDeepStrictEqual(previous.get(key), values.get(key)));
-        await Promise.all(changed.map(key => this.notify(key).catch(error => GG_CONFIG.get().onReloadError(error))));
+        await Promise.all(changed.map(key => this.notify(key).catch(this.#reportReloadError)));
     }
+
+    #reportReloadError = (error: Error): void => GG_CONFIG.get().onReloadError(error);
 
     public getValue<T>(key: GGConfigKey<T>): T {
         return this.#valuesCache.get(key) as T;

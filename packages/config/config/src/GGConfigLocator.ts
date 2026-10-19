@@ -42,8 +42,7 @@ export class GGConfigLocator<T extends object> {
     }
 
     /**
-     * Called when a running store fails to reload (unreadable file, bad JSON, failed validation) and keeps its
-     * last good values, or when a watcher fails during a reload. Can override this if you want custom handling.
+     * Called when a running store fails to reload and keeps its last good values, or when a watcher fails during a reload.
      */
     public onReloadError = (error: Error): void => {
         console.error("Config reload failed, keeping previous values:", error);
