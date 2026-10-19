@@ -1,14 +1,14 @@
 import * as fs from 'fs';
 import {GGConfigStore} from "../GGConfigStore";
 import {GGConfigKey} from "../GGConfigKey";
+import {GG_CONFIG} from "../GG_CONFIG";
 import {readConfigPath} from "../configPath";
-import {dirname, join} from "node:path";
+import {basename, dirname, join} from "node:path";
 import {fileURLToPath} from "node:url";
+import {isDeepStrictEqual} from "node:util";
 
 /**
- * Local file-based settings strategy.
- * Reads settings from settings.json in the config directory.
- * Watches file for changes and automatically reloads.
+ * Reads settings from a JSON file and reloads when the file is written or replaced.
  */
 export class GGConfigStoreFile<Key extends GGConfigKey> extends GGConfigStore<Key> {
 
@@ -26,13 +26,15 @@ export class GGConfigStoreFile<Key extends GGConfigKey> extends GGConfigStore<Ke
     public override async start(): Promise<void> {
         await super.start();
         await this.refresh(true);
-        this.#watcher = fs.watch(this.file, (eventType) => {
-            if (eventType === 'change') {
-                if (this.#debounceTimer) clearTimeout(this.#debounceTimer);
-                // Adding debounce so file writes would have time to correctly complete.
-                this.#debounceTimer = setTimeout(() => this.refresh(false), 100);
-            }
+        // Watch the directory: atomic writes rename a new inode over the file, which a file watch never sees.
+        const name = basename(this.file);
+        this.#watcher = fs.watch(dirname(this.file), (_eventType, filename) => {
+            if (filename && filename !== name) return;
+            if (this.#debounceTimer) clearTimeout(this.#debounceTimer);
+            // Adding debounce so file writes would have time to correctly complete.
+            this.#debounceTimer = setTimeout(() => this.refresh(false).catch(this.#reportReloadError), 100);
         });
+        this.#watcher.on('error', this.#reportReloadError);
     }
 
     public override async teardown(): Promise<void> {
@@ -40,20 +42,29 @@ export class GGConfigStoreFile<Key extends GGConfigKey> extends GGConfigStore<Ke
             this.#watcher.close();
             this.#watcher = null;
         }
+        clearTimeout(this.#debounceTimer ?? undefined);
+        this.#debounceTimer = null;
         await super.teardown();
     }
 
     public async refresh(isInitialLoad: boolean): Promise<void> {
         const fileContent = fs.readFileSync(this.file, 'utf-8');
         if (!fileContent) {
-            throw new Error("Settings file is empty! Why is that?")
+            throw new Error(`Settings file is empty: ${this.file}`)
         }
         const fileJson = JSON.parse(fileContent);
-        this.#valuesCache.clear();
+        const values = new Map<GGConfigKey, unknown>();
         this.keys.forEach(key => {
-            this.#valuesCache.set(key, this.resolveValue(key, readConfigPath(fileJson, key.name), isInitialLoad));
+            values.set(key, this.resolveValue(key, readConfigPath(fileJson, key.name), isInitialLoad));
         });
+        const previous = this.#valuesCache;
+        this.#valuesCache = values;
+        if (isInitialLoad) return;
+        const changed = this.keys.filter(key => !isDeepStrictEqual(previous.get(key), values.get(key)));
+        await Promise.all(changed.map(key => this.notify(key).catch(this.#reportReloadError)));
     }
+
+    #reportReloadError = (error: Error): void => GG_CONFIG.get().onReloadError(error);
 
     public getValue<T>(key: GGConfigKey<T>): T {
         return this.#valuesCache.get(key) as T;
