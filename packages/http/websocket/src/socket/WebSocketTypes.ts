@@ -12,8 +12,9 @@ export type WebSocketIncoming<TClientToServer> = {
 
 /**
  * Outgoing interface for serverToClient messages.
- * Includes all serverToClient methods plus onClose for lifecycle.
+ * Includes all serverToClient methods plus onClose/close for lifecycle.
  */
 export type WebSocketOutgoing<TServerToClient> = TServerToClient & {
     onClose(callback: () => void): void
+    close(): void
 }

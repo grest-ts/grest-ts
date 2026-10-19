@@ -65,6 +65,10 @@ export const ClientTestSocketApiContract = new GGDuplexContract("ClientTestSocke
             errors: [SERVER_ERROR],
             permission: GG_NO_PERMISSIONS
         },
+        // Fire-and-forget: asks the server to close this connection from its side.
+        closeMe: {
+            permission: GG_NO_PERMISSIONS
+        },
     },
     serverToClient: {
         // Fire-and-forget: server push

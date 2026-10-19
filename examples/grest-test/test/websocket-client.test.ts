@@ -153,6 +153,21 @@ describe("WebSocket createClient (production client)", () => {
         expect(disconnectReasons).toEqual(["manual"])
     })
 
+    test("server-side outgoing.close() drops the client, which reconnects and re-runs setup", async () => {
+        const client = ClientTestSocketApi.createClient({url: clientUrl(), reconnect: {initialDelayMs: 10}})
+        const disconnectReasons: string[] = []
+        client.onDisconnect((reason) => { disconnectReasons.push(reason) })
+        let setupRuns = 0
+        await client.connect(() => { setupRuns++ })
+
+        await client.outgoing.closeMe()
+        await vi.waitFor(() => expect(setupRuns).toBe(2))
+
+        expect(disconnectReasons).toEqual(["drop"])
+        expect(client.isConnected).toBe(true)
+        await client.disconnect()
+    })
+
     test("connect() after disconnect() on same client is rejected — create a new client", async () => {
         const client = ClientTestSocketApi.createClient({url: clientUrl()})
         await client.connect()
