@@ -2,7 +2,6 @@ import * as fs from 'fs';
 import {GGConfigStore} from "../GGConfigStore";
 import {GGConfigKey} from "../GGConfigKey";
 import {GG_CONFIG} from "../GG_CONFIG";
-import type {GGConfigLocator} from "../GGConfigLocator";
 import {readConfigPath} from "../configPath";
 import {basename, dirname, join} from "node:path";
 import {fileURLToPath} from "node:url";
@@ -17,7 +16,6 @@ export class GGConfigStoreFile<Key extends GGConfigKey> extends GGConfigStore<Ke
     #watcher: fs.FSWatcher | null = null;
     #debounceTimer: NodeJS.Timeout | null = null;
     #valuesCache: Map<GGConfigKey, unknown> = new Map();
-    #locator: GGConfigLocator<any> | null = null;
 
     constructor(file: string, moduleUrl?: string) {
         super();
@@ -28,7 +26,6 @@ export class GGConfigStoreFile<Key extends GGConfigKey> extends GGConfigStore<Ke
     public override async start(): Promise<void> {
         await super.start();
         await this.refresh(true);
-        this.#locator = GG_CONFIG.get();
         // Watch the directory: atomic writes rename a new inode over the file, which a file watch never sees.
         const name = basename(this.file);
         this.#watcher = fs.watch(dirname(this.file), (_eventType, filename) => {
@@ -67,7 +64,7 @@ export class GGConfigStoreFile<Key extends GGConfigKey> extends GGConfigStore<Ke
         await Promise.all(changed.map(key => this.notify(key).catch(this.#reportReloadError)));
     }
 
-    #reportReloadError = (error: Error): void => this.#locator!.onReloadError(error);
+    #reportReloadError = (error: Error): void => GG_CONFIG.get().onReloadError(error);
 
     public getValue<T>(key: GGConfigKey<T>): T {
         return this.#valuesCache.get(key) as T;
