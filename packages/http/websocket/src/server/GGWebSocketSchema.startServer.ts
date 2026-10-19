@@ -42,6 +42,11 @@ export function startWebSocketServer(
 ): GGSocketServer<any> {
     const contract = schema.contract
     const {schemaName, normalizedPath, middlewares, permissionsChecker, connectPermission, queryValidator} = prepareSocketServer(schema, config)
+    for (const reserved of ["close", "onClose"]) {
+        if (reserved in contract.serverToClient.methods) {
+            throw new Error(`${schemaName}: serverToClient method "${reserved}" is reserved for the connection lifecycle.`);
+        }
+    }
 
     const socketServer = groupSocketServer(schema.group, config.http, () => new GGSocketServer(config.http, {
         apiName: schemaName,
@@ -91,7 +96,8 @@ export function startWebSocketServer(
         const outgoingInstance = serverToClientContract.implement(impl, {skipLocatorRegistration: true});
         (outgoingInstance as any).onClose = (callback: () => void) => {
             socket.onClose(callback)
-        }
+        };
+        (outgoingInstance as any).close = () => socket.close();
         onConnection(incoming, outgoingInstance, queryArgs)
     });
 

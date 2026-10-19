@@ -31,6 +31,8 @@ export class ClientTestSocketService {
             askMeAQuestion: async ({prompt}) => {
                 return await outgoing.needsConfirmation({prompt})
             },
+
+            closeMe: async () => outgoing.close(),
         })
     }
 }
