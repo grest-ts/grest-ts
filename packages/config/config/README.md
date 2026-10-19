@@ -145,7 +145,11 @@ new GGConfigLocator(AppConfig)
 
 ### GGConfigStoreFile
 
-Reads values from a JSON file. Watches the file for changes and automatically reloads (100ms debounce).
+Reads values from a JSON file. Watches the file's directory and automatically reloads (100ms debounce), so both in-place writes and atomic writes (write a temp file, then `rename` it over the target) are picked up.
+
+- **Initial load** fails loudly: a missing, empty, unparsable or invalid file makes `start()` throw.
+- **Reloads** are all-or-nothing: every key is validated before any value changes. If anything fails (unreadable file, empty file, bad JSON, schema failure), the store keeps its last good values and reports the error to `GGConfigLocator.onReloadError` (default: `console.error`; override it to route to your logger or alerting). The file briefly missing mid-replace is not an error; the next write triggers a reload.
+- **Watchers** (`key.watch()`) fire once per reload, only for keys whose validated value changed (deep equality). A watcher that throws goes to `onNotifyError`; if that throws (the default), the error is passed to `onReloadError` instead of escaping as an unhandled rejection.
 
 The key path `/app/server/port` maps to `app.server.port` in JSON:
 
