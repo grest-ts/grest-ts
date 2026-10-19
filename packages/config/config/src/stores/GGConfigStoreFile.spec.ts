@@ -97,6 +97,15 @@ describe('GGConfigStoreFile', () => {
         expect(unhandled).not.toHaveBeenCalled();
     });
 
+    it('reports a deleted file, keeps the last good values and reloads when it is written back', async () => {
+        fs.unlinkSync(file);
+        await until(() => expect(reloadErrors.map(e => (e as NodeJS.ErrnoException).code)).toEqual(["ENOENT"]));
+        expect(values()).toEqual([1000, "app", {host: "localhost"}]);
+
+        writeAtomic(doc(3500));
+        await until(() => expect(store.getValue(Config.port)).toBe(3500));
+    });
+
     it('notifies only changed keys, once per change, with the new value', async () => {
         const port = vi.fn(), name = vi.fn(), db = vi.fn();
         store.watch(Config.port, port);
