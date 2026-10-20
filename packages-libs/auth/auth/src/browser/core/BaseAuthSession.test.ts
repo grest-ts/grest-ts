@@ -255,8 +255,8 @@ describe("refresh failure policy", () => {
         expect(onLogout).not.toHaveBeenCalled()
     })
 
-    test("fatal error (NOT_AUTHORIZED) → expired, wire cleared, onLogout fires", async () => {
-        const {session, slot, refreshFn} = makeSession()
+    test("fatal error (NOT_AUTHORIZED) → expired, wire + cache cleared, onLogout fires", async () => {
+        const {session, slot, cache, refreshFn} = makeSession()
         session.start(makePair("at-root-1", 500_000, "rt-1"))
         refreshFn.mockRejectedValueOnce(new NOT_AUTHORIZED())
         const onLogout = vi.fn()
@@ -266,6 +266,7 @@ describe("refresh failure policy", () => {
 
         expect(session.getState().status).toBe("expired")
         expect(slot.get()).toBeUndefined()
+        expect(cache.read()).toBeUndefined()
         expect(onLogout).toHaveBeenCalledOnce()
     })
 
@@ -281,6 +282,76 @@ describe("refresh failure policy", () => {
         expect(session.getState().status).toBe("expired")
         expect(slot.get()).toBeUndefined()
         expect(onLogout).toHaveBeenCalledOnce()
+    })
+
+    test("expired refresh token → expired + cache cleared without calling refresh", async () => {
+        const {session, slot, cache, refreshFn} = makeSession()
+        session.start({access: {token: "at-root-1", expiresAt: 500_000}, refresh: {token: "rt-1", expiresAt: 500_000}})
+        const onLogout = vi.fn()
+        session.onLogout(onLogout)
+
+        await expect(session.ensureFresh()).rejects.toThrow("No refresh token")
+
+        expect(refreshFn).not.toHaveBeenCalled()
+        expect(session.getState().status).toBe("expired")
+        expect(slot.get()).toBeUndefined()
+        expect(cache.read()).toBeUndefined()
+        expect(onLogout).toHaveBeenCalledOnce()
+
+        await expect(session.ensureFresh()).rejects.toThrow("No refresh token")
+        expect(onLogout).toHaveBeenCalledOnce()
+    })
+
+    test("init() with access + refresh both expired → expired, cache cleared, no refresh call", async () => {
+        const cache = new FakeSharedCache()
+        cache.write({access: {token: "at", expiresAt: 1000}, refresh: {token: "rt", expiresAt: 1000}, data: {userId: "u1"}})
+        const {session, slot, refreshFn} = makeSession({cache})
+
+        await session.init()
+
+        expect(refreshFn).not.toHaveBeenCalled()
+        expect(session.getState()).toEqual({status: "expired", refreshing: false, degraded: false})
+        expect(session.getIdentity()).toBeUndefined()
+        expect(slot.get()).toBeUndefined()
+        expect(cache.read()).toBeUndefined()
+    })
+
+    test("expiry in one tab logs out the other tab once; its own queued refresh doesn't fire onLogout again", async () => {
+        const cache = new FakeSharedCache()
+        const lock = new FakeLock()
+        const clock = new FakeClock()
+        const a = makeSession({cache, lock, clock})
+        const b = makeSession({cache, lock, clock})
+        a.session.start({access: {token: "at", expiresAt: 2_000_000}, refresh: {token: "rt", expiresAt: 2_000_000}})
+        await b.session.init()
+        clock.advance(2_000_000)
+        const onLogoutB = vi.fn()
+        b.session.onLogout(onLogoutB)
+
+        await Promise.all([
+            expect(a.session.ensureFresh()).rejects.toThrow("No refresh token"),
+            expect(b.session.ensureFresh()).rejects.toThrow("No refresh token"),
+        ])
+
+        expect(cache.read()).toBeUndefined()
+        expect(b.slot.get()).toBeUndefined()
+        expect(b.session.getState().status).toBe("anonymous")
+        expect(onLogoutB).toHaveBeenCalledOnce()
+    })
+
+    test("fatal refresh keeps a pair another tab rotated into the cache meanwhile", async () => {
+        const cache = new FakeSharedCache()
+        const {session, refreshFn} = makeSession({cache})
+        session.start(makePair("at-root-1", 500_000, "rt-1"))
+        refreshFn.mockImplementationOnce(async () => {
+            cache.write(makePair("at-other-tab", 9_000_000, "rt-1"))
+            throw new NOT_AUTHORIZED()
+        })
+
+        await expect(session.ensureFresh()).rejects.toBeInstanceOf(NOT_AUTHORIZED)
+
+        expect(session.getState().status).toBe("expired")
+        expect(cache.read()?.access.token).toBe("at-other-tab")
     })
 
     test("a later successful refresh clears the degraded flag", async () => {
@@ -848,7 +919,7 @@ describe("AuthSession — GGContextKeySynchronizer.provide wiring", () => {
             await new GGContext("test").run(async () => {
                 GGAuthSession.withToken(rootWire, {refresh: vi.fn().mockResolvedValue({tokens: okPair()}), localStorageKey: "test"})
                     .addDerived("org", orgWire, {mint: vi.fn().mockResolvedValue(okDerived())})
-                    .start({tokens: makePair("at", 0, "rt")}) // triggers _getSession
+                    .start({tokens: {access: {token: "at", expiresAt: 0}, refresh: {token: "rt", expiresAt: Date.now() + 604_800_000}}}) // triggers _getSession
 
                 const rootCtrl = capturedControllers[0]
                 const orgCtrl = capturedControllers[1]
