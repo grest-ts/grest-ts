@@ -244,8 +244,9 @@ export class BaseAuthSession<D extends DerivedMap> {
                 return
             }
 
+            const staleAccessToken = this.shared?.access.token
             if (!this.canRefresh()) {
-                this.toExpired()
+                this.toExpired(staleAccessToken)
                 throw new Error("No refresh token")
             }
 
@@ -254,7 +255,7 @@ export class BaseAuthSession<D extends DerivedMap> {
                 result = await this.config.refresh(this.currentRefreshToken())
             } catch (e) {
                 if (this.config.isFatalRefreshError(e)) {
-                    this.toExpired()
+                    this.toExpired(staleAccessToken)
                 } else {
                     this.markDegraded()
                 }
@@ -415,11 +416,15 @@ export class BaseAuthSession<D extends DerivedMap> {
         }
     }
 
-    private toExpired(): void {
+    private toExpired(staleAccessToken: string | undefined): void {
+        if (!this.shared) return
         this.clearRootWire()
         this.clearAllDerivedWires()
         this.shared = undefined
         this.identity = undefined
+        // Without navigator.locks another tab may have rotated in the meantime — don't wipe its fresh pair.
+        if (this.ports.cache.read()?.access.token === staleAccessToken) this.cacheWrite(undefined)
+        this.cancelNextRefresh()
         this.setState({status: "expired", refreshing: false, degraded: false})
         this.fireLogout()
         this.notifyListeners()
@@ -455,7 +460,9 @@ export class BaseAuthSession<D extends DerivedMap> {
     }
 
     private canRefresh(): boolean {
-        return this.config.storage === "cookie" ? true : !!this.shared?.refresh?.token
+        if (this.config.storage === "cookie") return true
+        const refresh = this.shared?.refresh
+        return !!refresh?.token && refresh.expiresAt > this.ports.clock.now()
     }
 
     private clearRootWire(): void {
