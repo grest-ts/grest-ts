@@ -20,6 +20,7 @@ For redesigning keys, GSIs or access patterns, use AWS's `amazon-dynamodb` skill
 - Unbounded parallel deletes or writes. Use `BatchWriteItem` (25 per call) with limited concurrency, and retry `UnprocessedItems`.
 
 ## Keys, indexes, throughput
+- A GSI can be added later with an online backfill, so a missing index is a fixable finding. The base table's partition and sort key can't be changed — that needs a new table and a migration — so scrutinize them hardest.
 - Hot keys: sustained traffic on one partition above 1,000 WCU / 3,000 RCU. Adaptive capacity can split a big item collection by sort key, so a large tenant under one key is often fine. That doesn't work when the sort key always increases (timestamps), when the table has an LSI, or for a single item. Then shard (`orgId#<bucket>`) or cache reads (DAX or app cache).
 - A GSI that can't keep up with writes (low-cardinality key, under-provisioned) throttles writes to the base table. Treat a hot GSI key, including constant sparse-queue keys like `"1"`, as a hot table key.
 - An LSI caps each item collection at 10 GB, and hitting it fails writes.
