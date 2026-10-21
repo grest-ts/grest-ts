@@ -391,6 +391,124 @@ describe("WebSocket createClient (production client)", () => {
     })
 
     // ----------------------------------------------------------------------
+    // reconnect.retryInitialConnect — a failed first connect joins the backoff loop
+    // ----------------------------------------------------------------------
+
+    describe("reconnect.retryInitialConnect", () => {
+
+        const failFirst = (calls: number) => {
+            if (calls === 1) throw new Error("transient mint failure")
+            return {url: clientUrl("QuerySocketApi"), query: {room: "r" + calls, version: calls}}
+        }
+
+        test("off by default: a failed first connect rejects and the client stays down", async () => {
+            let calls = 0
+            const client = QuerySocketApi.createClient({
+                reconnect: {initialDelayMs: 10},
+                beforeConnect: () => failFirst(++calls),
+            })
+            try {
+                await expect(client.connect()).rejects.toThrow("transient mint failure")
+                await wait(60)
+                expect(calls).toBe(1)
+                expect(client.isConnected).toBe(false)
+            } finally {
+                await client.disconnect()
+            }
+        })
+
+        test("on: connect() still rejects, then the client connects in the background and runs setup", async () => {
+            let calls = 0
+            let setups = 0
+            const client = QuerySocketApi.createClient({
+                reconnect: {initialDelayMs: 10, retryInitialConnect: true},
+                beforeConnect: () => failFirst(++calls),
+            })
+            try {
+                await expect(client.connect(() => { setups++ })).rejects.toThrow("transient mint failure")
+                for (let i = 0; i < 300 && !client.isConnected; i++) await wait(10)
+                expect(client.isConnected).toBe(true)
+                expect(calls).toBe(2)
+                expect(setups).toBe(1)
+                expect(await client.outgoing.echoRoom()).toBe("r2@2")
+            } finally {
+                await client.disconnect()
+            }
+        })
+
+        test("on: a terminal first error is not retried (onClose 'unrecoverable')", async () => {
+            let calls = 0
+            const closeReasons: string[] = []
+            const client = QuerySocketApi.createClient({
+                reconnect: {initialDelayMs: 10, retryInitialConnect: true},
+                beforeConnect: () => { calls++; return {url: clientUrl("QuerySocketApi"), query: {room: "", version: 1}} },
+            })
+            client.onClose((reason) => closeReasons.push(reason))
+            try {
+                await expect(client.connect()).rejects.toMatchObject({type: "VALIDATION_ERROR"})
+                await wait(60)
+                expect(calls).toBe(1)
+                expect(closeReasons).toEqual(["unrecoverable"])
+            } finally {
+                await client.disconnect()
+            }
+        })
+
+        test("on: a manual connect() while a retry is pending replaces it (one socket, no extra attempt)", async () => {
+            let calls = 0
+            const client = QuerySocketApi.createClient({
+                reconnect: {initialDelayMs: 40, retryInitialConnect: true},
+                beforeConnect: () => failFirst(++calls),
+            })
+            try {
+                await expect(client.connect()).rejects.toThrow("transient mint failure")
+                await client.connect()
+                await wait(120)
+                expect(calls).toBe(2)
+                expect(await client.outgoing.echoRoom()).toBe("r2@2")
+            } finally {
+                await client.disconnect()
+            }
+        })
+
+        test("on: a manual connect() during an in-flight retry joins it instead of opening a second socket", async () => {
+            let calls = 0
+            const client = QuerySocketApi.createClient({
+                reconnect: {initialDelayMs: 10, retryInitialConnect: true},
+                beforeConnect: async () => {
+                    const n = ++calls
+                    if (n === 2) await wait(100)
+                    return failFirst(n)
+                },
+            })
+            try {
+                await expect(client.connect()).rejects.toThrow("transient mint failure")
+                await wait(40)
+                expect(calls).toBe(2)
+                await client.connect()
+                await wait(120)
+                expect(calls).toBe(2)
+                expect(await client.outgoing.echoRoom()).toBe("r2@2")
+            } finally {
+                await client.disconnect()
+            }
+        })
+
+        test("on: disconnect() while a retry is pending stops it", async () => {
+            let calls = 0
+            const client = QuerySocketApi.createClient({
+                reconnect: {initialDelayMs: 40, retryInitialConnect: true},
+                beforeConnect: () => failFirst(++calls),
+            })
+            await expect(client.connect()).rejects.toThrow("transient mint failure")
+            await client.disconnect()
+            await wait(120)
+            expect(calls).toBe(1)
+            expect(client.isConnected).toBe(false)
+        })
+    })
+
+    // ----------------------------------------------------------------------
     // Auth middleware on schema (existing pattern — still supported)
     // ----------------------------------------------------------------------
 

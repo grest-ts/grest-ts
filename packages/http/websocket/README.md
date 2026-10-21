@@ -543,7 +543,7 @@ await client.connect(({incoming}) => incoming.on({onEvent: async (e) => handle(e
 
 - **Sole source (type-enforced):** connection params come from *either* the static `url`/`query`/`middlewares` *or* `beforeConnect` — never both. The config is a discriminated union, so setting a static field alongside `beforeConnect` is a **compile error**. `beforeConnect` returns the complete set each attempt; schema `use` wires always apply on top.
 - **Validated every attempt:** the returned `query` is validated each connect; a `VALIDATION_ERROR` is **terminal** (won't retry — a malformed query won't fix itself).
-- **Errors:** on a reconnect, a throw feeds `shouldRetry` (transient mint failure → backoff; `NOT_AUTHORIZED` / `FORBIDDEN` / `VALIDATION_ERROR` → final `onClose("unrecoverable")`). On the first connect, a throw rejects `connect()`.
+- **Errors:** on a reconnect, a throw feeds `shouldRetry` (transient mint failure → backoff; `NOT_AUTHORIZED` / `FORBIDDEN` / `VALIDATION_ERROR` → final `onClose("unrecoverable")`). On the first connect, a throw rejects `connect()` — and the client stays down unless you pass `reconnect: {retryInitialConnect: true}`, which also sends a failed first connect into the same backoff loop (`connect()` still rejects with that first error).
 - Available on both the typed and raw `createClient`. No reconnect loop or token-refresh plumbing in app code.
 
 ### Sending Modes (automatic from the contract)
