@@ -17,15 +17,7 @@ The question for every long-lived service: what breaks if two copies run behind 
 
 ## Background work
 - A timer or cron that does *shared* work (writes rows, sends, calls external APIs) runs once per instance. Give it a lease row (job name, owner, expiresAt, taken with a conditional write), or run it on a single worker on purpose and say so. Per-instance housekeeping (cache refresh, metrics flush, local cleanup) and cheap idempotent jobs don't need one.
-- **Work claims** need:
-  - a conditional claim;
-  - an owner unique per operation, not per process (a process can re-take its own lease while its first attempt is still running);
-  - a heartbeat that aborts the work when renewal fails;
-  - a lease longer than the longest step, or renewed during it;
-  - idempotent steps for crash replay;
-  - **a fencing token**: a lease version incremented on every claim and checked as a condition on every write the work makes. A GC pause or blocked event loop can outlive any lease, so without fencing the old holder can still write after a new one has taken over.
-  
-  Compute expiry in the store (store-side time, or a margin), not by comparing clocks across machines.
+- **Work claims** need a conditional claim, an owner unique per operation (not per process — a process can re-take its own lease mid-attempt), a heartbeat that aborts on failed renewal, a lease longer than any step, idempotent steps for crash replay, and **a fencing token** — a lease version incremented per claim and checked as a condition on every write the work makes, because a GC pause or blocked event loop can outlive any lease. Compute expiry with store-side time, not clocks compared across machines.
 - Bounded concurrency per tick. A tick that starts every pending item at once falls over on a burst; a serial tick grows O(N), and one slow item blocks the rest.
 - Retries stored on the row (`nextAttemptAt`) with exponential backoff and jitter, a max attempt count, and a dead-letter or failed state. Otherwise poison items retry forever.
 - Graceful shutdown: on SIGTERM, stop claiming new work, wait (bounded) for in-flight work, then release leases. Otherwise every deploy restarts all in-flight work after the leases expire.
@@ -34,7 +26,6 @@ The question for every long-lived service: what breaks if two copies run behind 
 - Un-awaited native promises without `.catch` crash the process on rejection (Node ≥ 15). Fix each call site. A process-level `unhandledRejection` handler *disables* that crash, so if you add one, make it log **and exit**.
 - Long-held HTTP calls between services (builds, exports) die on any deploy, scale-in or load-balancer idle timeout. Start the job, then poll or call back.
 - WebSocket servers need slow-consumer handling (check `bufferedAmount`; drop or close past a threshold), ping/pong to detect dead peers, and draining on deploy.
-- Clients that reconnect at a fixed backoff without jitter, then replay every subscription or init at once, create a synchronized storm after each server deploy.
 
 ## Local-only resources
 - Files on local disk, host-bound providers (local VMs, sockets) and in-process SQLite all need host affinity. Document it, or route work to the owning host.

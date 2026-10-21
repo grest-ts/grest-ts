@@ -22,9 +22,8 @@ Read the IaC (Terraform/CDK/CloudFormation, Beanstalk `.ebextensions`, k8s manif
 - CDN invalidation concurrency limits, when every publish invalidates.
 - DNS label ≤ 63 chars and hostname ≤ 253, for generated hostnames that concatenate IDs, slugs and service names.
 - Subnet sizes vs expected fleet: a /20 has ~4k usable IPs.
-- Per-region table/queue/bucket quotas for per-tenant resource designs (DynamoDB: 2,500 tables by default).
+- Per-region table/queue/bucket quotas for per-tenant resource designs.
 - Storage with no lifecycle rules: S3 prefixes, snapshots and images that are never expired.
 
 ## Data stores
-- Missing TTLs and unused or missing indexes compared with the code's access patterns (see `dynamodb.md`).
 - Single-writer or single-node databases that the app assumes are shared.

@@ -1,12 +1,12 @@
 # grest-ts failure modes
 
-Framework behaviours that work in dev and tests but break at scale or with more than one instance. Each entry: what to flag in app code → the framework-provided fix, or what the app has to do itself. Framework-side fixes are tracked in the grest-ts repo's `SCALABILITY_ISSUES.md`. When an entry there is fixed, update this file.
+Framework behaviours that work in dev and tests but break at scale or with more than one instance. Each entry: what to flag in app code → the framework-provided fix, or what the app has to do itself. DynamoDB semantics (paging, consistency, guard items, versions) are in `dynamodb.md`; this file maps them to grest-ts APIs.
 
 ## @grest-ts/db-dynamodb
-- **`query()` / `scan()` with no `limit` load every page and throw once a result passes 10,000 rows** (`MAX_AUTO_PAGED_ITEMS`). `GGDynamoDbTable.scan()` takes no limit at all. Any of these on a partition that grows with users or time is a future 500. → `queryPage(index, keyCond, values, {limit, descending, cursor})` / `scanPage({limit, cursor})`, which return `{items, cursor?}`. Loop on `cursor`, not on `items.length`: a page can be empty and still have a cursor. Return the cursor to the client as an opaque string, and map `GGDynamoDbCursorError` to a 400.
-- **`get()`, `queryPage` and `scanPage` never set `ConsistentRead`.** That's only a problem when correctness depends on the read itself. If the write that follows is `putConditional`, a stale read just fails the condition. Otherwise use the raw client (`getRawClient()` on `GGDynamoDb`, reached via the protected `db` in a table subclass; it builds a new client per call, so hoist it).
-- **`queryOne` is `query(..., {limit: 1})[0]`.** It doesn't check uniqueness, and on a GSI it's eventually consistent. "Check username free, then put" races. → a guard item written with `putConditional(item, "attribute_not_exists(pk)")`.
-- **`put()` and `delete()` are unconditional.** get → modify → `put` loses concurrent updates. → `putConditional(item, cond, values, attrNames)` (returns `false` on conflict) with an app-managed version field (`version` is a reserved word, so pass `attributeNames`). `updateFields(current, fields)` writes only the given fields and only while the row exists, but it's still last-writer-wins per field; contended fields need the version check.
+- **`query()` / `scan()` with no `limit` load every page and throw past 10,000 rows** (`MAX_AUTO_PAGED_ITEMS`; `GGDynamoDbTable.scan()` takes no limit at all). Per the package README: anything that renders a list → `queryPage(index, keyCond, values, {limit, descending, cursor})` / `scanPage({limit, cursor})`, returning `{items, cursor?}` (opaque cursor; map `GGDynamoDbCursorError` to 400). Totals, uniqueness checks and sweeps use `query` deliberately, and the cap is a tripwire — flag them when the partition can plausibly pass 10k on a path that matters; the fix is the access pattern (rollup, narrower key), not paging.
+- **`get()`, `queryPage` and `scanPage` never set `ConsistentRead`.** When one is needed, use `getRawClient()` on `GGDynamoDb` (reached via the protected `db` in a table subclass; it builds a new client per call, so hoist it).
+- **`queryOne` is `query(..., {limit: 1})[0]`** — no uniqueness check. Guard items → `putConditional(item, "attribute_not_exists(pk)")`.
+- **`put()` and `delete()` are unconditional.** Versioned writes → `putConditional(item, cond, values, attrNames)` (returns `false` on conflict; `version` is a reserved word, so pass `attributeNames`). `updateFields(current, fields)` writes only the given fields while the row exists, but is still last-writer-wins per field.
 - **No batch or transaction helpers.** N single calls in a loop is the default trap. → the raw client's `BatchGet`/`BatchWrite`/`TransactWrite` (marshalling is the app's job; retry `UnprocessedKeys`/`UnprocessedItems`).
 
 ## @grest-ts/db-mysql, @grest-ts/db-postgre
@@ -52,9 +52,7 @@ Framework behaviours that work in dev and tests but break at scale or with more 
 - → For multi-instance behaviour, use `GGTest.startWorker([MyRuntime, MyRuntime])` (separate workers) or `GGTest.startIsolated` (separate processes). Test conditional-write conflicts and idempotency explicitly, e.g. run the same claim twice and assert exactly one wins.
 
 ## Already handled (don't flag)
-- Unbounded DynamoDB reads fail loudly at 10k instead of exhausting memory; `queryPage` cursors are opaque and validated.
 - `putConditional` maps `ConditionalCheckFailedException` to `false`; `updateFields` is existence-conditioned; writes are schema-validated.
 - HTTP request bodies are capped at 1 MiB by default (`maxBodyBytes` per contract → `PAYLOAD_TOO_LARGE`).
-- The HTTP client has a default timeout and returns typed errors instead of throwing transport exceptions.
 - WebSocket heartbeats on both ends close dead peers; handshakes time out; client reconnect has a capped exponential backoff.
 - `runInTransaction` handles commit, rollback and release.

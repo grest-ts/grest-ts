@@ -1,6 +1,6 @@
 ---
 name: scalability-review
-description: Review code for things that break with more users, bigger tenants, longer history, or more than one instance of a service — whole-table loads filtered in code, unbounded queries, missing indexes, N+1, in-memory state that assumes one process, races, unsafe retries, unbounded fan-out, external API quotas, single-instance infra. Use when asked to check scalability, "will this scale", before finishing a feature (diff mode), or for a full-repo scalability audit. Knows grest-ts-specific failure modes.
+description: Find code that breaks with more users, more history, or more than one instance — unbounded queries filtered in code, N+1, in-memory state, races, unsafe retries, quotas. Use for "will this scale", when finishing a feature (diff mode), or for a full-repo audit. Knows grest-ts failure modes.
 ---
 
 # Scalability review
@@ -11,8 +11,8 @@ Find code that works today and breaks at N: more users, bigger orgs/tenants, mor
 
 The mode comes from the invocation arguments (`$ARGUMENTS`: `diff`, `audit`, optionally a path) or the user's request. Default is **diff**.
 
-- **diff** — review what this branch changed. Base branch = first of `main`/`master`/`dev`/`develop` that `git rev-parse --verify` resolves; files = `git diff --name-only $(git merge-base HEAD <base>)...HEAD` plus uncommitted/staged changes. Read each changed hunk, the code it calls into (a new list endpoint is only as good as the store method behind it) and its callers (a harmless helper becomes a problem when called per row or per request) — one hop each way. Report problems the change introduces or puts on a hotter path; pre-existing problems found one hop away go under a separate "Nearby, pre-existing" heading. Do it yourself, no sub-agents. Meant to run as part of finishing a feature.
-- **audit** — whole repo (or the given path). Survey the layout, then fan out parallel read-only review agents, one per area (data layer, background jobs/workers, request-serving tier + sockets, feature modules, UI, infra-as-code). Give each this file's checklist, the matching references and the finding format. Merge, dedupe by `file:line`, then spot-check every critical finding yourself before reporting.
+- **diff** — review what this branch changed: files from `git diff --name-only $(git merge-base HEAD <base>)...HEAD` plus uncommitted/staged changes, base = first of `grest`/`main`/`master`/`dev`/`develop` that resolves. Skip tests, docs and pure UI copy/styling. Follow a hunk one hop into the code it calls only when it touches data access, loops, endpoints, jobs or external calls (a new list endpoint is only as good as the store method behind it); follow callers only for new or changed shared helpers (harmless once, a problem per row or per request). Report what the change introduces or puts on a hotter path; pre-existing problems found on the way go under "Nearby, pre-existing". Do it yourself, no sub-agents.
+- **audit** — whole repo (or the given path). Survey the layout, then fan out parallel read-only review agents, one per area (data layer, background jobs/workers, request-serving tier + sockets, feature modules, UI, infra-as-code). Give each this file's checklist, only the references for its area, and the finding format. Merge, dedupe by `file:line`, then spot-check every critical finding yourself before reporting.
 
 ## Before you start
 
@@ -20,7 +20,7 @@ Load the references that match — only those:
 
 | Signal | Load |
 |---|---|
-| `package.json` has `@grest-ts/*` | `references/grest-ts.md` (framework failure modes — highest value) |
+| Changed code uses `@grest-ts/*` packages | `references/grest-ts.md` — only the sections for the packages it uses |
 | DynamoDB (`@aws-sdk/client-dynamodb`, `@grest-ts/db-dynamodb`, `aws_dynamodb_table`, `CreateTable` inputs in code) | `references/dynamodb.md` |
 | Long-running services, workers, crons, websockets, caches, retries | `references/multi-instance.md` |
 | IaC files changed (Terraform/CDK/CloudFormation/Beanstalk/k8s/compose), or audit mode | `references/infra.md` |
@@ -52,12 +52,12 @@ For a "more than one instance" finding in diff mode, grep the IaC for that servi
 - Leases/locks without a fencing token, or owned by the process instead of the operation (see `multi-instance.md`).
 - Timeouts (`Promise.race`, deadline helpers) that stop waiting but don't cancel the work → zombie operations.
 - DB write + publish/enqueue that aren't atomic (lost or phantom events — use an outbox); at-least-once consumers without dedupe by message id.
-- Un-awaited native promise without `.catch` → crashes the process (Node ≥ 15). An un-awaited grest-ts HTTP-client `GGPromise` doesn't crash — flag it only if losing its failure matters.
+- Un-awaited native promise without `.catch` → crashes the process (Node ≥ 15).
 
 **More than one instance** (details: `references/multi-instance.md`)
 - In-memory pub/sub, sessions, waiters, work queues, quota-enforcing rate limiters, dedupe sets.
 - Process-local caches of mutable data with no TTL/version and no cross-instance invalidation (revocations, rotations, deletes don't propagate).
-- Timers/crons with no lease that do *shared* work (write rows, send, call external APIs). Timers touching only process-local state are fine.
+- Timers/crons with no lease that do *shared* work (write rows, send, call external APIs).
 - Unbounded `Map`/`Set` caches keyed by user/tenant/entity.
 
 **Retries, timeouts, external APIs**
@@ -91,11 +91,11 @@ Severity = impact × likelihood at a scale the product will plausibly reach.
 
 Hard caps turn "slow" into "fails": an unbounded read that throws past a limit (grest-ts `query()` at 10k rows) is **critical** if the collection plausibly reaches it within about a year at its write rate (rows per user/day × users × days), otherwise **high**.
 
-Weigh the caller: the same scan is critical behind a page polled every 5 s and low behind a monthly admin export. Admin/monthly paths are `low` at most, and only if their cost grows with total history.
+Weigh the caller: the same scan is critical behind a page polled every 5 s and low behind a monthly admin export — unless a hard cap makes it fail outright.
 
 Known, accepted limits (a code comment or IaC saying "single instance until X"): report once, name the guard, mark `known`; in diff mode re-raise only if the change makes it worse.
 
-Don't flag: bounded collections (say what bounds them), single-process CLIs/scripts, test code, local-dev adapters, style, micro-optimizations.
+Don't flag: single-process CLIs/scripts, test code, local-dev adapters, style, micro-optimizations.
 
 ## Finding format
 

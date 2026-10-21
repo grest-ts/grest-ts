@@ -18,6 +18,15 @@ description: Use whenever the user is using or considering grest-ts (contract-fi
 
 `
 
+// A `version` here would override the marketplace entry's and stop clients from seeing updates.
+const PLUGIN_MANIFEST = {
+    name: "grest-ts",
+    description: "Framework conventions, anti-patterns, per-package reference docs, and a scalability review for grest-ts. Activates whenever Claude works in a project that uses @grest-ts/* packages.",
+    author: {name: "grest-ts"},
+    homepage: "https://github.com/grest-ts/grest-ts",
+    repository: "https://github.com/grest-ts/grest-ts",
+}
+
 /**
  * Generates AI assistant rule files from two source markdown files.
  *
@@ -32,6 +41,7 @@ description: Use whenever the user is using or considering grest-ts (contract-fi
  *
  * Claude Code plugin outputs (everything plugin-related contained in .claude-plugin/):
  *   .claude-plugin/marketplace.json                                                — marketplace manifest, version synced from root package.json
+ *   .claude-plugin/grest-ts/.claude-plugin/plugin.json                             — plugin manifest, deliberately without `version`
  *   .claude-plugin/grest-ts/skills/grest-ts/SKILL.md                               — framework body + auto-generated package index
  *   .claude-plugin/grest-ts/skills/grest-ts/packages/<shortName>/README*.md        — every published package's README*, copied verbatim
  *
@@ -86,6 +96,10 @@ export class GGAiRulesBuilder {
                 join(this.rootDir, ".claude-plugin", "marketplace.json"),
                 this.buildMarketplaceJson(),
             ),
+            PackagerFile.copy(
+                join(this.rootDir, ".claude-plugin", "grest-ts", ".claude-plugin", "plugin.json"),
+                JSON.stringify(PLUGIN_MANIFEST, null, 2) + "\n",
+            ),
             // Claude Code skill — framework body + per-package READMEs for deep-dive
             PackagerFile.copy(join(skillDir, "SKILL.md"), skillBody),
             ...packageReadmes,
@@ -105,13 +119,9 @@ export class GGAiRulesBuilder {
             description: "Claude Code knowledge plugin for grest-ts — the contract-first TypeScript framework",
             plugins: [
                 {
-                    name: "grest-ts",
+                    ...PLUGIN_MANIFEST,
                     source: "./.claude-plugin/grest-ts",
-                    description: "Framework conventions, anti-patterns, per-package reference docs, and a scalability review for grest-ts. Activates whenever Claude works in a project that uses @grest-ts/* packages.",
                     version,
-                    author: {name: "grest-ts"},
-                    homepage: "https://github.com/grest-ts/grest-ts",
-                    repository: "https://github.com/grest-ts/grest-ts",
                     category: "framework",
                 },
             ],
