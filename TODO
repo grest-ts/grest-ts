@@ -7,6 +7,8 @@
 
 * GREST_TS_PACKAGING_FIXES.md - work through those problems.
 
+* SCALABILITY_ISSUES.md - work through those problems (keep the scalability-review skill's references/grest-ts.md in sync).
+
 * Socket client has a test that is skipped (wsWireLog tests), because it uses console.log instead of GGLog. GGLog requires GGLocator that requires async storage and then browsers break. Need to rethink logging library a bit or separate browser&node loggers.
 
 * symmetric codec for RPC was nice idea, but doesn't actually work. Code is filled with solutions for browser that would not "load server part". Need to fix the whole architecture.
