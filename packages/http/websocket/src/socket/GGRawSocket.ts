@@ -151,6 +151,11 @@ export class GGRawSocket {
         this.adapter.sendRaw!(data);
     }
 
+    /** Bytes queued but not yet written to the network; 0 where the adapter can't tell. */
+    public get bufferedAmount(): number {
+        return this.adapter.bufferedAmount?.() ?? 0;
+    }
+
     public onClose(handler: () => void): this {
         this.onCloseCallbacks.push(handler);
         return this;

@@ -44,4 +44,7 @@ export interface SocketAdapter {
      * (e.g. a terminal: text control JSON vs binary keystrokes).
      */
     onRawMessage?(handler: (data: Uint8Array, isBinary: boolean) => void): void;
+
+    /** Bytes queued by send() but not yet written to the network — the slow-consumer signal. */
+    bufferedAmount?(): number;
 }
