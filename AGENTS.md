@@ -621,4 +621,15 @@ import {mockable} from "@grest-ts/testkit-runtime"
 import {mockOf} from "@grest-ts/testkit-runtime"
 // ✅ mockOf lives in testkit:
 import {mockOf} from "@grest-ts/testkit"
+
+// ❌ Listing via query()/scan() — they load everything and throw past 10,000 rows
+const all = await table.query("orgId-index", "orgId = :o", {":o": orgId})
+// ✅ Page it:
+const {items, cursor} = await table.queryPage("orgId-index", "orgId = :o", {":o": orgId}, {limit: 50, cursor: input.cursor})
+
+// ❌ get → modify → put (lost update with concurrent writers)
+await table.put({...await table.get(id), name})
+// ✅ Partial write (only these fields, only while the row exists); use putConditional + a version for contended fields:
+const current = await table.get(id)
+if (!current || !await table.updateFields(current, {name})) throw new NOT_FOUND()
 ```

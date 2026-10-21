@@ -1,7 +1,6 @@
 {
   "name": "grest-ts",
-  "description": "Framework conventions, anti-patterns, and per-package reference docs for grest-ts. Activates whenever Claude works in a project that uses @grest-ts/* packages.",
-  "version": "0.0.47",
+  "description": "Framework conventions, anti-patterns, per-package reference docs, and a scalability review for grest-ts. Activates whenever Claude works in a project that uses @grest-ts/* packages.",
   "author": {
     "name": "grest-ts"
   },

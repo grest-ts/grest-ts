@@ -3,7 +3,7 @@
   "version": "0.0.1",
   "private": true,
   "type": "module",
-  "description": "Demo / sandbox for the api-docs v2 native UI — see PLAN-api-docs-v2.md",
+  "description": "Demo / sandbox for the api-docs v2 native UI — see docs/plans/PLAN-api-docs-v2.md",
   "scripts": {
     "generate": "tsx src/generate.ts",
     "dev": "cd ui && vite",

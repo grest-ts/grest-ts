@@ -8,14 +8,14 @@
   "plugins": [
     {
       "name": "grest-ts",
-      "source": "./.claude-plugin/grest-ts",
-      "description": "Framework conventions, anti-patterns, and per-package reference docs for grest-ts. Activates whenever Claude works in a project that uses @grest-ts/* packages.",
-      "version": "0.0.84",
+      "description": "Framework conventions, anti-patterns, per-package reference docs, and a scalability review for grest-ts. Activates whenever Claude works in a project that uses @grest-ts/* packages.",
       "author": {
         "name": "grest-ts"
       },
       "homepage": "https://github.com/grest-ts/grest-ts",
       "repository": "https://github.com/grest-ts/grest-ts",
+      "source": "./.claude-plugin/grest-ts",
+      "version": "0.0.84",
       "category": "framework"
     }
   ]
