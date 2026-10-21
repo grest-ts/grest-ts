@@ -76,6 +76,13 @@ export interface GGReconnectConfig {
      * (works in the browser too). Pass `false` to disable, or an object to tune.
      */
     heartbeat?: GGHeartbeatConfig | false
+    /**
+     * Also retry when the very first connect fails. Default false: the first failure only rejects
+     * `connect()` and the client stays down. When true, `connect()` still rejects with that error,
+     * but the client keeps retrying in the background under the same backoff, `shouldRetry` and
+     * `maxAttempts` rules as a dropped connection.
+     */
+    retryInitialConnect?: boolean
 }
 
 /**
@@ -133,6 +140,7 @@ export interface NormalizedReconnect {
     maxAttempts: number
     shouldRetry: (error: Error) => boolean
     heartbeat?: GGHeartbeatConfig
+    retryInitialConnect: boolean
 }
 
 /**
@@ -161,6 +169,7 @@ export function normalizeReconnect(r: boolean | GGReconnectConfig | undefined): 
         maxAttempts: cfg.maxAttempts ?? Infinity,
         shouldRetry: cfg.shouldRetry ?? defaultShouldRetry,
         heartbeat: cfg.heartbeat === false ? undefined : (cfg.heartbeat ?? {}),
+        retryInitialConnect: cfg.retryInitialConnect ?? false,
     }
 }
 
@@ -169,6 +178,7 @@ export function createConnector<TSocket extends GGLiveSocket>(hooks: GGConnector
 
     let socket: TSocket | undefined
     let reconnectAttempt = 0
+    let hasOpened = false
     let reconnectTimer: ReturnType<typeof setTimeout> | undefined
     let finallyClosed = false
     let finalCloseFired = false
@@ -281,7 +291,7 @@ export function createConnector<TSocket extends GGLiveSocket>(hooks: GGConnector
 
         // #2: Run setup with explicit cleanup on throw so we never leak a socket.
         try {
-            await hooks.setup(newSocket, reconnectAttempt > 0)
+            await hooks.setup(newSocket, hasOpened)
         } catch (setupErr) {
             if (socket === newSocket) {
                 socket = undefined
@@ -289,14 +299,15 @@ export function createConnector<TSocket extends GGLiveSocket>(hooks: GGConnector
             try { newSocket.close() } catch (_) {}
             throw setupErr
         }
-        logMode === GGWsLogMode.ALL && log.info(schemaName, `ws ${reconnectAttempt > 0 ? "reconnected" : "open"} ${schemaName}`, {kind: reconnectAttempt > 0 ? "reconnect-success" : "open"})
+        logMode === GGWsLogMode.ALL && log.info(schemaName, `ws ${hasOpened ? "reconnected" : "open"} ${schemaName}`, {kind: hasOpened ? "reconnect-success" : "open"})
         setupPhase = false
         reconnectAttempt = 0
+        hasOpened = true
     }
 
     /**
      * Schedule a retry per the reconnect config. Called from the onClose handler
-     * (socket dropped) — never from initial connect().
+     * (socket dropped), and from a failed initial connect() only with `retryInitialConnect`.
      */
     const scheduleReconnect = () => {
         if (!reconnect) return
@@ -308,26 +319,43 @@ export function createConnector<TSocket extends GGLiveSocket>(hooks: GGConnector
         logMode === GGWsLogMode.ALL && log.info(schemaName, `ws reconnect-attempt ${schemaName}`, {kind: "reconnect-attempt", attempt: attempt + 1, delayMs: delay})
         reconnectTimer = setTimeout(async () => {
             reconnectTimer = undefined
-            if (finallyClosed) return
+            if (finallyClosed || socket) return
             try {
-                await openOnce()
+                await openShared()
             } catch (err) {
                 const error = err as Error
                 for (const cb of onErrorCallbacks) {
                     try { cb(error) } catch (_) {}
                 }
-                // #4: terminal errors skip further retries.
-                if (!reconnect.shouldRetry(error)) {
-                    fireFinalClose("unrecoverable", error)
-                    return
-                }
-                if (reconnectAttempt < reconnect.maxAttempts) {
-                    scheduleReconnect()
-                } else {
-                    fireFinalClose("retries-exhausted", error)
-                }
+                retryOrGiveUp(error)
             }
         }, delay)
+    }
+
+    // One open at a time: a manual connect() and a retry that overlap share the attempt, so they
+    // can't leak a second socket or each schedule a retry.
+    let opening: Promise<void> | undefined
+    const openShared = (): Promise<void> => opening ??= openOnce().finally(() => { opening = undefined })
+
+    const cancelRetry = () => {
+        if (reconnectTimer) {
+            clearTimeout(reconnectTimer)
+            reconnectTimer = undefined
+        }
+    }
+
+    const retryOrGiveUp = (error: Error) => {
+        if (!reconnect) return
+        // #4: terminal errors skip further retries.
+        if (!reconnect.shouldRetry(error)) {
+            fireFinalClose("unrecoverable", error)
+            return
+        }
+        if (reconnectAttempt < reconnect.maxAttempts) {
+            scheduleReconnect()
+        } else {
+            fireFinalClose("retries-exhausted", error)
+        }
     }
 
     return {
@@ -341,15 +369,21 @@ export function createConnector<TSocket extends GGLiveSocket>(hooks: GGConnector
                 })
             }
             if (socket) return
-            await openOnce()
+            if (opening) return opening
+            const retries = reconnect?.retryInitialConnect === true
+            // It re-enters backoff itself on failure, so a pending retry would only be a duplicate.
+            if (retries) cancelRetry()
+            try {
+                await openShared()
+            } catch (err) {
+                if (retries && !finallyClosed) retryOrGiveUp(err as Error)
+                throw err
+            }
         },
 
         async disconnect(): Promise<void> {
             finallyClosed = true
-            if (reconnectTimer) {
-                clearTimeout(reconnectTimer)
-                reconnectTimer = undefined
-            }
+            cancelRetry()
             const s = socket
             socket = undefined
             if (s) {
@@ -369,10 +403,7 @@ export function createConnector<TSocket extends GGLiveSocket>(hooks: GGConnector
 
         close(): void {
             finallyClosed = true
-            if (reconnectTimer) {
-                clearTimeout(reconnectTimer)
-                reconnectTimer = undefined
-            }
+            cancelRetry()
             const s = socket
             socket = undefined
             if (s) {
