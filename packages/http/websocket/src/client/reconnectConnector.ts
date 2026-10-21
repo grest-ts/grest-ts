@@ -64,6 +64,11 @@ export interface GGReconnectConfig {
     /** Give up after this many consecutive failures. Default Infinity. */
     maxAttempts?: number
     /**
+     * Full jitter: wait a random time between 0 and the backoff delay. Default false. Turn it on
+     * when many clients share a server, so a server restart doesn't bring them all back in lockstep.
+     */
+    jitter?: boolean
+    /**
      * Predicate deciding whether an error during a reconnect attempt should
      * trigger another retry. Default: retry on any error EXCEPT NOT_AUTHORIZED
      * and FORBIDDEN — those are treated as permanent and fire a final onClose
@@ -138,6 +143,7 @@ export interface NormalizedReconnect {
     maxDelayMs: number
     multiplier: number
     maxAttempts: number
+    jitter: boolean
     shouldRetry: (error: Error) => boolean
     heartbeat?: GGHeartbeatConfig
     retryInitialConnect: boolean
@@ -167,6 +173,7 @@ export function normalizeReconnect(r: boolean | GGReconnectConfig | undefined): 
         maxDelayMs: cfg.maxDelayMs ?? 30_000,
         multiplier: cfg.multiplier ?? 2,
         maxAttempts: cfg.maxAttempts ?? Infinity,
+        jitter: cfg.jitter ?? false,
         shouldRetry: cfg.shouldRetry ?? defaultShouldRetry,
         heartbeat: cfg.heartbeat === false ? undefined : (cfg.heartbeat ?? {}),
         retryInitialConnect: cfg.retryInitialConnect ?? false,
@@ -312,10 +319,11 @@ export function createConnector<TSocket extends GGLiveSocket>(hooks: GGConnector
     const scheduleReconnect = () => {
         if (!reconnect) return
         const attempt = reconnectAttempt++
-        const delay = Math.min(
+        const backoff = Math.min(
             reconnect.initialDelayMs * Math.pow(reconnect.multiplier, attempt),
             reconnect.maxDelayMs,
         )
+        const delay = reconnect.jitter ? Math.random() * backoff : backoff
         logMode === GGWsLogMode.ALL && log.info(schemaName, `ws reconnect-attempt ${schemaName}`, {kind: "reconnect-attempt", attempt: attempt + 1, delayMs: delay})
         reconnectTimer = setTimeout(async () => {
             reconnectTimer = undefined

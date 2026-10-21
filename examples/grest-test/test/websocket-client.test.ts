@@ -401,6 +401,24 @@ describe("WebSocket createClient (production client)", () => {
             return {url: clientUrl("QuerySocketApi"), query: {room: "r" + calls, version: calls}}
         }
 
+        test("jitter: the wait is a random share of the backoff, not the full delay", async () => {
+            let calls = 0
+            const random = vi.spyOn(Math, "random").mockReturnValue(0)
+            const client = QuerySocketApi.createClient({
+                reconnect: {initialDelayMs: 60_000, retryInitialConnect: true, jitter: true},
+                beforeConnect: () => failFirst(++calls),
+            })
+            try {
+                await expect(client.connect()).rejects.toThrow("transient mint failure")
+                for (let i = 0; i < 300 && !client.isConnected; i++) await wait(10)
+                expect(client.isConnected).toBe(true)
+                expect(calls).toBe(2)
+            } finally {
+                random.mockRestore()
+                await client.disconnect()
+            }
+        })
+
         test("off by default: a failed first connect rejects and the client stays down", async () => {
             let calls = 0
             const client = QuerySocketApi.createClient({

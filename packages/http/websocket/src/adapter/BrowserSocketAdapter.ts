@@ -70,6 +70,10 @@ export class BrowserSocketAdapter implements SocketAdapter {
         this.ws.send(data as unknown as ArrayBufferView<ArrayBuffer>);
     }
 
+    bufferedAmount(): number {
+        return this.ws.bufferedAmount;
+    }
+
     onRawMessage(handler: (data: Uint8Array, isBinary: boolean) => void): void {
         this.ws.addEventListener('message', (event: MessageEvent) => {
             const d = event.data;
