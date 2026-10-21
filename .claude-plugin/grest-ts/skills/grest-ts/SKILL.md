@@ -626,7 +626,19 @@ import {mockable} from "@grest-ts/testkit-runtime"
 import {mockOf} from "@grest-ts/testkit-runtime"
 // ✅ mockOf lives in testkit:
 import {mockOf} from "@grest-ts/testkit"
+
+// ❌ Unbounded DynamoDB read on a growing partition — query()/scan() throw past 10,000 rows
+const all = await table.query("orgId-index", "orgId = :o", {":o": orgId})
+// ✅ Page it:
+const {items, cursor} = await table.queryPage("orgId-index", "orgId = :o", {":o": orgId}, {limit: 50, cursor: input.cursor})
+
+// ❌ get → modify → put (lost update with concurrent writers)
+await table.put({...await table.get(key), name})
+// ✅ Conditional / partial write:
+await table.updateFields(current, {name})
 ```
+
+Scalability and multi-instance pitfalls (unbounded reads, in-process `GGInstanceLock`, poller claims, event loss, websocket fan-out, shutdown) → the `scalability-review` skill and its `references/grest-ts.md`.
 
 ---
 

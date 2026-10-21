@@ -54,7 +54,7 @@ Keep `error`-severity checker findings (GR001/GR002/GR003/GR004/GR005) unless yo
 | Agent | Checker rules to validate | Semantic checks (read the files) | SKILL.md |
 |---|---|---|---|
 | **1 — Contract-first & impl drift** | GR004 (Express), GR005 (routing/DI decorators) | Logic/routes defined without a `GGContractClass` contract; an impl whose method signatures drift from its contract; routes not bound contract-first. | §1, §3, §11 |
-| **2 — Wiring, DI & config** | GR010 (hardcoded URL/config), GR011 (module-scope config cache) | Servers/clients/services instantiated and wired anywhere other than a `GGRuntime.compose()` override; DI containers or service locators in production code; config read other than `GGSetting`/`GGSecret`/`GGResource` at point of use. | §4, §8, §10 |
+| **2 — Wiring, DI & config** | GR010 (hardcoded URL/config), GR011 (module-scope config cache) | Servers/clients/services instantiated and wired anywhere other than a `GGRuntime.compose()` override; DI containers or service locators in production code; config read other than `GGSetting`/`GGSecret`/`GGResource` at point of use; DynamoDB `query()`/`scan()` without `limit` on a partition that grows (throws past 10,000 rows — use `queryPage`/`scanPage`). | §4, §8, §10, §11 |
 | **3 — Schema boundaries** | GR009 (hand-rolled HTTP/socket) | Raw `fetch`/HTTP/socket to another service instead of `<Api>.createClient()`, or talking to a service without its typed client; `.parse` strips undeclared `IsObject` props — a field used but not declared in the schema silently never arrives. | §1, §9 |
 | **4 — Errors, validation & testkit** | GR001/GR002 (testkit import paths), GR003 (global mocks), GR007 (missing SERVER_ERROR) | Missing `VALIDATION_ERROR` on a mutation contract whose input can fail validation (without it, field errors coerce to `SERVER_ERROR`); missing `SERVER_ERROR`; reusable/exported schema without `.docs()` (low severity). | §1, §2, §6, §7 |
 
@@ -73,6 +73,8 @@ Wait for all 4 agents to complete. Merge their findings, dedupe by `file:line` (
 ```
 
 If nothing survives: "No grest-ts convention violations found across <N> file(s)." Keep it brief — no emojis, no preamble.
+
+Scalability (unbounded reads, multi-instance state, races, fan-out) is out of scope beyond the DynamoDB check above — point the user to `/grest-ts:scalability-review`.
 
 ## 5. `--fix` (only if requested)
 
