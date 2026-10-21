@@ -635,7 +635,8 @@ const {items, cursor} = await table.queryPage("orgId-index", "orgId = :o", {":o"
 // ❌ get → modify → put (lost update with concurrent writers)
 await table.put({...await table.get(id), name})
 // ✅ Partial write (only these fields, only while the row exists); use putConditional + a version for contended fields:
-if (!await table.updateFields(current, {name})) throw new NOT_FOUND()
+const current = await table.get(id)
+if (!current || !await table.updateFields(current, {name})) throw new NOT_FOUND()
 ```
 
 ---

@@ -17,7 +17,7 @@ Follow these steps:
 
 ## 1. Resolve the file list
 
-- **Default (diff):** find the base branch (`grest`/`main`/`master`/`dev` — whichever `git rev-parse --verify` resolves), then `git diff --name-only $(git merge-base HEAD <base>)...HEAD` **plus** `git diff --name-only HEAD` (uncommitted) and staged. Union them.
+- **Default (diff):** find the base branch — the PR's target branch if there is one (`gh pr view --json baseRefName`); otherwise, of `origin/HEAD` and the local or `origin/` `dev`/`develop`/`main`/`master` refs that exist, the one with the fewest — but more than zero — commits in `<base>..HEAD` — then `git diff --name-only $(git merge-base HEAD <base>)...HEAD` **plus** `git diff --name-only HEAD` (uncommitted) and staged. Union them.
 - **Path arg:** `git ls-files '<path>/**/*.ts' '<path>/**/*.tsx'` (fall back to `Glob` if not a git repo).
 - **`--all`:** `git ls-files '*.ts' '*.tsx'`.
 
@@ -74,7 +74,7 @@ Wait for all 4 agents to complete. Merge their findings, dedupe by `file:line` (
 
 If nothing survives: "No grest-ts convention violations found across <N> file(s)." Keep it brief — no emojis, no preamble.
 
-Scalability (unbounded reads, multi-instance state, races, fan-out) is out of scope here — point the user to `/grest-ts:scalability-review`.
+Beyond the §11 DynamoDB examples, scalability (unbounded reads, multi-instance state, races, fan-out) is out of scope here — point the user to `/grest-ts:scalability-review`.
 
 ## 5. `--fix` (only if requested)
 

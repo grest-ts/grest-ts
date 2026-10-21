@@ -41,7 +41,7 @@ const PLUGIN_MANIFEST = {
  *
  * Claude Code plugin outputs (everything plugin-related contained in .claude-plugin/):
  *   .claude-plugin/marketplace.json                                                — marketplace manifest, version synced from root package.json
- *   .claude-plugin/grest-ts/.claude-plugin/plugin.json                             — plugin manifest, deliberately without `version`
+ *   .claude-plugin/grest-ts/.claude-plugin/plugin.json                             — plugin manifest
  *   .claude-plugin/grest-ts/skills/grest-ts/SKILL.md                               — framework body + auto-generated package index
  *   .claude-plugin/grest-ts/skills/grest-ts/packages/<shortName>/README*.md        — every published package's README*, copied verbatim
  *
