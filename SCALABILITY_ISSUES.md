@@ -1,6 +1,6 @@
 # Known scalability / multi-instance issues
 
-Framework behaviours that are fine in dev and single-instance tests but break apps at scale or with more than one instance. Each one was found while auditing a downstream app (kratt) and verified against the source. Line numbers are as of commit `e1640898` and will drift.
+Framework behaviours that are fine in dev and single-instance tests but break apps at scale or with more than one instance. Each one was found while auditing a downstream app (kratt) and verified against the source. Line numbers are as of 2026-10-21 (grest-ts 0.0.84) and will drift — search for the named symbol if they don't match.
 
 Until an issue is fixed, the `scalability-review` skill (`.claude-plugin/grest-ts/skills/scalability-review/references/grest-ts.md`) warns about it in app code. When you fix one, update that file too.
 
