@@ -27,5 +27,13 @@ The question for every long-lived service: what breaks if two copies run behind 
 - Long-held HTTP calls between services (builds, exports) die on any deploy, scale-in or load-balancer idle timeout. Start the job, then poll or call back.
 - WebSocket servers need slow-consumer handling (check `bufferedAmount`; drop or close past a threshold), ping/pong to detect dead peers, and draining on deploy.
 
+## Fleet agents (many processes you operate, calling home)
+Agents on VMs/devices are clients you control, but N of them hit one backend:
+- **Sync deltas, not state.** Re-sending full history every interval grows hub load with fleet × history and eventually exceeds request-size limits (often failing silently). Send changes since the last acknowledged push, in chunks.
+- **Cache per-agent auth/permissions** for the token's lifetime instead of resolving them from the tenant's whole graph on every call.
+- **Negative-cache failures** (denied, not installed, not found) with backoff; otherwise every tick retries and spends shared quotas.
+- **Jitter every periodic task** (push, poll, heartbeat) so a fleet started together doesn't stay synchronized.
+- **Per-host growth**: work per tick must not grow with history (incremental parsing with a stored offset, not re-reading whole files); logs rotate; local stores are bounded; every outbound call (including object-storage PUTs) has a timeout so one stall can't wedge the agent.
+
 ## Local-only resources
 - Files on local disk, host-bound providers (local VMs, sockets) and in-process SQLite all need host affinity. Document it, or route work to the owning host.
