@@ -274,22 +274,26 @@ export class GGSocketServer<Query, TSocket extends ServerSocket = GGSocket> {
                     // A client that speaks first (not VNC, which waits for the server greeting)
                     // could emit frames during the auth await, before the handler attaches its
                     // listener — pause the socket across that gap and resume once it's wired.
+                    // Resume on every exit: a socket closed while paused never reads the peer's close
+                    // frame, so it lingers until ws's close timeout and stalls the next upgrade.
                     ws.pause();
-                    const authed = await this.runUpgradeAuth(upgrade, queryArgs, cookie);
-                    if (!authed.success) {
-                        GGLog.warn(this, "REJECTED - upgrade auth failed", (authed as { success: false; error: any }).error);
-                        if (GG_METRICS.has()) GGWebSocketMetrics.connections.inc(1, {...connectionLabels, result: 'HANDSHAKE_FAILED'});
+                    try {
+                        const authed = await this.runUpgradeAuth(upgrade, queryArgs, cookie);
+                        if (!authed.success) {
+                            GGLog.warn(this, "REJECTED - upgrade auth failed", (authed as { success: false; error: any }).error);
+                            if (GG_METRICS.has()) GGWebSocketMetrics.connections.inc(1, {...connectionLabels, result: 'HANDSHAKE_FAILED'});
+                            ws.close(4001, "Unauthorized");
+                            return;
+                        }
+                        await this.openRawConnection(adapter, context, queryArgs, upgrade, connectionLabels, false);
+                    } finally {
                         ws.resume();
-                        ws.close(4001, "Unauthorized");
-                        return;
                     }
-                    await this.openRawConnection(adapter, context, queryArgs, upgrade, connectionLabels, false);
-                    ws.resume();
                     return;
                 }
 
                 // Wait for handshake message with headers
-                const handshakeResult = await this.handleHandshake(context, adapter, queryArgs, cookie, upgrade.remoteAddress, upgrade.headers.origin);
+                const handshakeResult = await this.handleHandshake(context, adapter, queryArgs, cookie, upgrade);
 
                 if (!handshakeResult.success) {
                     GGLog.warn(this, "REJECTED - handshake failed", (handshakeResult as { success: false; error: any }).error);
@@ -463,8 +467,7 @@ export class GGSocketServer<Query, TSocket extends ServerSocket = GGSocket> {
         adapter: NodeSocketAdapter,
         queryArgs: Query,
         cookie: string | undefined,
-        remoteAddress: string | undefined,
-        origin: string | undefined
+        upgrade: GGWsUpgrade
     ): Promise<{ success: true } | { success: false; error: any }> {
         type HandshakeResult = { success: true } | { success: false; error: any };
         return withTimeout<HandshakeResult>(
@@ -482,8 +485,8 @@ export class GGSocketServer<Query, TSocket extends ServerSocket = GGSocket> {
                                     headers: msg.data || {},
                                     cookie,
                                     query: queryArgs as Record<string, string>,
-                                    peerAddress: remoteAddress,
-                                    origin
+                                    peerAddress: upgrade.remoteAddress,
+                                    origin: upgrade.headers.origin
                                 };
                                 for (const middleware of this.middlewares) middleware.parse?.(inbound);
                                 // Drop ephemeral raw credentials before the connection opens (and even
