@@ -141,18 +141,16 @@ Roughly in priority order.
 
 ## 9. DynamoDB: missing primitives push apps toward unsafe patterns
 
-**Where:** `packages-libs/db/db-dynamodb/src/GGDynamoDb.ts:245-248` (`get` without `ConsistentRead`), `:403-406` (`getRawClient` builds a new client per call); `GGDynamoDbTable.ts:144-153` (`queryOne` doesn't check uniqueness; `scan()` takes no limit)
+**Where:** `packages-libs/db/db-dynamodb/src/GGDynamoDb.ts` `getRawClient` (builds a new client per call); `GGDynamoDbTable.ts` `queryOne` (doesn't check uniqueness)
 
-**Breaks:** with no consistent-read option, no batch or transaction helpers and no optimistic-version helper, apps write N+1 loops, check-then-put uniqueness and unconditional read-modify-write. Dropping to `getRawClient()` costs a new `DynamoDBClient` per call, and you lose marshalling.
+**Breaks:** with no batch or transaction helpers and no optimistic-version helper, apps write N+1 loops, check-then-put uniqueness and unconditional read-modify-write. Dropping to `getRawClient()` costs a new `DynamoDBClient` per call, and you lose marshalling.
 
 **Fix:**
-- Add `{consistent: true}` on `get`/`queryPage`.
 - Add `batchGet` and `batchWrite` that retry the unprocessed keys and items.
 - Add `transactWrite`.
 - Add a `putVersioned` / `updateVersioned` helper that manages a version attribute.
 - Add a `putUnique` helper using guard items.
 - Cache the raw client.
-- Give `GGDynamoDbTable.scan()` a `limit` option.
 
 ## 10. AWS Secrets Manager config never refreshes
 

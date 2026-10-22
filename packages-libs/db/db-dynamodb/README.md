@@ -83,7 +83,7 @@ The client automatically:
 ## Raw Primitives
 
 ```typescript
-// GET
+// GET — strongly consistent by default (see Read Consistency)
 const user = await db.get<UserRow>("users", { userId: "u_123" })
 
 // PUT
@@ -138,6 +138,39 @@ page.cursor   // pass back as `cursor`; undefined once the index is exhausted
 The `cursor` is opaque — hand it to a client and take it back, don't build one.
 
 **Picking between them:** if the caller renders a list, use `queryPage`. If a partial answer would be *wrong* rather than just short — a total, a uniqueness check, a cleanup sweep — use `query` and let the cap tell you when the data outgrew the approach. A GSI partitioned so widely that one partition can hold an unbounded number of rows (per-org, per-tenant) is usually the real problem the cap is pointing at.
+
+## Reserved Words and Filters
+
+`names` maps `#placeholder`s to attribute names, for attributes that are DynamoDB reserved words (`status`, `name`, `version`, ...). `filter` adds a `FilterExpression`, sharing the same `values` and `names` as the key condition. Both work on `query` / `queryPage` / `scan` / `scanPage`; scans take their `values` in the options.
+
+```typescript
+const pending = await db.query<JobRow>(
+    "jobs",
+    "by-owner-status-index",
+    "ownerId = :o AND #s = :s",                  // sort key named `status`
+    { ":o": "o_abc", ":s": "PENDING", ":p": 3 },
+    { names: { "#s": "status" }, filter: "priority >= :p" },
+)
+
+const stale = await db.scan<JobRow>("jobs", {
+    filter: "#s = :s",
+    names: { "#s": "status" },
+    values: { ":s": "STALE" },
+})
+```
+
+A filter runs **after** DynamoDB has read the rows:
+
+- **It trims the payload, not the cost.** Filtered-out rows are still read and billed. Bounded, cheap access comes from key design — a key or index that selects the rows — not from a filter.
+- **`Limit` applies before the filter.** On `queryPage` / `scanPage`, `limit` counts rows *read*, so a page can come back with fewer items than `limit` — even empty — while matches exist further on. Follow the `cursor`, not the item count.
+- **`query` / `scan` count matches instead.** With a filter they send no `Limit`, read whole pages, and stop once `limit` matches are found. The 10 000-row cap counts returned rows too. A sparse filter can therefore read far more rows than it returns — up to the whole partition (or table, for `scan`).
+
+## Read Consistency
+
+DynamoDB reads are eventually consistent unless asked otherwise: a read shortly after a write can return the previous item. A strongly consistent read sees every write acknowledged before it, at **2× the read capacity** (RCU / request units).
+
+- **`get` is strongly consistent by default.** The common "get, then `putConditional` on a version" pattern would otherwise act on a stale item and fail the condition right after a write. Opt out where staleness is fine and cost matters: `db.get(table, key, { consistentRead: false })`, `users.get(id, undefined, { consistentRead: false })`.
+- **`query` / `queryPage` / `scan` / `scanPage` are eventually consistent by default.** Pass `{ consistentRead: true }` to change that. It works on the base table and on local secondary indexes; global secondary indexes are always eventually consistent, and DynamoDB rejects the request with a `ValidationException` if you ask.
 
 ## Schema-Bound Tables
 
