@@ -1,5 +1,8 @@
 import type {GGSchema} from "@grest-ts/schema"
-import type {GGDynamoDb, GGDynamoDbPage} from "./GGDynamoDb"
+import type {
+    GGDynamoDb, GGDynamoDbGetOptions, GGDynamoDbPage, GGDynamoDbQueryOptions, GGDynamoDbQueryPageOptions,
+    GGDynamoDbScanOptions, GGDynamoDbScanPageOptions,
+} from "./GGDynamoDb"
 
 /**
  * Schema-bound table gateway. Owns one DynamoDB table; all reads/writes
@@ -53,8 +56,8 @@ export class GGDynamoDbTable<
         this.skField = skField
     }
 
-    async get(pk: T[PK], sk?: unknown): Promise<T | undefined> {
-        return this.db.get<T>(this.tableName, this.buildKey(pk, sk))
+    async get(pk: T[PK], sk?: unknown, opts?: GGDynamoDbGetOptions): Promise<T | undefined> {
+        return this.db.get<T>(this.tableName, this.buildKey(pk, sk), opts)
     }
 
     /** Validates against the schema before writing. Throws on shape errors. */
@@ -115,7 +118,7 @@ export class GGDynamoDbTable<
         indexName: string | undefined,
         keyCondition: string,
         values: Record<string, unknown>,
-        opts?: {limit?: number, descending?: boolean},
+        opts?: GGDynamoDbQueryOptions,
     ): Promise<T[]> {
         return this.db.query<T>(this.tableName, indexName, keyCondition, values, opts)
     }
@@ -130,7 +133,7 @@ export class GGDynamoDbTable<
         indexName: string | undefined,
         keyCondition: string,
         values: Record<string, unknown>,
-        opts?: {limit?: number, descending?: boolean, cursor?: string},
+        opts?: GGDynamoDbQueryPageOptions,
     ): Promise<GGDynamoDbPage<T>> {
         return this.db.queryPage<T>(this.tableName, indexName, keyCondition, values, opts)
     }
@@ -139,23 +142,25 @@ export class GGDynamoDbTable<
      * Like `query` but expects 0 or 1 result — typically a unique-index
      * lookup (`username-index`, etc.). Internally limits the DDB scan to
      * one row; returns the row or `undefined`. Use this instead of
-     * `(await query(...))[0]` so the limit reaches the wire.
+     * `(await query(...))[0]` so the limit reaches the wire. With
+     * `opts.filter` the wire limit is dropped and it returns the first match.
      */
     async queryOne(
         indexName: string | undefined,
         keyCondition: string,
         values: Record<string, unknown>,
+        opts?: Omit<GGDynamoDbQueryOptions, "limit">,
     ): Promise<T | undefined> {
-        const rows = await this.db.query<T>(this.tableName, indexName, keyCondition, values, {limit: 1})
+        const rows = await this.db.query<T>(this.tableName, indexName, keyCondition, values, {...opts, limit: 1})
         return rows[0]
     }
 
-    async scan(): Promise<T[]> {
-        return this.db.scan<T>(this.tableName)
+    async scan(opts?: GGDynamoDbScanOptions): Promise<T[]> {
+        return this.db.scan<T>(this.tableName, opts)
     }
 
     /** One page of a full-table scan. See `queryPage`. */
-    async scanPage(opts?: {limit?: number, cursor?: string}): Promise<GGDynamoDbPage<T>> {
+    async scanPage(opts?: GGDynamoDbScanPageOptions): Promise<GGDynamoDbPage<T>> {
         return this.db.scanPage<T>(this.tableName, opts)
     }
 
