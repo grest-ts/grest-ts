@@ -27,6 +27,12 @@ export interface GGInbound {
      * A middleware gating a loopback-only endpoint reads this.
      */
     peerAddress?: string;
+    /**
+     * The `Origin` header of the real HTTP request (WebSocket: the upgrade request, never the
+     * spoofable in-band message). Browsers set it and pages can't forge it, so a middleware
+     * rejecting cross-site WebSocket hijacking reads this. `undefined` for non-browser clients.
+     */
+    origin?: string;
 }
 
 /** Outbound credentials a client writes — request headers (HTTP) or handshake headers (WS). */
