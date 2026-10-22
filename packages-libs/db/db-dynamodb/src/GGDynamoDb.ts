@@ -62,8 +62,13 @@ function encodeCursor(key: Record<string, unknown>): string {
     return Buffer.from(JSON.stringify(key), "utf8").toString("base64url")
 }
 
-function readExpressionInput(opts: GGDynamoDbQueryPageOptions | GGDynamoDbScanPageOptions | undefined) {
+// Empty expression maps are omitted — DynamoDB rejects them.
+function readInput(
+    opts: Pick<GGDynamoDbQueryPageOptions, "filter" | "names" | "consistentRead" | "cursor"> | undefined,
+    values: Record<string, unknown> | undefined,
+) {
     return {
+        ...(values && Object.keys(values).length > 0 && {ExpressionAttributeValues: values}),
         ...(opts?.filter && {FilterExpression: opts.filter}),
         ...(opts?.names && Object.keys(opts.names).length > 0 && {ExpressionAttributeNames: opts.names}),
         ...(opts?.consistentRead && {ConsistentRead: true}),
@@ -291,7 +296,6 @@ export class GGDynamoDb {
         return client
     }
 
-    /** Strongly consistent unless `{consistentRead: false}` — see `GGDynamoDbGetOptions`. */
     async get<T>(table: string, key: Record<string, unknown>, opts?: GGDynamoDbGetOptions): Promise<T | undefined> {
         const result = await this.getClient().send(new GetCommand({
             TableName: table,
@@ -377,9 +381,8 @@ export class GGDynamoDb {
      * listing whose caller pages (an API endpoint, a UI list); use `query`
      * when the caller needs the whole result set.
      *
-     * A page can come back empty but still carry a `cursor` (`limit` counts
-     * rows read, before `filter`) — follow the cursor, not the item count.
-     * See `GGDynamoDbQueryOptions` for the options.
+     * A page can come back empty but still carry a `cursor` — follow the
+     * cursor, not the item count.
      */
     async queryPage<T>(
         table: string,
@@ -392,10 +395,9 @@ export class GGDynamoDb {
             TableName: table,
             IndexName: indexName,
             KeyConditionExpression: keyCondition,
-            ExpressionAttributeValues: values,
             Limit: opts?.limit,
             ...(opts?.descending && {ScanIndexForward: false}),
-            ...readExpressionInput(opts),
+            ...readInput(opts, values),
         }))
         return {
             items: (result.Items ?? []) as T[],
@@ -437,8 +439,7 @@ export class GGDynamoDb {
         const result = await this.getClient().send(new ScanCommand({
             TableName: table,
             Limit: opts?.limit,
-            ...(opts?.values && Object.keys(opts.values).length > 0 && {ExpressionAttributeValues: opts.values}),
-            ...readExpressionInput(opts),
+            ...readInput(opts, opts?.values),
         }))
         return {
             items: (result.Items ?? []) as T[],

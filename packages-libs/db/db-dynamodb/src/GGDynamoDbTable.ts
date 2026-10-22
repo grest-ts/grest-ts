@@ -56,7 +56,6 @@ export class GGDynamoDbTable<
         this.skField = skField
     }
 
-    /** Strongly consistent unless `{consistentRead: false}` — see `GGDynamoDbGetOptions`. */
     async get(pk: T[PK], sk?: unknown, opts?: GGDynamoDbGetOptions): Promise<T | undefined> {
         return this.db.get<T>(this.tableName, this.buildKey(pk, sk), opts)
     }
@@ -109,9 +108,7 @@ export class GGDynamoDbTable<
 
     /**
      * `keyCondition` uses ExpressionAttributeValues placeholders (`:foo`);
-     * pass the values map alongside. `opts.names` maps `#foo` placeholders for
-     * reserved-word attributes; `opts.filter` shares both maps — see
-     * `GGDynamoDbQueryOptions` and `GGDynamoDb.query` for how it pages. For non-PK queries, supply the GSI
+     * pass the values map alongside. For non-PK queries, supply the GSI
      * name as `indexName`. For a PK lookup-by-equality, prefer `get()`.
      *
      * Subclasses typically wrap this in typed helpers — e.g.
