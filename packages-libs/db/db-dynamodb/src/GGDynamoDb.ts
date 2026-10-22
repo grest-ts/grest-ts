@@ -24,10 +24,9 @@ export interface GGDynamoDbQueryOptions {
     limit?: number
     /** Walk the sort key backwards (newest-first on a timestamp SK). */
     descending?: boolean
-    /** FilterExpression, sharing `values`/`names` with the key condition. Applied AFTER
-     *  rows are read: filtered-out rows are still read and billed, and a page can come
-     *  back empty while matches exist further on. It trims the payload, not the cost —
-     *  bounded access needs a key or index that selects the rows. */
+    /** FilterExpression, sharing `values`/`names`. Applied after the read: filtered-out
+     *  rows are still billed and a page can come back empty while matches remain — it
+     *  trims the payload, not the cost. See the package README, "Reserved Words and Filters". */
     filter?: string
     /** ExpressionAttributeNames — `#placeholder` → attribute name, for attributes that
      *  are reserved words (`status`, `name`, `version`, ...). */
@@ -413,10 +412,8 @@ export class GGDynamoDb {
      * large is a listing that should be paging (`queryPage`) rather than one
      * a service should hold in memory. The cap counts returned rows.
      *
-     * With a `filter`, `limit` bounds the returned matches rather than the rows
-     * read: no `Limit` goes on the wire, so pages are read whole until `limit`
-     * matches (or the cap) are found — a sparse filter can read far more rows
-     * than it returns.
+     * With a `filter` no `Limit` goes on the wire: `limit` bounds the returned
+     * matches, so a sparse filter can read far more rows than it returns.
      */
     async query<T>(
         table: string,
