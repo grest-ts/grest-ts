@@ -242,8 +242,12 @@ export class GGDynamoDb {
         return client
     }
 
+    /**
+     * Strongly consistent: a get usually feeds a read-modify-conditional-put, and an eventually
+     * consistent read can return the item from before the last write, failing the condition spuriously.
+     */
     async get<T>(table: string, key: Record<string, unknown>): Promise<T | undefined> {
-        const result = await this.getClient().send(new GetCommand({TableName: table, Key: key}))
+        const result = await this.getClient().send(new GetCommand({TableName: table, Key: key, ConsistentRead: true}))
         return result.Item as T | undefined
     }
 

@@ -83,7 +83,7 @@ The client automatically:
 ## Raw Primitives
 
 ```typescript
-// GET
+// GET (strongly consistent)
 const user = await db.get<UserRow>("users", { userId: "u_123" })
 
 // PUT
