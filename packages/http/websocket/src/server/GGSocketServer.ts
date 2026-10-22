@@ -279,6 +279,7 @@ export class GGSocketServer<Query, TSocket extends ServerSocket = GGSocket> {
                     if (!authed.success) {
                         GGLog.warn(this, "REJECTED - upgrade auth failed", (authed as { success: false; error: any }).error);
                         if (GG_METRICS.has()) GGWebSocketMetrics.connections.inc(1, {...connectionLabels, result: 'HANDSHAKE_FAILED'});
+                        ws.resume();
                         ws.close(4001, "Unauthorized");
                         return;
                     }
@@ -288,7 +289,7 @@ export class GGSocketServer<Query, TSocket extends ServerSocket = GGSocket> {
                 }
 
                 // Wait for handshake message with headers
-                const handshakeResult = await this.handleHandshake(context, adapter, queryArgs, cookie, upgrade.remoteAddress);
+                const handshakeResult = await this.handleHandshake(context, adapter, queryArgs, cookie, upgrade.remoteAddress, upgrade.headers.origin);
 
                 if (!handshakeResult.success) {
                     GGLog.warn(this, "REJECTED - handshake failed", (handshakeResult as { success: false; error: any }).error);
@@ -361,7 +362,7 @@ export class GGSocketServer<Query, TSocket extends ServerSocket = GGSocket> {
         cookie: string | undefined
     ): Promise<{ success: true } | { success: false; error: any }> {
         try {
-            const inbound: GGInbound = {headers: upgrade.headers, cookie, query: queryArgs as Record<string, string>, peerAddress: upgrade.remoteAddress};
+            const inbound: GGInbound = {headers: upgrade.headers, cookie, query: queryArgs as Record<string, string>, peerAddress: upgrade.remoteAddress, origin: upgrade.headers.origin};
             for (const middleware of this.middlewares) middleware.parse?.(inbound);
             try {
                 for (const middleware of this.middlewares) await middleware.process?.();
@@ -462,7 +463,8 @@ export class GGSocketServer<Query, TSocket extends ServerSocket = GGSocket> {
         adapter: NodeSocketAdapter,
         queryArgs: Query,
         cookie: string | undefined,
-        remoteAddress: string | undefined
+        remoteAddress: string | undefined,
+        origin: string | undefined
     ): Promise<{ success: true } | { success: false; error: any }> {
         type HandshakeResult = { success: true } | { success: false; error: any };
         return withTimeout<HandshakeResult>(
@@ -480,7 +482,8 @@ export class GGSocketServer<Query, TSocket extends ServerSocket = GGSocket> {
                                     headers: msg.data || {},
                                     cookie,
                                     query: queryArgs as Record<string, string>,
-                                    peerAddress: remoteAddress
+                                    peerAddress: remoteAddress,
+                                    origin
                                 };
                                 for (const middleware of this.middlewares) middleware.parse?.(inbound);
                                 // Drop ephemeral raw credentials before the connection opens (and even

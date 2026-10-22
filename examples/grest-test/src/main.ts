@@ -19,7 +19,7 @@ import {AuthedSocketApi} from "./api/AuthedSocketApi"
 import {RawEchoApi} from "./api/RawEchoApi"
 import {RawEchoService} from "./services/RawEchoService"
 import {RawAdminApi} from "./api/RawAdminApi"
-import {CustomClientProxyApi} from "./api/CustomClientProxyApi"
+import {CustomClientCookieApi, CustomClientProxyApi} from "./api/CustomClientProxyApi"
 import {QuerySocketApi} from "./api/QuerySocketApi"
 import {EventsTestApi} from "./api/EventsTestApi"
 import {LanguageTestApi} from "./api/LanguageTestApi"
@@ -122,6 +122,7 @@ export class MainRuntime extends GGRuntime {
             .wsRaw(CustomClientProxyApi, (socket, _query, upgrade) => {
                 socket.onMessage((_data, isBinary) => socket.send(`${isBinary ? "bin" : "txt"} ${upgrade.path} ${upgrade.remoteAddress}`));
             })
+            .wsRaw(CustomClientCookieApi, (socket) => { socket.onMessage((data) => socket.send(data)) })
             .ws(WsPermissionsApi, new WsPermissionsService().handleConnection)
             .ws(WsFeaturePermissionsApi, new WsFeaturePermissionsService().handleConnection)
             .ws(MessagingSocket, new ChatMessagingService().handle)

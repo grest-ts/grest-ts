@@ -289,6 +289,26 @@ describe("createClient (real client, end-to-end)", () => {
     })
 })
 
+describe("customClient upgrade auth (cookie)", () => {
+
+    GGTest.startWorker(MainRuntime)
+
+    // Resolves "echo:<frame>" once the stream round-trips a frame, otherwise the close code.
+    const open = (cookie?: string): Promise<string | number> => new Promise((resolve) => {
+        const url = GG_TEST_RUNNER.get().discoveryServer.getRoutingUrl("CustomClientCookieApi").replace(/^http/, "ws") + "/cc-cookie"
+        const ws = new WebSocket(url, cookie ? {headers: {cookie}} : undefined)
+        ws.on("open", () => ws.send("ping"))
+        ws.on("message", (d) => { resolve(`echo:${d.toString()}`); ws.close() })
+        ws.on("close", (code) => resolve(code))
+        ws.on("error", () => resolve(-1))
+    })
+
+    test("a rejected upgrade closes 4001 and doesn't stall the next connection", async () => {
+        expect(await open()).toBe(4001)
+        expect(await open("session=session-for-bob")).toBe("echo:ping")
+    }, 10_000)
+})
+
 describe("customClient auth guard", () => {
 
     // The danger a custom client introduces: a credential that's delivered via the grest-ts

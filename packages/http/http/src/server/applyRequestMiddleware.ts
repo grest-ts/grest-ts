@@ -18,7 +18,8 @@ export async function applyRequestMiddleware(
         headers: flatten(req.headers),
         cookie: typeof req.headers.cookie === "string" ? req.headers.cookie : undefined,
         query: flatten(queryArgs),
-        peerAddress: req.socket?.remoteAddress
+        peerAddress: req.socket?.remoteAddress,
+        origin: typeof req.headers.origin === "string" ? req.headers.origin : undefined
     };
     for (const mw of middlewares) mw.parse?.(inbound);
     // finally: a rejecting process() (e.g. anonymous → NOT_AUTHORIZED) must still drop every
