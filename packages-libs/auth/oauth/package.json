@@ -1,0 +1,72 @@
+{
+  "//": "THIS FILE IS GENERATED - DO NOT EDIT",
+  "name": "@grest-ts/oauth",
+  "version": "0.0.88",
+  "type": "module",
+  "license": "MIT",
+  "description": "OAuth 2.1 authorization server (panva oidc-provider on GGHttpServer) issuing @grest-ts/auth tokens, plus a browser code+PKCE client for GGAuthSession",
+  "exports": {
+    ".": {
+      "browser": {
+        "types": "./src/index-browser.ts",
+        "import": "./src/index-browser.ts"
+      },
+      "default": {
+        "types": "./src/index-node.ts",
+        "import": "./src/index-node.ts"
+      }
+    },
+    "./dynamodb": {
+      "types": "./src/node/store/DynamoOAuthStore.ts",
+      "import": "./src/node/store/DynamoOAuthStore.ts"
+    }
+  },
+  "files": [
+    "src"
+  ],
+  "scripts": {
+    "typecheck": "tsc --noEmit -p src",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "test:coverage:html": "vitest run --coverage --reporter=html"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/grest-ts/grest-ts.git",
+    "directory": "packages-libs/auth/oauth"
+  },
+  "homepage": "https://grest-ts.com/packages/oauth",
+  "bugs": {
+    "url": "https://github.com/grest-ts/grest-ts/issues"
+  },
+  "keywords": [
+    "typescript",
+    "framework",
+    "contract",
+    "api",
+    "microservices",
+    "testing",
+    "auth",
+    "oauth",
+    "oauth2",
+    "oidc",
+    "pkce",
+    "mcp"
+  ],
+  "engines": {
+    "node": ">=24"
+  },
+  "dependencies": {
+    "@types/oidc-provider": "9.12.1",
+    "oidc-provider": "9.13.0"
+  },
+  "peerDependencies": {
+    "@grest-ts/auth": "0.0.88",
+    "@grest-ts/db-dynamodb": "0.0.88",
+    "@grest-ts/http": "0.0.88",
+    "@grest-ts/schema": "0.0.88"
+  }
+}

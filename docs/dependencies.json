@@ -46,7 +46,7 @@
         "implementation": false,
         "npm": true
       },
-      "layer": 0,
+      "layer": 1,
       "color": "#59A14F",
       "category": "libs",
       "group": "auth",
@@ -194,7 +194,7 @@
         "implementation": false,
         "npm": true
       },
-      "layer": 1,
+      "layer": 0,
       "color": "#59A14F",
       "category": "libs",
       "group": "db",
@@ -211,7 +211,7 @@
         "implementation": false,
         "npm": true
       },
-      "layer": 1,
+      "layer": 0,
       "color": "#59A14F",
       "category": "libs",
       "group": "db",
@@ -519,6 +519,23 @@
       "color": "#4E79A7",
       "category": "core",
       "readme": "<!-- GREST-TS-BANNER-START -->\n> Part of the [grest-ts](https://github.com/grest-ts/grest-ts) framework.\n> [Documentation](https://github.com/grest-ts/grest-ts#readme) | [All packages](https://github.com/grest-ts/grest-ts#package-reference)\n<!-- GREST-TS-BANNER-END -->\n\n# @grest-ts/metrics\n\nType-safe metrics collection library for Grest Framework.\n\n## Features\n\nType-safe metrics collection library with support for counters, gauges, and histograms.\n\nProvides a structured way to define, collect, and export application metrics with:\n\n- Prometheus-style metrics (Counter, Gauge, Histogram)\n- Type-safe labels\n- Centralized metric definitions\n- Multiple export formats\n\nType-safe metrics collection library with support for counters, gauges, and histograms.\n\n## Quick usage example\n\n```typescript\n// Define metric keys.\n// This additionally acts as documentation of metrics provided by the application.\nexport const AppMetrics = GGMetrics.define('/app/', () => ({\n    actions: new GGCounterKey('actions_total', {\n        help: 'Total number of actions',\n        labelNames: ['type']\n    }),\n    // ... add more metrics here. All well documented and type safe.\n}));\n\n// Usage in the runtime.\nAppMetrics.actions.inc(1, {type: \"read\"}); // labels are typesafe (values are always strings)\n\n```\n\n## Documentation\n\n- [Usage](./README-usage.md) - How to define and collect metrics\n- [Testing](./README-testkit.md) - How to test metric changes with testkit\n- [Extending](./README-extending.md) - How to add custom exporters\n"
+    },
+    {
+      "name": "oauth",
+      "description": "OAuth 2.1 authorization server (panva oidc-provider on GGHttpServer) issuing @grest-ts/auth tokens, plus a browser code+PKCE client for GGAuthSession",
+      "flags": {
+        "node": true,
+        "browser": true,
+        "testkit": false,
+        "hidden": false,
+        "implementation": false,
+        "npm": true
+      },
+      "layer": 0,
+      "color": "#59A14F",
+      "category": "libs",
+      "group": "auth",
+      "readme": "<!-- GREST-TS-BANNER-START -->\n> Part of the [grest-ts](https://github.com/grest-ts/grest-ts) framework.\n> [Documentation](https://github.com/grest-ts/grest-ts#readme) | [All packages](https://github.com/grest-ts/grest-ts#package-reference)\n<!-- GREST-TS-BANNER-END -->\n\n"
     },
     {
       "name": "openapi",
@@ -1140,6 +1157,22 @@
       "to": "locator"
     },
     {
+      "from": "oauth",
+      "to": "auth"
+    },
+    {
+      "from": "oauth",
+      "to": "db-dynamodb"
+    },
+    {
+      "from": "oauth",
+      "to": "http"
+    },
+    {
+      "from": "oauth",
+      "to": "schema"
+    },
+    {
       "from": "openapi",
       "to": "context"
     },
@@ -1277,31 +1310,11 @@
     },
     {
       "from": "testkit-vitest",
-      "to": "config"
-    },
-    {
-      "from": "testkit-vitest",
-      "to": "db-dynamodb"
-    },
-    {
-      "from": "testkit-vitest",
-      "to": "db-mysql"
-    },
-    {
-      "from": "testkit-vitest",
-      "to": "db-postgre"
-    },
-    {
-      "from": "testkit-vitest",
       "to": "discovery"
     },
     {
       "from": "testkit-vitest",
       "to": "discovery-local"
-    },
-    {
-      "from": "testkit-vitest",
-      "to": "http"
     },
     {
       "from": "testkit-vitest",
@@ -1321,19 +1334,7 @@
     },
     {
       "from": "testkit-vitest",
-      "to": "metrics"
-    },
-    {
-      "from": "testkit-vitest",
-      "to": "schema-file"
-    },
-    {
-      "from": "testkit-vitest",
       "to": "testkit"
-    },
-    {
-      "from": "testkit-vitest",
-      "to": "websocket"
     },
     {
       "from": "trace",
