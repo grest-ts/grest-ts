@@ -1,3 +1,5 @@
+import type {AdapterConstructor} from "oidc-provider"
+
 // oidc-provider model state (sessions, grants, codes, refresh tokens, registered clients,
 // interactions). Payloads are opaque JSON owned by oidc-provider; expiry is enforced by the store.
 export type GGOAuthPayload = Record<string, unknown> & {
@@ -23,7 +25,7 @@ export interface GGOAuthStore {
 }
 
 // oidc-provider's adapter shape: `new Adapter(modelName)` per model.
-export function toOidcAdapter(store: GGOAuthStore) {
+export function toOidcAdapter(store: GGOAuthStore): AdapterConstructor {
     return class GGOAuthAdapter {
         private readonly model: string
         constructor(model: string) { this.model = model }
