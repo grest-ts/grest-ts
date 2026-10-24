@@ -3,8 +3,6 @@ import type {IncomingMessage, ServerResponse} from "node:http"
 import Provider, {errors as oidcErrors, type Configuration, type InteractionResults, type KoaContextWithOIDC} from "oidc-provider"
 import {NOT_FOUND} from "@grest-ts/schema"
 import type {GGHttpServer} from "@grest-ts/http"
-import {GG_DISCOVERY} from "@grest-ts/discovery"
-import {GGLocator} from "@grest-ts/locator"
 import type {GGAccessPayload, GGAuthAccessToken} from "@grest-ts/auth"
 import {GGOAuthInteractionContract, type GGOAuthInteraction} from "../shared/interactionContract"
 import {toOidcAdapter, type GGOAuthStore} from "./store/GGOAuthStore"
@@ -27,7 +25,7 @@ export interface GGOAuthResource<C extends object> {
     scopes: [string, ...string[]]
     // Re-run at every issuance (code exchange and each refresh), like GGAuthRefreshToken's resolve:
     // permission changes apply on refresh. undefined = subject gone → invalid_grant.
-    claims: (subject: string, client: {clientId: string, firstParty: boolean}) => Promise<C | undefined>
+    claims: (subject: string) => Promise<C | undefined>
     // Only pre-registered first-party clients may get tokens for it.
     firstPartyOnly?: boolean
 }
@@ -43,7 +41,7 @@ export interface GGOAuthServerOptions {
     resources: [GGOAuthResource<any>, ...GGOAuthResource<any>[]]
     // The app's login/consent page; it receives the interaction uid and uses GGOAuthInteractionContract.
     // `request` lets a first-party client's sign-in stay on the origin it was opened from.
-    interactionUrl: (uid: string, request: {clientId: string, redirectUri: string, firstParty: boolean}) => string
+    interactionUrl: (uid: string, request: {redirectUri: string, firstParty: boolean}) => string
     // Pre-registered app clients: no consent screen, silent re-auth while the login session lives.
     // Read once, on first use (config isn't readable at compose time).
     firstPartyClients?: () => GGOAuthFirstPartyClient[]
@@ -71,6 +69,7 @@ type Ticket = {uid: string, result: InteractionResults}
 export class GGOAuthServer {
 
     private _provider: Provider | undefined
+    private _callback: ReturnType<Provider["callback"]> | undefined
     private _firstParty: Map<string, GGOAuthFirstPartyClient> | undefined
     private readonly options: GGOAuthServerOptions
 
@@ -95,20 +94,21 @@ export class GGOAuthServer {
                     res.end("Sign-in request expired")
                     return
                 }
-                const clientId = String(found.params.client_id)
-                const redirectUri = String(found.params.redirect_uri)
-                res.writeHead(303, {location: this.options.interactionUrl(interaction[1], {clientId, redirectUri, firstParty: this.firstParty.has(clientId)})})
+                const firstParty = this.firstParty.has(String(found.params.client_id))
+                res.writeHead(303, {location: this.options.interactionUrl(interaction[1], {redirectUri: String(found.params.redirect_uri), firstParty})})
                 res.end()
                 return
             }
-            if (path === "/.well-known/oauth-authorization-server") req.url = "/.well-known/openid-configuration"
-            await this.provider().callback()(req, res)
+            this._callback ??= this.provider().callback()
+            await this._callback(req, res)
         }
         for (const method of ["GET", "POST"] as const) server.registerRoute(method, `${BASE}/*`, handle, "GGOAuthServer")
         server.registerRoute("GET", "/.well-known/openid-configuration", handle, "GGOAuthServer")
         server.registerRoute("GET", "/.well-known/oauth-authorization-server", handle, "GGOAuthServer")
 
-        announce(server, [`${BASE}/`, "/.well-known/"])
+        server.announce(`${BASE}/`, "GGOAuthServer")
+        server.announce("/.well-known/openid-configuration", "GGOAuthServer")
+        server.announce("/.well-known/oauth-authorization-server", "GGOAuthServer")
     }
 
     // Serves `path` as an OAuth-protected resource: requests without a valid token for `resource` get
@@ -146,7 +146,8 @@ export class GGOAuthServer {
             await handle(req, res, token)
         }
         for (const method of ["GET", "POST", "DELETE"] as const) server.registerRoute(method, path, guarded, "GGOAuthServer")
-        announce(server, [path])
+        server.announce(path, "GGOAuthServer")
+        server.announce(metadataPath, "GGOAuthServer")
     }
 
     // Implementation of GGOAuthInteractionContract; `subject` reads the signed-in user from the app's wire.
@@ -154,20 +155,21 @@ export class GGOAuthServer {
         return {
             get: async ({uid}) => this.describeInteraction(uid),
             approve: async ({uid}) => ({redirectUrl: await this.approve(uid, subject())}),
-            deny: async ({uid}) => ({redirectUrl: await this.ticket(uid, {error: "access_denied", error_description: "The user denied the request"})}),
+            deny: async ({uid}) => ({redirectUrl: await this.ticket(await this.findInteraction(uid), {error: "access_denied", error_description: "The user denied the request"})}),
         }
     }
 
     public listGrants = async (subject: string): Promise<Array<{grantId: string, clientId: string, clientName: string, createdAt: number}>> => {
         const p = this.provider()
-        const out: Array<{grantId: string, clientId: string, clientName: string, createdAt: number}> = []
-        for (const grantId of await this.options.store.listIdsByAccount("Grant", subject)) {
-            const grant = await p.Grant.find(grantId)
-            if (!grant?.clientId || grant.accountId !== subject) continue
-            const client = await p.Client.find(grant.clientId)
-            out.push({grantId, clientId: grant.clientId, clientName: String(client?.clientName ?? grant.clientId), createdAt: (grant.iat ?? 0) * 1000})
-        }
-        return out
+        const grants = await Promise.all((await this.options.store.listIdsByAccount("Grant", subject)).map(id => p.Grant.find(id)))
+        return await Promise.all(grants
+            .filter(g => g?.clientId && g.accountId === subject)
+            .map(async g => ({
+                grantId: g!.jti,
+                clientId: g!.clientId!,
+                clientName: String((await p.Client.find(g!.clientId!))?.clientName ?? g!.clientId),
+                createdAt: (g!.iat ?? 0) * 1000,
+            })))
     }
 
     // Kills the grant's refresh tokens and codes now; already-issued access tokens live out their TTL.
@@ -182,19 +184,17 @@ export class GGOAuthServer {
     // "Log out everywhere": every grant and login session of the subject.
     public revokeAll = async (subject: string): Promise<void> => {
         const store = this.options.store
-        for (const grantId of await store.listIdsByAccount("Grant", subject)) {
-            await store.revokeByGrantId(grantId)
-            await store.destroy("Grant", grantId)
-        }
-        for (const sessionId of await store.listIdsByAccount("Session", subject)) await store.destroy("Session", sessionId)
+        const [grantIds, sessionIds] = await Promise.all([store.listIdsByAccount("Grant", subject), store.listIdsByAccount("Session", subject)])
+        await Promise.all([
+            ...grantIds.map(id => Promise.all([store.revokeByGrantId(id), store.destroy("Grant", id)])),
+            ...sessionIds.map(id => store.destroy("Session", id)),
+        ])
     }
 
     private async describeInteraction(uid: string): Promise<GGOAuthInteraction> {
-        const p = this.provider()
-        const interaction = await p.Interaction.find(uid)
-        if (!interaction) throw new NOT_FOUND({debugMessage: "Unknown or expired OAuth interaction"})
+        const interaction = await this.findInteraction(uid)
         const clientId = String(interaction.params.client_id)
-        const client = await p.Client.find(clientId)
+        const client = await this.provider().Client.find(clientId)
         if (!client) throw new NOT_FOUND({debugMessage: "Unknown OAuth client"})
         const hosts = [...new Set((client.redirectUris ?? []).map(u => new URL(u).host))]
         return {
@@ -206,28 +206,32 @@ export class GGOAuthServer {
                 redirectHosts: hosts,
                 loopbackOnly: hosts.length > 0 && hosts.every(h => /^(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/.test(h)),
             },
-            scopes: String(interaction.params.scope ?? "").split(" ").filter(Boolean),
+            scopes: requestedScopes(interaction.params),
             resource: this.requestedResource(interaction.params, clientId).resource(),
         }
     }
 
     private async approve(uid: string, subject: string): Promise<string> {
         const p = this.provider()
-        const interaction = await p.Interaction.find(uid)
-        if (!interaction) throw new NOT_FOUND({debugMessage: "Unknown or expired OAuth interaction"})
+        const interaction = await this.findInteraction(uid)
         const clientId = String(interaction.params.client_id)
         const existing = interaction.grantId ? await p.Grant.find(interaction.grantId) : undefined
         const grant = existing?.accountId === subject ? existing : new p.Grant({accountId: subject, clientId})
         this.grantRequested(grant, interaction.params)
         const grantId = await grant.save()
-        return this.ticket(uid, {login: {accountId: subject}, consent: {grantId}})
+        return this.ticket(interaction, {login: {accountId: subject}, consent: {grantId}})
+    }
+
+    private async findInteraction(uid: string): Promise<InstanceType<Provider["Interaction"]>> {
+        const interaction = await this.provider().Interaction.find(uid)
+        if (!interaction) throw new NOT_FOUND({debugMessage: "Unknown or expired OAuth interaction"})
+        return interaction
     }
 
     // The result is applied only when the browser that started the flow (it holds the interaction
     // cookie) follows the redirect: a user approving someone else's flow can't hand them a code.
-    private async ticket(uid: string, result: InteractionResults): Promise<string> {
-        const interaction = await this.provider().Interaction.find(uid)
-        if (!interaction) throw new NOT_FOUND({debugMessage: "Unknown or expired OAuth interaction"})
+    private async ticket(interaction: InstanceType<Provider["Interaction"]>, result: InteractionResults): Promise<string> {
+        const uid = interaction.uid
         const id = randomBytes(24).toString("base64url")
         await this.options.store.upsert(TICKET, id, {uid, result} satisfies Ticket, 120)
         // The origin the browser started on: its interaction cookie lives there.
@@ -253,7 +257,7 @@ export class GGOAuthServer {
     }
 
     private grantRequested(grant: InstanceType<Provider["Grant"]>, params: Record<string, unknown>): void {
-        const requested = String(params.scope ?? "").split(" ").filter(Boolean)
+        const requested = requestedScopes(params)
         const oidc = requested.filter(s => OIDC_SCOPES.includes(s))
         if (oidc.length) grant.addOIDCScope(oidc.join(" "))
         const resource = this.requestedResource(params, String(grant.clientId))
@@ -312,7 +316,6 @@ export class GGOAuthServer {
             },
             interactions: {url: (_ctx, interaction) => `${BASE}/interaction/${interaction.uid}`},
             scopes: OIDC_SCOPES,
-            // OAuth 2.1: authorization code only (no implicit / hybrid).
             responseTypes: ["code"],
             pkce: {required: () => true},
             features: {
@@ -329,6 +332,7 @@ export class GGOAuthServer {
                     // Skip the provider's "do you want to sign out?" page. `logout=yes` is that page's
                     // button value: without it only the requesting client is signed out, not the session.
                     logoutSource: async (ctx, form) => {
+                        if (!form.includes("</form>")) throw new Error("GGOAuthServer: oidc-provider's logout form changed; can't confirm logout")
                         const confirmed = form.replace("</form>", `<input type="hidden" name="logout" value="yes"/></form>`)
                         ctx.body = `<!DOCTYPE html><html><body>${confirmed}<script>document.forms[0].submit()</script></body></html>`
                     },
@@ -374,8 +378,7 @@ export class GGOAuthServer {
                 const at = token as InstanceType<Provider["AccessToken"]>
                 const resource = this.resource(at.resourceServer?.identifier())
                 if (!resource) return undefined
-                const clientId = String(at.clientId)
-                const claims = await resource.claims(String(at.accountId), {clientId, firstParty: firstParty.has(clientId)})
+                const claims = await resource.claims(String(at.accountId))
                 if (!claims) throw new oidcErrors.InvalidGrant("subject is no longer valid")
                 return {data: resource.accessToken.encodeClaims(claims)}
             },
@@ -412,14 +415,8 @@ export class GGOAuthServer {
 }
 
 
-// Raw routes aren't announced by a schema, so a path-routing discovery proxy wouldn't forward them.
-function announce(server: GGHttpServer, pathPrefixes: string[]): void {
-    const scope = GGLocator.getScope()
-    server.onStart(() => {
-        GG_DISCOVERY.tryGet()?.registerRoutes(pathPrefixes.map(pathPrefix => ({
-            runtime: scope.serviceName, api: `GGOAuthServer${pathPrefix}`, pathPrefix, protocol: "http", port: server.port!,
-        })))
-    })
+function requestedScopes(params: Record<string, unknown>): string[] {
+    return String(params.scope ?? "").split(" ").filter(Boolean)
 }
 
 function hkdf(secret: string, info: string): Buffer {

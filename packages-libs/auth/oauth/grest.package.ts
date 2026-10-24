@@ -8,6 +8,7 @@ definePackage({
     publishToNpm: true,
     hasTests: true,
     dependencies: {
+        "jose": "^6.2.12",
         "oidc-provider": "9.13.0",
         "@types/oidc-provider": "9.12.1",
     },

@@ -21,8 +21,6 @@ export class InMemoryOAuthStore implements GGOAuthStore {
 
     public findByUid = async (model: string, uid: string) => this.findWhere(model, p => p.uid === uid)
 
-    public findByUserCode = async (model: string, userCode: string) => this.findWhere(model, p => p.userCode === userCode)
-
     public consume = async (model: string, id: string): Promise<void> => {
         const row = this.rows.get(`${model}:${id}`)
         if (row) row.payload = {...row.payload, consumed: Math.floor(this.now() / 1000)}

@@ -139,7 +139,7 @@ const oauth = new GGOAuthClient({
 })
 const session = GGAuthSession.withToken(USER_WIRE, {localStorageKey: "auth", refresh: oauth.refresh})
 
-if (location.pathname === "/oauth/callback") session.start((await oauth.handleCallback(location.href)).result)
+if (oauth.isCallback(location.href)) session.start((await oauth.handleCallback(location.href)).result)
 else if (!session.isLoggedIn()) await oauth.authorize({returnTo: location.pathname + location.search})
 
 oauth.logout(undefined)   // ends the authorization server's login session too

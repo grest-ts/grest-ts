@@ -18,7 +18,9 @@ type OAuthRow = typeof IsOAuthRow.infer
 
 // Table to create (TTL attribute `expiresAtSec`): HASH `pk` (S), plus GSIs projecting ALL —
 // `grantId-index` (grantId), `uid-index` (uid), `accountId-index` (accountId).
-export const DYNAMO_OAUTH_TABLE_INDEXES = ["grantId-index", "uid-index", "accountId-index"] as const
+// accountId is written only for the models looked up by account, so the index stays small: every
+// spent refresh token is kept until expiry (reuse detection) and would otherwise land in it.
+const BY_ACCOUNT = new Set(["Grant", "Session"])
 
 export class DynamoOAuthStore extends GGDynamoDbTable<OAuthRow, "pk"> implements GGOAuthStore {
 
@@ -34,7 +36,7 @@ export class DynamoOAuthStore extends GGDynamoDbTable<OAuthRow, "pk"> implements
             payload: JSON.stringify(payload),
             grantId: payload.grantId,
             uid: payload.uid,
-            accountId: payload.accountId,
+            accountId: BY_ACCOUNT.has(model) ? payload.accountId : undefined,
             expiresAtSec: expiresInSec ? Math.floor(Date.now() / 1000) + expiresInSec : undefined,
         })
     }
@@ -43,9 +45,6 @@ export class DynamoOAuthStore extends GGDynamoDbTable<OAuthRow, "pk"> implements
 
     public findByUid = async (model: string, uid: string): Promise<GGOAuthPayload | undefined> =>
         this.payloadOf(await this.queryOne("uid-index", "uid = :uid", {":uid": uid, ":model": model}, {filter: "#m = :model", names: {"#m": "model"}}))
-
-    // Device flow is not enabled by GGOAuthServer.
-    public findByUserCode = async (): Promise<GGOAuthPayload | undefined> => undefined
 
     public consume = async (model: string, id: string): Promise<void> => {
         const row = await this.get(`${model}#${id}`)
@@ -67,16 +66,9 @@ export class DynamoOAuthStore extends GGDynamoDbTable<OAuthRow, "pk"> implements
         } while (cursor)
     }
 
-    public listIdsByAccount = async (model: string, accountId: string): Promise<string[]> => {
-        const ids: string[] = []
-        let cursor: string | undefined
-        do {
-            const page = await this.queryPage("accountId-index", "accountId = :a", {":a": accountId, ":model": model}, {cursor, filter: "#m = :model", names: {"#m": "model"}})
-            for (const row of page.items) if (this.live(row)) ids.push(row.id)
-            cursor = page.cursor
-        } while (cursor)
-        return ids
-    }
+    public listIdsByAccount = async (model: string, accountId: string): Promise<string[]> =>
+        (await this.query("accountId-index", "accountId = :a", {":a": accountId, ":model": model}, {filter: "#m = :model", names: {"#m": "model"}}))
+            .filter(row => this.live(row)).map(row => row.id)
 
     private payloadOf(row: OAuthRow | undefined): GGOAuthPayload | undefined {
         return row && this.live(row) ? JSON.parse(row.payload) as GGOAuthPayload : undefined

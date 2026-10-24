@@ -3,7 +3,6 @@
 export type GGOAuthPayload = Record<string, unknown> & {
     grantId?: string
     uid?: string
-    userCode?: string
     accountId?: string
     consumed?: number
 }
@@ -12,7 +11,6 @@ export interface GGOAuthStore {
     upsert(model: string, id: string, payload: GGOAuthPayload, expiresInSec: number | undefined): Promise<void>
     find(model: string, id: string): Promise<GGOAuthPayload | undefined>
     findByUid(model: string, uid: string): Promise<GGOAuthPayload | undefined>
-    findByUserCode(model: string, userCode: string): Promise<GGOAuthPayload | undefined>
     // Mark consumed (not delete): a second use of a code / rotated refresh token is detected as replay.
     consume(model: string, id: string): Promise<void>
     destroy(model: string, id: string): Promise<void>
@@ -30,7 +28,8 @@ export function toOidcAdapter(store: GGOAuthStore) {
         upsert = (id: string, payload: GGOAuthPayload, expiresIn?: number) => store.upsert(this.model, id, payload, expiresIn)
         find = (id: string) => store.find(this.model, id)
         findByUid = (uid: string) => store.findByUid(this.model, uid)
-        findByUserCode = (userCode: string) => store.findByUserCode(this.model, userCode)
+        // Device flow is never enabled.
+        findByUserCode = async () => undefined
         consume = (id: string) => store.consume(this.model, id)
         destroy = (id: string) => store.destroy(this.model, id)
         revokeByGrantId = (grantId: string) => store.revokeByGrantId(grantId)

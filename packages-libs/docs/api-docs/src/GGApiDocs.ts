@@ -5,7 +5,6 @@ import type {GGHttpSchema} from "@grest-ts/http";
 import {GGHttpServer, GG_HTTP_SERVER} from "@grest-ts/http";
 import type {GGWebSocketSchema, GGRawWebSocketSchema} from "@grest-ts/websocket";
 import {GGLocator} from "@grest-ts/locator";
-import {GG_DISCOVERY} from "@grest-ts/discovery";
 import {buildContractDoc, type BuildContractDocOptions} from "./buildContractDoc";
 import type {ApiDocsConfig, ApiDocsDocument} from "./docTypes";
 
@@ -150,23 +149,8 @@ export class GGApiDocs {
             });
         }
 
-        // Tell service-discovery (e.g. the local dev router) that requests
-        // beginning with `docsPath` belong on this server. Without this, a
-        // local-router consumer 404s `/docs` because GGHttpSchema.startServer
-        // is the only thing that normally publishes prefixes to discovery.
-        // pathPrefix is left without a trailing slash so both `/docs` and
-        // `/docs/...` match (the matcher uses `path.startsWith`).
-        const docsPrefix = docsPath.endsWith("/") ? docsPath.slice(0, -1) : docsPath;
-        const scope = GGLocator.getScope();
-        server.onStart(() => {
-            GG_DISCOVERY.tryGet()?.registerRoutes([{
-                runtime: scope.serviceName,
-                api: "GGApiDocs",
-                pathPrefix: docsPrefix,
-                protocol: "http",
-                port: server.port!,
-            }]);
-        });
+        // No trailing slash, so both `/docs` and `/docs/...` match (the router uses `startsWith`).
+        server.announce(docsPath.endsWith("/") ? docsPath.slice(0, -1) : docsPath, "GGApiDocs");
 
         return this;
     }

@@ -1,4 +1,5 @@
 /// <reference lib="dom" />
+import {decodeJwt} from "jose"
 import {NOT_AUTHORIZED} from "@grest-ts/schema"
 
 // Structurally GGAuthSession's GGAuthResult (exported only from @grest-ts/auth's browser entry).
@@ -31,10 +32,7 @@ type Metadata = {issuer: string, authorization_endpoint: string, token_endpoint:
 
 const PENDING_KEY = "gg-oauth-pending"
 
-// Browser OAuth client (authorization code + PKCE S256, public client). Plugs into GGAuthSession:
-//   const oauth = new GGOAuthClient({...})
-//   const session = GGAuthSession.withToken(WIRE, {refresh: oauth.refresh, localStorageKey: "auth"})
-//   if (oauth.isCallback(location.href)) session.start((await oauth.handleCallback(location.href)).result)
+// Browser OAuth client (authorization code + PKCE S256), the `refresh` of a GGAuthSession — see README.
 // The token/revocation endpoints are OAuth protocol endpoints (form-encoded), not grest-ts contracts.
 export class GGOAuthClient<I = unknown> {
 
@@ -50,7 +48,7 @@ export class GGOAuthClient<I = unknown> {
     }
 
     // Redirects the browser to the authorization server; resolves never (the page unloads).
-    public authorize = async (opts?: {returnTo?: string, prompt?: "login" | "none"}): Promise<void> => {
+    public authorize = async (opts?: {returnTo?: string}): Promise<void> => {
         if (this.leaving) return await new Promise(() => undefined)
         this.leaving = true
         const meta = await this.discover()
@@ -67,7 +65,6 @@ export class GGOAuthClient<I = unknown> {
             code_challenge_method: "S256",
             resource: this.config.resource ?? meta.issuer,
             ...(this.config.scope ? {scope: this.config.scope} : {}),
-            ...(opts?.prompt ? {prompt: opts.prompt} : {}),
         }).toString()
         window.location.assign(url.href)
         await new Promise(() => undefined)
@@ -109,7 +106,10 @@ export class GGOAuthClient<I = unknown> {
         if (refreshToken && meta.revocation_endpoint) {
             await fetch(meta.revocation_endpoint, {method: "POST", body: new URLSearchParams({token: refreshToken, client_id: this.config.clientId})}).catch(() => undefined)
         }
-        if (!meta.end_session_endpoint) return
+        if (!meta.end_session_endpoint) {
+            this.leaving = false
+            return
+        }
         const url = new URL(meta.end_session_endpoint)
         url.search = new URLSearchParams({
             client_id: this.config.clientId,
@@ -155,9 +155,7 @@ export class GGOAuthClient<I = unknown> {
 // A grest-ts access token's payload, unverified — for UI identity only; the server re-verifies
 // every request.
 export function decodeAccessToken<T>(accessToken: string): {sub: string, exp: number, data: T} {
-    const payload = accessToken.split(".")[1] ?? ""
-    const json = atob(payload.replace(/-/g, "+").replace(/_/g, "/").padEnd(Math.ceil(payload.length / 4) * 4, "="))
-    return JSON.parse(new TextDecoder().decode(Uint8Array.from(json, c => c.charCodeAt(0)))) as {sub: string, exp: number, data: T}
+    return decodeJwt(accessToken) as unknown as {sub: string, exp: number, data: T}
 }
 
 function randomString(): string {
