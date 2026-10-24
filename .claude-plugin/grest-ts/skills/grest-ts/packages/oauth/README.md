@@ -41,7 +41,7 @@ const api: GGOAuthResource<UserClaims> = {
     accessToken: userTokenEngine.access,           // GGAuthAccessToken — signer must expose jwsKey()
     scopes: ["app"],                               // at least one; what they permit is up to you
     firstPartyOnly: true,
-    claims: async (subject) => claimsFor(subject), // at issue AND every refresh; undefined → invalid_grant
+    claims: async (subject, client) => claimsFor(subject), // at issue AND every refresh; undefined → invalid_grant
 }
 // An MCP endpoint for other apps (Claude, ChatGPT…): own audience, its own (smaller) claims.
 const mcp: GGOAuthResource<McpClaims> = {

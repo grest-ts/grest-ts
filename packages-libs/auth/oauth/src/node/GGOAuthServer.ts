@@ -25,7 +25,7 @@ export interface GGOAuthResource<C extends object> {
     scopes: [string, ...string[]]
     // Re-run at every issuance (code exchange and each refresh), like GGAuthRefreshToken's resolve:
     // permission changes apply on refresh. undefined = subject gone → invalid_grant.
-    claims: (subject: string) => Promise<C | undefined>
+    claims: (subject: string, client: {clientId: string, name: string}) => Promise<C | undefined>
     // Only pre-registered first-party clients may get tokens for it.
     firstPartyOnly?: boolean
 }
@@ -283,6 +283,11 @@ export class GGOAuthServer {
         return this.options.resources.find(r => r.resource() === indicator)
     }
 
+    private clientOf(ctx: KoaContextWithOIDC): {clientId: string, name: string} {
+        const client = ctx.oidc.client!
+        return {clientId: client.clientId, name: this.firstParty.get(client.clientId)?.name ?? String(client.clientName ?? client.clientId)}
+    }
+
     private usableResource(indicator: string, clientId: string): GGOAuthResource<any> {
         const resource = this.resource(indicator)
         if (!resource) throw new oidcErrors.InvalidTarget()
@@ -411,7 +416,7 @@ export class GGOAuthServer {
                 if (typeof requested === "string" && !granted.includes(requested)) throw new oidcErrors.InvalidTarget()
                 const indicator = typeof requested === "string" ? requested : granted.length === 1 ? granted[0] : undefined
                 const resource = indicator ? this.usableResource(indicator, clientId) : this.defaultResource(clientId)
-                const claims = await resource.claims(String(rt.accountId))
+                const claims = await resource.claims(String(rt.accountId), this.clientOf(ctx))
                 if (!claims) throw new oidcErrors.InvalidGrant("subject is no longer valid")
                 prefetchedClaims.set(ctx, {resource: resource.resource(), claims})
                 return true
@@ -422,7 +427,7 @@ export class GGOAuthServer {
                 const resource = this.resource(at.resourceServer?.identifier())
                 if (!resource) return undefined
                 const prefetched = prefetchedClaims.get(_ctx)
-                const claims = prefetched?.resource === resource.resource() ? prefetched.claims : await resource.claims(String(at.accountId))
+                const claims = prefetched?.resource === resource.resource() ? prefetched.claims : await resource.claims(String(at.accountId), this.clientOf(_ctx))
                 if (!claims) throw new oidcErrors.InvalidGrant("subject is no longer valid")
                 return {data: resource.accessToken.encodeClaims(claims)}
             },
