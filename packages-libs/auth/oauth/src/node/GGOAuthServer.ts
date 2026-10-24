@@ -5,7 +5,7 @@ import {NOT_FOUND} from "@grest-ts/schema"
 import type {GGHttpServer} from "@grest-ts/http"
 import {GG_DISCOVERY} from "@grest-ts/discovery"
 import {GGLocator} from "@grest-ts/locator"
-import type {GGAuthAccessToken} from "@grest-ts/auth"
+import type {GGAccessPayload, GGAuthAccessToken} from "@grest-ts/auth"
 import {GGOAuthInteractionContract, type GGOAuthInteraction} from "../shared/interactionContract"
 import {toOidcAdapter, type GGOAuthStore} from "./store/GGOAuthStore"
 
@@ -16,33 +16,42 @@ export interface GGOAuthFirstPartyClient {
     postLogoutRedirectUris?: string[]
 }
 
-export interface GGOAuthServerOptions<C extends object> {
+// One API the server issues tokens for (RFC 8707 resource indicator → its own audience and claims).
+export interface GGOAuthResource<C extends object> {
+    // Absolute URL identifying the API; for an MCP server, its URL exactly as users enter it.
+    resource: () => string
+    // Tokens for this resource ARE this token kind (signer, audience — defaults to the resource —,
+    // TTL, claim schema), so the wire already verifying it accepts them. Signer must expose jwsKey().
+    accessToken: GGAuthAccessToken<C>
+    // At least one: a request granting no scope is refused. What they permit is up to the app.
+    scopes: [string, ...string[]]
+    // Re-run at every issuance (code exchange and each refresh), like GGAuthRefreshToken's resolve:
+    // permission changes apply on refresh. undefined = subject gone → invalid_grant.
+    claims: (subject: string, client: {clientId: string, firstParty: boolean}) => Promise<C | undefined>
+    // Only pre-registered first-party clients may get tokens for it.
+    firstPartyOnly?: boolean
+}
+
+export interface GGOAuthServerOptions {
     // Public origin of the authorization server, no path (e.g. https://auth.example.com).
     issuer: () => string
     store: GGOAuthStore
     // Derives the cookie-signing key and the ES256 key of the published JWKS (id tokens). Rotating it
     // signs everyone out of the authorization server; issued access/refresh tokens are unaffected.
     secret: () => string
-    // The access token clients receive IS this token kind — same signer, audience, TTL and claim
-    // schema — so the app's existing wire verifies it unchanged. Its signer must expose jwsKey().
-    accessToken: GGAuthAccessToken<C>
-    // RFC 8707 resource indicator of the protected API; also the default when a client sends none.
-    resource: () => string
-    // Scopes clients may request for the resource. At least one: a request granting no scope is
-    // refused. The token carries them in `scope`; what they permit is up to the app.
-    scopes: [string, ...string[]]
-    // Re-run at every issuance (code exchange and each refresh), like GGAuthRefreshToken's resolve:
-    // permission changes apply on refresh. undefined = subject gone → invalid_grant.
-    claims: (subject: string, client: {clientId: string}) => Promise<C | undefined>
+    // The first is the default for first-party clients; others default to the first one they may use.
+    resources: [GGOAuthResource<any>, ...GGOAuthResource<any>[]]
     // The app's login/consent page; it receives the interaction uid and uses GGOAuthInteractionContract.
     // `request` lets a first-party client's sign-in stay on the origin it was opened from.
     interactionUrl: (uid: string, request: {clientId: string, redirectUri: string, firstParty: boolean}) => string
     // Pre-registered app clients: no consent screen, silent re-auth while the login session lives.
     // Read once, on first use (config isn't readable at compose time).
     firstPartyClients?: () => GGOAuthFirstPartyClient[]
-    // Let any client self-register (RFC 7591) or identify by a metadata URL (CIMD, MCP's preferred way).
+    // Let any client self-register (RFC 7591).
     dynamicRegistration?: boolean
-    clientIdMetadataDocument?: boolean
+    // Accept clients identified by a metadata document URL (CIMD, what MCP clients prefer), fetched
+    // only from these hosts — e.g. a vendor's hosted client documents.
+    clientIdMetadataDocument?: {allowedHosts: () => string[]}
     // Absolute refresh lifetime: rotation never extends it (OAuth for browser apps, RFC 10017).
     refreshTtlSec?: number
     sessionTtlSec?: number
@@ -59,13 +68,13 @@ type Ticket = {uid: string, result: InteractionResults}
 // OAuth 2.1 authorization server on a GGHttpServer. Protocol (PKCE, DCR, CIMD, resource indicators,
 // RFC 9207 iss, refresh rotation + reuse revocation, revocation, discovery) is panva oidc-provider;
 // this class owns the grest-ts seams: mounting, storage, token claims and the login/consent handoff.
-export class GGOAuthServer<C extends object> {
+export class GGOAuthServer {
 
     private _provider: Provider | undefined
     private _firstParty: Map<string, GGOAuthFirstPartyClient> | undefined
-    private readonly options: GGOAuthServerOptions<C>
+    private readonly options: GGOAuthServerOptions
 
-    constructor(options: GGOAuthServerOptions<C>) {
+    constructor(options: GGOAuthServerOptions) {
         this.options = options
     }
 
@@ -99,13 +108,45 @@ export class GGOAuthServer<C extends object> {
         server.registerRoute("GET", "/.well-known/openid-configuration", handle, "GGOAuthServer")
         server.registerRoute("GET", "/.well-known/oauth-authorization-server", handle, "GGOAuthServer")
 
-        // Raw routes aren't announced by a schema, so a path-routing discovery proxy wouldn't forward them.
-        const scope = GGLocator.getScope()
-        server.onStart(() => {
-            GG_DISCOVERY.tryGet()?.registerRoutes([`${BASE}/`, "/.well-known/"].map(pathPrefix => ({
-                runtime: scope.serviceName, api: `GGOAuthServer${pathPrefix}`, pathPrefix, protocol: "http", port: server.port!,
-            })))
-        })
+        announce(server, [`${BASE}/`, "/.well-known/"])
+    }
+
+    // Serves `path` as an OAuth-protected resource: requests without a valid token for `resource` get
+    // 401 + `WWW-Authenticate: Bearer resource_metadata=…`, and its RFC 9728 metadata is published —
+    // the discovery handshake MCP clients run before signing in.
+    public protect<C extends object>(
+        server: GGHttpServer,
+        resource: GGOAuthResource<C>,
+        path: string,
+        handle: (req: IncomingMessage, res: ServerResponse, token: GGAccessPayload<C>) => Promise<void>,
+    ): void {
+        const metadataPath = `/.well-known/oauth-protected-resource${path}`
+        server.registerRoute("GET", metadataPath, async (_req, res) => {
+            res.writeHead(200, {"content-type": "application/json"})
+            res.end(JSON.stringify({
+                resource: resource.resource(),
+                authorization_servers: [this.options.issuer()],
+                scopes_supported: resource.scopes,
+                bearer_methods_supported: ["header"],
+            }))
+        }, "GGOAuthServer")
+        const guarded = async (req: IncomingMessage, res: ServerResponse) => {
+            const auth = req.headers.authorization
+            const token = auth?.toLowerCase().startsWith("bearer ")
+                ? await resource.accessToken.verify(auth.slice(7)).catch(() => undefined)
+                : undefined
+            if (!token) {
+                const metadataUrl = `${new URL(resource.resource()).origin}${metadataPath}`
+                res.writeHead(401, {
+                    "www-authenticate": `Bearer resource_metadata="${metadataUrl}", scope="${resource.scopes.join(" ")}"${auth ? `, error="invalid_token"` : ""}`,
+                })
+                res.end()
+                return
+            }
+            await handle(req, res, token)
+        }
+        for (const method of ["GET", "POST", "DELETE"] as const) server.registerRoute(method, path, guarded, "GGOAuthServer")
+        announce(server, [path])
     }
 
     // Implementation of GGOAuthInteractionContract; `subject` reads the signed-in user from the app's wire.
@@ -161,6 +202,7 @@ export class GGOAuthServer<C extends object> {
                 loopbackOnly: hosts.length > 0 && hosts.every(h => /^(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/.test(h)),
             },
             scopes: String(interaction.params.scope ?? "").split(" ").filter(Boolean),
+            resource: this.requestedResource(interaction.params, clientId).resource(),
         }
     }
 
@@ -209,16 +251,28 @@ export class GGOAuthServer<C extends object> {
         const requested = String(params.scope ?? "").split(" ").filter(Boolean)
         const oidc = requested.filter(s => OIDC_SCOPES.includes(s))
         if (oidc.length) grant.addOIDCScope(oidc.join(" "))
-        const resourceScopes = requested.filter(s => this.options.scopes.includes(s))
-        if (resourceScopes.length) grant.addResourceScope(this.options.resource(), resourceScopes.join(" "))
+        const resource = this.requestedResource(params, String(grant.clientId))
+        const resourceScopes = requested.filter(s => resource.scopes.includes(s))
+        if (resourceScopes.length) grant.addResourceScope(resource.resource(), resourceScopes.join(" "))
+    }
+
+    private requestedResource(params: Record<string, unknown>, clientId: string): GGOAuthResource<any> {
+        const indicator = typeof params.resource === "string" ? params.resource : undefined
+        return (indicator && this.resource(indicator)) || this.defaultResource(clientId)
+    }
+
+    private resource(indicator: string | undefined): GGOAuthResource<any> | undefined {
+        return this.options.resources.find(r => r.resource() === indicator)
+    }
+
+    private defaultResource(clientId: string): GGOAuthResource<any> {
+        const firstParty = this.firstParty.has(clientId)
+        return this.options.resources.find(r => firstParty || !r.firstPartyOnly) ?? this.options.resources[0]
     }
 
     private provider(): Provider {
         if (this._provider) return this._provider
         const o = this.options
-        const jws = o.accessToken.signer.jwsKey?.()
-        if (!jws) throw new Error("GGOAuthServer: accessToken signer must implement jwsKey() (e.g. HmacSigner)")
-        const accessTtlSec = Math.floor(o.accessToken.accessTtlMs / 1000)
         const refreshTtlSec = o.refreshTtlSec ?? 30 * 24 * 3600
         const firstParty = this.firstParty
 
@@ -234,12 +288,16 @@ export class GGOAuthServer<C extends object> {
                 token_endpoint_auth_method: "none",
                 grant_types: ["authorization_code", "refresh_token"],
                 response_types: ["code"],
+                application_type: "web",
             })),
             clientDefaults: {
                 grant_types: ["authorization_code", "refresh_token"],
                 response_types: ["code"],
                 token_endpoint_auth_method: "none",
                 id_token_signed_response_alg: "ES256",
+                // Undeclared = native: CLI clients (e.g. Claude Code's metadata document) redirect to a
+                // loopback address on a per-run port, which oidc-provider only port-matches for native.
+                application_type: "native",
             },
             routes: {
                 authorization: `${BASE}/authorize`, token: `${BASE}/token`, registration: `${BASE}/register`,
@@ -256,7 +314,11 @@ export class GGOAuthServer<C extends object> {
                 devInteractions: {enabled: false},
                 revocation: {enabled: true},
                 registration: {enabled: !!o.dynamicRegistration},
-                ...(o.clientIdMetadataDocument ? {clientIdMetadataDocument: {enabled: true, ack: "draft-02"}} : {}),
+                ...(o.clientIdMetadataDocument ? {clientIdMetadataDocument: {
+                    enabled: true,
+                    ack: "draft-02",
+                    allowFetch: async (_ctx: unknown, clientId: string) => o.clientIdMetadataDocument!.allowedHosts().includes(new URL(clientId).hostname),
+                }} : {}),
                 rpInitiatedLogout: {
                     enabled: true,
                     // Skip the provider's "do you want to sign out?" page. `logout=yes` is that page's
@@ -268,14 +330,18 @@ export class GGOAuthServer<C extends object> {
                 },
                 resourceIndicators: {
                     enabled: true,
-                    defaultResource: () => o.resource(),
+                    defaultResource: (_ctx, client) => this.defaultResource(client.clientId).resource(),
                     useGrantedResource: () => true,
-                    getResourceServerInfo: (_ctx, resource) => {
-                        if (resource !== o.resource()) throw new oidcErrors.InvalidTarget()
+                    getResourceServerInfo: (_ctx, indicator, client) => {
+                        const resource = this.resource(indicator)
+                        if (!resource) throw new oidcErrors.InvalidTarget()
+                        if (resource.firstPartyOnly && !firstParty.has(client.clientId)) throw new oidcErrors.InvalidTarget("resource not available to this client")
+                        const jws = resource.accessToken.signer.jwsKey?.()
+                        if (!jws) throw new Error("GGOAuthServer: a resource's accessToken signer must implement jwsKey() (e.g. HmacSigner)")
                         return {
-                            scope: o.scopes.join(" "),
-                            audience: o.accessToken.audience ?? resource,
-                            accessTokenTTL: accessTtlSec,
+                            scope: resource.scopes.join(" "),
+                            audience: resource.accessToken.audience ?? indicator,
+                            accessTokenTTL: Math.floor(resource.accessToken.accessTtlMs / 1000),
                             accessTokenFormat: "jwt",
                             jwt: {sign: {alg: jws.alg as "HS256", key: Buffer.from(jws.key)}},
                         }
@@ -301,13 +367,19 @@ export class GGOAuthServer<C extends object> {
             extraTokenClaims: async (_ctx: KoaContextWithOIDC, token) => {
                 if (token.kind !== "AccessToken") return undefined
                 const at = token as InstanceType<Provider["AccessToken"]>
-                const claims = await o.claims(String(at.accountId), {clientId: String(at.clientId)})
+                const resource = this.resource(at.resourceServer?.identifier())
+                if (!resource) return undefined
+                const clientId = String(at.clientId)
+                const claims = await resource.claims(String(at.accountId), {clientId, firstParty: firstParty.has(clientId)})
                 if (!claims) throw new oidcErrors.InvalidGrant("subject is no longer valid")
-                return {data: o.accessToken.encodeClaims(claims)}
+                return {data: resource.accessToken.encodeClaims(claims)}
             },
             findAccount: async (_ctx, sub) => ({accountId: sub, claims: async () => ({sub})}),
             ttl: {
-                AccessToken: accessTtlSec,
+                AccessToken: (_ctx, token) => {
+                    const resource = this.resource(token.resourceServer?.identifier())
+                    return resource ? Math.floor(resource.accessToken.accessTtlMs / 1000) : 600
+                },
                 AuthorizationCode: 60,
                 Interaction: 30 * 60,
                 Session: o.sessionTtlSec ?? 30 * 24 * 3600,
@@ -327,13 +399,23 @@ export class GGOAuthServer<C extends object> {
         // Resource scopes aren't OIDC scopes, so the provider leaves them out of its metadata.
         provider.use(async (ctx, next) => {
             await next()
-            if (ctx.oidc?.route === "discovery") (ctx.body as {scopes_supported: string[]}).scopes_supported = [...OIDC_SCOPES, ...o.scopes]
+            if (ctx.oidc?.route === "discovery") (ctx.body as {scopes_supported: string[]}).scopes_supported = [...OIDC_SCOPES, ...new Set(o.resources.flatMap(r => r.scopes))]
         })
         this._provider = provider
         return provider
     }
 }
 
+
+// Raw routes aren't announced by a schema, so a path-routing discovery proxy wouldn't forward them.
+function announce(server: GGHttpServer, pathPrefixes: string[]): void {
+    const scope = GGLocator.getScope()
+    server.onStart(() => {
+        GG_DISCOVERY.tryGet()?.registerRoutes(pathPrefixes.map(pathPrefix => ({
+            runtime: scope.serviceName, api: `GGOAuthServer${pathPrefix}`, pathPrefix, protocol: "http", port: server.port!,
+        })))
+    })
+}
 
 function hkdf(secret: string, info: string): Buffer {
     return Buffer.from(hkdfSync("sha256", secret, "", info, 32))

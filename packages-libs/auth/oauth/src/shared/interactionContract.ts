@@ -16,6 +16,8 @@ export const IsGGOAuthInteraction = IsObject({
     uid: IsString,
     client: IsGGOAuthInteractionClient,
     scopes: IsArray(IsString),
+    /** The resource (API) the client asks for access to. */
+    resource: IsString,
 })
 export type GGOAuthInteraction = typeof IsGGOAuthInteraction.infer
 

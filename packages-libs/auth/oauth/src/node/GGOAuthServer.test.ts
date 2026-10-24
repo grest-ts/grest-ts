@@ -5,7 +5,7 @@ import {GGHeader, GGHttp, GGHttpSchema, GGHttpServer, GGRpc} from "@grest-ts/htt
 import {GGContextKey} from "@grest-ts/context"
 import {IsArray, IsObject, IsString, NOT_AUTHORIZED} from "@grest-ts/schema"
 import {GGAuthAccessToken, HmacSigner} from "@grest-ts/auth"
-import {GGOAuthServer} from "./GGOAuthServer"
+import {GGOAuthServer, type GGOAuthResource} from "./GGOAuthServer"
 import {InMemoryOAuthStore} from "./store/InMemoryOAuthStore"
 import {GGOAuthInteractionContract} from "../shared/interactionContract"
 
@@ -39,7 +39,19 @@ const InteractionApi = new GGHttpSchema({
     routes: {get: GGRpc.GET("get"), approve: GGRpc.POST("approve"), deny: GGRpc.POST("deny")},
 })
 
-let oauth!: GGOAuthServer<Claims>
+// A second resource, as for an MCP server: its own audience, and tokens that grant no permissions.
+const MCP = `${ISSUER}/mcp`
+const mcpToken = new GGAuthAccessToken({signer: new HmacSigner("app-token-secret"), claimSchema: IsClaims, audience: "app-mcp"})
+const mcp: GGOAuthResource<Claims> = {
+    resource: () => MCP,
+    accessToken: mcpToken,
+    scopes: ["mcp"],
+    claims: async (sub) => userPermissions.get(sub) ? {permissions: []} : undefined,
+}
+// What a client asks for: the first-party app its API, anyone else the MCP resource.
+const target = (clientId: string) => clientId === "app" ? {resource: API, scope: "api"} : {resource: MCP, scope: "mcp"}
+
+let oauth!: GGOAuthServer
 
 class OAuthTestRuntime extends GGRuntime {
     public static readonly NAME = "oauth-test"
@@ -47,23 +59,30 @@ class OAuthTestRuntime extends GGRuntime {
     protected compose(): void {
         const server = new GGHttpServer({port})
         USER_WIRE_HANDLER.create(undefined)
-        oauth = new GGOAuthServer<Claims>({
+        oauth = new GGOAuthServer({
             issuer: () => ISSUER,
             store: new InMemoryOAuthStore(),
             secret: () => "oauth-test-secret",
-            accessToken: userToken,
-            resource: () => API,
-            scopes: ["api"],
-            claims: async (sub) => {
-                const permissions = userPermissions.get(sub)
-                return permissions ? {permissions} : undefined
-            },
+            resources: [{
+                resource: () => API,
+                accessToken: userToken,
+                scopes: ["api"],
+                firstPartyOnly: true,
+                claims: async (sub) => {
+                    const permissions = userPermissions.get(sub)
+                    return permissions ? {permissions} : undefined
+                },
+            }, mcp],
             interactionUrl: (uid) => `${APP_LOGIN}?uid=${uid}`,
             firstPartyClients: () => [{clientId: "app", name: "The App", redirectUris: [FIRST_PARTY_REDIRECT], postLogoutRedirectUris: ["https://app.example/"]}],
             dynamicRegistration: true,
-            clientIdMetadataDocument: true,
+            clientIdMetadataDocument: {allowedHosts: () => ["clients.example"]},
         })
         oauth.mount(server)
+        oauth.protect(server, mcp, "/mcp", async (_req, res, token) => {
+            res.writeHead(200, {"content-type": "application/json"})
+            res.end(JSON.stringify({hello: token.sub}))
+        })
         new GGHttp(server).http(InteractionApi, oauth.interactionApi(() => SUBJECT.get()!.sub))
     }
 }
@@ -101,7 +120,7 @@ const pkce = () => {
 
 function authorizeUrl(clientId: string, redirectUri: string, challenge: string, extra: Record<string, string> = {}): string {
     const url = new URL(`${ISSUER}/oauth/authorize`)
-    url.search = new URLSearchParams({client_id: clientId, response_type: "code", redirect_uri: redirectUri, state: "st", code_challenge: challenge, code_challenge_method: "S256", resource: API, scope: "api", ...extra}).toString()
+    url.search = new URLSearchParams({client_id: clientId, response_type: "code", redirect_uri: redirectUri, state: "st", code_challenge: challenge, code_challenge_method: "S256", ...target(clientId), ...extra}).toString()
     return url.href
 }
 
@@ -131,14 +150,16 @@ async function signIn(browser: Browser, clientId: string, redirectUri: string, s
     const callback = await browser.navigate(approved.data.redirectUrl)
     expect(callback.origin + callback.pathname).toBe(redirectUri)
     expect(callback.searchParams.get("iss")).toBe(ISSUER)
-    const tokens = await token({grant_type: "authorization_code", code: callback.searchParams.get("code")!, redirect_uri: redirectUri, client_id: clientId, code_verifier: verifier, resource: API})
+    const tokens = await token({grant_type: "authorization_code", code: callback.searchParams.get("code")!, redirect_uri: redirectUri, client_id: clientId, code_verifier: verifier, resource: target(clientId).resource})
     return {details: details.data, tokens}
 }
 
-async function register(): Promise<string> {
+// A web client unless it only redirects to loopback (a CLI, which leaves application_type out).
+async function register(redirectUris = [THIRD_PARTY_REDIRECT]): Promise<string> {
+    const native = redirectUris.every(u => new URL(u).protocol === "http:")
     const res = await fetch(`${ISSUER}/oauth/register`, {
         method: "POST", headers: {"content-type": "application/json"},
-        body: JSON.stringify({client_name: "Claude", redirect_uris: [THIRD_PARTY_REDIRECT], token_endpoint_auth_method: "none", grant_types: ["authorization_code", "refresh_token"]}),
+        body: JSON.stringify({client_name: "Claude", redirect_uris: redirectUris, token_endpoint_auth_method: "none", grant_types: ["authorization_code", "refresh_token"], ...(native ? {} : {application_type: "web"})}),
     })
     expect(res.status).toBe(201)
     return (await res.json()).client_id
@@ -163,7 +184,7 @@ describe("GGOAuthServer", () => {
         })
         expect(meta.token_endpoint_auth_methods_supported).toContain("none")
         expect(meta.response_types_supported).toEqual(["code"])
-        expect(meta.scopes_supported).toEqual(["openid", "offline_access", "api"])
+        expect(meta.scopes_supported).toEqual(["openid", "offline_access", "api", "mcp"])
         const jwks = await (await fetch(meta.jwks_uri)).json()
         expect(jwks.keys).toEqual([expect.objectContaining({kty: "EC", crv: "P-256", alg: "ES256"})])
         expect(jwks.keys[0].d).toBeUndefined()
@@ -183,17 +204,56 @@ describe("GGOAuthServer", () => {
         expect(again.searchParams.get("code")).toEqual(expect.any(String))
     })
 
-    test("third-party client registers, needs consent once, and gets the same token kind", async () => {
+    test("third-party client registers, needs consent once, and gets a token only for its resource", async () => {
         const clientId = await register()
         const browser = new Browser()
         const {details, tokens} = await signIn(browser, clientId, THIRD_PARTY_REDIRECT)
-        expect(details.client).toMatchObject({name: "Claude", firstParty: false, redirectHosts: ["claude.ai"], loopbackOnly: false})
-        expect((await userToken.verify(tokens.access_token)).data.permissions).toEqual(["read", "write"])
+        expect(details).toMatchObject({resource: MCP, client: {name: "Claude", firstParty: false, redirectHosts: ["claude.ai"], loopbackOnly: false}})
+        expect((await mcpToken.verify(tokens.access_token)).data.permissions).toEqual([])
+        await expect(userToken.verify(tokens.access_token)).rejects.toThrow()
 
         const again = await browser.navigate(authorizeUrl(clientId, THIRD_PARTY_REDIRECT, pkce().challenge))
         expect(again.searchParams.get("code")).toEqual(expect.any(String))
 
         expect(await oauth.listGrants("alice")).toEqual(expect.arrayContaining([expect.objectContaining({clientId, clientName: "Claude"})]))
+    })
+
+    test("a third-party client can't get a token for a first-party-only resource", async () => {
+        const clientId = await register()
+        const res = await new Browser().get(authorizeUrl(clientId, THIRD_PARTY_REDIRECT, pkce().challenge, {resource: API, scope: "api"}))
+        expect(res.status).toBe(303)
+        expect(new URL(res.headers.get("location")!).searchParams.get("error")).toBe("invalid_target")
+    })
+
+    test("a protected resource challenges with its metadata, then serves a valid token", async () => {
+        const anon = await fetch(MCP, {method: "POST"})
+        expect(anon.status).toBe(401)
+        expect(anon.headers.get("www-authenticate")).toBe(`Bearer resource_metadata="${ISSUER}/.well-known/oauth-protected-resource/mcp", scope="mcp"`)
+        const prm = await (await fetch(`${ISSUER}/.well-known/oauth-protected-resource/mcp`)).json()
+        expect(prm).toEqual({resource: MCP, authorization_servers: [ISSUER], scopes_supported: ["mcp"], bearer_methods_supported: ["header"]})
+
+        const app = await signIn(new Browser(), "app", FIRST_PARTY_REDIRECT)
+        expect((await fetch(MCP, {method: "POST", headers: {authorization: `Bearer ${app.tokens.access_token}`}})).status).toBe(401)
+        const {tokens} = await signIn(new Browser(), await register(), THIRD_PARTY_REDIRECT)
+        expect(await (await fetch(MCP, {method: "POST", headers: {authorization: `Bearer ${tokens.access_token}`}})).json()).toEqual({hello: "alice"})
+    })
+
+    test("a loopback (CLI) client matches on any port and is asked for consent every time", async () => {
+        const clientId = await register(["http://127.0.0.1/callback", "http://localhost/callback"])
+        const login = await new Browser().navigate(authorizeUrl(clientId, "http://localhost:51234/callback", pkce().challenge))
+        expect(login.origin + login.pathname).toBe(APP_LOGIN)
+        const browser = new Browser()
+        const {details} = await signIn(browser, clientId, "http://127.0.0.1:40123/callback")
+        expect(details.client.loopbackOnly).toBe(true)
+        // Any local process can claim a loopback redirect, so an existing grant isn't reused silently.
+        const again = await browser.navigate(authorizeUrl(clientId, "http://127.0.0.1:40999/callback", pkce().challenge))
+        expect(again.origin + again.pathname).toBe(APP_LOGIN)
+    })
+
+    test("client metadata documents are fetched only from allowed hosts", async () => {
+        const res = await new Browser().get(authorizeUrl("https://elsewhere.example/client.json", THIRD_PARTY_REDIRECT, pkce().challenge))
+        expect(res.status).toBe(400)
+        expect(await res.text()).toContain("invalid_client")
     })
 
     test("deny sends access_denied to the client", async () => {
