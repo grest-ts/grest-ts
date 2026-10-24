@@ -322,11 +322,14 @@ describe("GGOAuthServer", () => {
         const mcpClient = await register()
         const connected = await signIn(browser, mcpClient, THIRD_PARTY_REDIRECT)
         const logoutUrl = `/oauth/logout?client_id=app&post_logout_redirect_uri=${encodeURIComponent("https://app.example/")}`
-        // Linked from another site: the user must click to confirm.
-        const crossSite = await (await browser.get(logoutUrl, {headers: {"sec-fetch-site": "cross-site"}})).text()
-        expect(crossSite).not.toContain("document.forms[0].submit()")
-        expect(crossSite).toContain(`<button name="logout" value="yes">`)
-        const page = await (await browser.get(logoutUrl, {headers: {"sec-fetch-site": "same-site"}})).text()
+        // Linked from any other page: the user must click to confirm.
+        for (const referer of [undefined, "https://workspace.app.example/"]) {
+            const linked = await (await browser.get(logoutUrl, {headers: referer ? {referer} : {}})).text()
+            expect(linked).not.toContain("document.forms[0].submit()")
+            expect(linked).toContain(`<button name="logout" value="yes">`)
+        }
+        const page = await (await browser.get(logoutUrl, {headers: {referer: "https://app.example/some/page"}})).text()
+        expect(page).toContain("document.forms[0].submit()")
         const action = page.match(/action="([^"]+)"/)![1]
         const fields = Object.fromEntries([...page.matchAll(/<input type="hidden" name="([^"]+)" value="([^"]*)"/g)].map(m => [m[1], m[2]]))
         expect(fields.logout).toBe("yes")
@@ -358,7 +361,8 @@ describe("GGOAuthServer", () => {
         const {tokens} = await signIn(new Browser(), "app", FIRST_PARTY_REDIRECT)
         const body = {grant_type: "refresh_token", refresh_token: tokens.refresh_token, client_id: "app"}
         const results = await Promise.all([token(body), token(body)])
-        expect(results.filter(r => r.access_token)).toHaveLength(1)
+        // Never two live lineages from one token; the loser gets invalid_grant (not a retryable 5xx).
+        expect(results.map(r => r.error ?? "ok").sort()).toEqual(["invalid_grant", "ok"])
     })
 
     test("the interaction API requires the app's signed-in user", async () => {

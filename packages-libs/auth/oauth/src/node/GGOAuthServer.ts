@@ -64,7 +64,7 @@ const BASE = "/oauth"
 const OIDC_SCOPES = ["openid", "offline_access"]
 const TICKET = "GGOAuthTicket"
 // Claims resolved during a refresh before the presented token was consumed (see rotateRefreshToken).
-const prefetchedClaims = new WeakMap<object, object>()
+const prefetchedClaims = new WeakMap<object, {resource: string, claims: object}>()
 
 type Ticket = {uid: string, result: InteractionResults}
 
@@ -342,10 +342,11 @@ export class GGOAuthServer {
                     // button value: without it only the requesting client is signed out, not the session.
                     logoutSource: async (ctx, form) => {
                         if (!form.includes("</form>")) throw new Error("GGOAuthServer: oidc-provider's logout form changed; can't confirm logout")
-                        // Another site can link here; only a same-site navigation (the app's own sign-out)
-                        // skips the confirmation click.
-                        const fetchSite = ctx.get("sec-fetch-site")
-                        if (fetchSite === "same-origin" || fetchSite === "same-site") {
+                        // Any page can link here; only a first-party client's own page (its redirect origin as
+                        // Referer) skips the confirmation click.
+                        const client = ctx.oidc.client && firstParty.get(ctx.oidc.client.clientId)
+                        const referer = URL.parse(ctx.get("referer"))?.origin
+                        if (client && referer && client.redirectUris.some(u => new URL(u).origin === referer)) {
                             const confirmed = form.replace("</form>", `<input type="hidden" name="logout" value="yes"/></form>`)
                             ctx.body = `<!DOCTYPE html><html><body>${confirmed}<script>document.forms[0].submit()</script></body></html>`
                             return
@@ -401,7 +402,7 @@ export class GGOAuthServer {
                 const resource = this.requestedResource({resource: indicator}, String(rt.clientId))
                 const claims = await resource.claims(String(rt.accountId))
                 if (!claims) throw new oidcErrors.InvalidGrant("subject is no longer valid")
-                prefetchedClaims.set(ctx, claims)
+                prefetchedClaims.set(ctx, {resource: resource.resource(), claims})
                 return true
             },
             extraTokenClaims: async (_ctx: KoaContextWithOIDC, token) => {
@@ -409,7 +410,8 @@ export class GGOAuthServer {
                 const at = token as InstanceType<Provider["AccessToken"]>
                 const resource = this.resource(at.resourceServer?.identifier())
                 if (!resource) return undefined
-                const claims = prefetchedClaims.get(_ctx) ?? await resource.claims(String(at.accountId))
+                const prefetched = prefetchedClaims.get(_ctx)
+                const claims = prefetched?.resource === resource.resource() ? prefetched.claims : await resource.claims(String(at.accountId))
                 if (!claims) throw new oidcErrors.InvalidGrant("subject is no longer valid")
                 return {data: resource.accessToken.encodeClaims(claims)}
             },

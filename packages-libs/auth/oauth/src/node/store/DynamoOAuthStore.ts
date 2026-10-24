@@ -1,5 +1,6 @@
 import {IsNumber, IsObject, IsString} from "@grest-ts/schema"
 import {type GGDynamoDb, GGDynamoDbTable} from "@grest-ts/db-dynamodb"
+import {errors as oidcErrors} from "oidc-provider"
 import type {GGOAuthPayload, GGOAuthStore} from "./GGOAuthStore"
 
 const IsOAuthRow = IsObject({
@@ -53,8 +54,9 @@ export class DynamoOAuthStore extends GGDynamoDbTable<OAuthRow, "pk"> implements
         if (!row) return
         const consumedAt = Math.floor(Date.now() / 1000)
         const payload = JSON.stringify({...JSON.parse(row.payload), consumed: consumedAt})
-        if (!await this.putConditional({...row, payload, consumedAt}, "attribute_not_exists(consumedAt)")) {
-            throw new Error(`OAuth ${model} already consumed`)
+        // attribute_exists(pk): a row revoked meanwhile stays gone instead of being re-created.
+        if (!await this.putConditional({...row, payload, consumedAt}, "attribute_exists(pk) AND attribute_not_exists(consumedAt)")) {
+            throw new oidcErrors.InvalidGrant(`${model} already used`)
         }
     }
 

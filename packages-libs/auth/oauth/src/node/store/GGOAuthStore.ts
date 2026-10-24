@@ -12,7 +12,8 @@ export interface GGOAuthStore {
     find(model: string, id: string): Promise<GGOAuthPayload | undefined>
     findByUid(model: string, uid: string): Promise<GGOAuthPayload | undefined>
     // Mark consumed (not delete): a second use of a code / rotated refresh token is detected as replay.
-    // Must be atomic — throw if it was already consumed, so of two concurrent redemptions one fails.
+    // Must be atomic — throw oidc-provider's InvalidGrant if it was already consumed, so of two
+    // concurrent redemptions one fails cleanly (a 5xx would be retried, and the retry is reuse).
     consume(model: string, id: string): Promise<void>
     destroy(model: string, id: string): Promise<void>
     // Every model row carrying this grantId (codes, refresh tokens, the grant itself).

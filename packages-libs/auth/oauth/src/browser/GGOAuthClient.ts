@@ -51,7 +51,10 @@ export class GGOAuthClient<I = unknown> {
     public authorize = async (opts?: {returnTo?: string}): Promise<void> => {
         if (this.leaving) return await new Promise(() => undefined)
         this.leaving = true
-        const meta = await this.discover()
+        const meta = await this.discover().catch(err => {
+            this.leaving = false
+            throw err
+        })
         const verifier = randomString()
         const pending: Pending = {state: randomString(), verifier, returnTo: opts?.returnTo}
         sessionStorage.setItem(PENDING_KEY, JSON.stringify(pending))
@@ -102,9 +105,14 @@ export class GGOAuthClient<I = unknown> {
     // Revokes the refresh token and ends the authorization server's login session (redirects away).
     public logout = async (refreshToken: string | undefined): Promise<void> => {
         this.leaving = true
-        const meta = await this.discover()
+        const meta = await this.discover().catch(err => {
+            this.leaving = false
+            throw err
+        })
         if (refreshToken && meta.revocation_endpoint) {
-            await fetch(meta.revocation_endpoint, {method: "POST", body: new URLSearchParams({token: refreshToken, client_id: this.config.clientId})}).catch(() => undefined)
+            // Not awaited (keepalive outlives the navigation): the sooner the redirect, the shorter the
+            // window in which other tabs could still sign in silently.
+            void fetch(meta.revocation_endpoint, {method: "POST", keepalive: true, body: new URLSearchParams({token: refreshToken, client_id: this.config.clientId})}).catch(() => undefined)
         }
         if (!meta.end_session_endpoint) {
             this.leaving = false

@@ -1,3 +1,4 @@
+import {errors as oidcErrors} from "oidc-provider"
 import type {GGOAuthPayload, GGOAuthStore} from "./GGOAuthStore"
 
 type Row = {model: string, id: string, payload: GGOAuthPayload, expiresAt: number | undefined}
@@ -24,7 +25,7 @@ export class InMemoryOAuthStore implements GGOAuthStore {
     public consume = async (model: string, id: string): Promise<void> => {
         const row = this.rows.get(`${model}:${id}`)
         if (!row) return
-        if (row.payload.consumed !== undefined) throw new Error(`OAuth ${model} already consumed`)
+        if (row.payload.consumed !== undefined) throw new oidcErrors.InvalidGrant(`${model} already used`)
         row.payload = {...row.payload, consumed: Math.floor(this.now() / 1000)}
     }
 
