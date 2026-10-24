@@ -8,13 +8,16 @@ export interface GGOAuthResult<I> {
 }
 
 export interface GGOAuthClientConfig<I> {
-    issuer: string
+    // Where the authorization server's metadata is (`{server}/.well-known/oauth-authorization-server`).
+    // Responses are checked against the `issuer` it declares.
+    server: string
     clientId: string
     redirectUri: string
     postLogoutRedirectUri?: string
-    // RFC 8707 resource the access token is for. Always sent: a request with `openid` and no
-    // resource would get a userinfo-only token instead of an API token.
-    resource: string
+    // RFC 8707 resource the access token is for; defaults to the issuer (an authorization server
+    // protecting its own API). Always sent: a request with `openid` and no resource would get a
+    // userinfo-only token instead of an API token.
+    resource?: string
     scope?: string
     // The session's identity `data`, derived from the issued access token.
     identity: (accessToken: string) => I
@@ -24,7 +27,7 @@ export interface GGOAuthClientConfig<I> {
 }
 
 type Pending = {state: string, verifier: string, returnTo?: string}
-type Metadata = {authorization_endpoint: string, token_endpoint: string, revocation_endpoint?: string, end_session_endpoint?: string}
+type Metadata = {issuer: string, authorization_endpoint: string, token_endpoint: string, revocation_endpoint?: string, end_session_endpoint?: string}
 
 const PENDING_KEY = "gg-oauth-pending"
 
@@ -36,6 +39,9 @@ const PENDING_KEY = "gg-oauth-pending"
 export class GGOAuthClient<I = unknown> {
 
     private metadata: Promise<Metadata> | undefined
+    // Set when a redirect away has started: a second one (e.g. a signed-out view starting sign-in
+    // while logout is redirecting) would race it.
+    private leaving = false
 
     private readonly config: GGOAuthClientConfig<I>
 
@@ -45,6 +51,8 @@ export class GGOAuthClient<I = unknown> {
 
     // Redirects the browser to the authorization server; resolves never (the page unloads).
     public authorize = async (opts?: {returnTo?: string, prompt?: "login" | "none"}): Promise<void> => {
+        if (this.leaving) return await new Promise(() => undefined)
+        this.leaving = true
         const meta = await this.discover()
         const verifier = randomString()
         const pending: Pending = {state: randomString(), verifier, returnTo: opts?.returnTo}
@@ -57,7 +65,7 @@ export class GGOAuthClient<I = unknown> {
             state: pending.state,
             code_challenge: await s256(verifier),
             code_challenge_method: "S256",
-            resource: this.config.resource,
+            resource: this.config.resource ?? meta.issuer,
             ...(this.config.scope ? {scope: this.config.scope} : {}),
             ...(opts?.prompt ? {prompt: opts.prompt} : {}),
         }).toString()
@@ -79,7 +87,7 @@ export class GGOAuthClient<I = unknown> {
         if (!pending || params.get("state") !== pending.state) throw new NOT_AUTHORIZED({debugMessage: "OAuth state mismatch"})
         // RFC 9207: reject a response from a different authorization server (mix-up attack).
         const iss = params.get("iss")
-        if (iss !== null && iss !== this.config.issuer) throw new NOT_AUTHORIZED({debugMessage: "OAuth issuer mismatch"})
+        if (iss !== null && iss !== (await this.discover()).issuer) throw new NOT_AUTHORIZED({debugMessage: "OAuth issuer mismatch"})
         const error = params.get("error")
         if (error) throw new NOT_AUTHORIZED({debugMessage: `OAuth ${error}: ${params.get("error_description") ?? ""}`})
         const result = await this.token({
@@ -96,6 +104,7 @@ export class GGOAuthClient<I = unknown> {
 
     // Revokes the refresh token and ends the authorization server's login session (redirects away).
     public logout = async (refreshToken: string | undefined): Promise<void> => {
+        this.leaving = true
         const meta = await this.discover()
         if (refreshToken && meta.revocation_endpoint) {
             await fetch(meta.revocation_endpoint, {method: "POST", body: new URLSearchParams({token: refreshToken, client_id: this.config.clientId})}).catch(() => undefined)
@@ -114,7 +123,7 @@ export class GGOAuthClient<I = unknown> {
         const meta = await this.discover()
         const res = await fetch(meta.token_endpoint, {
             method: "POST",
-            body: new URLSearchParams({...body, client_id: this.config.clientId, resource: this.config.resource}),
+            body: new URLSearchParams({...body, client_id: this.config.clientId, resource: this.config.resource ?? meta.issuer}),
         })
         const json = await res.json().catch(() => ({})) as Record<string, unknown>
         if (!res.ok) {
@@ -134,7 +143,7 @@ export class GGOAuthClient<I = unknown> {
     }
 
     private discover(): Promise<Metadata> {
-        this.metadata ??= fetch(`${this.config.issuer}/.well-known/oauth-authorization-server`).then(async res => {
+        this.metadata ??= fetch(`${this.config.server}/.well-known/oauth-authorization-server`).then(async res => {
             if (!res.ok) throw new Error(`OAuth discovery failed: ${res.status}`)
             return await res.json() as Metadata
         })
@@ -143,12 +152,12 @@ export class GGOAuthClient<I = unknown> {
     }
 }
 
-// The `data` claim of a grest-ts access token, unverified — for UI identity only; the server
-// re-verifies every request.
-export function decodeAccessTokenData<T>(accessToken: string): T {
+// A grest-ts access token's payload, unverified — for UI identity only; the server re-verifies
+// every request.
+export function decodeAccessToken<T>(accessToken: string): {sub: string, exp: number, data: T} {
     const payload = accessToken.split(".")[1] ?? ""
     const json = atob(payload.replace(/-/g, "+").replace(/_/g, "/").padEnd(Math.ceil(payload.length / 4) * 4, "="))
-    return (JSON.parse(new TextDecoder().decode(Uint8Array.from(json, c => c.charCodeAt(0)))) as {data: T}).data
+    return JSON.parse(new TextDecoder().decode(Uint8Array.from(json, c => c.charCodeAt(0)))) as {sub: string, exp: number, data: T}
 }
 
 function randomString(): string {

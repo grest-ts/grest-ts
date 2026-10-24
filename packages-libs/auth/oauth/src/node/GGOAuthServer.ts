@@ -35,7 +35,8 @@ export interface GGOAuthServerOptions<C extends object> {
     // permission changes apply on refresh. undefined = subject gone → invalid_grant.
     claims: (subject: string, client: {clientId: string}) => Promise<C | undefined>
     // The app's login/consent page; it receives the interaction uid and uses GGOAuthInteractionContract.
-    interactionUrl: (uid: string) => string
+    // `request` lets a first-party client's sign-in stay on the origin it was opened from.
+    interactionUrl: (uid: string, request: {clientId: string, redirectUri: string, firstParty: boolean}) => string
     // Pre-registered app clients: no consent screen, silent re-auth while the login session lives.
     // Read once, on first use (config isn't readable at compose time).
     firstPartyClients?: () => GGOAuthFirstPartyClient[]
@@ -79,7 +80,15 @@ export class GGOAuthServer<C extends object> {
             const interaction = path.match(/^\/oauth\/interaction\/([^/]+)(\/complete)?$/)
             if (interaction && req.method === "GET") {
                 if (interaction[2]) return this.finishInteraction(req, res, interaction[1])
-                res.writeHead(303, {location: this.options.interactionUrl(interaction[1])})
+                const found = await this.provider().Interaction.find(interaction[1])
+                if (!found) {
+                    res.writeHead(400, {"content-type": "text/plain"})
+                    res.end("Sign-in request expired")
+                    return
+                }
+                const clientId = String(found.params.client_id)
+                const redirectUri = String(found.params.redirect_uri)
+                res.writeHead(303, {location: this.options.interactionUrl(interaction[1], {clientId, redirectUri, firstParty: this.firstParty.has(clientId)})})
                 res.end()
                 return
             }
@@ -170,10 +179,12 @@ export class GGOAuthServer<C extends object> {
     // The result is applied only when the browser that started the flow (it holds the interaction
     // cookie) follows the redirect: a user approving someone else's flow can't hand them a code.
     private async ticket(uid: string, result: InteractionResults): Promise<string> {
-        if (!await this.provider().Interaction.find(uid)) throw new NOT_FOUND({debugMessage: "Unknown or expired OAuth interaction"})
+        const interaction = await this.provider().Interaction.find(uid)
+        if (!interaction) throw new NOT_FOUND({debugMessage: "Unknown or expired OAuth interaction"})
         const id = randomBytes(24).toString("base64url")
         await this.options.store.upsert(TICKET, id, {uid, result} satisfies Ticket, 120)
-        return `${this.options.issuer()}${BASE}/interaction/${uid}/complete?ticket=${id}`
+        // The origin the browser started on: its interaction cookie lives there.
+        return `${new URL(interaction.returnTo).origin}${BASE}/interaction/${uid}/complete?ticket=${id}`
     }
 
     private async finishInteraction(req: IncomingMessage, res: ServerResponse, uid: string): Promise<void> {
@@ -238,6 +249,8 @@ export class GGOAuthServer<C extends object> {
             },
             interactions: {url: (_ctx, interaction) => `${BASE}/interaction/${interaction.uid}`},
             scopes: OIDC_SCOPES,
+            // OAuth 2.1: authorization code only (no implicit / hybrid).
+            responseTypes: ["code"],
             pkce: {required: () => true},
             features: {
                 devInteractions: {enabled: false},
@@ -246,9 +259,11 @@ export class GGOAuthServer<C extends object> {
                 ...(o.clientIdMetadataDocument ? {clientIdMetadataDocument: {enabled: true, ack: "draft-02"}} : {}),
                 rpInitiatedLogout: {
                     enabled: true,
-                    // Skip the provider's "do you want to sign out?" page.
+                    // Skip the provider's "do you want to sign out?" page. `logout=yes` is that page's
+                    // button value: without it only the requesting client is signed out, not the session.
                     logoutSource: async (ctx, form) => {
-                        ctx.body = `<!DOCTYPE html><html><body>${form}<script>document.forms[0].submit()</script></body></html>`
+                        const confirmed = form.replace("</form>", `<input type="hidden" name="logout" value="yes"/></form>`)
+                        ctx.body = `<!DOCTYPE html><html><body>${confirmed}<script>document.forms[0].submit()</script></body></html>`
                     },
                 },
                 resourceIndicators: {
@@ -309,6 +324,11 @@ export class GGOAuthServer<C extends object> {
         }
         const provider = new Provider(o.issuer(), config)
         provider.proxy = !!o.proxy
+        // Resource scopes aren't OIDC scopes, so the provider leaves them out of its metadata.
+        provider.use(async (ctx, next) => {
+            await next()
+            if (ctx.oidc?.route === "discovery") (ctx.body as {scopes_supported: string[]}).scopes_supported = [...OIDC_SCOPES, ...o.scopes]
+        })
         this._provider = provider
         return provider
     }

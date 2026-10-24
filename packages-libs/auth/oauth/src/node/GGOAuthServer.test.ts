@@ -59,7 +59,7 @@ class OAuthTestRuntime extends GGRuntime {
                 return permissions ? {permissions} : undefined
             },
             interactionUrl: (uid) => `${APP_LOGIN}?uid=${uid}`,
-            firstPartyClients: () => [{clientId: "app", name: "The App", redirectUris: [FIRST_PARTY_REDIRECT]}],
+            firstPartyClients: () => [{clientId: "app", name: "The App", redirectUris: [FIRST_PARTY_REDIRECT], postLogoutRedirectUris: ["https://app.example/"]}],
             dynamicRegistration: true,
             clientIdMetadataDocument: true,
         })
@@ -72,8 +72,8 @@ class OAuthTestRuntime extends GGRuntime {
 class Browser {
     private readonly jar = new Map<string, string>()
 
-    async get(url: string): Promise<Response> {
-        const res = await fetch(new URL(url, ISSUER), {redirect: "manual", headers: this.jar.size ? {cookie: [...this.jar].map(([k, v]) => `${k}=${v}`).join("; ")} : {}})
+    async get(url: string, init: RequestInit = {}): Promise<Response> {
+        const res = await fetch(new URL(url, ISSUER), {...init, redirect: "manual", headers: {...init.headers as Record<string, string>, ...(this.jar.size ? {cookie: [...this.jar].map(([k, v]) => `${k}=${v}`).join("; ")} : {})}})
         for (const c of res.headers.getSetCookie()) {
             const [kv] = c.split(";")
             const i = kv.indexOf("=")
@@ -162,6 +162,8 @@ describe("GGOAuthServer", () => {
             client_id_metadata_document_supported: true,
         })
         expect(meta.token_endpoint_auth_methods_supported).toContain("none")
+        expect(meta.response_types_supported).toEqual(["code"])
+        expect(meta.scopes_supported).toEqual(["openid", "offline_access", "api"])
         const jwks = await (await fetch(meta.jwks_uri)).json()
         expect(jwks.keys).toEqual([expect.objectContaining({kty: "EC", crv: "P-256", alg: "ES256"})])
         expect(jwks.keys[0].d).toBeUndefined()
@@ -242,6 +244,20 @@ describe("GGOAuthServer", () => {
         await oauth.revokeAll("alice")
         expect((await token({grant_type: "refresh_token", refresh_token: app.tokens.refresh_token, client_id: "app"})).error).toBe("invalid_grant")
         const after = await appBrowser.navigate(authorizeUrl("app", FIRST_PARTY_REDIRECT, pkce().challenge))
+        expect(after.origin + after.pathname).toBe(APP_LOGIN)
+    })
+
+    test("logout ends the login session, so the next sign-in asks again", async () => {
+        const browser = new Browser()
+        await signIn(browser, "app", FIRST_PARTY_REDIRECT)
+        const page = await (await browser.get(`/oauth/logout?client_id=app&post_logout_redirect_uri=${encodeURIComponent("https://app.example/")}`)).text()
+        const action = page.match(/action="([^"]+)"/)![1]
+        const fields = Object.fromEntries([...page.matchAll(/<input type="hidden" name="([^"]+)" value="([^"]*)"/g)].map(m => [m[1], m[2]]))
+        expect(fields.logout).toBe("yes")
+        const done = await browser.get(action, {method: "POST", headers: {"content-type": "application/x-www-form-urlencoded"}, body: new URLSearchParams(fields).toString()})
+        expect(done.headers.get("location")).toBe("https://app.example/")
+
+        const after = await browser.navigate(authorizeUrl("app", FIRST_PARTY_REDIRECT, pkce().challenge))
         expect(after.origin + after.pathname).toBe(APP_LOGIN)
     })
 
