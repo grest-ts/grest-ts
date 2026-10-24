@@ -101,7 +101,7 @@ export class GGOAuthClient<I = unknown> {
     public logout = (refreshToken: string | undefined): Promise<void> => this.leave(async () => {
         const meta = await this.discover()
         const revoke = refreshToken && meta.revocation_endpoint
-            ? fetch(meta.revocation_endpoint, {method: "POST", keepalive: true, body: new URLSearchParams({token: refreshToken, client_id: this.config.clientId})}).then(() => undefined, () => undefined)
+            ? fetch(meta.revocation_endpoint, {method: "POST", keepalive: true, signal: AbortSignal.timeout(5000), body: new URLSearchParams({token: refreshToken, client_id: this.config.clientId})}).then(() => undefined, () => undefined)
             : Promise.resolve()
         if (!meta.end_session_endpoint) {
             await revoke
@@ -122,6 +122,8 @@ export class GGOAuthClient<I = unknown> {
         const run = (async () => {
             const url = await target()
             if (url === undefined) return
+            // Back from the back/forward cache (navigation undone): the redirect is over.
+            window.addEventListener("pageshow", () => { if (this.leaving === run) this.leaving = undefined }, {once: true})
             window.location.assign(url)
             await new Promise(() => undefined)
         })()

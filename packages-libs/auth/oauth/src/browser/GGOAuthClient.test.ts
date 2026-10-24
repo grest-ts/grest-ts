@@ -9,8 +9,6 @@ const METADATA = {
     revocation_endpoint: `${SERVER}/oauth/revoke`,
 }
 
-const flush = () => new Promise(r => setTimeout(r, 0))
-
 describe("GGOAuthClient redirects", () => {
     let assign: ReturnType<typeof vi.fn>
     let fetchMock: ReturnType<typeof vi.fn>
@@ -23,7 +21,7 @@ describe("GGOAuthClient redirects", () => {
             if (url.endsWith("/.well-known/oauth-authorization-server")) return new Response(JSON.stringify(metadata))
             return new Response("")
         })
-        vi.stubGlobal("window", {location: {assign}})
+        vi.stubGlobal("window", {location: {assign}, addEventListener: vi.fn()})
         vi.stubGlobal("sessionStorage", {setItem: vi.fn(), getItem: vi.fn(), removeItem: vi.fn()})
         vi.stubGlobal("fetch", fetchMock)
     })
@@ -36,9 +34,7 @@ describe("GGOAuthClient redirects", () => {
         fetchMock.mockImplementationOnce(async () => new Response("down", {status: 503}))
         await expect(oauth.authorize()).rejects.toThrow()
         void oauth.authorize()
-        await flush()
-        await flush()
-        expect(assign).toHaveBeenCalledTimes(1)
+        await vi.waitFor(() => expect(assign).toHaveBeenCalledTimes(1))
         expect(new URL(assign.mock.calls[0][0]).searchParams.get("code_challenge_method")).toBe("S256")
     })
 
@@ -47,9 +43,7 @@ describe("GGOAuthClient redirects", () => {
         metadata.end_session_endpoint = `${SERVER}/oauth/logout`
         void oauth.logout("rt")
         void oauth.authorize()
-        await flush()
-        await flush()
-        expect(assign).toHaveBeenCalledTimes(1)
+        await vi.waitFor(() => expect(assign).toHaveBeenCalledTimes(1))
         expect(assign.mock.calls[0][0]).toContain("/oauth/logout")
     })
 
@@ -59,10 +53,19 @@ describe("GGOAuthClient redirects", () => {
         const logout = oauth.logout(undefined)
         void oauth.authorize()
         await expect(logout).rejects.toThrow()
-        await flush()
-        await flush()
-        expect(assign).toHaveBeenCalledTimes(1)
+        await vi.waitFor(() => expect(assign).toHaveBeenCalledTimes(1))
         expect(assign.mock.calls[0][0]).toContain("/oauth/authorize")
+    })
+
+    test("coming back from the back/forward cache releases the redirect", async () => {
+        const oauth = client()
+        void oauth.authorize()
+        await vi.waitFor(() => expect(assign).toHaveBeenCalledTimes(1))
+        const [event, onPageShow] = (window.addEventListener as ReturnType<typeof vi.fn>).mock.calls[0]
+        expect(event).toBe("pageshow")
+        onPageShow()
+        void oauth.authorize()
+        await vi.waitFor(() => expect(assign).toHaveBeenCalledTimes(2))
     })
 
     test("without an end-session endpoint, logout resolves once the token is revoked", async () => {

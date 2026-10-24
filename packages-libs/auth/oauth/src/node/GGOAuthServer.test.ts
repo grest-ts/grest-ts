@@ -357,6 +357,14 @@ describe("GGOAuthServer", () => {
         expect((await token({grant_type: "refresh_token", refresh_token: tokens.refresh_token, client_id: "app"})).access_token).toEqual(expect.any(String))
     })
 
+    test("a refresh asking for a resource the token can't have fails without using the token up", async () => {
+        const clientId = await register()
+        const {tokens} = await signIn(new Browser(), clientId, THIRD_PARTY_REDIRECT)
+        const wrong = await token({grant_type: "refresh_token", refresh_token: tokens.refresh_token, client_id: clientId, resource: API})
+        expect(wrong.error).toBe("invalid_target")
+        expect((await token({grant_type: "refresh_token", refresh_token: tokens.refresh_token, client_id: clientId})).access_token).toEqual(expect.any(String))
+    })
+
     test("of two concurrent refreshes with one token, only one succeeds", async () => {
         const {tokens} = await signIn(new Browser(), "app", FIRST_PARTY_REDIRECT)
         const body = {grant_type: "refresh_token", refresh_token: tokens.refresh_token, client_id: "app"}

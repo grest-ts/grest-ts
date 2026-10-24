@@ -24,6 +24,7 @@ type OAuthRow = typeof IsOAuthRow.infer
 // accountId is written only for the models looked up by account, so the index stays small: every
 // spent refresh token is kept until expiry (reuse detection) and would otherwise land in it.
 const BY_ACCOUNT = new Set(["Grant", "Session"])
+const REDEEMABLE = new Set(["AuthorizationCode", "RefreshToken"])
 
 export class DynamoOAuthStore extends GGDynamoDbTable<OAuthRow, "pk"> implements GGOAuthStore {
 
@@ -51,8 +52,11 @@ export class DynamoOAuthStore extends GGDynamoDbTable<OAuthRow, "pk"> implements
 
     public consume = async (model: string, id: string): Promise<void> => {
         const row = await this.get(`${model}#${id}`)
-        // Revoked since it was read (e.g. the user disconnected the app): don't let the redemption go on.
-        if (!row) throw new oidcErrors.InvalidGrant(`${model} revoked`)
+        if (!row) {
+            // A code or refresh token revoked since it was read (e.g. the app was disconnected) must not be redeemed.
+            if (REDEEMABLE.has(model)) throw new oidcErrors.InvalidGrant(`${model} revoked`)
+            return
+        }
         const consumedAt = Math.floor(Date.now() / 1000)
         const payload = JSON.stringify({...JSON.parse(row.payload), consumed: consumedAt})
         // attribute_exists(pk): a row revoked meanwhile stays gone instead of being re-created.

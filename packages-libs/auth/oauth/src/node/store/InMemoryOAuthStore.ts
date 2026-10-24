@@ -24,7 +24,10 @@ export class InMemoryOAuthStore implements GGOAuthStore {
 
     public consume = async (model: string, id: string): Promise<void> => {
         const row = this.rows.get(`${model}:${id}`)
-        if (!row) throw new oidcErrors.InvalidGrant(`${model} revoked`)
+        if (!row) {
+            if (model === "AuthorizationCode" || model === "RefreshToken") throw new oidcErrors.InvalidGrant(`${model} revoked`)
+            return
+        }
         if (row.payload.consumed !== undefined) throw new oidcErrors.InvalidGrant(`${model} already used`)
         row.payload = {...row.payload, consumed: Math.floor(this.now() / 1000)}
     }

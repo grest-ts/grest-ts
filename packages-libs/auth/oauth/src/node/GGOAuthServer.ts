@@ -283,6 +283,13 @@ export class GGOAuthServer {
         return this.options.resources.find(r => r.resource() === indicator)
     }
 
+    private usableResource(indicator: string, clientId: string): GGOAuthResource<any> {
+        const resource = this.resource(indicator)
+        if (!resource) throw new oidcErrors.InvalidTarget()
+        if (resource.firstPartyOnly && !this.firstParty.has(clientId)) throw new oidcErrors.InvalidTarget("resource not available to this client")
+        return resource
+    }
+
     private defaultResource(clientId: string): GGOAuthResource<any> {
         const firstParty = this.firstParty.has(clientId)
         return this.options.resources.find(r => firstParty || !r.firstPartyOnly) ?? this.options.resources[0]
@@ -359,9 +366,7 @@ export class GGOAuthServer {
                     defaultResource: (_ctx, client) => this.defaultResource(client.clientId).resource(),
                     useGrantedResource: () => true,
                     getResourceServerInfo: (_ctx, indicator, client) => {
-                        const resource = this.resource(indicator)
-                        if (!resource) throw new oidcErrors.InvalidTarget()
-                        if (resource.firstPartyOnly && !firstParty.has(client.clientId)) throw new oidcErrors.InvalidTarget("resource not available to this client")
+                        const resource = this.usableResource(indicator, client.clientId)
                         const jws = resource.accessToken.signer.jwsKey?.()
                         if (!jws) throw new Error("GGOAuthServer: a resource's accessToken signer must implement jwsKey() (e.g. HmacSigner)")
                         return {
@@ -398,12 +403,14 @@ export class GGOAuthServer {
             // revokes the grant.
             rotateRefreshToken: async (ctx) => {
                 const rt = ctx.oidc.entities.RefreshToken!
-                // Which resource the new access token will be for, as oidc-provider resolves it: the
-                // request's resource first, then the one granted with the refresh token.
-                const requested = ctx.oidc.params?.resource ?? rt.resource
-                const indicator = typeof requested === "string" ? requested : undefined
-                if (indicator && !this.resource(indicator)) throw new oidcErrors.InvalidTarget()
-                const resource = this.requestedResource({resource: indicator}, String(rt.clientId))
+                const clientId = String(rt.clientId)
+                // Which resource the new access token will be for, as oidc-provider resolves it (the
+                // request's resource first, then the granted one), validated now rather than after consume.
+                const granted = [rt.resource ?? []].flat() as string[]
+                const requested = ctx.oidc.params?.resource
+                if (typeof requested === "string" && !granted.includes(requested)) throw new oidcErrors.InvalidTarget()
+                const indicator = typeof requested === "string" ? requested : granted.length === 1 ? granted[0] : undefined
+                const resource = indicator ? this.usableResource(indicator, clientId) : this.defaultResource(clientId)
                 const claims = await resource.claims(String(rt.accountId))
                 if (!claims) throw new oidcErrors.InvalidGrant("subject is no longer valid")
                 prefetchedClaims.set(ctx, {resource: resource.resource(), claims})
