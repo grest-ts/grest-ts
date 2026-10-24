@@ -33,6 +33,9 @@ export interface GGOAuthResource<C extends object> {
 export interface GGOAuthServerOptions {
     // Public origin of the authorization server, no path (e.g. https://auth.example.com).
     issuer: () => string
+    // Other public origins it is also reached on. A sign-in that started on one of these finishes
+    // there (its cookie lives there); any other request origin is ignored in favour of the issuer.
+    origins?: () => string[]
     store: GGOAuthStore
     // Derives the cookie-signing key and the ES256 key of the published JWKS (id tokens). Rotating it
     // signs everyone out of the authorization server; issued access/refresh tokens are unaffected.
@@ -60,6 +63,8 @@ export interface GGOAuthServerOptions {
 const BASE = "/oauth"
 const OIDC_SCOPES = ["openid", "offline_access"]
 const TICKET = "GGOAuthTicket"
+// Claims resolved during a refresh before the presented token was consumed (see rotateRefreshToken).
+const prefetchedClaims = new WeakMap<object, object>()
 
 type Ticket = {uid: string, result: InteractionResults}
 
@@ -167,7 +172,8 @@ export class GGOAuthServer {
             .map(async g => ({
                 grantId: g!.jti,
                 clientId: g!.clientId!,
-                clientName: String((await p.Client.find(g!.clientId!))?.clientName ?? g!.clientId),
+                // A client metadata document may be unreachable; the grant must still be listed (and revocable).
+                clientName: String((await p.Client.find(g!.clientId!).catch(() => undefined))?.clientName ?? g!.clientId),
                 createdAt: (g!.iat ?? 0) * 1000,
             })))
     }
@@ -234,8 +240,11 @@ export class GGOAuthServer {
         const uid = interaction.uid
         const id = randomBytes(24).toString("base64url")
         await this.options.store.upsert(TICKET, id, {uid, result} satisfies Ticket, 120)
-        // The origin the browser started on: its interaction cookie lives there.
-        return `${new URL(interaction.returnTo).origin}${BASE}/interaction/${uid}/complete?ticket=${id}`
+        // Back to the origin the browser started on (its interaction cookie lives there) — but only a
+        // known one: returnTo comes from the request's Host, which a client can set to its own server.
+        const started = new URL(interaction.returnTo).origin
+        const known = [this.options.issuer(), ...(this.options.origins?.() ?? [])].map(o => new URL(o).origin)
+        return `${known.includes(started) ? started : known[0]}${BASE}/interaction/${uid}/complete?ticket=${id}`
     }
 
     private async finishInteraction(req: IncomingMessage, res: ServerResponse, uid: string): Promise<void> {
@@ -333,8 +342,15 @@ export class GGOAuthServer {
                     // button value: without it only the requesting client is signed out, not the session.
                     logoutSource: async (ctx, form) => {
                         if (!form.includes("</form>")) throw new Error("GGOAuthServer: oidc-provider's logout form changed; can't confirm logout")
-                        const confirmed = form.replace("</form>", `<input type="hidden" name="logout" value="yes"/></form>`)
-                        ctx.body = `<!DOCTYPE html><html><body>${confirmed}<script>document.forms[0].submit()</script></body></html>`
+                        // Another site can link here; only a same-site navigation (the app's own sign-out)
+                        // skips the confirmation click.
+                        const fetchSite = ctx.get("sec-fetch-site")
+                        if (fetchSite === "same-origin" || fetchSite === "same-site") {
+                            const confirmed = form.replace("</form>", `<input type="hidden" name="logout" value="yes"/></form>`)
+                            ctx.body = `<!DOCTYPE html><html><body>${confirmed}<script>document.forms[0].submit()</script></body></html>`
+                            return
+                        }
+                        ctx.body = `<!DOCTYPE html><html><body>${form.replace("</form>", `<button name="logout" value="yes">Sign out</button></form>`)}</body></html>`
                     },
                 },
                 resourceIndicators: {
@@ -373,12 +389,27 @@ export class GGOAuthServer {
             },
             // MCP clients don't reliably request offline_access; every code-flow client gets a refresh token.
             issueRefreshToken: async (_ctx, client) => client.grantTypeAllowed("refresh_token"),
+            // Only first-party sign-ins end with the login session: signing out of the app must not
+            // disconnect the other apps the user connected (revoked explicitly instead).
+            expiresWithSession: async (ctx) => firstParty.has(ctx.oidc.client!.clientId),
+            // Runs before the presented refresh token is consumed. Resolve the claims here, so a failure
+            // (store/IdP down) leaves it redeemable — after consumption, the client's retry is reuse and
+            // revokes the grant.
+            rotateRefreshToken: async (ctx) => {
+                const rt = ctx.oidc.entities.RefreshToken!
+                const indicator = typeof rt.resource === "string" ? rt.resource : undefined
+                const resource = this.requestedResource({resource: indicator}, String(rt.clientId))
+                const claims = await resource.claims(String(rt.accountId))
+                if (!claims) throw new oidcErrors.InvalidGrant("subject is no longer valid")
+                prefetchedClaims.set(ctx, claims)
+                return true
+            },
             extraTokenClaims: async (_ctx: KoaContextWithOIDC, token) => {
                 if (token.kind !== "AccessToken") return undefined
                 const at = token as InstanceType<Provider["AccessToken"]>
                 const resource = this.resource(at.resourceServer?.identifier())
                 if (!resource) return undefined
-                const claims = await resource.claims(String(at.accountId))
+                const claims = prefetchedClaims.get(_ctx) ?? await resource.claims(String(at.accountId))
                 if (!claims) throw new oidcErrors.InvalidGrant("subject is no longer valid")
                 return {data: resource.accessToken.encodeClaims(claims)}
             },

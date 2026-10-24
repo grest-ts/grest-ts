@@ -151,6 +151,10 @@ oauth.logout(undefined)   // ends the authorization server's login session too
 
 ## Notes
 
+- The issuer, first-party clients, keys and resources are handed to oidc-provider when the first
+  OAuth request arrives. Changing them takes a restart; `allowedHosts` is read on every fetch.
+- A sign-in finishes on the origin it started on only if that is the issuer or one of `origins`.
+  Request hosts are client-controlled, so anything else falls back to the issuer.
 - The issuer is an origin. Clients bind to it, so changing it disconnects them.
 - Endpoints in the metadata follow the request host. Serve the issuer host directly or keep
   `Host` through your proxy, and pass `proxy: true` behind a TLS-terminating load balancer.

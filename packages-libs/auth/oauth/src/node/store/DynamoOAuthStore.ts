@@ -11,6 +11,8 @@ const IsOAuthRow = IsObject({
     grantId: IsString.orUndefined,
     uid: IsString.orUndefined,
     accountId: IsString.orUndefined,
+    /** Epoch seconds; set once (conditional write), so only one of two concurrent redemptions wins. */
+    consumedAt: IsNumber.min(0).orUndefined,
     /** Epoch seconds; drives DynamoDB TTL. TTL deletion lags, so reads check it too. */
     expiresAtSec: IsNumber.min(0).orUndefined,
 })
@@ -49,7 +51,11 @@ export class DynamoOAuthStore extends GGDynamoDbTable<OAuthRow, "pk"> implements
     public consume = async (model: string, id: string): Promise<void> => {
         const row = await this.get(`${model}#${id}`)
         if (!row) return
-        await this.updateFields(row, {payload: JSON.stringify({...JSON.parse(row.payload), consumed: Math.floor(Date.now() / 1000)})})
+        const consumedAt = Math.floor(Date.now() / 1000)
+        const payload = JSON.stringify({...JSON.parse(row.payload), consumed: consumedAt})
+        if (!await this.putConditional({...row, payload, consumedAt}, "attribute_not_exists(consumedAt)")) {
+            throw new Error(`OAuth ${model} already consumed`)
+        }
     }
 
     public destroy = async (model: string, id: string): Promise<void> => {

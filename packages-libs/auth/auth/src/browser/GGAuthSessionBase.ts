@@ -455,7 +455,7 @@ export class BaseAuthSession<D extends DerivedMap> {
         }
     }
 
-    private currentRefreshToken(): string | undefined {
+    public currentRefreshToken(): string | undefined {
         return this.config.storage === "cookie" ? undefined : this.shared?.refresh?.token
     }
 

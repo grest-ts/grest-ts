@@ -22,6 +22,8 @@ const THIRD_PARTY_REDIRECT = "https://claude.ai/api/mcp/auth_callback"
 // The app's existing first-party user token: OAuth must issue exactly this kind.
 const userToken = new GGAuthAccessToken({signer: new HmacSigner("app-token-secret"), claimSchema: IsClaims, audience: "app-user"})
 const userPermissions = new Map<string, string[] | undefined>([["alice", ["read", "write"]]])
+// Set to make the next claims lookup fail as if the store/IdP were down.
+let failClaimsOnce = false
 
 const USER_WIRE = new GGHeader("authorization", {scheme: "bearer"})
 const SUBJECT = new GGContextKey<{sub: string}>("oauthTestSubject", IsObject({sub: IsString}))
@@ -69,6 +71,10 @@ class OAuthTestRuntime extends GGRuntime {
                 scopes: ["api"],
                 firstPartyOnly: true,
                 claims: async (sub) => {
+                    if (failClaimsOnce) {
+                        failClaimsOnce = false
+                        throw new Error("store unavailable")
+                    }
                     const permissions = userPermissions.get(sub)
                     return permissions ? {permissions} : undefined
                 },
@@ -77,6 +83,7 @@ class OAuthTestRuntime extends GGRuntime {
             firstPartyClients: () => [{clientId: "app", name: "The App", redirectUris: [FIRST_PARTY_REDIRECT], postLogoutRedirectUris: ["https://app.example/"]}],
             dynamicRegistration: true,
             clientIdMetadataDocument: {allowedHosts: () => ["clients.example"]},
+            proxy: true,
         })
         oauth.mount(server)
         oauth.protect(server, mcp, "/mcp", async (_req, res, token) => {
@@ -309,10 +316,17 @@ describe("GGOAuthServer", () => {
         expect(after.origin + after.pathname).toBe(APP_LOGIN)
     })
 
-    test("logout ends the login session, so the next sign-in asks again", async () => {
+    test("logout ends the login session, but not other apps' access", async () => {
         const browser = new Browser()
         await signIn(browser, "app", FIRST_PARTY_REDIRECT)
-        const page = await (await browser.get(`/oauth/logout?client_id=app&post_logout_redirect_uri=${encodeURIComponent("https://app.example/")}`)).text()
+        const mcpClient = await register()
+        const connected = await signIn(browser, mcpClient, THIRD_PARTY_REDIRECT)
+        const logoutUrl = `/oauth/logout?client_id=app&post_logout_redirect_uri=${encodeURIComponent("https://app.example/")}`
+        // Linked from another site: the user must click to confirm.
+        const crossSite = await (await browser.get(logoutUrl, {headers: {"sec-fetch-site": "cross-site"}})).text()
+        expect(crossSite).not.toContain("document.forms[0].submit()")
+        expect(crossSite).toContain(`<button name="logout" value="yes">`)
+        const page = await (await browser.get(logoutUrl, {headers: {"sec-fetch-site": "same-site"}})).text()
         const action = page.match(/action="([^"]+)"/)![1]
         const fields = Object.fromEntries([...page.matchAll(/<input type="hidden" name="([^"]+)" value="([^"]*)"/g)].map(m => [m[1], m[2]]))
         expect(fields.logout).toBe("yes")
@@ -321,6 +335,30 @@ describe("GGOAuthServer", () => {
 
         const after = await browser.navigate(authorizeUrl("app", FIRST_PARTY_REDIRECT, pkce().challenge))
         expect(after.origin + after.pathname).toBe(APP_LOGIN)
+        expect((await token({grant_type: "refresh_token", refresh_token: connected.tokens.refresh_token, client_id: mcpClient})).access_token).toEqual(expect.any(String))
+    })
+
+    test("an approval link never points at a host the request named itself", async () => {
+        // A client can't set Host from fetch; X-Forwarded-Host (trusted behind a proxy) feeds the same value.
+        const res = await fetch(authorizeUrl("app", FIRST_PARTY_REDIRECT, pkce().challenge), {redirect: "manual", headers: {"x-forwarded-host": "evil.example"}})
+        const uid = new URL(res.headers.get("location")!, "https://evil.example").pathname.split("/").pop()!
+        const approved = await interaction((await userToken.issue("alice", {permissions: []})).token)("approve", uid)
+        expect(new URL(approved.data.redirectUrl).origin).toBe(ISSUER)
+    })
+
+    test("a refresh that fails before issuing (claims unavailable) can be retried", async () => {
+        const {tokens} = await signIn(new Browser(), "app", FIRST_PARTY_REDIRECT)
+        failClaimsOnce = true
+        const failed = await fetch(`${ISSUER}/oauth/token`, {method: "POST", body: new URLSearchParams({grant_type: "refresh_token", refresh_token: tokens.refresh_token, client_id: "app"})})
+        expect(failed.status).toBe(500)
+        expect((await token({grant_type: "refresh_token", refresh_token: tokens.refresh_token, client_id: "app"})).access_token).toEqual(expect.any(String))
+    })
+
+    test("of two concurrent refreshes with one token, only one succeeds", async () => {
+        const {tokens} = await signIn(new Browser(), "app", FIRST_PARTY_REDIRECT)
+        const body = {grant_type: "refresh_token", refresh_token: tokens.refresh_token, client_id: "app"}
+        const results = await Promise.all([token(body), token(body)])
+        expect(results.filter(r => r.access_token)).toHaveLength(1)
     })
 
     test("the interaction API requires the app's signed-in user", async () => {
