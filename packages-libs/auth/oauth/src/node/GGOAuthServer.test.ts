@@ -298,10 +298,12 @@ describe("GGOAuthServer", () => {
         const grant = (await oauth.listGrants("alice")).find(g => g.clientId === clientId)!
         await oauth.revokeGrant("alice", grant.grantId)
         expect((await token({grant_type: "refresh_token", refresh_token: tokens.refresh_token, client_id: clientId})).error).toBe("invalid_grant")
+        expect((await oauth.listGrants("alice")).map(g => g.grantId)).not.toContain(grant.grantId)
 
         const appBrowser = new Browser()
         const app = await signIn(appBrowser, "app", FIRST_PARTY_REDIRECT)
         await oauth.revokeAll("alice")
+        expect(await oauth.listGrants("alice")).toEqual([])
         expect((await token({grant_type: "refresh_token", refresh_token: app.tokens.refresh_token, client_id: "app"})).error).toBe("invalid_grant")
         const after = await appBrowser.navigate(authorizeUrl("app", FIRST_PARTY_REDIRECT, pkce().challenge))
         expect(after.origin + after.pathname).toBe(APP_LOGIN)

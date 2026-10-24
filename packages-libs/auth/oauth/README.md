@@ -28,32 +28,68 @@ The protocol is [panva/oidc-provider](https://github.com/panva/node-oidc-provide
 
 ## Server
 
+A server issues tokens for one or more **resources** (RFC 8707). Each resource has its own token
+kind: audience, claims and TTL. A token for one resource is therefore rejected by another's wire.
+
 ```ts
-import {GGOAuthServer, InMemoryOAuthStore} from "@grest-ts/oauth"
+import {GGOAuthServer, type GGOAuthResource} from "@grest-ts/oauth"
 import {DynamoOAuthStore} from "@grest-ts/oauth/dynamodb"
+
+// Your own app's API: its ordinary user token, only for your own clients.
+const api: GGOAuthResource<UserClaims> = {
+    resource: () => config.issuerUrl.get(),
+    accessToken: userTokenEngine.access,           // GGAuthAccessToken — signer must expose jwsKey()
+    scopes: ["app"],                               // at least one; what they permit is up to you
+    firstPartyOnly: true,
+    claims: async (subject) => claimsFor(subject), // at issue AND every refresh; undefined → invalid_grant
+}
+// An MCP endpoint for other apps (Claude, ChatGPT…): own audience, its own (smaller) claims.
+const mcp: GGOAuthResource<McpClaims> = {
+    resource: () => `${config.issuerUrl.get()}/mcp`,   // exactly the URL users enter
+    accessToken: mcpToken,                             // e.g. audience "app-mcp"
+    scopes: ["mcp"],
+    claims: async (subject) => ({permissions: []}),
+}
 
 const oauth = new GGOAuthServer({
     issuer: () => config.issuerUrl.get(),          // public origin, no path
-    resource: () => config.issuerUrl.get(),        // the API the tokens are for
-    scopes: ["app"],                               // at least one; what they permit is up to you
     store: new DynamoOAuthStore(dynamo, "my-oauth"),
     secret: () => config.tokenSecret.reveal(),     // derives cookie + JWKS keys
-    accessToken: userTokenEngine.access,           // your GGAuthAccessToken — signer must expose jwsKey()
-    claims: async (subject) => claimsFor(subject), // at issue AND every refresh; undefined → invalid_grant
-    interactionUrl: (uid) => `${appUrl}/?oauthLogin=${uid}`,
+    resources: [api, mcp],                         // first = default for first-party clients
+    interactionUrl: (uid, {firstParty, redirectUri}) => `${appUrl}/?oauthLogin=${uid}`,
     firstPartyClients: () => [{clientId: "web", name: "My App", redirectUris: [`${appUrl}/oauth/callback`]}],
-    dynamicRegistration: true,
-    clientIdMetadataDocument: true,
+    clientIdMetadataDocument: {allowedHosts: () => ["claude.ai", "chatgpt.com"]},  // vendor-hosted client docs
+    // dynamicRegistration: true,                  // open RFC 7591 registration — anyone, any name
 })
 oauth.mount(httpServer)                            // /oauth/* + /.well-known/*, announced to discovery
+oauth.protect(httpServer, mcp, "/mcp", handleMcp)  // 401 + resource metadata, then your handler
 new GGHttp(httpServer).http(OAuthInteractionApi, oauth.interactionApi(() => USER.get()!.id))
 ```
 
-`claims` is the `resolve` of `GGAuthRefreshToken.refresh`: role changes apply on the next refresh,
-and a deleted or deactivated user's OAuth session ends there.
+`claims` works like the `resolve` callback of `GGAuthRefreshToken.refresh`: role changes apply on
+the next refresh, and a deleted or deactivated user's OAuth session ends there.
 
 `listGrants(subject)` and `revokeGrant(subject, grantId)` back a "connected apps" page.
 `revokeAll(subject)` is "log out everywhere"; call it next to `GGAuthRefreshToken.revokeAll`.
+
+### Protected resources (MCP)
+
+`protect(server, resource, path, handler)` puts `path` behind the resource's token. It also
+provides the discovery handshake MCP clients run:
+
+- A request without a valid token gets `401 WWW-Authenticate: Bearer resource_metadata="…/.well-known/oauth-protected-resource{path}", scope="…"`.
+- That metadata (RFC 9728) names this server and the resource's scopes.
+- Your handler receives the verified token payload. For example, run the official MCP SDK's
+  `StreamableHTTPServerTransport` on the raw `req`/`res`.
+
+### Which clients may sign in
+
+| Client | How it's known | Consent |
+|---|---|---|
+| First-party (`firstPartyClients`) | Pre-registered | None; silent while the login session lives |
+| Client ID Metadata Document from `allowedHosts` | `client_id` is its document URL, fetched by the server | Once per grant |
+| Loopback / CLI (no `application_type` declared → native) | Any port on `localhost`/`127.0.0.1` matches | **Every** authorization: any local process could claim the redirect |
+| Dynamic registration (opt-in) | `POST /oauth/register` | Once per grant |
 
 ### Login and consent stay in your app
 

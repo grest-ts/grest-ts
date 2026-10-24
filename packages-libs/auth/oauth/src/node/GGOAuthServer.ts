@@ -158,14 +158,14 @@ export class GGOAuthServer {
         }
     }
 
-    public listGrants = async (subject: string): Promise<Array<{grantId: string, clientId: string, clientName: string}>> => {
+    public listGrants = async (subject: string): Promise<Array<{grantId: string, clientId: string, clientName: string, createdAt: number}>> => {
         const p = this.provider()
-        const out: Array<{grantId: string, clientId: string, clientName: string}> = []
+        const out: Array<{grantId: string, clientId: string, clientName: string, createdAt: number}> = []
         for (const grantId of await this.options.store.listIdsByAccount("Grant", subject)) {
             const grant = await p.Grant.find(grantId)
             if (!grant?.clientId || grant.accountId !== subject) continue
             const client = await p.Client.find(grant.clientId)
-            out.push({grantId, clientId: grant.clientId, clientName: String(client?.clientName ?? grant.clientId)})
+            out.push({grantId, clientId: grant.clientId, clientName: String(client?.clientName ?? grant.clientId), createdAt: (grant.iat ?? 0) * 1000})
         }
         return out
     }
@@ -175,12 +175,17 @@ export class GGOAuthServer {
         const grant = await this.provider().Grant.find(grantId)
         if (!grant || grant.accountId !== subject) throw new NOT_FOUND()
         await this.options.store.revokeByGrantId(grantId)
+        // The grant row carries its id as jti, not grantId, so revokeByGrantId leaves it.
+        await this.options.store.destroy("Grant", grantId)
     }
 
     // "Log out everywhere": every grant and login session of the subject.
     public revokeAll = async (subject: string): Promise<void> => {
         const store = this.options.store
-        for (const grantId of await store.listIdsByAccount("Grant", subject)) await store.revokeByGrantId(grantId)
+        for (const grantId of await store.listIdsByAccount("Grant", subject)) {
+            await store.revokeByGrantId(grantId)
+            await store.destroy("Grant", grantId)
+        }
         for (const sessionId of await store.listIdsByAccount("Session", subject)) await store.destroy("Session", sessionId)
     }
 
