@@ -184,6 +184,11 @@ export class GGAuthSession<D extends DerivedMap = {}, I = unknown> {
         return this._getSession().onLogout(cb)
     }
 
+    /** For revoking it at sign-out (token mode; undefined in cookie mode). */
+    public getRefreshToken(): string | undefined {
+        return this._session?.currentRefreshToken()
+    }
+
     public getAccessToken(opts?: {awaitRefresh?: boolean}): Promise<string | undefined> {
         return this._getSession().getAccessToken(opts)
     }

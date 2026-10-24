@@ -20,6 +20,8 @@ export class HmacSigner implements SigningStrategy {
         return new Uint8Array(hkdfSync("sha256", this.reveal(), "", KEY_INFO, 32))
     }
 
+    public jwsKey = (): {alg: string, key: Uint8Array} => ({alg: this.alg, key: this.key()})
+
     public sign = async (claims: Record<string, unknown>): Promise<string> => {
         return await new SignJWT(claims)
             .setProtectedHeader({alg: this.alg, typ: "JWT"})

@@ -46,7 +46,7 @@
         "implementation": false,
         "npm": true
       },
-      "layer": 0,
+      "layer": 1,
       "color": "#59A14F",
       "category": "libs",
       "group": "auth",
@@ -194,7 +194,7 @@
         "implementation": false,
         "npm": true
       },
-      "layer": 1,
+      "layer": 0,
       "color": "#59A14F",
       "category": "libs",
       "group": "db",
@@ -211,7 +211,7 @@
         "implementation": false,
         "npm": true
       },
-      "layer": 1,
+      "layer": 0,
       "color": "#59A14F",
       "category": "libs",
       "group": "db",
@@ -521,6 +521,23 @@
       "readme": "<!-- GREST-TS-BANNER-START -->\n> Part of the [grest-ts](https://github.com/grest-ts/grest-ts) framework.\n> [Documentation](https://github.com/grest-ts/grest-ts#readme) | [All packages](https://github.com/grest-ts/grest-ts#package-reference)\n<!-- GREST-TS-BANNER-END -->\n\n# @grest-ts/metrics\n\nType-safe metrics collection library for Grest Framework.\n\n## Features\n\nType-safe metrics collection library with support for counters, gauges, and histograms.\n\nProvides a structured way to define, collect, and export application metrics with:\n\n- Prometheus-style metrics (Counter, Gauge, Histogram)\n- Type-safe labels\n- Centralized metric definitions\n- Multiple export formats\n\nType-safe metrics collection library with support for counters, gauges, and histograms.\n\n## Quick usage example\n\n```typescript\n// Define metric keys.\n// This additionally acts as documentation of metrics provided by the application.\nexport const AppMetrics = GGMetrics.define('/app/', () => ({\n    actions: new GGCounterKey('actions_total', {\n        help: 'Total number of actions',\n        labelNames: ['type']\n    }),\n    // ... add more metrics here. All well documented and type safe.\n}));\n\n// Usage in the runtime.\nAppMetrics.actions.inc(1, {type: \"read\"}); // labels are typesafe (values are always strings)\n\n```\n\n## Documentation\n\n- [Usage](./README-usage.md) - How to define and collect metrics\n- [Testing](./README-testkit.md) - How to test metric changes with testkit\n- [Extending](./README-extending.md) - How to add custom exporters\n"
     },
     {
+      "name": "oauth",
+      "description": "OAuth 2.1 authorization server (panva oidc-provider on GGHttpServer) issuing @grest-ts/auth tokens, plus a browser code+PKCE client for GGAuthSession",
+      "flags": {
+        "node": true,
+        "browser": true,
+        "testkit": false,
+        "hidden": false,
+        "implementation": false,
+        "npm": true
+      },
+      "layer": 0,
+      "color": "#59A14F",
+      "category": "libs",
+      "group": "auth",
+      "readme": "<!-- GREST-TS-BANNER-START -->\n> Part of the [grest-ts](https://github.com/grest-ts/grest-ts) framework.\n> [Documentation](https://github.com/grest-ts/grest-ts#readme) | [All packages](https://github.com/grest-ts/grest-ts#package-reference)\n<!-- GREST-TS-BANNER-END -->\n\n# @grest-ts/oauth\n\nMake a grest-ts app its own **OAuth 2.1 authorization server** with this package. The token a\nclient receives is your app's existing [`@grest-ts/auth`](../auth/README.md) access token: the same\nsigner, audience and claims. Your wires and per-route permissions work unchanged for OAuth\nclients, whether that is your own SPA, an MCP connector (Claude, ChatGPT), a CLI or a script.\n\nThe protocol is [panva/oidc-provider](https://github.com/panva/node-oidc-provider)\n(OpenID-certified). This package owns the grest-ts seams:\n\n- mounting on a `GGHttpServer`\n- storage\n- token claims\n- handing login and consent to your own UI\n\n| What you get | |\n|---|---|\n| Authorization code + PKCE (S256 only, required) | No implicit/hybrid, no ROPC |\n| Dynamic client registration (RFC 7591), Client ID Metadata Documents | Opt-in. CIMD is what MCP clients prefer |\n| Resource indicators (RFC 8707), `iss` in responses (RFC 9207) | What the MCP authorization spec requires |\n| Refresh rotation with reuse detection | Absolute lifetime: rotation never extends it |\n| Revocation, RFC 8414 + OIDC discovery, RP-initiated logout | |\n\n## Server\n\nA server issues tokens for one or more **resources** (RFC 8707). Each resource has its own token\nkind: audience, claims and TTL. A token for one resource is therefore rejected by another's wire.\n\n```ts\nimport {GGOAuthServer, type GGOAuthResource} from \"@grest-ts/oauth\"\nimport {DynamoOAuthStore} from \"@grest-ts/oauth/dynamodb\"\n\n// Your own app's API: its ordinary user token, only for your own clients.\nconst api: GGOAuthResource<UserClaims> = {\n    resource: () => config.issuerUrl.get(),\n    accessToken: userTokenEngine.access,           // GGAuthAccessToken — signer must expose jwsKey()\n    scopes: [\"app\"],                               // at least one; what they permit is up to you\n    firstPartyOnly: true,\n    claims: async (subject, client) => claimsFor(subject), // at issue AND every refresh; undefined → invalid_grant\n}\n// An MCP endpoint for other apps (Claude, ChatGPT…): own audience, its own (smaller) claims.\nconst mcp: GGOAuthResource<McpClaims> = {\n    resource: () => `${config.issuerUrl.get()}/mcp`,   // exactly the URL users enter\n    accessToken: mcpToken,                             // e.g. audience \"app-mcp\"\n    scopes: [\"mcp\"],\n    claims: async (subject) => ({permissions: []}),\n}\n\nconst oauth = new GGOAuthServer({\n    issuer: () => config.issuerUrl.get(),          // public origin, no path\n    store: new DynamoOAuthStore(dynamo, \"my-oauth\"),\n    secret: () => config.tokenSecret.reveal(),     // derives cookie + JWKS keys\n    resources: [api, mcp],                         // first = default for first-party clients\n    interactionUrl: (uid, {firstParty, redirectUri}) => `${appUrl}/?oauthLogin=${uid}`,\n    firstPartyClients: () => [{clientId: \"web\", name: \"My App\", redirectUris: [`${appUrl}/oauth/callback`]}],\n    clientIdMetadataDocument: {allowedHosts: () => [\"claude.ai\", \"chatgpt.com\"]},  // vendor-hosted client docs\n    // dynamicRegistration: true,                  // open RFC 7591 registration — anyone, any name\n})\noauth.mount(httpServer)                            // /oauth/* + /.well-known/*, announced to discovery\noauth.protect(httpServer, mcp, \"/mcp\", handleMcp)  // 401 + resource metadata, then your handler\nnew GGHttp(httpServer).http(OAuthInteractionApi, oauth.interactionApi(() => USER.get()!.id))\n```\n\n`claims` works like the `resolve` callback of `GGAuthRefreshToken.refresh`: role changes apply on\nthe next refresh, and a deleted or deactivated user's OAuth session ends there.\n\n`listGrants(subject)` and `revokeGrant(subject, grantId)` back a \"connected apps\" page.\n`revokeAll(subject)` is \"log out everywhere\"; call it next to `GGAuthRefreshToken.revokeAll`.\n\n### Protected resources (MCP)\n\n`protect(server, resource, path, handler)` puts `path` behind the resource's token. It also\nprovides the discovery handshake MCP clients run:\n\n- A request without a valid token gets `401 WWW-Authenticate: Bearer resource_metadata=\"…/.well-known/oauth-protected-resource{path}\", scope=\"…\"`.\n- That metadata (RFC 9728) names this server and the resource's scopes.\n- Your handler receives the verified token payload. For example, run the official MCP SDK's\n  `StreamableHTTPServerTransport` on the raw `req`/`res`.\n\n### Which clients may sign in\n\n| Client | How it's known | Consent |\n|---|---|---|\n| First-party (`firstPartyClients`) | Pre-registered | None; silent while the login session lives |\n| Client ID Metadata Document from `allowedHosts` | `client_id` is its document URL, fetched by the server | Once per grant |\n| Loopback / CLI (no `application_type` declared → native) | Any port on `localhost`/`127.0.0.1` matches | **Every** authorization: any local process could claim the redirect |\n| Dynamic registration (opt-in) | `POST /oauth/register` | Once per grant |\n\n### Login and consent stay in your app\n\n`/oauth/authorize` sends the browser to `interactionUrl(uid)`. That page uses your normal login,\nthen calls `GGOAuthInteractionContract`. Bind the contract with **your** user wire, so the\nsigned-in user becomes the OAuth subject:\n\n```ts\nexport const OAuthInteractionApi = new GGHttpSchema({\n    contract: GGOAuthInteractionContract, pathPrefix: \"api/oauth/interaction\", use: [USER_WIRE],\n    routes: {get: GGRpc.GET(\"get\"), approve: GGRpc.POST(\"approve\"), deny: GGRpc.POST(\"deny\")},\n})\n```\n\nThe page works like this:\n\n1. `get({uid})` returns the client (name, `firstParty`, redirect hosts, `loopbackOnly`) and the\n   requested scopes.\n2. For a first-party client, call `approve` right away. For any other client, show a consent\n   screen first. Display the redirect hosts, and warn when `loopbackOnly` is set.\n3. `approve`/`deny` return `redirectUrl` for the browser to follow. The result applies only in\n   the browser holding the flow's interaction cookie, so a user approving someone else's flow\n   can't hand them a code.\n\nA first-party client re-authorizes silently while the login session lives.\n\n### Storage\n\n`GGOAuthStore` is a small key/value interface over oidc-provider's models. Two implementations\nship:\n\n- `InMemoryOAuthStore`: single process only (tests, local dev).\n- `DynamoOAuthStore` (`@grest-ts/oauth/dynamodb`). Its table needs:\n  - HASH key `pk` (S)\n  - TTL attribute `expiresAtSec`\n  - GSIs projecting ALL: `grantId-index`, `uid-index`, `accountId-index`\n\n## Browser client\n\n```ts\nimport {GGOAuthClient, decodeAccessToken} from \"@grest-ts/oauth\"\n\nconst oauth = new GGOAuthClient({\n    server: apiBase, clientId: \"web\", scope: \"app\",\n    redirectUri: `${location.origin}/oauth/callback`, postLogoutRedirectUri: `${location.origin}/`,\n    identity: (token) => toUser(decodeAccessToken(token)),   // session.get() data; UI-only, unverified\n})\nconst session = GGAuthSession.withToken(USER_WIRE, {localStorageKey: \"auth\", refresh: oauth.refresh})\n\nif (oauth.isCallback(location.href)) session.start((await oauth.handleCallback(location.href)).result)\nelse if (!session.isLoggedIn()) await oauth.authorize({returnTo: location.pathname + location.search})\n\noauth.logout(undefined)   // ends the authorization server's login session too\n```\n\n- `iss` is checked against the issuer in the server's metadata.\n- `resource` defaults to that issuer.\n- `invalid_grant` on refresh surfaces as `NOT_AUTHORIZED`, which ends the session.\n\n## Notes\n\n- The issuer, first-party clients, keys and resources are handed to oidc-provider when the first\n  OAuth request arrives. Changing them takes a restart; `allowedHosts` is read on every fetch.\n- A sign-in finishes on the origin it started on only if that is the issuer or one of `origins`.\n  Request hosts are client-controlled, so anything else falls back to the issuer.\n- The issuer is an origin. Clients bind to it, so changing it disconnects them.\n- Endpoints in the metadata follow the request host. Serve the issuer host directly or keep\n  `Host` through your proxy, and pass `proxy: true` behind a TLS-terminating load balancer.\n- oidc-provider's CIMD support is experimental (draft-02). The version is pinned exactly.\n- The OAuth endpoints use the standard form-encoded protocol, not grest-ts contracts. That is the\n  one place this package speaks raw HTTP.\n"
+    },
+    {
       "name": "openapi",
       "description": "OpenAPI 3.1 spec generation and Swagger UI server for grest-ts",
       "flags": {
@@ -758,10 +775,6 @@
     {
       "from": "api-docs",
       "to": "context"
-    },
-    {
-      "from": "api-docs",
-      "to": "discovery"
     },
     {
       "from": "api-docs",
@@ -1140,6 +1153,22 @@
       "to": "locator"
     },
     {
+      "from": "oauth",
+      "to": "auth"
+    },
+    {
+      "from": "oauth",
+      "to": "db-dynamodb"
+    },
+    {
+      "from": "oauth",
+      "to": "http"
+    },
+    {
+      "from": "oauth",
+      "to": "schema"
+    },
+    {
       "from": "openapi",
       "to": "context"
     },
@@ -1277,31 +1306,11 @@
     },
     {
       "from": "testkit-vitest",
-      "to": "config"
-    },
-    {
-      "from": "testkit-vitest",
-      "to": "db-dynamodb"
-    },
-    {
-      "from": "testkit-vitest",
-      "to": "db-mysql"
-    },
-    {
-      "from": "testkit-vitest",
-      "to": "db-postgre"
-    },
-    {
-      "from": "testkit-vitest",
       "to": "discovery"
     },
     {
       "from": "testkit-vitest",
       "to": "discovery-local"
-    },
-    {
-      "from": "testkit-vitest",
-      "to": "http"
     },
     {
       "from": "testkit-vitest",
@@ -1321,19 +1330,7 @@
     },
     {
       "from": "testkit-vitest",
-      "to": "metrics"
-    },
-    {
-      "from": "testkit-vitest",
-      "to": "schema-file"
-    },
-    {
-      "from": "testkit-vitest",
       "to": "testkit"
-    },
-    {
-      "from": "testkit-vitest",
-      "to": "websocket"
     },
     {
       "from": "trace",

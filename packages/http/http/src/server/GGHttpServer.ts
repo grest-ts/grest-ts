@@ -4,6 +4,7 @@ import {HttpMethod, HttpStatusCode} from "@grest-ts/common";
 import {GGLocator, GGLocatorKey, GGLocatorScope, GGLocatorServiceType} from "@grest-ts/locator";
 import {GG_HTTP_SERVER} from "./GG_HTTP_SERVER";
 import {GGLog} from "@grest-ts/logger";
+import {GG_DISCOVERY} from "@grest-ts/discovery";
 import findMyWay, {HTTPMethod} from "find-my-way";
 import type {GGHttpSchema} from "../schema/GGHttpSchema";
 import {checkWiresImplemented} from "./checkers/checkWiresImplemented";
@@ -269,6 +270,17 @@ export class GGHttpServer {
             }
             GGLog.info(this, `HTTP server stopped`);
         })();
+    }
+
+    /**
+     * Publishes a raw route's path prefix to service discovery (e.g. the local dev router), as a schema
+     * does for its own — a path-routing proxy only forwards prefixes it was told about.
+     */
+    public announce(pathPrefix: string, owner: string): void {
+        this.onStart(() => {
+            // Discovery keys routes by api name: one per prefix, or announcements replace each other.
+            GG_DISCOVERY.tryGet()?.registerRoutes([{runtime: this.scope.serviceName, api: `${owner}:${pathPrefix}`, pathPrefix, protocol: "http", port: this.port!}]);
+        });
     }
 
     public onStart(callback: () => Promise<void> | void): this {

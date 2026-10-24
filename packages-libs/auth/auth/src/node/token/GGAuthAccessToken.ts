@@ -29,10 +29,10 @@ export interface GGAuthAccessTokenOptions<C extends object> {
 // these for the access half of a rotating pair.
 export class GGAuthAccessToken<C extends object> {
 
-    private readonly signer: SigningStrategy
+    public readonly signer: SigningStrategy
     private readonly claims: GGSchema<C>
-    private readonly accessTtlMs: number
-    private readonly audience: string | undefined
+    public readonly accessTtlMs: number
+    public readonly audience: string | undefined
     private readonly now: () => number
 
     constructor(options: GGAuthAccessTokenOptions<C>) {
@@ -62,6 +62,10 @@ export class GGAuthAccessToken<C extends object> {
             exp: Number(payload["exp"]),
         } as GGAccessPayload<C>
     }
+
+    // The `data` claim value for these claims — for an external minter (OAuth server) that signs
+    // the envelope itself but must produce exactly what verify() parses.
+    public encodeClaims = (claims: C): C => this.claims.parse(claims)
 
     // Parses the claims then signs. Public so GGAuthRefreshToken can mint the access half of a
     // rotating pair through the same code path.
