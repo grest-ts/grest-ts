@@ -398,7 +398,11 @@ export class GGOAuthServer {
             // revokes the grant.
             rotateRefreshToken: async (ctx) => {
                 const rt = ctx.oidc.entities.RefreshToken!
-                const indicator = typeof rt.resource === "string" ? rt.resource : undefined
+                // Which resource the new access token will be for, as oidc-provider resolves it: the
+                // request's resource first, then the one granted with the refresh token.
+                const requested = ctx.oidc.params?.resource ?? rt.resource
+                const indicator = typeof requested === "string" ? requested : undefined
+                if (indicator && !this.resource(indicator)) throw new oidcErrors.InvalidTarget()
                 const resource = this.requestedResource({resource: indicator}, String(rt.clientId))
                 const claims = await resource.claims(String(rt.accountId))
                 if (!claims) throw new oidcErrors.InvalidGrant("subject is no longer valid")

@@ -37,9 +37,9 @@ const PENDING_KEY = "gg-oauth-pending"
 export class GGOAuthClient<I = unknown> {
 
     private metadata: Promise<Metadata> | undefined
-    // Set when a redirect away has started: a second one (e.g. a signed-out view starting sign-in
-    // while logout is redirecting) would race it.
-    private leaving = false
+    // The redirect away being prepared: a second one (e.g. a signed-out view starting sign-in while
+    // logout redirects) waits for it — forever if it navigates, and takes over if it fails.
+    private leaving: Promise<void> | undefined
 
     private readonly config: GGOAuthClientConfig<I>
 
@@ -48,13 +48,8 @@ export class GGOAuthClient<I = unknown> {
     }
 
     // Redirects the browser to the authorization server; resolves never (the page unloads).
-    public authorize = async (opts?: {returnTo?: string}): Promise<void> => {
-        if (this.leaving) return await new Promise(() => undefined)
-        this.leaving = true
-        const meta = await this.discover().catch(err => {
-            this.leaving = false
-            throw err
-        })
+    public authorize = (opts?: {returnTo?: string}): Promise<void> => this.leave(async () => {
+        const meta = await this.discover()
         const verifier = randomString()
         const pending: Pending = {state: randomString(), verifier, returnTo: opts?.returnTo}
         sessionStorage.setItem(PENDING_KEY, JSON.stringify(pending))
@@ -69,9 +64,8 @@ export class GGOAuthClient<I = unknown> {
             resource: this.config.resource ?? meta.issuer,
             ...(this.config.scope ? {scope: this.config.scope} : {}),
         }).toString()
-        window.location.assign(url.href)
-        await new Promise(() => undefined)
-    }
+        return url.href
+    })
 
     public isCallback = (href: string): boolean => {
         const url = new URL(href)
@@ -102,29 +96,41 @@ export class GGOAuthClient<I = unknown> {
     public refresh = async ({refreshToken}: {refreshToken: string}): Promise<GGOAuthResult<I>> =>
         this.token({grant_type: "refresh_token", refresh_token: refreshToken})
 
-    // Revokes the refresh token and ends the authorization server's login session (redirects away).
-    public logout = async (refreshToken: string | undefined): Promise<void> => {
-        this.leaving = true
-        const meta = await this.discover().catch(err => {
-            this.leaving = false
-            throw err
-        })
-        if (refreshToken && meta.revocation_endpoint) {
-            // Not awaited (keepalive outlives the navigation): the sooner the redirect, the shorter the
-            // window in which other tabs could still sign in silently.
-            void fetch(meta.revocation_endpoint, {method: "POST", keepalive: true, body: new URLSearchParams({token: refreshToken, client_id: this.config.clientId})}).catch(() => undefined)
-        }
+    // Revokes the refresh token and ends the authorization server's login session (redirects away
+    // when the server supports it).
+    public logout = (refreshToken: string | undefined): Promise<void> => this.leave(async () => {
+        const meta = await this.discover()
+        const revoke = refreshToken && meta.revocation_endpoint
+            ? fetch(meta.revocation_endpoint, {method: "POST", keepalive: true, body: new URLSearchParams({token: refreshToken, client_id: this.config.clientId})}).then(() => undefined, () => undefined)
+            : Promise.resolve()
         if (!meta.end_session_endpoint) {
-            this.leaving = false
-            return
+            await revoke
+            return undefined
         }
+        // Revocation not awaited (keepalive outlives the navigation): the sooner the redirect, the
+        // shorter the window in which other tabs could still sign in silently.
         const url = new URL(meta.end_session_endpoint)
         url.search = new URLSearchParams({
             client_id: this.config.clientId,
             ...(this.config.postLogoutRedirectUri ? {post_logout_redirect_uri: this.config.postLogoutRedirectUri} : {}),
         }).toString()
-        window.location.assign(url.href)
-        await new Promise(() => undefined)
+        return url.href
+    })
+
+    private async leave(target: () => Promise<string | undefined>): Promise<void> {
+        while (this.leaving) await this.leaving.catch(() => undefined)
+        const run = (async () => {
+            const url = await target()
+            if (url === undefined) return
+            window.location.assign(url)
+            await new Promise(() => undefined)
+        })()
+        this.leaving = run
+        try {
+            await run
+        } finally {
+            if (this.leaving === run) this.leaving = undefined
+        }
     }
 
     private async token(body: Record<string, string>): Promise<GGOAuthResult<I>> {

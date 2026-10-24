@@ -51,7 +51,8 @@ export class DynamoOAuthStore extends GGDynamoDbTable<OAuthRow, "pk"> implements
 
     public consume = async (model: string, id: string): Promise<void> => {
         const row = await this.get(`${model}#${id}`)
-        if (!row) return
+        // Revoked since it was read (e.g. the user disconnected the app): don't let the redemption go on.
+        if (!row) throw new oidcErrors.InvalidGrant(`${model} revoked`)
         const consumedAt = Math.floor(Date.now() / 1000)
         const payload = JSON.stringify({...JSON.parse(row.payload), consumed: consumedAt})
         // attribute_exists(pk): a row revoked meanwhile stays gone instead of being re-created.
