@@ -166,7 +166,9 @@ flowchart TB
     metrics --> locator
     oauth --> auth
     oauth --> db-dynamodb
+    oauth --> discovery
     oauth --> http
+    oauth --> locator
     oauth --> schema
     openapi --> context
     openapi --> http
@@ -369,30 +371,30 @@ flowchart TB
     linkStyle 97 stroke:#499894,stroke-width:2px
     linkStyle 98 stroke:#499894,stroke-width:2px
     linkStyle 99 stroke:#499894,stroke-width:2px
-    linkStyle 100 stroke:#D37295,stroke-width:2px
-    linkStyle 101 stroke:#D37295,stroke-width:2px
+    linkStyle 100 stroke:#499894,stroke-width:2px
+    linkStyle 101 stroke:#499894,stroke-width:2px
     linkStyle 102 stroke:#D37295,stroke-width:2px
     linkStyle 103 stroke:#D37295,stroke-width:2px
-    linkStyle 104 stroke:#A0CBE8,stroke-width:2px
-    linkStyle 105 stroke:#A0CBE8,stroke-width:2px
+    linkStyle 104 stroke:#D37295,stroke-width:2px
+    linkStyle 105 stroke:#D37295,stroke-width:2px
     linkStyle 106 stroke:#A0CBE8,stroke-width:2px
     linkStyle 107 stroke:#A0CBE8,stroke-width:2px
     linkStyle 108 stroke:#A0CBE8,stroke-width:2px
-    linkStyle 109 stroke:#FFBE7D,stroke-width:2px
-    linkStyle 110 stroke:#FFBE7D,stroke-width:2px
+    linkStyle 109 stroke:#A0CBE8,stroke-width:2px
+    linkStyle 110 stroke:#A0CBE8,stroke-width:2px
     linkStyle 111 stroke:#FFBE7D,stroke-width:2px
     linkStyle 112 stroke:#FFBE7D,stroke-width:2px
     linkStyle 113 stroke:#FFBE7D,stroke-width:2px
     linkStyle 114 stroke:#FFBE7D,stroke-width:2px
     linkStyle 115 stroke:#FFBE7D,stroke-width:2px
     linkStyle 116 stroke:#FFBE7D,stroke-width:2px
-    linkStyle 117 stroke:#4E79A7,stroke-width:2px
-    linkStyle 118 stroke:#4E79A7,stroke-width:2px
-    linkStyle 119 stroke:#F28E2B,stroke-width:2px
-    linkStyle 120 stroke:#E15759,stroke-width:2px
-    linkStyle 121 stroke:#E15759,stroke-width:2px
-    linkStyle 122 stroke:#59A14F,stroke-width:2px
-    linkStyle 123 stroke:#59A14F,stroke-width:2px
+    linkStyle 117 stroke:#FFBE7D,stroke-width:2px
+    linkStyle 118 stroke:#FFBE7D,stroke-width:2px
+    linkStyle 119 stroke:#4E79A7,stroke-width:2px
+    linkStyle 120 stroke:#4E79A7,stroke-width:2px
+    linkStyle 121 stroke:#F28E2B,stroke-width:2px
+    linkStyle 122 stroke:#E15759,stroke-width:2px
+    linkStyle 123 stroke:#E15759,stroke-width:2px
     linkStyle 124 stroke:#59A14F,stroke-width:2px
     linkStyle 125 stroke:#59A14F,stroke-width:2px
     linkStyle 126 stroke:#59A14F,stroke-width:2px
@@ -401,22 +403,22 @@ flowchart TB
     linkStyle 129 stroke:#59A14F,stroke-width:2px
     linkStyle 130 stroke:#59A14F,stroke-width:2px
     linkStyle 131 stroke:#59A14F,stroke-width:2px
-    linkStyle 132 stroke:#EDC948,stroke-width:2px
-    linkStyle 133 stroke:#B07AA1,stroke-width:2px
-    linkStyle 134 stroke:#B07AA1,stroke-width:2px
+    linkStyle 132 stroke:#59A14F,stroke-width:2px
+    linkStyle 133 stroke:#59A14F,stroke-width:2px
+    linkStyle 134 stroke:#EDC948,stroke-width:2px
     linkStyle 135 stroke:#B07AA1,stroke-width:2px
     linkStyle 136 stroke:#B07AA1,stroke-width:2px
     linkStyle 137 stroke:#B07AA1,stroke-width:2px
     linkStyle 138 stroke:#B07AA1,stroke-width:2px
     linkStyle 139 stroke:#B07AA1,stroke-width:2px
     linkStyle 140 stroke:#B07AA1,stroke-width:2px
-    linkStyle 141 stroke:#FF9DA7,stroke-width:2px
-    linkStyle 142 stroke:#FF9DA7,stroke-width:2px
-    linkStyle 143 stroke:#9C755F,stroke-width:2px
-    linkStyle 144 stroke:#9C755F,stroke-width:2px
+    linkStyle 141 stroke:#B07AA1,stroke-width:2px
+    linkStyle 142 stroke:#B07AA1,stroke-width:2px
+    linkStyle 143 stroke:#FF9DA7,stroke-width:2px
+    linkStyle 144 stroke:#FF9DA7,stroke-width:2px
     linkStyle 145 stroke:#9C755F,stroke-width:2px
-    linkStyle 146 stroke:#BAB0AC,stroke-width:2px
-    linkStyle 147 stroke:#BAB0AC,stroke-width:2px
+    linkStyle 146 stroke:#9C755F,stroke-width:2px
+    linkStyle 147 stroke:#9C755F,stroke-width:2px
     linkStyle 148 stroke:#BAB0AC,stroke-width:2px
     linkStyle 149 stroke:#BAB0AC,stroke-width:2px
     linkStyle 150 stroke:#BAB0AC,stroke-width:2px
@@ -424,6 +426,8 @@ flowchart TB
     linkStyle 152 stroke:#BAB0AC,stroke-width:2px
     linkStyle 153 stroke:#BAB0AC,stroke-width:2px
     linkStyle 154 stroke:#BAB0AC,stroke-width:2px
+    linkStyle 155 stroke:#BAB0AC,stroke-width:2px
+    linkStyle 156 stroke:#BAB0AC,stroke-width:2px
 ```
 
 ---
@@ -894,6 +898,7 @@ flowchart TB
         discovery-static["discovery-static 🟢"]
         events["events 🟢"]
         http["http 🟢🌐"]
+        oauth["oauth 🟢🌐"]
         runtime["runtime 🟢"]
         testkit-vitest["testkit-vitest 🟢"]
         websocket["websocket 🟢🌐"]
@@ -911,6 +916,7 @@ flowchart TB
     discovery-static --> discovery
     events --> discovery
     http --> discovery
+    oauth --> discovery
     runtime --> discovery
     testkit-vitest --> discovery
     websocket --> discovery
@@ -923,6 +929,7 @@ flowchart TB
     style discovery-static fill:#D4A6C8,stroke:#D4A6C8,color:#fff
     style events fill:#4E79A7,stroke:#4E79A7,color:#fff
     style http fill:#59A14F,stroke:#59A14F,color:#fff
+    style oauth fill:#499894,stroke:#499894,color:#fff
     style runtime fill:#FFBE7D,stroke:#FFBE7D,color:#fff
     style testkit-vitest fill:#B07AA1,stroke:#B07AA1,color:#fff
     style websocket fill:#BAB0AC,stroke:#BAB0AC,color:#fff
@@ -934,10 +941,11 @@ flowchart TB
     linkStyle 4 stroke:#D4A6C8,stroke-width:2px
     linkStyle 5 stroke:#4E79A7,stroke-width:2px
     linkStyle 6 stroke:#59A14F,stroke-width:2px
-    linkStyle 7 stroke:#FFBE7D,stroke-width:2px
-    linkStyle 8 stroke:#B07AA1,stroke-width:2px
-    linkStyle 9 stroke:#BAB0AC,stroke-width:2px
-    linkStyle 10 stroke:#499894,stroke-width:2px
+    linkStyle 7 stroke:#499894,stroke-width:2px
+    linkStyle 8 stroke:#FFBE7D,stroke-width:2px
+    linkStyle 9 stroke:#B07AA1,stroke-width:2px
+    linkStyle 10 stroke:#BAB0AC,stroke-width:2px
+    linkStyle 11 stroke:#499894,stroke-width:2px
 ```
 
 ### Discovery Kubernetes
@@ -1388,6 +1396,7 @@ flowchart TB
         lock["lock 🟢"]
         logger["logger 🟢🌐"]
         metrics["metrics 🟢"]
+        oauth["oauth 🟢🌐"]
         openapi["openapi 🟢"]
         poller["poller 🟢"]
         runtime["runtime 🟢"]
@@ -1417,6 +1426,7 @@ flowchart TB
     lock --> locator
     logger --> locator
     metrics --> locator
+    oauth --> locator
     openapi --> locator
     poller --> locator
     runtime --> locator
@@ -1441,6 +1451,7 @@ flowchart TB
     style lock fill:#BAB0AC,stroke:#BAB0AC,color:#fff
     style logger fill:#86BCB6,stroke:#86BCB6,color:#fff
     style metrics fill:#B6992D,stroke:#B6992D,color:#fff
+    style oauth fill:#499894,stroke:#499894,color:#fff
     style openapi fill:#D37295,stroke:#D37295,color:#fff
     style poller fill:#A0CBE8,stroke:#A0CBE8,color:#fff
     style runtime fill:#FFBE7D,stroke:#FFBE7D,color:#fff
@@ -1464,14 +1475,15 @@ flowchart TB
     linkStyle 12 stroke:#BAB0AC,stroke-width:2px
     linkStyle 13 stroke:#86BCB6,stroke-width:2px
     linkStyle 14 stroke:#B6992D,stroke-width:2px
-    linkStyle 15 stroke:#D37295,stroke-width:2px
-    linkStyle 16 stroke:#A0CBE8,stroke-width:2px
-    linkStyle 17 stroke:#FFBE7D,stroke-width:2px
-    linkStyle 18 stroke:#59A14F,stroke-width:2px
-    linkStyle 19 stroke:#EDC948,stroke-width:2px
-    linkStyle 20 stroke:#B07AA1,stroke-width:2px
-    linkStyle 21 stroke:#BAB0AC,stroke-width:2px
-    linkStyle 22 stroke:#9C755F,stroke-width:2px
+    linkStyle 15 stroke:#499894,stroke-width:2px
+    linkStyle 16 stroke:#D37295,stroke-width:2px
+    linkStyle 17 stroke:#A0CBE8,stroke-width:2px
+    linkStyle 18 stroke:#FFBE7D,stroke-width:2px
+    linkStyle 19 stroke:#59A14F,stroke-width:2px
+    linkStyle 20 stroke:#EDC948,stroke-width:2px
+    linkStyle 21 stroke:#B07AA1,stroke-width:2px
+    linkStyle 22 stroke:#BAB0AC,stroke-width:2px
+    linkStyle 23 stroke:#9C755F,stroke-width:2px
 ```
 
 ### Lock
@@ -1676,22 +1688,30 @@ flowchart TB
     subgraph Dependencies[" "]
         auth["auth 🟢🌐"]
         db-dynamodb["db-dynamodb 🟢"]
+        discovery["discovery 🟢"]
         http["http 🟢🌐"]
+        locator["locator 🟢"]
         schema["schema 🟢🌐"]
     end
     oauth --> auth
     oauth --> db-dynamodb
+    oauth --> discovery
     oauth --> http
+    oauth --> locator
     oauth --> schema
     style oauth fill:#499894,stroke:#499894,color:#fff
     style auth fill:#E15759,stroke:#E15759,color:#fff
     style db-dynamodb fill:#86BCB6,stroke:#86BCB6,color:#fff
+    style discovery fill:#499894,stroke:#499894,color:#fff
     style http fill:#59A14F,stroke:#59A14F,color:#fff
+    style locator fill:#9C755F,stroke:#9C755F,color:#fff
     style schema fill:#D4A6C8,stroke:#D4A6C8,color:#fff
     linkStyle 0 stroke:#499894,stroke-width:2px
     linkStyle 1 stroke:#499894,stroke-width:2px
     linkStyle 2 stroke:#499894,stroke-width:2px
     linkStyle 3 stroke:#499894,stroke-width:2px
+    linkStyle 4 stroke:#499894,stroke-width:2px
+    linkStyle 5 stroke:#499894,stroke-width:2px
 ```
 
 ### Openapi

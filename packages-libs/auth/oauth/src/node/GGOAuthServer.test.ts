@@ -1,6 +1,5 @@
 import {createHash, randomBytes} from "node:crypto"
 import {createServer} from "node:net"
-import {exportJWK, generateKeyPair} from "jose"
 import {GGRuntime} from "@grest-ts/runtime"
 import {GGHeader, GGHttp, GGHttpSchema, GGHttpServer, GGRpc} from "@grest-ts/http"
 import {GGContextKey} from "@grest-ts/context"
@@ -40,9 +39,6 @@ const InteractionApi = new GGHttpSchema({
     routes: {get: GGRpc.GET("get"), approve: GGRpc.POST("approve"), deny: GGRpc.POST("deny")},
 })
 
-const {privateKey} = await generateKeyPair("ES256", {extractable: true})
-const signingJwk = JSON.stringify({...await exportJWK(privateKey), alg: "ES256", kid: "test"})
-
 let oauth!: GGOAuthServer<Claims>
 
 class OAuthTestRuntime extends GGRuntime {
@@ -54,8 +50,7 @@ class OAuthTestRuntime extends GGRuntime {
         oauth = new GGOAuthServer<Claims>({
             issuer: () => ISSUER,
             store: new InMemoryOAuthStore(),
-            signingJwk: () => signingJwk,
-            cookieKeys: () => ["cookie-key"],
+            secret: () => "oauth-test-secret",
             accessToken: userToken,
             resource: () => API,
             scopes: ["api"],
@@ -64,7 +59,7 @@ class OAuthTestRuntime extends GGRuntime {
                 return permissions ? {permissions} : undefined
             },
             interactionUrl: (uid) => `${APP_LOGIN}?uid=${uid}`,
-            firstPartyClients: [{clientId: "app", name: "The App", redirectUris: [FIRST_PARTY_REDIRECT]}],
+            firstPartyClients: () => [{clientId: "app", name: "The App", redirectUris: [FIRST_PARTY_REDIRECT]}],
             dynamicRegistration: true,
             clientIdMetadataDocument: true,
         })
@@ -167,6 +162,9 @@ describe("GGOAuthServer", () => {
             client_id_metadata_document_supported: true,
         })
         expect(meta.token_endpoint_auth_methods_supported).toContain("none")
+        const jwks = await (await fetch(meta.jwks_uri)).json()
+        expect(jwks.keys).toEqual([expect.objectContaining({kty: "EC", crv: "P-256", alg: "ES256"})])
+        expect(jwks.keys[0].d).toBeUndefined()
     })
 
     test("first-party sign-in issues the app's own access token, then re-auths silently", async () => {

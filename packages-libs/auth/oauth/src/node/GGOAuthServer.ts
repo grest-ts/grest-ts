@@ -1,8 +1,10 @@
-import {randomBytes} from "node:crypto"
+import {createECDH, createHash, hkdfSync, randomBytes} from "node:crypto"
 import type {IncomingMessage, ServerResponse} from "node:http"
 import Provider, {errors as oidcErrors, type Configuration, type InteractionResults, type KoaContextWithOIDC} from "oidc-provider"
 import {NOT_FOUND} from "@grest-ts/schema"
 import type {GGHttpServer} from "@grest-ts/http"
+import {GG_DISCOVERY} from "@grest-ts/discovery"
+import {GGLocator} from "@grest-ts/locator"
 import type {GGAuthAccessToken} from "@grest-ts/auth"
 import {GGOAuthInteractionContract, type GGOAuthInteraction} from "../shared/interactionContract"
 import {toOidcAdapter, type GGOAuthStore} from "./store/GGOAuthStore"
@@ -18,9 +20,9 @@ export interface GGOAuthServerOptions<C extends object> {
     // Public origin of the authorization server, no path (e.g. https://auth.example.com).
     issuer: () => string
     store: GGOAuthStore
-    // ES256 private JWK (JSON string) for the provider's own JWKS (id tokens). Not used for access tokens.
-    signingJwk: () => string
-    cookieKeys: () => string[]
+    // Derives the cookie-signing key and the ES256 key of the published JWKS (id tokens). Rotating it
+    // signs everyone out of the authorization server; issued access/refresh tokens are unaffected.
+    secret: () => string
     // The access token clients receive IS this token kind — same signer, audience, TTL and claim
     // schema — so the app's existing wire verifies it unchanged. Its signer must expose jwsKey().
     accessToken: GGAuthAccessToken<C>
@@ -35,7 +37,8 @@ export interface GGOAuthServerOptions<C extends object> {
     // The app's login/consent page; it receives the interaction uid and uses GGOAuthInteractionContract.
     interactionUrl: (uid: string) => string
     // Pre-registered app clients: no consent screen, silent re-auth while the login session lives.
-    firstPartyClients?: GGOAuthFirstPartyClient[]
+    // Read once, on first use (config isn't readable at compose time).
+    firstPartyClients?: () => GGOAuthFirstPartyClient[]
     // Let any client self-register (RFC 7591) or identify by a metadata URL (CIMD, MCP's preferred way).
     dynamicRegistration?: boolean
     clientIdMetadataDocument?: boolean
@@ -58,12 +61,16 @@ type Ticket = {uid: string, result: InteractionResults}
 export class GGOAuthServer<C extends object> {
 
     private _provider: Provider | undefined
+    private _firstParty: Map<string, GGOAuthFirstPartyClient> | undefined
     private readonly options: GGOAuthServerOptions<C>
-    private readonly firstParty: Map<string, GGOAuthFirstPartyClient>
 
     constructor(options: GGOAuthServerOptions<C>) {
         this.options = options
-        this.firstParty = new Map((options.firstPartyClients ?? []).map(c => [c.clientId, c]))
+    }
+
+    private get firstParty(): Map<string, GGOAuthFirstPartyClient> {
+        this._firstParty ??= new Map((this.options.firstPartyClients?.() ?? []).map(c => [c.clientId, c]))
+        return this._firstParty
     }
 
     public mount(server: GGHttpServer): void {
@@ -82,6 +89,14 @@ export class GGOAuthServer<C extends object> {
         for (const method of ["GET", "POST"] as const) server.registerRoute(method, `${BASE}/*`, handle, "GGOAuthServer")
         server.registerRoute("GET", "/.well-known/openid-configuration", handle, "GGOAuthServer")
         server.registerRoute("GET", "/.well-known/oauth-authorization-server", handle, "GGOAuthServer")
+
+        // Raw routes aren't announced by a schema, so a path-routing discovery proxy wouldn't forward them.
+        const scope = GGLocator.getScope()
+        server.onStart(() => {
+            GG_DISCOVERY.tryGet()?.registerRoutes([`${BASE}/`, "/.well-known/"].map(pathPrefix => ({
+                runtime: scope.serviceName, api: `GGOAuthServer${pathPrefix}`, pathPrefix, protocol: "http", port: server.port!,
+            })))
+        })
     }
 
     // Implementation of GGOAuthInteractionContract; `subject` reads the signed-in user from the app's wire.
@@ -198,8 +213,8 @@ export class GGOAuthServer<C extends object> {
 
         const config: Configuration = {
             adapter: toOidcAdapter(o.store),
-            jwks: {keys: [{...JSON.parse(o.signingJwk()), use: "sig"}]},
-            cookies: {keys: o.cookieKeys()},
+            jwks: {keys: [deriveEs256Jwk(o.secret())]},
+            cookies: {keys: [hkdf(o.secret(), "@grest-ts/oauth cookies").toString("base64url")]},
             clients: [...firstParty.values()].map(c => ({
                 client_id: c.clientId,
                 client_name: c.name,
@@ -299,3 +314,19 @@ export class GGOAuthServer<C extends object> {
     }
 }
 
+
+function hkdf(secret: string, info: string): Buffer {
+    return Buffer.from(hkdfSync("sha256", secret, "", info, 32))
+}
+
+// Deterministic, so every instance publishes the same key without distributing a key file.
+function deriveEs256Jwk(secret: string) {
+    const d = hkdf(secret, "@grest-ts/oauth es256")
+    const ecdh = createECDH("prime256v1")
+    ecdh.setPrivateKey(d)
+    const point = ecdh.getPublicKey()
+    const x = point.subarray(1, 33).toString("base64url")
+    const y = point.subarray(33).toString("base64url")
+    const kid = createHash("sha256").update(x + y).digest("base64url").slice(0, 16)
+    return {kty: "EC", crv: "P-256", d: d.toString("base64url"), x, y, alg: "ES256", use: "sig", kid}
+}

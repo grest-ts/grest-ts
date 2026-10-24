@@ -66,7 +66,9 @@
   "peerDependencies": {
     "@grest-ts/auth": "0.0.88",
     "@grest-ts/db-dynamodb": "0.0.88",
+    "@grest-ts/discovery": "0.0.88",
     "@grest-ts/http": "0.0.88",
+    "@grest-ts/locator": "0.0.88",
     "@grest-ts/schema": "0.0.88"
   }
 }

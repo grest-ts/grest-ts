@@ -1166,7 +1166,15 @@
     },
     {
       "from": "oauth",
+      "to": "discovery"
+    },
+    {
+      "from": "oauth",
       "to": "http"
+    },
+    {
+      "from": "oauth",
+      "to": "locator"
     },
     {
       "from": "oauth",
