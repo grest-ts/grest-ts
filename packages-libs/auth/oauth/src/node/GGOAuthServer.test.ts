@@ -261,6 +261,13 @@ describe("GGOAuthServer", () => {
         expect(await (await fetch(MCP, {method: "POST", headers: {authorization: `Bearer ${tokens.access_token}`}})).json()).toEqual({hello: "alice"})
     })
 
+    test("every resource publishes its metadata, so clients can find the authorization server from it", async () => {
+        const api = await (await fetch(`${ISSUER}/.well-known/oauth-protected-resource/api`)).json()
+        expect(api).toEqual({resource: API, authorization_servers: [ISSUER], scopes_supported: ["api"], bearer_methods_supported: ["header"]})
+        expect((await fetch(`${ISSUER}/.well-known/oauth-protected-resource`)).status).toBe(404)
+        expect((await fetch(`${ISSUER}/.well-known/oauth-protected-resource/other`)).status).toBe(404)
+    })
+
     test("a loopback (CLI) client matches on any port and is asked for consent every time", async () => {
         const clientId = await register(["http://127.0.0.1/callback", "http://localhost/callback"])
         const login = await new Browser().navigate(authorizeUrl(clientId, "http://localhost:51234/callback", pkce().challenge))

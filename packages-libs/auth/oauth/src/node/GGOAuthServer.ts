@@ -5,6 +5,7 @@ import {NOT_FOUND} from "@grest-ts/schema"
 import type {GGHttpServer} from "@grest-ts/http"
 import type {GGAccessPayload, GGAuthAccessToken} from "@grest-ts/auth"
 import {GGOAuthInteractionContract, type GGOAuthInteraction} from "../shared/interactionContract"
+import {RESOURCE_METADATA, resourceMetadataPath, resourceMetadataUrl} from "../shared/resourceMetadata"
 import {toOidcAdapter, type GGOAuthStore} from "./store/GGOAuthStore"
 
 export interface GGOAuthFirstPartyClient {
@@ -119,40 +120,51 @@ export class GGOAuthServer {
         for (const method of ["GET", "POST"] as const) server.registerRoute(method, `${BASE}/*`, handle, "GGOAuthServer")
         server.registerRoute("GET", "/.well-known/openid-configuration", handle, "GGOAuthServer")
         server.registerRoute("GET", "/.well-known/oauth-authorization-server", handle, "GGOAuthServer")
+        server.registerRoute("GET", RESOURCE_METADATA, this.resourceMetadata, "GGOAuthServer")
+        server.registerRoute("GET", `${RESOURCE_METADATA}/*`, this.resourceMetadata, "GGOAuthServer")
 
         server.announce(`${BASE}/`, "GGOAuthServer")
         server.announce("/.well-known/openid-configuration", "GGOAuthServer")
         server.announce("/.well-known/oauth-authorization-server", "GGOAuthServer")
+        server.announce(RESOURCE_METADATA, "GGOAuthServer")
+    }
+
+    // RFC 9728 metadata of every resource, at its URL's path under the well-known prefix: clients
+    // (the app's own UI included) start from the resource and learn the authorization server here.
+    private resourceMetadata = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
+        const path = new URL(req.url ?? "/", "http://x").pathname
+        const resource = this.options.resources.find(r => resourceMetadataPath(r.resource()) === path)
+        if (!resource) {
+            res.writeHead(404)
+            res.end()
+            return
+        }
+        res.writeHead(200, {"content-type": "application/json"})
+        res.end(JSON.stringify({
+            resource: resource.resource(),
+            authorization_servers: [this.options.issuer()],
+            scopes_supported: resource.scopes,
+            bearer_methods_supported: ["header"],
+        }))
     }
 
     // Serves `path` as an OAuth-protected resource: requests without a valid token for `resource` get
-    // 401 + `WWW-Authenticate: Bearer resource_metadata=…`, and its RFC 9728 metadata is published —
-    // the discovery handshake MCP clients run before signing in.
+    // 401 + `WWW-Authenticate: Bearer resource_metadata=…` — the discovery handshake MCP clients run
+    // before signing in.
     public protect<C extends object>(
         server: GGHttpServer,
         resource: GGOAuthResource<C>,
         path: string,
         handle: (req: IncomingMessage, res: ServerResponse, token: GGAccessPayload<C>) => Promise<void>,
     ): void {
-        const metadataPath = `/.well-known/oauth-protected-resource${path}`
-        server.registerRoute("GET", metadataPath, async (_req, res) => {
-            res.writeHead(200, {"content-type": "application/json"})
-            res.end(JSON.stringify({
-                resource: resource.resource(),
-                authorization_servers: [this.options.issuer()],
-                scopes_supported: resource.scopes,
-                bearer_methods_supported: ["header"],
-            }))
-        }, "GGOAuthServer")
         const guarded = async (req: IncomingMessage, res: ServerResponse) => {
             const auth = req.headers.authorization
             const token = auth?.toLowerCase().startsWith("bearer ")
                 ? await resource.accessToken.verify(auth.slice(7)).catch(() => undefined)
                 : undefined
             if (!token) {
-                const metadataUrl = `${new URL(resource.resource()).origin}${metadataPath}`
                 res.writeHead(401, {
-                    "www-authenticate": `Bearer resource_metadata="${metadataUrl}", scope="${resource.scopes.join(" ")}"${auth ? `, error="invalid_token"` : ""}`,
+                    "www-authenticate": `Bearer resource_metadata="${resourceMetadataUrl(resource.resource())}", scope="${resource.scopes.join(" ")}"${auth ? `, error="invalid_token"` : ""}`,
                 })
                 res.end()
                 return
@@ -161,7 +173,6 @@ export class GGOAuthServer {
         }
         for (const method of ["GET", "POST", "DELETE"] as const) server.registerRoute(method, path, guarded, "GGOAuthServer")
         server.announce(path, "GGOAuthServer")
-        server.announce(metadataPath, "GGOAuthServer")
     }
 
     // Implementation of GGOAuthInteractionContract; `subject` reads the signed-in user from the app's wire.

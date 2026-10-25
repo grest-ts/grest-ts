@@ -1,6 +1,7 @@
 /// <reference lib="dom" />
 import {decodeJwt} from "jose"
 import {NOT_AUTHORIZED} from "@grest-ts/schema"
+import {resourceMetadataUrl} from "../shared/resourceMetadata"
 
 // Structurally GGAuthSession's GGAuthResult (exported only from @grest-ts/auth's browser entry).
 export interface GGOAuthResult<I> {
@@ -8,17 +9,19 @@ export interface GGOAuthResult<I> {
     data: I
 }
 
-export interface GGOAuthClientConfig<I> {
-    // Where the authorization server's metadata is (`{server}/.well-known/oauth-authorization-server`).
-    // Responses are checked against the `issuer` it declares.
-    server: string
+export type GGOAuthClientConfig<I> = GGOAuthClientOptions<I> & (
+    // Where the authorization server's metadata is: the issuer, or another origin it is reached on.
+    // Tokens are for `resource`, or for the issuer itself.
+    | {server: string, resource?: string}
+    // RFC 8707 resource the access token is for; its authorization server is discovered from the
+    // resource's RFC 9728 metadata, the way any other OAuth client of that resource finds it.
+    | {server?: undefined, resource: string}
+)
+
+export interface GGOAuthClientOptions<I> {
     clientId: string
     redirectUri: string
     postLogoutRedirectUri?: string
-    // RFC 8707 resource the access token is for; defaults to the issuer (an authorization server
-    // protecting its own API). Always sent: a request with `openid` and no resource would get a
-    // userinfo-only token instead of an API token.
-    resource?: string
     scope?: string
     // The session's identity `data`, derived from the issued access token.
     identity: (accessToken: string) => I
@@ -61,7 +64,7 @@ export class GGOAuthClient<I = unknown> {
             state: pending.state,
             code_challenge: await s256(verifier),
             code_challenge_method: "S256",
-            resource: this.config.resource ?? meta.issuer,
+            resource: await this.resource(),
             ...(this.config.scope ? {scope: this.config.scope} : {}),
         }).toString()
         return url.href
@@ -139,7 +142,7 @@ export class GGOAuthClient<I = unknown> {
         const meta = await this.discover()
         const res = await fetch(meta.token_endpoint, {
             method: "POST",
-            body: new URLSearchParams({...body, client_id: this.config.clientId, resource: this.config.resource ?? meta.issuer}),
+            body: new URLSearchParams({...body, client_id: this.config.clientId, resource: await this.resource()}),
         })
         const json = await res.json().catch(() => ({})) as Record<string, unknown>
         if (!res.ok) {
@@ -158,14 +161,39 @@ export class GGOAuthClient<I = unknown> {
         }
     }
 
+    // The resource is always sent: a request with `openid` and no resource would get a userinfo-only
+    // token instead of an API token.
+    private async resource(): Promise<string> {
+        return this.config.resource ?? (await this.discover()).issuer
+    }
+
     private discover(): Promise<Metadata> {
-        this.metadata ??= fetch(`${this.config.server}/.well-known/oauth-authorization-server`).then(async res => {
-            if (!res.ok) throw new Error(`OAuth discovery failed: ${res.status}`)
-            return await res.json() as Metadata
-        })
+        this.metadata ??= (async () => {
+            const config = this.config
+            if (config.server !== undefined) return await getJson(`${config.server}/.well-known/oauth-authorization-server`) as Metadata
+            const server = await authorizationServerOf(config.resource)
+            const meta = await getJson(`${server}/.well-known/oauth-authorization-server`) as Metadata
+            // RFC 8414 §3.3: a discovered server's metadata must name it as the issuer.
+            if (meta.issuer !== server) throw new Error(`OAuth discovery: ${server} declares issuer ${meta.issuer}`)
+            return meta
+        })()
         this.metadata.catch(() => { this.metadata = undefined })
         return this.metadata
     }
+}
+
+async function authorizationServerOf(resource: string): Promise<string> {
+    const meta = await getJson(resourceMetadataUrl(resource)) as {resource?: string, authorization_servers?: string[]}
+    if (meta.resource !== resource) throw new Error(`OAuth discovery: metadata of ${resource} is for ${meta.resource}`)
+    const server = meta.authorization_servers?.[0]
+    if (!server) throw new Error(`OAuth discovery: ${resource} names no authorization server`)
+    return server
+}
+
+async function getJson(url: string): Promise<unknown> {
+    const res = await fetch(url)
+    if (!res.ok) throw new Error(`OAuth discovery failed: ${url} ${res.status}`)
+    return await res.json()
 }
 
 // A grest-ts access token's payload, unverified — for UI identity only; the server re-verifies
