@@ -74,3 +74,40 @@ describe("GGOAuthClient redirects", () => {
         expect(assign).not.toHaveBeenCalled()
     })
 })
+
+describe("GGOAuthClient discovery from a resource", () => {
+    const API = "https://api.example"
+    let assign: ReturnType<typeof vi.fn>
+    let documents: Record<string, object>
+
+    beforeEach(() => {
+        assign = vi.fn()
+        documents = {
+            [`${API}/.well-known/oauth-protected-resource`]: {resource: API, authorization_servers: [SERVER]},
+            [`${SERVER}/.well-known/oauth-authorization-server`]: METADATA,
+        }
+        vi.stubGlobal("window", {location: {assign}, addEventListener: vi.fn()})
+        vi.stubGlobal("sessionStorage", {setItem: vi.fn(), getItem: vi.fn(), removeItem: vi.fn()})
+        vi.stubGlobal("fetch", vi.fn(async (url: string) => documents[url] ? new Response(JSON.stringify(documents[url])) : new Response("", {status: 404})))
+    })
+    afterEach(() => vi.unstubAllGlobals())
+
+    const client = () => new GGOAuthClient({resource: API, clientId: "web", redirectUri: "https://app.example/cb", identity: () => ({})})
+
+    test("signs in at the authorization server the resource names, for that resource", async () => {
+        void client().authorize()
+        await vi.waitFor(() => expect(assign).toHaveBeenCalledTimes(1))
+        const url = new URL(assign.mock.calls[0][0])
+        expect(url.origin + url.pathname).toBe(METADATA.authorization_endpoint)
+        expect(url.searchParams.get("resource")).toBe(API)
+    })
+
+    test("metadata that doesn't match what was asked for is refused", async () => {
+        documents[`${API}/.well-known/oauth-protected-resource`] = {resource: "https://other.example", authorization_servers: [SERVER]}
+        await expect(client().authorize()).rejects.toThrow(/is for https:\/\/other.example/)
+        documents[`${API}/.well-known/oauth-protected-resource`] = {resource: API, authorization_servers: [SERVER]}
+        documents[`${SERVER}/.well-known/oauth-authorization-server`] = {...METADATA, issuer: "https://evil.example"}
+        await expect(client().authorize()).rejects.toThrow(/declares issuer https:\/\/evil.example/)
+        expect(assign).not.toHaveBeenCalled()
+    })
+})

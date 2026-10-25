@@ -63,7 +63,7 @@ const oauth = new GGOAuthServer({
     clientIdMetadataDocument: {allowedUrlPrefixes: () => ["https://claude.ai/oauth/", "https://chatgpt.com/oauth/"]},
     // dynamicRegistration: true,                  // open RFC 7591 registration — anyone, any name
 })
-oauth.mount(httpServer)                            // /oauth/* + /.well-known/*, announced to discovery
+oauth.mount(httpServer)                            // /oauth/* + /.well-known/* (incl. every resource's metadata), announced to discovery
 oauth.protect(httpServer, mcp, "/mcp", handleMcp)  // 401 + resource metadata, then your handler
 new GGHttp(httpServer).http(OAuthInteractionApi, oauth.interactionApi(() => USER.get()!.id))
 ```
@@ -79,8 +79,9 @@ the next refresh, and a deleted or deactivated user's OAuth session ends there.
 `protect(server, resource, path, handler)` puts `path` behind the resource's token. It also
 provides the discovery handshake MCP clients run:
 
-- A request without a valid token gets `401 WWW-Authenticate: Bearer resource_metadata="…/.well-known/oauth-protected-resource{path}", scope="…"`.
-- That metadata (RFC 9728) names this server and the resource's scopes.
+- A request without a valid token gets `401 WWW-Authenticate: Bearer resource_metadata="…/.well-known/oauth-protected-resource{resource path}", scope="…"`.
+- That metadata (RFC 9728) names this server and the resource's scopes. `mount` publishes it for
+  every resource, protected or not, at the resource URL's path under that prefix.
 - Your handler receives the verified token payload. For example, run the official MCP SDK's
   `StreamableHTTPServerTransport` on the raw `req`/`res`.
 
@@ -135,7 +136,7 @@ ship:
 import {GGOAuthClient, decodeAccessToken} from "@grest-ts/oauth"
 
 const oauth = new GGOAuthClient({
-    server: apiBase, clientId: "web", scope: "app",
+    resource: apiBase, clientId: "web", scope: "app",       // or `server: issuer` to name it directly
     redirectUri: `${location.origin}/oauth/callback`, postLogoutRedirectUri: `${location.origin}/`,
     identity: (token) => toUser(decodeAccessToken(token)),   // session.get() data; UI-only, unverified
 })
@@ -147,8 +148,13 @@ else if (!session.isLoggedIn()) await oauth.authorize({returnTo: location.pathna
 oauth.logout(undefined)   // ends the authorization server's login session too
 ```
 
-- `iss` is checked against the issuer in the server's metadata.
-- `resource` defaults to that issuer.
+- With only `resource`, the authorization server is the first one its RFC 9728 metadata names, so
+  the sign-in host can differ from the API host (e.g. `auth.` vs `api.`). The metadata must be for
+  exactly that resource.
+- A discovered server's metadata must declare it as the issuer (RFC 8414).
+- With `server`, its metadata is used as fetched (it may be the issuer reached on another of its
+  `origins`), and `resource` defaults to the issuer it declares.
+- `iss` on the callback must match the issuer (RFC 9207).
 - `invalid_grant` on refresh surfaces as `NOT_AUTHORIZED`, which ends the session.
 
 ## Notes
