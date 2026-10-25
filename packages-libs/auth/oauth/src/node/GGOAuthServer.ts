@@ -5,6 +5,7 @@ import {NOT_FOUND} from "@grest-ts/schema"
 import type {GGHttpServer} from "@grest-ts/http"
 import type {GGAccessPayload, GGAuthAccessToken} from "@grest-ts/auth"
 import {GGOAuthInteractionContract, type GGOAuthInteraction} from "../shared/interactionContract"
+import {RESOURCE_METADATA, resourceMetadataPath, resourceMetadataUrl} from "../shared/resourceMetadata"
 import {toOidcAdapter, type GGOAuthStore} from "./store/GGOAuthStore"
 
 export interface GGOAuthFirstPartyClient {
@@ -63,7 +64,6 @@ export interface GGOAuthServerOptions {
 }
 
 const BASE = "/oauth"
-const RESOURCE_METADATA = "/.well-known/oauth-protected-resource"
 const OIDC_SCOPES = ["openid", "offline_access"]
 const TICKET = "GGOAuthTicket"
 // Claims resolved during a refresh before the presented token was consumed (see rotateRefreshToken).
@@ -132,8 +132,8 @@ export class GGOAuthServer {
     // RFC 9728 metadata of every resource, at its URL's path under the well-known prefix: clients
     // (the app's own UI included) start from the resource and learn the authorization server here.
     private resourceMetadata = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
-        const path = new URL(req.url ?? "/", "http://x").pathname.slice(RESOURCE_METADATA.length)
-        const resource = this.options.resources.find(r => resourcePath(r.resource()) === path)
+        const path = new URL(req.url ?? "/", "http://x").pathname
+        const resource = this.options.resources.find(r => resourceMetadataPath(r.resource()) === path)
         if (!resource) {
             res.writeHead(404)
             res.end()
@@ -163,9 +163,8 @@ export class GGOAuthServer {
                 ? await resource.accessToken.verify(auth.slice(7)).catch(() => undefined)
                 : undefined
             if (!token) {
-                const metadataUrl = `${new URL(resource.resource()).origin}${RESOURCE_METADATA}${resourcePath(resource.resource())}`
                 res.writeHead(401, {
-                    "www-authenticate": `Bearer resource_metadata="${metadataUrl}", scope="${resource.scopes.join(" ")}"${auth ? `, error="invalid_token"` : ""}`,
+                    "www-authenticate": `Bearer resource_metadata="${resourceMetadataUrl(resource.resource())}", scope="${resource.scopes.join(" ")}"${auth ? `, error="invalid_token"` : ""}`,
                 })
                 res.end()
                 return
@@ -484,12 +483,6 @@ export class GGOAuthServer {
     }
 }
 
-
-// The resource URL's path as RFC 9728 places it after the well-known prefix ("" for the origin itself).
-function resourcePath(resource: string): string {
-    const path = new URL(resource).pathname
-    return path === "/" ? "" : path
-}
 
 function isAllowedDocumentUrl(clientId: string, prefixes: string[]): boolean {
     const url = URL.parse(clientId)

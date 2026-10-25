@@ -1,6 +1,7 @@
 /// <reference lib="dom" />
 import {decodeJwt} from "jose"
 import {NOT_AUTHORIZED} from "@grest-ts/schema"
+import {resourceMetadataUrl} from "../shared/resourceMetadata"
 
 // Structurally GGAuthSession's GGAuthResult (exported only from @grest-ts/auth's browser entry).
 export interface GGOAuthResult<I> {
@@ -181,11 +182,8 @@ export class GGOAuthClient<I = unknown> {
     }
 }
 
-// RFC 9728: the resource's metadata sits at its URL's path under the well-known prefix.
 async function authorizationServerOf(resource: string): Promise<string> {
-    const url = new URL(resource)
-    const path = url.pathname === "/" ? "" : url.pathname
-    const meta = await getJson(`${url.origin}/.well-known/oauth-protected-resource${path}`) as {resource?: string, authorization_servers?: string[]}
+    const meta = await getJson(resourceMetadataUrl(resource)) as {resource?: string, authorization_servers?: string[]}
     if (meta.resource !== resource) throw new Error(`OAuth discovery: metadata of ${resource} is for ${meta.resource}`)
     const server = meta.authorization_servers?.[0]
     if (!server) throw new Error(`OAuth discovery: ${resource} names no authorization server`)
