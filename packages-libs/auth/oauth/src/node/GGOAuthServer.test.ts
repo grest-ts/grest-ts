@@ -329,8 +329,9 @@ describe("GGOAuthServer", () => {
         const {tokens} = await signIn(new Browser(), clientId, THIRD_PARTY_REDIRECT)
         const signedIn = Date.now()
         const lastUsed = async () => (await oauth.listGrants("alice")).find(g => g.clientId === clientId)!.lastUsedAt!
-        expect(await lastUsed()).toBeGreaterThanOrEqual(before)
-        expect(await lastUsed()).toBeLessThanOrEqual(signedIn)
+        const first = await lastUsed()
+        expect(first).toBeGreaterThanOrEqual(before)
+        expect(first).toBeLessThanOrEqual(signedIn)
 
         expect((await token({grant_type: "refresh_token", refresh_token: tokens.refresh_token, client_id: clientId})).access_token).toEqual(expect.any(String))
         expect(await lastUsed()).toBeGreaterThanOrEqual(signedIn)

@@ -67,6 +67,8 @@ export interface GGOAuthServerOptions {
 const BASE = "/oauth"
 const OIDC_SCOPES = ["openid", "offline_access"]
 const TICKET = "GGOAuthTicket"
+// Not an oidc-provider model: when each grant last got tokens, for listGrants. Carries grantId, so revoking the grant removes it.
+const GRANT_USAGE = "GrantUsage"
 // Claims resolved during a refresh before the presented token was consumed (see rotateRefreshToken).
 const prefetchedClaims = new WeakMap<object, {resource: string, claims: object}>()
 
@@ -187,18 +189,23 @@ export class GGOAuthServer {
 
     public listGrants = async (subject: string): Promise<Array<{grantId: string, clientId: string, clientName: string, createdAt: number, lastUsedAt?: number}>> => {
         const p = this.provider()
-        const store = this.options.store
-        const grants = await Promise.all((await store.listIdsByAccount("Grant", subject)).map(id => p.Grant.find(id)))
+        const grants = await Promise.all((await this.options.store.listIdsByAccount("Grant", subject)).map(id => p.Grant.find(id)))
         return await Promise.all(grants
             .filter(g => g?.clientId && g.accountId === subject)
-            .map(async g => ({
-                grantId: g!.jti,
-                clientId: g!.clientId!,
-                // A client metadata document may be unreachable; the grant must still be listed (and revocable).
-                clientName: String((await p.Client.find(g!.clientId!).catch(() => undefined))?.clientName ?? g!.clientId),
-                createdAt: (g!.iat ?? 0) * 1000,
-                lastUsedAt: (await store.find(GRANT_USAGE, g!.jti))?.lastUsedAt as number | undefined,
-            })))
+            .map(async g => {
+                const [client, usage] = await Promise.all([
+                    // A client metadata document may be unreachable; the grant must still be listed (and revocable).
+                    p.Client.find(g!.clientId!).catch(() => undefined),
+                    this.options.store.find(GRANT_USAGE, g!.jti),
+                ])
+                return {
+                    grantId: g!.jti,
+                    clientId: g!.clientId!,
+                    clientName: String(client?.clientName ?? g!.clientId),
+                    createdAt: (g!.iat ?? 0) * 1000,
+                    lastUsedAt: usage?.lastUsedAt as number | undefined,
+                }
+            }))
     }
 
     // Kills the grant's refresh tokens and codes now; already-issued access tokens live out their TTL.
@@ -483,7 +490,8 @@ export class GGOAuthServer {
         })
         provider.use(async (ctx, next) => {
             await next()
-            const grant = ctx.oidc?.route === "token" && ctx.status === 200 ? ctx.oidc.entities.Grant : undefined
+            if (ctx.oidc?.route !== "token" || ctx.status !== 200) return
+            const grant = ctx.oidc.entities.Grant
             if (!grant) return
             // The tokens are already issued (a refresh token already rotated): failing now would strand the client.
             await o.store.upsert(GRANT_USAGE, grant.jti, {grantId: grant.jti, lastUsedAt: Date.now()}, grant.remainingTTL)
@@ -494,9 +502,6 @@ export class GGOAuthServer {
     }
 }
 
-
-// Not an oidc-provider model: when each grant last got tokens, for listGrants. Carries grantId, so revoking the grant removes it.
-const GRANT_USAGE = "GrantUsage"
 
 function isAllowedDocumentUrl(clientId: string, prefixes: string[]): boolean {
     const url = URL.parse(clientId)
