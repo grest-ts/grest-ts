@@ -82,7 +82,7 @@ class OAuthTestRuntime extends GGRuntime {
             interactionUrl: (uid) => `${APP_LOGIN}?uid=${uid}`,
             firstPartyClients: () => [{clientId: "app", name: "The App", redirectUris: [FIRST_PARTY_REDIRECT], postLogoutRedirectUris: ["https://app.example/"]}],
             dynamicRegistration: true,
-            clientIdMetadataDocument: {allowedHosts: () => ["clients.example"]},
+            clientIdMetadataDocument: {allowedUrlPrefixes: () => ["https://clients.example/oauth/"]},
             proxy: true,
         })
         oauth.mount(server)
@@ -172,6 +172,22 @@ async function register(redirectUris = [THIRD_PARTY_REDIRECT]): Promise<string> 
     return (await res.json()).client_id
 }
 
+describe("GGOAuthServer resources", () => {
+    const base = {issuer: () => ISSUER, store: new InMemoryOAuthStore(), secret: () => "s", interactionUrl: () => "", scopes: ["x"] as [string]}
+    const resource = (audience: string | undefined) => ({
+        resource: () => `${ISSUER}/${audience ?? "none"}`,
+        accessToken: new GGAuthAccessToken({signer: new HmacSigner("k"), claimSchema: IsClaims, audience}),
+        scopes: ["x"] as [string],
+        claims: async () => ({permissions: []}),
+    })
+
+    test("each resource needs its own audience (shared signer)", () => {
+        expect(() => new GGOAuthServer({...base, resources: [resource("a"), resource(undefined)]})).toThrow(/own audience/)
+        expect(() => new GGOAuthServer({...base, resources: [resource("a"), resource("a")]})).toThrow(/own audience/)
+        expect(() => new GGOAuthServer({...base, resources: [resource("a"), resource("b")]})).not.toThrow()
+    })
+})
+
 describe("GGOAuthServer", () => {
     let runtime: OAuthTestRuntime
     beforeAll(async () => { runtime = await new OAuthTestRuntime().start() })
@@ -257,10 +273,18 @@ describe("GGOAuthServer", () => {
         expect(again.origin + again.pathname).toBe(APP_LOGIN)
     })
 
-    test("client metadata documents are fetched only from allowed hosts", async () => {
-        const res = await new Browser().get(authorizeUrl("https://elsewhere.example/client.json", THIRD_PARTY_REDIRECT, pkce().challenge))
-        expect(res.status).toBe(400)
-        expect(await res.text()).toContain("invalid_client")
+    test("client metadata documents are fetched only from allowed URL prefixes", async () => {
+        for (const clientId of [
+            "https://elsewhere.example/oauth/client.json",
+            "https://clients.example/other/client.json",
+            "https://clients.example/oauthx/client.json",
+            "https://clients.example:8443/oauth/client.json",
+            "https://user@clients.example/oauth/client.json",
+        ]) {
+            const res = await new Browser().get(authorizeUrl(clientId, THIRD_PARTY_REDIRECT, pkce().challenge))
+            expect(res.status, clientId).toBe(400)
+            expect(await res.text(), clientId).toContain("invalid_client")
+        }
     })
 
     test("deny sends access_denied to the client", async () => {
@@ -347,6 +371,9 @@ describe("GGOAuthServer", () => {
         const uid = new URL(res.headers.get("location")!, "https://evil.example").pathname.split("/").pop()!
         const approved = await interaction((await userToken.issue("alice", {permissions: []})).token)("approve", uid)
         expect(new URL(approved.data.redirectUrl).origin).toBe(ISSUER)
+
+        const meta = await (await fetch(`${ISSUER}/.well-known/oauth-authorization-server`, {headers: {"x-forwarded-host": "evil.example"}})).json()
+        expect(new URL(meta.token_endpoint).origin).toBe(ISSUER)
     })
 
     test("a refresh that fails before issuing (claims unavailable) can be retried", async () => {
