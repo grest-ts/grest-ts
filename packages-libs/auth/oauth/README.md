@@ -164,6 +164,8 @@ oauth.logout(undefined)   // ends the authorization server's login session too
 - A sign-in finishes on the origin it started on only if that is the issuer or one of `origins`.
   Request hosts are client-controlled, so anything else falls back to the issuer.
 - The issuer is an origin. Clients bind to it, so changing it disconnects them.
+- Resource metadata is served by the resource URL's path on any host, so give each resource its
+  own path (e.g. the API at `/` and MCP at `/mcp`).
 - Endpoints in the metadata follow the request host. Serve the issuer host directly or keep
   `Host` through your proxy, and pass `proxy: true` behind a TLS-terminating load balancer (it trusts
   `X-Forwarded-Proto`; `X-Forwarded-Host` is always ignored — clients can send it).
