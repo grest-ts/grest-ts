@@ -494,7 +494,7 @@ export class GGOAuthServer {
             const grant = ctx.oidc.entities.Grant
             if (!grant) return
             // The tokens are already issued (a refresh token already rotated): failing now would strand the client.
-            await o.store.upsert(GRANT_USAGE, grant.jti, {grantId: grant.jti, lastUsedAt: Date.now()}, grant.remainingTTL)
+            await o.store.upsert(GRANT_USAGE, grant.jti, {grantId: grant.jti, lastUsedAt: Date.now()}, Math.max(1, grant.remainingTTL))
                 .catch(error => GGLog.error(this, "Recording grant usage failed", {error}))
         })
         this._provider = provider
