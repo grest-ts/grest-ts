@@ -30,6 +30,8 @@ The protocol is [panva/oidc-provider](https://github.com/panva/node-oidc-provide
 
 A server issues tokens for one or more **resources** (RFC 8707). Each resource has its own token
 kind: audience, claims and TTL. A token for one resource is therefore rejected by another's wire.
+Every resource must set its own `audience` (the constructor refuses otherwise): with a shared signer,
+the audience is the only thing that tells the tokens apart.
 
 ```ts
 import {GGOAuthServer, type GGOAuthResource} from "@grest-ts/oauth"
@@ -58,7 +60,7 @@ const oauth = new GGOAuthServer({
     resources: [api, mcp],                         // first = default for first-party clients
     interactionUrl: (uid, {firstParty, redirectUri}) => `${appUrl}/?oauthLogin=${uid}`,
     firstPartyClients: () => [{clientId: "web", name: "My App", redirectUris: [`${appUrl}/oauth/callback`]}],
-    clientIdMetadataDocument: {allowedHosts: () => ["claude.ai", "chatgpt.com"]},  // vendor-hosted client docs
+    clientIdMetadataDocument: {allowedUrlPrefixes: () => ["https://claude.ai/oauth/", "https://chatgpt.com/oauth/"]},
     // dynamicRegistration: true,                  // open RFC 7591 registration — anyone, any name
 })
 oauth.mount(httpServer)                            // /oauth/* + /.well-known/*, announced to discovery
@@ -87,7 +89,7 @@ provides the discovery handshake MCP clients run:
 | Client | How it's known | Consent |
 |---|---|---|
 | First-party (`firstPartyClients`) | Pre-registered | None; silent while the login session lives |
-| Client ID Metadata Document from `allowedHosts` | `client_id` is its document URL, fetched by the server | Once per grant |
+| Client ID Metadata Document under `allowedUrlPrefixes` (https, default port) | `client_id` is its document URL, fetched by the server | Once per grant |
 | Loopback / CLI (no `application_type` declared → native) | Any port on `localhost`/`127.0.0.1` matches | **Every** authorization: any local process could claim the redirect |
 | Dynamic registration (opt-in) | `POST /oauth/register` | Once per grant |
 
@@ -152,12 +154,13 @@ oauth.logout(undefined)   // ends the authorization server's login session too
 ## Notes
 
 - The issuer, first-party clients, keys and resources are handed to oidc-provider when the first
-  OAuth request arrives. Changing them takes a restart; `allowedHosts` is read on every fetch.
+  OAuth request arrives. Changing them takes a restart; `allowedUrlPrefixes` is read on every fetch.
 - A sign-in finishes on the origin it started on only if that is the issuer or one of `origins`.
   Request hosts are client-controlled, so anything else falls back to the issuer.
 - The issuer is an origin. Clients bind to it, so changing it disconnects them.
 - Endpoints in the metadata follow the request host. Serve the issuer host directly or keep
-  `Host` through your proxy, and pass `proxy: true` behind a TLS-terminating load balancer.
+  `Host` through your proxy, and pass `proxy: true` behind a TLS-terminating load balancer (it trusts
+  `X-Forwarded-Proto`; `X-Forwarded-Host` is always ignored — clients can send it).
 - oidc-provider's CIMD support is experimental (draft-02). The version is pinned exactly.
 - The OAuth endpoints use the standard form-encoded protocol, not grest-ts contracts. That is the
   one place this package speaks raw HTTP.

@@ -51,12 +51,14 @@ export interface GGOAuthServerOptions {
     // Let any client self-register (RFC 7591).
     dynamicRegistration?: boolean
     // Accept clients identified by a metadata document URL (CIMD, what MCP clients prefer), fetched
-    // only from these hosts — e.g. a vendor's hosted client documents.
-    clientIdMetadataDocument?: {allowedHosts: () => string[]}
+    // only from https URLs on the default port under one of these prefixes (end each with "/"),
+    // e.g. a vendor's hosted client documents: "https://claude.ai/oauth/".
+    clientIdMetadataDocument?: {allowedUrlPrefixes: () => string[]}
     // Absolute refresh lifetime: rotation never extends it (OAuth for browser apps, RFC 10017).
     refreshTtlSec?: number
     sessionTtlSec?: number
-    // Trust X-Forwarded-* (behind a TLS-terminating load balancer).
+    // Trust X-Forwarded-Proto (behind a TLS-terminating load balancer). X-Forwarded-Host is never
+    // trusted: clients can send it through a load balancer that doesn't set it.
     proxy?: boolean
 }
 
@@ -79,6 +81,12 @@ export class GGOAuthServer {
     private readonly options: GGOAuthServerOptions
 
     constructor(options: GGOAuthServerOptions) {
+        // Resources sharing a signer are told apart only by audience: a token for one must never
+        // verify as another's (e.g. an app's MCP token as the first-party API token).
+        const audiences = options.resources.map(r => r.accessToken.audience)
+        if (audiences.some(a => !a) || new Set(audiences).size !== audiences.length) {
+            throw new Error("GGOAuthServer: every resource's accessToken needs its own audience")
+        }
         this.options = options
     }
 
@@ -89,6 +97,7 @@ export class GGOAuthServer {
 
     public mount(server: GGHttpServer): void {
         const handle = async (req: IncomingMessage, res: ServerResponse) => {
+            delete req.headers["x-forwarded-host"]
             const path = new URL(req.url ?? "/", "http://x").pathname
             const interaction = path.match(/^\/oauth\/interaction\/([^/]+)(\/complete)?$/)
             if (interaction && req.method === "GET") {
@@ -346,7 +355,7 @@ export class GGOAuthServer {
                 ...(o.clientIdMetadataDocument ? {clientIdMetadataDocument: {
                     enabled: true,
                     ack: "draft-02",
-                    allowFetch: async (_ctx: unknown, clientId: string) => o.clientIdMetadataDocument!.allowedHosts().includes(new URL(clientId).hostname),
+                    allowFetch: async (_ctx: unknown, clientId: string) => isAllowedDocumentUrl(clientId, o.clientIdMetadataDocument!.allowedUrlPrefixes()),
                 }} : {}),
                 rpInitiatedLogout: {
                     enabled: true,
@@ -463,6 +472,12 @@ export class GGOAuthServer {
     }
 }
 
+
+function isAllowedDocumentUrl(clientId: string, prefixes: string[]): boolean {
+    const url = URL.parse(clientId)
+    if (!url || url.protocol !== "https:" || url.port !== "" || url.username || url.password) return false
+    return prefixes.some(prefix => (url.origin + url.pathname).startsWith(prefix))
+}
 
 function requestedScopes(params: Record<string, unknown>): string[] {
     return String(params.scope ?? "").split(" ").filter(Boolean)
