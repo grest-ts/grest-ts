@@ -1166,6 +1166,10 @@
     },
     {
       "from": "oauth",
+      "to": "logger"
+    },
+    {
+      "from": "oauth",
       "to": "schema"
     },
     {

@@ -2,6 +2,7 @@ import {createECDH, createHash, hkdfSync, randomBytes} from "node:crypto"
 import type {IncomingMessage, ServerResponse} from "node:http"
 import Provider, {errors as oidcErrors, type Configuration, type InteractionResults, type KoaContextWithOIDC} from "oidc-provider"
 import {NOT_FOUND} from "@grest-ts/schema"
+import {GGLog} from "@grest-ts/logger"
 import type {GGHttpServer} from "@grest-ts/http"
 import type {GGAccessPayload, GGAuthAccessToken} from "@grest-ts/auth"
 import {GGOAuthInteractionContract, type GGOAuthInteraction} from "../shared/interactionContract"
@@ -184,9 +185,10 @@ export class GGOAuthServer {
         }
     }
 
-    public listGrants = async (subject: string): Promise<Array<{grantId: string, clientId: string, clientName: string, createdAt: number}>> => {
+    public listGrants = async (subject: string): Promise<Array<{grantId: string, clientId: string, clientName: string, createdAt: number, lastUsedAt?: number}>> => {
         const p = this.provider()
-        const grants = await Promise.all((await this.options.store.listIdsByAccount("Grant", subject)).map(id => p.Grant.find(id)))
+        const store = this.options.store
+        const grants = await Promise.all((await store.listIdsByAccount("Grant", subject)).map(id => p.Grant.find(id)))
         return await Promise.all(grants
             .filter(g => g?.clientId && g.accountId === subject)
             .map(async g => ({
@@ -195,6 +197,7 @@ export class GGOAuthServer {
                 // A client metadata document may be unreachable; the grant must still be listed (and revocable).
                 clientName: String((await p.Client.find(g!.clientId!).catch(() => undefined))?.clientName ?? g!.clientId),
                 createdAt: (g!.iat ?? 0) * 1000,
+                lastUsedAt: (await store.find(GRANT_USAGE, g!.jti))?.lastUsedAt as number | undefined,
             })))
     }
 
@@ -478,11 +481,22 @@ export class GGOAuthServer {
             await next()
             if (ctx.oidc?.route === "discovery") (ctx.body as {scopes_supported: string[]}).scopes_supported = [...OIDC_SCOPES, ...new Set(o.resources.flatMap(r => r.scopes))]
         })
+        provider.use(async (ctx, next) => {
+            await next()
+            const grant = ctx.oidc?.route === "token" && ctx.status === 200 ? ctx.oidc.entities.Grant : undefined
+            if (!grant) return
+            // The tokens are already issued (a refresh token already rotated): failing now would strand the client.
+            await o.store.upsert(GRANT_USAGE, grant.jti, {grantId: grant.jti, lastUsedAt: Date.now()}, grant.remainingTTL)
+                .catch(error => GGLog.error(this, "Recording grant usage failed", {error}))
+        })
         this._provider = provider
         return provider
     }
 }
 
+
+// Not an oidc-provider model: when each grant last got tokens, for listGrants. Carries grantId, so revoking the grant removes it.
+const GRANT_USAGE = "GrantUsage"
 
 function isAllowedDocumentUrl(clientId: string, prefixes: string[]): boolean {
     const url = URL.parse(clientId)

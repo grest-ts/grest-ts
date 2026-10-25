@@ -323,6 +323,19 @@ describe("GGOAuthServer", () => {
         expect((await token({grant_type: "refresh_token", refresh_token: refreshed.refresh_token, client_id: "app"})).error).toBe("invalid_grant")
     })
 
+    test("a grant records when it last got tokens", async () => {
+        const clientId = await register()
+        const before = Date.now()
+        const {tokens} = await signIn(new Browser(), clientId, THIRD_PARTY_REDIRECT)
+        const signedIn = Date.now()
+        const lastUsed = async () => (await oauth.listGrants("alice")).find(g => g.clientId === clientId)!.lastUsedAt!
+        expect(await lastUsed()).toBeGreaterThanOrEqual(before)
+        expect(await lastUsed()).toBeLessThanOrEqual(signedIn)
+
+        expect((await token({grant_type: "refresh_token", refresh_token: tokens.refresh_token, client_id: clientId})).access_token).toEqual(expect.any(String))
+        expect(await lastUsed()).toBeGreaterThanOrEqual(signedIn)
+    })
+
     test("refresh fails once the subject is gone", async () => {
         const {tokens} = await signIn(new Browser(), "app", FIRST_PARTY_REDIRECT)
         userPermissions.set("alice", undefined)

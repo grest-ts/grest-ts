@@ -71,7 +71,7 @@ new GGHttp(httpServer).http(OAuthInteractionApi, oauth.interactionApi(() => USER
 `claims` works like the `resolve` callback of `GGAuthRefreshToken.refresh`: role changes apply on
 the next refresh, and a deleted or deactivated user's OAuth session ends there.
 
-`listGrants(subject)` and `revokeGrant(subject, grantId)` back a "connected apps" page.
+`listGrants(subject)` and `revokeGrant(subject, grantId)` back a "connected apps" page. Each grant has `createdAt` and `lastUsedAt`: when it last got tokens, so within one access-token lifetime of its last use.
 `revokeAll(subject)` is "log out everywhere"; call it next to `GGAuthRefreshToken.revokeAll`.
 
 ### Protected resources (MCP)
