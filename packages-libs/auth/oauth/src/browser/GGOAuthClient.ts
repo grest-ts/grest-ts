@@ -168,8 +168,9 @@ export class GGOAuthClient<I = unknown> {
 
     private discover(): Promise<Metadata> {
         this.metadata ??= (async () => {
-            if (this.config.server) return await getJson(`${this.config.server}/.well-known/oauth-authorization-server`) as Metadata
-            const server = await authorizationServerOf(this.config.resource)
+            const config = this.config
+            if (config.server !== undefined) return await getJson(`${config.server}/.well-known/oauth-authorization-server`) as Metadata
+            const server = await authorizationServerOf(config.resource)
             const meta = await getJson(`${server}/.well-known/oauth-authorization-server`) as Metadata
             // RFC 8414 §3.3: a discovered server's metadata must name it as the issuer.
             if (meta.issuer !== server) throw new Error(`OAuth discovery: ${server} declares issuer ${meta.issuer}`)
