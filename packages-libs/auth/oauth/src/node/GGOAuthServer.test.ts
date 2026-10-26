@@ -54,6 +54,7 @@ const mcp: GGOAuthResource<Claims> = {
 const target = (clientId: string) => clientId === "app" ? {resource: API, scope: "api"} : {resource: MCP, scope: "mcp"}
 
 let oauth!: GGOAuthServer
+const store = new InMemoryOAuthStore()
 
 class OAuthTestRuntime extends GGRuntime {
     public static readonly NAME = "oauth-test"
@@ -63,7 +64,7 @@ class OAuthTestRuntime extends GGRuntime {
         USER_WIRE_HANDLER.create(undefined)
         oauth = new GGOAuthServer({
             issuer: () => ISSUER,
-            store: new InMemoryOAuthStore(),
+            store,
             secret: () => "oauth-test-secret",
             resources: [{
                 resource: () => API,
@@ -323,6 +324,21 @@ describe("GGOAuthServer", () => {
         expect((await token({grant_type: "refresh_token", refresh_token: refreshed.refresh_token, client_id: "app"})).error).toBe("invalid_grant")
     })
 
+    test("a grant records when it last got tokens", async () => {
+        const clientId = await register()
+        const before = Date.now()
+        const {tokens} = await signIn(new Browser(), clientId, THIRD_PARTY_REDIRECT)
+        const signedIn = Date.now()
+        const lastUsed = async () => (await oauth.listGrants("alice")).find(g => g.clientId === clientId)!.lastUsedAt!
+        const first = await lastUsed()
+        expect(first).toBeGreaterThanOrEqual(before)
+        expect(first).toBeLessThanOrEqual(signedIn)
+
+        await new Promise(r => setTimeout(r, 5))
+        expect((await token({grant_type: "refresh_token", refresh_token: tokens.refresh_token, client_id: clientId})).access_token).toEqual(expect.any(String))
+        expect(await lastUsed()).toBeGreaterThan(first)
+    })
+
     test("refresh fails once the subject is gone", async () => {
         const {tokens} = await signIn(new Browser(), "app", FIRST_PARTY_REDIRECT)
         userPermissions.set("alice", undefined)
@@ -334,7 +350,9 @@ describe("GGOAuthServer", () => {
         const browser = new Browser()
         const {tokens} = await signIn(browser, clientId, THIRD_PARTY_REDIRECT)
         const grant = (await oauth.listGrants("alice")).find(g => g.clientId === clientId)!
+        expect(await store.find("GrantUsage", grant.grantId)).toBeDefined()
         await oauth.revokeGrant("alice", grant.grantId)
+        expect(await store.find("GrantUsage", grant.grantId)).toBeUndefined()
         expect((await token({grant_type: "refresh_token", refresh_token: tokens.refresh_token, client_id: clientId})).error).toBe("invalid_grant")
         expect((await oauth.listGrants("alice")).map(g => g.grantId)).not.toContain(grant.grantId)
 
