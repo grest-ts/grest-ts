@@ -1,8 +1,8 @@
-import {describe, test, expect, afterAll} from "vitest"
+import {describe, test, expect, afterAll, afterEach, vi} from "vitest"
 import {createServer} from "node:http"
 import type {AddressInfo} from "node:net"
 import {generateKeyPairSync} from "node:crypto"
-import {IsArray, IsObject, IsString, NOT_AUTHORIZED} from "@grest-ts/schema"
+import {IsArray, IsObject, IsString, NOT_AUTHORIZED, SERVER_ERROR} from "@grest-ts/schema"
 import {GGAuthAccessToken, HmacSigner, JwksVerifier, JwsSigningStrategy, SecretJwsSigner, type TokenVerifier} from "../../index-node"
 
 const IsClaims = IsObject({permissions: IsArray(IsString)})
@@ -116,5 +116,71 @@ describe("JwksVerifier", () => {
         void (() => verifying.issue("alice", {permissions: []}))
         const audienceOf = (t: GGAuthAccessToken<typeof IsClaims.infer, TokenVerifier>) => t.audience
         expect([audienceOf(verifying), audienceOf(token(issuing)), audienceOf(token(new HmacSigner("k")))]).toEqual(["app-user", "app-user", "app-user"])
+    })
+})
+
+describe("JwksVerifier while the JWKS can't be fetched", () => {
+    const issuing = new JwsSigningStrategy(new SecretJwsSigner(newKey()))
+    let up = true
+    let fetches = 0
+    const server = createServer(async (_req, res) => {
+        fetches++
+        if (!up) {
+            res.writeHead(503)
+            res.end()
+            return
+        }
+        res.writeHead(200, {"content-type": "application/json"})
+        res.end(JSON.stringify({keys: await issuing.publicJwks()}))
+    })
+    const listening = new Promise<string>(resolve => server.listen(0, () => resolve(`http://localhost:${(server.address() as AddressInfo).port}/jwks`)))
+    afterAll(() => new Promise(resolve => server.close(resolve)))
+    afterEach(() => {
+        up = true
+        vi.useRealTimers()
+    })
+
+    async function expectUnavailable(p: Promise<unknown>): Promise<void> {
+        const err = await p.then(() => undefined, (e: unknown) => e)
+        expect(err).toBeInstanceOf(SERVER_ERROR)
+        expect((err as InstanceType<typeof SERVER_ERROR>).getDebugContext()?.debugMessage).toContain("JWKS_UNAVAILABLE")
+    }
+
+    test("the last fetched keys keep verifying past the 10-minute cache, without refetching on every call", async () => {
+        const verifier = token(new JwksVerifier({jwks: async () => await listening}))
+        const issued = await token(issuing).issue("alice", {permissions: []})
+        vi.useFakeTimers({toFake: ["Date"]})
+        expect((await verifier.verify(issued.token)).sub).toBe("alice")
+
+        up = false
+        vi.setSystemTime(Date.now() + 11 * 60_000)
+        fetches = 0
+        expect((await verifier.verify(issued.token)).sub).toBe("alice")
+        expect((await verifier.verify(issued.token)).sub).toBe("alice")
+        expect(fetches).toBe(1)
+    })
+
+    test("an unknown key is still refused while only the last fetched keys are available", async () => {
+        const verifier = token(new JwksVerifier({jwks: async () => await listening}))
+        expect((await verifier.verify((await token(issuing).issue("alice", {permissions: []})).token)).sub).toBe("alice")
+        up = false
+        vi.useFakeTimers({toFake: ["Date"]})
+        vi.setSystemTime(Date.now() + 11 * 60_000)
+        const stranger = await token(new JwsSigningStrategy(new SecretJwsSigner(newKey()))).issue("alice", {permissions: []})
+        await expectAuthError(verifier.verify(stranger.token), "TOKEN_INVALID")
+    })
+
+    test("with no keys fetched yet, or keys older than maxStaleMs, it is a server error, not an invalid token", async () => {
+        const issued = await token(issuing).issue("alice", {permissions: []})
+        up = false
+        await expectUnavailable(token(new JwksVerifier({jwks: async () => await listening})).verify(issued.token))
+
+        up = true
+        const verifier = token(new JwksVerifier({jwks: async () => await listening, maxStaleMs: 60 * 60_000}))
+        vi.useFakeTimers({toFake: ["Date"]})
+        expect((await verifier.verify(issued.token)).sub).toBe("alice")
+        up = false
+        vi.setSystemTime(Date.now() + 61 * 60_000)
+        await expectUnavailable(verifier.verify(issued.token))
     })
 })

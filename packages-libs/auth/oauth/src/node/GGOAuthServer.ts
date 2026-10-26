@@ -88,6 +88,9 @@ export interface GGOAuthServerOptions {
 const BASE = "/oauth"
 const AUTHORIZATION_PATH = `${BASE}/authorize`
 const TOKEN_PATH = `${BASE}/token`
+// Only the resources' access-token keys: what a resource server should trust. /oauth/jwks also lists
+// the ID-token key, derived from `secret`, so trusting it would let that secret mint access tokens.
+export const ACCESS_TOKEN_JWKS_PATH = `${BASE}/access-token-jwks`
 const OIDC_SCOPES = ["openid", "offline_access"]
 const TICKET = "GGOAuthTicket"
 // Not an oidc-provider model: when each grant last got tokens, for listGrants. Carries grantId, so revoking the grant removes it.
@@ -139,6 +142,11 @@ export class GGOAuthServer {
         const handle = async (req: IncomingMessage, res: ServerResponse) => {
             delete req.headers["x-forwarded-host"]
             const path = new URL(req.url ?? "/", "http://x").pathname
+            if (path === ACCESS_TOKEN_JWKS_PATH && req.method === "GET") {
+                res.writeHead(200, {"content-type": "application/jwk-set+json"})
+                res.end(JSON.stringify({keys: await this.resourceJwks()}))
+                return
+            }
             const interaction = path.match(/^\/oauth\/interaction\/([^/]+)(\/complete)?$/)
             if (interaction && req.method === "GET") {
                 if (interaction[2]) return this.finishInteraction(req, res, interaction[1])

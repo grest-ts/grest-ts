@@ -1,12 +1,14 @@
-import {createHash, generateKeyPairSync, randomBytes, sign as cryptoSign} from "node:crypto"
+import {createECDH, createHash, generateKeyPairSync, hkdfSync, randomBytes, sign as cryptoSign} from "node:crypto"
+import {importJWK, SignJWT} from "jose"
 import {createServer} from "node:net"
 import {GGRuntime} from "@grest-ts/runtime"
 import {GGHeader, GGHttp, GGHttpSchema, GGHttpServer, GGRpc} from "@grest-ts/http"
 import {GGContextKey} from "@grest-ts/context"
 import {IsArray, IsObject, IsString, NOT_AUTHORIZED} from "@grest-ts/schema"
 import {GGAuthAccessToken, HmacSigner, JwksVerifier, JwsSigningStrategy, type JwsSigner} from "@grest-ts/auth"
-import {GGOAuthServer, type GGOAuthResource} from "./GGOAuthServer"
+import {ACCESS_TOKEN_JWKS_PATH, GGOAuthServer, type GGOAuthResource} from "./GGOAuthServer"
 import {InMemoryOAuthStore} from "./store/InMemoryOAuthStore"
+import {GGOAuthResourceServer} from "./GGOAuthResourceServer"
 import {GGOAuthServiceClient, GGOAuthTokenError} from "./GGOAuthServiceClient"
 import {GGOAuthInteractionContract} from "../shared/interactionContract"
 
@@ -134,6 +136,15 @@ class OAuthTestRuntime extends GGRuntime {
             res.writeHead(200, {"content-type": "application/json"})
             res.end(JSON.stringify({hello: token.sub}))
         })
+        const unreachableKeys = {
+            resource: () => `${ISSUER}/mcp-down`,
+            accessToken: new GGAuthAccessToken({signer: new JwksVerifier({jwks: () => "http://127.0.0.1:1/jwks"}), claimSchema: IsClaims, audience: "app-mcp", issuer: () => ISSUER}),
+            scopes: ["mcp"] as [string],
+        }
+        new GGOAuthResourceServer({authorizationServer: () => ISSUER, resources: [unreachableKeys]}).protect(server, unreachableKeys, "/mcp-down", async (_req, res) => {
+            res.writeHead(200)
+            res.end()
+        })
         new GGHttp(server).http(InteractionApi, oauth.interactionApi(() => SUBJECT.get()!.sub))
     }
 }
@@ -247,6 +258,13 @@ describe("GGOAuthServer", () => {
         expect(oauth.endpoints()).toEqual({authorization: meta.authorization_endpoint, token: meta.token_endpoint})
     })
 
+    test("a protected resource answers 503, not invalid_token, when it can't fetch the keys", async () => {
+        const {tokens} = await signIn(new Browser(), await register(), THIRD_PARTY_REDIRECT)
+        const res = await fetch(`${ISSUER}/mcp-down`, {method: "POST", headers: {authorization: `Bearer ${tokens.access_token}`}})
+        expect(res.status).toBe(503)
+        expect(res.headers.get("www-authenticate")).toBeNull()
+    })
+
     test("publishes RFC 8414 metadata with what MCP clients require", async () => {
         const meta = await (await fetch(`${ISSUER}/.well-known/oauth-authorization-server`)).json()
         expect(meta).toMatchObject({
@@ -346,14 +364,33 @@ describe("GGOAuthServer", () => {
         const header = JSON.parse(Buffer.from(tokens.access_token.split(".")[0], "base64url").toString())
         expect(header).toMatchObject({alg: "ES256", kid: "sealed-1", typ: "at+jwt"})
 
-        const remote = new GGAuthAccessToken({signer: new JwksVerifier({jwks: () => `${ISSUER}/oauth/jwks`}), claimSchema: IsClaims, audience: "app-mcp", issuer: () => ISSUER})
+        const remote = new GGAuthAccessToken({signer: new JwksVerifier({jwks: () => `${ISSUER}${ACCESS_TOKEN_JWKS_PATH}`}), claimSchema: IsClaims, audience: "app-mcp", issuer: () => ISSUER})
         const verified = await remote.verify(tokens.access_token)
         expect(verified.sub).toBe("alice")
         expect(verified.data).toEqual({permissions: []})
 
-        const jwks = await (await fetch(`${ISSUER}/oauth/jwks`)).json() as {keys: Array<Record<string, unknown>>}
-        expect(jwks.keys.map(k => k.kid)).toContain("sealed-1")
+        const jwks = await (await fetch(`${ISSUER}${ACCESS_TOKEN_JWKS_PATH}`)).json() as {keys: Array<Record<string, unknown>>}
+        expect(jwks.keys.map(k => k.kid)).toEqual(["sealed-1", "sealed-org"])
         expect(jwks.keys.every(k => !("d" in k))).toBe(true)
+    })
+
+    test("an access token signed with the ID-token key (derived from the server secret) is refused by the access-token JWKS", async () => {
+        const d = Buffer.from(hkdfSync("sha256", "oauth-test-secret", "", "@grest-ts/oauth es256", 32))
+        const ecdh = createECDH("prime256v1")
+        ecdh.setPrivateKey(d)
+        const point = ecdh.getPublicKey()
+        const jwk = {kty: "EC", crv: "P-256", d: d.toString("base64url"), x: point.subarray(1, 33).toString("base64url"), y: point.subarray(33).toString("base64url")}
+        const published = await (await fetch(`${ISSUER}/oauth/jwks`)).json() as {keys: Array<Record<string, unknown>>}
+        const kid = published.keys.find(k => k.x === jwk.x)?.kid as string
+        expect(kid).toBeDefined()
+        const forged = await new SignJWT({data: {permissions: ["admin"]}})
+            .setProtectedHeader({alg: "ES256", kid, typ: "at+jwt"})
+            .setSubject("mallory").setAudience("app-mcp").setIssuer(ISSUER).setIssuedAt().setExpirationTime("5m")
+            .sign(await importJWK(jwk, "ES256"))
+
+        const verifier = (jwks: string) => new GGAuthAccessToken({signer: new JwksVerifier({jwks: () => jwks}), claimSchema: IsClaims, audience: "app-mcp", issuer: () => ISSUER})
+        expect((await verifier(`${ISSUER}/oauth/jwks`).verify(forged)).sub).toBe("mallory")
+        await expect(verifier(`${ISSUER}${ACCESS_TOKEN_JWKS_PATH}`).verify(forged)).rejects.toBeInstanceOf(NOT_AUTHORIZED)
     })
 
     test("a protected resource challenges with its metadata, then serves a valid token", async () => {

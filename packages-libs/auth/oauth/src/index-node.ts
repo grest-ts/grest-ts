@@ -1,5 +1,5 @@
 import "./_dedupCheck";
-export {GGOAuthServer} from "./node/GGOAuthServer"
+export {GGOAuthServer, ACCESS_TOKEN_JWKS_PATH} from "./node/GGOAuthServer"
 export type {GGOAuthServerOptions, GGOAuthFirstPartyClient, GGOAuthResource, GGOAuthServiceClientRegistration} from "./node/GGOAuthServer"
 export {GGOAuthResourceServer} from "./node/GGOAuthResourceServer"
 export type {GGOAuthProtectedResource, GGOAuthResourceServerOptions} from "./node/GGOAuthResourceServer"
