@@ -146,7 +146,7 @@ describe("JwksVerifier while the JWKS can't be fetched", () => {
         expect((err as InstanceType<typeof SERVER_ERROR>).getDebugContext()?.debugMessage).toContain("JWKS_UNAVAILABLE")
     }
 
-    test("the last fetched keys keep verifying past the 10-minute cache, without refetching on every call", async () => {
+    test("the last fetched keys keep verifying past the 10-minute cache, refetched in the background", async () => {
         const verifier = token(new JwksVerifier({jwks: async () => await listening}))
         const issued = await token(issuing).issue("alice", {permissions: []})
         vi.useFakeTimers({toFake: ["Date"]})
@@ -158,16 +158,21 @@ describe("JwksVerifier while the JWKS can't be fetched", () => {
         expect((await verifier.verify(issued.token)).sub).toBe("alice")
         expect((await verifier.verify(issued.token)).sub).toBe("alice")
         expect(fetches).toBe(1)
+
+        up = true
+        vi.setSystemTime(Date.now() + 31_000)
+        expect((await verifier.verify(issued.token)).sub).toBe("alice")
+        await vi.waitFor(() => expect(fetches).toBe(2))
     })
 
-    test("an unknown key is still refused while only the last fetched keys are available", async () => {
+    test("a key the last fetched keys don't have is a server error while the JWKS is down", async () => {
         const verifier = token(new JwksVerifier({jwks: async () => await listening}))
         expect((await verifier.verify((await token(issuing).issue("alice", {permissions: []})).token)).sub).toBe("alice")
         up = false
         vi.useFakeTimers({toFake: ["Date"]})
         vi.setSystemTime(Date.now() + 11 * 60_000)
         const stranger = await token(new JwsSigningStrategy(new SecretJwsSigner(newKey()))).issue("alice", {permissions: []})
-        await expectAuthError(verifier.verify(stranger.token), "TOKEN_INVALID")
+        await expectUnavailable(verifier.verify(stranger.token))
     })
 
     test("with no keys fetched yet, or keys older than maxStaleMs, it is a server error, not an invalid token", async () => {

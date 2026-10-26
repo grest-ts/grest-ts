@@ -28,8 +28,9 @@ export class JwksVerifier implements TokenVerifier {
     }
 
     public verify = async (token: string): Promise<Record<string, unknown>> => {
+        const keys = await this.keySet().catch((err: Error) => { throw unavailable(err) })
         try {
-            const {payload} = await jwtVerify(token, await this.keySet(), {algorithms: this.algorithms})
+            const {payload} = await jwtVerify(token, keys, {algorithms: this.algorithms})
             return payload as Record<string, unknown>
         } catch (err) {
             if (err instanceof SERVER_ERROR) throw err
@@ -63,17 +64,35 @@ export class JwksVerifier implements TokenVerifier {
             if (lastGood?.uat !== fetched.uat) lastGood = {uat: fetched.uat, get: createLocalJWKSet(fetched.jwks)}
             return lastGood.get
         }
+        // A key the last fetched set doesn't have may be a newly published one: can't tell while the JWKS is down.
+        const fromStale = async (get: JWTVerifyGetKey, header: Parameters<JWTVerifyGetKey>[0], token: Parameters<JWTVerifyGetKey>[1]) => {
+            try {
+                return await get(header, token)
+            } catch (err) {
+                throw err instanceof joseErrors.JWKSNoMatchingKey ? unavailable(err) : err
+            }
+        }
         return async (header, token) => {
             const fallback = stale()
-            if (fallback && Date.now() - failedAt < RETRY_AFTER_FAILURE_MS) return fallback(header, token)
+            // While failing, refetch in the background so no request waits on the fetch timeout.
+            if (fallback && failedAt) {
+                if (!remote.reloading && Date.now() - failedAt >= RETRY_AFTER_FAILURE_MS) {
+                    void remote.reload().then(() => { failedAt = 0 }, () => { failedAt = Date.now() })
+                }
+                return fromStale(fallback, header, token)
+            }
             try {
                 return await remote(header, token)
             } catch (err) {
                 if (err instanceof joseErrors.JWKSNoMatchingKey || err instanceof joseErrors.JWKSMultipleMatchingKeys) throw err
                 failedAt = Date.now()
-                if (fallback) return fallback(header, token)
-                throw new SERVER_ERROR({debugMessage: "JWKS_UNAVAILABLE: " + (err as Error).message})
+                if (fallback) return fromStale(fallback, header, token)
+                throw unavailable(err as Error)
             }
         }
     }
+}
+
+function unavailable(err: Error): Error {
+    return new SERVER_ERROR({debugMessage: "JWKS_UNAVAILABLE: " + err.message})
 }
