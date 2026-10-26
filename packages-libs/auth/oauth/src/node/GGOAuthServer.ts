@@ -1,5 +1,6 @@
 import {createECDH, createHash, hkdfSync, randomBytes} from "node:crypto"
 import type {IncomingMessage, ServerResponse} from "node:http"
+import {decodeJwt} from "jose"
 import Provider, {errors as oidcErrors, type ClientMetadata, type Configuration, type InteractionResults, type KoaContextWithOIDC} from "oidc-provider"
 import {NOT_FOUND} from "@grest-ts/schema"
 import {GGLog} from "@grest-ts/logger"
@@ -8,6 +9,7 @@ import type {GGAccessPayload, GGAuthAccessToken, TokenVerifier} from "@grest-ts/
 import {GGOAuthInteractionContract, type GGOAuthInteraction} from "../shared/interactionContract"
 import {GGOAuthResourceServer, type GGOAuthProtectedResource} from "./GGOAuthResourceServer"
 import {toOidcAdapter, type GGOAuthStore} from "./store/GGOAuthStore"
+import {ACCESS_TOKEN_TYPE, TOKEN_EXCHANGE} from "./tokenExchange"
 
 export interface GGOAuthFirstPartyClient {
     clientId: string
@@ -84,8 +86,6 @@ export interface GGOAuthServerOptions {
 }
 
 const BASE = "/oauth"
-const TOKEN_EXCHANGE = "urn:ietf:params:oauth:grant-type:token-exchange"
-const ACCESS_TOKEN_TYPE = "urn:ietf:params:oauth:token-type:access_token"
 const AUTHORIZATION_PATH = `${BASE}/authorize`
 const TOKEN_PATH = `${BASE}/token`
 const OIDC_SCOPES = ["openid", "offline_access"]
@@ -105,7 +105,7 @@ export class GGOAuthServer {
     private _provider: Provider | undefined
     private _callback: ReturnType<Provider["callback"]> | undefined
     private _firstParty: Map<string, GGOAuthFirstPartyClient> | undefined
-    private _service: Set<string> | undefined
+    private _service: Map<string, GGOAuthServiceClientRegistration> | undefined
     private readonly options: GGOAuthServerOptions
     private readonly resourceServer: GGOAuthResourceServer
 
@@ -125,8 +125,8 @@ export class GGOAuthServer {
         return this._firstParty
     }
 
-    private get service(): Set<string> {
-        this._service ??= new Set((this.options.serviceClients?.() ?? []).map(c => c.clientId))
+    private get service(): Map<string, GGOAuthServiceClientRegistration> {
+        this._service ??= new Map((this.options.serviceClients?.() ?? []).map(c => [c.clientId, c]))
         return this._service
     }
 
@@ -339,7 +339,7 @@ export class GGOAuthServer {
     // (KMS). It signs with a per-process placeholder key; the claims are re-signed here before the token
     // leaves. A placeholder-signed token that escaped any other way verifies nowhere.
     private async resign(token: string): Promise<string> {
-        const claims = JSON.parse(Buffer.from(token.split(".")[1] ?? "", "base64url").toString()) as Record<string, unknown>
+        const claims = decodeJwt(token)
         const resource = this.options.resources.find(r => r.accessToken.audience === claims["aud"])
         if (!resource) throw new Error("GGOAuthServer: issued an access token for an unknown audience")
         return resource.accessToken.signer.sign(claims)
@@ -397,7 +397,7 @@ export class GGOAuthServer {
                 grant_types: c.refreshTokens === false ? ["authorization_code"] : ["authorization_code", "refresh_token"],
                 response_types: ["code"],
                 application_type: "web",
-            }) satisfies ClientMetadata), ...(o.serviceClients?.() ?? []).map(c => ({
+            }) satisfies ClientMetadata), ...[...this.service.values()].map(c => ({
                 client_id: c.clientId,
                 client_secret: c.secret(),
                 token_endpoint_auth_method: "client_secret_basic",

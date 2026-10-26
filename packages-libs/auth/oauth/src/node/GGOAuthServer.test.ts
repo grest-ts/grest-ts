@@ -564,9 +564,8 @@ describe("GGOAuthServer", () => {
     })
 
     test("a user can't get a service-only resource", async () => {
-        const {verifier, challenge} = pkce()
+        const {challenge} = pkce()
         const res = await new Browser().get(authorizeUrl("app", FIRST_PARTY_REDIRECT, challenge, {resource: INTERNAL, scope: "internal"}))
-        expect(verifier).toBeTruthy()
         expect(res.headers.get("location") ?? "").toContain("error=invalid_target")
     })
 
@@ -591,7 +590,8 @@ describe("GGOAuthServer", () => {
 
     test("GGOAuthServiceClient: reuses its client_credentials token, exchanges, and reports token errors", async () => {
         const client = new GGOAuthServiceClient({tokenEndpoint: async () => `${ISSUER}/oauth/token`, clientId: "backend", secret: () => "backend-secret"})
-        const first = await client.token(INTERNAL)
+        const [first, concurrent] = await Promise.all([client.token(INTERNAL), client.token(INTERNAL)])
+        expect(concurrent).toBe(first)
         expect(await client.token(INTERNAL)).toBe(first)
         expect((await internalToken.verify(first)).sub).toBe("backend")
 

@@ -1,3 +1,5 @@
+import {ACCESS_TOKEN_TYPE, TOKEN_EXCHANGE} from "./tokenExchange"
+
 export interface GGOAuthServiceClientOptions {
     // The authorization server's token endpoint; resolved per call (config, service discovery).
     tokenEndpoint: () => string | Promise<string>
@@ -18,8 +20,6 @@ export class GGOAuthTokenError extends Error {
     }
 }
 
-const TOKEN_EXCHANGE = "urn:ietf:params:oauth:grant-type:token-exchange"
-const ACCESS_TOKEN_TYPE = "urn:ietf:params:oauth:token-type:access_token"
 // A reused token is replaced this long before it expires, so it never expires in flight.
 const REFRESH_MARGIN_MS = 60_000
 
@@ -29,7 +29,7 @@ export class GGOAuthServiceClient {
 
     private readonly options: GGOAuthServiceClientOptions
     private readonly now: () => number
-    private readonly tokens = new Map<string, Promise<{token: string, expiresAt: number}>>()
+    private readonly tokens = new Map<string, {pending: Promise<{token: string, expiresAt: number}>, expiresAt?: number}>()
 
     constructor(options: GGOAuthServiceClientOptions) {
         this.options = options
@@ -37,12 +37,17 @@ export class GGOAuthServiceClient {
     }
 
     // client_credentials for `resource`. One token per resource is reused until shortly before it expires.
+    // Concurrent callers share one request: the entry is set before the first await.
     public token = async (resource: string): Promise<string> => {
-        const held = await this.tokens.get(resource)?.catch(() => undefined)
-        if (held && held.expiresAt - REFRESH_MARGIN_MS > this.now()) return held.token
-        const fresh = this.request({grant_type: "client_credentials", resource})
-        this.tokens.set(resource, fresh)
-        return (await fresh).token
+        const held = this.tokens.get(resource)
+        if (held && (held.expiresAt === undefined || held.expiresAt - REFRESH_MARGIN_MS > this.now())) return (await held.pending).token
+        const entry: {pending: Promise<{token: string, expiresAt: number}>, expiresAt?: number} = {pending: this.request({grant_type: "client_credentials", resource})}
+        this.tokens.set(resource, entry)
+        entry.pending.then(
+            t => { entry.expiresAt = t.expiresAt },
+            () => { if (this.tokens.get(resource) === entry) this.tokens.delete(resource) },
+        )
+        return (await entry.pending).token
     }
 
     // RFC 8693: trades `subjectToken` (an access token) for one for `resource`, same subject.

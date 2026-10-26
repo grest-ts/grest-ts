@@ -1,7 +1,7 @@
-import {createLocalJWKSet, jwtVerify, type JWK} from "jose"
+import type {JWK} from "jose"
 import type {TokenSigner} from "./TokenSigner"
 import type {JwsSigner} from "./JwsSigner"
-import {toNotAuthorized} from "./verifyError"
+import {JwksVerifier} from "./JwksVerifier"
 
 // Signs with `active`; also publishes `published` (the next key during a rotation, or the previous
 // one until its last token expires) so verifiers already know a key before it signs.
@@ -9,10 +9,12 @@ export class JwsSigningStrategy implements TokenSigner {
 
     private readonly active: JwsSigner
     private readonly published: () => JwsSigner[]
+    private readonly verifier: JwksVerifier
 
     constructor(active: JwsSigner, published: () => JwsSigner[] = () => []) {
         this.active = active
         this.published = published
+        this.verifier = new JwksVerifier({jwks: this.publicJwks, algorithms: [active.alg]})
     }
 
     public sign = async (claims: Record<string, unknown>): Promise<string> => {
@@ -22,15 +24,7 @@ export class JwsSigningStrategy implements TokenSigner {
         return `${input}.${Buffer.from(signature).toString("base64url")}`
     }
 
-    public verify = async (token: string): Promise<Record<string, unknown>> => {
-        try {
-            const keys = createLocalJWKSet({keys: await this.publicJwks()})
-            const {payload} = await jwtVerify(token, keys, {algorithms: [this.active.alg]})
-            return payload as Record<string, unknown>
-        } catch (err) {
-            throw toNotAuthorized(err)
-        }
-    }
+    public verify = (token: string): Promise<Record<string, unknown>> => this.verifier.verify(token)
 
     public publicJwks = async (): Promise<JWK[]> =>
         Promise.all([this.active, ...this.published()].map(s => s.publicJwk()))
