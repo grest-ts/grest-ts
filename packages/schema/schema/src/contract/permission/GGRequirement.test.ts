@@ -46,6 +46,7 @@ describe("GGRequirement in permission checks", () => {
         expect(() => GGPermissionChecker.validatePermission({__permission: "requirement", action: "", errors: []} as never)).toThrow("needs an action")
         expect(() => GGPermissionChecker.validatePermission({...list("docs:Read"), resource: {type: "docs:doc"}} as never)).toThrow("is a list")
         expect(() => GGPermissionChecker.validatePermission({__permission: "requirement", action: "docs:Read", resource: {type: "docs:doc", id: {}}, errors: []} as never)).toThrow("neither {field} nor {context}")
+        expect(() => GGPermissionChecker.validatePermission(on("docs:Read", "docs:doc", "docId", {hidden: true}))).toThrow("must include NOT_FOUND")
     })
 })
 
@@ -71,6 +72,12 @@ describe("GGRequirement on contracts", () => {
             // @ts-expect-error the input has no docId
             read: {input: IsObject({id: IsString}), errors: [SERVER_ERROR], permission: on("docs:Read", "docs:doc", "docId")},
         })).toThrow("reads input.docId, which the input doesn't have")
+    })
+
+    it("refuses a field read from an optional input", () => {
+        expect(() => new GGContractClass("Docs", {
+            read: {input: IsObject({docId: IsString}).orUndefined, errors: [SERVER_ERROR], permission: on("docs:Read", "docs:doc", "docId")},
+        })).toThrow("the input itself is optional")
     })
 
     it("refuses an optional id unless the requirement is an upsert", () => {

@@ -9,6 +9,7 @@ import {
     IsObject,
     IsString,
     NOT_AUTHORIZED,
+    NOT_FOUND,
     SERVER_ERROR,
 } from "@grest-ts/schema";
 import {GGAuthority, GGRpc, GGHttpSchema} from "@grest-ts/http";
@@ -38,7 +39,7 @@ function findContract(doc: ReturnType<typeof buildContractDoc>, contractName: st
 describe("buildContractDoc — permission rendering", () => {
 
     it("HTTP method renders a requirement with its action and resource, never as public", () => {
-        const read = Object.freeze({__permission: "requirement", action: "docs:Read", resource: {type: "docs:doc", id: {field: "docId"}}, hidden: true, errors: [NOT_AUTHORIZED, FORBIDDEN]}) as GGRequirement<"docId">
+        const read = Object.freeze({__permission: "requirement", action: "docs:Read", resource: {type: "docs:doc", id: {field: "docId"}}, hidden: true, errors: [NOT_AUTHORIZED, FORBIDDEN, NOT_FOUND]}) as GGRequirement<"docId">
         const C = new GGContractClass("Docs", {
             read: {input: IsObject({docId: IsString}), success: IsString, errors: [SERVER_ERROR], permission: read},
         });

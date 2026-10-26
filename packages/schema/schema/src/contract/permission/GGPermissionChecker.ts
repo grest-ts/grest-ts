@@ -1,5 +1,6 @@
 import {GG_ANY_PERMISSION, GG_NO_PERMISSIONS, GGPermission} from "./GGPermission";
 import {GGRequirement, GGRequirementResource, isRequirement} from "./GGRequirement";
+import {NOT_FOUND} from "../standardErrors";
 
 const MAX_DEPTH = 3;
 
@@ -124,6 +125,7 @@ function validateResource(r: unknown, path: string): void {
 function validateRequirement(r: GGRequirement, path: string): void {
     if (typeof r.action !== "string" || r.action.length === 0) throw new Error(`Requirement at ${path} needs an action`)
     if (!Array.isArray(r.errors)) throw new Error(`Requirement at ${path} needs its errors`)
+    if (r.hidden && !r.errors.includes(NOT_FOUND)) throw new Error(`Requirement at ${path} is hidden, so its errors must include NOT_FOUND`)
     if (r.list) {
         if (r.resource || r.createOn) throw new Error(`Requirement at ${path} is a list: it names no resource`)
         return
