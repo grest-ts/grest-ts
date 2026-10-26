@@ -18,11 +18,15 @@ export interface GGOAuthStore {
     // concurrent redemptions one fails cleanly (a 5xx would be retried, and the retry is reuse).
     consume(model: string, id: string): Promise<void>
     destroy(model: string, id: string): Promise<void>
-    // Every model row carrying this grantId (codes, refresh tokens, the grant itself).
+    // Every GRANT_BOUND row carrying this grantId.
     revokeByGrantId(grantId: string): Promise<void>
     // Ids of this account's rows of one model (Grant, Session) — for "connected apps" and revoke-all.
     listIdsByAccount(model: string, accountId: string): Promise<string[]>
 }
+
+// What oidc-provider revokes by grant. An Interaction carries the grantId it would extend and must outlive it:
+// another account finishing a sign-in first ends the old session (revoking its grants), then resumes the interaction.
+export const GRANT_BOUND: ReadonlySet<string> = new Set(["AccessToken", "AuthorizationCode", "RefreshToken", "DeviceCode", "BackchannelAuthenticationRequest"])
 
 // oidc-provider's adapter shape: `new Adapter(modelName)` per model.
 export function toOidcAdapter(store: GGOAuthStore): AdapterConstructor {

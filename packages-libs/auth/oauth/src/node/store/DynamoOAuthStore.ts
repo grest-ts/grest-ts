@@ -1,7 +1,7 @@
 import {IsNumber, IsObject, IsString} from "@grest-ts/schema"
 import {type GGDynamoDb, GGDynamoDbTable} from "@grest-ts/db-dynamodb"
 import {errors as oidcErrors} from "oidc-provider"
-import type {GGOAuthPayload, GGOAuthStore} from "./GGOAuthStore"
+import {GRANT_BOUND, type GGOAuthPayload, type GGOAuthStore} from "./GGOAuthStore"
 
 const IsOAuthRow = IsObject({
     pk: IsString.nonEmpty,
@@ -38,7 +38,7 @@ export class DynamoOAuthStore extends GGDynamoDbTable<OAuthRow, "pk"> implements
             model,
             id,
             payload: JSON.stringify(payload),
-            grantId: payload.grantId,
+            grantId: GRANT_BOUND.has(model) ? payload.grantId : undefined,
             uid: payload.uid,
             accountId: BY_ACCOUNT.has(model) ? payload.accountId : undefined,
             expiresAtSec: expiresInSec ? Math.floor(Date.now() / 1000) + expiresInSec : undefined,

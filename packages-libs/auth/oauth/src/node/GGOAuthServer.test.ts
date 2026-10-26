@@ -102,6 +102,10 @@ class OAuthTestRuntime extends GGRuntime {
 class Browser {
     private readonly jar = new Map<string, string>()
 
+    post(url: string, form: Record<string, string>): Promise<Response> {
+        return this.get(url, {method: "POST", body: new URLSearchParams(form)})
+    }
+
     async get(url: string, init: RequestInit = {}): Promise<Response> {
         const res = await fetch(new URL(url, ISSUER), {...init, redirect: "manual", headers: {...init.headers as Record<string, string>, ...(this.jar.size ? {cookie: [...this.jar].map(([k, v]) => `${k}=${v}`).join("; ")} : {})}})
         for (const c of res.headers.getSetCookie()) {
@@ -243,6 +247,27 @@ describe("GGOAuthServer", () => {
         expect(first.details.forceLogin).toBe(false)
         const forced = await signIn(browser, "app", FIRST_PARTY_REDIRECT, "alice", {prompt: "login"})
         expect(forced.details.forceLogin).toBe(true)
+    })
+
+    test("a forced login by another account ends the previous login session, then completes as the new account", async () => {
+        userPermissions.set("bob", ["read"])
+        const browser = new Browser()
+        await signIn(browser, "app", FIRST_PARTY_REDIRECT)
+        const {verifier, challenge} = pkce()
+        const login = await browser.navigate(authorizeUrl("app", FIRST_PARTY_REDIRECT, challenge, {prompt: "login"}))
+        const call = interaction((await userToken.issue("bob", {permissions: []})).token)
+        const approved = await call("approve", login.searchParams.get("uid")!)
+        // The server first ends alice's session with a self-submitting form; post it as a browser would.
+        let res = await browser.get(approved.data.redirectUrl)
+        while (res.status === 303) res = await browser.get(new URL(res.headers.get("location")!, ISSUER).href)
+        const html = await res.text()
+        const action = /action="([^"]+)"/.exec(html)![1]
+        const fields = Object.fromEntries([...html.matchAll(/name="([^"]+)" value="([^"]*)"/g)].map(m => [m[1], m[2]]))
+        const confirmed = await browser.post(action, fields)
+        const callback = await browser.navigate(new URL(confirmed.headers.get("location")!, ISSUER).href)
+        expect(callback.origin + callback.pathname).toBe(FIRST_PARTY_REDIRECT)
+        const tokens = await token({grant_type: "authorization_code", code: callback.searchParams.get("code")!, redirect_uri: FIRST_PARTY_REDIRECT, client_id: "app", code_verifier: verifier, resource: API})
+        expect((await userToken.verify(tokens.access_token)).sub).toBe("bob")
     })
 
     test("third-party client registers, needs consent once, and gets a token only for its resource", async () => {

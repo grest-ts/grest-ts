@@ -1,5 +1,5 @@
 import {errors as oidcErrors} from "oidc-provider"
-import type {GGOAuthPayload, GGOAuthStore} from "./GGOAuthStore"
+import {GRANT_BOUND, type GGOAuthPayload, type GGOAuthStore} from "./GGOAuthStore"
 
 type Row = {model: string, id: string, payload: GGOAuthPayload, expiresAt: number | undefined}
 
@@ -37,7 +37,7 @@ export class InMemoryOAuthStore implements GGOAuthStore {
     }
 
     public revokeByGrantId = async (grantId: string): Promise<void> => {
-        for (const [key, row] of this.rows) if (row.payload.grantId === grantId) this.rows.delete(key)
+        for (const [key, row] of this.rows) if (GRANT_BOUND.has(row.model) && row.payload.grantId === grantId) this.rows.delete(key)
     }
 
     public listIdsByAccount = async (model: string, accountId: string): Promise<string[]> =>
