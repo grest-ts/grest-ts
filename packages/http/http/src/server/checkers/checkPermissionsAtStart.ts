@@ -44,7 +44,7 @@ function isNonPublic(permission: GGPermission | undefined): boolean {
 
 // A permission made only of requirements needs no grants from a wire — its authority decides it.
 function needsWireGrants(permission: GGPermission | undefined): boolean {
-    return isNonPublic(permission) && !GGPermissionChecker.satisfiesDeferring(permission!, [])
+    return permission !== undefined && !GGPermissionChecker.satisfies(GGPermissionChecker.scopesOf(permission), [])
 }
 
 function checkAuthorities(httpSchemas: readonly HttpSchemaLike[]): void {

@@ -92,6 +92,7 @@ function setupRoutes<TContract extends GGContractApiDefinition>(
         const contractFunctionSchema: GGContractMethod = httpSchema.contract.methods[methodName as keyof TContract]
         if (!contractFunctionSchema) throw new Error(`Contract for "${httpSchema.name}.${methodName}" is missing contract function schema!`)
         const requirements = GGPermissionChecker.requirementsOf(contractFunctionSchema.permission)
+        const scopes = contractFunctionSchema.permission && GGPermissionChecker.scopesOf(contractFunctionSchema.permission)
         const call = {api: httpSchema.name, method: methodName}
 
         // build request mapping
@@ -110,7 +111,7 @@ function setupRoutes<TContract extends GGContractApiDefinition>(
                 let rpcResult: ERROR<string, unknown> | OK<unknown> | undefined
                 try {
                     const rawInput = await requestParser.readRequest(req)
-                    await permissionsChecker.assert(httpSchema.name, methodName, contractFunctionSchema.permission, true)
+                    await permissionsChecker.assert(httpSchema.name, methodName, scopes)
                     try {
                         const input = requestParser.validateInput(rawInput)
                         // checkPermissionsAtStart guarantees an authority when there are requirements.

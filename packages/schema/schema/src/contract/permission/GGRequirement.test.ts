@@ -6,6 +6,7 @@ import {GGDuplexContract} from "../GGDuplexContract";
 import {FORBIDDEN, NOT_AUTHORIZED, NOT_FOUND} from "../standardErrors";
 import {IsObject} from "../../schemas/IsObject";
 import {IsString} from "../../schemas/IsString";
+import {GG_NO_PERMISSIONS} from "./GGPermission";
 import {GGPermissionChecker} from "./GGPermissionChecker";
 import type {GGRequirement} from "./GGRequirement";
 import type {GGRequirementErrors} from "./requirementMethod";
@@ -21,12 +22,13 @@ const list = (action: string): GGRequirement<string, Errors> => Object.freeze({_
 
 describe("GGRequirement in permission checks", () => {
 
-    it("fails closed where nothing decides it, and defers where an authority will", () => {
+    it("fails closed where nothing decides it; scopesOf leaves what the grants must satisfy", () => {
         const r = on("docs:Read", "docs:doc", "docId")
         expect(GGPermissionChecker.satisfies(r, [["docs:Read"]])).toBe(false)
-        expect(GGPermissionChecker.satisfiesDeferring(r, [])).toBe(true)
-        expect(GGPermissionChecker.satisfiesDeferring({allOf: ["admin", r]}, [])).toBe(false)
-        expect(GGPermissionChecker.satisfiesDeferring({allOf: ["admin", r]}, [["admin"]])).toBe(true)
+        expect(GGPermissionChecker.scopesOf(r)).toBe(GG_NO_PERMISSIONS)
+        expect(GGPermissionChecker.scopesOf({allOf: [r, list("docs:Read")]})).toBe(GG_NO_PERMISSIONS)
+        expect(GGPermissionChecker.scopesOf({allOf: ["admin", r]})).toEqual({allOf: ["admin"]})
+        expect(GGPermissionChecker.scopesOf({anyOf: ["a", "b"]})).toEqual({anyOf: ["a", "b"]})
     })
 
     it("collects requirements from allOf and refuses them in anyOf", () => {

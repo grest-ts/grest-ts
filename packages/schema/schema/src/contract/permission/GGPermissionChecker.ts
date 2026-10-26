@@ -5,26 +5,9 @@ const MAX_DEPTH = 3;
 
 export class GGPermissionChecker {
 
-    /** A requirement never passes here: it needs an authority, which only the HTTP server runs (see `satisfiesDeferring`). */
+    /** A requirement never passes here: it needs an authority. Check `scopesOf(permission)` and run the requirements through the authority. */
     public static satisfies(required: GGPermission, granted: undefined | ReadonlyArray<ReadonlyArray<string>>): boolean {
-        return this.check(required, granted, false)
-    }
-
-    /** As `satisfies`, but requirements pass: the caller decides them afterwards, with `requirementsOf`. */
-    public static satisfiesDeferring(required: GGPermission, granted: undefined | ReadonlyArray<ReadonlyArray<string>>): boolean {
-        return this.check(required, granted, true)
-    }
-
-    /** The requirements in a permission: itself, or the members of an `allOf` (they can't sit in `anyOf`). */
-    public static requirementsOf(p: GGPermission | undefined): GGRequirement[] {
-        if (isRequirement(p)) return [p]
-        if (p && typeof p === "object" && "allOf" in p) return p.allOf.flatMap(c => this.requirementsOf(c))
-        return []
-    }
-
-    private static check(required: GGPermission, granted: undefined | ReadonlyArray<ReadonlyArray<string>>, defer: boolean): boolean {
         if (required === GG_NO_PERMISSIONS || required === undefined) return true
-        if (isRequirement(required)) return defer
         if (required === GG_ANY_PERMISSION) return granted !== undefined && granted.length > 0
         if (typeof required === "string") {
             if (granted === undefined || granted.length === 0) return false;
@@ -36,10 +19,27 @@ export class GGPermissionChecker {
             return false
         }
         if (required && typeof required === "object") {
-            if ("allOf" in required) return required.allOf.every(p => this.check(p, granted, defer))
-            if ("anyOf" in required) return required.anyOf.some(p => this.check(p, granted, defer))
+            if ("allOf" in required) return required.allOf.every(p => this.satisfies(p, granted))
+            if ("anyOf" in required) return required.anyOf.some(p => this.satisfies(p, granted))
         }
         return false
+    }
+
+    /** The requirements in a permission: itself, or the members of an `allOf` (they can't sit in `anyOf`). */
+    public static requirementsOf(p: GGPermission | undefined): GGRequirement[] {
+        if (isRequirement(p)) return [p]
+        if (p && typeof p === "object" && "allOf" in p) return p.allOf.flatMap(c => this.requirementsOf(c))
+        return []
+    }
+
+    /** A permission without its requirements: what the caller's granted scopes must satisfy. */
+    public static scopesOf(p: GGPermission): GGPermission {
+        if (isRequirement(p)) return GG_NO_PERMISSIONS
+        if (p && typeof p === "object" && "allOf" in p) {
+            const rest = p.allOf.map(c => this.scopesOf(c)).filter(c => c !== GG_NO_PERMISSIONS)
+            return rest.length ? {allOf: rest as [GGPermission, ...GGPermission[]]} : GG_NO_PERMISSIONS
+        }
+        return p
     }
 
     public static describePermission(p: GGPermission | undefined): string {

@@ -1,3 +1,4 @@
+import type {GGSchemaDescription} from "../../GGSchemaDescription";
 import type {ANY_ERROR} from "../ERROR";
 import type {GGContractMethod} from "../GGContractClass";
 import {GGPermissionChecker} from "./GGPermissionChecker";
@@ -22,10 +23,9 @@ export type GGCheckRequirements<Methods> = {
         : {permission: `requirement reads input.${Exclude<RequirementFields<PermissionOf<Methods[K]>>, InputKeys<Methods[K]>>}, which the input doesn't have`}
 }
 
-function checkField(resource: GGRequirementResource | undefined, required: boolean, input: GGContractMethod["input"], at: string): void {
+function checkField(resource: GGRequirementResource | undefined, required: boolean, node: GGSchemaDescription["node"] | undefined, at: string): void {
     const id = resource?.id
     if (!id || !("field" in id)) return
-    const node = input?.toSchemaDescription().node
     if (node?.kind !== "object" || !(id.field in node.properties)) {
         throw new Error(`${at}: the requirement reads input.${id.field}, which the input doesn't have`)
     }
@@ -34,16 +34,26 @@ function checkField(resource: GGRequirementResource | undefined, required: boole
     }
 }
 
-/** Checks a method's requirements against its input and adds their errors to its own. Other methods pass unchanged. */
+/**
+ * Checks a method's requirements against its input and adds their errors to its own. Other methods pass unchanged.
+ * Expects an already validated permission.
+ */
 export function withRequirements<M extends GGContractMethod>(method: M, at: string): M {
     const requirements = GGPermissionChecker.requirementsOf(method.permission)
     if (!requirements.length) return method
-    GGPermissionChecker.validatePermission(method.permission!, `${at}.permission`)
+    const node = method.input?.toSchemaDescription().node
     const errors = [...method.errors ?? []]
     for (const r of requirements) {
-        checkField(r.resource, !r.createOn, method.input, at)
-        checkField(r.createOn, false, method.input, at)
+        checkField(r.resource, !r.createOn, node, at)
+        checkField(r.createOn, false, node, at)
         for (const e of r.errors) if (!errors.includes(e)) errors.push(e)
     }
     return {...method, errors}
+}
+
+/** Requirements need an authority, which only the HTTP server runs. */
+export function assertNoRequirements(name: string, methods: Record<string, GGContractMethod | undefined>): void {
+    for (const [at, m] of Object.entries(methods)) {
+        if (GGPermissionChecker.requirementsOf(m?.permission).length) throw new Error(`Socket contract ${name}.${at}: requirements are only supported on HTTP methods`)
+    }
 }

@@ -70,17 +70,16 @@ export class GGContractClass<ContractMethods extends GGContractApiDefinition> {
         this.name = name;
         this.methods = methods;
         for (const methodName in this.methods) {
+            const permission = this.methods[methodName].permission;
+            if (permission !== undefined) GGPermissionChecker.validatePermission(permission, `${name}.${methodName}.permission`);
             const method = withRequirements(this.methods[methodName], `Contract ${name}.${methodName}`);
             this.methods[methodName] = method;
-            if (method.permission !== undefined) {
-                GGPermissionChecker.validatePermission(method.permission, `${name}.${methodName}.permission`);
-                if (method.permission !== GG_NO_PERMISSIONS) {
-                    const errs = method.errors ?? [];
-                    if (!errs.includes(NOT_AUTHORIZED as any) || !errs.includes(FORBIDDEN as any)) {
-                        throw new Error(
-                            `Contract ${name}.${methodName} has a non-public permission but its 'errors' array must include both NOT_AUTHORIZED and FORBIDDEN`
-                        );
-                    }
+            if (permission !== undefined && permission !== GG_NO_PERMISSIONS) {
+                const errs = method.errors ?? [];
+                if (!errs.includes(NOT_AUTHORIZED as any) || !errs.includes(FORBIDDEN as any)) {
+                    throw new Error(
+                        `Contract ${name}.${methodName} has a non-public permission but its 'errors' array must include both NOT_AUTHORIZED and FORBIDDEN`
+                    );
                 }
             }
             if (method.maxBodyBytes !== undefined && (!Number.isInteger(method.maxBodyBytes) || method.maxBodyBytes <= 0)) {

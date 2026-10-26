@@ -1,6 +1,6 @@
 import {GGContractMethod} from "./GGContractClass";
 import {GGContractFunction} from "./GGContractFunction";
-import {assertNoRequirements} from "./GGDuplexContract";
+import {assertNoRequirements} from "./permission/requirementMethod";
 
 export interface GGRawSocketContractDefinition {
     connect: GGContractMethod
@@ -25,7 +25,7 @@ export class GGRawSocketContract<TDef extends GGRawSocketContractDefinition> {
 
     constructor(name: string, def: TDef) {
         this.name = name;
-        assertNoRequirements(name, {connect: def.connect, clientToServer: {}, serverToClient: {}});
+        assertNoRequirements(name, {connect: def.connect});
         this.connect = new GGContractFunction(def.connect);
         this.customClient = def.customClient === true;
         this.protocols = def.protocols;

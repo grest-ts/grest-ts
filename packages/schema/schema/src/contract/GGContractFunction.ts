@@ -11,16 +11,14 @@ export class GGContractFunction<Method extends GGContractMethod> {
     public readonly method: Method
 
     constructor(method: Method) {
+        if (method.permission !== undefined) GGPermissionChecker.validatePermission(method.permission, "permission");
         this.method = withRequirements(method, "Contract function");
-        if (method.permission !== undefined) {
-            GGPermissionChecker.validatePermission(method.permission, "permission");
-            if (method.permission !== GG_NO_PERMISSIONS) {
-                const errs = this.method.errors ?? [];
-                if (!errs.includes(NOT_AUTHORIZED as any) || !errs.includes(FORBIDDEN as any)) {
-                    throw new Error(
-                        `Contract function has a non-public permission but its 'errors' array must include both NOT_AUTHORIZED and FORBIDDEN`
-                    );
-                }
+        if (method.permission !== undefined && method.permission !== GG_NO_PERMISSIONS) {
+            const errs = this.method.errors ?? [];
+            if (!errs.includes(NOT_AUTHORIZED as any) || !errs.includes(FORBIDDEN as any)) {
+                throw new Error(
+                    `Contract function has a non-public permission but its 'errors' array must include both NOT_AUTHORIZED and FORBIDDEN`
+                );
             }
         }
         Object.freeze(this);
