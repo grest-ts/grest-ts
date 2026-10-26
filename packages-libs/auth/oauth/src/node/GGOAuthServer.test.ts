@@ -479,6 +479,21 @@ describe("GGOAuthServer", () => {
         expect((await userApi.json()).error).toBe("invalid_target")
     })
 
+    test("a registered (non-service) client can't use client_credentials", async () => {
+        const res = await fetch(`${ISSUER}/oauth/register`, {
+            method: "POST", headers: {"content-type": "application/json"},
+            body: JSON.stringify({client_name: "Sneaky", redirect_uris: [THIRD_PARTY_REDIRECT], application_type: "web", token_endpoint_auth_method: "client_secret_basic", grant_types: ["authorization_code", "client_credentials"]}),
+        })
+        const {client_id, client_secret} = await res.json()
+        // An app whose claims would happily answer for this subject: only the grant check stops it.
+        userPermissions.set(client_id, ["read"])
+        for (const resource of [undefined, MCP, INTERNAL]) {
+            const body = await fetch(`${ISSUER}/oauth/token`, {method: "POST", headers: {authorization: basic(client_id, client_secret)}, body: new URLSearchParams({grant_type: "client_credentials", ...(resource ? {resource} : {})})}).then(r => r.json())
+            expect(body.access_token).toBeUndefined()
+            expect(body.error).toEqual(expect.any(String))
+        }
+    })
+
     test("a user can't get a service-only resource", async () => {
         const {verifier, challenge} = pkce()
         const res = await new Browser().get(authorizeUrl("app", FIRST_PARTY_REDIRECT, challenge, {resource: INTERNAL, scope: "internal"}))

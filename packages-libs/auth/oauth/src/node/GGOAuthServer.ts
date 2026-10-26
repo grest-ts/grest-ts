@@ -402,7 +402,7 @@ export class GGOAuthServer {
             features: {
                 devInteractions: {enabled: false},
                 revocation: {enabled: true},
-                clientCredentials: {enabled: true},
+                clientCredentials: {enabled: !!o.serviceClients},
                 registration: {enabled: !!o.dynamicRegistration},
                 ...(o.clientIdMetadataDocument ? {clientIdMetadataDocument: {
                     enabled: true,
@@ -431,7 +431,9 @@ export class GGOAuthServer {
                     enabled: true,
                     defaultResource: (_ctx, client) => this.defaultResource(client.clientId).resource(),
                     useGrantedResource: () => true,
-                    getResourceServerInfo: (_ctx, indicator, client) => {
+                    getResourceServerInfo: (ctx, indicator, client) => {
+                        // client_credentials tokens have the client as subject: only for the app's own backends.
+                        if (ctx.oidc.params?.grant_type === "client_credentials" && !this.service.has(client.clientId)) throw new oidcErrors.UnauthorizedClient()
                         const resource = this.usableResource(indicator, client.clientId)
                         return {
                             scope: resource.scopes.join(" "),
