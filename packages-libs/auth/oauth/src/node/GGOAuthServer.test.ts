@@ -1,10 +1,10 @@
-import {createHash, randomBytes} from "node:crypto"
+import {createHash, generateKeyPairSync, randomBytes, sign as cryptoSign} from "node:crypto"
 import {createServer} from "node:net"
 import {GGRuntime} from "@grest-ts/runtime"
 import {GGHeader, GGHttp, GGHttpSchema, GGHttpServer, GGRpc} from "@grest-ts/http"
 import {GGContextKey} from "@grest-ts/context"
 import {IsArray, IsObject, IsString, NOT_AUTHORIZED} from "@grest-ts/schema"
-import {GGAuthAccessToken, HmacSigner} from "@grest-ts/auth"
+import {GGAuthAccessToken, HmacSigner, JwksVerifier, JwsSigningStrategy, type JwsSigner} from "@grest-ts/auth"
 import {GGOAuthServer, type GGOAuthResource} from "./GGOAuthServer"
 import {InMemoryOAuthStore} from "./store/InMemoryOAuthStore"
 import {GGOAuthInteractionContract} from "../shared/interactionContract"
@@ -41,15 +41,35 @@ const InteractionApi = new GGHttpSchema({
     routes: {get: GGRpc.GET("get"), approve: GGRpc.POST("approve"), deny: GGRpc.POST("deny")},
 })
 
-// A second resource, as for an MCP server: its own audience, and tokens that grant no permissions.
+// Like a KMS key: it signs, but its private key never leaves it.
+function sealedSigner(kid: string): JwsSigner {
+    const {privateKey, publicKey} = generateKeyPairSync("ec", {namedCurve: "P-256"})
+    return {
+        alg: "ES256",
+        kid: async () => kid,
+        sign: async (input) => cryptoSign("sha256", input, {key: privateKey, dsaEncoding: "ieee-p1363"}),
+        publicJwk: async () => ({...publicKey.export({format: "jwk"}), alg: "ES256", use: "sig", kid}),
+    }
+}
+
+// A second resource, as for an MCP server: its own audience, tokens that grant no permissions, and an
+// asymmetric signer the authorization server can't read the key of.
 const MCP = `${ISSUER}/mcp`
-const mcpToken = new GGAuthAccessToken({signer: new HmacSigner("app-token-secret"), claimSchema: IsClaims, audience: "app-mcp"})
+const mcpToken = new GGAuthAccessToken({signer: new JwsSigningStrategy(sealedSigner("sealed-1")), claimSchema: IsClaims, audience: "app-mcp", issuer: () => ISSUER})
 const mcp: GGOAuthResource<Claims> = {
     resource: () => MCP,
     accessToken: mcpToken,
     scopes: ["mcp"],
     claims: async (sub) => userPermissions.get(sub) ? {permissions: []} : undefined,
 }
+// The app's backend: a service client with its own resource, and the one that trades a user token
+// for an org-scoped token (token exchange).
+const INTERNAL = `${ISSUER}/internal`
+const internalToken = new GGAuthAccessToken({signer: new HmacSigner("internal-secret"), claimSchema: IsClaims, audience: "app-internal"})
+const ORG = `${ISSUER}/org`
+const orgToken = new GGAuthAccessToken({signer: new JwsSigningStrategy(sealedSigner("sealed-org")), claimSchema: IsClaims, audience: "app-org"})
+const basic = (id: string, secret: string) => `Basic ${Buffer.from(`${id}:${secret}`).toString("base64")}`
+
 // What a client asks for: the first-party app its API, anyone else the MCP resource.
 const target = (clientId: string) => clientId === "app" ? {resource: API, scope: "api"} : {resource: MCP, scope: "mcp"}
 
@@ -78,7 +98,25 @@ class OAuthTestRuntime extends GGRuntime {
                     const permissions = userPermissions.get(sub)
                     return permissions ? {permissions} : undefined
                 },
-            }, mcp],
+            }, mcp, {
+                resource: () => INTERNAL,
+                accessToken: internalToken,
+                scopes: ["internal"],
+                serviceOnly: true,
+                claims: async (clientId) => clientId === "backend" ? {permissions: ["internal"]} : undefined,
+            }, {
+                resource: () => ORG,
+                accessToken: orgToken,
+                scopes: ["org"],
+                firstPartyOnly: true,
+                claims: async () => undefined,
+                exchange: {
+                    from: userToken,
+                    params: ["org_id"],
+                    claims: async (sub, params) => params.org_id === "o1" && userPermissions.get(sub) ? {permissions: ["org:" + sub]} : undefined,
+                },
+            }],
+            serviceClients: () => [{clientId: "backend", secret: () => "backend-secret"}],
             interactionUrl: (uid) => `${APP_LOGIN}?uid=${uid}`,
             firstPartyClients: () => [{clientId: "app", name: "The App", redirectUris: [FIRST_PARTY_REDIRECT], postLogoutRedirectUris: ["https://app.example/"]}],
             dynamicRegistration: true,
@@ -207,10 +245,11 @@ describe("GGOAuthServer", () => {
         })
         expect(meta.token_endpoint_auth_methods_supported).toContain("none")
         expect(meta.response_types_supported).toEqual(["code"])
-        expect(meta.scopes_supported).toEqual(["openid", "offline_access", "api", "mcp"])
+        expect(meta.scopes_supported).toEqual(["openid", "offline_access", "api", "mcp", "internal", "org"])
         const jwks = await (await fetch(meta.jwks_uri)).json()
-        expect(jwks.keys).toEqual([expect.objectContaining({kty: "EC", crv: "P-256", alg: "ES256"})])
-        expect(jwks.keys[0].d).toBeUndefined()
+        // The ID-token key and the asymmetric resources' signers; HMAC resources publish nothing.
+        expect(jwks.keys).toEqual([expect.objectContaining({kty: "EC", crv: "P-256", alg: "ES256"}), expect.objectContaining({kid: "sealed-1"}), expect.objectContaining({kid: "sealed-org"})])
+        expect(jwks.keys.every((k: Record<string, unknown>) => k.d === undefined)).toBe(true)
     })
 
     test("first-party sign-in issues the app's own access token, then re-auths silently", async () => {
@@ -246,6 +285,22 @@ describe("GGOAuthServer", () => {
         const res = await new Browser().get(authorizeUrl(clientId, THIRD_PARTY_REDIRECT, pkce().challenge, {resource: API, scope: "api"}))
         expect(res.status).toBe(303)
         expect(new URL(res.headers.get("location")!).searchParams.get("error")).toBe("invalid_target")
+    })
+
+    test("an asymmetric resource's token is signed by its own signer and verifies with only the published JWKS", async () => {
+        const client = await register()
+        const {tokens} = await signIn(new Browser(), client, THIRD_PARTY_REDIRECT)
+        const header = JSON.parse(Buffer.from(tokens.access_token.split(".")[0], "base64url").toString())
+        expect(header).toMatchObject({alg: "ES256", kid: "sealed-1", typ: "at+jwt"})
+
+        const remote = new GGAuthAccessToken({signer: new JwksVerifier({jwks: () => `${ISSUER}/oauth/jwks`}), claimSchema: IsClaims, audience: "app-mcp", issuer: () => ISSUER})
+        const verified = await remote.verify(tokens.access_token)
+        expect(verified.sub).toBe("alice")
+        expect(verified.data).toEqual({permissions: []})
+
+        const jwks = await (await fetch(`${ISSUER}/oauth/jwks`)).json() as {keys: Array<Record<string, unknown>>}
+        expect(jwks.keys.map(k => k.kid)).toContain("sealed-1")
+        expect(jwks.keys.every(k => !("d" in k))).toBe(true)
     })
 
     test("a protected resource challenges with its metadata, then serves a valid token", async () => {
@@ -405,6 +460,55 @@ describe("GGOAuthServer", () => {
         const results = await Promise.all([token(body), token(body)])
         // Never two live lineages from one token; the loser gets invalid_grant (not a retryable 5xx).
         expect(results.map(r => r.error ?? "ok").sort()).toEqual(["invalid_grant", "ok"])
+    })
+
+    test("a service client gets a token for its service-only resource with client_credentials", async () => {
+        const res = await fetch(`${ISSUER}/oauth/token`, {method: "POST", headers: {authorization: basic("backend", "backend-secret")}, body: new URLSearchParams({grant_type: "client_credentials", resource: INTERNAL, scope: "internal"})})
+        const body = await res.json()
+        expect(res.status).toBe(200)
+        const verified = await internalToken.verify(body.access_token)
+        expect(verified.sub).toBe("backend")
+        expect(verified.data).toEqual({permissions: ["internal"]})
+    })
+
+    test("client_credentials refuses a wrong secret and any resource that isn't service-only", async () => {
+        const wrong = await fetch(`${ISSUER}/oauth/token`, {method: "POST", headers: {authorization: basic("backend", "nope")}, body: new URLSearchParams({grant_type: "client_credentials", resource: INTERNAL})})
+        expect((await wrong.json()).error).toBe("invalid_client")
+        const userApi = await fetch(`${ISSUER}/oauth/token`, {method: "POST", headers: {authorization: basic("backend", "backend-secret")}, body: new URLSearchParams({grant_type: "client_credentials", resource: API})})
+        expect((await userApi.json()).error).toBe("invalid_target")
+    })
+
+    test("a user can't get a service-only resource", async () => {
+        const {verifier, challenge} = pkce()
+        const res = await new Browser().get(authorizeUrl("app", FIRST_PARTY_REDIRECT, challenge, {resource: INTERNAL, scope: "internal"}))
+        expect(verifier).toBeTruthy()
+        expect(res.headers.get("location") ?? "").toContain("error=invalid_target")
+    })
+
+    test("token exchange: the backend trades a user's token for an org token for the same user", async () => {
+        const {tokens} = await signIn(new Browser(), "app", FIRST_PARTY_REDIRECT)
+        const exchange = (params: Record<string, string>, auth = basic("backend", "backend-secret")) => fetch(`${ISSUER}/oauth/token`, {
+            method: "POST", headers: {authorization: auth},
+            body: new URLSearchParams({grant_type: "urn:ietf:params:oauth:grant-type:token-exchange", subject_token_type: "urn:ietf:params:oauth:token-type:access_token", resource: ORG, ...params}),
+        }).then(r => r.json())
+
+        const ok = await exchange({subject_token: tokens.access_token, org_id: "o1"})
+        expect(ok).toMatchObject({issued_token_type: "urn:ietf:params:oauth:token-type:access_token", token_type: "Bearer"})
+        const verified = await orgToken.verify(ok.access_token)
+        expect(verified.sub).toBe("alice")
+        expect(verified.data).toEqual({permissions: ["org:alice"]})
+
+        expect((await exchange({subject_token: tokens.access_token, org_id: "o2"})).error).toBe("invalid_grant")
+        expect((await exchange({subject_token: "garbage", org_id: "o1"})).error).toBe("invalid_grant")
+        expect((await exchange({subject_token: tokens.access_token, org_id: "o1", resource: MCP})).error).toBe("invalid_target")
+        expect((await exchange({subject_token: tokens.access_token, org_id: "o1"}, basic("backend", "nope"))).error).toBe("invalid_client")
+    })
+
+    test("a public client can't use token exchange", async () => {
+        const {tokens} = await signIn(new Browser(), "app", FIRST_PARTY_REDIRECT)
+        const body = await token({grant_type: "urn:ietf:params:oauth:grant-type:token-exchange", client_id: "app", subject_token: tokens.access_token, subject_token_type: "urn:ietf:params:oauth:token-type:access_token", resource: ORG, org_id: "o1"})
+        expect(body.access_token).toBeUndefined()
+        expect(body.error).toEqual(expect.any(String))
     })
 
     test("the interaction API requires the app's signed-in user", async () => {

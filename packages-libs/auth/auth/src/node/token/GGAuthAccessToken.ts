@@ -20,6 +20,8 @@ export interface GGAuthAccessTokenOptions<C extends object> {
     accessTtlMs?: number
     // When set, tokens carry `aud` and verifyAccess rejects a different audience.
     audience?: string
+    // When set, tokens carry `iss` and verify rejects another issuer. Read per call (config).
+    issuer?: () => string
     now?: () => number
 }
 
@@ -33,6 +35,7 @@ export class GGAuthAccessToken<C extends object> {
     private readonly claims: GGSchema<C>
     public readonly accessTtlMs: number
     public readonly audience: string | undefined
+    public readonly issuer: (() => string) | undefined
     private readonly now: () => number
 
     constructor(options: GGAuthAccessTokenOptions<C>) {
@@ -40,6 +43,7 @@ export class GGAuthAccessToken<C extends object> {
         this.claims = options.claimSchema ?? (IsObject({}) as unknown as GGSchema<C>)
         this.accessTtlMs = options.accessTtlMs ?? 30 * 60 * 1000
         this.audience = options.audience
+        this.issuer = options.issuer
         this.now = options.now ?? Date.now
     }
 
@@ -53,6 +57,9 @@ export class GGAuthAccessToken<C extends object> {
         if (typeof sub !== "string") throw new NOT_AUTHORIZED({debugMessage: "TOKEN_INVALID: missing sub"})
         if (this.audience !== undefined && payload["aud"] !== this.audience) {
             throw new NOT_AUTHORIZED({debugMessage: "TOKEN_INVALID: wrong audience"})
+        }
+        if (this.issuer && payload["iss"] !== this.issuer()) {
+            throw new NOT_AUTHORIZED({debugMessage: "TOKEN_INVALID: wrong issuer"})
         }
         const claims = this.claims.parse(payload["data"])
         return {
@@ -74,6 +81,7 @@ export class GGAuthAccessToken<C extends object> {
         const token = await this.signer.sign({
             data: this.claims.parse(claims),
             ...(this.audience !== undefined ? {aud: this.audience} : {}),
+            ...(this.issuer ? {iss: this.issuer()} : {}),
             sub: subject,
             iat: Math.floor(nowMs / 1000),
             exp: Math.floor(expiresAt / 1000),

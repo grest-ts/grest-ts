@@ -40,7 +40,7 @@ import {DynamoOAuthStore} from "@grest-ts/oauth/dynamodb"
 // Your own app's API: its ordinary user token, only for your own clients.
 const api: GGOAuthResource<UserClaims> = {
     resource: () => config.issuerUrl.get(),
-    accessToken: userTokenEngine.access,           // GGAuthAccessToken — signer must expose jwsKey()
+    accessToken: userTokenEngine.access,           // GGAuthAccessToken, any signer (HMAC, private key, KMS)
     scopes: ["app"],                               // at least one; what they permit is up to you
     firstPartyOnly: true,
     claims: async (subject, client) => claimsFor(subject), // at issue AND every refresh; undefined → invalid_grant
@@ -56,7 +56,7 @@ const mcp: GGOAuthResource<McpClaims> = {
 const oauth = new GGOAuthServer({
     issuer: () => config.issuerUrl.get(),          // public origin, no path
     store: new DynamoOAuthStore(dynamo, "my-oauth"),
-    secret: () => config.tokenSecret.reveal(),     // derives cookie + JWKS keys
+    secret: () => config.sessionSecret.reveal(),   // derives the cookie and ID-token keys
     resources: [api, mcp],                         // first = default for first-party clients
     interactionUrl: (uid, {firstParty, redirectUri}) => `${appUrl}/?oauthLogin=${uid}`,
     firstPartyClients: () => [{clientId: "web", name: "My App", redirectUris: [`${appUrl}/oauth/callback`]}],
@@ -70,6 +70,27 @@ new GGHttp(httpServer).http(OAuthInteractionApi, oauth.interactionApi(() => USER
 
 `claims` works like the `resolve` callback of `GGAuthRefreshToken.refresh`: role changes apply on
 the next refresh, and a deleted or deactivated user's OAuth session ends there.
+
+**Signing.** Each resource's token is signed through its own `accessToken.signer`. oidc-provider
+can only sign with key material it holds, so it signs with a per-process placeholder and the token
+endpoint re-signs the claims before the token leaves. That's what lets a signer keep its key in KMS.
+Asymmetric signers (`JwsSigningStrategy`) publish their public keys in `/oauth/jwks`, next to the
+ID-token key, so another service verifies with `JwksVerifier` and holds no key.
+
+**Service clients** (`serviceClients`) are your own backends. They authenticate with a secret
+(`client_secret_basic`) and may use:
+- `client_credentials`, for resources marked `serviceOnly`. The token's subject is the client id.
+- token exchange (RFC 8693), for a resource with `exchange: {from, params, claims}`. The service sends
+  a subject's valid `from` token (`subject_token`) plus your extra `params`, and gets a token for this
+  resource for the same subject, e.g. an org-scoped token from a user token:
+
+```ts
+const org: GGOAuthResource<OrgClaims> = {
+    resource: () => `${issuer}/org`, accessToken: orgToken, scopes: ["org"], firstPartyOnly: true,
+    claims: async () => undefined,                 // only issued by exchange
+    exchange: {from: userToken, params: ["org_id"], claims: (sub, params) => orgClaimsFor(sub, params.org_id)},
+}
+```
 
 `listGrants(subject)` and `revokeGrant(subject, grantId)` back a "connected apps" page.
 `revokeAll(subject)` is "log out everywhere"; call it next to `GGAuthRefreshToken.revokeAll`.

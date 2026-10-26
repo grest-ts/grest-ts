@@ -1,6 +1,11 @@
 import "./_dedupCheck";
 export type {SigningStrategy} from "./node/signing/SigningStrategy"
 export {HmacSigner} from "./node/signing/HmacSigner"
+export type {JwsSigner} from "./node/signing/JwsSigner"
+export {SecretJwsSigner} from "./node/signing/SecretJwsSigner"
+export {JwsSigningStrategy} from "./node/signing/JwsSigningStrategy"
+export {JwksVerifier} from "./node/signing/JwksVerifier"
+export type {JwksVerifierOptions} from "./node/signing/JwksVerifier"
 
 export {IsRefreshTokenRecord} from "./node/refresh/RefreshTokenStore"
 export type {RefreshTokenRecord, RefreshTokenStore} from "./node/refresh/RefreshTokenStore"
