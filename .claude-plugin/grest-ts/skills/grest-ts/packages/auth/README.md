@@ -130,12 +130,31 @@ const userTokenEngine = new GGAuthRefreshToken({
   store: new InMemoryRefreshTokenStore(),         // swap a DB-backed store in prod
   refreshTtlMs: 7 * 24 * 60 * 60 * 1000,          // long-lived, revocable, single-use
   access: new GGAuthAccessToken({
-    signer: new HmacSigner(SECRET),               // or any SigningStrategy (KMS/ES256)
+    signer: new HmacSigner(SECRET),               // or any TokenSigner (below)
     claimSchema: IsUserClaims,
     accessTtlMs: 60 * 60 * 1000,                  // short-lived, stateless
   }),
 })
 ```
+
+**Signing strategies.** `HmacSigner` (HS256) is one service signing and verifying its own tokens.
+For tokens other services verify, sign asymmetrically and publish the public keys:
+- `JwsSigningStrategy(signer, published?)` signs with a `JwsSigner` (ES256 or EdDSA) and exposes
+  `publicJwks()` for the issuer's JWKS. `published` lists extra keys to publish during a rotation.
+- `JwsSigner` is one key behind `alg`/`kid`/`sign`/`publicJwk`, so the private key can stay in
+  KMS or an HSM. `SecretJwsSigner(privateJwk)` is the built-in one (a private JWK from a secret).
+- `JwksVerifier({jwks})` only verifies, against the issuer's JWKS URL or pinned keys.
+
+Signers implement `TokenSigner` (sign, verify, optional `publicJwks`); `JwksVerifier` implements only
+`TokenVerifier`. A token on a verifier is `GGAuthAccessToken<C, TokenVerifier>`: it verifies, and
+calling `issue()` on it is a compile error. Code that only verifies should accept
+`GGAuthAccessToken<C, TokenVerifier>`, which takes a signing token too.
+
+`HmacSigner` derives its key with HKDF info `"@kratt/auth hs256 signing key"`, an app name left over
+in the framework. Changing it would invalidate every HMAC token, so it stays until a versioned
+option exists.
+
+Set `issuer` on `GGAuthAccessToken` so tokens carry `iss` and another issuer's token is rejected.
 
 The service issues on login and rotates on refresh. `refresh`'s `resolve` callback re-derives the
 claims from the subject, so a permission change takes effect on the next refresh — not just on
@@ -398,7 +417,7 @@ serialized by a Web Lock so a single-use refresh token is never replayed).
 
 **Server (`@grest-ts/auth`, node entry)** — `GGAuthAccessToken` (`issue`/`verify`),
 `GGAuthRefreshToken` (`issue`/`refresh`/`revoke`/`revokeAll`, `.access`), `HmacSigner` /
-`SigningStrategy`, `RefreshTokenStore` / `InMemoryRefreshTokenStore`, IdPs (`PasswordIdp` +
+`JwsSigningStrategy` + `JwsSigner` / `SecretJwsSigner` / `JwksVerifier` / `TokenSigner` / `TokenVerifier`, `RefreshTokenStore` / `InMemoryRefreshTokenStore`, IdPs (`PasswordIdp` +
 `BcryptHasher`/`PasswordHasher`, `GoogleIdp`, `OidcIdp`, `OktaIdp`, `identityFromClaims`,
 `ExternalIdentity` / `IdpStrategy`). Node-only (`jose`, `node:crypto`; `bcrypt` peer dep for
 passwords).
