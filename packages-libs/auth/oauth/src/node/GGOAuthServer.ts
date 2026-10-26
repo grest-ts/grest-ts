@@ -4,7 +4,7 @@ import Provider, {errors as oidcErrors, type ClientMetadata, type Configuration,
 import {NOT_FOUND} from "@grest-ts/schema"
 import {GGLog} from "@grest-ts/logger"
 import type {GGHttpServer} from "@grest-ts/http"
-import type {GGAccessPayload, GGAuthAccessToken} from "@grest-ts/auth"
+import type {GGAccessPayload, GGAuthAccessToken, TokenVerifier} from "@grest-ts/auth"
 import {GGOAuthInteractionContract, type GGOAuthInteraction} from "../shared/interactionContract"
 import {GGOAuthResourceServer, type GGOAuthProtectedResource} from "./GGOAuthResourceServer"
 import {toOidcAdapter, type GGOAuthStore} from "./store/GGOAuthStore"
@@ -24,6 +24,7 @@ export interface GGOAuthFirstPartyClient {
 // token is signed through it; its public keys join the JWKS. `scopes`: at least one; a request
 // granting none is refused. What they permit is up to the app.
 export interface GGOAuthResource<C extends object> extends GGOAuthProtectedResource<C> {
+    accessToken: GGAuthAccessToken<C>
     // Re-run at every issuance (code exchange and each refresh), like GGAuthRefreshToken's resolve:
     // permission changes apply on refresh. undefined = subject gone → invalid_grant.
     claims: (subject: string, client: {clientId: string, name: string}) => Promise<C | undefined>
@@ -35,7 +36,7 @@ export interface GGOAuthResource<C extends object> extends GGOAuthProtectedResou
     // this resource, for the same subject. `params` are the extra request parameters `claims` reads.
     exchange?: {
         // The token kind the subject presents (usually another resource's accessToken).
-        from: GGAuthAccessToken<any>
+        from: GGAuthAccessToken<any, TokenVerifier>
         params?: string[]
         claims: (subject: string, params: Record<string, string | undefined>) => Promise<C | undefined>
     }

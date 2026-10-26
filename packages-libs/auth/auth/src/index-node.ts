@@ -1,5 +1,5 @@
 import "./_dedupCheck";
-export type {SigningStrategy} from "./node/signing/SigningStrategy"
+export type {TokenSigner, TokenVerifier} from "./node/signing/TokenSigner"
 export {HmacSigner} from "./node/signing/HmacSigner"
 export type {JwsSigner} from "./node/signing/JwsSigner"
 export {SecretJwsSigner} from "./node/signing/SecretJwsSigner"

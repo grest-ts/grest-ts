@@ -1,5 +1,5 @@
 import {createLocalJWKSet, createRemoteJWKSet, jwtVerify, type JWK, type JWTVerifyGetKey} from "jose"
-import type {SigningStrategy} from "./SigningStrategy"
+import type {TokenVerifier} from "./TokenSigner"
 import {toNotAuthorized} from "./verifyError"
 
 export interface JwksVerifierOptions {
@@ -10,7 +10,7 @@ export interface JwksVerifierOptions {
 }
 
 // Verify-only: a service that accepts another service's tokens without holding any key.
-export class JwksVerifier implements SigningStrategy {
+export class JwksVerifier implements TokenVerifier {
 
     private keys: {source: string, get: JWTVerifyGetKey} | undefined
     private readonly options: JwksVerifierOptions
@@ -19,10 +19,6 @@ export class JwksVerifier implements SigningStrategy {
     constructor(options: JwksVerifierOptions) {
         this.options = options
         this.algorithms = options.algorithms ?? ["ES256"]
-    }
-
-    public sign = async (): Promise<string> => {
-        throw new Error("JwksVerifier only verifies; tokens are signed by their issuer")
     }
 
     public verify = async (token: string): Promise<Record<string, unknown>> => {

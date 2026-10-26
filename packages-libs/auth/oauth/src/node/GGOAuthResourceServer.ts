@@ -1,6 +1,6 @@
 import type {IncomingMessage, ServerResponse} from "node:http"
 import type {GGHttpServer} from "@grest-ts/http"
-import type {GGAccessPayload, GGAuthAccessToken} from "@grest-ts/auth"
+import type {GGAccessPayload, GGAuthAccessToken, TokenVerifier} from "@grest-ts/auth"
 import {RESOURCE_METADATA, resourceMetadataPath, resourceMetadataUrl} from "../shared/resourceMetadata"
 
 // An API that accepts the authorization server's tokens. It verifies them and holds no AS state.
@@ -8,7 +8,7 @@ export interface GGOAuthProtectedResource<C extends object> {
     // Absolute URL identifying the API; for an MCP server, its URL exactly as users enter it.
     resource: () => string
     // Verifies this resource's tokens (audience, issuer, signature).
-    accessToken: GGAuthAccessToken<C>
+    accessToken: GGAuthAccessToken<C, TokenVerifier>
     scopes: [string, ...string[]]
 }
 

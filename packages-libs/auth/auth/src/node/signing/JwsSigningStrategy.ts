@@ -1,11 +1,11 @@
 import {createLocalJWKSet, jwtVerify, type JWK} from "jose"
-import type {SigningStrategy} from "./SigningStrategy"
+import type {TokenSigner} from "./TokenSigner"
 import type {JwsSigner} from "./JwsSigner"
 import {toNotAuthorized} from "./verifyError"
 
 // Signs with `active`; also publishes `published` (the next key during a rotation, or the previous
 // one until its last token expires) so verifiers already know a key before it signs.
-export class JwsSigningStrategy implements SigningStrategy {
+export class JwsSigningStrategy implements TokenSigner {
 
     private readonly active: JwsSigner
     private readonly published: () => JwsSigner[]

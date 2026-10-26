@@ -130,7 +130,7 @@ const userTokenEngine = new GGAuthRefreshToken({
   store: new InMemoryRefreshTokenStore(),         // swap a DB-backed store in prod
   refreshTtlMs: 7 * 24 * 60 * 60 * 1000,          // long-lived, revocable, single-use
   access: new GGAuthAccessToken({
-    signer: new HmacSigner(SECRET),               // or any SigningStrategy (below)
+    signer: new HmacSigner(SECRET),               // or any TokenSigner (below)
     claimSchema: IsUserClaims,
     accessTtlMs: 60 * 60 * 1000,                  // short-lived, stateless
   }),

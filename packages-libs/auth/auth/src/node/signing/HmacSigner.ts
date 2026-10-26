@@ -1,11 +1,11 @@
 import {hkdfSync} from "node:crypto"
 import {SignJWT, jwtVerify, errors as joseErrors} from "jose"
 import {NOT_AUTHORIZED} from "@grest-ts/schema"
-import type {SigningStrategy} from "./SigningStrategy"
+import type {TokenSigner} from "./TokenSigner"
 
 const KEY_INFO = "@kratt/auth hs256 signing key"
 
-export class HmacSigner implements SigningStrategy {
+export class HmacSigner implements TokenSigner {
 
     private readonly alg = "HS256"
     private readonly reveal: () => string

@@ -3,7 +3,7 @@ import {createServer} from "node:http"
 import type {AddressInfo} from "node:net"
 import {generateKeyPairSync} from "node:crypto"
 import {IsArray, IsObject, IsString, NOT_AUTHORIZED} from "@grest-ts/schema"
-import {GGAuthAccessToken, JwksVerifier, JwsSigningStrategy, SecretJwsSigner} from "../../index-node"
+import {GGAuthAccessToken, HmacSigner, JwksVerifier, JwsSigningStrategy, SecretJwsSigner, type TokenVerifier} from "../../index-node"
 
 const IsClaims = IsObject({permissions: IsArray(IsString)})
 const ISSUER = "https://auth.example"
@@ -15,7 +15,7 @@ function newKey(type: "ec" | "ed25519" = "ec"): string {
     return JSON.stringify(privateKey.export({format: "jwk"}))
 }
 
-function token(signer: JwsSigningStrategy | JwksVerifier, issuer = ISSUER) {
+function token<S extends TokenVerifier>(signer: S, issuer = ISSUER) {
     return new GGAuthAccessToken({signer, claimSchema: IsClaims, audience: "app-user", issuer: () => issuer})
 }
 
@@ -103,7 +103,11 @@ describe("JwksVerifier", () => {
         await expectAuthError(token(new JwksVerifier({jwks: () => keys})).verify(issued.token), "TOKEN_INVALID")
     })
 
-    test("refuses to sign", async () => {
-        await expect(token(new JwksVerifier({jwks: () => []})).issue("alice", {permissions: []})).rejects.toThrow("only verifies")
+    test("a verify-only token has no issue() at compile time; a signing one fits where a verifier is expected", () => {
+        const verifying = token(new JwksVerifier({jwks: () => []}))
+        // @ts-expect-error — JwksVerifier can't sign
+        void (() => verifying.issue("alice", {permissions: []}))
+        const audienceOf = (t: GGAuthAccessToken<typeof IsClaims.infer, TokenVerifier>) => t.audience
+        expect([audienceOf(verifying), audienceOf(token(issuing)), audienceOf(token(new HmacSigner("k")))]).toEqual(["app-user", "app-user", "app-user"])
     })
 })
