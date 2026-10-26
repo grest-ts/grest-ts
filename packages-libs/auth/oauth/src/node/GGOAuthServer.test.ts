@@ -17,6 +17,7 @@ const ISSUER = `http://localhost:${port}`
 const API = `${ISSUER}/api`
 const APP_LOGIN = "https://app.example/oauth-login"
 const FIRST_PARTY_REDIRECT = "https://app.example/callback"
+const IDENTITY_REDIRECT = "https://auth.example/access/callback"
 const THIRD_PARTY_REDIRECT = "https://claude.ai/api/mcp/auth_callback"
 
 // The app's existing first-party user token: OAuth must issue exactly this kind.
@@ -51,7 +52,7 @@ const mcp: GGOAuthResource<Claims> = {
     claims: async (sub) => userPermissions.get(sub) ? {permissions: []} : undefined,
 }
 // What a client asks for: the first-party app its API, anyone else the MCP resource.
-const target = (clientId: string) => clientId === "app" ? {resource: API, scope: "api"} : {resource: MCP, scope: "mcp"}
+const target = (clientId: string) => clientId === "app" || clientId === "identity" ? {resource: API, scope: "api"} : {resource: MCP, scope: "mcp"}
 
 let oauth!: GGOAuthServer
 
@@ -80,7 +81,10 @@ class OAuthTestRuntime extends GGRuntime {
                 },
             }, mcp],
             interactionUrl: (uid) => `${APP_LOGIN}?uid=${uid}`,
-            firstPartyClients: () => [{clientId: "app", name: "The App", redirectUris: [FIRST_PARTY_REDIRECT], postLogoutRedirectUris: ["https://app.example/"]}],
+            firstPartyClients: () => [
+                {clientId: "app", name: "The App", redirectUris: [FIRST_PARTY_REDIRECT], postLogoutRedirectUris: ["https://app.example/"]},
+                {clientId: "identity", name: "The App", redirectUris: [IDENTITY_REDIRECT], refreshTokens: false},
+            ],
             dynamicRegistration: true,
             clientIdMetadataDocument: {allowedUrlPrefixes: () => ["https://clients.example/oauth/"]},
             proxy: true,
@@ -146,9 +150,9 @@ const interaction = (bearer: string) => async (method: "get" | "approve" | "deny
     return json
 }
 
-async function signIn(browser: Browser, clientId: string, redirectUri: string, sub = "alice") {
+async function signIn(browser: Browser, clientId: string, redirectUri: string, sub = "alice", extra: Record<string, string> = {}) {
     const {verifier, challenge} = pkce()
-    const login = await browser.navigate(authorizeUrl(clientId, redirectUri, challenge))
+    const login = await browser.navigate(authorizeUrl(clientId, redirectUri, challenge, extra))
     expect(login.origin + login.pathname).toBe(APP_LOGIN)
     const uid = login.searchParams.get("uid")!
     const call = interaction((await userToken.issue(sub, {permissions: []})).token)
@@ -225,6 +229,20 @@ describe("GGOAuthServer", () => {
         const again = await browser.navigate(authorizeUrl("app", FIRST_PARTY_REDIRECT, pkce().challenge))
         expect(again.origin + again.pathname).toBe(FIRST_PARTY_REDIRECT)
         expect(again.searchParams.get("code")).toEqual(expect.any(String))
+    })
+
+    test("a first-party client without refresh tokens gets only an access token", async () => {
+        const {tokens} = await signIn(new Browser(), "identity", IDENTITY_REDIRECT)
+        expect((await userToken.verify(tokens.access_token)).sub).toBe("alice")
+        expect(tokens.refresh_token).toBeUndefined()
+    })
+
+    test("prompt=login asks for a fresh sign-in even with a live session", async () => {
+        const browser = new Browser()
+        const first = await signIn(browser, "app", FIRST_PARTY_REDIRECT)
+        expect(first.details.forceLogin).toBe(false)
+        const forced = await signIn(browser, "app", FIRST_PARTY_REDIRECT, "alice", {prompt: "login"})
+        expect(forced.details.forceLogin).toBe(true)
     })
 
     test("third-party client registers, needs consent once, and gets a token only for its resource", async () => {

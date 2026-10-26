@@ -13,6 +13,8 @@ export interface GGOAuthFirstPartyClient {
     name: string
     redirectUris: string[]
     postLogoutRedirectUris?: string[]
+    // false: codes buy only an access token — for a client that reads the identity once and keeps nothing.
+    refreshTokens?: boolean
 }
 
 // One API the server issues tokens for (RFC 8707 resource indicator → its own audience and claims).
@@ -234,6 +236,7 @@ export class GGOAuthServer {
             },
             scopes: requestedScopes(interaction.params),
             resource: this.requestedResource(interaction.params, clientId).resource(),
+            forceLogin: interaction.prompt.name === "login" && interaction.prompt.reasons.some(r => r === "login_prompt" || r === "max_age"),
         }
     }
 
@@ -336,7 +339,7 @@ export class GGOAuthServer {
                 redirect_uris: c.redirectUris,
                 post_logout_redirect_uris: c.postLogoutRedirectUris ?? [],
                 token_endpoint_auth_method: "none",
-                grant_types: ["authorization_code", "refresh_token"],
+                grant_types: c.refreshTokens === false ? ["authorization_code"] : ["authorization_code", "refresh_token"],
                 response_types: ["code"],
                 application_type: "web",
             })),

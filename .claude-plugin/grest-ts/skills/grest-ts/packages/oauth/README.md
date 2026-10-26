@@ -109,15 +109,18 @@ export const OAuthInteractionApi = new GGHttpSchema({
 
 The page works like this:
 
-1. `get({uid})` returns the client (name, `firstParty`, redirect hosts, `loopbackOnly`) and the
-   requested scopes.
-2. For a first-party client, call `approve` right away. For any other client, show a consent
+1. `get({uid})` returns the client (name, `firstParty`, redirect hosts, `loopbackOnly`), the
+   requested scopes and `forceLogin`.
+2. When `forceLogin` is set (the client sent `prompt=login`, or its `max_age` has passed), sign the
+   user out of your app first and show the login form: an existing session must not approve it.
+3. For a first-party client, call `approve` right away. For any other client, show a consent
    screen first. Display the redirect hosts, and warn when `loopbackOnly` is set.
-3. `approve`/`deny` return `redirectUrl` for the browser to follow. The result applies only in
+4. `approve`/`deny` return `redirectUrl` for the browser to follow. The result applies only in
    the browser holding the flow's interaction cookie, so a user approving someone else's flow
    can't hand them a code.
 
-A first-party client re-authorizes silently while the login session lives.
+A first-party client re-authorizes silently while the login session lives. Set `refreshTokens:
+false` on one that only reads who signed in and keeps nothing: its codes then buy an access token alone.
 
 ### Storage
 
