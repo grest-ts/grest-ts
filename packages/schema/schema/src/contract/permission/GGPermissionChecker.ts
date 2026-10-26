@@ -1,9 +1,12 @@
 import {GG_ANY_PERMISSION, GG_NO_PERMISSIONS, GGPermission} from "./GGPermission";
+import {GGRequirement, GGRequirementResource, isRequirement} from "./GGRequirement";
+import {NOT_FOUND} from "../standardErrors";
 
 const MAX_DEPTH = 3;
 
 export class GGPermissionChecker {
 
+    /** A requirement never passes here: it needs an authority. Check `scopesOf(permission)` and run the requirements through the authority. */
     public static satisfies(required: GGPermission, granted: undefined | ReadonlyArray<ReadonlyArray<string>>): boolean {
         if (required === GG_NO_PERMISSIONS || required === undefined) return true
         if (required === GG_ANY_PERMISSION) return granted !== undefined && granted.length > 0
@@ -23,25 +26,48 @@ export class GGPermissionChecker {
         return false
     }
 
+    /** The requirements in a permission: itself, or the members of an `allOf` (they can't sit in `anyOf`). */
+    public static requirementsOf(p: GGPermission | undefined): GGRequirement[] {
+        if (isRequirement(p)) return [p]
+        if (p && typeof p === "object" && "allOf" in p) return p.allOf.flatMap(c => this.requirementsOf(c))
+        return []
+    }
+
+    /** A permission without its requirements: what the caller's granted scopes must satisfy. */
+    public static scopesOf(p: GGPermission): GGPermission {
+        if (isRequirement(p)) return GG_NO_PERMISSIONS
+        if (p && typeof p === "object" && "allOf" in p) {
+            const rest = p.allOf.map(c => this.scopesOf(c)).filter(c => c !== GG_NO_PERMISSIONS)
+            return rest.length ? {allOf: rest as [GGPermission, ...GGPermission[]]} : GG_NO_PERMISSIONS
+        }
+        return p
+    }
+
     public static describePermission(p: GGPermission | undefined): string {
         if (p === undefined) return "undefined";
         if (p === GG_NO_PERMISSIONS) return "GG_NO_PERMISSIONS";
         if (p === GG_ANY_PERMISSION) return "GG_ANY_PERMISSION";
         if (typeof p === "string") return JSON.stringify(p);
+        if (isRequirement(p)) return describeRequirement(p);
         if ("allOf" in p) return `allOf(${p.allOf.map(c => this.describePermission(c)).join(", ")})`;
         if ("anyOf" in p) return `anyOf(${p.anyOf.map(c => this.describePermission(c)).join(", ")})`;
         return String(p);
     }
 
     public static validatePermission(permission: GGPermission, path: string = ""): void {
-        this._walk(permission, path, 0);
+        this._walk(permission, path, 0, false);
     }
 
-    private static _walk(p: unknown, path: string, depth: number): void {
+    private static _walk(p: unknown, path: string, depth: number, inAnyOf: boolean): void {
         if (depth > MAX_DEPTH) {
             throw new Error(`Permission tree too deep at ${path || "root"}: max depth is ${MAX_DEPTH}`);
         }
         if (p === GG_NO_PERMISSIONS || p === GG_ANY_PERMISSION) return;
+        if (isRequirement(p)) {
+            if (inAnyOf) throw new Error(`Permission at ${path || "root"}: a requirement can't sit inside anyOf`);
+            validateRequirement(p, path || "root");
+            return;
+        }
         if (typeof p === "string") {
             if (p.length === 0) throw new Error(`Permission scope at ${path || "root"} must be a non-empty string`);
             return;
@@ -53,7 +79,7 @@ export class GGPermissionChecker {
                 if (!Array.isArray(list) || list.length === 0) {
                     throw new Error(`Permission at ${here} must contain at least one entry`);
                 }
-                list.forEach((c, i) => this._walk(c, `${here}[${i}]`, depth + 1));
+                list.forEach((c, i) => this._walk(c, `${here}[${i}]`, depth + 1, inAnyOf));
                 return;
             }
             if ("anyOf" in p) {
@@ -62,7 +88,7 @@ export class GGPermissionChecker {
                 if (!Array.isArray(list) || list.length === 0) {
                     throw new Error(`Permission at ${here} must contain at least one entry`);
                 }
-                list.forEach((c, i) => this._walk(c, `${here}[${i}]`, depth + 1));
+                list.forEach((c, i) => this._walk(c, `${here}[${i}]`, depth + 1, true));
                 return;
             }
         }
@@ -70,4 +96,43 @@ export class GGPermissionChecker {
     }
 
 
+}
+
+function describeResource(r: GGRequirementResource): string {
+    const id = r.id === undefined ? "" : "field" in r.id ? ` from input.${r.id.field}` : ` from context ${r.id.context}`
+    return `${r.type}${id}`
+}
+
+function describeRequirement(r: GGRequirement): string {
+    if (r.list) return `${r.action} (lists what the caller may see)`
+    const on = `${r.action} on ${describeResource(r.resource!)}`
+    return [on, r.createOn ? `, or on ${describeResource(r.createOn)} when creating` : "", r.hidden ? " (denied as NOT_FOUND)" : ""].join("")
+}
+
+function validateResource(r: unknown, path: string): void {
+    const res = r as GGRequirementResource
+    if (typeof res !== "object" || res === null || typeof res.type !== "string" || res.type.length === 0) {
+        throw new Error(`Requirement at ${path} needs a resource type`)
+    }
+    const id = res.id as unknown
+    if (id === undefined) return
+    const ok = typeof id === "object" && id !== null && (
+        ("field" in id && typeof id.field === "string" && id.field.length > 0) ||
+        ("context" in id && typeof id.context === "string" && id.context.length > 0))
+    if (!ok) throw new Error(`Requirement at ${path} has an id that is neither {field} nor {context}`)
+}
+
+function validateRequirement(r: GGRequirement, path: string): void {
+    if (typeof r.action !== "string" || r.action.length === 0) throw new Error(`Requirement at ${path} needs an action`)
+    if (!Array.isArray(r.errors)) throw new Error(`Requirement at ${path} needs its errors`)
+    if (r.hidden && !r.errors.includes(NOT_FOUND)) throw new Error(`Requirement at ${path} is hidden, so its errors must include NOT_FOUND`)
+    if (r.list) {
+        if (r.resource || r.createOn) throw new Error(`Requirement at ${path} is a list: it names no resource`)
+        return
+    }
+    validateResource(r.resource, `${path}.resource`)
+    if (r.createOn) {
+        validateResource(r.createOn, `${path}.createOn`)
+        if (!r.resource?.id || !("field" in r.resource.id)) throw new Error(`Requirement at ${path} has createOn, so its resource id must be an input field`)
+    }
 }

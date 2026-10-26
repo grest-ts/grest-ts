@@ -1,5 +1,6 @@
 import type {IncomingMessage, ServerResponse} from "node:http"
 import type {GGHttpServer} from "@grest-ts/http"
+import {SERVER_ERROR} from "@grest-ts/schema"
 import type {GGAccessPayload, GGAuthAccessToken, TokenVerifier} from "@grest-ts/auth"
 import {RESOURCE_METADATA, resourceMetadataPath, resourceMetadataUrl} from "../shared/resourceMetadata"
 
@@ -45,9 +46,17 @@ export class GGOAuthResourceServer {
     ): void {
         const guarded = async (req: IncomingMessage, res: ServerResponse) => {
             const auth = req.headers.authorization
-            const token = auth?.toLowerCase().startsWith("bearer ")
-                ? await resource.accessToken.verify(auth.slice(7)).catch(() => undefined)
-                : undefined
+            let token: GGAccessPayload<C> | undefined
+            try {
+                token = auth?.toLowerCase().startsWith("bearer ") ? await resource.accessToken.verify(auth.slice(7)) : undefined
+            } catch (err) {
+                // The keys can't be fetched: an invalid_token answer would send the client to sign in again.
+                if (err instanceof SERVER_ERROR) {
+                    res.writeHead(503)
+                    res.end()
+                    return
+                }
+            }
             if (!token) {
                 res.writeHead(401, {
                     "www-authenticate": `Bearer resource_metadata="${resourceMetadataUrl(resource.resource())}", scope="${resource.scopes.join(" ")}"${auth ? `, error="invalid_token"` : ""}`,

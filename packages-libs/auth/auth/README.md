@@ -143,7 +143,9 @@ For tokens other services verify, sign asymmetrically and publish the public key
   `publicJwks()` for the issuer's JWKS. `published` lists extra keys to publish during a rotation.
 - `JwsSigner` is one key behind `alg`/`kid`/`sign`/`publicJwk`, so the private key can stay in
   KMS or an HSM. `SecretJwsSigner(privateJwk)` is the built-in one (a private JWK from a secret).
-- `JwksVerifier({jwks})` only verifies, against the issuer's JWKS URL or pinned keys.
+- `JwksVerifier({jwks})` only verifies, against the issuer's JWKS URL or pinned keys. If the URL
+  can't be fetched, the last fetched keys keep verifying for `maxStaleMs` (default 24 h); with none,
+  verify throws `SERVER_ERROR` rather than `NOT_AUTHORIZED`, so an issuer outage isn't read as a bad token.
 
 Signers implement `TokenSigner` (sign, verify, optional `publicJwks`); `JwksVerifier` implements only
 `TokenVerifier`. A token on a verifier is `GGAuthAccessToken<C, TokenVerifier>`: it verifies, and

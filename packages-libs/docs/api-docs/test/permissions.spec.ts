@@ -5,11 +5,14 @@ import {
     GG_NO_PERMISSIONS,
     GGContractClass,
     GGDuplexContract,
+    type GGRequirement,
+    IsObject,
     IsString,
     NOT_AUTHORIZED,
+    NOT_FOUND,
     SERVER_ERROR,
 } from "@grest-ts/schema";
-import {GGRpc, GGHttpSchema} from "@grest-ts/http";
+import {GGAuthority, GGRpc, GGHttpSchema} from "@grest-ts/http";
 import {GGWebSocketSchema} from "@grest-ts/websocket";
 import {buildContractDoc} from "../src/buildContractDoc";
 
@@ -34,6 +37,19 @@ function findContract(doc: ReturnType<typeof buildContractDoc>, contractName: st
 }
 
 describe("buildContractDoc — permission rendering", () => {
+
+    it("HTTP method renders a requirement with its action and resource, never as public", () => {
+        const read = Object.freeze({__permission: "requirement", action: "docs:Read", resource: {type: "docs:doc", id: {field: "docId"}}, hidden: true, errors: [NOT_AUTHORIZED, FORBIDDEN, NOT_FOUND]}) as GGRequirement<"docId">
+        const C = new GGContractClass("Docs", {
+            read: {input: IsObject({docId: IsString}), success: IsString, errors: [SERVER_ERROR], permission: read},
+        });
+        const Api = new GGHttpSchema({contract: C as any, pathPrefix: "docs", use: [new GGAuthority("docs")], routes: {read: GGRpc.GET("read")}});
+        const doc = buildContractDoc({title: "T", groups: {default: {http: [Api]}}});
+        expect(findMethod(doc, "Docs", "read")?.permission).toEqual({
+            tree: {kind: "requirement", action: "docs:Read", description: "docs:Read on docs:doc from input.docId (denied as NOT_FOUND)"},
+            text: "Requires `docs:Read on docs:doc from input.docId (denied as NOT_FOUND)`.",
+        });
+    });
 
     it("HTTP method picks up GG_NO_PERMISSIONS as public", () => {
         const C = new GGContractClass("Pub", {

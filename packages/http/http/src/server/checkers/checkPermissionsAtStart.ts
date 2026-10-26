@@ -10,11 +10,16 @@
  *    so a non-public permission on a WS serverToClient method is silently ignored.
  *
  * Scopes come only from the schema's wires; there is no resolver wiring.
+ *
+ * Plus one for requirements: an HTTP schema whose methods declare a GGRequirement must .use() exactly one
+ * GGAuthority, and that authority must be created in this runtime.
  */
-import {GG_NO_PERMISSIONS, GGContractMethod, GGPermission} from "@grest-ts/schema"
+import {GG_NO_PERMISSIONS, GGContractMethod, GGPermission, GGPermissionChecker} from "@grest-ts/schema"
 import type {GGTransportMiddleware} from "@grest-ts/context"
 import {GGWireContextKey} from "../../schema/GGWireContextKey"
 import "../../schema/GGWireContextKey.node.js"
+import {GGAuthority} from "../../schema/GGAuthority"
+import "../../schema/GGAuthority.node.js"
 
 interface HttpSchemaLike {
     name: string
@@ -35,6 +40,29 @@ interface WebSocketSchemaLike {
 
 function isNonPublic(permission: GGPermission | undefined): boolean {
     return permission !== undefined && permission !== GG_NO_PERMISSIONS
+}
+
+// A permission made only of requirements needs no grants from a wire — its authority decides it.
+function needsWireGrants(permission: GGPermission | undefined): boolean {
+    return permission !== undefined && !GGPermissionChecker.satisfies(GGPermissionChecker.scopesOf(permission), [])
+}
+
+function checkAuthorities(httpSchemas: readonly HttpSchemaLike[]): void {
+    const problems: string[] = []
+    for (const schema of httpSchemas) {
+        const methods = schema.contract?.methods ?? {}
+        const withRequirements = Object.keys(methods).filter(name => GGPermissionChecker.requirementsOf(methods[name].permission).length)
+        if (!withRequirements.length) continue
+        const authorities = schema.apiMiddlewares.filter((mw): mw is GGAuthority => mw instanceof GGAuthority)
+        if (authorities.length !== 1) {
+            problems.push(`  ${schema.name}: ${withRequirements.join(", ")} declare requirements, but the schema .use()s ${authorities.length} authorities (needs exactly one)`)
+        } else if (!authorities[0]!.hasHandler()) {
+            problems.push(`  ${schema.name}: authority "${authorities[0]!.name}" is not created - call ${authorities[0]!.name}.define(...).create(deps) in compose()`)
+        }
+    }
+    if (problems.length) {
+        throw new Error(`GGHttpServer: these schemas have requirements nothing can decide:\n\n${problems.join("\n")}`)
+    }
 }
 
 function hasPermissionWire(wires: readonly GGTransportMiddleware[]): boolean {
@@ -85,7 +113,9 @@ export function checkPermissionsAtStart(
         )
     }
 
-    const unsatisfiable = surfaces.filter(s => isNonPublic(s.permission) && !s.hasWire)
+    checkAuthorities(httpSchemas)
+
+    const unsatisfiable = surfaces.filter(s => needsWireGrants(s.permission) && !s.hasWire)
     if (unsatisfiable.length > 0) {
         const lines = unsatisfiable.map(s => `  ${s.label}`).join("\n")
         throw new Error(
