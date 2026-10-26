@@ -47,7 +47,7 @@ export interface GGOAuthServerOptions {
     resources: [GGOAuthResource<any>, ...GGOAuthResource<any>[]]
     // The app's login/consent page; it receives the interaction uid and uses GGOAuthInteractionContract.
     // `request` lets a first-party client's sign-in stay on the origin it was opened from.
-    interactionUrl: (uid: string, request: {redirectUri: string, firstParty: boolean}) => string
+    interactionUrl: (uid: string, request: {clientId: string, redirectUri: string, firstParty: boolean}) => string
     // Pre-registered app clients: no consent screen, silent re-auth while the login session lives.
     // Read once, on first use (config isn't readable at compose time).
     firstPartyClients?: () => GGOAuthFirstPartyClient[]
@@ -66,6 +66,8 @@ export interface GGOAuthServerOptions {
 }
 
 const BASE = "/oauth"
+const AUTHORIZATION_PATH = `${BASE}/authorize`
+const TOKEN_PATH = `${BASE}/token`
 const OIDC_SCOPES = ["openid", "offline_access"]
 const TICKET = "GGOAuthTicket"
 // Claims resolved during a refresh before the presented token was consumed (see rotateRefreshToken).
@@ -98,6 +100,11 @@ export class GGOAuthServer {
         return this._firstParty
     }
 
+    // Where a client of this server sends the browser and redeems codes, on `origin` (default: the issuer).
+    public endpoints(origin = this.options.issuer()): {authorization: string, token: string} {
+        return {authorization: `${origin}${AUTHORIZATION_PATH}`, token: `${origin}${TOKEN_PATH}`}
+    }
+
     public mount(server: GGHttpServer): void {
         const handle = async (req: IncomingMessage, res: ServerResponse) => {
             delete req.headers["x-forwarded-host"]
@@ -111,8 +118,8 @@ export class GGOAuthServer {
                     res.end("Sign-in request expired")
                     return
                 }
-                const firstParty = this.firstParty.has(String(found.params.client_id))
-                res.writeHead(303, {location: this.options.interactionUrl(interaction[1], {redirectUri: String(found.params.redirect_uri), firstParty})})
+                const clientId = String(found.params.client_id)
+                res.writeHead(303, {location: this.options.interactionUrl(interaction[1], {clientId, redirectUri: String(found.params.redirect_uri), firstParty: this.firstParty.has(clientId)})})
                 res.end()
                 return
             }
@@ -186,7 +193,7 @@ export class GGOAuthServer {
         }
     }
 
-    public listGrants = async (subject: string): Promise<Array<{grantId: string, clientId: string, clientName: string, createdAt: number}>> => {
+    public listGrants = async (subject: string): Promise<Array<{grantId: string, clientId: string, clientName: string, firstParty: boolean, createdAt: number}>> => {
         const p = this.provider()
         const grants = await Promise.all((await this.options.store.listIdsByAccount("Grant", subject)).map(id => p.Grant.find(id)))
         return await Promise.all(grants
@@ -196,6 +203,7 @@ export class GGOAuthServer {
                 clientId: g!.clientId!,
                 // A client metadata document may be unreachable; the grant must still be listed (and revocable).
                 clientName: String((await p.Client.find(g!.clientId!).catch(() => undefined))?.clientName ?? g!.clientId),
+                firstParty: this.firstParty.has(g!.clientId!),
                 createdAt: (g!.iat ?? 0) * 1000,
             })))
     }
@@ -353,7 +361,7 @@ export class GGOAuthServer {
                 application_type: "native",
             },
             routes: {
-                authorization: `${BASE}/authorize`, token: `${BASE}/token`, registration: `${BASE}/register`,
+                authorization: AUTHORIZATION_PATH, token: TOKEN_PATH, registration: `${BASE}/register`,
                 jwks: `${BASE}/jwks`, revocation: `${BASE}/revoke`, end_session: `${BASE}/logout`, userinfo: `${BASE}/userinfo`,
                 introspection: `${BASE}/introspect`, pushed_authorization_request: `${BASE}/par`, code_verification: `${BASE}/device`,
                 device_authorization: `${BASE}/device/auth`, backchannel_authentication: `${BASE}/backchannel`, challenge: `${BASE}/challenge`,

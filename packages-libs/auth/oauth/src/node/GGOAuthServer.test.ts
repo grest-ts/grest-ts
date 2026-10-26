@@ -202,6 +202,11 @@ describe("GGOAuthServer", () => {
     afterAll(async () => { await runtime.teardown() })
     beforeEach(() => { userPermissions.set("alice", ["read", "write"]) })
 
+    test("names its endpoints as its metadata does", async () => {
+        const meta = await (await fetch(`${ISSUER}/.well-known/oauth-authorization-server`)).json()
+        expect(oauth.endpoints()).toEqual({authorization: meta.authorization_endpoint, token: meta.token_endpoint})
+    })
+
     test("publishes RFC 8414 metadata with what MCP clients require", async () => {
         const meta = await (await fetch(`${ISSUER}/.well-known/oauth-authorization-server`)).json()
         expect(meta).toMatchObject({
@@ -281,7 +286,10 @@ describe("GGOAuthServer", () => {
         const again = await browser.navigate(authorizeUrl(clientId, THIRD_PARTY_REDIRECT, pkce().challenge))
         expect(again.searchParams.get("code")).toEqual(expect.any(String))
 
-        expect(await oauth.listGrants("alice")).toEqual(expect.arrayContaining([expect.objectContaining({clientId, clientName: "Claude"})]))
+        expect(await oauth.listGrants("alice")).toEqual(expect.arrayContaining([
+            expect.objectContaining({clientId, clientName: "Claude", firstParty: false}),
+            expect.objectContaining({clientId: "app", firstParty: true}),
+        ]))
     })
 
     test("a third-party client can't get a token for a first-party-only resource", async () => {

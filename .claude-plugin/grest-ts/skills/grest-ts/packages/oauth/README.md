@@ -58,7 +58,7 @@ const oauth = new GGOAuthServer({
     store: new DynamoOAuthStore(dynamo, "my-oauth"),
     secret: () => config.tokenSecret.reveal(),     // derives cookie + JWKS keys
     resources: [api, mcp],                         // first = default for first-party clients
-    interactionUrl: (uid, {firstParty, redirectUri}) => `${appUrl}/?oauthLogin=${uid}`,
+    interactionUrl: (uid, {clientId, firstParty, redirectUri}) => `${appUrl}/?oauthLogin=${uid}`,
     firstPartyClients: () => [{clientId: "web", name: "My App", redirectUris: [`${appUrl}/oauth/callback`]}],
     clientIdMetadataDocument: {allowedUrlPrefixes: () => ["https://claude.ai/oauth/", "https://chatgpt.com/oauth/"]},
     // dynamicRegistration: true,                  // open RFC 7591 registration — anyone, any name
@@ -121,6 +121,8 @@ The page works like this:
 
 A first-party client re-authorizes silently while the login session lives. Set `refreshTokens:
 false` on one that only reads who signed in and keeps nothing: its codes then buy an access token alone.
+`endpoints()` gives such a client its authorization and token URLs, and `listGrants` marks each grant
+`firstParty`, so a "connected apps" list can leave your own clients out.
 
 ### Storage
 
