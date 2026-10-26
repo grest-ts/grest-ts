@@ -2,6 +2,7 @@ import {describe, it, expect, vi, afterEach} from 'vitest'
 import {GGContractClass, IsObject, IsString, SERVER_ERROR} from '@grest-ts/schema'
 import {GGHttpSchema} from '../schema/GGHttpSchema'
 import {GGRpc} from '../rpc/GGHttpRouteRPC'
+import {GGHeader} from '../schema/GGHeader'
 import {createClient, _registerDiscoveryUrlResolver} from './GGHttpSchema.createClient'
 import {discoveryUrlResolver} from './GGHttpSchema.createClient.node.js'
 
@@ -84,5 +85,41 @@ describe('createClient discovery url resolution', () => {
             expect(res.context?.displayMessage).toContain("HTTP 502")
             expect(res.context?.displayMessage).toContain("502 Bad Gateway")
         }
+    })
+})
+
+describe('createClient wires', () => {
+
+    const SERVICE_TOKEN = new GGHeader("x-test-service-token", {scheme: "bearer"})
+    const GuardedApi = new GGHttpSchema({
+        contract: PingContract,
+        pathPrefix: "api/guarded",
+        use: [SERVICE_TOKEN],
+        routes: {ping: GGRpc.POST("ping")},
+    })
+
+    afterEach(() => vi.unstubAllGlobals())
+
+    it('resolves each wire value per request and sends it as the wire header', async () => {
+        const sent: Array<string | undefined> = []
+        vi.stubGlobal("fetch", vi.fn(async (_url: string, init: {headers: Record<string, string>}) => {
+            sent.push(init.headers["x-test-service-token"])
+            return okResponse()
+        }))
+        let n = 0
+        const client = createClient(GuardedApi, {url: "http://explicit:1", wires: [{wire: SERVICE_TOKEN, value: async () => `t${++n}`}]})
+        expect((await client.ping({msg: "hi"})).msg).toBe("pong")
+        await client.ping({msg: "hi"})
+        expect(sent).toEqual(["Bearer t1", "Bearer t2"])
+        expect(SERVICE_TOKEN.get()).toBeUndefined()
+    })
+
+    it('a failing value provider is the call\'s SERVER_ERROR, not a thrown promise', async () => {
+        const client = createClient(GuardedApi, {url: "http://explicit:1", wires: [{wire: SERVICE_TOKEN, value: async () => { throw new Error("token endpoint down") }}]})
+        expect(await client.ping({msg: "hi"}).asResult()).toBeInstanceOf(SERVER_ERROR)
+    })
+
+    it('refuses a wire the schema does not use', () => {
+        expect(() => createClient(PingApi, {url: "http://explicit:1", wires: [{wire: SERVICE_TOKEN, value: () => "t"}]})).toThrow(/not used by/)
     })
 })

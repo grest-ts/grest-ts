@@ -1,7 +1,8 @@
 import {ANY_ERROR, ERROR, GGContractApiDefinition, GGContractClient, GGContractExecutor, GGContractImplementation, GGPromise, OK, SERVER_ERROR} from "@grest-ts/schema"
 import {ClientHttpRouteToRpcTransformClientCodec, GGHttpCodec, GGHttpSchema} from "../schema/GGHttpSchema";
 import {isBrowser} from "@grest-ts/common";
-import type {GGConnectionSettings} from "@grest-ts/context";
+import {GGContext, GGContextStore, type GGConnectionSettings} from "@grest-ts/context";
+import type {GGWireContextKey} from "../schema/GGWireContextKey";
 
 
 declare module "../schema/GGHttpSchema" {
@@ -60,6 +61,17 @@ export interface GGHttpClientConfig {
      * browser client throws when a request is issued (the browser can't access the TLS layer).
      */
     connectionSettings?: GGConnectionSettings
+    /**
+     * Wire values this client attaches itself, resolved before every request — e.g. a service
+     * credential: `{wire: SERVICE_TOKEN_WIRE, value: () => serviceClient.token(resource)}`.
+     * Each wire must be in the schema's `use`.
+     */
+    wires?: GGHttpClientWire[]
+}
+
+export interface GGHttpClientWire {
+    wire: GGWireContextKey
+    value: () => string | undefined | Promise<string | undefined>
 }
 
 /**
@@ -114,6 +126,12 @@ export function createClient<TContract extends GGContractApiDefinition>(
         throw new Error("Must define URL for GGHttpClient when running in browser! Use empty string for same-origin requests.");
     }
 
+    for (const {wire} of config.wires ?? []) {
+        if (!httpSchema.apiMiddlewares.includes(wire)) {
+            throw new Error(`Wire "${wire.name}" is not used by ${httpSchema.name}, so its value would never be sent.`);
+        }
+    }
+
     const pathPrefix = "/" + httpSchema.pathPrefix + "/";
 
     const transportImplementation: any = {}
@@ -149,7 +167,9 @@ export function createClient<TContract extends GGContractApiDefinition>(
 
                 // ---------------------------------------------
                 // Execution
-                const fetchRequest = await wireFormat.createRequest(validatedInput);
+                const fetchRequest = config.wires
+                    ? await withWireValues(config.wires, () => wireFormat.createRequest(validatedInput))
+                    : await wireFormat.createRequest(validatedInput);
 
                 const connectionSettings = config.connectionSettings || fetchRequest.connectionSettings
                     ? {...config.connectionSettings, ...fetchRequest.connectionSettings}
@@ -201,3 +221,10 @@ export function createClient<TContract extends GGContractApiDefinition>(
 
 const defaultFetchTransport: GGHttpTransport = (url, init) =>
     fetch(url, init as RequestInit)
+
+async function withWireValues<T>(wires: GGHttpClientWire[], fn: () => T | Promise<T>): Promise<T> {
+    const values = await Promise.all(wires.map(w => w.value()));
+    const ctx = new GGContext("httpClientWires", GGContextStore.tryGetContext());
+    wires.forEach((w, i) => ctx.set(w.wire, values[i]));
+    return ctx.run(fn);
+}

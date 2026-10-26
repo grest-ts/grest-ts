@@ -101,6 +101,9 @@ const org: GGOAuthResource<OrgClaims> = {
 A backend calls the token endpoint with `GGOAuthServiceClient({tokenEndpoint, clientId, secret})`:
 `token(resource)` (client_credentials, reused until shortly before expiry) and
 `exchange(subjectToken, resource, params)`; failures throw `GGOAuthTokenError` with the OAuth `error`.
+To send the token, give the client of the other service a wire value:
+`OtherApi.createClient({wires: [{wire: SERVICE_TOKEN_WIRE, value: () => serviceClient.token(resource)}]})`
+(see `@grest-ts/http` → "Client — sending the credential").
 
 **Resource server only.** A service that accepts the tokens but doesn't run the authorization server
 uses `GGOAuthResourceServer({authorizationServer, resources})`: `mount` serves each resource's RFC 9728
