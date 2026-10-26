@@ -48,15 +48,13 @@ scopeOf?}`:
 
 MCP clients (Claude, ChatGPT) require exactly this to start sign-in and step-up.
 
-## Not in grest-ts (yet)
+## Built since
 
-- **The authorization server itself.** kratt embeds panva `oidc-provider`. Its configuration
-  (consent, grants, claims) is app-specific. Extract an `@grest-ts/oauth-server` (mount on
-  `GGHttpServer`, a `GGDynamoDbTable` adapter, the consent-ticket flow, a PRM helper) once a
-  second app needs it.
-- **Asymmetric signing.** A `SigningStrategy` for ES256 + JWKS verification belongs in
-  `@grest-ts/auth` when a verifier lives outside the issuing process. The interface already
-  allows it.
+- **The authorization server** is `@grest-ts/oauth` (`GGOAuthServer` on panva `oidc-provider`,
+  `GGOAuthResourceServer`, `GGOAuthServiceClient`, `DynamoOAuthStore`).
+- **Asymmetric signing** is in `@grest-ts/auth`: `JwsSigningStrategy` (ES256/EdDSA through a
+  `JwsSigner`, which can be a KMS key) publishes its keys in the issuer's JWKS, and `JwksVerifier`
+  verifies outside the issuing process with no key.
 
 ## Note
 
