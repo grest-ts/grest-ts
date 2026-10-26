@@ -195,7 +195,7 @@ export class GGOAuthServer {
 
     public listGrants = async (subject: string): Promise<Array<{grantId: string, clientId: string, clientName: string, firstParty: boolean, createdAt: number, lastUsedAt?: number}>> => {
         const p = this.provider()
-        const grants = await Promise.all((await this.options.store.listIdsByAccount("Grant", subject)).map(id => p.Grant.find(id)))
+        const grants = await Promise.all((await this.options.store.listGrantIds(subject)).map(id => p.Grant.find(id)))
         return await Promise.all(grants
             .filter(g => g?.clientId && g.accountId === subject)
             .map(async g => {
@@ -220,17 +220,16 @@ export class GGOAuthServer {
         const grant = await this.provider().Grant.find(grantId)
         if (!grant || grant.accountId !== subject) throw new NOT_FOUND()
         await this.options.store.revokeByGrantId(grantId)
-        // The grant row carries its id as jti, not grantId, so revokeByGrantId leaves it.
+        // A grant row isn't GRANT_BOUND, so revokeByGrantId leaves it.
         await this.options.store.destroy("Grant", grantId)
     }
 
     // "Log out everywhere": every grant and login session of the subject.
     public revokeAll = async (subject: string): Promise<void> => {
         const store = this.options.store
-        const [grantIds, sessionIds] = await Promise.all([store.listIdsByAccount("Grant", subject), store.listIdsByAccount("Session", subject)])
         await Promise.all([
-            ...grantIds.map(id => Promise.all([store.revokeByGrantId(id), store.destroy("Grant", id)])),
-            ...sessionIds.map(id => store.destroy("Session", id)),
+            store.destroySessions(subject),
+            store.listGrantIds(subject).then(ids => Promise.all(ids.map(id => Promise.all([store.revokeByGrantId(id), store.destroy("Grant", id)])))),
         ])
     }
 

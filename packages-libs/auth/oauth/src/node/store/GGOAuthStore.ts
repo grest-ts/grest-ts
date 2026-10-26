@@ -20,8 +20,9 @@ export interface GGOAuthStore {
     destroy(model: string, id: string): Promise<void>
     // Every GRANT_BOUND row carrying this grantId.
     revokeByGrantId(grantId: string): Promise<void>
-    // Ids of this account's rows of one model (Grant, Session) — for "connected apps" and revoke-all.
-    listIdsByAccount(model: string, accountId: string): Promise<string[]>
+    // For "connected apps" and revoke-all.
+    listGrantIds(accountId: string): Promise<string[]>
+    destroySessions(accountId: string): Promise<void>
 }
 
 // What revoking a grant removes: oidc-provider's codes and tokens, and the server's own GrantUsage. An Interaction carries

@@ -7,7 +7,9 @@ import {GGContextKey} from "@grest-ts/context"
 import {IsArray, IsObject, IsString, NOT_AUTHORIZED} from "@grest-ts/schema"
 import {GGAuthAccessToken, HmacSigner, JwksVerifier, JwsSigningStrategy, type JwsSigner} from "@grest-ts/auth"
 import {ACCESS_TOKEN_JWKS_PATH, deriveEs256Jwk, GGOAuthServer, type GGOAuthResource} from "./GGOAuthServer"
+import type {GGDynamoDb} from "@grest-ts/db-dynamodb"
 import {InMemoryOAuthStore} from "./store/InMemoryOAuthStore"
+import {DynamoOAuthStore} from "./store/DynamoOAuthStore"
 import {GGOAuthResourceServer} from "./GGOAuthResourceServer"
 import {GGOAuthServiceClient, GGOAuthTokenError} from "./GGOAuthServiceClient"
 import {GGOAuthInteractionContract} from "../shared/interactionContract"
@@ -78,7 +80,31 @@ const basic = (id: string, secret: string) => `Basic ${Buffer.from(`${id}:${secr
 const target = (clientId: string) => clientId === "app" || clientId === "identity" ? {resource: API, scope: "api"} : {resource: MCP, scope: "mcp"}
 
 let oauth!: GGOAuthServer
-const store = new InMemoryOAuthStore()
+// Every bearer value the tests saw: tokens, codes, approval tickets and the login session cookie.
+const bearers = new Set<string>()
+
+// DynamoDB as DynamoOAuthStore uses it: key lookups, the GSIs it queries, and its one put condition.
+function fakeDynamo() {
+    const rows = new Map<string, Record<string, unknown>>()
+    const query = async (_table: string, index: string, _condition: string, {":model": model, ...key}: Record<string, unknown>) =>
+        [...rows.values()].filter(r => r[index.replace("-index", "")] === Object.values(key)[0] && (!model || r.model === model))
+    const db = {
+        get: async (_table: string, key: {pk: string}) => rows.get(key.pk),
+        put: async (_table: string, item: {pk: string}) => { rows.set(item.pk, item) },
+        putConditional: async (_table: string, item: {pk: string}) => {
+            const row = rows.get(item.pk)
+            if (!row || row.consumedAt !== undefined) return false
+            rows.set(item.pk, item)
+            return true
+        },
+        delete: async (_table: string, key: {pk: string}) => { rows.delete(key.pk) },
+        query,
+        queryPage: async (...args: Parameters<typeof query>) => ({items: await query(...args), cursor: undefined}),
+    }
+    return {db: db as unknown as GGDynamoDb, rows}
+}
+const dynamo = fakeDynamo()
+const store = new DynamoOAuthStore(dynamo.db, "oauth")
 
 class OAuthTestRuntime extends GGRuntime {
     public static readonly NAME = "oauth-test"
@@ -162,7 +188,9 @@ class Browser {
         for (const c of res.headers.getSetCookie()) {
             const [kv] = c.split(";")
             const i = kv.indexOf("=")
-            this.jar.set(kv.slice(0, i), kv.slice(i + 1))
+            const [name, value] = [kv.slice(0, i), kv.slice(i + 1)]
+            this.jar.set(name, value)
+            if (name === "_session" && value) bearers.add(value)
         }
         return res
     }
@@ -192,7 +220,9 @@ function authorizeUrl(clientId: string, redirectUri: string, challenge: string, 
 
 async function token(body: Record<string, string>): Promise<Record<string, any>> {
     const res = await fetch(`${ISSUER}/oauth/token`, {method: "POST", body: new URLSearchParams(body)})
-    return await res.json()
+    const json = await res.json()
+    for (const value of [body.code, json.access_token, json.refresh_token]) if (value) bearers.add(value)
+    return json
 }
 
 const interaction = (bearer: string) => async (method: "get" | "approve" | "deny", uid: string) => {
@@ -202,6 +232,8 @@ const interaction = (bearer: string) => async (method: "get" | "approve" | "deny
         body: method === "get" ? undefined : JSON.stringify({uid}),
     })
     const json = await res.json() as {success: boolean, data: any}
+    const ticket = json.data?.redirectUrl && new URL(json.data.redirectUrl).searchParams.get("ticket")
+    if (ticket) bearers.add(ticket)
     return json
 }
 
@@ -649,6 +681,17 @@ describe("GGOAuthServer", () => {
     test("the interaction API requires the app's signed-in user", async () => {
         const res = await fetch(`${API}/oauth/interaction/get?uid=x`)
         expect(res.status).toBe(401)
+    })
+
+    test("no stored row holds a bearer value, in its key or payload", async () => {
+        const browser = new Browser()
+        const {tokens} = await signIn(browser, "app", FIRST_PARTY_REDIRECT)
+        await token({grant_type: "refresh_token", refresh_token: tokens.refresh_token, client_id: "app"})
+        // Left pending: its Interaction copies the login session, and its ticket is never redeemed.
+        const pending = await browser.navigate(authorizeUrl("app", FIRST_PARTY_REDIRECT, pkce().challenge, {prompt: "login"}))
+        await interaction((await userToken.issue("alice", {permissions: []})).token)("approve", pending.searchParams.get("uid")!)
+        const stored = [...dynamo.rows.values()].map(row => JSON.stringify(row))
+        for (const bearer of bearers) expect(stored.filter(row => row.includes(bearer))).toEqual([])
     })
 })
 

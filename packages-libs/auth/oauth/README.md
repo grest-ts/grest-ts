@@ -177,6 +177,8 @@ ship:
   - HASH key `pk` (S)
   - TTL attribute `expiresAtSec`
   - GSIs projecting ALL: `grantId-index`, `uid-index`, `accountId-index`
+  - Rows are keyed by the SHA-256 of the id, and payloads drop it: oidc-provider's ids are the
+    refresh tokens, codes and session cookies themselves, so the table holds none of them.
 
 ## Browser client
 
