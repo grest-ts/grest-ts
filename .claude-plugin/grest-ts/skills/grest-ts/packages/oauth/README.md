@@ -78,8 +78,10 @@ service client gets no other resource.
 **Signing.** Each resource's token is signed through its own `accessToken.signer`. oidc-provider
 can only sign with key material it holds, so it signs with a per-process placeholder and the token
 endpoint re-signs the claims before the token leaves. That's what lets a signer keep its key in KMS.
-Asymmetric signers (`JwsSigningStrategy`) publish their public keys in `/oauth/jwks`, next to the
-ID-token key, so another service verifies with `JwksVerifier` and holds no key.
+Asymmetric signers (`JwsSigningStrategy`) publish their public keys at `ACCESS_TOKEN_JWKS_PATH`
+(`/oauth/access-token-jwks`), so another service verifies with `JwksVerifier` and holds no key.
+`/oauth/jwks` lists them too, next to the ID-token key derived from `secret`: never verify access
+tokens against it, or whoever holds `secret` can mint them.
 
 **Service clients** (`serviceClients`) are your own backends. They authenticate with a secret
 (`client_secret_basic`) and may use:
@@ -109,7 +111,8 @@ To send the token, give the client of the other service a wire value:
 uses `GGOAuthResourceServer({authorizationServer, resources})`: `mount` serves each resource's RFC 9728
 metadata and `protect` answers a missing or invalid token with the discovery challenge. Its resources'
 `accessToken` only verifies: a `GGAuthAccessToken` on a `JwksVerifier` (from `@grest-ts/auth`) reading
-the issuer's `/oauth/jwks`.
+the issuer's `/oauth/access-token-jwks`. When those keys can't be fetched (`JwksVerifier` throws
+`SERVER_ERROR`), `protect` answers 503 rather than sending the client to sign in again.
 
 `listGrants(subject)` and `revokeGrant(subject, grantId)` back a "connected apps" page. Each grant has `createdAt` and `lastUsedAt`: when it last got tokens, so within one access-token lifetime of its last use.
 `revokeAll(subject)` is "log out everywhere"; call it next to `GGAuthRefreshToken.revokeAll`.
