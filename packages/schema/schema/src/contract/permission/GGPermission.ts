@@ -1,3 +1,5 @@
+import type {GGRequirement} from "./GGRequirement";
+
 /**
  * Permission sentinels. Frozen singleton objects with a discriminating
  * readonly literal property. Two reasons over `Symbol.for(...)`:
@@ -19,9 +21,11 @@ export const GG_ANY_PERMISSION = Object.freeze({__permission: "any"} as const);
 export type GG_NO_PERMISSIONS = typeof GG_NO_PERMISSIONS;
 export type GG_ANY_PERMISSION = typeof GG_ANY_PERMISSION;
 
+/** `GGRequirement`s may sit at the top level or inside `allOf`, not inside `anyOf`. */
 export type GGPermission =
     | GG_NO_PERMISSIONS
     | GG_ANY_PERMISSION
     | string
+    | GGRequirement
     | {allOf: readonly [GGPermission, ...GGPermission[]]}
     | {anyOf: readonly [GGPermission, ...GGPermission[]]}

@@ -5,7 +5,7 @@
 import http from "http";
 import {GGLocator} from "@grest-ts/locator";
 import {ClientHttpRouteToRpcTransformServerCodec, GGHttpCodec, GGHttpSchema} from "../schema/GGHttpSchema";
-import {ERROR, GGContractApiDefinition, GGContractImplementation, GGContractMethod, OK, SERVER_ERROR} from "@grest-ts/schema";
+import {ERROR, GGContractApiDefinition, GGContractImplementation, GGContractMethod, GGPermissionChecker, OK, SERVER_ERROR} from "@grest-ts/schema";
 import {HttpMethod} from "@grest-ts/common";
 import {GG_DISCOVERY} from "@grest-ts/discovery";
 import {GGContext, GGContextStore, type GGTransportMiddleware} from "@grest-ts/context";
@@ -17,6 +17,8 @@ import {GGHttpMetrics} from "./GGHttpMetrics";
 import {GGHttpServer} from "./GGHttpServer";
 import {GGLog} from "@grest-ts/logger";
 import {GGHttpPermissionsChecker} from "../schema/GGHttpPermissionsChecker";
+import {GGAuthority} from "../schema/GGAuthority";
+import "../schema/GGAuthority.node.js";
 
 export interface GGHttpRegisterConfig {
     http: GGHttpServer;
@@ -47,6 +49,7 @@ function setupRoutes<TContract extends GGContractApiDefinition>(
     const parentContext = GGContextStore.tryGetContext();
 
     const permissionsChecker = new GGHttpPermissionsChecker(apiMiddlewares);
+    const authority = apiMiddlewares.find((mw): mw is GGAuthority => mw instanceof GGAuthority);
     for (const mw of apiMiddlewares) {
         const hKeys = Object.keys(mw.headers ?? {});
         const rhKeys = Object.keys(mw.responseHeaders ?? {});
@@ -88,6 +91,8 @@ function setupRoutes<TContract extends GGContractApiDefinition>(
         // Input schema
         const contractFunctionSchema: GGContractMethod = httpSchema.contract.methods[methodName as keyof TContract]
         if (!contractFunctionSchema) throw new Error(`Contract for "${httpSchema.name}.${methodName}" is missing contract function schema!`)
+        const requirements = GGPermissionChecker.requirementsOf(contractFunctionSchema.permission)
+        const call = {api: httpSchema.name, method: methodName}
 
         // build request mapping
         const requestParser: ClientHttpRouteToRpcTransformServerCodec = codec.createForServer({
@@ -105,9 +110,12 @@ function setupRoutes<TContract extends GGContractApiDefinition>(
                 let rpcResult: ERROR<string, unknown> | OK<unknown> | undefined
                 try {
                     const rawInput = await requestParser.readRequest(req)
-                    await permissionsChecker.assert(httpSchema.name, methodName, contractFunctionSchema.permission)
+                    await permissionsChecker.assert(httpSchema.name, methodName, contractFunctionSchema.permission, true)
                     try {
-                        rpcResult = {success: true, type: "OK", data: await implFn(requestParser.validateInput(rawInput))}
+                        const input = requestParser.validateInput(rawInput)
+                        // checkPermissionsAtStart guarantees an authority when there are requirements.
+                        for (const requirement of requirements) await authority!.authorize(requirement, input, call)
+                        rpcResult = {success: true, type: "OK", data: await implFn(input)}
                         // GGLog.debug(httpSchema, "Response", rpcResult) // This is very slow to log this (like 3x performance loss)
                     } catch (error: unknown) {
                         rpcResult = ERROR.fromUnknown(error);

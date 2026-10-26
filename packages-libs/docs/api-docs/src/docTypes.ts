@@ -130,7 +130,9 @@ export type PermissionTree =
     | {kind: "anyAuth"}
     | {kind: "scope"; scope: string}
     | {kind: "allOf"; children: PermissionTree[]}
-    | {kind: "anyOf"; children: PermissionTree[]};
+    | {kind: "anyOf"; children: PermissionTree[]}
+    /** Decided by the API's authority, e.g. "docs:Write on docs:doc from input.docId". */
+    | {kind: "requirement"; action: string; description: string};
 
 /**
  * Renders contract-declared permission into both a human-readable form (for

@@ -5,6 +5,7 @@ import {GGPromise} from "./GGPromise";
 import {FORBIDDEN, NOT_AUTHORIZED, VALIDATION_ERROR} from "./standardErrors";
 import {GG_NO_PERMISSIONS, GGPermission} from "./permission/GGPermission";
 import {GGPermissionChecker} from "./permission/GGPermissionChecker";
+import {GGCheckRequirements, GGRequirementErrors, withRequirements} from "./permission/requirementMethod";
 
 /**
  * Per-method metadata the framework carries but never interprets — e.g. for generating tool
@@ -51,13 +52,13 @@ export type GGContractClientMethod<Method> = Method extends { input: { infer: in
             ? (data: I) => GGPromise<void, GGContractMethodErrors<Method> | typeof SERVER_ERROR.infer>
             : () => GGPromise<void, typeof SERVER_ERROR.infer>
 
-export type GGContractMethodErrors<Method> = Method extends { errors: infer E }
+export type GGContractMethodErrors<Method> = (Method extends { errors: infer E }
     ? E extends { infer: infer F }[]
         ? F extends ANY_ERROR
             ? F
             : never
         : never
-    : never;
+    : never) | GGRequirementErrors<Method>;
 
 export class GGContractClass<ContractMethods extends GGContractApiDefinition> {
 
@@ -65,11 +66,12 @@ export class GGContractClass<ContractMethods extends GGContractApiDefinition> {
     public readonly methods: ContractMethods
     declare readonly infer: GGContractImplementation<ContractMethods>
 
-    constructor(name: string, methods: ContractMethods) {
+    constructor(name: string, methods: ContractMethods & NoInfer<GGCheckRequirements<ContractMethods>>) {
         this.name = name;
         this.methods = methods;
         for (const methodName in this.methods) {
-            const method = this.methods[methodName];
+            const method = withRequirements(this.methods[methodName], `Contract ${name}.${methodName}`);
+            this.methods[methodName] = method;
             if (method.permission !== undefined) {
                 GGPermissionChecker.validatePermission(method.permission, `${name}.${methodName}.permission`);
                 if (method.permission !== GG_NO_PERMISSIONS) {

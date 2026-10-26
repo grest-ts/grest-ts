@@ -15,18 +15,20 @@ export class GGHttpPermissionsChecker {
 
     // Resolved per call, not at construction: a wire's handler may be created after the
     // schema is registered (any time before start), and its grants must still count.
-    public async assert(schema: string, method: string, required: GGPermission | undefined): Promise<ReadonlyArray<ReadonlyArray<string>>> {
+    /** `deferRequirements`: let requirements pass here because the caller runs them through its authority next (HTTP). */
+    public async assert(schema: string, method: string, required: GGPermission | undefined, deferRequirements = false): Promise<ReadonlyArray<ReadonlyArray<string>>> {
         const scopes: Array<readonly string[]> = [];
         for (let i = 0; i < this.wires.length; i++) {
             if (this.wires[i].hasPermissions()) scopes.push(await this.wires[i].getGrantedPermissions())
         }
-        this.assertGrants(schema, method, scopes, required)
+        this.assertGrants(schema, method, scopes, required, deferRequirements)
         return Object.freeze(scopes) as readonly string[][]
     }
 
-    public assertGrants(schema: string, method: string, granted: undefined | ReadonlyArray<ReadonlyArray<string>>, required: GGPermission | undefined): void {
+    public assertGrants(schema: string, method: string, granted: undefined | ReadonlyArray<ReadonlyArray<string>>, required: GGPermission | undefined, deferRequirements = false): void {
         if (required === undefined) return
-        if (!GGPermissionChecker.satisfies(required, granted)) {
+        const ok = deferRequirements ? GGPermissionChecker.satisfiesDeferring(required, granted) : GGPermissionChecker.satisfies(required, granted)
+        if (!ok) {
             throw new FORBIDDEN({
                 debugMessage: `${schema + (method ? "." + method : "")} requires ${GGPermissionChecker.describePermission(required)} - caller scopes did not satisfy`
             })

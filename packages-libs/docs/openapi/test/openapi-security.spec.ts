@@ -58,6 +58,12 @@ describe("toOpenApi — permission → security mapping", () => {
         expect(doc.components?.securitySchemes?.BearerAuth).toMatchObject({type: "http", scheme: "bearer"});
     });
 
+    it("requirement → bearerAuth with no scopes, never public; inside allOf it adds no scope", () => {
+        const list = Object.freeze({__permission: "requirement", action: "items:Read", list: true, errors: [NOT_AUTHORIZED, FORBIDDEN]})
+        expect(opSecurity(toOpenApi([makeApi("ReqApi", "list", list)]), "list")).toEqual([{BearerAuth: []}])
+        expect(opSecurity(toOpenApi([makeApi("ReqAllApi", "list", {allOf: ["items:admin", list]})]), "list")).toEqual([{BearerAuth: ["items:admin"]}])
+    });
+
     it("bare string scope → bearerAuth with single scope", () => {
         const api = makeApi("ScopeApi", "read", "items:read");
         const doc = toOpenApi([api]);

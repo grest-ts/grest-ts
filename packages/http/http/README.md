@@ -210,7 +210,43 @@ The gate reads the method's `permission`, collects the caller's grants from ever
 
 The coverage check is per-server (HTTP routes + WS schemas on the same `GGHttpServer`), so a permission declared anywhere is infectious across sibling chains. The only way to opt out is to declare nothing — projects with no auth pay zero ceremony, but the moment one route opts in, the framework forces consistency.
 
-**What this does not cover.** The permission gates *endpoint access* — "is this caller allowed to invoke this method at all?" It does not handle *resource access* — "can this caller edit *this specific* post?" That check still belongs in the handler, which reads the app's own durable principal (minted by the wire's `process()`) — not a framework scope bag.
+**Endpoint access vs resource access.** A scope string gates *endpoint access*: "may this caller invoke this method at all?" For *resource access* ("may this caller edit *this* post?") use a requirement, below.
+
+### Resource requirements and authorities
+
+A **requirement** (`GGRequirement`, from `@grest-ts/schema`) says "the caller must be allowed *action* on *this resource*", where the resource id comes from an input field. It is plain data in `permission:`, so the contract stays shareable with the browser. Build requirements with your model library's helpers; the shape is:
+
+```typescript
+{__permission: "requirement", action: "posts:Edit", resource: {type: "blog:post", id: {field: "postId"}}, errors: [NOT_AUTHORIZED, FORBIDDEN]}
+```
+
+| Option | Meaning |
+|---|---|
+| `resource.id: {field}` | The id is that input field. It must exist in the input and be required; checked at compile time and when the contract is built. |
+| `resource.id: {context}` / no `id` | The authority resolves the resource from the request (e.g. the caller's own workspace, or their tenant). |
+| `createOn` | An upsert: when the id field is absent, check this resource (the parent) instead. |
+| `hidden` | The authority should refuse with `NOT_FOUND`, so the resource's existence doesn't leak. |
+| `list` | No resource; the handler filters what it returns. |
+| `errors` | What the authority may throw. Added to the method's `errors`, values and types alike, so you don't list them per method. |
+
+A requirement is decided by the schema's **authority**, which is listed in `use:` like a wire:
+
+```typescript
+export const DOCS_AUTHORITY = new GGAuthority("docs")                    // shared api/
+export const DocsApi = new GGHttpSchema({contract, pathPrefix: "api/docs", use: [USER_TOKEN_WIRE, DOCS_AUTHORITY], routes})
+
+// server: throw one of the requirement's errors to refuse
+export const DOCS_AUTHORITY_HANDLER = DOCS_AUTHORITY.define((engine: Engine) => ({
+    authorize: async (requirement, input, call) => { /* decide; throw FORBIDDEN / NOT_FOUND */ },
+}))
+DOCS_AUTHORITY_HANDLER.create(engine)                                     // in compose()
+```
+
+- **Order:** wires authenticate → scope strings are checked (before the input is read) → the input is validated → each requirement goes to the authority → the handler runs. Invalid input never reaches the authority.
+- **Mixing:** `{allOf: ["admin", requirement]}` needs both. A requirement can't sit inside `anyOf`.
+- **Startup:** a schema whose methods declare requirements must `use:` exactly one authority, and that authority must be created in the runtime; otherwise the server refuses to start. A requirement-only method needs no permission-resolving wire.
+- **HTTP only.** WebSocket and raw socket contracts refuse requirements.
+- The handler still loads data through its own tenancy-checked queries: the authority decides access, not existence.
 
 ## Authentication & Context
 

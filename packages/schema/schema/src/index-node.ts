@@ -24,6 +24,7 @@ export * from "./contract/OK";
 // Permission
 export * from "./contract/permission/GGPermission";
 export * from "./contract/permission/GGPermissionChecker";
+export * from "./contract/permission/GGRequirement";
 
 // Common
 export * from "./GGSchema";
