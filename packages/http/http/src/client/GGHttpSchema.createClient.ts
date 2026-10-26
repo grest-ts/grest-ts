@@ -71,7 +71,8 @@ export interface GGHttpClientConfig {
 
 export interface GGHttpClientWire {
     wire: GGWireContextKey
-    value: () => string | undefined | Promise<string | undefined>
+    // Always a value: an unset key in the child context would fall back to the caller's own (inbound) one.
+    value: () => string | Promise<string>
 }
 
 /**

@@ -62,6 +62,13 @@ describe("JwsSigningStrategy + SecretJwsSigner", () => {
         await expectAuthError(token(new JwsSigningStrategy(nextKey)).verify(oldToken.token), "TOKEN_INVALID")
     })
 
+    test("rotation across algorithms: a published ES256 key still verifies after switching to EdDSA", async () => {
+        const oldKey = new SecretJwsSigner(newKey())
+        const nextKey = new SecretJwsSigner(newKey("ed25519"), "EdDSA")
+        const oldToken = await token(new JwsSigningStrategy(oldKey)).issue("alice", {permissions: []})
+        expect((await token(new JwsSigningStrategy(nextKey, () => [oldKey])).verify(oldToken.token)).sub).toBe("alice")
+    })
+
     test("the published JWKS carries no private part", async () => {
         const [jwk] = await new JwsSigningStrategy(new SecretJwsSigner(newKey())).publicJwks()
         expect(jwk).toMatchObject({kty: "EC", crv: "P-256", alg: "ES256", use: "sig"})

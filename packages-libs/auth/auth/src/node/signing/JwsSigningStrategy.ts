@@ -14,7 +14,8 @@ export class JwsSigningStrategy implements TokenSigner {
     constructor(active: JwsSigner, published: () => JwsSigner[] = () => []) {
         this.active = active
         this.published = published
-        this.verifier = new JwksVerifier({jwks: this.publicJwks, algorithms: [active.alg]})
+        // Not just active.alg: a published key of another algorithm (a rotation ES256 → EdDSA) must still verify.
+        this.verifier = new JwksVerifier({jwks: this.publicJwks, algorithms: [...new Set([active.alg, "ES256", "EdDSA"])]})
     }
 
     public sign = async (claims: Record<string, unknown>): Promise<string> => {
