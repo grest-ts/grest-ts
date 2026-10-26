@@ -588,7 +588,7 @@ function hkdf(secret: string, info: string): Buffer {
 }
 
 // Deterministic, so every instance publishes the same key without distributing a key file.
-function deriveEs256Jwk(secret: string) {
+export function deriveEs256Jwk(secret: string) {
     const d = hkdf(secret, "@grest-ts/oauth es256")
     const ecdh = createECDH("prime256v1")
     ecdh.setPrivateKey(d)

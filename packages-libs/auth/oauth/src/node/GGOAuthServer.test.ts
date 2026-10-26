@@ -1,4 +1,4 @@
-import {createECDH, createHash, generateKeyPairSync, hkdfSync, randomBytes, sign as cryptoSign} from "node:crypto"
+import {createHash, generateKeyPairSync, randomBytes, sign as cryptoSign} from "node:crypto"
 import {importJWK, SignJWT} from "jose"
 import {createServer} from "node:net"
 import {GGRuntime} from "@grest-ts/runtime"
@@ -6,7 +6,7 @@ import {GGHeader, GGHttp, GGHttpSchema, GGHttpServer, GGRpc} from "@grest-ts/htt
 import {GGContextKey} from "@grest-ts/context"
 import {IsArray, IsObject, IsString, NOT_AUTHORIZED} from "@grest-ts/schema"
 import {GGAuthAccessToken, HmacSigner, JwksVerifier, JwsSigningStrategy, type JwsSigner} from "@grest-ts/auth"
-import {ACCESS_TOKEN_JWKS_PATH, GGOAuthServer, type GGOAuthResource} from "./GGOAuthServer"
+import {ACCESS_TOKEN_JWKS_PATH, deriveEs256Jwk, GGOAuthServer, type GGOAuthResource} from "./GGOAuthServer"
 import {InMemoryOAuthStore} from "./store/InMemoryOAuthStore"
 import {GGOAuthResourceServer} from "./GGOAuthResourceServer"
 import {GGOAuthServiceClient, GGOAuthTokenError} from "./GGOAuthServiceClient"
@@ -375,14 +375,9 @@ describe("GGOAuthServer", () => {
     })
 
     test("an access token signed with the ID-token key (derived from the server secret) is refused by the access-token JWKS", async () => {
-        const d = Buffer.from(hkdfSync("sha256", "oauth-test-secret", "", "@grest-ts/oauth es256", 32))
-        const ecdh = createECDH("prime256v1")
-        ecdh.setPrivateKey(d)
-        const point = ecdh.getPublicKey()
-        const jwk = {kty: "EC", crv: "P-256", d: d.toString("base64url"), x: point.subarray(1, 33).toString("base64url"), y: point.subarray(33).toString("base64url")}
+        const {kid, ...jwk} = deriveEs256Jwk("oauth-test-secret")
         const published = await (await fetch(`${ISSUER}/oauth/jwks`)).json() as {keys: Array<Record<string, unknown>>}
-        const kid = published.keys.find(k => k.x === jwk.x)?.kid as string
-        expect(kid).toBeDefined()
+        expect(published.keys.map(k => k.kid)).toContain(kid)
         const forged = await new SignJWT({data: {permissions: ["admin"]}})
             .setProtectedHeader({alg: "ES256", kid, typ: "at+jwt"})
             .setSubject("mallory").setAudience("app-mcp").setIssuer(ISSUER).setIssuedAt().setExpirationTime("5m")
