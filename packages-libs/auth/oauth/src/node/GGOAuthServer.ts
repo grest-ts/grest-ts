@@ -2,6 +2,7 @@ import {createECDH, createHash, hkdfSync, randomBytes} from "node:crypto"
 import type {IncomingMessage, ServerResponse} from "node:http"
 import Provider, {errors as oidcErrors, type ClientMetadata, type Configuration, type InteractionResults, type KoaContextWithOIDC} from "oidc-provider"
 import {NOT_FOUND} from "@grest-ts/schema"
+import {GGLog} from "@grest-ts/logger"
 import type {GGHttpServer} from "@grest-ts/http"
 import type {GGAccessPayload, GGAuthAccessToken} from "@grest-ts/auth"
 import {GGOAuthInteractionContract, type GGOAuthInteraction} from "../shared/interactionContract"
@@ -13,6 +14,8 @@ export interface GGOAuthFirstPartyClient {
     name: string
     redirectUris: string[]
     postLogoutRedirectUris?: string[]
+    // false: codes buy only an access token — for a client that reads the identity once and keeps nothing.
+    refreshTokens?: boolean
 }
 
 // One API the server issues tokens for (RFC 8707 resource indicator → its own audience and claims).
@@ -59,7 +62,7 @@ export interface GGOAuthServerOptions {
     resources: [GGOAuthResource<any>, ...GGOAuthResource<any>[]]
     // The app's login/consent page; it receives the interaction uid and uses GGOAuthInteractionContract.
     // `request` lets a first-party client's sign-in stay on the origin it was opened from.
-    interactionUrl: (uid: string, request: {redirectUri: string, firstParty: boolean}) => string
+    interactionUrl: (uid: string, request: {clientId: string, redirectUri: string, firstParty: boolean}) => string
     // Pre-registered app clients: no consent screen, silent re-auth while the login session lives.
     // Read once, on first use (config isn't readable at compose time).
     firstPartyClients?: () => GGOAuthFirstPartyClient[]
@@ -82,8 +85,12 @@ export interface GGOAuthServerOptions {
 const BASE = "/oauth"
 const TOKEN_EXCHANGE = "urn:ietf:params:oauth:grant-type:token-exchange"
 const ACCESS_TOKEN_TYPE = "urn:ietf:params:oauth:token-type:access_token"
+const AUTHORIZATION_PATH = `${BASE}/authorize`
+const TOKEN_PATH = `${BASE}/token`
 const OIDC_SCOPES = ["openid", "offline_access"]
 const TICKET = "GGOAuthTicket"
+// Not an oidc-provider model: when each grant last got tokens, for listGrants. Carries grantId, so revoking the grant removes it.
+const GRANT_USAGE = "GrantUsage"
 // Claims resolved during a refresh before the presented token was consumed (see rotateRefreshToken).
 const prefetchedClaims = new WeakMap<object, {resource: string, claims: object}>()
 
@@ -122,6 +129,11 @@ export class GGOAuthServer {
         return this._service
     }
 
+    // Where a client of this server sends the browser and redeems codes, on `origin` (default: the issuer).
+    public endpoints(origin = this.options.issuer()): {authorization: string, token: string} {
+        return {authorization: `${origin}${AUTHORIZATION_PATH}`, token: `${origin}${TOKEN_PATH}`}
+    }
+
     public mount(server: GGHttpServer): void {
         const handle = async (req: IncomingMessage, res: ServerResponse) => {
             delete req.headers["x-forwarded-host"]
@@ -135,8 +147,8 @@ export class GGOAuthServer {
                     res.end("Sign-in request expired")
                     return
                 }
-                const firstParty = this.firstParty.has(String(found.params.client_id))
-                res.writeHead(303, {location: this.options.interactionUrl(interaction[1], {redirectUri: String(found.params.redirect_uri), firstParty})})
+                const clientId = String(found.params.client_id)
+                res.writeHead(303, {location: this.options.interactionUrl(interaction[1], {clientId, redirectUri: String(found.params.redirect_uri), firstParty: this.firstParty.has(clientId)})})
                 res.end()
                 return
             }
@@ -172,18 +184,26 @@ export class GGOAuthServer {
         }
     }
 
-    public listGrants = async (subject: string): Promise<Array<{grantId: string, clientId: string, clientName: string, createdAt: number}>> => {
+    public listGrants = async (subject: string): Promise<Array<{grantId: string, clientId: string, clientName: string, firstParty: boolean, createdAt: number, lastUsedAt?: number}>> => {
         const p = this.provider()
         const grants = await Promise.all((await this.options.store.listIdsByAccount("Grant", subject)).map(id => p.Grant.find(id)))
         return await Promise.all(grants
             .filter(g => g?.clientId && g.accountId === subject)
-            .map(async g => ({
-                grantId: g!.jti,
-                clientId: g!.clientId!,
-                // A client metadata document may be unreachable; the grant must still be listed (and revocable).
-                clientName: String((await p.Client.find(g!.clientId!).catch(() => undefined))?.clientName ?? g!.clientId),
-                createdAt: (g!.iat ?? 0) * 1000,
-            })))
+            .map(async g => {
+                const [client, usage] = await Promise.all([
+                    // A client metadata document may be unreachable; the grant must still be listed (and revocable).
+                    p.Client.find(g!.clientId!).catch(() => undefined),
+                    this.options.store.find(GRANT_USAGE, g!.jti),
+                ])
+                return {
+                    grantId: g!.jti,
+                    clientId: g!.clientId!,
+                    clientName: String(client?.clientName ?? g!.clientId),
+                    firstParty: this.firstParty.has(g!.clientId!),
+                    createdAt: (g!.iat ?? 0) * 1000,
+                    lastUsedAt: usage?.lastUsedAt as number | undefined,
+                }
+            }))
     }
 
     // Kills the grant's refresh tokens and codes now; already-issued access tokens live out their TTL.
@@ -222,6 +242,7 @@ export class GGOAuthServer {
             },
             scopes: requestedScopes(interaction.params),
             resource: this.requestedResource(interaction.params, clientId).resource(),
+            forceLogin: interaction.prompt.name === "login" && interaction.prompt.reasons.some(r => r === "login_prompt" || r === "max_age"),
         }
     }
 
@@ -369,7 +390,7 @@ export class GGOAuthServer {
                 redirect_uris: c.redirectUris,
                 post_logout_redirect_uris: c.postLogoutRedirectUris ?? [],
                 token_endpoint_auth_method: "none",
-                grant_types: ["authorization_code", "refresh_token"],
+                grant_types: c.refreshTokens === false ? ["authorization_code"] : ["authorization_code", "refresh_token"],
                 response_types: ["code"],
                 application_type: "web",
             }) satisfies ClientMetadata), ...(o.serviceClients?.() ?? []).map(c => ({
@@ -390,7 +411,7 @@ export class GGOAuthServer {
                 application_type: "native",
             },
             routes: {
-                authorization: `${BASE}/authorize`, token: `${BASE}/token`, registration: `${BASE}/register`,
+                authorization: AUTHORIZATION_PATH, token: TOKEN_PATH, registration: `${BASE}/register`,
                 jwks: `${BASE}/jwks`, revocation: `${BASE}/revoke`, end_session: `${BASE}/logout`, userinfo: `${BASE}/userinfo`,
                 introspection: `${BASE}/introspect`, pushed_authorization_request: `${BASE}/par`, code_verification: `${BASE}/device`,
                 device_authorization: `${BASE}/device/auth`, backchannel_authentication: `${BASE}/backchannel`, challenge: `${BASE}/challenge`,
@@ -526,6 +547,15 @@ export class GGOAuthServer {
         })
         const exchangeParams = o.resources.flatMap(r => r.exchange?.params ?? [])
         provider.registerGrantType(TOKEN_EXCHANGE, ctx => this.exchange(ctx), ["subject_token", "subject_token_type", "requested_token_type", "resource", ...exchangeParams])
+        provider.use(async (ctx, next) => {
+            await next()
+            if (ctx.oidc?.route !== "token" || ctx.status !== 200) return
+            const grant = ctx.oidc.entities.Grant
+            if (!grant) return
+            // The tokens are already issued (a refresh token already rotated): failing now would strand the client.
+            await o.store.upsert(GRANT_USAGE, grant.jti, {grantId: grant.jti, lastUsedAt: Date.now()}, Math.max(1, grant.remainingTTL))
+                .catch(error => GGLog.error(this, "Recording grant usage failed", {error}))
+        })
         this._provider = provider
         return provider
     }

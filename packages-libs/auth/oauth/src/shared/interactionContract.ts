@@ -18,6 +18,8 @@ export const IsGGOAuthInteraction = IsObject({
     scopes: IsArray(IsString),
     /** The resource (API) the client asks for access to. */
     resource: IsString,
+    /** The client demands a fresh sign-in (`prompt=login`, an expired `max_age`): an existing app session must not approve it. */
+    forceLogin: IsBoolean,
 })
 export type GGOAuthInteraction = typeof IsGGOAuthInteraction.infer
 

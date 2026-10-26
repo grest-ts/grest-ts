@@ -58,7 +58,7 @@ const oauth = new GGOAuthServer({
     store: new DynamoOAuthStore(dynamo, "my-oauth"),
     secret: () => config.tokenSecret.reveal(),     // derives cookie + JWKS keys
     resources: [api, mcp],                         // first = default for first-party clients
-    interactionUrl: (uid, {firstParty, redirectUri}) => `${appUrl}/?oauthLogin=${uid}`,
+    interactionUrl: (uid, {clientId, firstParty, redirectUri}) => `${appUrl}/?oauthLogin=${uid}`,
     firstPartyClients: () => [{clientId: "web", name: "My App", redirectUris: [`${appUrl}/oauth/callback`]}],
     clientIdMetadataDocument: {allowedUrlPrefixes: () => ["https://claude.ai/oauth/", "https://chatgpt.com/oauth/"]},
     // dynamicRegistration: true,                  // open RFC 7591 registration — anyone, any name
@@ -71,7 +71,7 @@ new GGHttp(httpServer).http(OAuthInteractionApi, oauth.interactionApi(() => USER
 `claims` works like the `resolve` callback of `GGAuthRefreshToken.refresh`: role changes apply on
 the next refresh, and a deleted or deactivated user's OAuth session ends there.
 
-`listGrants(subject)` and `revokeGrant(subject, grantId)` back a "connected apps" page.
+`listGrants(subject)` and `revokeGrant(subject, grantId)` back a "connected apps" page. Each grant has `createdAt` and `lastUsedAt`: when it last got tokens, so within one access-token lifetime of its last use.
 `revokeAll(subject)` is "log out everywhere"; call it next to `GGAuthRefreshToken.revokeAll`.
 
 ### Protected resources (MCP)
@@ -109,15 +109,20 @@ export const OAuthInteractionApi = new GGHttpSchema({
 
 The page works like this:
 
-1. `get({uid})` returns the client (name, `firstParty`, redirect hosts, `loopbackOnly`) and the
-   requested scopes.
-2. For a first-party client, call `approve` right away. For any other client, show a consent
+1. `get({uid})` returns the client (name, `firstParty`, redirect hosts, `loopbackOnly`), the
+   requested scopes and `forceLogin`.
+2. When `forceLogin` is set (the client sent `prompt=login`, or its `max_age` has passed), sign the
+   user out of your app first and show the login form: an existing session must not approve it.
+3. For a first-party client, call `approve` right away. For any other client, show a consent
    screen first. Display the redirect hosts, and warn when `loopbackOnly` is set.
-3. `approve`/`deny` return `redirectUrl` for the browser to follow. The result applies only in
+4. `approve`/`deny` return `redirectUrl` for the browser to follow. The result applies only in
    the browser holding the flow's interaction cookie, so a user approving someone else's flow
    can't hand them a code.
 
-A first-party client re-authorizes silently while the login session lives.
+A first-party client re-authorizes silently while the login session lives. Set `refreshTokens:
+false` on one that only reads who signed in and keeps nothing: its codes then buy an access token alone.
+`endpoints()` gives such a client its authorization and token URLs, and `listGrants` marks each grant
+`firstParty`, so a "connected apps" list can leave your own clients out.
 
 ### Storage
 

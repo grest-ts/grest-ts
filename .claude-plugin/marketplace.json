@@ -15,7 +15,7 @@
       "homepage": "https://github.com/grest-ts/grest-ts",
       "repository": "https://github.com/grest-ts/grest-ts",
       "source": "./.claude-plugin/grest-ts",
-      "version": "0.0.93",
+      "version": "0.0.94",
       "category": "framework"
     }
   ]

@@ -18,6 +18,7 @@ const ISSUER = `http://localhost:${port}`
 const API = `${ISSUER}/api`
 const APP_LOGIN = "https://app.example/oauth-login"
 const FIRST_PARTY_REDIRECT = "https://app.example/callback"
+const IDENTITY_REDIRECT = "https://auth.example/access/callback"
 const THIRD_PARTY_REDIRECT = "https://claude.ai/api/mcp/auth_callback"
 
 // The app's existing first-party user token: OAuth must issue exactly this kind.
@@ -72,9 +73,10 @@ const orgToken = new GGAuthAccessToken({signer: new JwsSigningStrategy(sealedSig
 const basic = (id: string, secret: string) => `Basic ${Buffer.from(`${id}:${secret}`).toString("base64")}`
 
 // What a client asks for: the first-party app its API, anyone else the MCP resource.
-const target = (clientId: string) => clientId === "app" ? {resource: API, scope: "api"} : {resource: MCP, scope: "mcp"}
+const target = (clientId: string) => clientId === "app" || clientId === "identity" ? {resource: API, scope: "api"} : {resource: MCP, scope: "mcp"}
 
 let oauth!: GGOAuthServer
+const store = new InMemoryOAuthStore()
 
 class OAuthTestRuntime extends GGRuntime {
     public static readonly NAME = "oauth-test"
@@ -84,7 +86,7 @@ class OAuthTestRuntime extends GGRuntime {
         USER_WIRE_HANDLER.create(undefined)
         oauth = new GGOAuthServer({
             issuer: () => ISSUER,
-            store: new InMemoryOAuthStore(),
+            store,
             secret: () => "oauth-test-secret",
             resources: [{
                 resource: () => API,
@@ -119,7 +121,10 @@ class OAuthTestRuntime extends GGRuntime {
             }],
             serviceClients: () => [{clientId: "backend", secret: () => "backend-secret"}],
             interactionUrl: (uid) => `${APP_LOGIN}?uid=${uid}`,
-            firstPartyClients: () => [{clientId: "app", name: "The App", redirectUris: [FIRST_PARTY_REDIRECT], postLogoutRedirectUris: ["https://app.example/"]}],
+            firstPartyClients: () => [
+                {clientId: "app", name: "The App", redirectUris: [FIRST_PARTY_REDIRECT], postLogoutRedirectUris: ["https://app.example/"]},
+                {clientId: "identity", name: "The App", redirectUris: [IDENTITY_REDIRECT], refreshTokens: false},
+            ],
             dynamicRegistration: true,
             clientIdMetadataDocument: {allowedUrlPrefixes: () => ["https://clients.example/oauth/"]},
             proxy: true,
@@ -136,6 +141,10 @@ class OAuthTestRuntime extends GGRuntime {
 // A browser: keeps cookies, never follows redirects on its own.
 class Browser {
     private readonly jar = new Map<string, string>()
+
+    post(url: string, form: Record<string, string>): Promise<Response> {
+        return this.get(url, {method: "POST", body: new URLSearchParams(form)})
+    }
 
     async get(url: string, init: RequestInit = {}): Promise<Response> {
         const res = await fetch(new URL(url, ISSUER), {...init, redirect: "manual", headers: {...init.headers as Record<string, string>, ...(this.jar.size ? {cookie: [...this.jar].map(([k, v]) => `${k}=${v}`).join("; ")} : {})}})
@@ -185,9 +194,9 @@ const interaction = (bearer: string) => async (method: "get" | "approve" | "deny
     return json
 }
 
-async function signIn(browser: Browser, clientId: string, redirectUri: string, sub = "alice") {
+async function signIn(browser: Browser, clientId: string, redirectUri: string, sub = "alice", extra: Record<string, string> = {}) {
     const {verifier, challenge} = pkce()
-    const login = await browser.navigate(authorizeUrl(clientId, redirectUri, challenge))
+    const login = await browser.navigate(authorizeUrl(clientId, redirectUri, challenge, extra))
     expect(login.origin + login.pathname).toBe(APP_LOGIN)
     const uid = login.searchParams.get("uid")!
     const call = interaction((await userToken.issue(sub, {permissions: []})).token)
@@ -233,6 +242,11 @@ describe("GGOAuthServer", () => {
     afterAll(async () => { await runtime.teardown() })
     beforeEach(() => { userPermissions.set("alice", ["read", "write"]) })
 
+    test("names its endpoints as its metadata does", async () => {
+        const meta = await (await fetch(`${ISSUER}/.well-known/oauth-authorization-server`)).json()
+        expect(oauth.endpoints()).toEqual({authorization: meta.authorization_endpoint, token: meta.token_endpoint})
+    })
+
     test("publishes RFC 8414 metadata with what MCP clients require", async () => {
         const meta = await (await fetch(`${ISSUER}/.well-known/oauth-authorization-server`)).json()
         expect(meta).toMatchObject({
@@ -267,6 +281,41 @@ describe("GGOAuthServer", () => {
         expect(again.searchParams.get("code")).toEqual(expect.any(String))
     })
 
+    test("a first-party client without refresh tokens gets only an access token", async () => {
+        const {tokens} = await signIn(new Browser(), "identity", IDENTITY_REDIRECT)
+        expect((await userToken.verify(tokens.access_token)).sub).toBe("alice")
+        expect(tokens.refresh_token).toBeUndefined()
+    })
+
+    test("prompt=login asks for a fresh sign-in even with a live session", async () => {
+        const browser = new Browser()
+        const first = await signIn(browser, "app", FIRST_PARTY_REDIRECT)
+        expect(first.details.forceLogin).toBe(false)
+        const forced = await signIn(browser, "app", FIRST_PARTY_REDIRECT, "alice", {prompt: "login"})
+        expect(forced.details.forceLogin).toBe(true)
+    })
+
+    test("a forced login by another account ends the previous login session, then completes as the new account", async () => {
+        userPermissions.set("bob", ["read"])
+        const browser = new Browser()
+        await signIn(browser, "app", FIRST_PARTY_REDIRECT)
+        const {verifier, challenge} = pkce()
+        const login = await browser.navigate(authorizeUrl("app", FIRST_PARTY_REDIRECT, challenge, {prompt: "login"}))
+        const call = interaction((await userToken.issue("bob", {permissions: []})).token)
+        const approved = await call("approve", login.searchParams.get("uid")!)
+        // The server first ends alice's session with a self-submitting form; post it as a browser would.
+        let res = await browser.get(approved.data.redirectUrl)
+        while (res.status === 303) res = await browser.get(new URL(res.headers.get("location")!, ISSUER).href)
+        const html = await res.text()
+        const action = /action="([^"]+)"/.exec(html)![1]
+        const fields = Object.fromEntries([...html.matchAll(/name="([^"]+)" value="([^"]*)"/g)].map(m => [m[1], m[2]]))
+        const confirmed = await browser.post(action, fields)
+        const callback = await browser.navigate(new URL(confirmed.headers.get("location")!, ISSUER).href)
+        expect(callback.origin + callback.pathname).toBe(FIRST_PARTY_REDIRECT)
+        const tokens = await token({grant_type: "authorization_code", code: callback.searchParams.get("code")!, redirect_uri: FIRST_PARTY_REDIRECT, client_id: "app", code_verifier: verifier, resource: API})
+        expect((await userToken.verify(tokens.access_token)).sub).toBe("bob")
+    })
+
     test("third-party client registers, needs consent once, and gets a token only for its resource", async () => {
         const clientId = await register()
         const browser = new Browser()
@@ -278,7 +327,10 @@ describe("GGOAuthServer", () => {
         const again = await browser.navigate(authorizeUrl(clientId, THIRD_PARTY_REDIRECT, pkce().challenge))
         expect(again.searchParams.get("code")).toEqual(expect.any(String))
 
-        expect(await oauth.listGrants("alice")).toEqual(expect.arrayContaining([expect.objectContaining({clientId, clientName: "Claude"})]))
+        expect(await oauth.listGrants("alice")).toEqual(expect.arrayContaining([
+            expect.objectContaining({clientId, clientName: "Claude", firstParty: false}),
+            expect.objectContaining({clientId: "app", firstParty: true}),
+        ]))
     })
 
     test("a third-party client can't get a token for a first-party-only resource", async () => {
@@ -379,6 +431,21 @@ describe("GGOAuthServer", () => {
         expect((await token({grant_type: "refresh_token", refresh_token: refreshed.refresh_token, client_id: "app"})).error).toBe("invalid_grant")
     })
 
+    test("a grant records when it last got tokens", async () => {
+        const clientId = await register()
+        const before = Date.now()
+        const {tokens} = await signIn(new Browser(), clientId, THIRD_PARTY_REDIRECT)
+        const signedIn = Date.now()
+        const lastUsed = async () => (await oauth.listGrants("alice")).find(g => g.clientId === clientId)!.lastUsedAt!
+        const first = await lastUsed()
+        expect(first).toBeGreaterThanOrEqual(before)
+        expect(first).toBeLessThanOrEqual(signedIn)
+
+        await new Promise(r => setTimeout(r, 5))
+        expect((await token({grant_type: "refresh_token", refresh_token: tokens.refresh_token, client_id: clientId})).access_token).toEqual(expect.any(String))
+        expect(await lastUsed()).toBeGreaterThan(first)
+    })
+
     test("refresh fails once the subject is gone", async () => {
         const {tokens} = await signIn(new Browser(), "app", FIRST_PARTY_REDIRECT)
         userPermissions.set("alice", undefined)
@@ -390,7 +457,9 @@ describe("GGOAuthServer", () => {
         const browser = new Browser()
         const {tokens} = await signIn(browser, clientId, THIRD_PARTY_REDIRECT)
         const grant = (await oauth.listGrants("alice")).find(g => g.clientId === clientId)!
+        expect(await store.find("GrantUsage", grant.grantId)).toBeDefined()
         await oauth.revokeGrant("alice", grant.grantId)
+        expect(await store.find("GrantUsage", grant.grantId)).toBeUndefined()
         expect((await token({grant_type: "refresh_token", refresh_token: tokens.refresh_token, client_id: clientId})).error).toBe("invalid_grant")
         expect((await oauth.listGrants("alice")).map(g => g.grantId)).not.toContain(grant.grantId)
 
