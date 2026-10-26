@@ -28,10 +28,10 @@ export interface GGOAuthResource<C extends object> extends GGOAuthProtectedResou
     // Re-run at every issuance (code exchange and each refresh), like GGAuthRefreshToken's resolve:
     // permission changes apply on refresh. undefined = subject gone → invalid_grant.
     claims: (subject: string, client: {clientId: string, name: string}) => Promise<C | undefined>
-    // Only pre-registered first-party clients may get tokens for it.
-    firstPartyOnly?: boolean
-    // Only service clients may get tokens for it (client_credentials; the subject is the client id).
-    serviceOnly?: boolean
+    // Who may get tokens for it. "any" (default): every client that signs a user in. "firstParty": only
+    // pre-registered first-party clients. "service": only service clients, by client_credentials (the
+    // subject is the client id); service clients get no other resource.
+    clients?: "any" | "firstParty" | "service"
     // Issuable by token exchange (RFC 8693): a service client trades a valid `from` token for one for
     // this resource, for the same subject. `params` are the extra request parameters `claims` reads.
     exchange?: {
@@ -321,15 +321,18 @@ export class GGOAuthServer {
     private usableResource(indicator: string, clientId: string): GGOAuthResource<any> {
         const resource = this.resource(indicator)
         if (!resource) throw new oidcErrors.InvalidTarget()
-        if (resource.firstPartyOnly && !this.firstParty.has(clientId)) throw new oidcErrors.InvalidTarget("resource not available to this client")
-        if (!!resource.serviceOnly !== this.service.has(clientId)) throw new oidcErrors.InvalidTarget("resource not available to this client")
+        if (!this.mayUse(resource, clientId)) throw new oidcErrors.InvalidTarget("resource not available to this client")
         return resource
     }
 
     private defaultResource(clientId: string): GGOAuthResource<any> {
-        const firstParty = this.firstParty.has(clientId)
-        const service = this.service.has(clientId)
-        return this.options.resources.find(r => !!r.serviceOnly === service && (firstParty || !r.firstPartyOnly)) ?? this.options.resources[0]
+        return this.options.resources.find(r => this.mayUse(r, clientId)) ?? this.options.resources[0]
+    }
+
+    private mayUse(resource: GGOAuthResource<any>, clientId: string): boolean {
+        const clients = resource.clients ?? "any"
+        if (this.service.has(clientId)) return clients === "service"
+        return clients === "any" || (clients === "firstParty" && this.firstParty.has(clientId))
     }
 
     // oidc-provider can only sign with key material it holds, and the resource's signer may hold none

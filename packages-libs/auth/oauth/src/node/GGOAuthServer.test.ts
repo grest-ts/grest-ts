@@ -92,7 +92,7 @@ class OAuthTestRuntime extends GGRuntime {
                 resource: () => API,
                 accessToken: userToken,
                 scopes: ["api"],
-                firstPartyOnly: true,
+                clients: "firstParty",
                 claims: async (sub) => {
                     if (failClaimsOnce) {
                         failClaimsOnce = false
@@ -105,13 +105,13 @@ class OAuthTestRuntime extends GGRuntime {
                 resource: () => INTERNAL,
                 accessToken: internalToken,
                 scopes: ["internal"],
-                serviceOnly: true,
+                clients: "service",
                 claims: async (clientId) => clientId === "backend" ? {permissions: ["internal"]} : undefined,
             }, {
                 resource: () => ORG,
                 accessToken: orgToken,
                 scopes: ["org"],
-                firstPartyOnly: true,
+                clients: "firstParty",
                 claims: async () => undefined,
                 exchange: {
                     from: userToken,
