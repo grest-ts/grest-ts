@@ -92,6 +92,15 @@ const org: GGOAuthResource<OrgClaims> = {
 }
 ```
 
+A backend calls the token endpoint with `GGOAuthServiceClient({tokenEndpoint, clientId, secret})`:
+`token(resource)` (client_credentials, reused until shortly before expiry) and
+`exchange(subjectToken, resource, params)`; failures throw `GGOAuthTokenError` with the OAuth `error`.
+
+**Resource server only.** A service that accepts the tokens but doesn't run the authorization server
+uses `GGOAuthResourceServer({authorizationServer, resources})`: `mount` serves each resource's RFC 9728
+metadata and `protect` answers a missing or invalid token with the discovery challenge. Its resources'
+`accessToken` verifies with a `JwksVerifier` (from `@grest-ts/auth`) on the issuer's `/oauth/jwks`.
+
 `listGrants(subject)` and `revokeGrant(subject, grantId)` back a "connected apps" page.
 `revokeAll(subject)` is "log out everywhere"; call it next to `GGAuthRefreshToken.revokeAll`.
 

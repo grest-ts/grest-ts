@@ -4,7 +4,8 @@ import {toNotAuthorized} from "./verifyError"
 
 export interface JwksVerifierOptions {
     // The issuer's JWKS URL (fetched on first use and on an unknown kid), or pinned public keys.
-    jwks: (() => string) | (() => JWK[])
+    // Resolved per verify, so it may come from config or service discovery.
+    jwks: () => string | JWK[] | Promise<string | JWK[]>
     algorithms?: string[]
 }
 
@@ -26,7 +27,7 @@ export class JwksVerifier implements SigningStrategy {
 
     public verify = async (token: string): Promise<Record<string, unknown>> => {
         try {
-            const {payload} = await jwtVerify(token, this.keySet(), {algorithms: this.algorithms})
+            const {payload} = await jwtVerify(token, await this.keySet(), {algorithms: this.algorithms})
             return payload as Record<string, unknown>
         } catch (err) {
             throw toNotAuthorized(err)
@@ -34,8 +35,8 @@ export class JwksVerifier implements SigningStrategy {
     }
 
     // Resolved on first use, not at construction: config isn't readable at compose time.
-    private keySet(): JWTVerifyGetKey {
-        const jwks = this.options.jwks()
+    private async keySet(): Promise<JWTVerifyGetKey> {
+        const jwks = await this.options.jwks()
         const source = typeof jwks === "string" ? jwks : JSON.stringify(jwks)
         if (this.keys?.source !== source) {
             this.keys = {

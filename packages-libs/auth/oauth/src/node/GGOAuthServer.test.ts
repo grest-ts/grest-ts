@@ -7,6 +7,7 @@ import {IsArray, IsObject, IsString, NOT_AUTHORIZED} from "@grest-ts/schema"
 import {GGAuthAccessToken, HmacSigner, JwksVerifier, JwsSigningStrategy, type JwsSigner} from "@grest-ts/auth"
 import {GGOAuthServer, type GGOAuthResource} from "./GGOAuthServer"
 import {InMemoryOAuthStore} from "./store/InMemoryOAuthStore"
+import {GGOAuthServiceClient, GGOAuthTokenError} from "./GGOAuthServiceClient"
 import {GGOAuthInteractionContract} from "../shared/interactionContract"
 
 const IsClaims = IsObject({permissions: IsArray(IsString)})
@@ -502,6 +503,24 @@ describe("GGOAuthServer", () => {
         expect((await exchange({subject_token: "garbage", org_id: "o1"})).error).toBe("invalid_grant")
         expect((await exchange({subject_token: tokens.access_token, org_id: "o1", resource: MCP})).error).toBe("invalid_target")
         expect((await exchange({subject_token: tokens.access_token, org_id: "o1"}, basic("backend", "nope"))).error).toBe("invalid_client")
+    })
+
+    test("GGOAuthServiceClient: reuses its client_credentials token, exchanges, and reports token errors", async () => {
+        const client = new GGOAuthServiceClient({tokenEndpoint: async () => `${ISSUER}/oauth/token`, clientId: "backend", secret: () => "backend-secret"})
+        const first = await client.token(INTERNAL)
+        expect(await client.token(INTERNAL)).toBe(first)
+        expect((await internalToken.verify(first)).sub).toBe("backend")
+
+        const {tokens} = await signIn(new Browser(), "app", FIRST_PARTY_REDIRECT)
+        const exchanged = await client.exchange(tokens.access_token, ORG, {org_id: "o1"})
+        expect((await orgToken.verify(exchanged.token)).data).toEqual({permissions: ["org:alice"]})
+        expect(exchanged.expiresAt).toBeGreaterThan(Date.now())
+
+        const refused = await client.exchange(tokens.access_token, ORG, {org_id: "o2"}).catch((e: unknown) => e)
+        expect(refused).toBeInstanceOf(GGOAuthTokenError)
+        expect((refused as GGOAuthTokenError).error).toBe("invalid_grant")
+        const wrongSecret = new GGOAuthServiceClient({tokenEndpoint: () => `${ISSUER}/oauth/token`, clientId: "backend", secret: () => "nope"})
+        expect(await wrongSecret.token(INTERNAL).catch((e: GGOAuthTokenError) => e.error)).toBe("invalid_client")
     })
 
     test("a public client can't use token exchange", async () => {

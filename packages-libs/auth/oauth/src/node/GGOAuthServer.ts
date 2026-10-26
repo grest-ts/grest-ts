@@ -5,7 +5,7 @@ import {NOT_FOUND} from "@grest-ts/schema"
 import type {GGHttpServer} from "@grest-ts/http"
 import type {GGAccessPayload, GGAuthAccessToken} from "@grest-ts/auth"
 import {GGOAuthInteractionContract, type GGOAuthInteraction} from "../shared/interactionContract"
-import {RESOURCE_METADATA, resourceMetadataPath, resourceMetadataUrl} from "../shared/resourceMetadata"
+import {GGOAuthResourceServer, type GGOAuthProtectedResource} from "./GGOAuthResourceServer"
 import {toOidcAdapter, type GGOAuthStore} from "./store/GGOAuthStore"
 
 export interface GGOAuthFirstPartyClient {
@@ -16,15 +16,11 @@ export interface GGOAuthFirstPartyClient {
 }
 
 // One API the server issues tokens for (RFC 8707 resource indicator → its own audience and claims).
-export interface GGOAuthResource<C extends object> {
-    // Absolute URL identifying the API; for an MCP server, its URL exactly as users enter it.
-    resource: () => string
-    // Tokens for this resource ARE this token kind (signer, audience — defaults to the resource —,
-    // TTL, claim schema), so the wire already verifying it accepts them. Any signer works (HMAC,
-    // a private key, KMS): the token is signed through it; its public keys join the JWKS.
-    accessToken: GGAuthAccessToken<C>
-    // At least one: a request granting no scope is refused. What they permit is up to the app.
-    scopes: [string, ...string[]]
+// `accessToken`: tokens for this resource ARE this token kind (signer, audience, TTL, claim schema),
+// so the wire already verifying it accepts them. Any signer works (HMAC, a private key, KMS): the
+// token is signed through it; its public keys join the JWKS. `scopes`: at least one; a request
+// granting none is refused. What they permit is up to the app.
+export interface GGOAuthResource<C extends object> extends GGOAuthProtectedResource<C> {
     // Re-run at every issuance (code exchange and each refresh), like GGAuthRefreshToken's resolve:
     // permission changes apply on refresh. undefined = subject gone → invalid_grant.
     claims: (subject: string, client: {clientId: string, name: string}) => Promise<C | undefined>
@@ -44,7 +40,7 @@ export interface GGOAuthResource<C extends object> {
 
 // A backend of the app: authenticates with a secret (client_secret_basic), and may use
 // client_credentials and token exchange.
-export interface GGOAuthServiceClient {
+export interface GGOAuthServiceClientRegistration {
     clientId: string
     secret: () => string
 }
@@ -68,7 +64,7 @@ export interface GGOAuthServerOptions {
     // Read once, on first use (config isn't readable at compose time).
     firstPartyClients?: () => GGOAuthFirstPartyClient[]
     // Read once, on first use, like firstPartyClients.
-    serviceClients?: () => GGOAuthServiceClient[]
+    serviceClients?: () => GGOAuthServiceClientRegistration[]
     // Let any client self-register (RFC 7591).
     dynamicRegistration?: boolean
     // Accept clients identified by a metadata document URL (CIMD, what MCP clients prefer), fetched
@@ -103,6 +99,7 @@ export class GGOAuthServer {
     private _firstParty: Map<string, GGOAuthFirstPartyClient> | undefined
     private _service: Set<string> | undefined
     private readonly options: GGOAuthServerOptions
+    private readonly resourceServer: GGOAuthResourceServer
 
     constructor(options: GGOAuthServerOptions) {
         // Resources sharing a signer are told apart only by audience: a token for one must never
@@ -112,6 +109,7 @@ export class GGOAuthServer {
             throw new Error("GGOAuthServer: every resource's accessToken needs its own audience")
         }
         this.options = options
+        this.resourceServer = new GGOAuthResourceServer({authorizationServer: options.issuer, resources: options.resources})
     }
 
     private get firstParty(): Map<string, GGOAuthFirstPartyClient> {
@@ -148,59 +146,21 @@ export class GGOAuthServer {
         for (const method of ["GET", "POST"] as const) server.registerRoute(method, `${BASE}/*`, handle, "GGOAuthServer")
         server.registerRoute("GET", "/.well-known/openid-configuration", handle, "GGOAuthServer")
         server.registerRoute("GET", "/.well-known/oauth-authorization-server", handle, "GGOAuthServer")
-        server.registerRoute("GET", RESOURCE_METADATA, this.resourceMetadata, "GGOAuthServer")
-        server.registerRoute("GET", `${RESOURCE_METADATA}/*`, this.resourceMetadata, "GGOAuthServer")
+        this.resourceServer.mount(server)
 
         server.announce(`${BASE}/`, "GGOAuthServer")
         server.announce("/.well-known/openid-configuration", "GGOAuthServer")
         server.announce("/.well-known/oauth-authorization-server", "GGOAuthServer")
-        server.announce(RESOURCE_METADATA, "GGOAuthServer")
     }
 
-    // RFC 9728 metadata of every resource, at its URL's path under the well-known prefix: clients
-    // (the app's own UI included) start from the resource and learn the authorization server here.
-    private resourceMetadata = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
-        const path = new URL(req.url ?? "/", "http://x").pathname
-        const resource = this.options.resources.find(r => resourceMetadataPath(r.resource()) === path)
-        if (!resource) {
-            res.writeHead(404)
-            res.end()
-            return
-        }
-        res.writeHead(200, {"content-type": "application/json"})
-        res.end(JSON.stringify({
-            resource: resource.resource(),
-            authorization_servers: [this.options.issuer()],
-            scopes_supported: resource.scopes,
-            bearer_methods_supported: ["header"],
-        }))
-    }
-
-    // Serves `path` as an OAuth-protected resource: requests without a valid token for `resource` get
-    // 401 + `WWW-Authenticate: Bearer resource_metadata=…` — the discovery handshake MCP clients run
-    // before signing in.
+    // A resource the server issues for, served in this process (see GGOAuthResourceServer.protect).
     public protect<C extends object>(
         server: GGHttpServer,
         resource: GGOAuthResource<C>,
         path: string,
         handle: (req: IncomingMessage, res: ServerResponse, token: GGAccessPayload<C>) => Promise<void>,
     ): void {
-        const guarded = async (req: IncomingMessage, res: ServerResponse) => {
-            const auth = req.headers.authorization
-            const token = auth?.toLowerCase().startsWith("bearer ")
-                ? await resource.accessToken.verify(auth.slice(7)).catch(() => undefined)
-                : undefined
-            if (!token) {
-                res.writeHead(401, {
-                    "www-authenticate": `Bearer resource_metadata="${resourceMetadataUrl(resource.resource())}", scope="${resource.scopes.join(" ")}"${auth ? `, error="invalid_token"` : ""}`,
-                })
-                res.end()
-                return
-            }
-            await handle(req, res, token)
-        }
-        for (const method of ["GET", "POST", "DELETE"] as const) server.registerRoute(method, path, guarded, "GGOAuthServer")
-        server.announce(path, "GGOAuthServer")
+        this.resourceServer.protect(server, resource, path, handle)
     }
 
     // Implementation of GGOAuthInteractionContract; `subject` reads the signed-in user from the app's wire.
