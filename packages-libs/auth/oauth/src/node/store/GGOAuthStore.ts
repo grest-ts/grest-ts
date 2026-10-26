@@ -24,12 +24,23 @@ export interface GGOAuthStore {
     listIdsByAccount(model: string, accountId: string): Promise<string[]>
 }
 
-// What oidc-provider revokes by grant. An Interaction carries the grantId it would extend and must outlive it:
-// another account finishing a sign-in first ends the old session (revoking its grants), then resumes the interaction.
-export const GRANT_BOUND: ReadonlySet<string> = new Set(["AccessToken", "AuthorizationCode", "RefreshToken", "DeviceCode", "BackchannelAuthenticationRequest"])
+// What revoking a grant removes: oidc-provider's codes and tokens, and the server's own GrantUsage. An Interaction carries
+// the grantId it would extend and must outlive it: another account finishing a sign-in first ends the old session
+// (revoking its grants), then resumes the interaction.
+export const GRANT_BOUND: ReadonlySet<string> = new Set(["AccessToken", "AuthorizationCode", "RefreshToken", "DeviceCode", "BackchannelAuthenticationRequest", "GrantUsage"])
 
 // oidc-provider's adapter shape: `new Adapter(modelName)` per model.
 export function toOidcAdapter(store: GGOAuthStore): AdapterConstructor {
+    // oidc-provider revokes a grant through each grant-bound model at once; the store removes them all in one pass.
+    const revoking = new Map<string, Promise<void>>()
+    const revokeByGrantId = (grantId: string): Promise<void> => {
+        let pending = revoking.get(grantId)
+        if (!pending) {
+            pending = store.revokeByGrantId(grantId).finally(() => revoking.delete(grantId))
+            revoking.set(grantId, pending)
+        }
+        return pending
+    }
     return class GGOAuthAdapter {
         private readonly model: string
         constructor(model: string) { this.model = model }
@@ -40,6 +51,6 @@ export function toOidcAdapter(store: GGOAuthStore): AdapterConstructor {
         findByUserCode = async () => undefined
         consume = (id: string) => store.consume(this.model, id)
         destroy = (id: string) => store.destroy(this.model, id)
-        revokeByGrantId = (grantId: string) => store.revokeByGrantId(grantId)
+        revokeByGrantId = revokeByGrantId
     }
 }

@@ -68,6 +68,7 @@
     "@grest-ts/auth": "0.0.93",
     "@grest-ts/db-dynamodb": "0.0.93",
     "@grest-ts/http": "0.0.93",
+    "@grest-ts/logger": "0.0.93",
     "@grest-ts/schema": "0.0.93"
   }
 }

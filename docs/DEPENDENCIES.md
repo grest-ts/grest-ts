@@ -166,6 +166,7 @@ flowchart TB
     oauth --> auth
     oauth --> db-dynamodb
     oauth --> http
+    oauth --> logger
     oauth --> schema
     openapi --> context
     openapi --> http
@@ -375,16 +376,16 @@ flowchart TB
     linkStyle 96 stroke:#499894,stroke-width:2px
     linkStyle 97 stroke:#499894,stroke-width:2px
     linkStyle 98 stroke:#499894,stroke-width:2px
-    linkStyle 99 stroke:#D37295,stroke-width:2px
+    linkStyle 99 stroke:#499894,stroke-width:2px
     linkStyle 100 stroke:#D37295,stroke-width:2px
     linkStyle 101 stroke:#D37295,stroke-width:2px
     linkStyle 102 stroke:#D37295,stroke-width:2px
-    linkStyle 103 stroke:#A0CBE8,stroke-width:2px
+    linkStyle 103 stroke:#D37295,stroke-width:2px
     linkStyle 104 stroke:#A0CBE8,stroke-width:2px
     linkStyle 105 stroke:#A0CBE8,stroke-width:2px
     linkStyle 106 stroke:#A0CBE8,stroke-width:2px
     linkStyle 107 stroke:#A0CBE8,stroke-width:2px
-    linkStyle 108 stroke:#FFBE7D,stroke-width:2px
+    linkStyle 108 stroke:#A0CBE8,stroke-width:2px
     linkStyle 109 stroke:#FFBE7D,stroke-width:2px
     linkStyle 110 stroke:#FFBE7D,stroke-width:2px
     linkStyle 111 stroke:#FFBE7D,stroke-width:2px
@@ -392,12 +393,12 @@ flowchart TB
     linkStyle 113 stroke:#FFBE7D,stroke-width:2px
     linkStyle 114 stroke:#FFBE7D,stroke-width:2px
     linkStyle 115 stroke:#FFBE7D,stroke-width:2px
-    linkStyle 116 stroke:#4E79A7,stroke-width:2px
+    linkStyle 116 stroke:#FFBE7D,stroke-width:2px
     linkStyle 117 stroke:#4E79A7,stroke-width:2px
-    linkStyle 118 stroke:#F28E2B,stroke-width:2px
-    linkStyle 119 stroke:#E15759,stroke-width:2px
+    linkStyle 118 stroke:#4E79A7,stroke-width:2px
+    linkStyle 119 stroke:#F28E2B,stroke-width:2px
     linkStyle 120 stroke:#E15759,stroke-width:2px
-    linkStyle 121 stroke:#59A14F,stroke-width:2px
+    linkStyle 121 stroke:#E15759,stroke-width:2px
     linkStyle 122 stroke:#59A14F,stroke-width:2px
     linkStyle 123 stroke:#59A14F,stroke-width:2px
     linkStyle 124 stroke:#59A14F,stroke-width:2px
@@ -407,8 +408,8 @@ flowchart TB
     linkStyle 128 stroke:#59A14F,stroke-width:2px
     linkStyle 129 stroke:#59A14F,stroke-width:2px
     linkStyle 130 stroke:#59A14F,stroke-width:2px
-    linkStyle 131 stroke:#EDC948,stroke-width:2px
-    linkStyle 132 stroke:#B07AA1,stroke-width:2px
+    linkStyle 131 stroke:#59A14F,stroke-width:2px
+    linkStyle 132 stroke:#EDC948,stroke-width:2px
     linkStyle 133 stroke:#B07AA1,stroke-width:2px
     linkStyle 134 stroke:#B07AA1,stroke-width:2px
     linkStyle 135 stroke:#B07AA1,stroke-width:2px
@@ -424,12 +425,12 @@ flowchart TB
     linkStyle 145 stroke:#B07AA1,stroke-width:2px
     linkStyle 146 stroke:#B07AA1,stroke-width:2px
     linkStyle 147 stroke:#B07AA1,stroke-width:2px
-    linkStyle 148 stroke:#FF9DA7,stroke-width:2px
+    linkStyle 148 stroke:#B07AA1,stroke-width:2px
     linkStyle 149 stroke:#FF9DA7,stroke-width:2px
-    linkStyle 150 stroke:#9C755F,stroke-width:2px
+    linkStyle 150 stroke:#FF9DA7,stroke-width:2px
     linkStyle 151 stroke:#9C755F,stroke-width:2px
     linkStyle 152 stroke:#9C755F,stroke-width:2px
-    linkStyle 153 stroke:#BAB0AC,stroke-width:2px
+    linkStyle 153 stroke:#9C755F,stroke-width:2px
     linkStyle 154 stroke:#BAB0AC,stroke-width:2px
     linkStyle 155 stroke:#BAB0AC,stroke-width:2px
     linkStyle 156 stroke:#BAB0AC,stroke-width:2px
@@ -438,6 +439,7 @@ flowchart TB
     linkStyle 159 stroke:#BAB0AC,stroke-width:2px
     linkStyle 160 stroke:#BAB0AC,stroke-width:2px
     linkStyle 161 stroke:#BAB0AC,stroke-width:2px
+    linkStyle 162 stroke:#BAB0AC,stroke-width:2px
 ```
 
 ---
@@ -1545,6 +1547,7 @@ flowchart TB
         http["http 🟢🌐"]
         ipc["ipc 🟢"]
         logger-console["logger-console 🟢"]
+        oauth["oauth 🟢🌐"]
         runtime["runtime 🟢"]
         testkit["testkit 🟢"]
         testkit-vitest["testkit-vitest 🟢"]
@@ -1571,6 +1574,7 @@ flowchart TB
     http --> logger
     ipc --> logger
     logger-console --> logger
+    oauth --> logger
     runtime --> logger
     testkit --> logger
     testkit-vitest --> logger
@@ -1592,6 +1596,7 @@ flowchart TB
     style http fill:#59A14F,stroke:#59A14F,color:#fff
     style ipc fill:#FF9DA7,stroke:#FF9DA7,color:#fff
     style logger-console fill:#8CD17D,stroke:#8CD17D,color:#fff
+    style oauth fill:#499894,stroke:#499894,color:#fff
     style runtime fill:#FFBE7D,stroke:#FFBE7D,color:#fff
     style testkit fill:#59A14F,stroke:#59A14F,color:#fff
     style testkit-vitest fill:#B07AA1,stroke:#B07AA1,color:#fff
@@ -1612,12 +1617,13 @@ flowchart TB
     linkStyle 11 stroke:#59A14F,stroke-width:2px
     linkStyle 12 stroke:#FF9DA7,stroke-width:2px
     linkStyle 13 stroke:#8CD17D,stroke-width:2px
-    linkStyle 14 stroke:#FFBE7D,stroke-width:2px
-    linkStyle 15 stroke:#59A14F,stroke-width:2px
-    linkStyle 16 stroke:#B07AA1,stroke-width:2px
-    linkStyle 17 stroke:#BAB0AC,stroke-width:2px
-    linkStyle 18 stroke:#86BCB6,stroke-width:2px
+    linkStyle 14 stroke:#499894,stroke-width:2px
+    linkStyle 15 stroke:#FFBE7D,stroke-width:2px
+    linkStyle 16 stroke:#59A14F,stroke-width:2px
+    linkStyle 17 stroke:#B07AA1,stroke-width:2px
+    linkStyle 18 stroke:#BAB0AC,stroke-width:2px
     linkStyle 19 stroke:#86BCB6,stroke-width:2px
+    linkStyle 20 stroke:#86BCB6,stroke-width:2px
 ```
 
 ### Logger Console
@@ -1711,21 +1717,25 @@ flowchart TB
         auth["auth 🟢🌐"]
         db-dynamodb["db-dynamodb 🟢"]
         http["http 🟢🌐"]
+        logger["logger 🟢🌐"]
         schema["schema 🟢🌐"]
     end
     oauth --> auth
     oauth --> db-dynamodb
     oauth --> http
+    oauth --> logger
     oauth --> schema
     style oauth fill:#499894,stroke:#499894,color:#fff
     style auth fill:#E15759,stroke:#E15759,color:#fff
     style db-dynamodb fill:#86BCB6,stroke:#86BCB6,color:#fff
     style http fill:#59A14F,stroke:#59A14F,color:#fff
+    style logger fill:#86BCB6,stroke:#86BCB6,color:#fff
     style schema fill:#D4A6C8,stroke:#D4A6C8,color:#fff
     linkStyle 0 stroke:#499894,stroke-width:2px
     linkStyle 1 stroke:#499894,stroke-width:2px
     linkStyle 2 stroke:#499894,stroke-width:2px
     linkStyle 3 stroke:#499894,stroke-width:2px
+    linkStyle 4 stroke:#499894,stroke-width:2px
 ```
 
 ### Openapi
