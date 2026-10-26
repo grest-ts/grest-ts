@@ -40,9 +40,9 @@ import {DynamoOAuthStore} from "@grest-ts/oauth/dynamodb"
 // Your own app's API: its ordinary user token, only for your own clients.
 const api: GGOAuthResource<UserClaims> = {
     resource: () => config.issuerUrl.get(),
-    accessToken: userTokenEngine.access,           // GGAuthAccessToken — signer must expose jwsKey()
+    accessToken: userTokenEngine.access,           // GGAuthAccessToken on a TokenSigner (HMAC, private key, KMS)
     scopes: ["app"],                               // at least one; what they permit is up to you
-    firstPartyOnly: true,
+    clients: "firstParty",                         // "any" (default) | "firstParty" | "service"
     claims: async (subject, client) => claimsFor(subject), // at issue AND every refresh; undefined → invalid_grant
 }
 // An MCP endpoint for other apps (Claude, ChatGPT…): own audience, its own (smaller) claims.
@@ -56,7 +56,7 @@ const mcp: GGOAuthResource<McpClaims> = {
 const oauth = new GGOAuthServer({
     issuer: () => config.issuerUrl.get(),          // public origin, no path
     store: new DynamoOAuthStore(dynamo, "my-oauth"),
-    secret: () => config.tokenSecret.reveal(),     // derives cookie + JWKS keys
+    secret: () => config.sessionSecret.reveal(),   // derives the cookie and ID-token keys
     resources: [api, mcp],                         // first = default for first-party clients
     interactionUrl: (uid, {clientId, firstParty, redirectUri}) => `${appUrl}/?oauthLogin=${uid}`,
     firstPartyClients: () => [{clientId: "web", name: "My App", redirectUris: [`${appUrl}/oauth/callback`]}],
@@ -70,6 +70,46 @@ new GGHttp(httpServer).http(OAuthInteractionApi, oauth.interactionApi(() => USER
 
 `claims` works like the `resolve` callback of `GGAuthRefreshToken.refresh`: role changes apply on
 the next refresh, and a deleted or deactivated user's OAuth session ends there.
+
+`clients` sets who may get tokens for a resource: `"any"` (the default: every client that signs a
+user in), `"firstParty"` (only `firstPartyClients`) or `"service"` (only service clients, below). A
+service client gets no other resource.
+
+**Signing.** Each resource's token is signed through its own `accessToken.signer`. oidc-provider
+can only sign with key material it holds, so it signs with a per-process placeholder and the token
+endpoint re-signs the claims before the token leaves. That's what lets a signer keep its key in KMS.
+Asymmetric signers (`JwsSigningStrategy`) publish their public keys in `/oauth/jwks`, next to the
+ID-token key, so another service verifies with `JwksVerifier` and holds no key.
+
+**Service clients** (`serviceClients`) are your own backends. They authenticate with a secret
+(`client_secret_basic`) and may use:
+- `client_credentials`, for resources with `clients: "service"`. The token's subject is the client id.
+- token exchange (RFC 8693), for a resource with `exchange: {from, params, claims}`. The service sends
+  a subject's valid `from` token (`subject_token`) plus your extra `params`, and gets a token for this
+  resource for the same subject, e.g. an org-scoped token from a user token. Same subject only: there
+  is no delegation (`actor_token`, the `act` claim), so the issued token doesn't say which service
+  asked for it.
+
+```ts
+const org: GGOAuthResource<OrgClaims> = {
+    resource: () => `${issuer}/org`, accessToken: orgToken, scopes: ["org"], clients: "firstParty",
+    claims: async () => undefined,                 // only issued by exchange
+    exchange: {from: userToken, params: ["org_id"], claims: (sub, params) => orgClaimsFor(sub, params.org_id)},
+}
+```
+
+A backend calls the token endpoint with `GGOAuthServiceClient({tokenEndpoint, clientId, secret})`:
+`token(resource)` (client_credentials, reused until shortly before expiry) and
+`exchange(subjectToken, resource, params)`; failures throw `GGOAuthTokenError` with the OAuth `error`.
+To send the token, give the client of the other service a wire value:
+`OtherApi.createClient({wires: [{wire: SERVICE_TOKEN_WIRE, value: () => serviceClient.token(resource)}]})`
+(see `@grest-ts/http` → "Client — sending the credential").
+
+**Resource server only.** A service that accepts the tokens but doesn't run the authorization server
+uses `GGOAuthResourceServer({authorizationServer, resources})`: `mount` serves each resource's RFC 9728
+metadata and `protect` answers a missing or invalid token with the discovery challenge. Its resources'
+`accessToken` only verifies: a `GGAuthAccessToken` on a `JwksVerifier` (from `@grest-ts/auth`) reading
+the issuer's `/oauth/jwks`.
 
 `listGrants(subject)` and `revokeGrant(subject, grantId)` back a "connected apps" page. Each grant has `createdAt` and `lastUsedAt`: when it last got tokens, so within one access-token lifetime of its last use.
 `revokeAll(subject)` is "log out everywhere"; call it next to `GGAuthRefreshToken.revokeAll`.

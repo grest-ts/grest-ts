@@ -428,8 +428,17 @@ export const session = GGAuthSession
     .withToken(USER_TOKEN_WIRE, { refresh: api.authApi.refresh, localStorageKey: "auth" })
 ```
 
-For the no-session case (a static service-to-service API key), the underlying primitive is
-`WIRE.defineClient({ value: () => API_KEY })`.
+A backend calling another service sets the credential per client with `wires`: each value is
+resolved before every request, so it can come from a token cache. Every wire must be in the schema's
+`use` (createClient throws otherwise), and the call stays a normal `GGPromise` (a failing provider is
+that call's `SERVER_ERROR`).
+
+```typescript
+const oauth = new GGOAuthServiceClient({ tokenEndpoint, clientId: "billing", secret })
+const inventory = InventoryApi.createClient({
+    wires: [{ wire: SERVICE_TOKEN_WIRE, value: () => oauth.token(INVENTORY_RESOURCE) }],
+})
+```
 
 ### Public API (No Auth)
 
