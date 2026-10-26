@@ -565,7 +565,6 @@ export class GGOAuthServer {
     }
 }
 
-
 function isAllowedDocumentUrl(clientId: string, prefixes: string[]): boolean {
     const url = URL.parse(clientId)
     if (!url || url.protocol !== "https:" || url.port !== "" || url.username || url.password) return false

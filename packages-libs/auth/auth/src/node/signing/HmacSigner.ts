@@ -1,8 +1,9 @@
 import {hkdfSync} from "node:crypto"
-import {SignJWT, jwtVerify, errors as joseErrors} from "jose"
-import {NOT_AUTHORIZED} from "@grest-ts/schema"
+import {SignJWT, jwtVerify} from "jose"
 import type {TokenSigner} from "./TokenSigner"
+import {toNotAuthorized} from "./verifyError"
 
+// App-named by history; changing it invalidates every HMAC token, so only via a future versioned option.
 const KEY_INFO = "@kratt/auth hs256 signing key"
 
 export class HmacSigner implements TokenSigner {
@@ -31,8 +32,7 @@ export class HmacSigner implements TokenSigner {
             const {payload} = await jwtVerify(token, this.key(), {algorithms: [this.alg]})
             return payload as Record<string, unknown>
         } catch (err) {
-            if (err instanceof joseErrors.JWTExpired) throw new NOT_AUTHORIZED({debugMessage: "TOKEN_EXPIRED"})
-            throw new NOT_AUTHORIZED({debugMessage: "TOKEN_INVALID: " + (err as Error).message})
+            throw toNotAuthorized(err)
         }
     }
 }
