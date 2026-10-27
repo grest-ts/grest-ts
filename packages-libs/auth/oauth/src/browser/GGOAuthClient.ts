@@ -51,13 +51,15 @@ export class GGOAuthClient<I = unknown> {
     }
 
     // Redirects the browser to the authorization server; resolves never (the page unloads).
-    public authorize = (opts?: {returnTo?: string, prompt?: "login"}): Promise<void> => this.leave(async () => {
+    // `params`: the server's extraParams (e.g. a sign-in method to start right away).
+    public authorize = (opts?: {returnTo?: string, prompt?: "login", params?: Record<string, string>}): Promise<void> => this.leave(async () => {
         const meta = await this.discover()
         const verifier = randomString()
         const pending: Pending = {state: randomString(), verifier, returnTo: opts?.returnTo}
         sessionStorage.setItem(PENDING_KEY, JSON.stringify(pending))
         const url = new URL(meta.authorization_endpoint)
         url.search = new URLSearchParams({
+            ...opts?.params,
             response_type: "code",
             client_id: this.config.clientId,
             redirect_uri: this.config.redirectUri,

@@ -16,7 +16,7 @@ The protocol is [panva/oidc-provider](https://github.com/panva/node-oidc-provide
 - mounting on a `GGHttpServer`
 - storage
 - token claims
-- handing login and consent to your own UI
+- handing the login and consent pages to your own code
 
 | What you get | |
 |---|---|
@@ -58,27 +58,22 @@ const oauth = new GGOAuthServer({
     store: new DynamoOAuthStore(dynamo, "my-oauth"),
     secret: () => config.sessionSecret.reveal(),   // derives the cookie and ID-token keys
     resources: [api, mcp],                         // first = default for first-party clients
-    interactionUrl: (uid, {clientId, firstParty, redirectUri}) => `${appUrl}/?oauthLogin=${uid}`,
+    interactionPage: renderSignIn,                 // your login and consent pages, below
     firstPartyClients: () => [{clientId: "web", name: "My App", redirectUris: [`${appUrl}/oauth/callback`]}],
     clientIdMetadataDocument: {allowedUrlPrefixes: () => ["https://claude.ai/oauth/", "https://chatgpt.com/oauth/"]},
     // dynamicRegistration: true,                  // open RFC 7591 registration — anyone, any name
 })
 oauth.mount(httpServer)                            // /oauth/* + /.well-known/* (incl. every resource's metadata), announced to discovery
 oauth.protect(httpServer, mcp, "/mcp", handleMcp)  // 401 + resource metadata, then your handler
-new GGHttp(httpServer).http(OAuthInteractionApi, oauth.interactionApi(() => USER.get()!.id))
 ```
 
 `claims` works like the `resolve` callback of `GGAuthRefreshToken.refresh`: role changes apply on
 the next refresh, and a deleted or deactivated user's OAuth session ends there.
 
 A user's access token carries `auth_time` (OIDC: when the user signed in, epoch seconds; a refresh
-keeps it), read as `verify(token).auth_time`. To require a recent sign-in, check it and send the user
-through `authorize({prompt: "login"})`. That time comes from the approving user's own token: issue it
-with `accessToken.issue(sub, claims, {authTime})` at sign-in and pass
-`interactionApi(subject, () => USER.get()!.authTime)`. Otherwise an approval counts as a sign-in, so
-anyone holding a user token could mint "fresh" ones. With `authTime`, a forced login (`prompt=login`,
-an expired `max_age`) is refused unless the user signed in after the request started. Token exchange
-keeps the subject token's `auth_time`.
+and a silent re-authorization keep it), read as `verify(token).auth_time`. To require a recent
+sign-in, check it and send the user through `authorize({prompt: "login"})`. Token exchange keeps the
+subject token's `auth_time`.
 
 `clients` sets who may get tokens for a resource: `"any"` (the default: every client that signs a
 user in), `"firstParty"` (only `firstPartyClients`) or `"service"` (only service clients, below). A
@@ -146,30 +141,46 @@ provides the discovery handshake MCP clients run:
 | Loopback / CLI (no `application_type` declared → native) | Any port on `localhost`/`127.0.0.1` matches | **Every** authorization: any local process could claim the redirect |
 | Dynamic registration (opt-in) | `POST /oauth/register` | Once per grant |
 
-### Login and consent stay in your app
+### Login and consent pages
 
-`/oauth/authorize` sends the browser to `interactionUrl(uid)`. That page uses your normal login,
-then calls `GGOAuthInteractionContract`. Bind the contract with **your** user wire, so the
-signed-in user becomes the OAuth subject:
+The authorization server signs the user in itself, on its own login session (an HttpOnly cookie on
+the issuer). Your app is only an OAuth client: it never sees a password or approves anything.
+`/oauth/authorize` sends the browser to `/oauth/interaction/:uid`, and every GET or POST under that
+path (except `/complete`) goes to `interactionPage`:
 
 ```ts
-export const OAuthInteractionApi = new GGHttpSchema({
-    contract: GGOAuthInteractionContract, pathPrefix: "api/oauth/interaction", use: [USER_WIRE],
-    routes: {get: GGRpc.GET("get"), approve: GGRpc.POST("approve"), deny: GGRpc.POST("deny")},
-})
+const renderSignIn = async ({interaction, action, method, form, csrf, res, login, consent, deny}: GGOAuthInteractionRequest) => {
+    if (method === "POST" && action === "password") {
+        const user = await users.checkPassword(form.username, form.password)
+        if (user) return login({accountId: user.id, amr: ["pwd"]})
+    }
+    if (method === "POST" && action === "consent") return form.allow ? consent() : deny()
+    res.writeHead(200, {"content-type": "text/html; charset=utf-8"})
+    res.end(interaction.prompt === "login" ? loginForm(csrf) : consentForm(interaction, csrf))
+}
 ```
 
-The page works like this:
-
-1. `get({uid})` returns the client (name, `firstParty`, redirect hosts, `loopbackOnly`), the
-   requested scopes and `forceLogin`.
-2. When `forceLogin` is set (the client sent `prompt=login`, or its `max_age` has passed), sign the
-   user out of your app first and show the login form: an existing session must not approve it.
-3. For a first-party client, call `approve` right away. For any other client, show a consent
-   screen first. Display the redirect hosts, and warn when `loopbackOnly` is set.
-4. `approve`/`deny` return `redirectUrl` for the browser to follow. The result applies only in
-   the browser holding the flow's interaction cookie, so a user approving someone else's flow
-   can't hand them a code.
+- `interaction.prompt` is `"login"` (no login session, `prompt=login`, an expired `max_age`, or a
+  session too old for a new grant, below) or `"consent"`: a signed-in `accountId` approves a
+  third-party client. Show the client's name and redirect hosts, and warn when `loopbackOnly` is set.
+- A first-party client never gets a consent prompt: it re-authorizes silently while the login
+  session lives (single sign-on).
+- The request reaches your code only from the browser that started the flow (it holds the
+  flow's interaction cookie, scoped to the path). A POST must also come from the issuer or one of
+  `origins` (`Origin` header) and carry `csrf` as a form field (`application/x-www-form-urlencoded`);
+  the server answers 403 otherwise. Your pages can't be framed (`frame-ancestors 'none'`, `X-Frame-Options`).
+- Approve and deny only on a POST: a GET can be triggered by any page.
+- `login` while a session for another account lives first ends that session (a self-submitting form).
+- `newGrantMaxLoginAgeSec`: a third-party client's new grant needs a sign-in at most this old, so
+  a stale login session (or a stolen laptop) can't connect a new app. It's a login prompt in
+  oidc-provider's interaction policy, so no page can skip it.
+- A sign-in that completes on another host (an external IdP's callback registered elsewhere) carries
+  the uid through its own state and ends with `loginTicketUrl(uid, accountId)`: a single-use link
+  that completes the flow only in the browser that started it.
+- `extraParams` pass authorization parameters through to `interaction.params` (e.g. a sign-in
+  method to start right away: `authorize({params: {start_with: "sso"}})`).
+- `sessionCookie` names the login session cookie, e.g. `"__Host-app_session"` on an https issuer.
+- `errorPage(message)` renders the server's own error pages (an expired flow, an invalid request).
 
 A first-party client re-authorizes silently while the login session lives. Set `refreshTokens:
 false` on one that only reads who signed in and keeps nothing: its codes then buy an access token alone.
@@ -215,7 +226,8 @@ oauth.logout(undefined)   // ends the authorization server's login session too
   `origins`), and `resource` defaults to the issuer it declares.
 - `iss` on the callback must match the issuer (RFC 9207).
 - `invalid_grant` on refresh surfaces as `NOT_AUTHORIZED`, which ends the session.
-- `authorize({prompt: "login"})` asks for a fresh sign-in even while the login session lives.
+- `authorize({prompt: "login"})` asks for a fresh sign-in even while the login session lives;
+  `authorize({params})` adds the server's `extraParams`.
 
 ## Notes
 

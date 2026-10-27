@@ -2,17 +2,15 @@ import {createHash, generateKeyPairSync, randomBytes, sign as cryptoSign} from "
 import {importJWK, SignJWT} from "jose"
 import {createServer} from "node:net"
 import {GGRuntime} from "@grest-ts/runtime"
-import {GGHeader, GGHttp, GGHttpSchema, GGHttpServer, GGRpc} from "@grest-ts/http"
-import {GGContextKey} from "@grest-ts/context"
-import {IsArray, IsNumber, IsObject, IsString, NOT_AUTHORIZED} from "@grest-ts/schema"
+import {GGHttpServer} from "@grest-ts/http"
+import {IsArray, IsObject, IsString, NOT_AUTHORIZED} from "@grest-ts/schema"
 import {GGAuthAccessToken, HmacSigner, JwksVerifier, JwsSigningStrategy, type JwsSigner} from "@grest-ts/auth"
-import {ACCESS_TOKEN_JWKS_PATH, deriveEs256Jwk, GGOAuthServer, type GGOAuthResource} from "./GGOAuthServer"
+import {ACCESS_TOKEN_JWKS_PATH, deriveEs256Jwk, GGOAuthServer, type GGOAuthInteraction, type GGOAuthResource} from "./GGOAuthServer"
 import type {GGDynamoDb} from "@grest-ts/db-dynamodb"
 import {InMemoryOAuthStore} from "./store/InMemoryOAuthStore"
 import {DynamoOAuthStore} from "./store/DynamoOAuthStore"
 import {GGOAuthResourceServer} from "./GGOAuthResourceServer"
 import {GGOAuthServiceClient, GGOAuthTokenError} from "./GGOAuthServiceClient"
-import {GGOAuthInteractionContract} from "../shared/interactionContract"
 
 const IsClaims = IsObject({permissions: IsArray(IsString)})
 type Claims = typeof IsClaims.infer
@@ -20,7 +18,8 @@ type Claims = typeof IsClaims.infer
 const port = await freePort()
 const ISSUER = `http://localhost:${port}`
 const API = `${ISSUER}/api`
-const APP_LOGIN = "https://app.example/oauth-login"
+const SESSION_COOKIE = "app_session"
+const NEW_GRANT_MAX_LOGIN_AGE_SEC = 600
 const FIRST_PARTY_REDIRECT = "https://app.example/callback"
 const IDENTITY_REDIRECT = "https://auth.example/access/callback"
 const THIRD_PARTY_REDIRECT = "https://claude.ai/api/mcp/auth_callback"
@@ -31,22 +30,6 @@ const userPermissions = new Map<string, string[] | undefined>([["alice", ["read"
 // Set to make the next claims lookup fail as if the store/IdP were down.
 let failClaimsOnce = false
 
-const USER_WIRE = new GGHeader("authorization", {scheme: "bearer"})
-const SUBJECT = new GGContextKey<{sub: string, authTime?: number}>("oauthTestSubject", IsObject({sub: IsString, authTime: IsNumber.orUndefined}))
-const USER_WIRE_HANDLER = USER_WIRE.define(() => ({
-    process: async () => {
-        const raw = USER_WIRE.get()
-        if (!raw) throw new NOT_AUTHORIZED()
-        const user = await userToken.verify(raw)
-        SUBJECT.set({sub: user.sub, authTime: user.auth_time})
-    },
-}))
-const InteractionApi = new GGHttpSchema({
-    contract: GGOAuthInteractionContract,
-    pathPrefix: "api/oauth/interaction",
-    use: [USER_WIRE],
-    routes: {get: GGRpc.GET("get"), approve: GGRpc.POST("approve"), deny: GGRpc.POST("deny")},
-})
 
 // Like a KMS key: it signs, but its private key never leaves it.
 function sealedSigner(kid: string): JwsSigner {
@@ -112,7 +95,6 @@ class OAuthTestRuntime extends GGRuntime {
 
     protected compose(): void {
         const server = new GGHttpServer({port})
-        USER_WIRE_HANDLER.create(undefined)
         oauth = new GGOAuthServer({
             issuer: () => ISSUER,
             store,
@@ -149,7 +131,23 @@ class OAuthTestRuntime extends GGRuntime {
                 },
             }],
             serviceClients: () => [{clientId: "backend", secret: () => "backend-secret"}],
-            interactionUrl: (uid) => `${APP_LOGIN}?uid=${uid}`,
+            // The app's sign-in pages, reduced to what a test drives: the page as JSON, and a "login" that trusts the posted subject.
+            interactionPage: async ({res, method, action, form, interaction, csrf, login, consent, deny}) => {
+                if (method === "GET") {
+                    res.writeHead(200, {"content-type": "application/json"})
+                    res.end(JSON.stringify({interaction, csrf}))
+                    return
+                }
+                if (action === "login") return login({accountId: form.sub})
+                if (action === "consent") return consent()
+                if (action === "deny") return deny()
+                res.writeHead(404)
+                res.end()
+            },
+            errorPage: (message) => `<p>${message}</p>`,
+            newGrantMaxLoginAgeSec: () => NEW_GRANT_MAX_LOGIN_AGE_SEC,
+            extraParams: ["start_with"],
+            sessionCookie: () => SESSION_COOKIE,
             firstPartyClients: () => [
                 {clientId: "app", name: "The App", redirectUris: [FIRST_PARTY_REDIRECT], postLogoutRedirectUris: ["https://app.example/"]},
                 {clientId: "identity", name: "The App", redirectUris: [IDENTITY_REDIRECT], refreshTokens: false},
@@ -172,39 +170,72 @@ class OAuthTestRuntime extends GGRuntime {
             res.writeHead(200)
             res.end()
         })
-        new GGHttp(server).http(InteractionApi, oauth.interactionApi(() => SUBJECT.get()!.sub, () => SUBJECT.get()!.authTime))
     }
 }
 
+type Page = {uid: string, interaction: GGOAuthInteraction, csrf: string}
+const INTERACTION_PATH = /^\/oauth\/interaction\/([^/]+)$/
+
 // A browser: keeps cookies, never follows redirects on its own.
 class Browser {
-    private readonly jar = new Map<string, string>()
+    readonly jar = new Map<string, string>()
+    readonly setCookies: string[] = []
 
-    post(url: string, form: Record<string, string>): Promise<Response> {
-        return this.get(url, {method: "POST", body: new URLSearchParams(form)})
+    post(url: string, form: Record<string, string>, origin: string | null = ISSUER): Promise<Response> {
+        return this.get(url, {method: "POST", headers: origin ? {origin} : {}, body: new URLSearchParams(form)})
     }
 
     async get(url: string, init: RequestInit = {}): Promise<Response> {
         const res = await fetch(new URL(url, ISSUER), {...init, redirect: "manual", headers: {...init.headers as Record<string, string>, ...(this.jar.size ? {cookie: [...this.jar].map(([k, v]) => `${k}=${v}`).join("; ")} : {})}})
         for (const c of res.headers.getSetCookie()) {
+            this.setCookies.push(c)
             const [kv] = c.split(";")
             const i = kv.indexOf("=")
             const [name, value] = [kv.slice(0, i), kv.slice(i + 1)]
             this.jar.set(name, value)
-            if (name === "_session" && value) bearers.add(value)
+            if (name === SESSION_COOKIE && value) bearers.add(value)
         }
         return res
     }
 
-    // Follow redirects until one leaves the authorization server; returns that URL.
-    async navigate(url: string): Promise<URL> {
+    // Follows redirects (and self-submitting forms) until the flow leaves the authorization server or shows a sign-in page.
+    async step(url: string): Promise<{done: URL} | Page> {
         let next = new URL(url, ISSUER)
         while (next.origin === ISSUER) {
             const res = await this.get(next.href)
+            const uid = INTERACTION_PATH.exec(next.pathname)?.[1]
+            if (res.status === 200 && uid) return {uid, ...await res.json()}
+            if (res.status === 200) {
+                const html = await res.text()
+                const action = /action="([^"]+)"/.exec(html)?.[1]
+                if (!action || !html.includes("submit()")) throw new Error(`200 at ${next.href}: ${html}`)
+                const fields = Object.fromEntries([...html.matchAll(/name="([^"]+)" value="([^"]*)"/g)].map(m => [m[1], m[2]]))
+                next = new URL((await this.post(action, fields)).headers.get("location")!, ISSUER)
+                continue
+            }
             if (res.status !== 303 && res.status !== 302) throw new Error(`${res.status} at ${next.href}: ${await res.text()}`)
             next = new URL(res.headers.get("location")!, ISSUER)
         }
-        return next
+        return {done: next}
+    }
+
+    async page(url: string): Promise<Page> {
+        const step = await this.step(url)
+        if ("done" in step) throw new Error(`no sign-in page, the flow went to ${step.done}`)
+        return step
+    }
+
+    async done(url: string): Promise<URL> {
+        const step = await this.step(url)
+        if (!("done" in step)) throw new Error(`stopped at a ${step.interaction.prompt} page`)
+        return step.done
+    }
+
+    // Answers a sign-in page; returns where the flow goes next.
+    async submit(page: Page, action: string, form: Record<string, string> = {}): Promise<string> {
+        const res = await this.post(`/oauth/interaction/${page.uid}/${action}`, {csrf: page.csrf, ...form})
+        if (res.status !== 303) throw new Error(`${res.status} at ${action}: ${await res.text()}`)
+        return res.headers.get("location")!
     }
 }
 
@@ -226,31 +257,20 @@ async function token(body: Record<string, string>): Promise<Record<string, any>>
     return json
 }
 
-const interaction = (bearer: string) => async (method: "get" | "approve" | "deny", uid: string) => {
-    const res = await fetch(`${API}/oauth/interaction/${method}${method === "get" ? `?uid=${uid}` : ""}`, {
-        method: method === "get" ? "GET" : "POST",
-        headers: {authorization: `Bearer ${bearer}`, ...(method === "get" ? {} : {"content-type": "application/json"})},
-        body: method === "get" ? undefined : JSON.stringify({uid}),
-    })
-    const json = await res.json() as {success: boolean, data: any}
-    const ticket = json.data?.redirectUrl && new URL(json.data.redirectUrl).searchParams.get("ticket")
-    if (ticket) bearers.add(ticket)
-    return json
-}
-
-async function signIn(browser: Browser, clientId: string, redirectUri: string, sub = "alice", extra: Record<string, string> = {}, authTime?: number) {
+// Signs in as `sub` on every login page and approves every consent page; returns the pages seen.
+async function signIn(browser: Browser, clientId: string, redirectUri: string, sub = "alice", extra: Record<string, string> = {}) {
     const {verifier, challenge} = pkce()
-    const login = await browser.navigate(authorizeUrl(clientId, redirectUri, challenge, extra))
-    expect(login.origin + login.pathname).toBe(APP_LOGIN)
-    const uid = login.searchParams.get("uid")!
-    const call = interaction((await userToken.issue(sub, {permissions: []}, {authTime})).token)
-    const details = await call("get", uid)
-    const approved = await call("approve", uid)
-    const callback = await browser.navigate(approved.data.redirectUrl)
+    const pages: GGOAuthInteraction[] = []
+    let step = await browser.step(authorizeUrl(clientId, redirectUri, challenge, extra))
+    while (!("done" in step)) {
+        pages.push(step.interaction)
+        step = await browser.step(await browser.submit(step, step.interaction.prompt === "login" ? "login" : "consent", {sub}))
+    }
+    const callback = step.done
     expect(callback.origin + callback.pathname).toBe(redirectUri)
     expect(callback.searchParams.get("iss")).toBe(ISSUER)
     const tokens = await token({grant_type: "authorization_code", code: callback.searchParams.get("code")!, redirect_uri: redirectUri, client_id: clientId, code_verifier: verifier, resource: target(clientId).resource})
-    return {details: details.data, tokens}
+    return {pages, tokens}
 }
 
 // A web client unless it only redirects to loopback (a CLI, which leaves application_type out).
@@ -265,7 +285,7 @@ async function register(redirectUris = [THIRD_PARTY_REDIRECT]): Promise<string> 
 }
 
 describe("GGOAuthServer resources", () => {
-    const base = {issuer: () => ISSUER, store: new InMemoryOAuthStore(), secret: () => "s", interactionUrl: () => "", scopes: ["x"] as [string]}
+    const base = {issuer: () => ISSUER, store: new InMemoryOAuthStore(), secret: () => "s", interactionPage: async () => {}, scopes: ["x"] as [string]}
     const resource = (audience: string | undefined) => ({
         resource: () => `${ISSUER}/${audience ?? "none"}`,
         accessToken: new GGAuthAccessToken({signer: new HmacSigner("k"), claimSchema: IsClaims, audience}),
@@ -318,18 +338,28 @@ describe("GGOAuthServer", () => {
         expect(jwks.keys.every((k: Record<string, unknown>) => k.d === undefined)).toBe(true)
     })
 
-    test("first-party sign-in issues the app's own access token, then re-auths silently", async () => {
+    test("first-party sign-in shows only the login page, issues the app's own access token, then re-auths silently", async () => {
         const browser = new Browser()
-        const {details, tokens} = await signIn(browser, "app", FIRST_PARTY_REDIRECT)
-        expect(details.client).toMatchObject({clientId: "app", name: "The App", firstParty: true, redirectHosts: ["app.example"]})
+        const {pages, tokens} = await signIn(browser, "app", FIRST_PARTY_REDIRECT)
+        expect(pages).toEqual([expect.objectContaining({prompt: "login", client: expect.objectContaining({clientId: "app", name: "The App", firstParty: true, redirectHosts: ["app.example"]})})])
         const verified = await userToken.verify(tokens.access_token)
         expect(verified.sub).toBe("alice")
         expect(verified.data).toEqual({permissions: ["read", "write"]})
         expect(tokens.refresh_token).toEqual(expect.any(String))
 
-        const again = await browser.navigate(authorizeUrl("app", FIRST_PARTY_REDIRECT, pkce().challenge))
+        const again = await browser.done(authorizeUrl("app", FIRST_PARTY_REDIRECT, pkce().challenge))
         expect(again.origin + again.pathname).toBe(FIRST_PARTY_REDIRECT)
         expect(again.searchParams.get("code")).toEqual(expect.any(String))
+    })
+
+    test("the login session cookie is HttpOnly, SameSite=Lax and has the configured name", async () => {
+        const browser = new Browser()
+        await signIn(browser, "app", FIRST_PARTY_REDIRECT)
+        const session = browser.setCookies.find(c => c.startsWith(`${SESSION_COOKIE}=`) && !c.startsWith(`${SESSION_COOKIE}=;`))!
+        expect(session.toLowerCase()).toContain("httponly")
+        expect(session.toLowerCase()).toContain("samesite=lax")
+        expect(session).toContain("path=/")
+        expect(session.toLowerCase()).not.toContain("domain=")
     })
 
     test("a first-party client without refresh tokens gets only an access token", async () => {
@@ -340,42 +370,29 @@ describe("GGOAuthServer", () => {
 
     test("prompt=login asks for a fresh sign-in even with a live session", async () => {
         const browser = new Browser()
-        const first = await signIn(browser, "app", FIRST_PARTY_REDIRECT)
-        expect(first.details.forceLogin).toBe(false)
+        await signIn(browser, "app", FIRST_PARTY_REDIRECT)
         const forced = await signIn(browser, "app", FIRST_PARTY_REDIRECT, "alice", {prompt: "login"})
-        expect(forced.details.forceLogin).toBe(true)
+        expect(forced.pages).toEqual([expect.objectContaining({prompt: "login", accountId: "alice"})])
     })
 
     test("a forced login by another account ends the previous login session, then completes as the new account", async () => {
         userPermissions.set("bob", ["read"])
         const browser = new Browser()
         await signIn(browser, "app", FIRST_PARTY_REDIRECT)
-        const {verifier, challenge} = pkce()
-        const login = await browser.navigate(authorizeUrl("app", FIRST_PARTY_REDIRECT, challenge, {prompt: "login"}))
-        const call = interaction((await userToken.issue("bob", {permissions: []})).token)
-        const approved = await call("approve", login.searchParams.get("uid")!)
-        // The server first ends alice's session with a self-submitting form; post it as a browser would.
-        let res = await browser.get(approved.data.redirectUrl)
-        while (res.status === 303) res = await browser.get(new URL(res.headers.get("location")!, ISSUER).href)
-        const html = await res.text()
-        const action = /action="([^"]+)"/.exec(html)![1]
-        const fields = Object.fromEntries([...html.matchAll(/name="([^"]+)" value="([^"]*)"/g)].map(m => [m[1], m[2]]))
-        const confirmed = await browser.post(action, fields)
-        const callback = await browser.navigate(new URL(confirmed.headers.get("location")!, ISSUER).href)
-        expect(callback.origin + callback.pathname).toBe(FIRST_PARTY_REDIRECT)
-        const tokens = await token({grant_type: "authorization_code", code: callback.searchParams.get("code")!, redirect_uri: FIRST_PARTY_REDIRECT, client_id: "app", code_verifier: verifier, resource: API})
+        const {tokens} = await signIn(browser, "app", FIRST_PARTY_REDIRECT, "bob", {prompt: "login"})
         expect((await userToken.verify(tokens.access_token)).sub).toBe("bob")
     })
 
     test("third-party client registers, needs consent once, and gets a token only for its resource", async () => {
         const clientId = await register()
         const browser = new Browser()
-        const {details, tokens} = await signIn(browser, clientId, THIRD_PARTY_REDIRECT)
-        expect(details).toMatchObject({resource: MCP, client: {name: "Claude", firstParty: false, redirectHosts: ["claude.ai"], loopbackOnly: false}})
+        const {pages, tokens} = await signIn(browser, clientId, THIRD_PARTY_REDIRECT)
+        expect(pages.map(p => p.prompt)).toEqual(["login", "consent"])
+        expect(pages[1]).toMatchObject({accountId: "alice", resource: MCP, scopes: ["mcp"], client: {name: "Claude", firstParty: false, redirectHosts: ["claude.ai"], loopbackOnly: false}})
         expect((await mcpToken.verify(tokens.access_token)).data.permissions).toEqual([])
         await expect(userToken.verify(tokens.access_token)).rejects.toThrow()
 
-        const again = await browser.navigate(authorizeUrl(clientId, THIRD_PARTY_REDIRECT, pkce().challenge))
+        const again = await browser.done(authorizeUrl(clientId, THIRD_PARTY_REDIRECT, pkce().challenge))
         expect(again.searchParams.get("code")).toEqual(expect.any(String))
 
         expect(await oauth.listGrants("alice")).toEqual(expect.arrayContaining([
@@ -443,14 +460,13 @@ describe("GGOAuthServer", () => {
 
     test("a loopback (CLI) client matches on any port and is asked for consent every time", async () => {
         const clientId = await register(["http://127.0.0.1/callback", "http://localhost/callback"])
-        const login = await new Browser().navigate(authorizeUrl(clientId, "http://localhost:51234/callback", pkce().challenge))
-        expect(login.origin + login.pathname).toBe(APP_LOGIN)
+        expect((await new Browser().page(authorizeUrl(clientId, "http://localhost:51234/callback", pkce().challenge))).interaction.prompt).toBe("login")
         const browser = new Browser()
-        const {details} = await signIn(browser, clientId, "http://127.0.0.1:40123/callback")
-        expect(details.client.loopbackOnly).toBe(true)
+        const {pages} = await signIn(browser, clientId, "http://127.0.0.1:40123/callback")
+        expect(pages[1].client.loopbackOnly).toBe(true)
         // Any local process can claim a loopback redirect, so an existing grant isn't reused silently.
-        const again = await browser.navigate(authorizeUrl(clientId, "http://127.0.0.1:40999/callback", pkce().challenge))
-        expect(again.origin + again.pathname).toBe(APP_LOGIN)
+        const again = await browser.page(authorizeUrl(clientId, "http://127.0.0.1:40999/callback", pkce().challenge))
+        expect(again.interaction.prompt).toBe("consent")
     })
 
     test("client metadata documents are fetched only from allowed URL prefixes", async () => {
@@ -468,21 +484,95 @@ describe("GGOAuthServer", () => {
     })
 
     test("deny sends access_denied to the client", async () => {
-        const clientId = await register()
         const browser = new Browser()
-        const login = await browser.navigate(authorizeUrl(clientId, THIRD_PARTY_REDIRECT, pkce().challenge))
-        const denied = await interaction((await userToken.issue("alice", {permissions: []})).token)("deny", login.searchParams.get("uid")!)
-        const callback = await browser.navigate(denied.data.redirectUrl)
+        const login = await browser.page(authorizeUrl(await register(), THIRD_PARTY_REDIRECT, pkce().challenge))
+        const consent = await browser.page(await browser.submit(login, "login", {sub: "alice"}))
+        const callback = await browser.done(await browser.submit(consent, "deny"))
         expect(callback.searchParams.get("error")).toBe("access_denied")
     })
 
-    test("an approval only completes in the browser that started the flow", async () => {
-        const attacker = new Browser()
-        const login = await attacker.navigate(authorizeUrl("app", FIRST_PARTY_REDIRECT, pkce().challenge))
-        const approved = await interaction((await userToken.issue("alice", {permissions: []})).token)("approve", login.searchParams.get("uid")!)
-        const victim = await new Browser().get(approved.data.redirectUrl)
-        expect(victim.status).toBe(400)
-        expect(await attacker.get(approved.data.redirectUrl).then(r => r.status)).toBe(400)
+    test("the sign-in pages answer only the browser that started the flow", async () => {
+        const starter = new Browser()
+        const login = await starter.page(authorizeUrl("app", FIRST_PARTY_REDIRECT, pkce().challenge))
+        const other = new Browser()
+        const page = await other.get(`/oauth/interaction/${login.uid}`)
+        expect(page.status).toBe(400)
+        expect(await page.text()).toContain("<p>")
+        expect((await other.post(`/oauth/interaction/${login.uid}/login`, {csrf: login.csrf, sub: "mallory"})).status).toBe(400)
+    })
+
+    test("a sign-in POST needs a known Origin and the page's csrf token", async () => {
+        const browser = new Browser()
+        const login = await browser.page(authorizeUrl("app", FIRST_PARTY_REDIRECT, pkce().challenge))
+        const url = `/oauth/interaction/${login.uid}/login`
+        expect((await browser.post(url, {sub: "alice"})).status).toBe(403)
+        expect((await browser.post(url, {csrf: "x".repeat(login.csrf.length), sub: "alice"})).status).toBe(403)
+        expect((await browser.post(url, {csrf: login.csrf, sub: "alice"}, "https://evil.example")).status).toBe(403)
+        expect((await browser.post(url, {csrf: login.csrf, sub: "alice"}, null)).status).toBe(403)
+        const json = await browser.get(url, {method: "POST", headers: {origin: ISSUER, "content-type": "application/json"}, body: JSON.stringify({csrf: login.csrf, sub: "alice"})})
+        expect(json.status).toBe(403)
+        // Another flow's token doesn't fit.
+        const otherBrowser = new Browser()
+        const other = await otherBrowser.page(authorizeUrl("app", FIRST_PARTY_REDIRECT, pkce().challenge))
+        expect((await otherBrowser.post(`/oauth/interaction/${other.uid}/login`, {csrf: login.csrf, sub: "alice"})).status).toBe(403)
+        expect(await browser.done(await browser.submit(login, "login", {sub: "alice"}))).toBeInstanceOf(URL)
+    })
+
+    test("the sign-in pages can't be framed or cached", async () => {
+        const browser = new Browser()
+        const login = await browser.page(authorizeUrl("app", FIRST_PARTY_REDIRECT, pkce().challenge))
+        const res = await browser.get(`/oauth/interaction/${login.uid}`)
+        expect(res.headers.get("x-frame-options")).toBe("DENY")
+        expect(res.headers.get("content-security-policy")).toBe("frame-ancestors 'none'")
+        expect(res.headers.get("cache-control")).toBe("no-store")
+    })
+
+    test("consent is refused while the user still has to sign in", async () => {
+        const browser = new Browser()
+        const login = await browser.page(authorizeUrl(await register(), THIRD_PARTY_REDIRECT, pkce().challenge))
+        expect((await browser.post(`/oauth/interaction/${login.uid}/consent`, {csrf: login.csrf})).status).toBe(400)
+    })
+
+    test("a third-party client's new grant needs a recent sign-in; an existing grant and first-party SSO don't", async () => {
+        const browser = new Browser()
+        await signIn(browser, "app", FIRST_PARTY_REDIRECT)
+        const connected = await register()
+        await signIn(browser, connected, THIRD_PARTY_REDIRECT)
+        vi.useFakeTimers({toFake: ["Date"], now: Date.now() + (NEW_GRANT_MAX_LOGIN_AGE_SEC + 60) * 1000})
+        try {
+            expect(await browser.done(authorizeUrl("app", FIRST_PARTY_REDIRECT, pkce().challenge))).toBeInstanceOf(URL)
+            expect(await browser.done(authorizeUrl(connected, THIRD_PARTY_REDIRECT, pkce().challenge))).toBeInstanceOf(URL)
+
+            const fresh = await register()
+            const {pages} = await signIn(browser, fresh, THIRD_PARTY_REDIRECT)
+            expect(pages.map(p => [p.prompt, p.accountId])).toEqual([["login", "alice"], ["consent", "alice"]])
+        } finally {
+            vi.useRealTimers()
+        }
+        // Right after a sign-in, a new client goes straight to consent.
+        const {pages} = await signIn(browser, await register(), THIRD_PARTY_REDIRECT)
+        expect(pages.map(p => p.prompt)).toEqual(["consent"])
+    })
+
+    test("extraParams reach the sign-in page; other parameters don't", async () => {
+        const page = await new Browser().page(authorizeUrl("app", FIRST_PARTY_REDIRECT, pkce().challenge, {start_with: "github"}))
+        expect(page.interaction.params).toEqual({start_with: "github"})
+    })
+
+    test("a login ticket completes only in the browser that started the flow", async () => {
+        const {verifier, challenge} = pkce()
+        const starter = new Browser()
+        const login = await starter.page(authorizeUrl("app", FIRST_PARTY_REDIRECT, challenge))
+        const url = await oauth.loginTicketUrl(login.uid, "alice")
+        bearers.add(new URL(url).searchParams.get("ticket")!)
+        expect(new URL(url).pathname).toBe(`/oauth/interaction/${login.uid}/complete`)
+        expect((await new Browser().get(url)).status).toBe(400)
+        // Single use: the other browser's attempt spent it.
+        expect((await starter.get(url)).status).toBe(400)
+
+        const callback = await starter.done(await oauth.loginTicketUrl(login.uid, "alice"))
+        const tokens = await token({grant_type: "authorization_code", code: callback.searchParams.get("code")!, redirect_uri: FIRST_PARTY_REDIRECT, client_id: "app", code_verifier: verifier, resource: API})
+        expect((await userToken.verify(tokens.access_token)).sub).toBe("alice")
     })
 
     test("refresh rotates, re-resolves claims, and treats replay as reuse", async () => {
@@ -511,19 +601,19 @@ describe("GGOAuthServer", () => {
         }
     })
 
-    test("an approval by a bearer signed in earlier gives tokens that bearer's sign-in time, not the approval's", async () => {
-        const hourAgo = Math.floor(Date.now() / 1000) - 3600
-        const {tokens} = await signIn(new Browser(), "app", FIRST_PARTY_REDIRECT, "alice", {}, hourAgo)
-        expect((await userToken.verify(tokens.access_token)).auth_time).toBe(hourAgo)
-    })
-
-    test("a forced login is approved only by a sign-in made after the request", async () => {
+    test("a silent re-auth carries the login session's sign-in time", async () => {
         const browser = new Browser()
-        await signIn(browser, "app", FIRST_PARTY_REDIRECT)
-        const uid = (await browser.navigate(authorizeUrl("app", FIRST_PARTY_REDIRECT, pkce().challenge, {prompt: "login"}))).searchParams.get("uid")!
-        const approve = async (authTime: number) => interaction((await userToken.issue("alice", {permissions: []}, {authTime})).token)("approve", uid)
-        expect(await approve(Math.floor(Date.now() / 1000) - 3600)).toMatchObject({success: false, type: "NOT_AUTHORIZED"})
-        expect((await approve(Math.floor(Date.now() / 1000))).success).toBe(true)
+        const {tokens} = await signIn(browser, "app", FIRST_PARTY_REDIRECT)
+        const signedIn = (await userToken.verify(tokens.access_token)).auth_time!
+        vi.useFakeTimers({toFake: ["Date"], now: Date.now() + 120_000})
+        try {
+            const {verifier, challenge} = pkce()
+            const callback = await browser.done(authorizeUrl("app", FIRST_PARTY_REDIRECT, challenge))
+            const again = await token({grant_type: "authorization_code", code: callback.searchParams.get("code")!, redirect_uri: FIRST_PARTY_REDIRECT, client_id: "app", code_verifier: verifier, resource: API})
+            expect((await userToken.verify(again.access_token)).auth_time).toBe(signedIn)
+        } finally {
+            vi.useRealTimers()
+        }
     })
 
     test("a grant records when it last got tokens", async () => {
@@ -563,8 +653,8 @@ describe("GGOAuthServer", () => {
         await oauth.revokeAll("alice")
         expect(await oauth.listGrants("alice")).toEqual([])
         expect((await token({grant_type: "refresh_token", refresh_token: app.tokens.refresh_token, client_id: "app"})).error).toBe("invalid_grant")
-        const after = await appBrowser.navigate(authorizeUrl("app", FIRST_PARTY_REDIRECT, pkce().challenge))
-        expect(after.origin + after.pathname).toBe(APP_LOGIN)
+        const after = (await appBrowser.page(authorizeUrl("app", FIRST_PARTY_REDIRECT, pkce().challenge))).interaction
+        expect([after.prompt, after.accountId]).toEqual(["login", undefined])
     })
 
     test("logout ends the login session, but not other apps' access", async () => {
@@ -587,17 +677,16 @@ describe("GGOAuthServer", () => {
         const done = await browser.get(action, {method: "POST", headers: {"content-type": "application/x-www-form-urlencoded"}, body: new URLSearchParams(fields).toString()})
         expect(done.headers.get("location")).toBe("https://app.example/")
 
-        const after = await browser.navigate(authorizeUrl("app", FIRST_PARTY_REDIRECT, pkce().challenge))
-        expect(after.origin + after.pathname).toBe(APP_LOGIN)
+        const after = (await browser.page(authorizeUrl("app", FIRST_PARTY_REDIRECT, pkce().challenge))).interaction
+        expect([after.prompt, after.accountId]).toEqual(["login", undefined])
         expect((await token({grant_type: "refresh_token", refresh_token: connected.tokens.refresh_token, client_id: mcpClient})).access_token).toEqual(expect.any(String))
     })
 
-    test("an approval link never points at a host the request named itself", async () => {
+    test("a login ticket link never points at a host the request named itself", async () => {
         // A client can't set Host from fetch; X-Forwarded-Host (trusted behind a proxy) feeds the same value.
         const res = await fetch(authorizeUrl("app", FIRST_PARTY_REDIRECT, pkce().challenge), {redirect: "manual", headers: {"x-forwarded-host": "evil.example"}})
         const uid = new URL(res.headers.get("location")!, "https://evil.example").pathname.split("/").pop()!
-        const approved = await interaction((await userToken.issue("alice", {permissions: []})).token)("approve", uid)
-        expect(new URL(approved.data.redirectUrl).origin).toBe(ISSUER)
+        expect(new URL(await oauth.loginTicketUrl(uid, "alice")).origin).toBe(ISSUER)
 
         const meta = await (await fetch(`${ISSUER}/.well-known/oauth-authorization-server`, {headers: {"x-forwarded-host": "evil.example"}})).json()
         expect(new URL(meta.token_endpoint).origin).toBe(ISSUER)
@@ -710,18 +799,13 @@ describe("GGOAuthServer", () => {
         expect(body.error).toEqual(expect.any(String))
     })
 
-    test("the interaction API requires the app's signed-in user", async () => {
-        const res = await fetch(`${API}/oauth/interaction/get?uid=x`)
-        expect(res.status).toBe(401)
-    })
-
     test("no stored row holds a bearer value, in its key or payload", async () => {
         const browser = new Browser()
         const {tokens} = await signIn(browser, "app", FIRST_PARTY_REDIRECT)
         await token({grant_type: "refresh_token", refresh_token: tokens.refresh_token, client_id: "app"})
         // Left pending: its Interaction copies the login session, and its ticket is never redeemed.
-        const pending = await browser.navigate(authorizeUrl("app", FIRST_PARTY_REDIRECT, pkce().challenge, {prompt: "login"}))
-        await interaction((await userToken.issue("alice", {permissions: []})).token)("approve", pending.searchParams.get("uid")!)
+        const pending = await browser.page(authorizeUrl("app", FIRST_PARTY_REDIRECT, pkce().challenge, {prompt: "login"}))
+        bearers.add(new URL(await oauth.loginTicketUrl(pending.uid, "alice")).searchParams.get("ticket")!)
         const stored = [...dynamo.rows.values()].map(row => JSON.stringify(row))
         for (const bearer of bearers) expect(stored.filter(row => row.includes(bearer))).toEqual([])
     })
