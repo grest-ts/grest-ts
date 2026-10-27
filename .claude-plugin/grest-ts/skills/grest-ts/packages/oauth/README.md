@@ -169,6 +169,7 @@ const renderSignIn = async ({interaction, action, method, form, csrf, res, login
   flow's interaction cookie, scoped to the path). A POST must also come from the issuer or one of
   `origins` (`Origin` header) and carry `csrf` as a form field (`application/x-www-form-urlencoded`);
   the server answers 403 otherwise. Your pages can't be framed (`frame-ancestors 'none'`, `X-Frame-Options`).
+  Don't send `Referrer-Policy: no-referrer` on them: browsers then post `Origin: null`, which is refused.
 - Approve and deny only on a POST: a GET can be triggered by any page.
 - `login` while a session for another account lives first ends that session (a self-submitting form).
 - `newGrantMaxLoginAgeSec`: a third-party client's new grant needs a sign-in at most this old, so
