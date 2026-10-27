@@ -1,7 +1,7 @@
-import {createECDH, createHash, createHmac, hkdfSync, randomBytes, timingSafeEqual} from "node:crypto"
+import {createECDH, createHash, hkdfSync, randomBytes} from "node:crypto"
 import type {IncomingMessage, ServerResponse} from "node:http"
 import {decodeJwt} from "jose"
-import Provider, {errors as oidcErrors, interactionPolicy, type ClientMetadata, type Configuration, type InteractionResults, type KoaContextWithOIDC} from "oidc-provider"
+import Provider, {errors as oidcErrors, type ClientMetadata, type Configuration, type InteractionResults, type KoaContextWithOIDC} from "oidc-provider"
 import {NOT_FOUND} from "@grest-ts/schema"
 import {GGLog} from "@grest-ts/logger"
 import type {GGHttpServer} from "@grest-ts/http"
@@ -63,7 +63,7 @@ export interface GGOAuthInteractionClient {
 
 export interface GGOAuthInteraction {
     uid: string
-    // "login": sign the user in (no login session, prompt=login, max_age, or one too old for a new grant).
+    // "login": sign the user in (no login session, prompt=login or max_age).
     // "consent": the signed-in user approves a third-party client.
     prompt: "login" | "consent"
     // The login session's account, if there is one.
@@ -77,7 +77,7 @@ export interface GGOAuthInteraction {
 }
 
 // One request to the app's sign-in pages, under /oauth/interaction/:uid. Only reaches the app from the browser
-// that started the flow (it holds the interaction cookie); a POST also came from a known origin with `csrf`.
+// that started the flow (it holds the interaction cookie); a POST also came from the issuer's origin.
 export interface GGOAuthInteractionRequest {
     req: IncomingMessage
     res: ServerResponse
@@ -87,8 +87,6 @@ export interface GGOAuthInteractionRequest {
     method: "GET" | "POST"
     // The POST's form fields (application/x-www-form-urlencoded).
     form: Record<string, string>
-    // Every form posting here carries it as the `csrf` field.
-    csrf: string
     // Each ends the request with a redirect back into the flow.
     login: (result: {accountId: string, amr?: string[]}) => Promise<void>
     // Grants what the client asked for. Only while prompt is "consent".
@@ -99,9 +97,6 @@ export interface GGOAuthInteractionRequest {
 export interface GGOAuthServerOptions {
     // Public origin of the authorization server, no path (e.g. https://auth.example.com).
     issuer: () => string
-    // Other public origins it is also reached on. A sign-in that started on one of these finishes
-    // there (its cookie lives there); any other request origin is ignored in favour of the issuer.
-    origins?: () => string[]
     store: GGOAuthStore
     // Derives the cookie-signing key and the ES256 key of ID tokens. Rotating it signs everyone out
     // of the authorization server; issued access/refresh tokens are unaffected.
@@ -113,8 +108,6 @@ export interface GGOAuthServerOptions {
     interactionPage: (request: GGOAuthInteractionRequest) => Promise<void>
     // HTML for the server's own error pages (an expired sign-in, an invalid request); plain text without.
     errorPage?: (message: string) => string
-    // A third-party client's new grant needs a sign-in at most this old: an older login session signs in again first.
-    newGrantMaxLoginAgeSec?: () => number
     // Authorization request parameters passed through to interactionPage (e.g. a sign-in method to start).
     extraParams?: string[]
     // Name of the login session cookie (e.g. "__Host-…" when served only over https).
@@ -241,7 +234,7 @@ export class GGOAuthServer {
 
     // The flow's sign-in page, on the origin it started on: where a sign-in that failed on another host returns to.
     public interactionUrl = async (uid: string): Promise<string> =>
-        `${this.startedOrigin(await this.findInteraction(uid))}${BASE}/interaction/${uid}`
+        `${this.origin()}${BASE}/interaction/${(await this.findInteraction(uid)).uid}`
 
     public listGrants = async (subject: string): Promise<Array<{grantId: string, clientId: string, clientName: string, firstParty: boolean, createdAt: number, lastUsedAt?: number}>> => {
         const p = this.provider()
@@ -291,18 +284,17 @@ export class GGOAuthServer {
         })
         if (found?.uid !== uid) return this.fail(res, 400, "This sign-in request has expired or was started in another browser. Start again from the app.")
         const method = req.method as "GET" | "POST"
-        const csrf = this.csrfToken(uid)
         let form: Record<string, string> = {}
         if (method === "POST") {
-            const origin = req.headers.origin
-            if (!origin || !this.knownOrigins().includes(origin)) return this.fail(res, 403, "Request refused")
+            // The SameSite interaction cookie already keeps other sites out; Origin catches what it can't (a same-site page).
+            if (req.headers.origin !== this.origin()) return this.fail(res, 403, "Request refused")
             const body = await readForm(req)
-            if (!body || !sameToken(body.csrf ?? "", csrf)) return this.fail(res, 403, "Request refused")
+            if (!body) return this.fail(res, 403, "Request refused")
             form = body
         }
         const finish = (result: InteractionResults) => p.interactionFinished(req, res, result, {mergeWithLastSubmission: false})
         await this.options.interactionPage({
-            req, res, action, method, form, csrf,
+            req, res, action, method, form,
             interaction: await this.describeInteraction(found),
             login: ({accountId, amr}) => finish({login: {accountId, amr}}),
             consent: async () => {
@@ -340,12 +332,8 @@ export class GGOAuthServer {
         }
     }
 
-    private csrfToken(uid: string): string {
-        return createHmac("sha256", hkdf(this.options.secret(), "@grest-ts/oauth csrf")).update(uid).digest("base64url")
-    }
-
-    private knownOrigins(): string[] {
-        return [this.options.issuer(), ...(this.options.origins?.() ?? [])].map(o => new URL(o).origin)
+    private origin(): string {
+        return new URL(this.options.issuer()).origin
     }
 
     private fail(res: ServerResponse, status: number, message: string): void {
@@ -366,15 +354,7 @@ export class GGOAuthServer {
         const uid = interaction.uid
         const id = randomBytes(24).toString("base64url")
         await this.options.store.upsert(TICKET, id, {uid, result} satisfies Ticket, 120)
-        return `${this.startedOrigin(interaction)}${BASE}/interaction/${uid}/complete?ticket=${id}`
-    }
-
-    // The origin the browser started on (its interaction cookie lives there) — but only a known one:
-    // returnTo comes from the request's Host, which a client can set to its own server.
-    private startedOrigin(interaction: InstanceType<Provider["Interaction"]>): string {
-        const started = new URL(interaction.returnTo).origin
-        const known = this.knownOrigins()
-        return known.includes(started) ? started : known[0]
+        return `${this.origin()}${BASE}/interaction/${uid}/complete?ticket=${id}`
     }
 
     private async finishInteraction(req: IncomingMessage, res: ServerResponse, uid: string): Promise<void> {
@@ -472,20 +452,6 @@ export class GGOAuthServer {
         return [...new Map(all.map(k => [k.kid ?? JSON.stringify(k), k])).values()]
     }
 
-    // oidc-provider's own, plus: a third-party client's new grant needs a recent sign-in. A login prompt, so no
-    // interaction page can skip it.
-    private policy(): interactionPolicy.DefaultPolicy {
-        const policy = interactionPolicy.base()
-        const {Check} = interactionPolicy
-        policy.get("login")!.checks.add(new Check("new_grant_needs_recent_login", "A new grant needs a recent sign-in", async (ctx) => {
-            const maxAge = this.options.newGrantMaxLoginAgeSec?.()
-            const {client, session, result} = ctx.oidc
-            if (maxAge === undefined || !session?.accountId || result?.login || result?.consent || this.firstParty.has(client!.clientId)) return Check.NO_NEED_TO_PROMPT
-            return !session.grantIdFor(client!.clientId) && session.past(maxAge)
-        }))
-        return policy
-    }
-
     private provider(): Provider {
         if (this._provider) return this._provider
         const o = this.options
@@ -532,7 +498,7 @@ export class GGOAuthServer {
                 introspection: `${BASE}/introspect`, pushed_authorization_request: `${BASE}/par`, code_verification: `${BASE}/device`,
                 device_authorization: `${BASE}/device/auth`, backchannel_authentication: `${BASE}/backchannel`, challenge: `${BASE}/challenge`,
             },
-            interactions: {url: (_ctx, interaction) => `${BASE}/interaction/${interaction.uid}`, policy: this.policy()},
+            interactions: {url: (_ctx, interaction) => `${BASE}/interaction/${interaction.uid}`},
             extraParams: o.extraParams ?? [],
             scopes: OIDC_SCOPES,
             responseTypes: ["code"],
@@ -718,9 +684,4 @@ async function readForm(req: IncomingMessage): Promise<Record<string, string> | 
         chunks.push(chunk)
     }
     return Object.fromEntries(new URLSearchParams(Buffer.concat(chunks).toString()))
-}
-
-function sameToken(a: string, b: string): boolean {
-    const [x, y] = [Buffer.from(a), Buffer.from(b)]
-    return x.length === y.length && timingSafeEqual(x, y)
 }

@@ -149,36 +149,31 @@ the issuer). Your app is only an OAuth client: it never sees a password or appro
 path (except `/complete`) goes to `interactionPage`:
 
 ```ts
-const renderSignIn = async ({interaction, action, method, form, csrf, res, login, consent, deny}: GGOAuthInteractionRequest) => {
+const renderSignIn = async ({interaction, action, method, form, res, login, consent, deny}: GGOAuthInteractionRequest) => {
     if (method === "POST" && action === "password") {
         const user = await users.checkPassword(form.username, form.password)
         if (user) return login({accountId: user.id, amr: ["pwd"]})
     }
     if (method === "POST" && action === "consent") return form.allow ? consent() : deny()
     res.writeHead(200, {"content-type": "text/html; charset=utf-8"})
-    res.end(interaction.prompt === "login" ? loginForm(csrf) : consentForm(interaction, csrf))
+    res.end(interaction.prompt === "login" ? loginForm() : consentForm(interaction))
 }
 ```
 
-- `interaction.prompt` is `"login"` (no login session, `prompt=login`, an expired `max_age`, or a
-  session too old for a new grant, below) or `"consent"`: a signed-in `accountId` approves a
+- `interaction.prompt` is `"login"` (no login session, `prompt=login` or an expired `max_age`) or `"consent"`: a signed-in `accountId` approves a
   third-party client. Show the client's name and redirect hosts, and warn when `loopbackOnly` is set.
 - A first-party client never gets a consent prompt: it re-authorizes silently while the login
   session lives (single sign-on).
 - The request reaches your code only from the browser that started the flow (it holds the
-  flow's interaction cookie, scoped to the path). A POST must also come from the issuer or one of
-  `origins` (`Origin` header) and carry `csrf` as a form field (`application/x-www-form-urlencoded`);
-  the server answers 403 otherwise. Your pages can't be framed (`frame-ancestors 'none'`, `X-Frame-Options`).
+  flow's interaction cookie: SameSite=Lax, scoped to the path). A POST must also come from the issuer's
+  origin (`Origin` header) and be a form (`application/x-www-form-urlencoded`); the server answers 403 otherwise. Your pages can't be framed (`frame-ancestors 'none'`, `X-Frame-Options`).
   Don't send `Referrer-Policy: no-referrer` on them: browsers then post `Origin: null`, which is refused.
 - Approve and deny only on a POST: a GET can be triggered by any page.
 - `login` while a session for another account lives first ends that session (a self-submitting form).
-- `newGrantMaxLoginAgeSec`: a third-party client's new grant needs a sign-in at most this old, so
-  a stale login session (or a stolen laptop) can't connect a new app. It's a login prompt in
-  oidc-provider's interaction policy, so no page can skip it.
 - A sign-in that completes on another host (an external IdP's callback registered elsewhere) carries
   the uid through its own state and ends with `loginTicketUrl(uid, accountId)`: a single-use link
   that completes the flow only in the browser that started it. A failed one goes back to
-  `interactionUrl(uid)`, the flow's page on the origin it started on.
+  `interactionUrl(uid)`, the flow's page.
 - `extraParams` pass authorization parameters through to `interaction.params` (e.g. a sign-in
   method to start right away: `authorize({params: {start_with: "sso"}})`).
 - `sessionCookie` names the login session cookie, e.g. `"__Host-app_session"` on an https issuer.
@@ -224,8 +219,8 @@ oauth.logout(undefined)   // ends the authorization server's login session too
   the sign-in host can differ from the API host (e.g. `auth.` vs `api.`). The metadata must be for
   exactly that resource.
 - A discovered server's metadata must declare it as the issuer (RFC 8414).
-- With `server`, its metadata is used as fetched (it may be the issuer reached on another of its
-  `origins`), and `resource` defaults to the issuer it declares.
+- With `server`, its metadata is used as fetched (e.g. the issuer reached through a dev proxy), and
+  `resource` defaults to the issuer it declares.
 - `iss` on the callback must match the issuer (RFC 9207).
 - `invalid_grant` on refresh surfaces as `NOT_AUTHORIZED`, which ends the session.
 - `authorize({prompt: "login"})` asks for a fresh sign-in even while the login session lives;
@@ -235,8 +230,8 @@ oauth.logout(undefined)   // ends the authorization server's login session too
 
 - The issuer, first-party clients, keys and resources are handed to oidc-provider when the first
   OAuth request arrives. Changing them takes a restart; `allowedUrlPrefixes` is read on every fetch.
-- A sign-in finishes on the origin it started on only if that is the issuer or one of `origins`.
-  Request hosts are client-controlled, so anything else falls back to the issuer.
+- Sign-in happens on the issuer's origin: its pages refuse a POST from any other, and a login ticket
+  always points there (request hosts are client-controlled).
 - The issuer is an origin. Clients bind to it, so changing it disconnects them.
 - Resource metadata is served by the resource URL's path on any host, so give each resource its
   own path (e.g. the API at `/` and MCP at `/mcp`).

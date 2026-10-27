@@ -19,7 +19,6 @@ const port = await freePort()
 const ISSUER = `http://localhost:${port}`
 const API = `${ISSUER}/api`
 const SESSION_COOKIE = "app_session"
-const NEW_GRANT_MAX_LOGIN_AGE_SEC = 600
 const FIRST_PARTY_REDIRECT = "https://app.example/callback"
 const IDENTITY_REDIRECT = "https://auth.example/access/callback"
 const THIRD_PARTY_REDIRECT = "https://claude.ai/api/mcp/auth_callback"
@@ -132,10 +131,10 @@ class OAuthTestRuntime extends GGRuntime {
             }],
             serviceClients: () => [{clientId: "backend", secret: () => "backend-secret"}],
             // The app's sign-in pages, reduced to what a test drives: the page as JSON, and a "login" that trusts the posted subject.
-            interactionPage: async ({res, method, action, form, interaction, csrf, login, consent, deny}) => {
+            interactionPage: async ({res, method, action, form, interaction, login, consent, deny}) => {
                 if (method === "GET") {
                     res.writeHead(200, {"content-type": "application/json"})
-                    res.end(JSON.stringify({interaction, csrf}))
+                    res.end(JSON.stringify({interaction}))
                     return
                 }
                 if (action === "login") return login({accountId: form.sub})
@@ -145,7 +144,6 @@ class OAuthTestRuntime extends GGRuntime {
                 res.end()
             },
             errorPage: (message) => `<p>${message}</p>`,
-            newGrantMaxLoginAgeSec: () => NEW_GRANT_MAX_LOGIN_AGE_SEC,
             extraParams: ["start_with"],
             sessionCookie: () => SESSION_COOKIE,
             firstPartyClients: () => [
@@ -173,7 +171,7 @@ class OAuthTestRuntime extends GGRuntime {
     }
 }
 
-type Page = {uid: string, interaction: GGOAuthInteraction, csrf: string}
+type Page = {uid: string, interaction: GGOAuthInteraction}
 const INTERACTION_PATH = /^\/oauth\/interaction\/([^/]+)$/
 
 // A browser: keeps cookies, never follows redirects on its own.
@@ -233,7 +231,7 @@ class Browser {
 
     // Answers a sign-in page; returns where the flow goes next.
     async submit(page: Page, action: string, form: Record<string, string> = {}): Promise<string> {
-        const res = await this.post(`/oauth/interaction/${page.uid}/${action}`, {csrf: page.csrf, ...form})
+        const res = await this.post(`/oauth/interaction/${page.uid}/${action}`, form)
         if (res.status !== 303) throw new Error(`${res.status} at ${action}: ${await res.text()}`)
         return res.headers.get("location")!
     }
@@ -498,23 +496,17 @@ describe("GGOAuthServer", () => {
         const page = await other.get(`/oauth/interaction/${login.uid}`)
         expect(page.status).toBe(400)
         expect(await page.text()).toContain("<p>")
-        expect((await other.post(`/oauth/interaction/${login.uid}/login`, {csrf: login.csrf, sub: "mallory"})).status).toBe(400)
+        expect((await other.post(`/oauth/interaction/${login.uid}/login`, {sub: "mallory"})).status).toBe(400)
     })
 
-    test("a sign-in POST needs a known Origin and the page's csrf token", async () => {
+    test("a sign-in POST needs the issuer's Origin and a form body", async () => {
         const browser = new Browser()
         const login = await browser.page(authorizeUrl("app", FIRST_PARTY_REDIRECT, pkce().challenge))
         const url = `/oauth/interaction/${login.uid}/login`
-        expect((await browser.post(url, {sub: "alice"})).status).toBe(403)
-        expect((await browser.post(url, {csrf: "x".repeat(login.csrf.length), sub: "alice"})).status).toBe(403)
-        expect((await browser.post(url, {csrf: login.csrf, sub: "alice"}, "https://evil.example")).status).toBe(403)
-        expect((await browser.post(url, {csrf: login.csrf, sub: "alice"}, null)).status).toBe(403)
-        const json = await browser.get(url, {method: "POST", headers: {origin: ISSUER, "content-type": "application/json"}, body: JSON.stringify({csrf: login.csrf, sub: "alice"})})
+        expect((await browser.post(url, {sub: "alice"}, "https://evil.example")).status).toBe(403)
+        expect((await browser.post(url, {sub: "alice"}, null)).status).toBe(403)
+        const json = await browser.get(url, {method: "POST", headers: {origin: ISSUER, "content-type": "application/json"}, body: JSON.stringify({sub: "alice"})})
         expect(json.status).toBe(403)
-        // Another flow's token doesn't fit.
-        const otherBrowser = new Browser()
-        const other = await otherBrowser.page(authorizeUrl("app", FIRST_PARTY_REDIRECT, pkce().challenge))
-        expect((await otherBrowser.post(`/oauth/interaction/${other.uid}/login`, {csrf: login.csrf, sub: "alice"})).status).toBe(403)
         expect(await browser.done(await browser.submit(login, "login", {sub: "alice"}))).toBeInstanceOf(URL)
     })
 
@@ -530,28 +522,7 @@ describe("GGOAuthServer", () => {
     test("consent is refused while the user still has to sign in", async () => {
         const browser = new Browser()
         const login = await browser.page(authorizeUrl(await register(), THIRD_PARTY_REDIRECT, pkce().challenge))
-        expect((await browser.post(`/oauth/interaction/${login.uid}/consent`, {csrf: login.csrf})).status).toBe(400)
-    })
-
-    test("a third-party client's new grant needs a recent sign-in; an existing grant and first-party SSO don't", async () => {
-        const browser = new Browser()
-        await signIn(browser, "app", FIRST_PARTY_REDIRECT)
-        const connected = await register()
-        await signIn(browser, connected, THIRD_PARTY_REDIRECT)
-        vi.useFakeTimers({toFake: ["Date"], now: Date.now() + (NEW_GRANT_MAX_LOGIN_AGE_SEC + 60) * 1000})
-        try {
-            expect(await browser.done(authorizeUrl("app", FIRST_PARTY_REDIRECT, pkce().challenge))).toBeInstanceOf(URL)
-            expect(await browser.done(authorizeUrl(connected, THIRD_PARTY_REDIRECT, pkce().challenge))).toBeInstanceOf(URL)
-
-            const fresh = await register()
-            const {pages} = await signIn(browser, fresh, THIRD_PARTY_REDIRECT)
-            expect(pages.map(p => [p.prompt, p.accountId])).toEqual([["login", "alice"], ["consent", "alice"]])
-        } finally {
-            vi.useRealTimers()
-        }
-        // Right after a sign-in, a new client goes straight to consent.
-        const {pages} = await signIn(browser, await register(), THIRD_PARTY_REDIRECT)
-        expect(pages.map(p => p.prompt)).toEqual(["consent"])
+        expect((await browser.post(`/oauth/interaction/${login.uid}/consent`, {})).status).toBe(400)
     })
 
     test("extraParams reach the sign-in page; other parameters don't", async () => {
