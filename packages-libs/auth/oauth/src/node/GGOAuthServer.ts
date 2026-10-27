@@ -87,6 +87,9 @@ export interface GGOAuthInteractionRequest {
     method: "GET" | "POST"
     // The POST's form fields (application/x-www-form-urlencoded).
     form: Record<string, string>
+    // Answer with a page, or send the browser on (303). Both send the headers sign-in pages need.
+    html: (status: number, body: string) => void
+    redirect: (url: string) => void
     // Each ends the request with a redirect back into the flow.
     login: (result: {accountId: string, amr?: string[]}) => Promise<void>
     // Grants what the client asked for. Only while prompt is "consent".
@@ -110,7 +113,7 @@ export interface GGOAuthServerOptions {
     errorPage?: (message: string) => string
     // Authorization request parameters passed through to interactionPage (e.g. a sign-in method to start).
     extraParams?: string[]
-    // Name of the login session cookie (e.g. "__Host-…" when served only over https).
+    // Name of the login session cookie. Default: "__Host-session" on an https issuer.
     sessionCookie?: () => string
     // Pre-registered app clients: no consent screen, silent re-auth while the login session lives.
     // Read once, on first use (config isn't readable at compose time).
@@ -140,6 +143,8 @@ export const ACCESS_TOKEN_JWKS_PATH = `${BASE}/access-token-jwks`
 const OIDC_SCOPES = ["openid", "offline_access"]
 const INTERACTION_PATH = /^\/oauth\/interaction\/([\w-]+)(?:\/([\w-]+))?$/
 const MAX_FORM_BYTES = 16 * 1024
+// no-referrer would make browsers post `Origin: null`, which the interaction pages refuse.
+const PAGE_HEADERS = {"content-type": "text/html; charset=utf-8", "referrer-policy": "same-origin", "cache-control": "no-store"}
 const TICKET = "GGOAuthTicket"
 // Not an oidc-provider model: when each grant last got tokens, for listGrants. Carries grantId, so revoking the grant removes it.
 const GRANT_USAGE = "GrantUsage"
@@ -232,9 +237,10 @@ export class GGOAuthServer {
     public loginTicketUrl = async (uid: string, accountId: string, amr?: string[]): Promise<string> =>
         this.ticket(await this.findInteraction(uid), {login: {accountId, amr, ts: Math.floor(Date.now() / 1000)}})
 
-    // The flow's sign-in page, on the origin it started on: where a sign-in that failed on another host returns to.
-    public interactionUrl = async (uid: string): Promise<string> =>
-        `${this.origin()}${BASE}/interaction/${(await this.findInteraction(uid)).uid}`
+    // The flow's sign-in page, on the origin it started on: where a sign-in that failed on another host returns
+    // to, with `error` (the app's own code) as ?error=.
+    public interactionUrl = async (uid: string, error?: string): Promise<string> =>
+        `${this.origin()}${BASE}/interaction/${(await this.findInteraction(uid)).uid}${error ? `?error=${encodeURIComponent(error)}` : ""}`
 
     public listGrants = async (subject: string): Promise<Array<{grantId: string, clientId: string, clientName: string, firstParty: boolean, createdAt: number, lastUsedAt?: number}>> => {
         const p = this.provider()
@@ -295,6 +301,14 @@ export class GGOAuthServer {
         const finish = (result: InteractionResults) => p.interactionFinished(req, res, result, {mergeWithLastSubmission: false})
         await this.options.interactionPage({
             req, res, action, method, form,
+            html: (status, body) => {
+                res.writeHead(status, PAGE_HEADERS)
+                res.end(body)
+            },
+            redirect: (url) => {
+                res.writeHead(303, {...PAGE_HEADERS, location: url})
+                res.end()
+            },
             interaction: await this.describeInteraction(found),
             login: ({accountId, amr}) => finish({login: {accountId, amr}}),
             consent: async () => {
@@ -477,7 +491,7 @@ export class GGOAuthServer {
             jwks: {keys: [deriveEs256Jwk(o.secret())]},
             cookies: {
                 keys: [hkdf(o.secret(), "@grest-ts/oauth cookies").toString("base64url")],
-                ...(o.sessionCookie ? {names: {session: o.sessionCookie()}} : {}),
+                names: {session: o.sessionCookie?.() ?? (new URL(o.issuer()).protocol === "https:" ? "__Host-session" : "_session")},
             },
             clients: [...[...firstParty.values()].map(c => ({
                 client_id: c.clientId,

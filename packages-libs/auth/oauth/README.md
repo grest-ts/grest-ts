@@ -149,14 +149,13 @@ the issuer). Your app is only an OAuth client: it never sees a password or appro
 path (except `/complete`) goes to `interactionPage`:
 
 ```ts
-const renderSignIn = async ({interaction, action, method, form, res, login, consent, deny}: GGOAuthInteractionRequest) => {
+const renderSignIn = async ({interaction, action, method, form, html, login, consent, deny}: GGOAuthInteractionRequest) => {
     if (method === "POST" && action === "password") {
         const user = await users.checkPassword(form.username, form.password)
         if (user) return login({accountId: user.id, amr: ["pwd"]})
     }
     if (method === "POST" && action === "consent") return form.allow ? consent() : deny()
-    res.writeHead(200, {"content-type": "text/html; charset=utf-8"})
-    res.end(interaction.prompt === "login" ? loginForm() : consentForm(interaction))
+    html(200, interaction.prompt === "login" ? loginForm() : consentForm(interaction))
 }
 ```
 
@@ -168,16 +167,21 @@ const renderSignIn = async ({interaction, action, method, form, res, login, cons
   flow's interaction cookie: SameSite=Lax, scoped to the path). A POST must also come from the issuer's
   origin (`Origin` header) and be a form (`application/x-www-form-urlencoded`); the server answers 403 otherwise. Your pages can't be framed (`frame-ancestors 'none'`, `X-Frame-Options`).
   Don't send `Referrer-Policy: no-referrer` on them: browsers then post `Origin: null`, which is refused.
+- `html(status, body)` and `redirect(url)` (a 303) answer with the headers these pages need:
+  `text/html; charset=utf-8`, `Referrer-Policy: same-origin` and `Cache-Control: no-store`. `res` is
+  there for anything else.
 - Approve and deny only on a POST: a GET can be triggered by any page.
 - `login` while a session for another account lives first ends that session (a self-submitting form).
 - A sign-in that completes on another host (an external IdP's callback registered elsewhere) carries
   the uid through its own state and ends with `loginTicketUrl(uid, accountId)`: a single-use link
   that completes the flow only in the browser that started it. A failed one goes back to
-  `interactionUrl(uid)`, the flow's page.
+  `interactionUrl(uid, error?)`, the flow's page; `error` (your own code) arrives as `?error=`.
 - `extraParams` pass authorization parameters through to `interaction.params` (e.g. a sign-in
   method to start right away: `authorize({params: {start_with: "sso"}})`).
-- `sessionCookie` names the login session cookie, e.g. `"__Host-app_session"` on an https issuer.
+- `sessionCookie` names the login session cookie. The default is `__Host-session` on an https issuer
+  (`_session` on http).
 - `errorPage(message)` renders the server's own error pages (an expired flow, an invalid request).
+  `message` can echo request values (e.g. an OAuth `error_description`): HTML-escape it.
 
 A first-party client re-authorizes silently while the login session lives. Set `refreshTokens:
 false` on one that only reads who signed in and keeps nothing: its codes then buy an access token alone.

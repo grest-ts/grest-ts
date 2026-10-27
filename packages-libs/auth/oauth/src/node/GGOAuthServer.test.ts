@@ -136,7 +136,9 @@ class OAuthTestRuntime extends GGRuntime {
             }],
             serviceClients: () => [{clientId: "backend", secret: () => "backend-secret"}],
             // The app's sign-in pages, reduced to what a test drives: the page as JSON, and a "login" that trusts the posted subject.
-            interactionPage: async ({res, method, action, form, interaction, login, consent, deny}) => {
+            interactionPage: async ({res, method, action, form, interaction, login, consent, deny, html, redirect}) => {
+                if (action === "html") return html(200, "<p>page</p>")
+                if (action === "redirect") return redirect("https://elsewhere.example/")
                 if (method === "GET") {
                     res.writeHead(200, {"content-type": "application/json"})
                     res.end(JSON.stringify({interaction}))
@@ -524,6 +526,19 @@ describe("GGOAuthServer", () => {
         expect(res.headers.get("cache-control")).toBe("no-store")
     })
 
+    test("html and redirect answer with the headers a sign-in page needs", async () => {
+        const browser = new Browser()
+        const login = await browser.page(authorizeUrl("app", FIRST_PARTY_REDIRECT, pkce().challenge))
+        const page = await browser.get(`/oauth/interaction/${login.uid}/html`)
+        const away = await browser.post(`/oauth/interaction/${login.uid}/redirect`, {})
+        expect([page.status, await page.text(), away.status, away.headers.get("location")]).toEqual([200, "<p>page</p>", 303, "https://elsewhere.example/"])
+        for (const res of [page, away]) {
+            expect(res.headers.get("content-type")).toBe("text/html; charset=utf-8")
+            expect(res.headers.get("referrer-policy")).toBe("same-origin")
+            expect(res.headers.get("cache-control")).toBe("no-store")
+        }
+    })
+
     test("consent is refused while the user still has to sign in", async () => {
         const browser = new Browser()
         const login = await browser.page(authorizeUrl(await register(), THIRD_PARTY_REDIRECT, pkce().challenge))
@@ -675,6 +690,7 @@ describe("GGOAuthServer", () => {
         const uid = new URL(res.headers.get("location")!, "https://evil.example").pathname.split("/").pop()!
         expect(new URL(await oauth.loginTicketUrl(uid, "alice")).origin).toBe(ISSUER)
         expect(await oauth.interactionUrl(uid)).toBe(`${ISSUER}/oauth/interaction/${uid}`)
+        expect(await oauth.interactionUrl(uid, "not linked&x")).toBe(`${ISSUER}/oauth/interaction/${uid}?error=not%20linked%26x`)
 
         const meta = await (await fetch(`${ISSUER}/.well-known/oauth-authorization-server`, {headers: {"x-forwarded-host": "evil.example"}})).json()
         expect(new URL(meta.token_endpoint).origin).toBe(ISSUER)
