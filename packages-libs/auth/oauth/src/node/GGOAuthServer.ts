@@ -239,6 +239,10 @@ export class GGOAuthServer {
     public loginTicketUrl = async (uid: string, accountId: string, amr?: string[]): Promise<string> =>
         this.ticket(await this.findInteraction(uid), {login: {accountId, amr, ts: Math.floor(Date.now() / 1000)}})
 
+    // The flow's sign-in page, on the origin it started on: where a sign-in that failed on another host returns to.
+    public interactionUrl = async (uid: string): Promise<string> =>
+        `${this.startedOrigin(await this.findInteraction(uid))}${BASE}/interaction/${uid}`
+
     public listGrants = async (subject: string): Promise<Array<{grantId: string, clientId: string, clientName: string, firstParty: boolean, createdAt: number, lastUsedAt?: number}>> => {
         const p = this.provider()
         const grants = await Promise.all((await this.options.store.listGrantIds(subject)).map(id => p.Grant.find(id)))
@@ -362,11 +366,15 @@ export class GGOAuthServer {
         const uid = interaction.uid
         const id = randomBytes(24).toString("base64url")
         await this.options.store.upsert(TICKET, id, {uid, result} satisfies Ticket, 120)
-        // Back to the origin the browser started on (its interaction cookie lives there) — but only a
-        // known one: returnTo comes from the request's Host, which a client can set to its own server.
+        return `${this.startedOrigin(interaction)}${BASE}/interaction/${uid}/complete?ticket=${id}`
+    }
+
+    // The origin the browser started on (its interaction cookie lives there) — but only a known one:
+    // returnTo comes from the request's Host, which a client can set to its own server.
+    private startedOrigin(interaction: InstanceType<Provider["Interaction"]>): string {
         const started = new URL(interaction.returnTo).origin
         const known = this.knownOrigins()
-        return `${known.includes(started) ? started : known[0]}${BASE}/interaction/${uid}/complete?ticket=${id}`
+        return known.includes(started) ? started : known[0]
     }
 
     private async finishInteraction(req: IncomingMessage, res: ServerResponse, uid: string): Promise<void> {

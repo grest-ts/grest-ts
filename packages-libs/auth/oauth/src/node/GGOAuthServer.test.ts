@@ -687,6 +687,7 @@ describe("GGOAuthServer", () => {
         const res = await fetch(authorizeUrl("app", FIRST_PARTY_REDIRECT, pkce().challenge), {redirect: "manual", headers: {"x-forwarded-host": "evil.example"}})
         const uid = new URL(res.headers.get("location")!, "https://evil.example").pathname.split("/").pop()!
         expect(new URL(await oauth.loginTicketUrl(uid, "alice")).origin).toBe(ISSUER)
+        expect(await oauth.interactionUrl(uid)).toBe(`${ISSUER}/oauth/interaction/${uid}`)
 
         const meta = await (await fetch(`${ISSUER}/.well-known/oauth-authorization-server`, {headers: {"x-forwarded-host": "evil.example"}})).json()
         expect(new URL(meta.token_endpoint).origin).toBe(ISSUER)

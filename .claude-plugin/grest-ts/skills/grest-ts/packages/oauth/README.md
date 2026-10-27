@@ -176,7 +176,8 @@ const renderSignIn = async ({interaction, action, method, form, csrf, res, login
   oidc-provider's interaction policy, so no page can skip it.
 - A sign-in that completes on another host (an external IdP's callback registered elsewhere) carries
   the uid through its own state and ends with `loginTicketUrl(uid, accountId)`: a single-use link
-  that completes the flow only in the browser that started it.
+  that completes the flow only in the browser that started it. A failed one goes back to
+  `interactionUrl(uid)`, the flow's page on the origin it started on.
 - `extraParams` pass authorization parameters through to `interaction.params` (e.g. a sign-in
   method to start right away: `authorize({params: {start_with: "sso"}})`).
 - `sessionCookie` names the login session cookie, e.g. `"__Host-app_session"` on an https issuer.
