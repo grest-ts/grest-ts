@@ -221,7 +221,9 @@ oauth.logout(undefined)   // ends the authorization server's login session too
 - A discovered server's metadata must declare it as the issuer (RFC 8414).
 - With `server`, its metadata is used as fetched (e.g. the issuer reached through a dev proxy), and
   `resource` defaults to the issuer it declares.
-- `iss` on the callback must match the issuer (RFC 9207).
+- `iss` on the callback is required and must match the issuer (RFC 9207).
+- Each sign-in in progress is kept in `sessionStorage` under its own `state`, so sign-ins started in
+  two tabs at once both complete.
 - `invalid_grant` on refresh surfaces as `NOT_AUTHORIZED`, which ends the session.
 - `authorize({prompt: "login"})` asks for a fresh sign-in even while the login session lives;
   `authorize({params})` adds the server's `extraParams`.
