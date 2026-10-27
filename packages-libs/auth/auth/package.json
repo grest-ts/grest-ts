@@ -15,6 +15,10 @@
         "types": "./src/index-node.ts",
         "import": "./src/index-node.ts"
       }
+    },
+    "./oidc-rp": {
+      "types": "./src/node/idp/OidcRelyingParty.ts",
+      "import": "./src/node/idp/OidcRelyingParty.ts"
     }
   },
   "files": [
@@ -55,7 +59,8 @@
     "node": ">=24"
   },
   "dependencies": {
-    "jose": "^6.2.12"
+    "jose": "^6.2.12",
+    "openid-client": "6.8.8"
   },
   "peerDependencies": {
     "@grest-ts/http": "0.0.97",

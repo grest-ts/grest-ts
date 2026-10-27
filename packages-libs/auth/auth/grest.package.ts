@@ -9,11 +9,15 @@ definePackage({
     hasTests: true,
     dependencies: {
         "jose": "^6.2.12",
+        "openid-client": "6.8.8",
     },
     peerDependencies: {
         "bcrypt": "^6.0.0",
     },
     devDependencies: {
         "@types/bcrypt": "^6.0.0",
-    }
+    },
+    customExports: {
+        "./oidc-rp": "./src/node/idp/OidcRelyingParty.ts",
+    },
 })
