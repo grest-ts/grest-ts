@@ -16,7 +16,7 @@ The protocol is [panva/oidc-provider](https://github.com/panva/node-oidc-provide
 - mounting on a `GGHttpServer`
 - storage
 - token claims
-- handing login and consent to your own UI
+- handing the login and consent pages to your own code
 
 | What you get | |
 |---|---|
@@ -58,27 +58,22 @@ const oauth = new GGOAuthServer({
     store: new DynamoOAuthStore(dynamo, "my-oauth"),
     secret: () => config.sessionSecret.reveal(),   // derives the cookie and ID-token keys
     resources: [api, mcp],                         // first = default for first-party clients
-    interactionUrl: (uid, {clientId, firstParty, redirectUri}) => `${appUrl}/?oauthLogin=${uid}`,
+    interactionPage: renderSignIn,                 // your login and consent pages, below
     firstPartyClients: () => [{clientId: "web", name: "My App", redirectUris: [`${appUrl}/oauth/callback`]}],
     clientIdMetadataDocument: {allowedUrlPrefixes: () => ["https://claude.ai/oauth/", "https://chatgpt.com/oauth/"]},
     // dynamicRegistration: true,                  // open RFC 7591 registration — anyone, any name
 })
 oauth.mount(httpServer)                            // /oauth/* + /.well-known/* (incl. every resource's metadata), announced to discovery
 oauth.protect(httpServer, mcp, "/mcp", handleMcp)  // 401 + resource metadata, then your handler
-new GGHttp(httpServer).http(OAuthInteractionApi, oauth.interactionApi(() => USER.get()!.id))
 ```
 
 `claims` works like the `resolve` callback of `GGAuthRefreshToken.refresh`: role changes apply on
 the next refresh, and a deleted or deactivated user's OAuth session ends there.
 
 A user's access token carries `auth_time` (OIDC: when the user signed in, epoch seconds; a refresh
-keeps it), read as `verify(token).auth_time`. To require a recent sign-in, check it and send the user
-through `authorize({prompt: "login"})`. That time comes from the approving user's own token: issue it
-with `accessToken.issue(sub, claims, {authTime})` at sign-in and pass
-`interactionApi(subject, () => USER.get()!.authTime)`. Otherwise an approval counts as a sign-in, so
-anyone holding a user token could mint "fresh" ones. With `authTime`, a forced login (`prompt=login`,
-an expired `max_age`) is refused unless the user signed in after the request started. Token exchange
-keeps the subject token's `auth_time`.
+and a silent re-authorization keep it), read as `verify(token).auth_time`. To require a recent
+sign-in, check it and send the user through `authorize({prompt: "login"})`. Token exchange keeps the
+subject token's `auth_time`.
 
 `clients` sets who may get tokens for a resource: `"any"` (the default: every client that signs a
 user in), `"firstParty"` (only `firstPartyClients`) or `"service"` (only service clients, below). A
@@ -146,30 +141,86 @@ provides the discovery handshake MCP clients run:
 | Loopback / CLI (no `application_type` declared → native) | Any port on `localhost`/`127.0.0.1` matches | **Every** authorization: any local process could claim the redirect |
 | Dynamic registration (opt-in) | `POST /oauth/register` | Once per grant |
 
-### Login and consent stay in your app
+### Login and consent pages
 
-`/oauth/authorize` sends the browser to `interactionUrl(uid)`. That page uses your normal login,
-then calls `GGOAuthInteractionContract`. Bind the contract with **your** user wire, so the
-signed-in user becomes the OAuth subject:
+The authorization server signs the user in itself, on its own login session (an HttpOnly cookie on
+the issuer). Your app is only an OAuth client: it never sees a password or approves anything.
+`/oauth/authorize` sends the browser to `/oauth/interaction/:uid`, and every GET or POST under that
+path (except `/complete`) goes to `interactionPage`:
 
 ```ts
-export const OAuthInteractionApi = new GGHttpSchema({
-    contract: GGOAuthInteractionContract, pathPrefix: "api/oauth/interaction", use: [USER_WIRE],
-    routes: {get: GGRpc.GET("get"), approve: GGRpc.POST("approve"), deny: GGRpc.POST("deny")},
-})
+const renderSignIn = async ({interaction, action, method, form, html, login, consent, deny}: GGOAuthInteractionRequest) => {
+    if (method === "POST" && action === "password") {
+        const user = await users.checkPassword(form.username, form.password)
+        if (user) return login({accountId: user.id, amr: ["pwd"]})
+    }
+    if (method === "POST" && action === "consent") return form.allow ? consent() : deny()
+    html(200, interaction.prompt === "login" ? loginForm() : consentForm(interaction))
+}
 ```
 
-The page works like this:
+- `interaction.prompt` is `"login"` (no login session, `prompt=login` or an expired `max_age`) or `"consent"`: a signed-in `accountId` approves a
+  third-party client. Show the client's name and redirect hosts, and warn when `loopbackOnly` is set.
+- A first-party client never gets a consent prompt: it re-authorizes silently while the login
+  session lives (single sign-on).
+- The request reaches your code only from the browser that started the flow (it holds the
+  flow's interaction cookie: SameSite=Lax, scoped to the path). A POST must also come from the issuer's
+  origin (`Origin` header) and be a form (`application/x-www-form-urlencoded`); the server answers 403 otherwise. Your pages can't be framed (`frame-ancestors 'none'`, `X-Frame-Options`).
+  Don't send `Referrer-Policy: no-referrer` on them: browsers then post `Origin: null`, which is refused.
+- `html(status, body)` and `redirect(url)` (a 303) answer with the headers these pages need:
+  `text/html; charset=utf-8`, `Referrer-Policy: same-origin` and `Cache-Control: no-store`. `res` is
+  there for anything else.
+- Approve and deny only on a POST: a GET can be triggered by any page.
+- `login` while a session for another account lives first ends that session (a self-submitting form).
+- A sign-in that completes on another host (an external IdP's callback registered elsewhere) carries
+  the uid through its own state and ends with `loginTicketUrl(uid, accountId)`: a single-use link
+  that completes the flow only in the browser that started it. A failed one goes back to
+  `interactionUrl(uid, error?)`, the flow's page; `error` (your own code) arrives as `?error=`.
+  [External sign-in](#external-sign-in) does that round trip for you.
+- `extraParams` pass authorization parameters through to `interaction.params` (e.g. a sign-in
+  method to start right away: `authorize({params: {start_with: "sso"}})`).
+- `sessionCookie` names the login session cookie. The default is `__Host-session` on an https issuer
+  (`_session` on http).
+- `errorPage(message)` renders the server's own error pages (an expired flow, an invalid request).
+  `message` can echo request values (e.g. an OAuth `error_description`): HTML-escape it.
 
-1. `get({uid})` returns the client (name, `firstParty`, redirect hosts, `loopbackOnly`), the
-   requested scopes and `forceLogin`.
-2. When `forceLogin` is set (the client sent `prompt=login`, or its `max_age` has passed), sign the
-   user out of your app first and show the login form: an existing session must not approve it.
-3. For a first-party client, call `approve` right away. For any other client, show a consent
-   screen first. Display the redirect hosts, and warn when `loopbackOnly` is set.
-4. `approve`/`deny` return `redirectUrl` for the browser to follow. The result applies only in
-   the browser holding the flow's interaction cookie, so a user approving someone else's flow
-   can't hand them a code.
+### External sign-in
+
+"Sign in with GitHub / your company IdP" leaves the issuer: the upstream sends the browser back to a
+callback registered on some host of yours. `externalSignIn` does that round trip: a per-flow state
+cookie at start, and at the callback a login ticket or the flow's page with your error code.
+
+```ts
+const idpSignIn = oauth.externalSignIn<OidcAuthorizationChecks>({
+    callbackPath: "/auth/oidc/callback", fallbackUrl: () => appUrl,
+})
+// GET /auth/oidc/start?uid=…  (your sign-in page links here)
+idpSignIn.send(res, await idpSignIn.start(uid, async (state) => {
+    const {url, checks} = await idp.authorize({state})     // OidcRelyingParty from @grest-ts/auth/oidc-rp
+    return {url, data: checks}
+}))
+// GET /auth/oidc/callback
+const redirect = await idpSignIn.callback(req, async ({params, query, data}) => {
+    if (params.get("error")) return {error: "cancelled"}
+    const {identity} = await idp.callback(query, data)
+    const user = await users.byExternalIdentity(identity)
+    return user ? {accountId: user.id, amr: ["idp"]} : {error: "not_linked"}
+})
+idpSignIn.send(res, redirect ?? {location: appUrl})
+```
+
+- `start(uid, authorize)`: `authorize` builds the upstream URL with the `state` it is given. The state
+  cookie (HttpOnly, Secure, SameSite=Lax, `Path=callbackPath`, 10 minutes, named by the state so
+  sign-ins in two tabs don't clash) carries the uid and your `data` (e.g. the PKCE verifier), signed
+  with a key derived from `secret`. It is readable by the browser, so keep secrets out; over ~4 KB is refused.
+- `callback(req, resolve)` is `undefined` when this browser holds no state cookie for the callback's
+  `state`: it isn't this flow's, so a callback URL shared with something else (e.g. linking a GitHub
+  account) falls through to your other handling. Otherwise the cookie is cleared, and:
+  - a tampered or expired cookie, or a sign-in that expired meanwhile, goes to `fallbackUrl`;
+  - `resolve` runs only after the cookie and `state` check out, so a forged `?error=` link can't cancel
+    someone's sign-in. It answers `{accountId, amr?}` (→ a login ticket) or `{error}` (→
+    `interactionUrl(uid, error)`). An exception propagates: map failures to an error code yourself.
+- `send(res, redirect)` answers 302 with `Cache-Control: no-store` and the cookie.
 
 A first-party client re-authorizes silently while the login session lives. Set `refreshTokens:
 false` on one that only reads who signed in and keeps nothing: its codes then buy an access token alone.
@@ -211,18 +262,49 @@ oauth.logout(undefined)   // ends the authorization server's login session too
   the sign-in host can differ from the API host (e.g. `auth.` vs `api.`). The metadata must be for
   exactly that resource.
 - A discovered server's metadata must declare it as the issuer (RFC 8414).
-- With `server`, its metadata is used as fetched (it may be the issuer reached on another of its
-  `origins`), and `resource` defaults to the issuer it declares.
-- `iss` on the callback must match the issuer (RFC 9207).
+- With `server`, its metadata is used as fetched (e.g. the issuer reached through a dev proxy), and
+  `resource` defaults to the issuer it declares.
+- `iss` on the callback is required and must match the issuer (RFC 9207).
+- Each sign-in in progress is kept in `sessionStorage` under its own `state`, so sign-ins started in
+  two tabs at once both complete.
 - `invalid_grant` on refresh surfaces as `NOT_AUTHORIZED`, which ends the session.
-- `authorize({prompt: "login"})` asks for a fresh sign-in even while the login session lives.
+- `authorize({prompt: "login"})` asks for a fresh sign-in even while the login session lives;
+  `authorize({params})` adds the server's `extraParams`.
+
+## Headless sign-in (scripts, tests)
+
+`GGOAuthHeadlessBrowser` signs in the way a browser does, without one: authorization code + PKCE, a
+cookie jar, redirects followed by hand, self-submitting forms submitted, and form POSTs carrying the
+issuer's `Origin`. It stops on your sign-in pages and asks you how to answer each.
+
+```ts
+import {GGOAuthHeadlessBrowser} from "@grest-ts/oauth"
+
+const browser = new GGOAuthHeadlessBrowser({server: authUrl})
+const tokens = await browser.signIn({clientId: "web", redirectUri: `${appUrl}/oauth/callback`, scope: "app"}, (page) =>
+    page.html.includes("/consent") ? {action: "consent", form: {allow: "1"}} : {action: "password", form: {username, password}})
+api.createClient({wires: [{wire: USER_TOKEN_WIRE, value: () => tokens.accessToken}]})
+```
+
+- `signIn(client, answer)`: `answer(page)` gets each sign-in page (`url`, `uid`, `status`, `html`) and
+  returns the `action` to POST to and its `form`. The flow ends at the client's redirect URI; `iss` is
+  checked and the code redeemed (`{accessToken, refreshToken?, idToken?, expiresAt}`). An error there
+  throws `GGOAuthTokenError` (`access_denied` when the user denied); a page it can't answer throws.
+- Step by step: `authorize(client)` returns the first `step` and `finish(location)`; `submit(page, action,
+  form)` and `follow(url)` return the next step, whose `location` is set once the flow leaves the
+  server's origins (e.g. to an upstream sign-in). `get`, `post` and `cookies` are there for the rest.
+- `client.params` adds authorization parameters (`prompt`, your `extraParams`). Reusing a browser keeps
+  its login session: the next sign-in is silent.
+- `origins` lists more hosts whose redirects are followed (e.g. where an external sign-in starts), and
+  `fetch` replaces the transport (e.g. to reach a configured issuer at a test server's real address).
+- The cookie jar keys cookies by name only: one server at a time.
 
 ## Notes
 
 - The issuer, first-party clients, keys and resources are handed to oidc-provider when the first
   OAuth request arrives. Changing them takes a restart; `allowedUrlPrefixes` is read on every fetch.
-- A sign-in finishes on the origin it started on only if that is the issuer or one of `origins`.
-  Request hosts are client-controlled, so anything else falls back to the issuer.
+- Sign-in happens on the issuer's origin: its pages refuse a POST from any other, and a login ticket
+  always points there (request hosts are client-controlled).
 - The issuer is an origin. Clients bind to it, so changing it disconnects them.
 - Resource metadata is served by the resource URL's path on any host, so give each resource its
   own path (e.g. the API at `/` and MCP at `/mcp`).

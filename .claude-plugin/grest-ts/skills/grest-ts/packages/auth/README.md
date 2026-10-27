@@ -244,6 +244,36 @@ export class AppRuntime extends GGRuntime {
 > `OktaIdp`. Each exposes `authenticate(credential) → ExternalIdentity` ({provider, subject, email,
 > claims}); the issue tail is identical across providers.
 
+### Signing in with an OIDC identity provider (`@grest-ts/auth/oidc-rp`)
+
+`OidcRelyingParty` is the server side of "Sign in with Okta / Entra / any OIDC IdP": a confidential
+client (authorization code + PKCE, `client_secret_basic`, nonce, ID token signature checked) on
+[openid-client](https://github.com/panva/openid-client). Its settings are getters, read at use.
+
+```ts
+import {OidcRelyingParty} from "@grest-ts/auth/oidc-rp"
+
+const idp = new OidcRelyingParty({
+    issuer: () => config.idp.issuer.get(), clientId: () => config.idp.clientId.get(),
+    clientSecret: () => config.idp.secret.reveal(), redirectUri: () => `${apiUrl}/auth/oidc/callback`,
+    scope: () => "openid email profile offline_access",
+})
+const {url, checks} = await idp.authorize()            // keep `checks` server-side (a signed cookie), redirect to `url`
+const {identity, refreshToken} = await idp.callback(callbackQuery, checks)   // identity: ExternalIdentity, claims included
+const later = await idp.refresh(refreshToken, identity.subject)   // {ended: true, reason} once the IdP drops the session
+```
+
+- `authorize(extra)` adds authorization parameters (`prompt`, `login_hint`…); `extra.state` is used as the state.
+- `callback` rebuilds the callback URL from `redirectUri`, so a TLS-terminating proxy doesn't break the
+  `redirect_uri` match. It throws on any failed check (state, nonce, issuer, audience, signature, expiry).
+- `refresh` answers `{ended: false, refreshToken (rotated or the same), accessToken, claims}` (`claims`:
+  the refreshed ID token's, if the IdP sent one), `{ended: true, reason}` on `invalid_grant` or another
+  subject, and throws when the IdP can't be asked.
+- `userinfo(accessToken, subject)` reads the userinfo claims (undefined without the endpoint), e.g. for
+  groups an IdP leaves out of the ID token.
+- Groups, required groups and provisioning are your policy: read them from `identity.claims`.
+- `email_verified` sent as the string `"true"` (some IdPs do) counts as verified, here and in every IdP.
+
 ---
 
 ## 4. Client — keep it fresh, automatically
@@ -422,7 +452,7 @@ serialized by a Web Lock so a single-use refresh token is never replayed).
 `JwsSigningStrategy` + `JwsSigner` / `SecretJwsSigner` / `JwksVerifier` / `TokenSigner` / `TokenVerifier`, `RefreshTokenStore` / `InMemoryRefreshTokenStore`, IdPs (`PasswordIdp` +
 `BcryptHasher`/`PasswordHasher`, `GoogleIdp`, `OidcIdp`, `OktaIdp`, `identityFromClaims`,
 `ExternalIdentity` / `IdpStrategy`). Node-only (`jose`, `node:crypto`; `bcrypt` peer dep for
-passwords).
+passwords). `OidcRelyingParty` from `@grest-ts/auth/oidc-rp` (`openid-client`).
 
 **Client (`@grest-ts/auth`, browser entry)** — `GGAuthSession.withToken(wire, {refresh, localStorageKey})`
 / `.withCookie(wire, {refresh, logout})` / `.addDerived(name, wire, {mint})`; instance methods

@@ -9,7 +9,8 @@ export function identityFromClaims(provider: string, claims: Record<string, unkn
         provider,
         subject: sub,
         email: typeof claims["email"] === "string" ? claims["email"] : undefined,
-        emailVerified: claims["email_verified"] === true,
+        // Some IdPs (e.g. Cognito, older Okta orgs) send it as a string.
+        emailVerified: claims["email_verified"] === true || claims["email_verified"] === "true",
         name: typeof claims["name"] === "string" ? claims["name"] : undefined,
         claims,
     }

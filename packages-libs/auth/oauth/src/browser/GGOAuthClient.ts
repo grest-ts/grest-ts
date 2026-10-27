@@ -30,10 +30,11 @@ export interface GGOAuthClientOptions<I> {
     refreshTtlMs?: number
 }
 
-type Pending = {state: string, verifier: string, returnTo?: string}
+type Pending = {verifier: string, returnTo?: string}
 type Metadata = {issuer: string, authorization_endpoint: string, token_endpoint: string, revocation_endpoint?: string, end_session_endpoint?: string}
 
-const PENDING_KEY = "gg-oauth-pending"
+// Keyed by state: two tabs signing in at once each find their own.
+const pendingKey = (state: string) => `gg-oauth-pending:${state}`
 
 // Browser OAuth client (authorization code + PKCE S256), the `refresh` of a GGAuthSession — see README.
 // The token/revocation endpoints are OAuth protocol endpoints (form-encoded), not grest-ts contracts.
@@ -51,17 +52,19 @@ export class GGOAuthClient<I = unknown> {
     }
 
     // Redirects the browser to the authorization server; resolves never (the page unloads).
-    public authorize = (opts?: {returnTo?: string, prompt?: "login"}): Promise<void> => this.leave(async () => {
+    // `params`: the server's extraParams (e.g. a sign-in method to start right away).
+    public authorize = (opts?: {returnTo?: string, prompt?: "login", params?: Record<string, string>}): Promise<void> => this.leave(async () => {
         const meta = await this.discover()
         const verifier = randomString()
-        const pending: Pending = {state: randomString(), verifier, returnTo: opts?.returnTo}
-        sessionStorage.setItem(PENDING_KEY, JSON.stringify(pending))
+        const state = randomString()
+        sessionStorage.setItem(pendingKey(state), JSON.stringify({verifier, returnTo: opts?.returnTo} satisfies Pending))
         const url = new URL(meta.authorization_endpoint)
         url.search = new URLSearchParams({
+            ...opts?.params,
             response_type: "code",
             client_id: this.config.clientId,
             redirect_uri: this.config.redirectUri,
-            state: pending.state,
+            state,
             code_challenge: await s256(verifier),
             code_challenge_method: "S256",
             resource: await this.resource(),
@@ -79,13 +82,13 @@ export class GGOAuthClient<I = unknown> {
 
     public handleCallback = async (href: string): Promise<{result: GGOAuthResult<I>, returnTo?: string}> => {
         const params = new URL(href).searchParams
-        const raw = sessionStorage.getItem(PENDING_KEY)
-        sessionStorage.removeItem(PENDING_KEY)
-        const pending = raw ? JSON.parse(raw) as Pending : undefined
-        if (!pending || params.get("state") !== pending.state) throw new NOT_AUTHORIZED({debugMessage: "OAuth state mismatch"})
+        const key = pendingKey(params.get("state") ?? "")
+        const raw = sessionStorage.getItem(key)
+        sessionStorage.removeItem(key)
+        if (!raw) throw new NOT_AUTHORIZED({debugMessage: "OAuth state mismatch"})
+        const pending = JSON.parse(raw) as Pending
         // RFC 9207: reject a response from a different authorization server (mix-up attack).
-        const iss = params.get("iss")
-        if (iss !== null && iss !== (await this.discover()).issuer) throw new NOT_AUTHORIZED({debugMessage: "OAuth issuer mismatch"})
+        if (params.get("iss") !== (await this.discover()).issuer) throw new NOT_AUTHORIZED({debugMessage: "OAuth issuer mismatch"})
         const error = params.get("error")
         if (error) throw new NOT_AUTHORIZED({debugMessage: `OAuth ${error}: ${params.get("error_description") ?? ""}`})
         const result = await this.token({

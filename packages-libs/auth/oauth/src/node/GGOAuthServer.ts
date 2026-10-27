@@ -2,14 +2,14 @@ import {createECDH, createHash, hkdfSync, randomBytes} from "node:crypto"
 import type {IncomingMessage, ServerResponse} from "node:http"
 import {decodeJwt} from "jose"
 import Provider, {errors as oidcErrors, type ClientMetadata, type Configuration, type InteractionResults, type KoaContextWithOIDC} from "oidc-provider"
-import {NOT_AUTHORIZED, NOT_FOUND} from "@grest-ts/schema"
+import {NOT_FOUND} from "@grest-ts/schema"
 import {GGLog} from "@grest-ts/logger"
 import type {GGHttpServer} from "@grest-ts/http"
 import type {GGAccessPayload, GGAuthAccessToken, TokenVerifier} from "@grest-ts/auth"
-import {GGOAuthInteractionContract, type GGOAuthInteraction} from "../shared/interactionContract"
 import {GGOAuthResourceServer, type GGOAuthProtectedResource} from "./GGOAuthResourceServer"
 import {toOidcAdapter, type GGOAuthStore} from "./store/GGOAuthStore"
 import {ACCESS_TOKEN_TYPE, TOKEN_EXCHANGE} from "./tokenExchange"
+import {GGOAuthExternalSignIn, type GGOAuthExternalSignInOptions} from "./GGOAuthExternalSignIn"
 
 export interface GGOAuthFirstPartyClient {
     clientId: string
@@ -51,21 +51,71 @@ export interface GGOAuthServiceClientRegistration {
     secret: () => string
 }
 
+export interface GGOAuthInteractionClient {
+    clientId: string
+    name: string
+    // Pre-registered by the app (its own UI). Third-party clients must be shown a consent screen.
+    firstParty: boolean
+    // Hosts the authorization code is sent to — show these on the consent screen.
+    redirectHosts: string[]
+    // Every redirect is a loopback address: any local process could be posing as this client.
+    loopbackOnly: boolean
+}
+
+export interface GGOAuthInteraction {
+    uid: string
+    // "login": sign the user in (no login session, prompt=login or max_age).
+    // "consent": the signed-in user approves a third-party client.
+    prompt: "login" | "consent"
+    // The login session's account, if there is one.
+    accountId?: string
+    client: GGOAuthInteractionClient
+    scopes: string[]
+    // The resource (API) the client asks for access to.
+    resource: string
+    // The authorization request's `extraParams`.
+    params: Record<string, string>
+}
+
+// One request to the app's sign-in pages, under /oauth/interaction/:uid. Only reaches the app from the browser
+// that started the flow (it holds the interaction cookie); a POST also came from the issuer's origin.
+export interface GGOAuthInteractionRequest {
+    req: IncomingMessage
+    res: ServerResponse
+    interaction: GGOAuthInteraction
+    // The path below /oauth/interaction/:uid ("" for the page itself).
+    action: string
+    method: "GET" | "POST"
+    // The POST's form fields (application/x-www-form-urlencoded).
+    form: Record<string, string>
+    // Answer with a page, or send the browser on (303). Both send the headers sign-in pages need.
+    html: (status: number, body: string) => void
+    redirect: (url: string) => void
+    // Each ends the request with a redirect back into the flow.
+    login: (result: {accountId: string, amr?: string[]}) => Promise<void>
+    // Grants what the client asked for. Only while prompt is "consent".
+    consent: () => Promise<void>
+    deny: () => Promise<void>
+}
+
 export interface GGOAuthServerOptions {
     // Public origin of the authorization server, no path (e.g. https://auth.example.com).
     issuer: () => string
-    // Other public origins it is also reached on. A sign-in that started on one of these finishes
-    // there (its cookie lives there); any other request origin is ignored in favour of the issuer.
-    origins?: () => string[]
     store: GGOAuthStore
     // Derives the cookie-signing key and the ES256 key of ID tokens. Rotating it signs everyone out
     // of the authorization server; issued access/refresh tokens are unaffected.
     secret: () => string
     // The first is the default for first-party clients; others default to the first one they may use.
     resources: [GGOAuthResource<any>, ...GGOAuthResource<any>[]]
-    // The app's login/consent page; it receives the interaction uid and uses GGOAuthInteractionContract.
-    // `request` lets a first-party client's sign-in stay on the origin it was opened from.
-    interactionUrl: (uid: string, request: {clientId: string, redirectUri: string, firstParty: boolean}) => string
+    // The app's login and consent pages: it signs the user in (its own login session is the server's)
+    // and finishes through the request's login/consent/deny.
+    interactionPage: (request: GGOAuthInteractionRequest) => Promise<void>
+    // HTML for the server's own error pages (an expired sign-in, an invalid request); plain text without.
+    errorPage?: (message: string) => string
+    // Authorization request parameters passed through to interactionPage (e.g. a sign-in method to start).
+    extraParams?: string[]
+    // Name of the login session cookie. Default: "__Host-session" on an https issuer.
+    sessionCookie?: () => string
     // Pre-registered app clients: no consent screen, silent re-auth while the login session lives.
     // Read once, on first use (config isn't readable at compose time).
     firstPartyClients?: () => GGOAuthFirstPartyClient[]
@@ -92,6 +142,10 @@ const TOKEN_PATH = `${BASE}/token`
 // the ID-token key, derived from `secret`, so trusting it would let that secret mint access tokens.
 export const ACCESS_TOKEN_JWKS_PATH = `${BASE}/access-token-jwks`
 const OIDC_SCOPES = ["openid", "offline_access"]
+const INTERACTION_PATH = /^\/oauth\/interaction\/([\w-]+)(?:\/([\w-]+))?$/
+const MAX_FORM_BYTES = 16 * 1024
+// no-referrer would make browsers post `Origin: null`, which the interaction pages refuse.
+const PAGE_HEADERS = {"content-type": "text/html; charset=utf-8", "referrer-policy": "same-origin", "cache-control": "no-store"}
 const TICKET = "GGOAuthTicket"
 // Not an oidc-provider model: when each grant last got tokens, for listGrants. Carries grantId, so revoking the grant removes it.
 const GRANT_USAGE = "GrantUsage"
@@ -147,19 +201,14 @@ export class GGOAuthServer {
                 res.end(JSON.stringify({keys: await this.resourceJwks()}))
                 return
             }
-            const interaction = path.match(/^\/oauth\/interaction\/([^/]+)(\/complete)?$/)
-            if (interaction && req.method === "GET") {
-                if (interaction[2]) return this.finishInteraction(req, res, interaction[1])
-                const found = await this.provider().Interaction.find(interaction[1])
-                if (!found) {
-                    res.writeHead(400, {"content-type": "text/plain"})
-                    res.end("Sign-in request expired")
-                    return
-                }
-                const clientId = String(found.params.client_id)
-                res.writeHead(303, {location: this.options.interactionUrl(interaction[1], {clientId, redirectUri: String(found.params.redirect_uri), firstParty: this.firstParty.has(clientId)})})
-                res.end()
-                return
+            const interaction = path.match(INTERACTION_PATH)
+            if (interaction && (req.method === "GET" || req.method === "POST")) {
+                res.setHeader("cache-control", "no-store")
+                res.setHeader("x-frame-options", "DENY")
+                res.setHeader("content-security-policy", "frame-ancestors 'none'")
+                const [, uid, action = ""] = interaction
+                if (action === "complete" && req.method === "GET") return this.finishInteraction(req, res, uid)
+                return this.interactionPage(req, res, uid, action)
             }
             this._callback ??= this.provider().callback()
             await this._callback(req, res)
@@ -184,15 +233,20 @@ export class GGOAuthServer {
         this.resourceServer.protect(server, resource, path, handle)
     }
 
-    // Implementation of GGOAuthInteractionContract; `subject` reads the signed-in user from the app's wire, `authTime`
-    // when that user signed in (epoch seconds): the sign-in time OAuth tokens then carry, instead of the approval's.
-    public interactionApi(subject: () => string, authTime?: () => number | undefined): typeof GGOAuthInteractionContract.infer {
-        return {
-            get: async ({uid}) => this.describeInteraction(uid),
-            approve: async ({uid}) => ({redirectUrl: await this.approve(uid, subject(), authTime?.())}),
-            deny: async ({uid}) => ({redirectUrl: await this.ticket(await this.findInteraction(uid), {error: "access_denied", error_description: "The user denied the request"})}),
-        }
-    }
+    // Signs `accountId` in to the flow from outside it (e.g. a callback on another host): the browser that
+    // started the flow must follow the returned URL.
+    public loginTicketUrl = async (uid: string, accountId: string, amr?: string[]): Promise<string> =>
+        this.ticket(await this.findInteraction(uid), {login: {accountId, amr, ts: Math.floor(Date.now() / 1000)}})
+
+    // The flow's sign-in page, on the origin it started on: where a sign-in that failed on another host returns
+    // to, with `error` (the app's own code) as ?error=.
+    public interactionUrl = async (uid: string, error?: string): Promise<string> =>
+        `${this.origin()}${BASE}/interaction/${(await this.findInteraction(uid)).uid}${error ? `?error=${encodeURIComponent(error)}` : ""}`
+
+    // A sign-in that completes on an upstream whose callback is on another host (see GGOAuthExternalSignIn).
+    // Its state cookie is signed with a key derived from `secret`.
+    public externalSignIn = <D = undefined>(options: GGOAuthExternalSignInOptions): GGOAuthExternalSignIn<D> =>
+        new GGOAuthExternalSignIn<D>(this, () => hkdf(this.options.secret(), "@grest-ts/oauth external sign-in"), options)
 
     public listGrants = async (subject: string): Promise<Array<{grantId: string, clientId: string, clientName: string, firstParty: boolean, createdAt: number, lastUsedAt?: number}>> => {
         const p = this.provider()
@@ -234,14 +288,57 @@ export class GGOAuthServer {
         ])
     }
 
-    private async describeInteraction(uid: string): Promise<GGOAuthInteraction> {
-        const interaction = await this.findInteraction(uid)
+    private async interactionPage(req: IncomingMessage, res: ServerResponse, uid: string, action: string): Promise<void> {
+        const p = this.provider()
+        const found = await p.interactionDetails(req, res).catch((err: unknown) => {
+            if (err instanceof oidcErrors.SessionNotFound) return undefined
+            throw err
+        })
+        if (found?.uid !== uid) return this.fail(res, 400, "This sign-in request has expired or was started in another browser. Start again from the app.")
+        const method = req.method as "GET" | "POST"
+        let form: Record<string, string> = {}
+        if (method === "POST") {
+            // The SameSite interaction cookie already keeps other sites out; Origin catches what it can't (a same-site page).
+            if (req.headers.origin !== this.origin()) return this.fail(res, 403, "Request refused")
+            const body = await readForm(req)
+            if (!body) return this.fail(res, 403, "Request refused")
+            form = body
+        }
+        const finish = (result: InteractionResults) => p.interactionFinished(req, res, result, {mergeWithLastSubmission: false})
+        await this.options.interactionPage({
+            req, res, action, method, form,
+            html: (status, body) => {
+                res.writeHead(status, PAGE_HEADERS)
+                res.end(body)
+            },
+            redirect: (url) => {
+                res.writeHead(303, {...PAGE_HEADERS, location: url})
+                res.end()
+            },
+            interaction: await this.describeInteraction(found),
+            login: ({accountId, amr}) => finish({login: {accountId, amr}}),
+            consent: async () => {
+                const accountId = found.session?.accountId
+                if (found.prompt.name !== "consent" || !accountId) return this.fail(res, 400, "Sign in first")
+                const existing = found.grantId ? await p.Grant.find(found.grantId) : undefined
+                const grant = existing?.accountId === accountId ? existing : new p.Grant({accountId, clientId: String(found.params.client_id)})
+                this.grantRequested(grant, found.params)
+                await p.interactionFinished(req, res, {consent: {grantId: await grant.save()}}, {mergeWithLastSubmission: true})
+            },
+            deny: () => finish({error: "access_denied", error_description: "The user denied the request"}),
+        })
+    }
+
+    private async describeInteraction(interaction: InstanceType<Provider["Interaction"]>): Promise<GGOAuthInteraction> {
         const clientId = String(interaction.params.client_id)
         const client = await this.provider().Client.find(clientId)
         if (!client) throw new NOT_FOUND({debugMessage: "Unknown OAuth client"})
         const hosts = [...new Set((client.redirectUris ?? []).map(u => new URL(u).host))]
+        const extra = this.options.extraParams ?? []
         return {
-            uid,
+            uid: interaction.uid,
+            prompt: interaction.prompt.name === "consent" ? "consent" : "login",
+            accountId: interaction.session?.accountId,
             client: {
                 clientId,
                 name: this.firstParty.get(clientId)?.name ?? String(client.clientName ?? clientId),
@@ -251,20 +348,18 @@ export class GGOAuthServer {
             },
             scopes: requestedScopes(interaction.params),
             resource: this.requestedResource(interaction.params, clientId).resource(),
-            forceLogin: forcesLogin(interaction),
+            params: Object.fromEntries(extra.filter(k => typeof interaction.params[k] === "string").map(k => [k, String(interaction.params[k])])),
         }
     }
 
-    private async approve(uid: string, subject: string, authTime: number | undefined): Promise<string> {
-        const p = this.provider()
-        const interaction = await this.findInteraction(uid)
-        if (authTime !== undefined && forcesLogin(interaction) && authTime < interaction.iat!) throw new NOT_AUTHORIZED({debugMessage: "This sign-in needs a fresh login"})
-        const clientId = String(interaction.params.client_id)
-        const existing = interaction.grantId ? await p.Grant.find(interaction.grantId) : undefined
-        const grant = existing?.accountId === subject ? existing : new p.Grant({accountId: subject, clientId})
-        this.grantRequested(grant, interaction.params)
-        const grantId = await grant.save()
-        return this.ticket(interaction, {login: {accountId: subject, ts: authTime}, consent: {grantId}})
+    private origin(): string {
+        return new URL(this.options.issuer()).origin
+    }
+
+    private fail(res: ServerResponse, status: number, message: string): void {
+        const html = this.options.errorPage?.(message)
+        res.writeHead(status, {"content-type": html ? "text/html; charset=utf-8" : "text/plain"})
+        res.end(html ?? message)
     }
 
     private async findInteraction(uid: string): Promise<InstanceType<Provider["Interaction"]>> {
@@ -279,29 +374,33 @@ export class GGOAuthServer {
         const uid = interaction.uid
         const id = randomBytes(24).toString("base64url")
         await this.options.store.upsert(TICKET, id, {uid, result} satisfies Ticket, 120)
-        // Back to the origin the browser started on (its interaction cookie lives there) — but only a
-        // known one: returnTo comes from the request's Host, which a client can set to its own server.
-        const started = new URL(interaction.returnTo).origin
-        const known = [this.options.issuer(), ...(this.options.origins?.() ?? [])].map(o => new URL(o).origin)
-        return `${known.includes(started) ? started : known[0]}${BASE}/interaction/${uid}/complete?ticket=${id}`
+        return `${this.origin()}${BASE}/interaction/${uid}/complete?ticket=${id}`
     }
 
     private async finishInteraction(req: IncomingMessage, res: ServerResponse, uid: string): Promise<void> {
         const id = new URL(req.url ?? "/", "http://x").searchParams.get("ticket") ?? ""
-        const ticket = id ? await this.options.store.find(TICKET, id) as Ticket | undefined : undefined
-        if (id) await this.options.store.destroy(TICKET, id)
-        if (!ticket || ticket.uid !== uid) {
-            res.writeHead(400, {"content-type": "text/plain"})
-            res.end("Invalid or expired sign-in link")
-            return
-        }
+        const ticket = id ? await this.takeTicket(id) : undefined
+        if (!ticket || ticket.uid !== uid) return this.fail(res, 400, "Invalid or expired sign-in link")
         try {
             await this.provider().interactionFinished(req, res, ticket.result, {mergeWithLastSubmission: false})
         } catch (err) {
             if (!(err instanceof oidcErrors.SessionNotFound)) throw err
-            res.writeHead(400, {"content-type": "text/plain"})
-            res.end("This sign-in was started in another browser")
+            this.fail(res, 400, "This sign-in was started in another browser")
         }
+    }
+
+    // consume is the store's atomic once-only mark: of two concurrent redemptions only one gets past it.
+    private async takeTicket(id: string): Promise<Ticket | undefined> {
+        const store = this.options.store
+        try {
+            await store.consume(TICKET, id)
+        } catch (err) {
+            if (err instanceof oidcErrors.InvalidGrant) return undefined
+            throw err
+        }
+        const ticket = await store.find(TICKET, id) as Ticket | undefined
+        await store.destroy(TICKET, id)
+        return ticket
     }
 
     private grantRequested(grant: InstanceType<Provider["Grant"]>, params: Record<string, unknown>): void {
@@ -396,7 +495,10 @@ export class GGOAuthServer {
         const config: Configuration = {
             adapter: toOidcAdapter(o.store),
             jwks: {keys: [deriveEs256Jwk(o.secret())]},
-            cookies: {keys: [hkdf(o.secret(), "@grest-ts/oauth cookies").toString("base64url")]},
+            cookies: {
+                keys: [hkdf(o.secret(), "@grest-ts/oauth cookies").toString("base64url")],
+                names: {session: o.sessionCookie?.() ?? (new URL(o.issuer()).protocol === "https:" ? "__Host-session" : "_session")},
+            },
             clients: [...[...firstParty.values()].map(c => ({
                 client_id: c.clientId,
                 client_name: c.name,
@@ -430,6 +532,7 @@ export class GGOAuthServer {
                 device_authorization: `${BASE}/device/auth`, backchannel_authentication: `${BASE}/backchannel`, challenge: `${BASE}/challenge`,
             },
             interactions: {url: (_ctx, interaction) => `${BASE}/interaction/${interaction.uid}`},
+            extraParams: o.extraParams ?? [],
             scopes: OIDC_SCOPES,
             responseTypes: ["code"],
             pkce: {required: () => true},
@@ -544,8 +647,10 @@ export class GGOAuthServer {
                 },
             },
             renderError: async (ctx, out) => {
-                ctx.type = "text/plain"
-                ctx.body = `${out.error}: ${out.error_description ?? ""}`
+                const message = `${out.error}: ${out.error_description ?? ""}`
+                const html = o.errorPage?.(message)
+                ctx.type = html ? "html" : "text/plain"
+                ctx.body = html ?? message
             },
         }
         const provider = new Provider(o.issuer(), config)
@@ -602,6 +707,14 @@ export function deriveEs256Jwk(secret: string) {
     return {kty: "EC", crv: "P-256", d: d.toString("base64url"), x, y, alg: "ES256", use: "sig", kid}
 }
 
-function forcesLogin(interaction: InstanceType<Provider["Interaction"]>): boolean {
-    return interaction.prompt.name === "login" && interaction.prompt.reasons.some(r => r === "login_prompt" || r === "max_age")
+async function readForm(req: IncomingMessage): Promise<Record<string, string> | undefined> {
+    if (!(req.headers["content-type"] ?? "").startsWith("application/x-www-form-urlencoded")) return undefined
+    const chunks: Buffer[] = []
+    let size = 0
+    for await (const chunk of req as AsyncIterable<Buffer>) {
+        size += chunk.length
+        if (size > MAX_FORM_BYTES) return undefined
+        chunks.push(chunk)
+    }
+    return Object.fromEntries(new URLSearchParams(Buffer.concat(chunks).toString()))
 }
