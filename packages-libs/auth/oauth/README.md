@@ -73,7 +73,12 @@ the next refresh, and a deleted or deactivated user's OAuth session ends there.
 
 A user's access token carries `auth_time` (OIDC: when the user signed in, epoch seconds; a refresh
 keeps it), read as `verify(token).auth_time`. To require a recent sign-in, check it and send the user
-through `authorize({prompt: "login"})`.
+through `authorize({prompt: "login"})`. That time comes from the approving user's own token: issue it
+with `accessToken.issue(sub, claims, {authTime})` at sign-in and pass
+`interactionApi(subject, () => USER.get()!.authTime)`. Otherwise an approval counts as a sign-in, so
+anyone holding a user token could mint "fresh" ones. With `authTime`, a forced login (`prompt=login`,
+an expired `max_age`) is refused unless the user signed in after the request started. Token exchange
+keeps the subject token's `auth_time`.
 
 `clients` sets who may get tokens for a resource: `"any"` (the default: every client that signs a
 user in), `"firstParty"` (only `firstPartyClients`) or `"service"` (only service clients, below). A

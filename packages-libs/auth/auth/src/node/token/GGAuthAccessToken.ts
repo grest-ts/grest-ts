@@ -53,9 +53,10 @@ export class GGAuthAccessToken<C extends object, S extends TokenVerifier = Token
 
     // `unknown` rather than `never` when S can't sign, so a signing token still fits where a
     // verify-only one is expected (GGAuthAccessToken<C, TokenVerifier>).
-    public readonly issue = (async (subject: string | GGAuthSubject, claims: C): Promise<GGAccessTokenData> => {
-        return await this.sign(subject as GGAuthSubject, claims, this.now())
-    }) as S extends TokenSigner ? (subject: string | GGAuthSubject, claims: C) => Promise<GGAccessTokenData> : unknown
+    // `authTime`: when the subject signed in (epoch seconds), carried as `auth_time`.
+    public readonly issue = (async (subject: string | GGAuthSubject, claims: C, opts?: {authTime?: number}): Promise<GGAccessTokenData> => {
+        return await this.sign(subject as GGAuthSubject, claims, this.now(), opts?.authTime)
+    }) as S extends TokenSigner ? (subject: string | GGAuthSubject, claims: C, opts?: {authTime?: number}) => Promise<GGAccessTokenData> : unknown
 
     public verify = async (accessToken: string): Promise<GGAccessPayload<C>> => {
         const payload = await this.signer.verify(accessToken)
@@ -87,7 +88,7 @@ export class GGAuthAccessToken<C extends object, S extends TokenVerifier = Token
         this.sign(subject, claims, nowMs)
     ) as S extends TokenSigner ? (subject: GGAuthSubject, claims: C, nowMs: number) => Promise<GGAccessTokenData> : unknown
 
-    private sign = async (subject: GGAuthSubject, claims: C, nowMs: number): Promise<GGAccessTokenData> => {
+    private sign = async (subject: GGAuthSubject, claims: C, nowMs: number, authTime?: number): Promise<GGAccessTokenData> => {
         const expiresAt = nowMs + this.accessTtlMs
         // Only reachable through issue/_sign, whose types require S to be a TokenSigner.
         const token = await (this.signer as TokenVerifier as TokenSigner).sign({
@@ -97,6 +98,7 @@ export class GGAuthAccessToken<C extends object, S extends TokenVerifier = Token
             sub: subject,
             iat: Math.floor(nowMs / 1000),
             exp: Math.floor(expiresAt / 1000),
+            ...(authTime !== undefined ? {auth_time: authTime} : {}),
         })
         return IsGGAccessTokenData.parse({token, expiresAt})
     }

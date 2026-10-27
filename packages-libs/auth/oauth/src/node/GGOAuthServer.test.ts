@@ -4,7 +4,7 @@ import {createServer} from "node:net"
 import {GGRuntime} from "@grest-ts/runtime"
 import {GGHeader, GGHttp, GGHttpSchema, GGHttpServer, GGRpc} from "@grest-ts/http"
 import {GGContextKey} from "@grest-ts/context"
-import {IsArray, IsObject, IsString, NOT_AUTHORIZED} from "@grest-ts/schema"
+import {IsArray, IsNumber, IsObject, IsString, NOT_AUTHORIZED} from "@grest-ts/schema"
 import {GGAuthAccessToken, HmacSigner, JwksVerifier, JwsSigningStrategy, type JwsSigner} from "@grest-ts/auth"
 import {ACCESS_TOKEN_JWKS_PATH, deriveEs256Jwk, GGOAuthServer, type GGOAuthResource} from "./GGOAuthServer"
 import type {GGDynamoDb} from "@grest-ts/db-dynamodb"
@@ -32,12 +32,13 @@ const userPermissions = new Map<string, string[] | undefined>([["alice", ["read"
 let failClaimsOnce = false
 
 const USER_WIRE = new GGHeader("authorization", {scheme: "bearer"})
-const SUBJECT = new GGContextKey<{sub: string}>("oauthTestSubject", IsObject({sub: IsString}))
+const SUBJECT = new GGContextKey<{sub: string, authTime?: number}>("oauthTestSubject", IsObject({sub: IsString, authTime: IsNumber.orUndefined}))
 const USER_WIRE_HANDLER = USER_WIRE.define(() => ({
     process: async () => {
         const raw = USER_WIRE.get()
         if (!raw) throw new NOT_AUTHORIZED()
-        SUBJECT.set({sub: (await userToken.verify(raw)).sub})
+        const user = await userToken.verify(raw)
+        SUBJECT.set({sub: user.sub, authTime: user.auth_time})
     },
 }))
 const InteractionApi = new GGHttpSchema({
@@ -171,7 +172,7 @@ class OAuthTestRuntime extends GGRuntime {
             res.writeHead(200)
             res.end()
         })
-        new GGHttp(server).http(InteractionApi, oauth.interactionApi(() => SUBJECT.get()!.sub))
+        new GGHttp(server).http(InteractionApi, oauth.interactionApi(() => SUBJECT.get()!.sub, () => SUBJECT.get()!.authTime))
     }
 }
 
@@ -237,12 +238,12 @@ const interaction = (bearer: string) => async (method: "get" | "approve" | "deny
     return json
 }
 
-async function signIn(browser: Browser, clientId: string, redirectUri: string, sub = "alice", extra: Record<string, string> = {}) {
+async function signIn(browser: Browser, clientId: string, redirectUri: string, sub = "alice", extra: Record<string, string> = {}, authTime?: number) {
     const {verifier, challenge} = pkce()
     const login = await browser.navigate(authorizeUrl(clientId, redirectUri, challenge, extra))
     expect(login.origin + login.pathname).toBe(APP_LOGIN)
     const uid = login.searchParams.get("uid")!
-    const call = interaction((await userToken.issue(sub, {permissions: []})).token)
+    const call = interaction((await userToken.issue(sub, {permissions: []}, {authTime})).token)
     const details = await call("get", uid)
     const approved = await call("approve", uid)
     const callback = await browser.navigate(approved.data.redirectUrl)
@@ -510,6 +511,21 @@ describe("GGOAuthServer", () => {
         }
     })
 
+    test("an approval by a bearer signed in earlier gives tokens that bearer's sign-in time, not the approval's", async () => {
+        const hourAgo = Math.floor(Date.now() / 1000) - 3600
+        const {tokens} = await signIn(new Browser(), "app", FIRST_PARTY_REDIRECT, "alice", {}, hourAgo)
+        expect((await userToken.verify(tokens.access_token)).auth_time).toBe(hourAgo)
+    })
+
+    test("a forced login is approved only by a sign-in made after the request", async () => {
+        const browser = new Browser()
+        await signIn(browser, "app", FIRST_PARTY_REDIRECT)
+        const uid = (await browser.navigate(authorizeUrl("app", FIRST_PARTY_REDIRECT, pkce().challenge, {prompt: "login"}))).searchParams.get("uid")!
+        const approve = async (authTime: number) => interaction((await userToken.issue("alice", {permissions: []}, {authTime})).token)("approve", uid)
+        expect(await approve(Math.floor(Date.now() / 1000) - 3600)).toMatchObject({success: false, type: "NOT_AUTHORIZED"})
+        expect((await approve(Math.floor(Date.now() / 1000))).success).toBe(true)
+    })
+
     test("a grant records when it last got tokens", async () => {
         const clientId = await register()
         const before = Date.now()
@@ -659,6 +675,7 @@ describe("GGOAuthServer", () => {
         expect(ok).toMatchObject({issued_token_type: "urn:ietf:params:oauth:token-type:access_token", token_type: "Bearer"})
         const verified = await orgToken.verify(ok.access_token)
         expect(verified.sub).toBe("alice")
+        expect(verified.auth_time).toBe((await userToken.verify(tokens.access_token)).auth_time)
         expect(verified.data).toEqual({permissions: ["org:alice"]})
 
         expect((await exchange({subject_token: tokens.access_token, org_id: "o2"})).error).toBe("invalid_grant")
