@@ -176,12 +176,51 @@ const renderSignIn = async ({interaction, action, method, form, html, login, con
   the uid through its own state and ends with `loginTicketUrl(uid, accountId)`: a single-use link
   that completes the flow only in the browser that started it. A failed one goes back to
   `interactionUrl(uid, error?)`, the flow's page; `error` (your own code) arrives as `?error=`.
+  [External sign-in](#external-sign-in) does that round trip for you.
 - `extraParams` pass authorization parameters through to `interaction.params` (e.g. a sign-in
   method to start right away: `authorize({params: {start_with: "sso"}})`).
 - `sessionCookie` names the login session cookie. The default is `__Host-session` on an https issuer
   (`_session` on http).
 - `errorPage(message)` renders the server's own error pages (an expired flow, an invalid request).
   `message` can echo request values (e.g. an OAuth `error_description`): HTML-escape it.
+
+### External sign-in
+
+"Sign in with GitHub / your company IdP" leaves the issuer: the upstream sends the browser back to a
+callback registered on some host of yours. `externalSignIn` does that round trip: a per-flow state
+cookie at start, and at the callback a login ticket or the flow's page with your error code.
+
+```ts
+const idpSignIn = oauth.externalSignIn<OidcAuthorizationChecks>({
+    callbackPath: "/auth/oidc/callback", fallbackUrl: () => appUrl,
+})
+// GET /auth/oidc/start?uid=…  (your sign-in page links here)
+idpSignIn.send(res, await idpSignIn.start(uid, async (state) => {
+    const {url, checks} = await idp.authorize({state})     // OidcRelyingParty from @grest-ts/auth/oidc-rp
+    return {url, data: checks}
+}))
+// GET /auth/oidc/callback
+const redirect = await idpSignIn.callback(req, async ({params, query, data}) => {
+    if (params.get("error")) return {error: "cancelled"}
+    const {identity} = await idp.callback(query, data)
+    const user = await users.byExternalIdentity(identity)
+    return user ? {accountId: user.id, amr: ["idp"]} : {error: "not_linked"}
+})
+idpSignIn.send(res, redirect ?? {location: appUrl})
+```
+
+- `start(uid, authorize)`: `authorize` builds the upstream URL with the `state` it is given. The state
+  cookie (HttpOnly, Secure, SameSite=Lax, `Path=callbackPath`, 10 minutes, named by the state so
+  sign-ins in two tabs don't clash) carries the uid and your `data` (e.g. the PKCE verifier), signed
+  with a key derived from `secret`. It is readable by the browser, so keep secrets out; over ~4 KB is refused.
+- `callback(req, resolve)` is `undefined` when this browser holds no state cookie for the callback's
+  `state`: it isn't this flow's, so a callback URL shared with something else (e.g. linking a GitHub
+  account) falls through to your other handling. Otherwise the cookie is cleared, and:
+  - a tampered or expired cookie, or a sign-in that expired meanwhile, goes to `fallbackUrl`;
+  - `resolve` runs only after the cookie and `state` check out, so a forged `?error=` link can't cancel
+    someone's sign-in. It answers `{accountId, amr?}` (→ a login ticket) or `{error}` (→
+    `interactionUrl(uid, error)`). An exception propagates: map failures to an error code yourself.
+- `send(res, redirect)` answers 302 with `Cache-Control: no-store` and the cookie.
 
 A first-party client re-authorizes silently while the login session lives. Set `refreshTokens:
 false` on one that only reads who signed in and keeps nothing: its codes then buy an access token alone.

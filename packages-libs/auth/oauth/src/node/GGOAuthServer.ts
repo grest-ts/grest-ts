@@ -9,6 +9,7 @@ import type {GGAccessPayload, GGAuthAccessToken, TokenVerifier} from "@grest-ts/
 import {GGOAuthResourceServer, type GGOAuthProtectedResource} from "./GGOAuthResourceServer"
 import {toOidcAdapter, type GGOAuthStore} from "./store/GGOAuthStore"
 import {ACCESS_TOKEN_TYPE, TOKEN_EXCHANGE} from "./tokenExchange"
+import {GGOAuthExternalSignIn, type GGOAuthExternalSignInOptions} from "./GGOAuthExternalSignIn"
 
 export interface GGOAuthFirstPartyClient {
     clientId: string
@@ -241,6 +242,11 @@ export class GGOAuthServer {
     // to, with `error` (the app's own code) as ?error=.
     public interactionUrl = async (uid: string, error?: string): Promise<string> =>
         `${this.origin()}${BASE}/interaction/${(await this.findInteraction(uid)).uid}${error ? `?error=${encodeURIComponent(error)}` : ""}`
+
+    // A sign-in that completes on an upstream whose callback is on another host (see GGOAuthExternalSignIn).
+    // Its state cookie is signed with a key derived from `secret`.
+    public externalSignIn = <D = undefined>(options: GGOAuthExternalSignInOptions): GGOAuthExternalSignIn<D> =>
+        new GGOAuthExternalSignIn<D>(this, () => hkdf(this.options.secret(), "@grest-ts/oauth external sign-in"), options)
 
     public listGrants = async (subject: string): Promise<Array<{grantId: string, clientId: string, clientName: string, firstParty: boolean, createdAt: number, lastUsedAt?: number}>> => {
         const p = this.provider()

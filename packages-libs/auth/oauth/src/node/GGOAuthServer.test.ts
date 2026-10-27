@@ -11,6 +11,7 @@ import {InMemoryOAuthStore} from "./store/InMemoryOAuthStore"
 import {DynamoOAuthStore} from "./store/DynamoOAuthStore"
 import {GGOAuthResourceServer} from "./GGOAuthResourceServer"
 import {GGOAuthServiceClient, GGOAuthTokenError} from "./GGOAuthServiceClient"
+import type {GGOAuthExternalSignIn} from "./GGOAuthExternalSignIn"
 
 const IsClaims = IsObject({permissions: IsArray(IsString)})
 type Claims = typeof IsClaims.infer
@@ -63,6 +64,9 @@ const basic = (id: string, secret: string) => `Basic ${Buffer.from(`${id}:${secr
 const target = (clientId: string) => clientId === "app" || clientId === "identity" ? {resource: API, scope: "api"} : {resource: MCP, scope: "mcp"}
 
 let oauth!: GGOAuthServer
+// A sign-in on an upstream (as an OIDC IdP or GitHub) whose callback is this server's /ext/callback.
+let external!: GGOAuthExternalSignIn<{nonce: string}>
+const UPSTREAM = "https://upstream.example"
 // Every bearer value the tests saw: tokens, codes, approval tickets and the login session cookie.
 const bearers = new Set<string>()
 
@@ -162,6 +166,22 @@ class OAuthTestRuntime extends GGRuntime {
             proxy: true,
         })
         oauth.mount(server)
+        external = oauth.externalSignIn({callbackPath: "/ext/callback", fallbackUrl: () => `${ISSUER}/fallback`})
+        server.registerRoute("GET", "/ext/start", async (req, res) => {
+            const uid = new URL(req.url!, ISSUER).searchParams.get("uid")!
+            external.send(res, await external.start(uid, async (state) => ({url: `${UPSTREAM}/authorize?state=${state}`, data: {nonce: "n1"}})))
+        })
+        server.registerRoute("GET", "/ext/callback", async (req, res) => {
+            const redirect = await external.callback(req, async ({params, data}) => {
+                if (params.get("error")) return {error: "cancelled"}
+                if (data.nonce !== "n1") return {error: "lost data"}
+                return {accountId: params.get("code")!, amr: ["ext"]}
+            })
+            if (redirect) return external.send(res, redirect)
+            // A shared callback URL's other use (e.g. linking an account).
+            res.writeHead(200)
+            res.end("not a sign-in")
+        })
         oauth.protect(server, mcp, "/mcp", async (_req, res, token) => {
             res.writeHead(200, {"content-type": "application/json"})
             res.end(JSON.stringify({hello: token.sub}))
@@ -575,6 +595,75 @@ describe("GGOAuthServer", () => {
         dynamo.slowReads = true
         const results = await Promise.all([starter.get(url), starter.get(url)]).finally(() => { dynamo.slowReads = false })
         expect(results.map(r => r.status).sort()).toEqual([303, 400])
+    })
+
+    describe("external sign-in", () => {
+        const startExternal = async (browser: Browser) => {
+            const {verifier, challenge} = pkce()
+            const login = await browser.page(authorizeUrl("app", FIRST_PARTY_REDIRECT, challenge))
+            const start = await browser.get(`/ext/start?uid=${login.uid}`)
+            const upstream = new URL(start.headers.get("location")!)
+            expect(upstream.origin).toBe(UPSTREAM)
+            return {uid: login.uid, verifier, state: upstream.searchParams.get("state")!, setCookie: start.headers.get("set-cookie")!}
+        }
+
+        test("a state cookie for the round trip, then a login ticket for the account the app resolved", async () => {
+            const browser = new Browser()
+            const {uid, verifier, state, setCookie} = await startExternal(browser)
+            expect(setCookie).toMatch(new RegExp(`^gg_signin_${state}=[^;]+; Path=/ext/callback; Max-Age=600; HttpOnly; Secure; SameSite=Lax$`))
+
+            const back = await browser.get(`/ext/callback?code=alice&state=${state}`)
+            expect(back.status).toBe(302)
+            expect(back.headers.get("set-cookie")).toMatch(new RegExp(`^gg_signin_${state}=; Path=/ext/callback; Max-Age=0;`))
+            const ticket = new URL(back.headers.get("location")!)
+            expect(ticket.pathname).toBe(`/oauth/interaction/${uid}/complete`)
+            bearers.add(ticket.searchParams.get("ticket")!)
+
+            const callback = await browser.done(ticket.href)
+            const tokens = await token({grant_type: "authorization_code", code: callback.searchParams.get("code")!, redirect_uri: FIRST_PARTY_REDIRECT, client_id: "app", code_verifier: verifier, resource: API})
+            expect((await userToken.verify(tokens.access_token)).sub).toBe("alice")
+        })
+
+        test("the upstream's error goes back to the flow's page as the app's code; a forged one is not this flow's", async () => {
+            const browser = new Browser()
+            const {uid, state} = await startExternal(browser)
+            for (const forged of [new Browser().get(`/ext/callback?error=access_denied&state=${state}`), browser.get("/ext/callback?error=access_denied&state=guessed")]) {
+                expect(await (await forged).text()).toBe("not a sign-in")
+            }
+            const back = await browser.get(`/ext/callback?error=access_denied&state=${state}`)
+            expect(back.headers.get("location")).toBe(await oauth.interactionUrl(uid, "cancelled"))
+        })
+
+        test("a tampered or expired state cookie goes to the fallback, and is cleared", async () => {
+            const browser = new Browser()
+            const {state} = await startExternal(browser)
+            const name = `gg_signin_${state}`
+            const raw = browser.jar.get(name)!
+            browser.jar.set(name, raw.slice(0, -2) + (raw.endsWith("AA") ? "BB" : "AA"))
+            const tampered = await browser.get(`/ext/callback?code=mallory&state=${state}`)
+            expect(tampered.headers.get("location")).toBe(`${ISSUER}/fallback`)
+            expect(tampered.headers.get("set-cookie")).toContain("Max-Age=0")
+
+            const expired = new Browser()
+            const fresh = await startExternal(expired)
+            vi.useFakeTimers({toFake: ["Date"], now: Date.now() + 601_000})
+            try {
+                expect((await expired.get(`/ext/callback?code=alice&state=${fresh.state}`)).headers.get("location")).toBe(`${ISSUER}/fallback`)
+            } finally {
+                vi.useRealTimers()
+            }
+        })
+
+        test("a sign-in that expired meanwhile goes to the fallback", async () => {
+            const browser = new Browser()
+            const {uid, state} = await startExternal(browser)
+            await store.destroy("Interaction", uid)
+            expect((await browser.get(`/ext/callback?code=alice&state=${state}`)).headers.get("location")).toBe(`${ISSUER}/fallback`)
+        })
+
+        test("start refuses data too large for a cookie", async () => {
+            await expect(external.start("uid", async () => ({url: UPSTREAM, data: {nonce: "x".repeat(5000)}}))).rejects.toThrow(/too large/)
+        })
     })
 
     test("refresh rotates, re-resolves claims, and treats replay as reuse", async () => {
