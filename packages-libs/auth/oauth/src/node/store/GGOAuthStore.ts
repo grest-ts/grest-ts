@@ -20,7 +20,6 @@ export interface GGOAuthStore {
     destroy(model: string, id: string): Promise<void>
     // Every GRANT_BOUND row carrying this grantId.
     revokeByGrantId(grantId: string): Promise<void>
-    // For "connected apps" and revoke-all.
     listGrantIds(accountId: string): Promise<string[]>
     destroySessions(accountId: string): Promise<void>
 }

@@ -53,7 +53,6 @@ export class GGAuthAccessToken<C extends object, S extends TokenVerifier = Token
 
     // `unknown` rather than `never` when S can't sign, so a signing token still fits where a
     // verify-only one is expected (GGAuthAccessToken<C, TokenVerifier>).
-    // `authTime`: when the subject signed in (epoch seconds), carried as `auth_time`.
     public readonly issue = (async (subject: string | GGAuthSubject, claims: C, opts?: {authTime?: number}): Promise<GGAccessTokenData> => {
         return await this.sign(subject as GGAuthSubject, claims, this.now(), opts?.authTime)
     }) as S extends TokenSigner ? (subject: string | GGAuthSubject, claims: C, opts?: {authTime?: number}) => Promise<GGAccessTokenData> : unknown

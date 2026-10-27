@@ -7,7 +7,7 @@ import {GRANT_BOUND, type GGOAuthPayload, type GGOAuthStore} from "./GGOAuthStor
 const IsOAuthRow = IsObject({
     pk: IsString.nonEmpty,
     model: IsString.nonEmpty,
-    /** Only a Grant's: its id isn't a secret (every token row carries it as grantId). */
+    /** Grant rows only: a grant id isn't a secret (every token row carries it as grantId). */
     id: IsString.orUndefined,
     // oidc-provider's payload as JSON: opaque, nested, may hold undefined values.
     payload: IsString,
@@ -78,24 +78,20 @@ export class DynamoOAuthStore extends GGDynamoDbTable<OAuthRow, "pk"> implements
         await this.delete(keyOf(model, id))
     }
 
-    // A long-lived grant accumulates one spent refresh token per rotation (kept for reuse detection), so page.
-    public revokeByGrantId = async (grantId: string): Promise<void> => {
-        let cursor: string | undefined
-        do {
-            const page = await this.queryPage("grantId-index", "grantId = :g", {":g": grantId}, {cursor, limit: 100})
-            await Promise.all(page.items.map(row => this.delete(row.pk)))
-            cursor = page.cursor
-        } while (cursor)
-    }
+    public revokeByGrantId = (grantId: string): Promise<void> => this.deleteAll("grantId-index", "grantId = :g", {":g": grantId})
 
     public listGrantIds = async (accountId: string): Promise<string[]> =>
         (await this.query("accountId-index", "accountId = :a", {":a": accountId, ":model": "Grant"}, {filter: "#m = :model", names: {"#m": "model"}}))
             .filter(row => this.live(row)).map(row => row.id!)
 
-    public destroySessions = async (accountId: string): Promise<void> => {
+    public destroySessions = (accountId: string): Promise<void> =>
+        this.deleteAll("accountId-index", "accountId = :a", {":a": accountId, ":model": "Session"}, {filter: "#m = :model", names: {"#m": "model"}})
+
+    // A long-lived grant accumulates one spent refresh token per rotation (kept for reuse detection), so page.
+    private async deleteAll(index: string, condition: string, values: Record<string, unknown>, opts?: {filter: string, names: Record<string, string>}): Promise<void> {
         let cursor: string | undefined
         do {
-            const page = await this.queryPage("accountId-index", "accountId = :a", {":a": accountId, ":model": "Session"}, {filter: "#m = :model", names: {"#m": "model"}, cursor, limit: 100})
+            const page = await this.queryPage(index, condition, values, {...opts, cursor, limit: 100})
             await Promise.all(page.items.map(row => this.delete(row.pk)))
             cursor = page.cursor
         } while (cursor)
