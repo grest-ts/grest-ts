@@ -71,6 +71,15 @@ new GGHttp(httpServer).http(OAuthInteractionApi, oauth.interactionApi(() => USER
 `claims` works like the `resolve` callback of `GGAuthRefreshToken.refresh`: role changes apply on
 the next refresh, and a deleted or deactivated user's OAuth session ends there.
 
+A user's access token carries `auth_time` (OIDC: when the user signed in, epoch seconds; a refresh
+keeps it), read as `verify(token).auth_time`. To require a recent sign-in, check it and send the user
+through `authorize({prompt: "login"})`. That time comes from the approving user's own token: issue it
+with `accessToken.issue(sub, claims, {authTime})` at sign-in and pass
+`interactionApi(subject, () => USER.get()!.authTime)`. Otherwise an approval counts as a sign-in, so
+anyone holding a user token could mint "fresh" ones. With `authTime`, a forced login (`prompt=login`,
+an expired `max_age`) is refused unless the user signed in after the request started. Token exchange
+keeps the subject token's `auth_time`.
+
 `clients` sets who may get tokens for a resource: `"any"` (the default: every client that signs a
 user in), `"firstParty"` (only `firstPartyClients`) or `"service"` (only service clients, below). A
 service client gets no other resource.
@@ -177,6 +186,8 @@ ship:
   - HASH key `pk` (S)
   - TTL attribute `expiresAtSec`
   - GSIs projecting ALL: `grantId-index`, `uid-index`, `accountId-index`
+  - Rows are keyed by the SHA-256 of the id, and payloads drop it: oidc-provider's ids are the
+    refresh tokens, codes and session cookies themselves, so the table holds none of them.
 
 ## Browser client
 
@@ -204,6 +215,7 @@ oauth.logout(undefined)   // ends the authorization server's login session too
   `origins`), and `resource` defaults to the issuer it declares.
 - `iss` on the callback must match the issuer (RFC 9207).
 - `invalid_grant` on refresh surfaces as `NOT_AUTHORIZED`, which ends the session.
+- `authorize({prompt: "login"})` asks for a fresh sign-in even while the login session lives.
 
 ## Notes
 

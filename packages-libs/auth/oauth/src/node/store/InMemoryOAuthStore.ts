@@ -40,8 +40,12 @@ export class InMemoryOAuthStore implements GGOAuthStore {
         for (const [key, row] of this.rows) if (GRANT_BOUND.has(row.model) && row.payload.grantId === grantId) this.rows.delete(key)
     }
 
-    public listIdsByAccount = async (model: string, accountId: string): Promise<string[]> =>
-        [...this.rows.values()].filter(r => r.model === model && this.live(r) && r.payload.accountId === accountId).map(r => r.id)
+    public listGrantIds = async (accountId: string): Promise<string[]> =>
+        [...this.rows.values()].filter(r => r.model === "Grant" && this.live(r) && r.payload.accountId === accountId).map(r => r.id)
+
+    public destroySessions = async (accountId: string): Promise<void> => {
+        for (const [key, row] of this.rows) if (row.model === "Session" && row.payload.accountId === accountId) this.rows.delete(key)
+    }
 
     private findWhere(model: string, match: (p: GGOAuthPayload) => boolean): GGOAuthPayload | undefined {
         for (const row of this.rows.values()) if (row.model === model && this.live(row) && match(row.payload)) return row.payload

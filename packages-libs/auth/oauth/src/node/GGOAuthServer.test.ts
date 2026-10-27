@@ -4,10 +4,12 @@ import {createServer} from "node:net"
 import {GGRuntime} from "@grest-ts/runtime"
 import {GGHeader, GGHttp, GGHttpSchema, GGHttpServer, GGRpc} from "@grest-ts/http"
 import {GGContextKey} from "@grest-ts/context"
-import {IsArray, IsObject, IsString, NOT_AUTHORIZED} from "@grest-ts/schema"
+import {IsArray, IsNumber, IsObject, IsString, NOT_AUTHORIZED} from "@grest-ts/schema"
 import {GGAuthAccessToken, HmacSigner, JwksVerifier, JwsSigningStrategy, type JwsSigner} from "@grest-ts/auth"
 import {ACCESS_TOKEN_JWKS_PATH, deriveEs256Jwk, GGOAuthServer, type GGOAuthResource} from "./GGOAuthServer"
+import type {GGDynamoDb} from "@grest-ts/db-dynamodb"
 import {InMemoryOAuthStore} from "./store/InMemoryOAuthStore"
+import {DynamoOAuthStore} from "./store/DynamoOAuthStore"
 import {GGOAuthResourceServer} from "./GGOAuthResourceServer"
 import {GGOAuthServiceClient, GGOAuthTokenError} from "./GGOAuthServiceClient"
 import {GGOAuthInteractionContract} from "../shared/interactionContract"
@@ -30,12 +32,13 @@ const userPermissions = new Map<string, string[] | undefined>([["alice", ["read"
 let failClaimsOnce = false
 
 const USER_WIRE = new GGHeader("authorization", {scheme: "bearer"})
-const SUBJECT = new GGContextKey<{sub: string}>("oauthTestSubject", IsObject({sub: IsString}))
+const SUBJECT = new GGContextKey<{sub: string, authTime?: number}>("oauthTestSubject", IsObject({sub: IsString, authTime: IsNumber.orUndefined}))
 const USER_WIRE_HANDLER = USER_WIRE.define(() => ({
     process: async () => {
         const raw = USER_WIRE.get()
         if (!raw) throw new NOT_AUTHORIZED()
-        SUBJECT.set({sub: (await userToken.verify(raw)).sub})
+        const user = await userToken.verify(raw)
+        SUBJECT.set({sub: user.sub, authTime: user.auth_time})
     },
 }))
 const InteractionApi = new GGHttpSchema({
@@ -78,7 +81,31 @@ const basic = (id: string, secret: string) => `Basic ${Buffer.from(`${id}:${secr
 const target = (clientId: string) => clientId === "app" || clientId === "identity" ? {resource: API, scope: "api"} : {resource: MCP, scope: "mcp"}
 
 let oauth!: GGOAuthServer
-const store = new InMemoryOAuthStore()
+// Every bearer value the tests saw: tokens, codes, approval tickets and the login session cookie.
+const bearers = new Set<string>()
+
+// DynamoDB as DynamoOAuthStore uses it: key lookups, the GSIs it queries, and its one put condition.
+function fakeDynamo() {
+    const rows = new Map<string, Record<string, unknown>>()
+    const query = async (_table: string, index: string, _condition: string, {":model": model, ...key}: Record<string, unknown>) =>
+        [...rows.values()].filter(r => r[index.replace("-index", "")] === Object.values(key)[0] && (!model || r.model === model))
+    const db = {
+        get: async (_table: string, key: {pk: string}) => rows.get(key.pk),
+        put: async (_table: string, item: {pk: string}) => { rows.set(item.pk, item) },
+        putConditional: async (_table: string, item: {pk: string}) => {
+            const row = rows.get(item.pk)
+            if (!row || row.consumedAt !== undefined) return false
+            rows.set(item.pk, item)
+            return true
+        },
+        delete: async (_table: string, key: {pk: string}) => { rows.delete(key.pk) },
+        query,
+        queryPage: async (...args: Parameters<typeof query>) => ({items: await query(...args), cursor: undefined}),
+    }
+    return {db: db as unknown as GGDynamoDb, rows}
+}
+const dynamo = fakeDynamo()
+const store = new DynamoOAuthStore(dynamo.db, "oauth")
 
 class OAuthTestRuntime extends GGRuntime {
     public static readonly NAME = "oauth-test"
@@ -145,7 +172,7 @@ class OAuthTestRuntime extends GGRuntime {
             res.writeHead(200)
             res.end()
         })
-        new GGHttp(server).http(InteractionApi, oauth.interactionApi(() => SUBJECT.get()!.sub))
+        new GGHttp(server).http(InteractionApi, oauth.interactionApi(() => SUBJECT.get()!.sub, () => SUBJECT.get()!.authTime))
     }
 }
 
@@ -162,7 +189,9 @@ class Browser {
         for (const c of res.headers.getSetCookie()) {
             const [kv] = c.split(";")
             const i = kv.indexOf("=")
-            this.jar.set(kv.slice(0, i), kv.slice(i + 1))
+            const [name, value] = [kv.slice(0, i), kv.slice(i + 1)]
+            this.jar.set(name, value)
+            if (name === "_session" && value) bearers.add(value)
         }
         return res
     }
@@ -192,7 +221,9 @@ function authorizeUrl(clientId: string, redirectUri: string, challenge: string, 
 
 async function token(body: Record<string, string>): Promise<Record<string, any>> {
     const res = await fetch(`${ISSUER}/oauth/token`, {method: "POST", body: new URLSearchParams(body)})
-    return await res.json()
+    const json = await res.json()
+    for (const value of [body.code, json.access_token, json.refresh_token]) if (value) bearers.add(value)
+    return json
 }
 
 const interaction = (bearer: string) => async (method: "get" | "approve" | "deny", uid: string) => {
@@ -202,15 +233,17 @@ const interaction = (bearer: string) => async (method: "get" | "approve" | "deny
         body: method === "get" ? undefined : JSON.stringify({uid}),
     })
     const json = await res.json() as {success: boolean, data: any}
+    const ticket = json.data?.redirectUrl && new URL(json.data.redirectUrl).searchParams.get("ticket")
+    if (ticket) bearers.add(ticket)
     return json
 }
 
-async function signIn(browser: Browser, clientId: string, redirectUri: string, sub = "alice", extra: Record<string, string> = {}) {
+async function signIn(browser: Browser, clientId: string, redirectUri: string, sub = "alice", extra: Record<string, string> = {}, authTime?: number) {
     const {verifier, challenge} = pkce()
     const login = await browser.navigate(authorizeUrl(clientId, redirectUri, challenge, extra))
     expect(login.origin + login.pathname).toBe(APP_LOGIN)
     const uid = login.searchParams.get("uid")!
-    const call = interaction((await userToken.issue(sub, {permissions: []})).token)
+    const call = interaction((await userToken.issue(sub, {permissions: []}, {authTime})).token)
     const details = await call("get", uid)
     const approved = await call("approve", uid)
     const callback = await browser.navigate(approved.data.redirectUrl)
@@ -463,6 +496,36 @@ describe("GGOAuthServer", () => {
         expect((await token({grant_type: "refresh_token", refresh_token: refreshed.refresh_token, client_id: "app"})).error).toBe("invalid_grant")
     })
 
+    test("an access token carries the sign-in time, and a refresh keeps it", async () => {
+        const before = Math.floor(Date.now() / 1000)
+        const {tokens} = await signIn(new Browser(), "app", FIRST_PARTY_REDIRECT)
+        const signedIn = (await userToken.verify(tokens.access_token)).auth_time!
+        expect(signedIn).toBeGreaterThanOrEqual(before)
+        vi.useFakeTimers({toFake: ["Date"], now: Date.now() + 60_000})
+        try {
+            const refreshed = await userToken.verify((await token({grant_type: "refresh_token", refresh_token: tokens.refresh_token, client_id: "app"})).access_token)
+            expect(refreshed.iat).toBeGreaterThanOrEqual(signedIn + 60)
+            expect(refreshed.auth_time).toBe(signedIn)
+        } finally {
+            vi.useRealTimers()
+        }
+    })
+
+    test("an approval by a bearer signed in earlier gives tokens that bearer's sign-in time, not the approval's", async () => {
+        const hourAgo = Math.floor(Date.now() / 1000) - 3600
+        const {tokens} = await signIn(new Browser(), "app", FIRST_PARTY_REDIRECT, "alice", {}, hourAgo)
+        expect((await userToken.verify(tokens.access_token)).auth_time).toBe(hourAgo)
+    })
+
+    test("a forced login is approved only by a sign-in made after the request", async () => {
+        const browser = new Browser()
+        await signIn(browser, "app", FIRST_PARTY_REDIRECT)
+        const uid = (await browser.navigate(authorizeUrl("app", FIRST_PARTY_REDIRECT, pkce().challenge, {prompt: "login"}))).searchParams.get("uid")!
+        const approve = async (authTime: number) => interaction((await userToken.issue("alice", {permissions: []}, {authTime})).token)("approve", uid)
+        expect(await approve(Math.floor(Date.now() / 1000) - 3600)).toMatchObject({success: false, type: "NOT_AUTHORIZED"})
+        expect((await approve(Math.floor(Date.now() / 1000))).success).toBe(true)
+    })
+
     test("a grant records when it last got tokens", async () => {
         const clientId = await register()
         const before = Date.now()
@@ -612,6 +675,7 @@ describe("GGOAuthServer", () => {
         expect(ok).toMatchObject({issued_token_type: "urn:ietf:params:oauth:token-type:access_token", token_type: "Bearer"})
         const verified = await orgToken.verify(ok.access_token)
         expect(verified.sub).toBe("alice")
+        expect(verified.auth_time).toBe((await userToken.verify(tokens.access_token)).auth_time)
         expect(verified.data).toEqual({permissions: ["org:alice"]})
 
         expect((await exchange({subject_token: tokens.access_token, org_id: "o2"})).error).toBe("invalid_grant")
@@ -649,6 +713,17 @@ describe("GGOAuthServer", () => {
     test("the interaction API requires the app's signed-in user", async () => {
         const res = await fetch(`${API}/oauth/interaction/get?uid=x`)
         expect(res.status).toBe(401)
+    })
+
+    test("no stored row holds a bearer value, in its key or payload", async () => {
+        const browser = new Browser()
+        const {tokens} = await signIn(browser, "app", FIRST_PARTY_REDIRECT)
+        await token({grant_type: "refresh_token", refresh_token: tokens.refresh_token, client_id: "app"})
+        // Left pending: its Interaction copies the login session, and its ticket is never redeemed.
+        const pending = await browser.navigate(authorizeUrl("app", FIRST_PARTY_REDIRECT, pkce().challenge, {prompt: "login"}))
+        await interaction((await userToken.issue("alice", {permissions: []})).token)("approve", pending.searchParams.get("uid")!)
+        const stored = [...dynamo.rows.values()].map(row => JSON.stringify(row))
+        for (const bearer of bearers) expect(stored.filter(row => row.includes(bearer))).toEqual([])
     })
 })
 

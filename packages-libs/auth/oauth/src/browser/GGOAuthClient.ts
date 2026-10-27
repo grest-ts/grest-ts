@@ -51,7 +51,7 @@ export class GGOAuthClient<I = unknown> {
     }
 
     // Redirects the browser to the authorization server; resolves never (the page unloads).
-    public authorize = (opts?: {returnTo?: string}): Promise<void> => this.leave(async () => {
+    public authorize = (opts?: {returnTo?: string, prompt?: "login"}): Promise<void> => this.leave(async () => {
         const meta = await this.discover()
         const verifier = randomString()
         const pending: Pending = {state: randomString(), verifier, returnTo: opts?.returnTo}
@@ -66,6 +66,7 @@ export class GGOAuthClient<I = unknown> {
             code_challenge_method: "S256",
             resource: await this.resource(),
             ...(this.config.scope ? {scope: this.config.scope} : {}),
+            ...(opts?.prompt ? {prompt: opts.prompt} : {}),
         }).toString()
         return url.href
     })

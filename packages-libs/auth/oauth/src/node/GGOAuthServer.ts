@@ -2,7 +2,7 @@ import {createECDH, createHash, hkdfSync, randomBytes} from "node:crypto"
 import type {IncomingMessage, ServerResponse} from "node:http"
 import {decodeJwt} from "jose"
 import Provider, {errors as oidcErrors, type ClientMetadata, type Configuration, type InteractionResults, type KoaContextWithOIDC} from "oidc-provider"
-import {NOT_FOUND} from "@grest-ts/schema"
+import {NOT_AUTHORIZED, NOT_FOUND} from "@grest-ts/schema"
 import {GGLog} from "@grest-ts/logger"
 import type {GGHttpServer} from "@grest-ts/http"
 import type {GGAccessPayload, GGAuthAccessToken, TokenVerifier} from "@grest-ts/auth"
@@ -184,18 +184,19 @@ export class GGOAuthServer {
         this.resourceServer.protect(server, resource, path, handle)
     }
 
-    // Implementation of GGOAuthInteractionContract; `subject` reads the signed-in user from the app's wire.
-    public interactionApi(subject: () => string): typeof GGOAuthInteractionContract.infer {
+    // Implementation of GGOAuthInteractionContract; `subject` reads the signed-in user from the app's wire, `authTime`
+    // when that user signed in (epoch seconds): the sign-in time OAuth tokens then carry, instead of the approval's.
+    public interactionApi(subject: () => string, authTime?: () => number | undefined): typeof GGOAuthInteractionContract.infer {
         return {
             get: async ({uid}) => this.describeInteraction(uid),
-            approve: async ({uid}) => ({redirectUrl: await this.approve(uid, subject())}),
+            approve: async ({uid}) => ({redirectUrl: await this.approve(uid, subject(), authTime?.())}),
             deny: async ({uid}) => ({redirectUrl: await this.ticket(await this.findInteraction(uid), {error: "access_denied", error_description: "The user denied the request"})}),
         }
     }
 
     public listGrants = async (subject: string): Promise<Array<{grantId: string, clientId: string, clientName: string, firstParty: boolean, createdAt: number, lastUsedAt?: number}>> => {
         const p = this.provider()
-        const grants = await Promise.all((await this.options.store.listIdsByAccount("Grant", subject)).map(id => p.Grant.find(id)))
+        const grants = await Promise.all((await this.options.store.listGrantIds(subject)).map(id => p.Grant.find(id)))
         return await Promise.all(grants
             .filter(g => g?.clientId && g.accountId === subject)
             .map(async g => {
@@ -220,17 +221,16 @@ export class GGOAuthServer {
         const grant = await this.provider().Grant.find(grantId)
         if (!grant || grant.accountId !== subject) throw new NOT_FOUND()
         await this.options.store.revokeByGrantId(grantId)
-        // The grant row carries its id as jti, not grantId, so revokeByGrantId leaves it.
+        // A grant row isn't GRANT_BOUND, so revokeByGrantId leaves it.
         await this.options.store.destroy("Grant", grantId)
     }
 
     // "Log out everywhere": every grant and login session of the subject.
     public revokeAll = async (subject: string): Promise<void> => {
         const store = this.options.store
-        const [grantIds, sessionIds] = await Promise.all([store.listIdsByAccount("Grant", subject), store.listIdsByAccount("Session", subject)])
         await Promise.all([
-            ...grantIds.map(id => Promise.all([store.revokeByGrantId(id), store.destroy("Grant", id)])),
-            ...sessionIds.map(id => store.destroy("Session", id)),
+            store.destroySessions(subject),
+            store.listGrantIds(subject).then(ids => Promise.all(ids.map(id => Promise.all([store.revokeByGrantId(id), store.destroy("Grant", id)])))),
         ])
     }
 
@@ -251,19 +251,20 @@ export class GGOAuthServer {
             },
             scopes: requestedScopes(interaction.params),
             resource: this.requestedResource(interaction.params, clientId).resource(),
-            forceLogin: interaction.prompt.name === "login" && interaction.prompt.reasons.some(r => r === "login_prompt" || r === "max_age"),
+            forceLogin: forcesLogin(interaction),
         }
     }
 
-    private async approve(uid: string, subject: string): Promise<string> {
+    private async approve(uid: string, subject: string, authTime: number | undefined): Promise<string> {
         const p = this.provider()
         const interaction = await this.findInteraction(uid)
+        if (authTime !== undefined && forcesLogin(interaction) && authTime < interaction.iat!) throw new NOT_AUTHORIZED({debugMessage: "This sign-in needs a fresh login"})
         const clientId = String(interaction.params.client_id)
         const existing = interaction.grantId ? await p.Grant.find(interaction.grantId) : undefined
         const grant = existing?.accountId === subject ? existing : new p.Grant({accountId: subject, clientId})
         this.grantRequested(grant, interaction.params)
         const grantId = await grant.save()
-        return this.ticket(interaction, {login: {accountId: subject}, consent: {grantId}})
+        return this.ticket(interaction, {login: {accountId: subject, ts: authTime}, consent: {grantId}})
     }
 
     private async findInteraction(uid: string): Promise<InstanceType<Provider["Interaction"]>> {
@@ -366,7 +367,7 @@ export class GGOAuthServer {
         if (!subject) throw new oidcErrors.InvalidGrant("subject_token is invalid or expired")
         const claims = await target.exchange.claims(subject.sub, params)
         if (!claims) throw new oidcErrors.InvalidGrant("no token for this subject")
-        const issued = await target.accessToken.issue(subject.sub, claims)
+        const issued = await target.accessToken.issue(subject.sub, claims, {authTime: subject.auth_time})
         ctx.body = {
             access_token: issued.token,
             issued_token_type: ACCESS_TOKEN_TYPE,
@@ -525,7 +526,9 @@ export class GGOAuthServer {
                 const prefetched = prefetchedClaims.get(_ctx)
                 const claims = prefetched?.resource === resource.resource() ? prefetched.claims : await resource.claims(subject, this.clientOf(_ctx))
                 if (!claims) throw new oidcErrors.InvalidGrant("subject is no longer valid")
-                return {data: resource.accessToken.encodeClaims(claims)}
+                // On refresh, the sign-in time the refresh token copied from its code: a refresh never makes a token fresh.
+                const authTime = (_ctx.oidc.entities.AuthorizationCode ?? _ctx.oidc.entities.RefreshToken)?.authTime
+                return {data: resource.accessToken.encodeClaims(claims), auth_time: authTime}
             },
             findAccount: async (_ctx, sub) => ({accountId: sub, claims: async () => ({sub})}),
             ttl: {
@@ -597,4 +600,8 @@ export function deriveEs256Jwk(secret: string) {
     const y = point.subarray(33).toString("base64url")
     const kid = createHash("sha256").update(x + y).digest("base64url").slice(0, 16)
     return {kty: "EC", crv: "P-256", d: d.toString("base64url"), x, y, alg: "ES256", use: "sig", kid}
+}
+
+function forcesLogin(interaction: InstanceType<Provider["Interaction"]>): boolean {
+    return interaction.prompt.name === "login" && interaction.prompt.reasons.some(r => r === "login_prompt" || r === "max_age")
 }
