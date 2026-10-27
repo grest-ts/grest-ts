@@ -271,6 +271,34 @@ oauth.logout(undefined)   // ends the authorization server's login session too
 - `authorize({prompt: "login"})` asks for a fresh sign-in even while the login session lives;
   `authorize({params})` adds the server's `extraParams`.
 
+## Headless sign-in (scripts, tests)
+
+`GGOAuthHeadlessBrowser` signs in the way a browser does, without one: authorization code + PKCE, a
+cookie jar, redirects followed by hand, self-submitting forms submitted, and form POSTs carrying the
+issuer's `Origin`. It stops on your sign-in pages and asks you how to answer each.
+
+```ts
+import {GGOAuthHeadlessBrowser} from "@grest-ts/oauth"
+
+const browser = new GGOAuthHeadlessBrowser({server: authUrl})
+const tokens = await browser.signIn({clientId: "web", redirectUri: `${appUrl}/oauth/callback`, scope: "app"}, (page) =>
+    page.html.includes("/consent") ? {action: "consent", form: {allow: "1"}} : {action: "password", form: {username, password}})
+api.createClient({wires: [{wire: USER_TOKEN_WIRE, value: () => tokens.accessToken}]})
+```
+
+- `signIn(client, answer)`: `answer(page)` gets each sign-in page (`url`, `uid`, `status`, `html`) and
+  returns the `action` to POST to and its `form`. The flow ends at the client's redirect URI; `iss` is
+  checked and the code redeemed (`{accessToken, refreshToken?, idToken?, expiresAt}`). An error there
+  throws `GGOAuthTokenError` (`access_denied` when the user denied); a page it can't answer throws.
+- Step by step: `authorize(client)` returns the first `step` and `finish(location)`; `submit(page, action,
+  form)` and `follow(url)` return the next step, whose `location` is set once the flow leaves the
+  server's origins (e.g. to an upstream sign-in). `get`, `post` and `cookies` are there for the rest.
+- `client.params` adds authorization parameters (`prompt`, your `extraParams`). Reusing a browser keeps
+  its login session: the next sign-in is silent.
+- `origins` lists more hosts whose redirects are followed (e.g. where an external sign-in starts), and
+  `fetch` replaces the transport (e.g. to reach a configured issuer at a test server's real address).
+- The cookie jar keys cookies by name only: one server at a time.
+
 ## Notes
 
 - The issuer, first-party clients, keys and resources are handed to oidc-provider when the first
