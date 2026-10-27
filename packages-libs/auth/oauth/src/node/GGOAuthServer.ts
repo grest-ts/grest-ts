@@ -359,8 +359,7 @@ export class GGOAuthServer {
 
     private async finishInteraction(req: IncomingMessage, res: ServerResponse, uid: string): Promise<void> {
         const id = new URL(req.url ?? "/", "http://x").searchParams.get("ticket") ?? ""
-        const ticket = id ? await this.options.store.find(TICKET, id) as Ticket | undefined : undefined
-        if (id) await this.options.store.destroy(TICKET, id)
+        const ticket = id ? await this.takeTicket(id) : undefined
         if (!ticket || ticket.uid !== uid) return this.fail(res, 400, "Invalid or expired sign-in link")
         try {
             await this.provider().interactionFinished(req, res, ticket.result, {mergeWithLastSubmission: false})
@@ -368,6 +367,20 @@ export class GGOAuthServer {
             if (!(err instanceof oidcErrors.SessionNotFound)) throw err
             this.fail(res, 400, "This sign-in was started in another browser")
         }
+    }
+
+    // consume is the store's atomic once-only mark: of two concurrent redemptions only one gets past it.
+    private async takeTicket(id: string): Promise<Ticket | undefined> {
+        const store = this.options.store
+        try {
+            await store.consume(TICKET, id)
+        } catch (err) {
+            if (err instanceof oidcErrors.InvalidGrant) return undefined
+            throw err
+        }
+        const ticket = await store.find(TICKET, id) as Ticket | undefined
+        await store.destroy(TICKET, id)
+        return ticket
     }
 
     private grantRequested(grant: InstanceType<Provider["Grant"]>, params: Record<string, unknown>): void {

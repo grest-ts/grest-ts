@@ -72,7 +72,11 @@ function fakeDynamo() {
     const query = async (_table: string, index: string, _condition: string, {":model": model, ...key}: Record<string, unknown>) =>
         [...rows.values()].filter(r => r[index.replace("-index", "")] === Object.values(key)[0] && (!model || r.model === model))
     const db = {
-        get: async (_table: string, key: {pk: string}) => rows.get(key.pk),
+        get: async (_table: string, key: {pk: string}) => {
+            const row = rows.get(key.pk)
+            if (fake.slowReads) await new Promise(r => setTimeout(r, 20))
+            return row
+        },
         put: async (_table: string, item: {pk: string}) => { rows.set(item.pk, item) },
         putConditional: async (_table: string, item: {pk: string}) => {
             const row = rows.get(item.pk)
@@ -84,7 +88,8 @@ function fakeDynamo() {
         query,
         queryPage: async (...args: Parameters<typeof query>) => ({items: await query(...args), cursor: undefined}),
     }
-    return {db: db as unknown as GGDynamoDb, rows}
+    const fake = {db: db as unknown as GGDynamoDb, rows, slowReads: false}
+    return fake
 }
 const dynamo = fakeDynamo()
 const store = new DynamoOAuthStore(dynamo.db, "oauth")
@@ -544,6 +549,17 @@ describe("GGOAuthServer", () => {
         const callback = await starter.done(await oauth.loginTicketUrl(login.uid, "alice"))
         const tokens = await token({grant_type: "authorization_code", code: callback.searchParams.get("code")!, redirect_uri: FIRST_PARTY_REDIRECT, client_id: "app", code_verifier: verifier, resource: API})
         expect((await userToken.verify(tokens.access_token)).sub).toBe("alice")
+    })
+
+    test("of two concurrent redemptions of one login ticket, only one wins", async () => {
+        const starter = new Browser()
+        const login = await starter.page(authorizeUrl("app", FIRST_PARTY_REDIRECT, pkce().challenge))
+        const url = await oauth.loginTicketUrl(login.uid, "alice")
+        bearers.add(new URL(url).searchParams.get("ticket")!)
+        // Slow reads: both requests have read the ticket before either writes.
+        dynamo.slowReads = true
+        const results = await Promise.all([starter.get(url), starter.get(url)]).finally(() => { dynamo.slowReads = false })
+        expect(results.map(r => r.status).sort()).toEqual([303, 400])
     })
 
     test("refresh rotates, re-resolves claims, and treats replay as reuse", async () => {
