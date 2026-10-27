@@ -38,6 +38,12 @@ describe("GGOAuthClient redirects", () => {
         expect(new URL(assign.mock.calls[0][0]).searchParams.get("code_challenge_method")).toBe("S256")
     })
 
+    test("prompt=login reaches the authorization request", async () => {
+        void client().authorize({prompt: "login"})
+        await vi.waitFor(() => expect(assign).toHaveBeenCalledTimes(1))
+        expect(new URL(assign.mock.calls[0][0]).searchParams.get("prompt")).toBe("login")
+    })
+
     test("a sign-in started during a logout redirect waits for it", async () => {
         const oauth = client()
         metadata.end_session_endpoint = `${SERVER}/oauth/logout`

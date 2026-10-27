@@ -524,7 +524,9 @@ export class GGOAuthServer {
                 const prefetched = prefetchedClaims.get(_ctx)
                 const claims = prefetched?.resource === resource.resource() ? prefetched.claims : await resource.claims(subject, this.clientOf(_ctx))
                 if (!claims) throw new oidcErrors.InvalidGrant("subject is no longer valid")
-                return {data: resource.accessToken.encodeClaims(claims)}
+                // On refresh, the sign-in time the refresh token copied from its code: a refresh never makes a token fresh.
+                const authTime = (_ctx.oidc.entities.AuthorizationCode ?? _ctx.oidc.entities.RefreshToken)?.authTime
+                return {data: resource.accessToken.encodeClaims(claims), auth_time: authTime}
             },
             findAccount: async (_ctx, sub) => ({accountId: sub, claims: async () => ({sub})}),
             ttl: {

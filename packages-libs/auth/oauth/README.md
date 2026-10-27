@@ -71,6 +71,10 @@ new GGHttp(httpServer).http(OAuthInteractionApi, oauth.interactionApi(() => USER
 `claims` works like the `resolve` callback of `GGAuthRefreshToken.refresh`: role changes apply on
 the next refresh, and a deleted or deactivated user's OAuth session ends there.
 
+A user's access token carries `auth_time` (OIDC: when the user signed in, epoch seconds; a refresh
+keeps it), read as `verify(token).auth_time`. To require a recent sign-in, check it and send the user
+through `authorize({prompt: "login"})`.
+
 `clients` sets who may get tokens for a resource: `"any"` (the default: every client that signs a
 user in), `"firstParty"` (only `firstPartyClients`) or `"service"` (only service clients, below). A
 service client gets no other resource.
@@ -206,6 +210,7 @@ oauth.logout(undefined)   // ends the authorization server's login session too
   `origins`), and `resource` defaults to the issuer it declares.
 - `iss` on the callback must match the issuer (RFC 9207).
 - `invalid_grant` on refresh surfaces as `NOT_AUTHORIZED`, which ends the session.
+- `authorize({prompt: "login"})` asks for a fresh sign-in even while the login session lives.
 
 ## Notes
 

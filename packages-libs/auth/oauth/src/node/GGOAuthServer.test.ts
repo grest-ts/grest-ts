@@ -495,6 +495,21 @@ describe("GGOAuthServer", () => {
         expect((await token({grant_type: "refresh_token", refresh_token: refreshed.refresh_token, client_id: "app"})).error).toBe("invalid_grant")
     })
 
+    test("an access token carries the sign-in time, and a refresh keeps it", async () => {
+        const before = Math.floor(Date.now() / 1000)
+        const {tokens} = await signIn(new Browser(), "app", FIRST_PARTY_REDIRECT)
+        const signedIn = (await userToken.verify(tokens.access_token)).auth_time!
+        expect(signedIn).toBeGreaterThanOrEqual(before)
+        vi.useFakeTimers({toFake: ["Date"], now: Date.now() + 60_000})
+        try {
+            const refreshed = await userToken.verify((await token({grant_type: "refresh_token", refresh_token: tokens.refresh_token, client_id: "app"})).access_token)
+            expect(refreshed.iat).toBeGreaterThanOrEqual(signedIn + 60)
+            expect(refreshed.auth_time).toBe(signedIn)
+        } finally {
+            vi.useRealTimers()
+        }
+    })
+
     test("a grant records when it last got tokens", async () => {
         const clientId = await register()
         const before = Date.now()

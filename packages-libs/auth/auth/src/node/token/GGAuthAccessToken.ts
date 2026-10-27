@@ -9,6 +9,8 @@ export type GGAccessPayload<C extends object> = {
     iat: number
     /** seconds (JWT convention). */
     exp: number
+    /** seconds; when the user signed in (OIDC auth_time), if the issuer recorded it. */
+    auth_time?: number
 }
 
 export interface GGAuthAccessTokenOptions<C extends object, S extends TokenVerifier = TokenSigner> {
@@ -71,6 +73,7 @@ export class GGAuthAccessToken<C extends object, S extends TokenVerifier = Token
             sub,
             iat: Number(payload["iat"]),
             exp: Number(payload["exp"]),
+            ...(typeof payload["auth_time"] === "number" ? {auth_time: payload["auth_time"]} : {}),
         } as GGAccessPayload<C>
     }
 
