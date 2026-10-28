@@ -98,6 +98,7 @@ export function startWebSocketServer(
             socket.onClose(callback)
         };
         (outgoingInstance as any).close = () => socket.close();
+        Object.defineProperty(outgoingInstance, "bufferedAmount", {get: () => socket.bufferedAmount});
         onConnection(incoming, outgoingInstance, queryArgs)
     });
 

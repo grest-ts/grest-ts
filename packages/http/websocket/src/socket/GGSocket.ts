@@ -335,6 +335,11 @@ export class GGSocket {
         return this;
     }
 
+    /** Bytes queued but not yet written to the network; 0 where the adapter can't tell. */
+    public get bufferedAmount(): number {
+        return this.socket.bufferedAmount?.() ?? 0;
+    }
+
     public onClose(onClose: () => void): this {
         this.onCloseCallbacks.push(onClose);
         return this;

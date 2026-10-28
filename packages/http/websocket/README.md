@@ -434,6 +434,10 @@ export class ChatService {
 }
 ```
 
+`outgoing.bufferedAmount` is the bytes queued for that connection but not yet sent. A broadcaster
+can use it to skip or `close()` a slow consumer instead of buffering for it without bound
+(`GGRawSocket` exposes the same getter).
+
 When the contract declares `connect.input`, the validated query arrives as the handler's 3rd argument:
 
 ```typescript
@@ -543,7 +547,7 @@ await client.connect(({incoming}) => incoming.on({onEvent: async (e) => handle(e
 
 - **Sole source (type-enforced):** connection params come from *either* the static `url`/`query`/`middlewares` *or* `beforeConnect` — never both. The config is a discriminated union, so setting a static field alongside `beforeConnect` is a **compile error**. `beforeConnect` returns the complete set each attempt; schema `use` wires always apply on top.
 - **Validated every attempt:** the returned `query` is validated each connect; a `VALIDATION_ERROR` is **terminal** (won't retry — a malformed query won't fix itself).
-- **Errors:** on a reconnect, a throw feeds `shouldRetry` (transient mint failure → backoff; `NOT_AUTHORIZED` / `FORBIDDEN` / `VALIDATION_ERROR` → final `onClose("unrecoverable")`). On the first connect, a throw rejects `connect()` — and the client stays down unless you pass `reconnect: {retryInitialConnect: true}`, which also sends a failed first connect into the same backoff loop (`connect()` still rejects with that first error).
+- **Errors:** on a reconnect, a throw feeds `shouldRetry` (transient mint failure → backoff; `NOT_AUTHORIZED` / `FORBIDDEN` / `VALIDATION_ERROR` → final `onClose("unrecoverable")`). On the first connect, a throw rejects `connect()` — and the client stays down unless you pass `reconnect: {retryInitialConnect: true}`, which also sends a failed first connect into the same backoff loop (`connect()` still rejects with that first error). With many clients on one server, pass `reconnect: {jitter: true}` so each retry waits a random share of the backoff and a server restart doesn't bring every client back in lockstep.
 - Available on both the typed and raw `createClient`. No reconnect loop or token-refresh plumbing in app code.
 
 ### Sending Modes (automatic from the contract)
