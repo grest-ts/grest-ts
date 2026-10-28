@@ -29,9 +29,9 @@ export const api = {
 // App-owned session: subclass GGAuthSession to add UX permission helpers over the identity
 // `data` the server returns (User.permissions). The server re-checks every call — these only
 // drive the UI, and the session never decodes the opaque access token.
-class AppSession extends GGAuthSession<{org: DerivedConfig<SelectOrgRequest, Org>}> {
+class AppSession extends GGAuthSession<{org: DerivedConfig<SelectOrgRequest, Org>}, User> {
     public get permissions(): UserPermission[] {
-        return (this.get() as User | undefined)?.permissions ?? []
+        return this.get()?.permissions ?? []
     }
 
     public hasPermission(permission: UserPermission): boolean {
@@ -48,6 +48,6 @@ if (false as boolean) {
     session.login({username: "alice", password: "secret123"})            // authenticate + store tokens
     session.isLoggedIn()                                                 // boolean: active session?
     session.hasPermission(UserPermission.CAN_UPDATE_RED_BANNER_COUNTER)  // UX gate only — server re-checks
-    session.get().email                                                 // current user identity
+    session.get()?.email                                                // current user identity
     session.logout()                                                    // clear session + tokens
 }

@@ -5,7 +5,8 @@
     "jsx": "react-jsx",
     "types": ["node"],
     "moduleResolution": "Bundler",
-    "customConditions": ["browser"]
+    "customConditions": ["browser"],
+    "erasableSyntaxOnly": false
   },
   "include": ["src/**/*.ts", "src/**/*.tsx"]
 }
