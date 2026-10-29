@@ -26,27 +26,27 @@ export class GGPermissionChecker {
         return false
     }
 
-    /** The requirements in a permission: itself, or the members of an `allOf` (they can't sit in `anyOf`), with every
-     *  case of a `byField`. */
-    public static requirementsOf(p: GGPermission | undefined): GGRequirement[] {
-        if (isRequirement(p)) return [p]
-        if (isRequirementByField(p)) return Object.values(p.cases).filter(c => c !== null)
-        if (p && typeof p === "object" && "allOf" in p) return p.allOf.flatMap(c => this.requirementsOf(c))
+    /** The requirements and byFields in a permission: itself, or the members of an `allOf` (they can't sit in `anyOf`). */
+    public static entriesOf(p: GGPermission | undefined): (GGRequirement | GGRequirementByField)[] {
+        if (isRequirement(p) || isRequirementByField(p)) return [p]
+        if (p && typeof p === "object" && "allOf" in p) return p.allOf.flatMap(c => this.entriesOf(c))
         return []
     }
 
-    /** The requirements a request with this validated input must pass: as `requirementsOf`, but only the case of each
-     *  `byField` the input takes. */
+    /** Every requirement a permission may check, with each case of a `byField`. */
+    public static requirementsOf(p: GGPermission | undefined): GGRequirement[] {
+        return this.entriesOf(p).flatMap(e => isRequirement(e) ? [e] : Object.values(e.cases).filter(c => c !== null))
+    }
+
+    /** The requirements a request with this validated input must pass: only the case of each `byField` it takes. */
     public static requirementsFor(p: GGPermission | undefined, input: unknown): GGRequirement[] {
-        if (isRequirement(p)) return [p]
-        if (isRequirementByField(p)) {
-            const value = requirementField(input, p.field)
-            if (typeof value !== "string" || !Object.hasOwn(p.cases, value)) throw new Error(`No case for input.${p.field} ${JSON.stringify(value)}`)
-            const picked = p.cases[value]
+        return this.entriesOf(p).flatMap(e => {
+            if (isRequirement(e)) return [e]
+            const value = requirementField(input, e.field)
+            if (typeof value !== "string" || !Object.hasOwn(e.cases, value)) throw new Error(`No case for input.${e.field} ${JSON.stringify(value)}`)
+            const picked = e.cases[value]
             return picked ? [picked] : []
-        }
-        if (p && typeof p === "object" && "allOf" in p) return p.allOf.flatMap(c => this.requirementsFor(c, input))
-        return []
+        })
     }
 
     /** A permission without its requirements: what the caller's granted scopes must satisfy. */

@@ -167,8 +167,8 @@ describe("byField on contracts", () => {
 
     it("checks the cases match the union and adds their errors", () => {
         const Shelves = new GGContractClass("Shelves", {
-            read: {input: IsObject({shelf: IsShelf}), errors: [SERVER_ERROR], permission: ByShelf.at("shelf")},
-            top: {input: IsShelf, errors: [SERVER_ERROR], permission: ByShelf},
+            read: {input: IsObject({shelf: IsShelf}), errors: [SERVER_ERROR], permission: {allOf: ["admin", ByShelf.at("shelf")]}},
+            top: {input: IsShelf, errors: [SERVER_ERROR], permission: {allOf: ["admin", ByShelf]}},
         })
         expect(Shelves.methods.read.errors).toEqual([SERVER_ERROR, NOT_AUTHORIZED, FORBIDDEN, APPROVAL_REQUIRED])
         const added: GGRequirementErrors<typeof Shelves.methods.read>["type"] = "APPROVAL_REQUIRED"
@@ -181,8 +181,27 @@ describe("byField on contracts", () => {
             read: {input: IsObject({box: IsShelf}), errors: [SERVER_ERROR], permission: ByShelf.at("shelf")},
         })).toThrow("reads input.shelf.type, which the input doesn't have")
         expect(() => new GGContractClass("Shelves", {
+            // @ts-expect-error shelf isn't the union
+            read: {input: IsObject({shelf: IsString}), errors: [SERVER_ERROR], permission: ByShelf.at("shelf")},
+        })).toThrow("isn't a discriminated union's discriminator")
+        expect(() => new GGContractClass("Shelves", {
+            read: {input: IsObject({shelf: IsDiscriminated("type", {a: IsObject({type: IsLiteral("a")}), one: IsObject({type: IsLiteral(1)})})}), errors: [SERVER_ERROR], permission: {allOf: ["admin", byField(IsObject({type: IsLiteral("a")}), "type", {a: null}).at("shelf")]}},
+        })).toThrow("whose value 1 isn't a string")
+        expect(() => new GGContractClass("Shelves", {
             read: {input: IsObject({shelf: IsShelf.orUndefined}), errors: [SERVER_ERROR], permission: ByShelf.at("shelf")},
         })).toThrow("which is optional")
+        expect(() => new GGContractClass("Shelves", {
+            read: {input: IsObject({shelf: IsShelf.orNull}), errors: [SERVER_ERROR], permission: ByShelf.at("shelf")},
+        })).toThrow("input.shelf is nullable")
+    })
+
+    it("refuses a null case with nothing else to authenticate the caller", () => {
+        expect(() => new GGContractClass("Shelves", {
+            read: {input: IsShelf, errors: [SERVER_ERROR], permission: ByShelf},
+        })).toThrow("nothing would authenticate the caller")
+        new GGContractClass("Shelves", {
+            read: {input: IsObject({a: IsShelf, b: IsObject({type: IsLiteral("member"), memberId: IsString})}), errors: [SERVER_ERROR], permission: {allOf: [ByShelf.at("a"), ByShelf.pick(["member"]).at("b")]}},
+        })
     })
 
     it("refuses cases that don't match the input's variants", () => {
@@ -191,7 +210,7 @@ describe("byField on contracts", () => {
             read: {input: IsObject({shelf: TwoShelves}), errors: [SERVER_ERROR], permission: ByShelf.at("shelf")},
         })).toThrow("has a case for member, which the input can't hold")
         new GGContractClass("Shelves", {
-            read: {input: IsObject({shelf: TwoShelves}), errors: [SERVER_ERROR], permission: ByShelf.pick(["org", "project"]).at("shelf")},
+            read: {input: IsObject({shelf: TwoShelves}), errors: [SERVER_ERROR], permission: {allOf: ["admin", ByShelf.pick(["org", "project"]).at("shelf")]}},
             one: {input: IsObject({shelf: IsObject({type: IsLiteral("member"), memberId: IsString})}), errors: [SERVER_ERROR], permission: ByShelf.pick(["member"]).at("shelf")},
         })
         expect(() => new GGContractClass("Shelves", {
@@ -227,5 +246,9 @@ describe("dotted requirement fields", () => {
             // @ts-expect-error only the project variant has projectId
             read: {input: IsObject({shelf: IsShelf}), errors: [SERVER_ERROR], permission: on("org:ReadProject", "org:project", "shelf.projectId")},
         })).toThrow("reads input.shelf.projectId, which the input doesn't have")
+        expect(() => new GGContractClass("Docs", {
+            // @ts-expect-error a path can't pass through a union, even to a field every variant has
+            read: {input: IsObject({shelf: IsShelf}), errors: [SERVER_ERROR], permission: on("org:Read", "org:org", "shelf.type")},
+        })).toThrow("reads input.shelf.type, which the input doesn't have")
     })
 })

@@ -1,24 +1,30 @@
 import type {GGSchemaDescription} from "../../GGSchemaDescription";
 import type {ANY_ERROR} from "../ERROR";
 import type {GGContractMethod} from "../GGContractClass";
-import type {GGPermission} from "./GGPermission";
 import {type GGRequirement, type GGRequirementByField, type GGRequirementResource, isRequirement, isRequirementByField} from "./GGRequirement";
+import {GG_NO_PERMISSIONS} from "./GGPermission";
+import {GGPermissionChecker} from "./GGPermissionChecker";
 
 type RequirementsIn<P> = P extends GGRequirement<any> | GGRequirementByField<any, any, any> ? P : P extends {allOf: readonly (infer E)[]} ? RequirementsIn<E> : never
 // A field typed plain `string` can't be checked here; contract construction still checks it.
 type FieldOf<R> = R extends {id?: infer I} ? I extends {field: infer F extends string} ? string extends F ? never : F : never : never
-// A byField's cases were checked against their variants by `byField`; here only its discriminator is.
 type RequirementFields<P> = RequirementsIn<P> extends infer R
-    ? R extends GGRequirementByField<infer F, any, any> ? string extends F ? never : F
-    : R extends {resource?: infer A, createOn?: infer B} ? FieldOf<A> | FieldOf<B> : never
+    ? R extends {__permission: "requirement", resource?: infer A, createOn?: infer B} ? FieldOf<A> | FieldOf<B> : never
     : never
+// A byField's cases were checked against their variants by `byField`; here only its discriminator is.
+type DiscriminatorFields<P> = RequirementsIn<P> extends infer R ? R extends GGRequirementByField<infer F, any, any> ? string extends F ? never : F : never : never
 type InputOf<M> = M extends {input: {infer: infer I}} ? NonNullable<I> : never
 type PermissionOf<M> = M extends {permission: infer P} ? P : never
-/** The fields of `F` (paths such as `scope.projectId`) that `I` doesn't have; a path can't pass through a union's
- *  variant-only field. */
-type MissingFields<F, I> = F extends keyof I ? never
-    : F extends `${infer H}.${infer R}` ? H extends keyof I ? [MissingFields<R, NonNullable<I[H]>>] extends [never] ? never : F : F
+/** The fields of `F` (paths such as `scope.projectId`) that `I` doesn't have. A path can't pass through a union,
+ *  except, for a discriminator, its last step. */
+type MissingFields<F, I, Discriminator = false> = F extends keyof I ? never
+    : F extends `${infer H}.${infer R}` ? H extends keyof I
+        ? IsUnion<NonNullable<I[H]>> extends true ? Discriminator extends true ? R extends keyof NonNullable<I[H]> ? never : F : F
+        : [MissingFields<R, NonNullable<I[H]>, Discriminator>] extends [never] ? never : F
+        : F
     : F
+type IsUnion<T, U = T> = T extends unknown ? [U] extends [T] ? false : true : never
+type MethodMissing<M> = MissingFields<RequirementFields<PermissionOf<M>>, InputOf<M>> | MissingFields<DiscriminatorFields<PermissionOf<M>>, InputOf<M>, true>
 
 /** The errors a method's requirements add, for the client's error types. */
 export type GGRequirementErrors<Method> = RequirementsIn<PermissionOf<Method>> extends {errors: readonly (infer E)[]}
@@ -27,16 +33,9 @@ export type GGRequirementErrors<Method> = RequirementsIn<PermissionOf<Method>> e
 
 /** Compile-time half of the field check: a requirement may only read fields its method's input has. */
 export type GGCheckRequirements<Methods> = {
-    [K in keyof Methods]: [MissingFields<RequirementFields<PermissionOf<Methods[K]>>, InputOf<Methods[K]>>] extends [never]
+    [K in keyof Methods]: [MethodMissing<Methods[K]>] extends [never]
         ? unknown
-        : {permission: `requirement reads input.${MissingFields<RequirementFields<PermissionOf<Methods[K]>>, InputOf<Methods[K]>> & string}, which the input doesn't have`}
-}
-
-/** The requirements and byFields in a permission, as written. */
-function entriesOf(p: GGPermission | undefined): (GGRequirement | GGRequirementByField)[] {
-    if (isRequirement(p) || isRequirementByField(p)) return [p]
-    if (p && typeof p === "object" && "allOf" in p) return p.allOf.flatMap(entriesOf)
-    return []
+        : {permission: `requirement reads input.${MethodMissing<Methods[K]> & string}, which the input doesn't have`}
 }
 
 /** The node at `path` from `input`; every step must be a required property of an object, the last one only when
@@ -45,6 +44,7 @@ function nodeAt(input: GGSchemaDescription | undefined, path: string, at: string
     if (input?.optional || input?.nullable) {
         throw new Error(`${at}: the requirement reads input.${shown}, but the input itself is optional; make it required`)
     }
+    if (!path) return input!
     const parts = path.split(".")
     let desc = input
     parts.forEach((part, i) => {
@@ -78,14 +78,18 @@ function checkByField(p: GGRequirementByField, input: GGSchemaDescription | unde
     const dot = p.field.lastIndexOf(".")
     const base = dot < 0 ? "" : p.field.slice(0, dot)
     const discriminator = p.field.slice(dot + 1)
-    const union = base ? nodeAt(input, base, at, p.field, true) : input
-    if (!base && (input?.optional || input?.nullable)) throw new Error(`${at}: the byField reads input.${p.field}, but the input itself is optional; make it required`)
+    const union = nodeAt(input, base, at, p.field, true)
+    if (base && union.nullable) throw new Error(`${at}: the byField reads input.${p.field}, but input.${base} is nullable; make it required`)
     const node = union?.node
     const variants = node?.kind === "discriminated" && node.discriminator === discriminator ? node.variants : node?.kind === "object" ? [union!] : []
     const byValue = new Map<string, GGSchemaDescription>()
     for (const v of variants) {
         const tag = v.node.kind === "object" ? v.node.properties[discriminator]?.node : undefined
-        if (tag?.kind === "literal") for (const value of tag.values) byValue.set(String(value), v)
+        if (tag?.kind !== "literal") continue
+        for (const value of tag.values) {
+            if (typeof value !== "string") throw new Error(`${at}: the byField reads input.${p.field}, whose value ${JSON.stringify(value)} isn't a string`)
+            byValue.set(value, v)
+        }
     }
     if (!byValue.size) throw new Error(`${at}: the byField reads input.${p.field}, which isn't a discriminated union's discriminator`)
     const missing = [...byValue.keys()].filter(k => !Object.hasOwn(p.cases, k))
@@ -100,7 +104,7 @@ function checkByField(p: GGRequirementByField, input: GGSchemaDescription | unde
  * Expects an already validated permission.
  */
 export function withRequirements<M extends GGContractMethod>(method: M, at: string): M {
-    const entries = entriesOf(method.permission)
+    const entries = GGPermissionChecker.entriesOf(method.permission)
     if (!entries.length) return method
     const input = method.input?.toSchemaDescription()
     const errors = [...method.errors ?? []]
@@ -109,12 +113,16 @@ export function withRequirements<M extends GGContractMethod>(method: M, at: stri
         else checkRequirement(r, input, at)
         for (const e of r.errors) if (!errors.includes(e)) errors.push(e)
     }
+    const always = (e: GGRequirement | GGRequirementByField) => isRequirement(e) || !Object.values(e.cases).includes(null)
+    if (!entries.every(always) && !entries.some(always) && GGPermissionChecker.scopesOf(method.permission!) === GG_NO_PERMISSIONS) {
+        throw new Error(`${at}: a byField's null case checks nothing, so nothing would authenticate the caller; add a requirement or scope beside it`)
+    }
     return {...method, errors}
 }
 
 /** Requirements need an authority, which only the HTTP server runs. */
 export function assertNoRequirements(name: string, methods: Record<string, GGContractMethod | undefined>): void {
     for (const [at, m] of Object.entries(methods)) {
-        if (entriesOf(m?.permission).length) throw new Error(`Socket contract ${name}.${at}: requirements are only supported on HTTP methods`)
+        if (GGPermissionChecker.entriesOf(m?.permission).length) throw new Error(`Socket contract ${name}.${at}: requirements are only supported on HTTP methods`)
     }
 }
