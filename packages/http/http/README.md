@@ -222,7 +222,7 @@ A **requirement** (`GGRequirement`, from `@grest-ts/schema`) says "the caller mu
 
 | Option | Meaning |
 |---|---|
-| `resource.id: {field}` | The id is that input field. It must exist in the input and be required; checked at compile time and when the contract is built. |
+| `resource.id: {field}` | The id is that input field, or a path into it (`"scope.projectId"`). It must exist in the input and be required; checked at compile time and when the contract is built. |
 | `resource.id: {context}` / no `id` | The authority resolves the resource from the request (e.g. the caller's own workspace, or their tenant). |
 | `createOn` | An upsert: when the id field is absent, check this resource (the parent) instead. |
 | `hidden` | The authority should refuse with `NOT_FOUND`, so the resource's existence doesn't leak. |
@@ -244,6 +244,11 @@ DOCS_AUTHORITY_HANDLER.create(engine)                                     // in 
 
 - **Order:** wires authenticate → scope strings are checked (before the input is read) → the input is validated → each requirement goes to the authority → the handler runs. Invalid input never reaches the authority.
 - **Mixing:** `{allOf: ["admin", requirement]}` needs both. A requirement can't sit inside `anyOf`.
+- **By a discriminated union:** `byField(IsScope, "type", {org: null, project: ReadProject.on("projectId")})` picks the
+  requirement by the input's discriminator (`null`: no check). tsc wants exactly one case per value, each reading only
+  its own variant's fields; `.at("scope")` is the same for a union under the input's `scope`, `.pick(["org"])` keeps some
+  cases for an input with fewer variants. Contract construction checks the cases match the input's union; the server
+  passes the authority only the case taken, and `requirementsOf` lists them all.
 - **Startup:** a schema whose methods declare requirements must `use:` exactly one authority, and that authority must be created in the runtime; otherwise the server refuses to start. A requirement-only method needs no permission-resolving wire.
 - **HTTP only.** WebSocket and raw socket contracts refuse requirements.
 - The handler still loads data through its own tenancy-checked queries: the authority decides access, not existence.
