@@ -1,5 +1,5 @@
 import type {GGPermission} from "@grest-ts/schema";
-import {GG_ANY_PERMISSION, GG_NO_PERMISSIONS, isRequirement} from "@grest-ts/schema";
+import {GG_ANY_PERMISSION, GG_NO_PERMISSIONS, isRequirement, isRequirementByField} from "@grest-ts/schema";
 import type {OpenAPIV3_1} from "openapi-types";
 
 export const DEFAULT_BEARER_SCHEME = "BearerAuth";
@@ -18,7 +18,7 @@ export const DEFAULT_BEARER_SCHEME = "BearerAuth";
  *  - bare string       → `[{BearerAuth: [scope]}]`
  *  - allOf(a, b)       → `[{BearerAuth: [a, b]}]`
  *  - anyOf(a, b)       → `[{BearerAuth: [a]}, {BearerAuth: [b]}]`
- *  - requirement       → `[{BearerAuth: []}]` (an authenticated caller; the API's authority decides the rest)
+ *  - requirement, byField → `[{BearerAuth: []}]` (an authenticated caller; the API's authority decides the rest)
  *  - Nested            → flattened to disjunctive normal form.
  *
  * Registers the BearerAuth scheme into the supplied map if any non-empty
@@ -41,7 +41,7 @@ export function permissionToSecurity(
 
 function toDNF(p: GGPermission): string[][] {
     if (typeof p === "string") return [[p]];
-    if (isRequirement(p)) return [[]];
+    if (isRequirement(p) || isRequirementByField(p)) return [[]];
     if (p === GG_NO_PERMISSIONS || p === GG_ANY_PERMISSION) {
         // Handled by buildSecurityFromPermission before reaching here; defensive.
         return [];

@@ -56,6 +56,15 @@ describe("requirements — HTTP end-to-end", () => {
         await callOn(RequirementDocsApi, scope).save({folderId: "f9"}).toBeError(FORBIDDEN)
     })
 
+    test("byField: only the case the input takes reaches the authority, reading the nested field", async () => {
+        scope = as("alice")
+        expect(await callOn(RequirementDocsApi, scope).file({docId: "d1", place: {type: "folder", folderId: "f1"}})).toBe("filed:d1:folder")
+        expect(AUTHORITY_SEEN.splice(0).map(s => s.split(" ")[0])).toEqual(["docs:Write", "docs:Write"])
+        await callOn(RequirementDocsApi, scope).file({docId: "d1", place: {type: "folder", folderId: "f9"}}).toBeError(FORBIDDEN)
+        expect(await callOn(RequirementDocsApi, scope).file({docId: "d1", place: {type: "desk"}})).toBe("filed:d1:desk")
+        expect(AUTHORITY_SEEN.splice(0)).toHaveLength(3)
+    })
+
     test("list: the authority is asked, with no resource", async () => {
         scope = as("bob")
         expect(await callOn(RequirementDocsApi, scope).list()).toEqual(["d1"])
