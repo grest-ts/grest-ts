@@ -115,8 +115,14 @@ function setupRoutes<TContract extends GGContractApiDefinition>(
                     try {
                         const input = requestParser.validateInput(rawInput)
                         // checkPermissionsAtStart guarantees an authority when there are requirements.
-                        for (const requirement of requirements) await authority!.authorize(requirement, input, call)
-                        rpcResult = {success: true, type: "OK", data: await implFn(input)}
+                        let ok = false
+                        try {
+                            for (const requirement of requirements) await authority!.authorize(requirement, input, call)
+                            rpcResult = {success: true, type: "OK", data: await implFn(input)}
+                            ok = true
+                        } finally {
+                            if (requirements.length) await authority!.settle(call, ok)
+                        }
                         // GGLog.debug(httpSchema, "Response", rpcResult) // This is very slow to log this (like 3x performance loss)
                     } catch (error: unknown) {
                         rpcResult = ERROR.fromUnknown(error);

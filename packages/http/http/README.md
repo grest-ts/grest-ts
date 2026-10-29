@@ -238,11 +238,13 @@ export const DocsApi = new GGHttpSchema({contract, pathPrefix: "api/docs", use: 
 // server: throw one of the requirement's errors to refuse
 export const DOCS_AUTHORITY_HANDLER = DOCS_AUTHORITY.define((engine: Engine) => ({
     authorize: async (requirement, input, call) => { /* decide; throw FORBIDDEN / NOT_FOUND */ },
+    settle: async (call, ok) => { /* optional: spend or free what authorize only reserved */ },
 }))
 DOCS_AUTHORITY_HANDLER.create(engine)                                     // in compose()
 ```
 
 - **Order:** wires authenticate → scope strings are checked (before the input is read) → the input is validated → each requirement goes to the authority → the handler runs. Invalid input never reaches the authority.
+- **Settle:** once `authorize` has run, the optional `settle(call, ok)` runs after the request is decided: `ok` when every requirement passed and the handler returned. Use it for what must hold only if the call succeeded, e.g. a one-shot approval a requirement reserved.
 - **Mixing:** `{allOf: ["admin", requirement]}` needs both. A requirement can't sit inside `anyOf`.
 - **Startup:** a schema whose methods declare requirements must `use:` exactly one authority, and that authority must be created in the runtime; otherwise the server refuses to start. A requirement-only method needs no permission-resolving wire.
 - **HTTP only.** WebSocket and raw socket contracts refuse requirements.

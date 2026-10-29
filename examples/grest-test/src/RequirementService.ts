@@ -12,6 +12,8 @@ const ALLOWED = new Set([
 
 /** What the authority was asked, in order. The runtime runs inline in tests, so they read it directly. */
 export const AUTHORITY_SEEN: string[] = []
+/** How each request that ran requirements was settled. */
+export const AUTHORITY_SETTLED: string[] = []
 
 export const DOCS_AUTHORITY_HANDLER = DOCS_AUTHORITY.define((seen: string[]) => ({
     authorize: async (r: GGRequirement, input: unknown) => {
@@ -24,6 +26,7 @@ export const DOCS_AUTHORITY_HANDLER = DOCS_AUTHORITY.define((seen: string[]) => 
         if (ALLOWED.has(`${USER_DATA.get()!.username} ${r.action} ${resource.type}/${id}`)) return
         throw r.hidden ? new NOT_FOUND() : new FORBIDDEN()
     },
+    settle: async (call, ok) => void AUTHORITY_SETTLED.push(`${call.method} ${ok}`),
 }))
 
 export class RequirementDocsService {

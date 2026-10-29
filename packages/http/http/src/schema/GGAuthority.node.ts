@@ -14,6 +14,9 @@ export interface GGAuthorityCall {
 export interface GGAuthorityHandler {
     /** Throw one of the requirement's `errors` to refuse; return to allow. `input` is already validated. */
     authorize(requirement: GGRequirement, input: unknown, call: GGAuthorityCall): Promise<void>
+    /** Once the request is decided: `ok` when every requirement passed and the handler returned. Runs whenever
+     *  `authorize` ran, e.g. to spend what a requirement only reserved. */
+    settle?(call: GGAuthorityCall, ok: boolean): Promise<void>
 }
 
 const HANDLER_KEYS = new WeakMap<GGAuthority, GGLocatorKey<GGAuthorityHandler>>()
@@ -56,6 +59,9 @@ declare module "./GGAuthority" {
         /** @internal server pipeline hook. */
         authorize(requirement: GGRequirement, input: unknown, call: GGAuthorityCall): Promise<void>
 
+        /** @internal server pipeline hook. */
+        settle(call: GGAuthorityCall, ok: boolean): Promise<void>
+
         /** @internal startup validation — true once .create() has run on the current runtime scope. */
         hasHandler(): boolean
     }
@@ -71,6 +77,10 @@ GGAuthority.prototype.authorize = async function (requirement, input, call) {
     const handler = handlerKeyFor(this).tryGet()
     if (!handler) throw new Error(`Authority "${this.name}" is used but not implemented - call ${this.name}.define(...).create(deps) in compose().`)
     await handler.authorize(requirement, input, call)
+}
+
+GGAuthority.prototype.settle = async function (call, ok) {
+    await handlerKeyFor(this).tryGet()?.settle?.(call, ok)
 }
 
 GGAuthority.prototype.hasHandler = function () {

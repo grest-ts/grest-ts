@@ -5,7 +5,7 @@ import {afterEach} from "vitest"
 import {RequirementDocsApi, RequirementDocsApiContract} from "../src/api/RequirementApi"
 import {USER_TOKEN_WIRE} from "../src/api/WireAuthApi"
 import {RequirementRuntime} from "../src/RequirementRuntime"
-import {AUTHORITY_SEEN} from "../src/RequirementService"
+import {AUTHORITY_SEEN, AUTHORITY_SETTLED} from "../src/RequirementService"
 import {RequirementMissingAuthorityRuntime} from "../src/RequirementMissingAuthorityRuntime"
 
 function as(user: string): GGContext {
@@ -23,6 +23,7 @@ describe("requirements — HTTP end-to-end", () => {
         scope?.reset()
         scope = undefined
         AUTHORITY_SEEN.splice(0)
+        AUTHORITY_SETTLED.splice(0)
     })
 
     test("the authority allows: the handler runs", async () => {
@@ -60,6 +61,14 @@ describe("requirements — HTTP end-to-end", () => {
         scope = as("bob")
         expect(await callOn(RequirementDocsApi, scope).list()).toEqual(["d1"])
         expect(AUTHORITY_SEEN.splice(0)).toEqual(["docs:Read null"])
+    })
+
+    test("settle: after the handler, ok only when every requirement passed and the handler returned", async () => {
+        scope = as("alice")
+        await callOn(RequirementDocsApi, scope).read({docId: "d1"})
+        await callOn(RequirementDocsApi, scope).read({docId: "d2"}).toBeError(NOT_FOUND)
+        await callOn(RequirementDocsApi, scope).publish({docId: "d1", text: ""}).toBeError(VALIDATION_ERROR)
+        expect(AUTHORITY_SETTLED).toEqual(["read true", "read false"])
     })
 
     test("the requirement's errors are on the contract", () => {
