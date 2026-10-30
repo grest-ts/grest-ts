@@ -1,10 +1,7 @@
 import type {GGSetting} from "@grest-ts/config"
 import type {GGJobSettings} from "./GGJobSettings"
 
-/**
- * - `oneInstance`: one instance at a time runs the job, at most once per interval across all of them.
- * - `everyInstance`: every instance runs it, for work each one must do itself (e.g. warm a local cache).
- */
+/** `oneInstance`: once per interval across all instances. `everyInstance`: each instance on its own schedule. */
 export type GGJobRunOn = "oneInstance" | "everyInstance"
 
 export interface GGJobConfig {
@@ -12,7 +9,7 @@ export interface GGJobConfig {
     name: string
     /** Default `oneInstance`. */
     runOn?: GGJobRunOn
-    /** Schedule and tuning, read at the start of every run: a `GGSetting` with the `IsGGJobSettings` schema. */
+    /** Read every tick. */
     settings: Pick<GGSetting<GGJobSettings>, "get">
 }
 
@@ -33,10 +30,9 @@ export abstract class GGJob<Row> {
 
     abstract getDataSet(limit: number): Promise<Row[]>
 
-    /** `signal` aborts when the run lost its lock or the runner is stopping; rows not yet started are skipped. */
+    /** `signal` aborts when the lock is lost or the runner stops. */
     abstract processRow(row: Row, signal: AbortSignal): Promise<void>
 
-    /** After every batch whose data set loaded. */
     dataSetFinished?(report: GGJobReport): Promise<void>
 
     /** What a failed row logs as. */

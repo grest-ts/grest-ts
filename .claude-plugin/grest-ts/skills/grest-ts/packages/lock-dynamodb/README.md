@@ -9,13 +9,12 @@ A [`GGLock`](@pkg/lock) on DynamoDB, shared by every instance that uses the same
 
 ```typescript
 import {GGDynamoDbLock} from "@grest-ts/lock-dynamodb"
-import {withLock, newLockOwner} from "@grest-ts/lock"
 
 class MyRuntime extends GGRuntime {
     protected compose(): void {
         const db = MyConfig.db.newDynamoDb()
         const lock = new GGDynamoDbLock(db, {tableName: "my-service.locks"})
-        // pass it to a GGJobRunner, or use withLock(lock, ...) directly
+        // pass it to a GGJobRunner, or to withLock from @grest-ts/lock
     }
 }
 ```

@@ -13,7 +13,6 @@ const MAX_CHECK_EVERY_MS = 15 * 60_000
 const WARN_RATIO = 0.7
 
 export interface GGJobRunnerOptions {
-    /** What `oneInstance` jobs coordinate through. */
     lock: GGLock
     /** Unique per runner. Default `newLockOwner()`. */
     owner?: string
@@ -22,10 +21,9 @@ export interface GGJobRunnerOptions {
 /** Runs its jobs from runtime start until teardown, which stops new rows, waits for running ones and frees locks. */
 export class GGJobRunner {
 
-    readonly owner: string
-    readonly lock: GGLock
-    readonly scope: GGLocatorScope
-
+    private readonly owner: string
+    private readonly lock: GGLock
+    private readonly scope: GGLocatorScope
     private readonly loops: JobLoop[] = []
     private started = false
     private stopped = false
@@ -44,7 +42,7 @@ export class GGJobRunner {
     add(...jobs: GGJob<any>[]): this {
         for (const job of jobs) {
             if (this.loops.some(l => l.job.config.name === job.config.name)) throw new Error(`Job ${job.config.name} added twice`)
-            const loop = new JobLoop(job, this)
+            const loop = new JobLoop(job, this.scope, this.lock, this.owner)
             this.loops.push(loop)
             if (this.started && !this.stopped) loop.start()
         }
@@ -77,15 +75,19 @@ interface RunConfig {
 class JobLoop {
 
     readonly job: GGJob<unknown>
-    private readonly runner: GGJobRunner
+    private readonly scope: GGLocatorScope
+    private readonly lock: GGLock
+    private readonly owner: string
     private timer?: NodeJS.Timeout
     private running?: Promise<void>
     private lastConfig?: RunConfig
     private readonly stopped = new AbortController()
 
-    constructor(job: GGJob<unknown>, runner: GGJobRunner) {
+    constructor(job: GGJob<unknown>, scope: GGLocatorScope, lock: GGLock, owner: string) {
         this.job = job
-        this.runner = runner
+        this.scope = scope
+        this.lock = lock
+        this.owner = owner
     }
 
     start(): void {
@@ -109,7 +111,7 @@ class JobLoop {
     }
 
     private schedule(ms: number): void {
-        this.timer = this.runner.scope.setTimeout(() => this.tick(), ms)
+        this.timer = this.scope.setTimeout(() => this.tick(), ms)
         this.timer.unref()
     }
 
@@ -149,7 +151,7 @@ class JobLoop {
         const name = this.job.config.name
         const signal = this.stopped.signal
         const startedAt = Date.now()
-        const overdue = this.runner.scope.setTimeout(() => {
+        const overdue = this.scope.setTimeout(() => {
             GGLog.warn(this.job, "Job still running past its timeout", {job: name, timeoutMs: config.timeoutMs})
         }, config.timeoutMs)
         overdue.unref()
@@ -165,10 +167,9 @@ class JobLoop {
         }
         try {
             if (this.oneInstance) {
-                const {lock, owner} = this.runner
-                // A finished run holds the lock until the next one is due, so instances run it once per interval
-                // between them. A tenth of a check of slack, for clock skew between instances: a check that finds
-                // the run a moment short of due must not push it a whole check back.
+                const {lock, owner} = this
+                // Hold the lock until the next run is due, so all instances share one run per interval. The slack
+                // absorbs clock skew: a check that finds the run just short of due must not delay it a whole check.
                 const holdUntil = startedAt + config.intervalMs - config.checkEveryMs / 10
                 const result = await withLock(lock, name, {owner, ttlMs: config.timeoutMs, signal, holdUntil}, s => {
                     GGLog.info(this.job, "Job run", {job: name, owner})

@@ -3,10 +3,7 @@ import {GGInstanceLock} from "../instance/GGInstanceLock";
 
 const STORAGE = new GGLocatorKey<Map<string, {owner: string, expiresAt: number}>>("GGLocatorScopeLock");
 
-/**
- * In-memory lock scoped to the current `GGLocatorScope`: each scope has its own, isolated lock state (e.g. one per
- * test). Throws outside a scope.
- */
+/** Lock state per `GGLocatorScope` (e.g. per test). Throws outside a scope. */
 export class GGLocatorScopeLock extends GGInstanceLock {
 
     protected override storage(): Map<string, {owner: string, expiresAt: number}> {

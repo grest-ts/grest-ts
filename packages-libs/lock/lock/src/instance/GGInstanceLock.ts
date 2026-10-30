@@ -1,18 +1,6 @@
-import {GGLock} from "../GGLock";
+import type {GGLock} from "../GGLock";
 
-
-/**
- * In-memory lock for one process: single-instance deployments, development and tests.
- * With several instances it excludes nothing; use a shared store (e.g. `@grest-ts/lock-dynamodb`).
- *
- * @example
- * ```typescript
- * const lock = new GGInstanceLock();
- * await withLock(lock, 'my-task', {ttlMs: 30000}, async signal => {
- *     // Do work while holding the lock
- * });
- * ```
- */
+/** One process only: with several instances it excludes nothing. */
 export class GGInstanceLock implements GGLock {
     private locks?: Map<string, {owner: string, expiresAt: number}>;
 

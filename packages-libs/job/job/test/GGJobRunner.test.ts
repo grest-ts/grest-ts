@@ -8,14 +8,18 @@ import {GGJob, GGJobMetrics, GGJobRunner, IsGGJobSettings, type GGJobRunOn, type
 import {runJobOnce} from "@grest-ts/job/testkit"
 
 // Each runner gets its own scope, as each instance has its own runtime; sharing one lock makes them one fleet.
+const scopes = new WeakMap<GGJobRunner, GGLocatorScope>()
+
 function newRunner(lock: GGLock, owner: string): GGJobRunner {
     const scope = new GGLocatorScope(owner, undefined, owner)
     GGLog.init(scope)
-    return scope.run(() => {
+    const runner = scope.run(() => {
         scope.setLifecycleOwner(() => {})
         new GGMetricsLoader()
         return new GGJobRunner({lock, owner})
     })
+    scopes.set(runner, scope)
+    return runner
 }
 
 function stubLock(overrides: Partial<GGLock> = {}): GGLock {
@@ -189,7 +193,7 @@ describe("GGJobRunner", () => {
 
         await vi.advanceTimersByTimeAsync(3_000)
 
-        runner.scope.run(() => {
+        scopes.get(runner)!.run(() => {
             const metrics = GG_METRICS.get()
             expect(metrics.get(GGJobMetrics.runs).getValue({job: "metered"})).toBe(1)
             expect(metrics.get(GGJobMetrics.rows).getValue({job: "metered", result: "OK"})).toBe(2)
