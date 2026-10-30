@@ -3,14 +3,14 @@ import {importJWK, SignJWT} from "jose"
 import {createServer} from "node:net"
 import {GGRuntime} from "@grest-ts/runtime"
 import {GGHttpServer} from "@grest-ts/http"
-import {IsArray, IsObject, IsString, NOT_AUTHORIZED} from "@grest-ts/schema"
+import {FORBIDDEN, IsArray, IsObject, IsString, NOT_AUTHORIZED} from "@grest-ts/schema"
 import {GGAuthAccessToken, HmacSigner, JwksVerifier, JwsSigningStrategy, type JwsSigner} from "@grest-ts/auth"
 import {ACCESS_TOKEN_JWKS_PATH, deriveEs256Jwk, GGOAuthServer, type GGOAuthInteraction, type GGOAuthResource} from "./GGOAuthServer"
 import type {GGDynamoDb} from "@grest-ts/db-dynamodb"
 import {InMemoryOAuthStore} from "./store/InMemoryOAuthStore"
 import {DynamoOAuthStore} from "./store/DynamoOAuthStore"
 import {GGOAuthResourceServer} from "./GGOAuthResourceServer"
-import {GGOAuthServiceClient, GGOAuthTokenError} from "./GGOAuthServiceClient"
+import {GGOAuthServiceClient} from "./GGOAuthServiceClient"
 import type {GGOAuthExternalSignIn} from "./GGOAuthExternalSignIn"
 import {GGOAuthHeadlessBrowser, type GGOAuthHeadlessStep} from "./GGOAuthHeadlessBrowser"
 
@@ -830,23 +830,21 @@ describe("GGOAuthServer", () => {
         expect(results.map(r => r.error ?? "ok").sort()).toEqual(["invalid_grant", "ok"])
     })
 
-    test("a service client gets a token for its service-only resource with client_credentials", async () => {
-        const res = await fetch(`${ISSUER}/oauth/token`, {method: "POST", headers: {authorization: basic("backend", "backend-secret")}, body: new URLSearchParams({grant_type: "client_credentials", resource: INTERNAL, scope: "internal"})})
-        const body = await res.json()
-        expect(res.status).toBe(200)
-        const verified = await internalToken.verify(body.access_token)
+    const backend = (secret = "backend-secret") => new GGOAuthServiceClient({url: () => ISSUER, clientId: "backend", secret: () => secret})
+
+    test("a service client gets a token for its service-only resource", async () => {
+        const verified = await internalToken.verify(await backend().token(INTERNAL))
         expect(verified.sub).toBe("backend")
         expect(verified.data).toEqual({permissions: ["internal"]})
     })
 
-    test("client_credentials refuses a wrong secret and any resource that isn't service-only", async () => {
-        const wrong = await fetch(`${ISSUER}/oauth/token`, {method: "POST", headers: {authorization: basic("backend", "nope")}, body: new URLSearchParams({grant_type: "client_credentials", resource: INTERNAL})})
-        expect((await wrong.json()).error).toBe("invalid_client")
-        const userApi = await fetch(`${ISSUER}/oauth/token`, {method: "POST", headers: {authorization: basic("backend", "backend-secret")}, body: new URLSearchParams({grant_type: "client_credentials", resource: API})})
-        expect((await userApi.json()).error).toBe("invalid_target")
+    test("a service token is refused for a wrong secret and any resource that isn't service-only", async () => {
+        expect(await backend("nope").token(INTERNAL).catch((e: unknown) => e)).toBeInstanceOf(NOT_AUTHORIZED)
+        expect(await new GGOAuthServiceClient({url: () => ISSUER, clientId: "app", secret: () => ""}).token(INTERNAL).catch((e: unknown) => e)).toBeInstanceOf(NOT_AUTHORIZED)
+        expect(await backend().token(API).catch((e: unknown) => e)).toBeInstanceOf(FORBIDDEN)
     })
 
-    test("a registered (non-service) client can't use client_credentials", async () => {
+    test("a registered client can't use client_credentials", async () => {
         const res = await fetch(`${ISSUER}/oauth/register`, {
             method: "POST", headers: {"content-type": "application/json"},
             body: JSON.stringify({client_name: "Sneaky", redirect_uris: [THIRD_PARTY_REDIRECT], application_type: "web", token_endpoint_auth_method: "client_secret_basic", grant_types: ["authorization_code", "client_credentials"]}),
@@ -855,7 +853,7 @@ describe("GGOAuthServer", () => {
         // An app whose claims would happily answer for this subject: only the grant check stops it.
         userPermissions.set(client_id, ["read"])
         for (const resource of [undefined, MCP, INTERNAL]) {
-            const body = await fetch(`${ISSUER}/oauth/token`, {method: "POST", headers: {authorization: basic(client_id, client_secret)}, body: new URLSearchParams({grant_type: "client_credentials", ...(resource ? {resource} : {})})}).then(r => r.json())
+            const body = await fetch(`${ISSUER}/oauth/token`, {method: "POST", headers: {authorization: basic(client_id ?? "x", client_secret ?? "x")}, body: new URLSearchParams({grant_type: "client_credentials", ...(resource ? {resource} : {})})}).then(r => r.json())
             expect(body.access_token).toBeUndefined()
             expect(body.error).toEqual(expect.any(String))
         }
@@ -869,44 +867,28 @@ describe("GGOAuthServer", () => {
 
     test("token exchange: the backend trades a user's token for an org token for the same user", async () => {
         const {tokens} = await signIn(new Browser(), "app", FIRST_PARTY_REDIRECT)
-        const exchange = (params: Record<string, string>, auth = basic("backend", "backend-secret")) => fetch(`${ISSUER}/oauth/token`, {
-            method: "POST", headers: {authorization: auth},
-            body: new URLSearchParams({grant_type: "urn:ietf:params:oauth:grant-type:token-exchange", subject_token_type: "urn:ietf:params:oauth:token-type:access_token", resource: ORG, ...params}),
-        }).then(r => r.json())
-
-        const ok = await exchange({subject_token: tokens.accessToken, org_id: "o1"})
-        expect(ok).toMatchObject({issued_token_type: "urn:ietf:params:oauth:token-type:access_token", token_type: "Bearer"})
-        const verified = await orgToken.verify(ok.access_token)
+        const ok = await backend().exchange(tokens.accessToken, ORG, {org_id: "o1"})
+        expect(ok.expiresAt).toBeGreaterThan(Date.now())
+        const verified = await orgToken.verify(ok.token)
         expect(verified.sub).toBe("alice")
         expect(verified.auth_time).toBe((await userToken.verify(tokens.accessToken)).auth_time)
         expect(verified.data).toEqual({permissions: ["org:alice"]})
 
-        expect((await exchange({subject_token: tokens.accessToken, org_id: "o2"})).error).toBe("invalid_grant")
-        expect((await exchange({subject_token: "garbage", org_id: "o1"})).error).toBe("invalid_grant")
-        expect((await exchange({subject_token: tokens.accessToken, org_id: "o1", resource: MCP})).error).toBe("invalid_target")
-        expect((await exchange({subject_token: tokens.accessToken, org_id: "o1"}, basic("backend", "nope"))).error).toBe("invalid_client")
+        const refused = (subjectToken: string, resource: string, params: Record<string, string>, client = backend()) => client.exchange(subjectToken, resource, params).catch((e: unknown) => e)
+        expect(await refused(tokens.accessToken, ORG, {org_id: "o2"})).toBeInstanceOf(FORBIDDEN)
+        expect(await refused("garbage", ORG, {org_id: "o1"})).toBeInstanceOf(FORBIDDEN)
+        expect(await refused(tokens.accessToken, MCP, {org_id: "o1"})).toBeInstanceOf(FORBIDDEN)
+        expect(await refused(tokens.accessToken, ORG, {org_id: "o1"}, backend("nope"))).toBeInstanceOf(NOT_AUTHORIZED)
     })
 
-    test("GGOAuthServiceClient: reuses its client_credentials token, exchanges, and reports token errors", async () => {
-        const client = new GGOAuthServiceClient({tokenEndpoint: async () => `${ISSUER}/oauth/token`, clientId: "backend", secret: () => "backend-secret"})
+    test("GGOAuthServiceClient reuses its token, and concurrent callers share one request", async () => {
+        const client = backend()
         const [first, concurrent] = await Promise.all([client.token(INTERNAL), client.token(INTERNAL)])
         expect(concurrent).toBe(first)
         expect(await client.token(INTERNAL)).toBe(first)
-        expect((await internalToken.verify(first)).sub).toBe("backend")
-
-        const {tokens} = await signIn(new Browser(), "app", FIRST_PARTY_REDIRECT)
-        const exchanged = await client.exchange(tokens.accessToken, ORG, {org_id: "o1"})
-        expect((await orgToken.verify(exchanged.token)).data).toEqual({permissions: ["org:alice"]})
-        expect(exchanged.expiresAt).toBeGreaterThan(Date.now())
-
-        const refused = await client.exchange(tokens.accessToken, ORG, {org_id: "o2"}).catch((e: unknown) => e)
-        expect(refused).toBeInstanceOf(GGOAuthTokenError)
-        expect((refused as GGOAuthTokenError).error).toBe("invalid_grant")
-        const wrongSecret = new GGOAuthServiceClient({tokenEndpoint: () => `${ISSUER}/oauth/token`, clientId: "backend", secret: () => "nope"})
-        expect(await wrongSecret.token(INTERNAL).catch((e: GGOAuthTokenError) => e.error)).toBe("invalid_client")
     })
 
-    test("a public client can't use token exchange", async () => {
+    test("the token endpoint offers no token exchange", async () => {
         const {tokens} = await signIn(new Browser(), "app", FIRST_PARTY_REDIRECT)
         const body = await token({grant_type: "urn:ietf:params:oauth:grant-type:token-exchange", client_id: "app", subject_token: tokens.accessToken, subject_token_type: "urn:ietf:params:oauth:token-type:access_token", resource: ORG, org_id: "o1"})
         expect(body.access_token).toBeUndefined()

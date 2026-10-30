@@ -355,6 +355,9 @@ describe("cross-service flow", () => {
 })
 ```
 
+Service tokens (`@grest-ts/oauth` `GGOAuthServiceClient`) need no test setup: with the auth runtime
+running they are real; without it they are placeholders that only mocked APIs (`Api.mock.x`) accept.
+
 ---
 
 ## 6. @mockable and mockOf

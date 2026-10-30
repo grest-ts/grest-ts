@@ -19,10 +19,15 @@
     "./dynamodb": {
       "types": "./src/node/store/DynamoOAuthStore.ts",
       "import": "./src/node/store/DynamoOAuthStore.ts"
+    },
+    "./testkit": {
+      "types": "./testkit/index-testkit.ts",
+      "import": "./testkit/index-testkit.ts"
     }
   },
   "files": [
-    "src"
+    "src",
+    "testkit"
   ],
   "scripts": {
     "typecheck": "tsc --noEmit -p src",
@@ -66,9 +71,14 @@
   },
   "peerDependencies": {
     "@grest-ts/auth": "0.0.100",
+    "@grest-ts/context": "0.0.100",
     "@grest-ts/db-dynamodb": "0.0.100",
+    "@grest-ts/discovery": "0.0.100",
     "@grest-ts/http": "0.0.100",
     "@grest-ts/logger": "0.0.100",
     "@grest-ts/schema": "0.0.100"
+  },
+  "devDependencies": {
+    "@grest-ts/testkit": "0.0.100"
   }
 }

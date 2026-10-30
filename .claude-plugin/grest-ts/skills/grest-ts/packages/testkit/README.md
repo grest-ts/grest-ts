@@ -405,6 +405,10 @@ test('spy on external service', async () => {
 | **How to use** | `MyApi.mock.method.andReturn(...)` | `mockOf(Service).method.andReturn(...)` |
 | **Import** | `import "@grest-ts/http/testkit"` | `import {mockOf, spyOn} from "@grest-ts/testkit"` |
 
+A call that carries a service token from `@grest-ts/oauth` needs nothing extra: while no authorization
+server runs in the test, the token is a placeholder, and a schema mock never checks it. See
+[Service tokens in tests](../../../packages-libs/auth/oauth/README.md#service-tokens-in-tests).
+
 ---
 
 ## Usage
