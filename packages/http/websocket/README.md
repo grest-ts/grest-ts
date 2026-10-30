@@ -480,8 +480,7 @@ new GGHttp(httpServer)
 orderEvents.out.onOrder({order})   // every joined connection
 ```
 
-See [Broadcast](./README-broadcast.md) for what it is (and isn't) for, the snapshot + delta pattern
-and its ordering guarantees, and how to scope it across instances or per tenant.
+See [Broadcast](./README-broadcast.md) for snapshot ordering and scope.
 
 ## Client
 
