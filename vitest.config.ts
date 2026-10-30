@@ -9,6 +9,7 @@ export default defineConfig({
     globals: true,
     projects: [
       'packages-libs/auth/auth',
+      'packages-libs/auth/authz',
       'packages-libs/auth/oauth',
       'packages-libs/auth/service-auth',
       'packages-libs/db/db-dynamodb',

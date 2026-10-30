@@ -10,6 +10,7 @@ import { GGImportFixer } from "./GGImportFixer"
 import { GGReadmeBannerBuilder } from "./GGReadmeBannerBuilder"
 import { GGCircularDependencyChecker } from "./GGCircularDependencyChecker"
 import { GGAllowedPackagesChecker } from "./GGAllowedPackagesChecker"
+import { GGBrowserEntryChecker } from "./GGBrowserEntryChecker"
 import { GGAiRulesBuilder } from "./GGAiRulesBuilder"
 import { GGDedupCheckBuilder } from "./GGDedupCheckBuilder"
 import { PackagerFile } from "./PackagerFile"
@@ -103,6 +104,10 @@ export class GGPackager {
         // Check for disallowed package imports (throws error if found)
         console.log("🔒 Checking allowed packages...")
         new GGAllowedPackagesChecker(packages).check()
+
+        // Check that browser entries can't reach Node-only code (throws error if found)
+        console.log("🌐 Checking browser entries...")
+        new GGBrowserEntryChecker(packages).check()
 
         // Fix invalid imports
         console.log("🔧 Checking imports...")

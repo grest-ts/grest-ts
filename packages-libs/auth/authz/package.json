@@ -1,0 +1,69 @@
+{
+  "//": "THIS FILE IS GENERATED - DO NOT EDIT",
+  "name": "@grest-ts/authz",
+  "version": "0.0.100",
+  "type": "module",
+  "license": "MIT",
+  "description": "Authorization engine for hierarchical resources — IAM-style deny/cap/grant evaluation, contract requirements, list plans and approvals",
+  "exports": {
+    ".": {
+      "browser": {
+        "types": "./src/index-browser.ts",
+        "import": "./src/index-browser.ts"
+      },
+      "default": {
+        "types": "./src/index-node.ts",
+        "import": "./src/index-node.ts"
+      }
+    }
+  },
+  "files": [
+    "src"
+  ],
+  "scripts": {
+    "typecheck": "tsc --noEmit -p src && tsc --noEmit -p test",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "test:coverage:html": "vitest run --coverage --reporter=html",
+    "test:cedar": "GG_AUTHZ_CEDAR=1 vitest run test/cedar.test.ts",
+    "bench": "tsx test/bench.ts"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/grest-ts/grest-ts.git",
+    "directory": "packages-libs/auth/authz"
+  },
+  "homepage": "https://grest-ts.com/packages/authz",
+  "bugs": {
+    "url": "https://github.com/grest-ts/grest-ts/issues"
+  },
+  "keywords": [
+    "typescript",
+    "framework",
+    "contract",
+    "api",
+    "microservices",
+    "testing",
+    "authz",
+    "authorization",
+    "iam",
+    "rbac",
+    "abac",
+    "policy",
+    "permissions"
+  ],
+  "engines": {
+    "node": ">=24"
+  },
+  "peerDependencies": {
+    "@grest-ts/common": "0.0.100",
+    "@grest-ts/context": "0.0.100",
+    "@grest-ts/schema": "0.0.100"
+  },
+  "devDependencies": {
+    "@cedar-policy/cedar-wasm": "4.14.0"
+  }
+}
