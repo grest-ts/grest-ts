@@ -46,4 +46,10 @@ describe("GGJobDynamoDbLock", () => {
 
         expect(await lock.acquire("drop", "c", 10_000, 0)).toBe(true)
     })
+
+    test("a lease that expired can't be renewed, even when no one took it", async () => {
+        expect(await lock.acquire("stale", "a", 10_000)).toBe(true)
+        clock.t += 10_001
+        expect(await lock.renew("stale", "a", 10_000)).toBe(false)
+    })
 })

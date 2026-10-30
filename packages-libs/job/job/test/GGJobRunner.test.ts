@@ -270,17 +270,17 @@ describe("GGJobRunner", () => {
         expect(release).toHaveBeenLastCalledWith("test", "a", expect.any(Number))
     })
 
-    test("exclusive: renews that keep failing for a whole TTL count as a lost lock", async () => {
+    test("exclusive: renews that keep failing for two thirds of a TTL count as a lost lock", async () => {
         const lock: GGJobLock = {acquire: async () => true, renew: async () => { throw new Error("unreachable") }, release: async () => {}}
         const job = new TestJob({checkEveryMs: 60_000}, () => ["r1", "r2"], (_row, signal) => new Promise(r => {
             signal.addEventListener("abort", () => r())
         }))
         newRunner(lock, "a").add(job).start()
 
-        await vi.advanceTimersByTimeAsync(3_000)
+        await vi.advanceTimersByTimeAsync(2_500)
         expect(job.processed).toEqual([])
 
-        await vi.advanceTimersByTimeAsync(1_500)
+        await vi.advanceTimersByTimeAsync(1_000)
         expect(job.processed).toEqual(["r1"])
     })
 
@@ -313,5 +313,21 @@ describe("GGJobRunner", () => {
         await vi.advanceTimersByTimeAsync(1_500)
 
         expect(job.processed).toEqual(["good"])
+    })
+
+    test("item: a row whose lock is lost counts as failed", async () => {
+        const lock: GGJobLock = {acquire: async () => true, renew: async () => false, release: async () => {}}
+        const job = new TestJob({lock: "item"}, () => ["r1"], (_row, signal) => new Promise(r => {
+            signal.addEventListener("abort", () => r())
+        }))
+        const runner = newRunner(lock, "a").add(job)
+        runner.start()
+
+        await vi.advanceTimersByTimeAsync(2_500)
+
+        runner.scope.run(() => {
+            expect(GG_METRICS.get().get(GGJobMetrics.rows).getValue({job: "test", result: "ERROR"})).toBe(1)
+            expect(GG_METRICS.get().get(GGJobMetrics.rows).getValue({job: "test", result: "OK"})).toBe(0)
+        })
     })
 })

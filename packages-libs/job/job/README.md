@@ -109,8 +109,8 @@ super({name: "expired-sessions", lock: "exclusive", intervalMs: 10 * 60_000, tim
 
 - A row that throws is logged and counted. The rest of the batch still runs, and no extra batch follows.
 - A data set that fails to load fails the run, which is logged. An `exclusive` run that failed records no last run, so it runs again at the next check.
-- In `item` mode, a row whose lock another instance holds is skipped; no extra batch follows, since it would read that row again.
-- When the lock is lost (a renew finds another owner, or no renew has succeeded for a whole `timeoutMs`), the run's `AbortSignal` fires and rows not yet started are skipped. A lost lock is never released.
+- In `item` mode, a row whose lock another instance holds is skipped (`report.skipped`). A batch of only skipped rows gets no extra batch, since that would read them again.
+- When the lock is lost (a renew fails because the lease expired or another owner holds it, or no renew has succeeded for two thirds of `timeoutMs`), the run's `AbortSignal` fires and rows not yet started are skipped. A lost lock is never released, and an `item` row whose lock was lost counts as failed.
 - On teardown the runner aborts the signal and waits for running rows. An interrupted `exclusive` run records no last run, so another instance picks it up straight away.
 
 `processRow(row, signal)` gets that signal; pass it on to long calls.

@@ -35,6 +35,8 @@ export interface GGJobConfig {
 export interface GGJobReport {
     rows: number
     failed: number
+    /** `item` rows whose lock another instance held. */
+    skipped: number
     durationMs: number
 }
 

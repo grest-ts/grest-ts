@@ -29,6 +29,7 @@ export class GGJobRunner {
 
     private readonly loops: JobLoop[] = []
     private started = false
+    private stopped = false
 
     constructor(options: GGJobRunnerOptions) {
         this.owner = options.owner ?? `${hostname()}-${process.pid}-${randomUUID().slice(0, 8)}`
@@ -47,7 +48,7 @@ export class GGJobRunner {
             if (this.loops.some(l => l.job.config.name === job.config.name)) throw new Error(`Job ${job.config.name} added twice`)
             const loop = new JobLoop(job, this)
             this.loops.push(loop)
-            if (this.started) loop.start()
+            if (this.started && !this.stopped) loop.start()
         }
         return this
     }
@@ -60,7 +61,7 @@ export class GGJobRunner {
     }
 
     async stop(): Promise<void> {
-        this.started = false
+        this.stopped = true
         await Promise.all(this.loops.map(l => l.stop()))
     }
 }
@@ -135,7 +136,9 @@ class JobLoop {
             GGLog.warn(this.job, "Job still running past its timeout", {job: name, timeoutMs})
         }, timeoutMs)
         overdue.unref()
+        let ran = false
         const run = (s: AbortSignal) => {
+            ran = true
             metric(() => GGJobMetrics.runs.inc(1, {job: name}))
             return this.runBatches(config, s)
         }
@@ -144,36 +147,38 @@ class JobLoop {
                 // A tenth of a check of slack, for clock skew between instances: a check that finds the run a moment
                 // short of due must not push it a whole check back. It stays below a tenth of the interval.
                 const due = {lastRunAtMost: startedAt - config.intervalMs + config.checkEveryMs / 10, ranAt: startedAt}
-                if (!await this.withLock(name, signal, s => {
+                await this.withLock(name, signal, s => {
                     GGLog.info(this.job, "Job run", {job: name, owner: this.runner.owner})
                     return run(s)
-                }, due)) return
+                }, due)
             } else {
                 await run(signal)
             }
         } finally {
             clearTimeout(overdue)
+            if (ran) {
+                const durationMs = Date.now() - startedAt
+                metric(() => GGJobMetrics.runDuration.inc(durationMs, {job: name}))
+                if (durationMs > config.intervalMs * WARN_RATIO) GGLog.warn(this.job, "Job run took most of its interval", {job: name, durationMs, intervalMs: config.intervalMs})
+            }
         }
-        const durationMs = Date.now() - startedAt
-        metric(() => GGJobMetrics.runDuration.inc(durationMs, {job: name}))
-        if (durationMs > config.intervalMs * WARN_RATIO) GGLog.warn(this.job, "Job run took most of its interval", {job: name, durationMs, intervalMs: config.intervalMs})
     }
 
     /**
-     * Lost-lock and stop both abort `fn`'s signal. A lock is lost when a renew says so, or when no renew has succeeded
-     * for a whole TTL: past it another owner may hold the lock. A lost lock is never released: someone else holds it.
+     * Lost-lock and stop both abort `fn`'s signal. A lock is lost when a renew fails, or when the last renew that
+     * succeeded was sent two thirds of a TTL ago: the next tick would come too late. A lost lock is never released.
      */
     private async withLock(
         id: string,
         parent: AbortSignal,
         fn: (signal: AbortSignal) => Promise<void>,
         due?: {lastRunAtMost: number, ranAt: number},
-    ): Promise<boolean> {
+    ): Promise<"busy" | "lost" | "done"> {
         const {lock, owner, scope} = this.runner
         const {name, timeoutMs: ttl} = this.job.config
-        if (!await lock.acquire(id, owner, ttl, due?.lastRunAtMost)) return false
-        const lost = new AbortController()
         let renewedAt = Date.now()
+        if (!await lock.acquire(id, owner, ttl, due?.lastRunAtMost)) return "busy"
+        const lost = new AbortController()
         let done = false
         const lose = () => {
             if (done || lost.signal.aborted) return
@@ -183,13 +188,12 @@ class JobLoop {
             clearInterval(heartbeat)
         }
         const heartbeat = scope.setInterval(() => {
+            if (Date.now() - renewedAt >= ttl * 2 / 3) return lose()
+            const sentAt = Date.now()
             lock.renew(id, owner, ttl).then(ok => {
-                if (ok) renewedAt = Date.now()
+                if (ok) renewedAt = Math.max(renewedAt, sentAt)
                 else lose()
-            }, err => {
-                GGLog.warn(this.job, "Job lock heartbeat failed", {job: name, id, err: (err as Error).message})
-                if (Date.now() - renewedAt >= ttl) lose()
-            })
+            }, err => GGLog.warn(this.job, "Job lock heartbeat failed", {job: name, id, err: (err as Error).message}))
         }, ttl / 3)
         heartbeat.unref()
         let completed = false
@@ -205,7 +209,7 @@ class JobLoop {
                     .catch(err => GGLog.warn(this.job, "Job lock release failed", {job: name, id, err: (err as Error).message}))
             }
         }
-        return true
+        return lost.signal.aborted ? "lost" : "done"
     }
 
     private async runBatches({limit, parallel, maxExtraRuns}: RunConfig, signal: AbortSignal): Promise<void> {
@@ -228,12 +232,12 @@ class JobLoop {
             }
             await Promise.all(Array.from({length: Math.min(parallel, rows.length)}, worker))
 
-            const report = {rows: rows.length, failed, durationMs: Date.now() - startedAt}
+            const report = {rows: rows.length, failed, skipped, durationMs: Date.now() - startedAt}
             if (rows.length > 0) GGLog.info(this.job, "Job batch done", {job: name, ...report})
             await this.job.dataSetFinished?.(report)
                 .catch(err => GGLog.warn(this.job, "Job dataSetFinished failed", {job: name, err: (err as Error).message}))
-            // A skipped row is locked by another instance, so the next batch would read it again.
-            if (signal.aborted || failed > 0 || skipped > 0 || rows.length < limit || extra >= maxExtraRuns) return
+            // A batch of rows all locked by other instances made no progress; the next one would read them again.
+            if (signal.aborted || failed > 0 || skipped === rows.length || rows.length < limit || extra >= maxExtraRuns) return
         }
     }
 
@@ -242,7 +246,9 @@ class JobLoop {
         metric(() => GGJobMetrics.rowsInFlight.inc(1, {job}))
         try {
             if (this.job.config.lock === "item") {
-                if (!await this.withLock(`${job}#${this.job.rowKey!(row)}`, signal, s => this.job.processRow(row, s))) return "SKIPPED"
+                const result = await this.withLock(`${job}#${this.job.rowKey!(row)}`, signal, s => this.job.processRow(row, s))
+                if (result === "busy") return "SKIPPED"
+                if (result === "lost") throw new Error("Lost the row's lock")
             } else {
                 await this.job.processRow(row, signal)
             }
@@ -261,7 +267,7 @@ class JobLoop {
         try {
             return this.job.describeRow(row)
         } catch {
-            return row
+            return "<describeRow failed>"
         }
     }
 }

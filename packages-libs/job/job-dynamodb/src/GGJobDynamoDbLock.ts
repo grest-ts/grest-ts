@@ -57,14 +57,15 @@ export class GGJobDynamoDbLock implements GGJobLock {
     }
 
     renew(id: string, owner: string, ttlMs: number): Promise<boolean> {
-        const until = this.now() + ttlMs
+        const now = this.now()
+        const until = now + ttlMs
         return this.conditional(new UpdateCommand({
             TableName: this.tableName,
             Key: {id},
             UpdateExpression: "SET lockedUntil = :until, #exp = :exp",
-            ConditionExpression: "#owner = :me",
+            ConditionExpression: "#owner = :me AND lockedUntil >= :now",
             ExpressionAttributeNames: {"#owner": "owner", "#exp": GGJobDynamoDbLock.TTL_ATTRIBUTE},
-            ExpressionAttributeValues: {":me": owner, ":until": until, ":exp": this.expiresAtSec(until)},
+            ExpressionAttributeValues: {":me": owner, ":now": now, ":until": until, ":exp": this.expiresAtSec(until)},
         }))
     }
 
