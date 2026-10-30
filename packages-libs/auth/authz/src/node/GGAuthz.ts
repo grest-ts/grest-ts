@@ -3,7 +3,6 @@ import {applyPlan} from "./applyPlan"
 import {expandActions, expandRoles, MAX_DEPTH, type OnUnknownAction} from "../shared/chain"
 import {type AttributeLookup, evalCondition, evalConditional, evalConditions, isResourceKey} from "./conditions"
 import {type GGAuthzActionRef, validatedModels} from "../shared/defineAuthz"
-import {describe, document} from "./describe"
 import {APPROVAL_REQUIRED, INSUFFICIENT_SCOPE, STEP_UP_REQUIRED} from "../shared/authzErrors"
 import {explain} from "./explain"
 import {GG_AUTHZ_SUBJECT} from "./GG_AUTHZ_SUBJECT"
@@ -180,8 +179,6 @@ interface Loader {
 
 export class GGAuthz {
 
-    public static readonly describe = describe
-    public static readonly document = document
     public static readonly explain = explain
     public static readonly applyPlan = applyPlan
 

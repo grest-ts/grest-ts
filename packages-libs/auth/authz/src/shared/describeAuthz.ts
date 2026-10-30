@@ -1,7 +1,7 @@
 import {type GGContractClass, type GGContractMethod, GGPermissionChecker} from "@grest-ts/schema"
-import {expandActions, expandRoles} from "../shared/chain"
-import {definedAtOf} from "../shared/defineAuthz"
-import {GG_AUTHZ_APPROVAL_LEVELS, type GGAuthzApprovalLevel, type GGAuthzModel} from "../shared/authzSchemas"
+import {expandActions, expandRoles} from "./chain"
+import {definedAtOf} from "./defineAuthz"
+import {GG_AUTHZ_APPROVAL_LEVELS, type GGAuthzApprovalLevel, type GGAuthzModel} from "./authzSchemas"
 
 export interface GGAuthzDescribeOptions {
     /** Contracts whose methods' requirements are listed per action. */
@@ -33,7 +33,7 @@ export interface GGAuthzCatalog {
     readonly tokenScopes: readonly GGAuthzRoleInfo[]
 }
 
-export function describe(model: GGAuthzModel, options?: GGAuthzDescribeOptions): GGAuthzCatalog {
+export function describeAuthzModel(model: GGAuthzModel, options?: GGAuthzDescribeOptions): GGAuthzCatalog {
     const known = new Map(model.actions.map(a => [a.name, a]))
     const expanded = expandRoles(known, model.roles)
     const roles = model.roles.map(r => ({
@@ -78,8 +78,8 @@ export function describe(model: GGAuthzModel, options?: GGAuthzDescribeOptions):
     }
 }
 
-export function document(model: GGAuthzModel, options?: GGAuthzDescribeOptions): string {
-    const catalog = describe(model, options)
+export function documentAuthzModel(model: GGAuthzModel, options?: GGAuthzDescribeOptions): string {
+    const catalog = describeAuthzModel(model, options)
     const row = (cells: readonly string[]) => `| ${cells.map(c => c.replace(/\|/g, "\\|")).join(" | ")} |`
     const list = (items: readonly string[]) => items.map(i => `\`${i}\``).join(", ")
     return [

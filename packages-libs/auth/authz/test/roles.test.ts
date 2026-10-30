@@ -1,6 +1,6 @@
 import {FORBIDDEN} from "@grest-ts/schema"
 import {describe, expect, test} from "vitest"
-import {defineAuthzModel, defineAuthzRole, defineAuthzService, GGAuthz, type GGAuthzBinding, GGAuthzMemoryResolver, type GGAuthzPolicies, type GGAuthzSubject} from "../src/index-node"
+import {defineAuthzModel, defineAuthzRole, defineAuthzService, describeAuthzModel, GGAuthz, type GGAuthzBinding, GGAuthzMemoryResolver, type GGAuthzPolicies, type GGAuthzSubject} from "../src/index-node"
 import {as} from "./util"
 
 const org = "rn:acme:org:acme:org/acme"
@@ -68,7 +68,7 @@ describe("roles: inheritance and tenant-defined roles", () => {
         const roles = [defineAuthzRole("t-viewer", {actions: ["docs:Read"]})]
         roles.push(defineAuthzRole("t-editor", {actions: ["docs:Write"], includes: [roles[0]!]}))
         const defined = defineAuthzModel({partition: "acme", services: [defineAuthzService("docs", {types: {doc: ""}, actions: {Read: {on: ["doc"]}, Write: {on: ["doc"]}}})], roles})
-        expect(GGAuthz.describe(defined).roles.find(r => r.name === "t-editor")!.actions).toEqual(["docs:Write", "docs:Read"])
+        expect(describeAuthzModel(defined).roles.find(r => r.name === "t-editor")!.actions).toEqual(["docs:Write", "docs:Read"])
     })
 })
 

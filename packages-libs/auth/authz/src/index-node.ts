@@ -16,5 +16,4 @@ export type {
 export {GGAuthzMemoryResolver} from "./node/GGAuthzMemoryResolver"
 export type {GGAuthzMemoryData} from "./node/GGAuthzMemoryResolver"
 export {GG_AUTHZ_SUBJECT} from "./node/GG_AUTHZ_SUBJECT"
-export type {GGAuthzActionInfo, GGAuthzCatalog, GGAuthzDescribeOptions, GGAuthzRoleInfo} from "./node/describe"
 export type {GGAuthzApplyPlanOptions} from "./node/applyPlan"

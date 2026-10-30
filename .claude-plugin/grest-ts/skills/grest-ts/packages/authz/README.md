@@ -506,19 +506,19 @@ Every other unknown still denies. Pass the facts that hold at the scope in `cont
 editing a role). A refusal names what's missing:
 `{layer: "grant", kind: "escalation", role: "editor", actions: ["docs:Write"]}`.
 
-### `explain`, `describe`, `document`
+### `explain`, `describeAuthzModel`, `documentAuthzModel`
 
 ```ts
 GGAuthz.explain(request, decision)
 // "user:dan may not docs:Export on rn:…/doc/salaries: guardrail contractors-no-export on rn:…/org/acme denies docs:Export."
-GGAuthz.describe(AppAuthz, {contracts: [DocsApiContract]})  // structured catalog
-GGAuthz.document(AppAuthz, {contracts: [DocsApiContract]})  // the same as markdown
+describeAuthzModel(AppAuthz, {contracts: [DocsApiContract]})  // structured catalog
+documentAuthzModel(AppAuthz, {contracts: [DocsApiContract]})  // the same as markdown
 ```
 
 The catalog lists every action with its resource types, description, roles and token scopes that
 include it, approval floor, the contract methods whose requirements name it, and where it was
 defined. A contract method naming an action the model doesn't know throws, so a docs or CI step
-catches it.
+catches it. Both are in the browser entry, e.g. to show what a role grants.
 
 ---
 
@@ -541,12 +541,12 @@ catches it.
 ## Reference
 
 **Browser entry (`@grest-ts/authz`, browser condition)** — the model and contract side:
-`defineAuthzService`, `defineAuthzRole`, `defineAuthzTokenScope`, `defineAuthzModel`, the action
-builders (`.on`, `.onContext`, `.list`, `.hide`, `.orCreateOn`), `GGAuthzRn`, the errors
+`defineAuthzService`, `defineAuthzRole`, `defineAuthzTokenScope`, `defineAuthzModel`,
+`describeAuthzModel`, `documentAuthzModel`, the action builders (`.on`, `.onContext`, `.list`, `.hide`, `.orCreateOn`), `GGAuthzRn`, the errors
 (`APPROVAL_REQUIRED`, `INSUFFICIENT_SCOPE`, `STEP_UP_REQUIRED`, `GG_AUTHZ_ERRORS`), and every
 `IsGGAuthz*` schema with its `GGAuthz*` type. The engine is not in it.
 
 **Node entry (`@grest-ts/authz`)** — all of the above plus `GGAuthz` (`authorize`, `authorizeGrant`,
 `evaluate`, `evaluateBatch`, `listAllowed`, `canGrant`, `missingActions`, `inactive`; statics
-`explain`, `describe`, `document`, `applyPlan`), `GGAuthzAuthority`, `GGAuthzMemoryResolver` and
+`explain`, `applyPlan`), `GGAuthzAuthority`, `GGAuthzMemoryResolver` and
 `GG_AUTHZ_SUBJECT`.

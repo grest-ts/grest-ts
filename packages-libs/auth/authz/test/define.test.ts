@@ -1,6 +1,6 @@
 import {GGContractClass, IsObject, IsString, NOT_FOUND} from "@grest-ts/schema"
 import {describe, expect, test} from "vitest"
-import {APPROVAL_REQUIRED, defineAuthzModel, defineAuthzRole, defineAuthzService, GGAuthz} from "../src/index-node"
+import {APPROVAL_REQUIRED, defineAuthzModel, defineAuthzRole, defineAuthzService, describeAuthzModel, documentAuthzModel} from "../src/index-node"
 import {Cloud, model, Secrets, Vm} from "./world"
 
 describe("define functions", () => {
@@ -53,7 +53,7 @@ describe("contract methods", () => {
     })
 
     test("describe lists roles, scopes, floors and declaring methods per action", () => {
-        const catalog = GGAuthz.describe(model, {contracts: [WorkspaceApi]})
+        const catalog = describeAuthzModel(model, {contracts: [WorkspaceApi]})
         expect(catalog.actions.find(a => a.name === "vm:StopWorkspace")).toMatchObject({
             roles: ["member", "owner", "admin"],
             tokenScopes: ["workspaces:operate"],
@@ -67,11 +67,11 @@ describe("contract methods", () => {
     test("describe rejects a contract that declares an unknown action", () => {
         const Nope = defineAuthzService("nope", {types: {thing: "Not in the model"}, actions: {Do: {on: ["thing"]}}})
         const Other = new GGContractClass("OtherApi", {x: {permission: Nope.Do.on(Nope.types.thing)}})
-        expect(() => GGAuthz.describe(model, {contracts: [Other]})).toThrow("OtherApi.x declares unknown action nope:Do")
+        expect(() => describeAuthzModel(model, {contracts: [Other]})).toThrow("OtherApi.x declares unknown action nope:Do")
     })
 
     test("document renders the catalog as markdown", () => {
-        const md = GGAuthz.document(model, {contracts: [WorkspaceApi]})
+        const md = documentAuthzModel(model, {contracts: [WorkspaceApi]})
         expect(md).toContain("| `vm:StopWorkspace` | `vm:workspace` |  | member, owner, admin | workspaces:operate |  | `WorkspaceApi.stop` |")
         expect(md).toContain(`| \`${Secrets.Write.name}\` | \`secrets:secret\` |  | owner, admin |  | ask |  |`)
         expect(md).toContain("| viewer | Read-only | `vm:ReadWorkspace`, `git:Read` |")
