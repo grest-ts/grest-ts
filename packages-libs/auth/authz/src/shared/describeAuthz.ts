@@ -4,7 +4,6 @@ import {definedAtOf} from "./defineAuthz"
 import {GG_AUTHZ_APPROVAL_LEVELS, type GGAuthzApprovalLevel, type GGAuthzModel} from "./authzSchemas"
 
 export interface GGAuthzDescribeOptions {
-    /** Contracts whose methods' requirements are listed per action. */
     contracts?: readonly GGContractClass<any>[]
 }
 

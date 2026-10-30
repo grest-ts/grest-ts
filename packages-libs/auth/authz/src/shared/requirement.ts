@@ -22,7 +22,7 @@ export interface GGAuthzActionBuilders<Types extends string> {
     /** The resource id is that input field (the action must have one resource type). */
     on<const F extends string>(field: IsUnion<Types> extends true ? never : F): GGAuthzRequirement<F, Types>
     on<T extends Types, const F extends string>(type: T, field: F): GGAuthzRequirement<F, Types>
-    /** The authority resolves the id from the request, e.g. the calling agent's own workspace. */
+    /** The authority resolves the id from the request, e.g. the document the caller has open. */
     onContext(source: string): GGAuthzRequirement<never, Types>
     onContext<T extends Types>(type: T, source: string): GGAuthzRequirement<never, Types>
     /** No check before the handler; it filters what it returns. */

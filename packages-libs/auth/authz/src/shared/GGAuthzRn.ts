@@ -49,7 +49,7 @@ export class GGAuthzRn {
         return value.endsWith("*")
     }
 
-    // A pattern is an RN prefix cut at a segment boundary plus `*`, so `workspace/w1*` can't also match `w10`.
+    // A pattern is an RN prefix cut at a segment boundary plus `*`, so `doc/d1*` can't also match `d10`.
     public static isValidPattern(pattern: string): boolean {
         if (!pattern.endsWith(":*") && !pattern.endsWith("/*")) return false
         const prefix = pattern.slice(0, -1)

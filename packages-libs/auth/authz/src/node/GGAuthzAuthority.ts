@@ -43,7 +43,6 @@ export interface GGAuthzApprovalNeed {
 /** Names what an approval of `action` is for when it isn't the decided resource, e.g. the new row of a create. */
 export type GGAuthzApprovalKey = (input: Record<string, unknown>, resource: GGAuthzResolvedResource) => {type: string, id: string}
 
-/** The contract method a request runs, as grest-ts names it to an authority. */
 export interface GGAuthzCall {
     api: string
     method: string

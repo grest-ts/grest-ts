@@ -19,7 +19,6 @@ export interface GGAuthzActionSpec<Type extends string> {
 
 export interface GGAuthzServiceSpec<Type extends string, Actions extends Record<string, GGAuthzActionSpec<Type>>> {
     description?: string
-    /** Resource type → description. */
     types?: Record<Type, string>
     actions: Actions
 }

@@ -1,6 +1,6 @@
 import type {GGAuthzDecision, GGAuthzReason, GGAuthzRequest} from "../shared/authzSchemas"
 
-/** e.g. "user:ben may vm:StopWorkspace on rn:… because group:eng has role operator on rn:…; boundary agents allows vm:*." */
+/** e.g. "user:ben may docs:Write on rn:… because group:eng has role editor on rn:…; boundary assistants allows docs:Write." */
 export function explain(request: GGAuthzRequest, decision: GGAuthzDecision): string {
     const subject = `${request.subject.type}:${request.subject.id}`
     const human = request.subject.properties?.onBehalfOf
