@@ -28,23 +28,67 @@ with a resolver for the scope tree and group memberships, and get decisions back
                      authz.listAllowed(...) → a query plan for listings
 ```
 
-The evaluation is AWS IAM's (an explicit deny wins, every cap must pass, then something must allow)
-over GCP-style bindings inherited down a scope tree:
-
 ```
 effective access  =  grants  ∩  every cap that applies  −  hard noes
 ```
 
-| Here | AWS / GCP equivalent | Kind |
-|---|---|---|
-| binding `{principal, role, on}` | identity policy / allow-policy binding | grant |
-| resource policy allow / deny statement (`except`) | resource policy / deny policy with exceptions | grant / hard no |
-| guardrail | SCP, RCP / organization policy | hard no or cap |
-| boundary | permission boundary / principal access boundary | cap |
-| token scope, request restriction | OAuth scope, session policy | cap |
-| condition, fact | condition keys / IAM condition | "only if" on any rule |
+## Vocabulary
 
-Beyond those two:
+The examples use a document platform: tenant `acme` → project → folder → doc.
+
+**Who, what, where**
+
+| Term | Means | Example |
+|---|---|---|
+| principal | who acts: a user, a group, an AI agent, an app | `user:ann`, `group:eng`, `agent:assistant-ann` |
+| workload | a principal that isn't a person; the model's `workloadTypes` say which types | `agent`, `client` |
+| subject | the principal making this request, plus who it acts for (`onBehalfOf`) and through (`via`) | an app acting for ann through her assistant |
+| resource | one thing, named by an RN | `rn:acme:docs:acme:doc/intro` |
+| resource type | the kind of thing | `docs:doc` |
+| scope tree | each resource's parents (`ancestors`); access given on a resource reaches everything below it | acme → project web → folder handbook → doc intro |
+| action | one verb on one or more resource types | `docs:Write` |
+| model | the services, actions, roles and token scopes; code, shared with the browser | `AppAuthz` |
+| policies | who gets what in one tenant; data | bindings, guardrails, … |
+
+**What gives access**
+
+| Term | Means | Example |
+|---|---|---|
+| role | a named list of actions; only adds | `editor` = Write + Delete + everything in `viewer` |
+| binding | principal + role + `on` a resource: the grant. Reaches `on` and everything below it | `group:eng` is `editor` on project web |
+| resource policy | allow and deny statements kept on a resource | doc salaries: ben may read |
+| condition | an attribute test a binding or rule must pass | `resource.owner` equals `principal.key`: "your own docs" |
+| fact | a yes/no your code computes per request; `when` needs it true, `unless` needs it false | `published`, `mfa` |
+
+**What takes access away**
+
+| Term | Means | Example |
+|---|---|---|
+| deny statement | in a resource policy: nobody it selects may, whatever they were granted; `except` lists who is exempt | doc salaries: nobody except ben and admins |
+| guardrail | a limit on everything under `on`, admins included: `deny` rules, a `ceiling`, or both | contractors may not export anywhere in acme |
+| ceiling | nothing outside these rules is possible | project legal: only Read and Write |
+| boundary | the most the principals it selects may ever do, whatever they're granted | assistants may only read and write inside folders |
+| token scope | the most a token may do; the request's `scopes` | a `docs:read` token |
+| restriction | the most this one request may do | only doc onboarding |
+
+**Approvals**
+
+| Term | Means | Example |
+|---|---|---|
+| approval level | whether a person must confirm a workload's allowed request: `auto` < `ask-once` < `ask` < `critical` < `humans-only` | an assistant reading salaries: `ask` |
+| approval floor | a level the model always enforces | exporting always asks |
+| locked | a level that resources below can't lower | |
+
+**How one request is decided**
+
+1. A deny statement or guardrail deny matches → **no**.
+2. A ceiling, boundary, token scope or restriction doesn't cover it → **no**.
+3. A binding or allow statement matches → **yes**.
+4. For workloads: the approval level is attached, or `humans-only` → **no**.
+
+Nothing matched → **no**.
+
+Beyond that:
 
 - **approvals for agents**: allowed, but a human confirms first;
 - **delegation chains**: an outside client calling through your own agent, with every caller's caps;
@@ -52,13 +96,11 @@ Beyond those two:
 - **remedies**: a denial says when another OAuth scope or an MFA step-up would turn it into an allow;
 - unknown facts and attributes **fail closed in both directions**.
 
-The model maps one-to-one onto [Cedar](https://www.cedarpolicy.com)'s entity model, and a
-differential test checks the engine against Cedar. [Conformance](./README-conformance.md) compares
-it rule by rule with AWS IAM, Google Cloud IAM, Zanzibar and GitHub.
+[Conformance](./README-conformance.md) compares the engine rule by rule with other authorization
+systems.
 
-The examples below are a document platform: tenant `acme` with projects, folders and docs; users
-`ann`, `ben`, `cleo` (admin) and `dan` (contractor); AI assistants acting for users; and OAuth
-clients.
+The examples below use users `ann`, `ben`, `cleo` (admin) and `dan` (contractor), AI assistants
+acting for users, and OAuth clients.
 
 ---
 
