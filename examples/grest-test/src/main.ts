@@ -15,6 +15,7 @@ import {MetricsTestApi} from "./api/MetricsTestApi"
 import {HttpMetricsTestApi} from "./api/HttpMetricsTestApi"
 import {ConfigTestSocketApi} from "./api/ConfigTestSocketApi"
 import {ClientTestSocketApi} from "./api/ClientTestSocketApi"
+import {BroadcastSocketApi} from "./api/BroadcastSocketApi"
 import {AuthedSocketApi} from "./api/AuthedSocketApi"
 import {RawEchoApi} from "./api/RawEchoApi"
 import {RawEchoService} from "./services/RawEchoService"
@@ -39,6 +40,7 @@ import {MiddlewareTestService} from "./services/MiddlewareTestService"
 import {FileUploadTestService} from "./services/FileUploadTestService"
 import {BenchmarkService} from "./services/BenchmarkService"
 import {ClientTestSocketService} from "./services/ClientTestSocketService"
+import {BroadcastSocketService} from "./services/BroadcastSocketService"
 import {AuthedSocketService} from "./services/AuthedSocketService"
 import {QuerySocketService} from "./services/QuerySocketService"
 import {MessagingSocket} from "./api/ChatMessagingApi"
@@ -114,6 +116,7 @@ export class MainRuntime extends GGRuntime {
             .http(CookieTestApi, new CookieTestService())
             .ws(ConfigTestSocketApi, configTestService.handleSocketConnection)
             .ws(ClientTestSocketApi, clientTestSocketService.handleConnection)
+            .ws(BroadcastSocketApi, new BroadcastSocketService().handleConnection)
             .ws(AuthedSocketApi, authedSocketService.handleConnection)
             .wsRaw(RawEchoApi, new RawEchoService().handleConnection)
             .ws(QuerySocketApi, querySocketService.handleConnection)

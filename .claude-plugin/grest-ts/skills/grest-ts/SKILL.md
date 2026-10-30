@@ -672,6 +672,7 @@ Read these only when you need package-specific detail (exact API, options, advan
 - **@grest-ts/runtime** — `packages/runtime/README.md`
 - **@grest-ts/schema** — `packages/schema/README-codec.md`, `packages/schema/README-contract.md`, `packages/schema/README-extending.md`, `packages/schema/README-localization.md`, `packages/schema/README-usage.md`, `packages/schema/README.md`
 - **@grest-ts/schema-file** — `packages/schema-file/README.md`
+- **@grest-ts/service-auth** — `packages/service-auth/README.md`
 - **@grest-ts/sql** — `packages/sql/README.md`
 - **@grest-ts/struct** — `packages/struct/README.md`
 - **@grest-ts/testkit** — `packages/testkit/README-extending.md`, `packages/testkit/README.md`
@@ -679,4 +680,4 @@ Read these only when you need package-specific detail (exact API, options, advan
 - **@grest-ts/testkit-vitest** — `packages/testkit-vitest/README.md`
 - **@grest-ts/trace** — `packages/trace/README.md`
 - **@grest-ts/trace-http** — `packages/trace-http/README.md`
-- **@grest-ts/websocket** — `packages/websocket/README.md`
+- **@grest-ts/websocket** — `packages/websocket/README-broadcast.md`, `packages/websocket/README.md`
