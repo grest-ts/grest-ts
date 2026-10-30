@@ -38,7 +38,7 @@ await db.getRawClient().send(new CreateTableCommand({
 }))
 ```
 
-Enable DynamoDB TTL on the `expiresAtSec` attribute. A held lock carries it, set to a day past its lease, so the row of a holder that crashed (an `item` row lock, typically) is eventually deleted. A finished `exclusive` run keeps one row per job with its `lastRunAt`.
+Enable DynamoDB TTL on the `expiresAtSec` attribute (`GGJobDynamoDbLock.TTL_ATTRIBUTE`). A held lock carries it, set to a day past its lease, so the row of a holder that crashed (an `item` row lock, typically) is eventually deleted. A finished `exclusive` run keeps one row per job with its `lastRunAt`.
 
 | Attribute | Set while | Meaning |
 |---|---|---|

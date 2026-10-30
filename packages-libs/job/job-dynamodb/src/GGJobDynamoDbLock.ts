@@ -17,6 +17,9 @@ export interface GGJobDynamoDbLockOptions {
  */
 export class GGJobDynamoDbLock implements GGJobLock {
 
+    /** Enable DynamoDB TTL on this attribute. */
+    static readonly TTL_ATTRIBUTE = "expiresAtSec"
+
     static tableDefinition(tableName: string): CreateTableCommandInput {
         return {
             TableName: tableName,
@@ -43,9 +46,9 @@ export class GGJobDynamoDbLock implements GGJobLock {
         return this.conditional(new UpdateCommand({
             TableName: this.tableName,
             Key: {id},
-            UpdateExpression: "SET #owner = :me, lockedUntil = :until, expiresAtSec = :exp",
+            UpdateExpression: "SET #owner = :me, lockedUntil = :until, #exp = :exp",
             ConditionExpression: "(attribute_not_exists(lockedUntil) OR lockedUntil < :now)" + due,
-            ExpressionAttributeNames: {"#owner": "owner"},
+            ExpressionAttributeNames: {"#owner": "owner", "#exp": GGJobDynamoDbLock.TTL_ATTRIBUTE},
             ExpressionAttributeValues: {
                 ":me": owner, ":now": now, ":until": now + ttlMs, ":exp": this.expiresAtSec(now + ttlMs),
                 ...(lastRunAtMost === undefined ? {} : {":most": lastRunAtMost}),
@@ -58,9 +61,9 @@ export class GGJobDynamoDbLock implements GGJobLock {
         return this.conditional(new UpdateCommand({
             TableName: this.tableName,
             Key: {id},
-            UpdateExpression: "SET lockedUntil = :until, expiresAtSec = :exp",
+            UpdateExpression: "SET lockedUntil = :until, #exp = :exp",
             ConditionExpression: "#owner = :me",
-            ExpressionAttributeNames: {"#owner": "owner"},
+            ExpressionAttributeNames: {"#owner": "owner", "#exp": GGJobDynamoDbLock.TTL_ATTRIBUTE},
             ExpressionAttributeValues: {":me": owner, ":until": until, ":exp": this.expiresAtSec(until)},
         }))
     }
@@ -77,9 +80,9 @@ export class GGJobDynamoDbLock implements GGJobLock {
             : new UpdateCommand({
                 TableName: this.tableName,
                 Key: {id},
-                UpdateExpression: "SET lastRunAt = :ranAt REMOVE #owner, lockedUntil, expiresAtSec",
+                UpdateExpression: "SET lastRunAt = :ranAt REMOVE #owner, lockedUntil, #exp",
                 ConditionExpression: "#owner = :me",
-                ExpressionAttributeNames: {"#owner": "owner"},
+                ExpressionAttributeNames: {"#owner": "owner", "#exp": GGJobDynamoDbLock.TTL_ATTRIBUTE},
                 ExpressionAttributeValues: {":me": owner, ":ranAt": ranAt},
             }))
     }
