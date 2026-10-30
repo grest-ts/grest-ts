@@ -5,7 +5,7 @@ import {GGLog} from "@grest-ts/logger";
 import type {GGLock} from "./GGLock";
 
 export interface GGWithLockOptions {
-    /** Default: one per process, `newLockOwner()`. */
+    /** Default `processLockOwner()`. */
     owner?: string;
     ttlMs: number;
     /** Aborts `fn`'s signal too. A run it aborted is released without `holdUntil`. */
@@ -30,6 +30,11 @@ export function newLockOwner(): string {
 
 let processOwner: string | undefined;
 
+/** One `newLockOwner()` for the whole process, the default owner of `withLock` and `GGJobRunner`. */
+export function processLockOwner(): string {
+    return processOwner ??= newLockOwner();
+}
+
 /**
  * Runs `fn` while holding `lockId`, renewing it every `ttlMs / 3`. The lock is lost when a renew fails, or when the
  * last renew that succeeded was sent two thirds of a TTL ago; `fn`'s signal is then aborted, and the lock is not
@@ -42,7 +47,7 @@ export async function withLock(
     fn: (signal: AbortSignal) => Promise<void>,
 ): Promise<GGWithLockResult> {
     const {ttlMs, signal, holdUntil} = options;
-    const owner = options.owner ?? (processOwner ??= newLockOwner());
+    const owner = options.owner ?? processLockOwner();
     // Inside a runtime, timers belong to its scope (stopped with it); outside one, plain timers.
     const scope = GGLocator.tryGetScope();
     const every = (fn: () => void, ms: number) => scope ? scope.setInterval(fn, ms) : setInterval(fn, ms);

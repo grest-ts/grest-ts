@@ -20,7 +20,7 @@ interface GGLock {
 - `renew` extends the lease while `owner` still holds it. `false` means the lock was lost: stop the work.
 - `release` does nothing unless `owner` holds the lock, so a holder whose lease expired can't release its successor's lock.
 
-`owner` must be unique per process; `newLockOwner()` gives hostname + pid + a random suffix, and `withLock` uses one per process unless told otherwise.
+`owner` must be unique per process. `processLockOwner()` (hostname + pid + a random suffix) is the default of `withLock` and `GGJobRunner`.
 
 ## withLock
 

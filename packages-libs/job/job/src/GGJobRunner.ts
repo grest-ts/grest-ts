@@ -1,7 +1,7 @@
 import {GGLocator, GGLocatorKey, GGLocatorServiceType, type GGLocatorScope} from "@grest-ts/locator"
 import {GGLog} from "@grest-ts/logger"
 import {GG_METRICS} from "@grest-ts/metrics"
-import {type GGLock, newLockOwner, withLock} from "@grest-ts/lock"
+import {type GGLock, processLockOwner, withLock} from "@grest-ts/lock"
 import type {GGJob} from "./GGJob"
 import {GGJobMetrics} from "./GGJobMetrics"
 
@@ -15,7 +15,7 @@ const WARN_RATIO = 0.7
 export interface GGJobRunnerOptions {
     /** What `oneInstance` jobs coordinate through. */
     lock: GGLock
-    /** Unique per process. Default `newLockOwner()`. */
+    /** Unique per process. Default `processLockOwner()`. */
     owner?: string
 }
 
@@ -31,7 +31,7 @@ export class GGJobRunner {
     private stopped = false
 
     constructor(options: GGJobRunnerOptions) {
-        this.owner = options.owner ?? newLockOwner()
+        this.owner = options.owner ?? processLockOwner()
         this.lock = options.lock
         this.scope = GGLocator.getScope()
         this.scope.setWithLifecycle(GG_JOB_RUNNER, this, {
