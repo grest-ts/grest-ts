@@ -23,19 +23,25 @@ export function teardown() {
 function claimSlot(): number {
     const dir = path.join(os.tmpdir(), "gg-test-slots");
     fs.mkdirSync(dir, {recursive: true});
-    for (let slot = 0; ; slot++) {
-        const file = path.join(dir, String(slot));
-        try {
-            fs.writeFileSync(file, String(process.pid), {flag: "wx"});
-            return slot;
-        } catch (err) {
+    // Runs starting together take turns, so none reads a half-written claim or replaces one just made.
+    const lock = path.join(dir, "lock");
+    for (let since = Date.now(); ;) {
+        try { fs.mkdirSync(lock); break; } catch (err) {
             if ((err as NodeJS.ErrnoException).code !== "EEXIST") throw err;
         }
-        let owner = 0;
-        try { owner = Number(fs.readFileSync(file, "utf8")); } catch { /* released meanwhile: retry it */ }
-        if (isAlive(owner)) continue;
-        fs.rmSync(file, {force: true});
-        slot--;
+        // A holder that died mid-claim never lets go; a claim takes milliseconds.
+        if (Date.now() - since > 10_000) { fs.rmSync(lock, {recursive: true, force: true}); since = Date.now(); }
+        Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 20);
+    }
+    try {
+        for (let slot = 0; ; slot++) {
+            const file = path.join(dir, String(slot));
+            if (fs.existsSync(file) && isAlive(Number(fs.readFileSync(file, "utf8")))) continue;
+            fs.writeFileSync(file, String(process.pid));
+            return slot;
+        }
+    } finally {
+        fs.rmSync(lock, {recursive: true, force: true});
     }
 }
 

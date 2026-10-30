@@ -145,11 +145,6 @@ export class GGTestRunner {
     }
 
     /**
-     * Register a test lifecycle hook.
-     * Hooks run beforeAll (during start) and afterAll (during teardown).
-     * Duplicate registrations with the same keyName are skipped.
-     */
-    /**
      * Unique among the run's concurrent runners, and the same small set of values every run: the run's slot, the
      * worker, and the lowest number no live runner in this worker holds (released at teardown). For test resources a
      * backend can't free, such as dynamodb-local's per-key databases.
@@ -164,6 +159,11 @@ export class GGTestRunner {
         return `s${process.env.GG_TEST_SLOT ?? process.env.GG_TEST_RUN_ID}w${process.env.GG_TEST_WORKER ?? process.pid}n${this.reusableNumber}`;
     }
 
+    /**
+     * Register a test lifecycle hook.
+     * Hooks run beforeAll (during start) and afterAll (during teardown).
+     * Duplicate registrations with the same keyName are skipped.
+     */
     public registerHook(hook: GGTestRunnerHook): void {
         if (this.hooks.has(hook.keyName)) {
             GGLog.debug(this, `Hook already registered for ${hook.keyName}, skipping duplicate`);
