@@ -87,14 +87,16 @@ Asymmetric signers (`JwsSigningStrategy`) publish their public keys at `ACCESS_T
 `/oauth/jwks` lists them too, next to the ID-token key derived from `secret`: never verify access
 tokens against it, or whoever holds `secret` can mint them.
 
-**Service clients** (`serviceClients`) are your own backends. They authenticate with a secret
-(`client_secret_basic`) and may use:
-- `client_credentials`, for resources with `clients: "service"`. The token's subject is the client id.
-- token exchange (RFC 8693), for a resource with `exchange: {from, params, claims}`. The service sends
-  a subject's valid `from` token (`subject_token`) plus your extra `params`, and gets a token for this
-  resource for the same subject, e.g. an org-scoped token from a user token. Same subject only: there
-  is no delegation (`actor_token`, the `act` claim), so the issued token doesn't say which service
-  asked for it.
+**Service clients** (`serviceClients`) are your own backends. `mount` also serves them a grest
+contract, `GGOAuthServiceApi`, which they call with their secret:
+- `token({resource})`, for resources with `clients: "service"`. The token's subject is the client id.
+- `exchange({subjectToken, resource, params})`, for a resource with `exchange: {from, params, claims}`.
+  The service sends a subject's valid `from` token plus your extra `params`, and gets a token for this
+  resource for the same subject, e.g. an org-scoped token from a user token. Same subject only: the
+  issued token doesn't say which service asked for it.
+
+A wrong secret is `NOT_AUTHORIZED`; an invalid or expired subject token is `SUBJECT_TOKEN_INVALID`
+(get a fresh one); a resource the client may not have, or no token for the subject, is `FORBIDDEN`. These are not OAuth grants: `/oauth/token` offers neither `client_credentials` nor token exchange.
 
 ```ts
 const org: GGOAuthResource<OrgClaims> = {
@@ -104,22 +106,39 @@ const org: GGOAuthResource<OrgClaims> = {
 }
 ```
 
-A backend calls the token endpoint with `GGOAuthServiceClient({tokenEndpoint, clientId, secret})`:
-`token(resource)` (client_credentials, reused until shortly before expiry) and
-`exchange(subjectToken, resource, params)`; failures throw `GGOAuthTokenError` with the OAuth `error`.
-To send the token, give the client of the other service a wire value:
-`OtherApi.createClient({wires: [{wire: SERVICE_TOKEN_WIRE, value: () => serviceClient.token(resource)}]})`
-(see `@grest-ts/http` → "Client — sending the credential").
+A backend calls it through `GGOAuthServiceClient({clientId, secret, url?})`. `token(resource)` is reused
+until shortly before it expires; `exchange(subjectToken, resource, params)` isn't cached. Without `url`
+(or with an empty one) the server is found by service discovery, like any other contract. To send the
+token, give the other service's client a wire value:
+
+```ts
+const auth = new GGOAuthServiceClient({clientId: "billing", secret: () => config.authSecret.reveal()})
+const ledger = LedgerApi.createClient({wires: [{wire: SERVICE_TOKEN_WIRE, value: () => auth.token(LEDGER_RESOURCE)}]})
+```
 
 **Resource server only.** A service that accepts the tokens but doesn't run the authorization server
 uses `GGOAuthResourceServer({authorizationServer, resources})`: `mount` serves each resource's RFC 9728
 metadata and `protect` answers a missing or invalid token with the discovery challenge. Its resources'
 `accessToken` only verifies: a `GGAuthAccessToken` on a `JwksVerifier` (from `@grest-ts/auth`) reading
-the issuer's `/oauth/access-token-jwks`. When those keys can't be fetched (`JwksVerifier` throws
-`SERVER_ERROR`), `protect` answers 503 rather than sending the client to sign in again.
+the issuer's `/oauth/access-token-jwks`. `accessTokenJwksUrl(url?)` gives that URL: on `url`, or on the
+server discovery finds for `GGOAuthServiceApi`, since `mount` serves both (`new JwksVerifier({jwks: accessTokenJwksUrl()})`).
+When those keys can't be fetched (`JwksVerifier` throws `SERVER_ERROR`), `protect` answers 503 rather
+than sending the client to sign in again.
 
 `listGrants(subject)` and `revokeGrant(subject, grantId)` back a "connected apps" page. Each grant has `createdAt` and `lastUsedAt`: when it last got tokens, so within one access-token lifetime of its last use.
 `revokeAll(subject)` is "log out everywhere"; call it next to `GGAuthRefreshToken.revokeAll`.
+
+### Service tokens in tests
+
+With `@grest-ts/oauth` installed, `GGTest` makes service-token calls work without setup:
+- **The authorization server's runtime is running:** tokens are real, and the receiving service verifies them.
+  The caller's `secret` and the server's `serviceClients` entry must be the same value in the test config;
+  a mismatch is `NOT_AUTHORIZED`.
+- **It isn't:** `GGOAuthServiceApi` answers with a random placeholder token that expires at once (so it's
+  never reused). A mocked API accepts it (`OtherApi.mock.x` never checks credentials); a real one refuses it.
+- **A test mocks `GGOAuthServiceApi.token`/`exchange` itself:** that mock answers while it is active.
+
+Cached service tokens are dropped before each test, so a token from one test never answers the next.
 
 ### Protected resources (MCP)
 

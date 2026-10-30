@@ -1,14 +1,15 @@
-import {createECDH, createHash, hkdfSync, randomBytes} from "node:crypto"
+import {createECDH, createHash, createHmac, hkdfSync, randomBytes, timingSafeEqual} from "node:crypto"
 import type {IncomingMessage, ServerResponse} from "node:http"
 import {decodeJwt} from "jose"
 import Provider, {errors as oidcErrors, type ClientMetadata, type Configuration, type InteractionResults, type KoaContextWithOIDC} from "oidc-provider"
-import {NOT_FOUND} from "@grest-ts/schema"
+import {FORBIDDEN, IsString, NOT_AUTHORIZED, NOT_FOUND} from "@grest-ts/schema"
 import {GGLog} from "@grest-ts/logger"
-import type {GGHttpServer} from "@grest-ts/http"
-import type {GGAccessPayload, GGAuthAccessToken, TokenVerifier} from "@grest-ts/auth"
+import {GGContextKey} from "@grest-ts/context"
+import {GGHttp, type GGHttpServer} from "@grest-ts/http"
+import type {GGAccessPayload, GGAccessTokenData, GGAuthAccessToken, TokenVerifier} from "@grest-ts/auth"
 import {GGOAuthResourceServer, type GGOAuthProtectedResource} from "./GGOAuthResourceServer"
 import {toOidcAdapter, type GGOAuthStore} from "./store/GGOAuthStore"
-import {ACCESS_TOKEN_TYPE, TOKEN_EXCHANGE} from "./tokenExchange"
+import {GG_OAUTH_SERVICE_CLIENT, GGOAuthServiceApi, SUBJECT_TOKEN_INVALID} from "./GGOAuthServiceApi"
 import {GGOAuthExternalSignIn, type GGOAuthExternalSignInOptions} from "./GGOAuthExternalSignIn"
 
 export interface GGOAuthFirstPartyClient {
@@ -31,10 +32,10 @@ export interface GGOAuthResource<C extends object> extends GGOAuthProtectedResou
     // permission changes apply on refresh. undefined = subject gone → invalid_grant.
     claims: (subject: string, client: {clientId: string, name: string}) => Promise<C | undefined>
     // Who may get tokens for it. "any" (default): every client that signs a user in. "firstParty": only
-    // pre-registered first-party clients. "service": only service clients, by client_credentials (the
-    // subject is the client id); service clients get no other resource.
+    // pre-registered first-party clients. "service": only service clients, by GGOAuthServiceApi.token
+    // (the subject is the client id); service clients get no other resource.
     clients?: "any" | "firstParty" | "service"
-    // Issuable by token exchange (RFC 8693): a service client trades a valid `from` token for one for
+    // Issuable by GGOAuthServiceApi.exchange: a service client trades a valid `from` token for one for
     // this resource, for the same subject. `params` are the extra request parameters `claims` reads.
     exchange?: {
         // The token kind the subject presents (usually another resource's accessToken).
@@ -44,8 +45,6 @@ export interface GGOAuthResource<C extends object> extends GGOAuthProtectedResou
     }
 }
 
-// A backend of the app: authenticates with a secret (client_secret_basic), and may use
-// client_credentials and token exchange.
 export interface GGOAuthServiceClientRegistration {
     clientId: string
     secret: () => string
@@ -151,6 +150,15 @@ const TICKET = "GGOAuthTicket"
 const GRANT_USAGE = "GrantUsage"
 // Claims resolved during a refresh before the presented token was consumed (see rotateRefreshToken).
 const prefetchedClaims = new WeakMap<object, {resource: string, claims: object}>()
+// Comparing fixed-length HMAC digests keeps timingSafeEqual from leaking the secret's length.
+const COMPARE_KEY = randomBytes(32)
+
+const SERVICE_CLIENT = new GGContextKey<string>("ggOAuthServiceClient", IsString)
+const SERVICE_CLIENT_HANDLER = GG_OAUTH_SERVICE_CLIENT.define((authenticate: (authorization: string | undefined) => string) => ({
+    process: async () => {
+        SERVICE_CLIENT.set(authenticate(GG_OAUTH_SERVICE_CLIENT.get()))
+    },
+}))
 
 type Ticket = {uid: string, result: InteractionResults}
 
@@ -217,6 +225,8 @@ export class GGOAuthServer {
         server.registerRoute("GET", "/.well-known/openid-configuration", handle, "GGOAuthServer")
         server.registerRoute("GET", "/.well-known/oauth-authorization-server", handle, "GGOAuthServer")
         this.resourceServer.mount(server)
+        SERVICE_CLIENT_HANDLER.create(this.authenticateServiceClient)
+        new GGHttp(server).http(GGOAuthServiceApi, {token: this.serviceToken, exchange: this.exchange})
 
         server.announce(`${BASE}/`, "GGOAuthServer")
         server.announce("/.well-known/openid-configuration", "GGOAuthServer")
@@ -441,7 +451,6 @@ export class GGOAuthServer {
 
     private mayUse(resource: GGOAuthResource<any>, clientId: string): boolean {
         const clients = resource.clients ?? "any"
-        if (this.service.has(clientId)) return clients === "service"
         return clients === "any" || (clients === "firstParty" && this.firstParty.has(clientId))
     }
 
@@ -455,26 +464,37 @@ export class GGOAuthServer {
         return resource.accessToken.signer.sign(claims)
     }
 
-    // RFC 8693, same subject, no actor: the service asks on the subject's behalf with the subject's own
-    // token. Signed directly through the target resource's signer.
-    private async exchange(ctx: KoaContextWithOIDC): Promise<void> {
-        const params = ctx.oidc.params as Record<string, string | undefined>
-        if (!this.service.has(ctx.oidc.client!.clientId)) throw new oidcErrors.UnauthorizedClient()
-        if (params.subject_token_type !== ACCESS_TOKEN_TYPE) throw new oidcErrors.InvalidRequest("subject_token_type must be an access token")
-        if (params.requested_token_type && params.requested_token_type !== ACCESS_TOKEN_TYPE) throw new oidcErrors.InvalidRequest("only access tokens can be requested")
-        const target = this.resource(params.resource)
-        if (!target?.exchange) throw new oidcErrors.InvalidTarget()
-        const subject = await target.exchange.from.verify(params.subject_token ?? "").catch(() => undefined)
-        if (!subject) throw new oidcErrors.InvalidGrant("subject_token is invalid or expired")
-        const claims = await target.exchange.claims(subject.sub, params)
-        if (!claims) throw new oidcErrors.InvalidGrant("no token for this subject")
-        const issued = await target.accessToken.issue(subject.sub, claims, {authTime: subject.auth_time})
-        ctx.body = {
-            access_token: issued.token,
-            issued_token_type: ACCESS_TOKEN_TYPE,
-            token_type: "Bearer",
-            expires_in: Math.max(0, Math.floor((issued.expiresAt - Date.now()) / 1000)),
-        }
+    private authenticateServiceClient = (authorization: string | undefined): string => {
+        const [scheme, encoded] = (authorization ?? "").split(" ")
+        const [id, secret] = Buffer.from(encoded ?? "", "base64").toString().split(":").map(safeDecode)
+        const client = scheme?.toLowerCase() === "basic" && id ? this.service.get(id) : undefined
+        const expected = client?.secret()
+        if (!client || !expected || !equalSecrets(secret ?? "", expected)) throw new NOT_AUTHORIZED({debugMessage: "Unknown service client or wrong secret"})
+        return client.clientId
+    }
+
+    private serviceToken = async ({resource}: {resource: string}): Promise<GGAccessTokenData> => {
+        const clientId = SERVICE_CLIENT.get()!
+        const target = this.resource(resource)
+        if (target?.clients !== "service") throw new FORBIDDEN({debugMessage: "Resource is not available to service clients"})
+        const claims = await target.claims(clientId, {clientId, name: clientId})
+        if (!claims) throw new FORBIDDEN({debugMessage: "No token for this client"})
+        return await target.accessToken.issue(clientId, claims)
+    }
+
+    // Same subject, no actor: the service asks on the subject's behalf with the subject's own token.
+    private exchange = async ({subjectToken, resource, params}: {subjectToken: string, resource: string, params: Record<string, string>}): Promise<GGAccessTokenData> => {
+        const target = this.resource(resource)
+        if (!target?.exchange) throw new FORBIDDEN({debugMessage: "Resource is not issuable by exchange"})
+        const subject = await target.exchange.from.verify(subjectToken).catch((err: unknown) => {
+            if (err instanceof NOT_AUTHORIZED) return undefined
+            throw err
+        })
+        if (!subject) throw new SUBJECT_TOKEN_INVALID()
+        const declared = Object.fromEntries((target.exchange.params ?? []).map(name => [name, params[name]]))
+        const claims = await target.exchange.claims(subject.sub, declared)
+        if (!claims) throw new FORBIDDEN({debugMessage: "No token for this subject"})
+        return await target.accessToken.issue(subject.sub, claims, {authTime: subject.auth_time})
     }
 
     private ttlOf(indicator: string | undefined): number {
@@ -501,7 +521,7 @@ export class GGOAuthServer {
                 keys: [hkdf(o.secret(), "@grest-ts/oauth cookies").toString("base64url")],
                 names: {session: o.sessionCookie?.() ?? (new URL(o.issuer()).protocol === "https:" ? "__Host-session" : "_session")},
             },
-            clients: [...[...firstParty.values()].map(c => ({
+            clients: [...firstParty.values()].map(c => ({
                 client_id: c.clientId,
                 client_name: c.name,
                 redirect_uris: c.redirectUris,
@@ -510,14 +530,7 @@ export class GGOAuthServer {
                 grant_types: c.refreshTokens === false ? ["authorization_code"] : ["authorization_code", "refresh_token"],
                 response_types: ["code"],
                 application_type: "web",
-            }) satisfies ClientMetadata), ...[...this.service.values()].map(c => ({
-                client_id: c.clientId,
-                client_secret: c.secret(),
-                token_endpoint_auth_method: "client_secret_basic",
-                grant_types: ["client_credentials", TOKEN_EXCHANGE],
-                response_types: [],
-                redirect_uris: [],
-            }) satisfies ClientMetadata)],
+            }) satisfies ClientMetadata),
             clientDefaults: {
                 grant_types: ["authorization_code", "refresh_token"],
                 response_types: ["code"],
@@ -541,7 +554,6 @@ export class GGOAuthServer {
             features: {
                 devInteractions: {enabled: false},
                 revocation: {enabled: true},
-                clientCredentials: {enabled: !!o.serviceClients},
                 registration: {enabled: !!o.dynamicRegistration},
                 ...(o.clientIdMetadataDocument ? {clientIdMetadataDocument: {
                     enabled: true,
@@ -571,8 +583,6 @@ export class GGOAuthServer {
                     defaultResource: (_ctx, client) => this.defaultResource(client.clientId).resource(),
                     useGrantedResource: () => true,
                     getResourceServerInfo: (ctx, indicator, client) => {
-                        // client_credentials tokens have the client as subject: only for the app's own backends.
-                        if (ctx.oidc.params?.grant_type === "client_credentials" && !this.service.has(client.clientId)) throw new oidcErrors.UnauthorizedClient()
                         const resource = this.usableResource(indicator, client.clientId)
                         return {
                             scope: resource.scopes.join(" "),
@@ -638,7 +648,6 @@ export class GGOAuthServer {
             findAccount: async (_ctx, sub) => ({accountId: sub, claims: async () => ({sub})}),
             ttl: {
                 AccessToken: (_ctx, token) => this.ttlOf(token.resourceServer?.identifier()),
-                ClientCredentials: (_ctx, token) => this.ttlOf(token.resourceServer?.identifier()),
                 AuthorizationCode: 60,
                 Interaction: 30 * 60,
                 Session: o.sessionTtlSec ?? 30 * 24 * 3600,
@@ -664,11 +673,8 @@ export class GGOAuthServer {
             // A new body: oidc-provider reuses its own between requests.
             if (ctx.oidc?.route === "jwks") ctx.body = {keys: [...(ctx.body as {keys: object[]}).keys, ...await this.resourceJwks()]}
             const body = ctx.body as {access_token?: unknown} | undefined
-            const exchanged = ctx.oidc?.params?.grant_type === TOKEN_EXCHANGE
-            if (ctx.oidc?.route === "token" && !exchanged && typeof body?.access_token === "string") body.access_token = await this.resign(body.access_token)
+            if (ctx.oidc?.route === "token" && typeof body?.access_token === "string") body.access_token = await this.resign(body.access_token)
         })
-        const exchangeParams = o.resources.flatMap(r => r.exchange?.params ?? [])
-        provider.registerGrantType(TOKEN_EXCHANGE, ctx => this.exchange(ctx), ["subject_token", "subject_token_type", "requested_token_type", "resource", ...exchangeParams])
         provider.use(async (ctx, next) => {
             await next()
             if (ctx.oidc?.route !== "token" || ctx.status !== 200) return
@@ -691,6 +697,18 @@ function isAllowedDocumentUrl(clientId: string, prefixes: string[]): boolean {
 
 function requestedScopes(params: Record<string, unknown>): string[] {
     return String(params.scope ?? "").split(" ").filter(Boolean)
+}
+
+function safeDecode(value: string): string | undefined {
+    try {
+        return decodeURIComponent(value)
+    } catch {
+        return undefined
+    }
+}
+
+function equalSecrets(a: string, b: string): boolean {
+    return timingSafeEqual(createHmac("sha256", COMPARE_KEY).update(a).digest(), createHmac("sha256", COMPARE_KEY).update(b).digest())
 }
 
 function hkdf(secret: string, info: string): Buffer {

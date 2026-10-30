@@ -1,5 +1,16 @@
 import {createHash, randomBytes} from "node:crypto"
-import {GGOAuthTokenError} from "./GGOAuthServiceClient"
+
+// An error response from the token endpoint (RFC 6749 §5.2), e.g. `invalid_grant`.
+export class GGOAuthTokenError extends Error {
+    public readonly error: string
+    public readonly status: number
+
+    constructor(error: string, status: number, description?: string) {
+        super(`${error}${description ? `: ${description}` : ""}`)
+        this.error = error
+        this.status = status
+    }
+}
 
 export interface GGOAuthHeadlessBrowserOptions {
     // An origin the authorization server is reached on: its issuer, or another of its hosts.

@@ -356,6 +356,9 @@ describe("cross-service flow", () => {
 })
 ```
 
+Service tokens (`@grest-ts/oauth` `GGOAuthServiceClient`) need no test setup: with the auth runtime
+running they are real; without it they are placeholders that only mocked APIs (`Api.mock.x`) accept.
+
 ### Periodic jobs
 
 Under `GGTest`, a runtime's `GGJob`s don't run on their own. Run one when the test needs it — it goes through the real runner (settings, lock) and sees the action's mocks:
@@ -430,7 +433,7 @@ test("spy — call through but validate", async () => {
 - `spyOn(S).method` — calls real method but validates input/output.
 - `.responseToMatchObject(...)` — on a spyOn interceptor, validates the real return value.
 - A mock is active while its action runs — any call to that method in that window hits it, including from parallel requests. Unmocked `@mockable` calls run for real.
-- `.with(interceptor)` accepts a single interceptor or an array of interceptors.
+- `.with(a, b, …)` takes one or more interceptors as separate arguments (not an array); calls can also be chained.
 
 ### @testable — call any class directly from tests
 

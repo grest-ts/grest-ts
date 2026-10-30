@@ -364,6 +364,23 @@ Object.defineProperty(HttpApiSchema.prototype, 'mock', {
 });
 ```
 
+### Default answers for a framework API
+
+A framework package whose own contract is called implicitly (as `@grest-ts/oauth`'s token call is)
+can answer it while no runtime serves it, so tests don't have to mock it:
+
+```ts
+public async start(): Promise<void> {
+    this.runner.getExtensionInstance(GGHttpInterceptorsServer).addDefault(MyFrameworkApi, {
+        token: async (body) => ({token: "placeholder", expiresAt: Date.now()}),
+    })
+}
+```
+
+A running service still gets the call, and a test's own `MyFrameworkApi.mock.x` replaces the answer
+while it is active. It's for framework plumbing only: on an app's API it would hide a service the
+test forgot to start.
+
 ---
 
 ## 2.3 .with() and .waitFor() extensions

@@ -68,6 +68,7 @@
     "@grest-ts/logger": "0.0.100",
     "@grest-ts/logger-console": "0.0.100",
     "@grest-ts/metrics": "0.0.100",
+    "@grest-ts/oauth": "0.0.100",
     "@grest-ts/schema-file": "0.0.100",
     "@grest-ts/testkit": "0.0.100",
     "@grest-ts/websocket": "0.0.100"
@@ -92,6 +93,9 @@
       "optional": true
     },
     "@grest-ts/metrics": {
+      "optional": true
+    },
+    "@grest-ts/oauth": {
       "optional": true
     },
     "@grest-ts/schema-file": {

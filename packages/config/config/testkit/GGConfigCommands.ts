@@ -50,16 +50,17 @@ GGTestRuntimeWorker.onBeforeRuntimeStart(() => {
         await getStore(payload.storeName).replaceValueOverride(GGConfigKey.getKey(payload.keyName), payload.value);
     });
 
+    // Every test pushes and pops a frame; a runtime without GGConfig has nothing to undo.
     worker.ipcClient.onFrameworkRequest(GGConfigIPC.worker.pushUndoFrame, async () => {
         worker.runtime.scope.enter();
-        for (const store of GG_CONFIG.get().getStores().values()) {
+        for (const store of GG_CONFIG.tryGet()?.getStores().values() ?? []) {
             (store as GGConfigTestStore).pushUndoFrame();
         }
     });
 
     worker.ipcClient.onFrameworkRequest(GGConfigIPC.worker.popUndoFrame, async () => {
         worker.runtime.scope.enter();
-        for (const store of GG_CONFIG.get().getStores().values()) {
+        for (const store of GG_CONFIG.tryGet()?.getStores().values() ?? []) {
             (store as GGConfigTestStore).popUndoFrame();
         }
     });

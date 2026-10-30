@@ -7,6 +7,7 @@ definePackage({
     targets: {node: true, browser: true},
     publishToNpm: true,
     hasTests: true,
+    extendsTestKit: true,
     dependencies: {
         "jose": "^6.2.12",
         "oidc-provider": "9.13.0",
