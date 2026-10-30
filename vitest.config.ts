@@ -10,6 +10,7 @@ export default defineConfig({
     projects: [
       'packages-libs/auth/auth',
       'packages-libs/auth/oauth',
+      'packages-libs/authz',
       'packages-libs/db/db-dynamodb',
       'packages-libs/docs/api-docs',
       'packages-libs/docs/asyncapi',

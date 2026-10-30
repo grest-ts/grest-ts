@@ -656,6 +656,12 @@ Many packages provide testkit utilities making testing easier. These are
 | [`@grest-ts/db-postgre`](./packages-libs/db/db-postgre) | PostgreSQL utilities (thin layer over pg) |
 | [`@grest-ts/sql`](./packages-libs/sql)                  | Type-safe SQL query builder               |
 
+### Authorization (All optional)
+
+| Package                                        | Purpose                                                                                                   |
+|------------------------------------------------|-----------------------------------------------------------------------------------------------------------|
+| [`@grest-ts/authz`](./packages-libs/authz)     | Authorization engine for contract requirements — IAM-style evaluation over a resource tree, list plans, approvals |
+
 ### Files (All optional)
 
 | Package                                            | Purpose                                                                                                                     |
