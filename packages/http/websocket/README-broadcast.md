@@ -24,9 +24,9 @@ export class OrderEvents {
 }
 ```
 
-* A connection stays a member until it closes; there is no `leave`. Joining twice is a no-op.
+* A connection stays a member until it closes; there is no `leave`.
 * `out` methods are fire-and-forget: a send that fails for one connection is logged and the
-  others still receive it. Don't `await` them.
+  others still receive it. They return nothing to `await`.
 * `out` has no `onClose`/`close` — it is the audience, not a connection.
 
 ## Snapshot + Delta
@@ -59,7 +59,9 @@ handleConnection = (incoming: typeof OrderEventsSocket.clientToServer, outgoing:
 * Broadcasts made while `seed` is still running are queued and delivered right after it, so none
   are lost. They may already be reflected in the snapshot, so make deltas safe to apply twice
   (upsert / replace, not increment).
-* If `seed` throws, the connection is not joined and the error reaches the calling handler.
+* Joining again with a `seed` re-seeds the connection (a client that re-subscribes over a shared,
+  pooled socket gets a fresh snapshot); the newest seed wins.
+* If `seed` throws, the connection is left out and the error reaches the calling handler.
 
 Let the client ask for the snapshot (`requestSnapshot` above) instead of seeding in
 `handleConnection`. The client sends it after registering its `incoming` handlers — on every

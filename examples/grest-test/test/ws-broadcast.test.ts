@@ -61,15 +61,26 @@ describe("GGSocketBroadcast", () => {
 
     test("broadcasts during a slow seed are delivered after the snapshot, not lost", async () => {
         const slow = await connect()
-        const publisher = await connect()
 
         await slow.client.outgoing.requestSnapshot({delayMs: 200})
-        await sleep(50)
-        await publisher.client.outgoing.publish({value: 4})
+        await slow.client.outgoing.publish({value: 4})
         await vi.waitFor(() => expect(slow.received).toHaveLength(2))
 
         expect(slow.received[0]).toEqual({snapshot: expect.not.arrayContaining([4])})
         expect(slow.received[1]).toEqual({value: 4})
+    })
+
+    test("asking again on the same connection re-seeds it", async () => {
+        const member = await connect()
+
+        await member.client.outgoing.requestSnapshot({})
+        await vi.waitFor(() => expect(member.received).toHaveLength(1))
+        await member.client.outgoing.publish({value: 7})
+        await member.client.outgoing.requestSnapshot({})
+        await vi.waitFor(() => expect(member.received).toHaveLength(3))
+
+        expect(member.received[1]).toEqual({value: 7})
+        expect(member.received[2]).toEqual({snapshot: expect.arrayContaining([7])})
     })
 
     test("a failing seed leaves the connection out", async () => {
@@ -87,7 +98,7 @@ describe("GGSocketBroadcast", () => {
         expect(failed.received).toEqual([])
     })
 
-    test("a closed connection leaves; the rest keep receiving", async () => {
+    test("a closed connection doesn't disturb the rest", async () => {
         const leaving = await connect()
         const staying = await connect()
 
