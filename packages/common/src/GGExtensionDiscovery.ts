@@ -106,11 +106,14 @@ export class GGExtensionDiscovery {
     // so its extension must load too.
     private installedGrestPackages(cwd: string): string[] {
         const names: string[] = [];
-        for (let dir = cwd; ; dir = path.dirname(dir)) {
+        let dir = cwd;
+        const root = path.parse(dir).root;
+        while (dir !== root) {
             const scopeDir = path.join(dir, 'node_modules', '@grest-ts');
             if (fs.existsSync(scopeDir)) names.push(...fs.readdirSync(scopeDir).map(name => `@grest-ts/${name}`));
-            if (dir === path.dirname(dir)) return names;
+            dir = path.dirname(dir);
         }
+        return names;
     }
 
     private readDependencyNames(cwd: string): string[] {

@@ -14,21 +14,24 @@ type ConfigKeyOf<T, D extends 1[] = []> = D['length'] extends 5 ? never : {
                 T[K] extends object ? (ConfigKeyOf<T[K], [...D, 1]> extends never ? never : K) : never
 }[keyof T];
 
-/** Keys a local config may leave out: settings fall back to their default. */
-type OptionalKeyOf<T, D extends 1[]> = {
-    [K in ConfigKeyOf<T, D>]: HasDefault<T[K], [...D, 1]> extends true ? K : never
-}[ConfigKeyOf<T, D>];
-
-type HasDefault<T, D extends 1[]> =
+/**
+ * True when a local config may leave this entry out, as at runtime: a setting falls back to its default, a key whose
+ * schema accepts undefined may be unset, and an object holding only such entries may be left out whole.
+ */
+export type ConfigValueOptional<T, D extends 1[] = []> =
     D['length'] extends 5 ? false :
         T extends GGSetting<any> ? true :
-            T extends GGConfigKey<any> ? false :
-                Exclude<ConfigKeyOf<T, D>, OptionalKeyOf<T, D>> extends never ? true : false;
+            T extends GGConfigKey<infer V> ? (undefined extends V ? true : false) :
+                {} extends ConfigValues<T, D> ? true : false;
+
+type OptionalKeyOf<T, D extends 1[]> = {
+    [K in ConfigKeyOf<T, D>]: ConfigValueOptional<T[K], [...D, 1]> extends true ? K : never
+}[ConfigKeyOf<T, D>];
 
 /**
  * Maps a config definition to the shape of values it expects.
  * GGConfigKey<V> → V, objects with config keys → recurse, everything else → excluded.
- * Settings, and objects holding only settings, are optional.
+ * Entries a local config may leave out (see ConfigValueOptional) are optional.
  */
 export type ConfigValues<T, D extends 1[] = []> =
     D['length'] extends 5 ? never :

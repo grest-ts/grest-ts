@@ -9,6 +9,7 @@ import {createLocalConfig, GGConfigStoreLocal} from './GGConfigStoreLocal';
 const Config = GGConfig.define("/local_app/", () => ({
     port: new GGSetting("port", IsPosInt, 4000, "HTTP port"),
     domain: new GGResource("domain", IsString, "Public domain"),
+    region: new GGResource("region", IsString.orUndefined, "Region, when not the SDK default"),
     jobs: {
         sweep: new GGSetting("jobs/sweep", IsObject({everyMs: IsNumber}), {everyMs: 60_000}, "Sweep job"),
     },
@@ -20,16 +21,16 @@ const Config = GGConfig.define("/local_app/", () => ({
 
 async function started(values: Parameters<typeof createLocalConfig<typeof Config>>[1]): Promise<GGConfigStoreLocal<typeof Config>> {
     const store = new GGConfigStoreLocal(Config, createLocalConfig(Config, values));
-    store.setKeys([Config.port, Config.domain, Config.jobs.sweep, Config.db.host, Config.db.poolSize] as GGConfigKey[]);
+    store.setKeys([Config.port, Config.domain, Config.region, Config.jobs.sweep, Config.db.host, Config.db.poolSize] as GGConfigKey[]);
     await store.start();
     return store;
 }
 
 describe('GGConfigStoreLocal', () => {
-    it('lets settings be left out, falling back to their defaults', async () => {
+    it('lets settings and keys that accept undefined be left out', async () => {
         const store = await started({domain: "example.com", db: {host: "localhost"}});
-        expect([store.getValue(Config.port), store.getValue(Config.jobs.sweep), store.getValue(Config.db.poolSize)])
-            .toEqual([4000, {everyMs: 60_000}, 10]);
+        expect([store.getValue(Config.port), store.getValue(Config.jobs.sweep), store.getValue(Config.db.poolSize), store.getValue(Config.region)])
+            .toEqual([4000, {everyMs: 60_000}, 10, undefined]);
     });
 
     it('uses a given setting value over the default', async () => {

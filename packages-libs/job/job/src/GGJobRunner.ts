@@ -11,6 +11,7 @@ const DEFAULT_LIMIT = 500
 const MIN_CHECK_EVERY_MS = 60_000
 const MAX_CHECK_EVERY_MS = 15 * 60_000
 const WARN_RATIO = 0.7
+const NO_RUN = {rows: 0, failed: 0, batches: 0}
 
 export interface GGJobRunnerOptions {
     lock: GGLock
@@ -55,10 +56,6 @@ export class GGJobRunner {
             if (this.started && !this.stopped) loop.start()
         }
         return this
-    }
-
-    has(name: string): boolean {
-        return this.loops.some(l => l.job.config.name === name)
     }
 
     /** Runs a job now, outside its schedule, and leaves the schedule as it was. Rejects when the run fails. */
@@ -167,8 +164,8 @@ class JobLoop {
 
     async runNow(): Promise<GGJobRunResult> {
         const config = this.runConfig()
-        if (!config.enabled) return {result: "DISABLED", rows: 0, failed: 0, batches: 0}
-        if (this.running) return {result: "BUSY", rows: 0, failed: 0, batches: 0}
+        if (!config.enabled) return {result: "DISABLED", ...NO_RUN}
+        if (this.running) return {result: "BUSY", ...NO_RUN}
         return this.track(this.runOnce(config, false))
     }
 
@@ -185,7 +182,7 @@ class JobLoop {
             GGLog.warn(this.job, "Job still running past its timeout", {job: name, timeoutMs: config.timeoutMs})
         }, config.timeoutMs)
         overdue.unref()
-        let totals = {rows: 0, failed: 0, batches: 0}
+        let totals = NO_RUN
         const run = async (s: AbortSignal) => {
             metric(() => GGJobMetrics.runs.inc(1, {job: name}))
             try {

@@ -31,7 +31,7 @@ describe("GGJobRunner in a GGTest runtime", () => {
 
     test("a run that fails, or of an unknown job, fails the test action", async () => {
         await expect(t.jobs.run("counting").with(mockOf(CountingSource).rows.andReturn(() => { throw new Error("db down") }))).rejects.toThrow(/db down/)
-        await expect(t.jobs.run("nope")).rejects.toThrow(/Job nope/)
+        await expect(t.jobs.run("nope")).rejects.toThrow(/No job nope/)
     })
 
     test("t.jobs.start runs them on their schedule, and settings apply live", async () => {

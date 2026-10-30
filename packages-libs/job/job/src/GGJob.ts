@@ -9,7 +9,7 @@ export interface GGJobConfig {
     name: string
     /** Default `oneInstance`. */
     runOn?: GGJobRunOn
-    /** Read every tick. */
+    /** Read at the start of every run. */
     settings: Pick<GGSetting<GGJobSettings>, "get">
 }
 
