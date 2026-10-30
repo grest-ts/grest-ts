@@ -1,4 +1,4 @@
-import {evalConditional, isResourceKey, type Tri} from "../shared/conditions"
+import {evalConditional, isResourceKey, type Tri} from "./conditions"
 import {GGAuthzRn} from "../shared/GGAuthzRn"
 import type {GGAuthzPlan, GGAuthzPlanFilter} from "../shared/authzSchemas"
 

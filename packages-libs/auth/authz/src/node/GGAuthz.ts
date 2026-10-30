@@ -1,7 +1,7 @@
 import {FORBIDDEN, NOT_AUTHORIZED} from "@grest-ts/schema"
 import {applyPlan} from "./applyPlan"
 import {expandActions, expandRoles, MAX_DEPTH, type OnUnknownAction} from "../shared/chain"
-import {type AttributeLookup, evalCondition, evalConditional, evalConditions, isResourceKey} from "../shared/conditions"
+import {type AttributeLookup, evalCondition, evalConditional, evalConditions, isResourceKey} from "./conditions"
 import {type GGAuthzActionRef, validatedModels} from "../shared/defineAuthz"
 import {describe, document} from "./describe"
 import {APPROVAL_REQUIRED, INSUFFICIENT_SCOPE, STEP_UP_REQUIRED} from "../shared/authzErrors"

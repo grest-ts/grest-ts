@@ -1,3 +1,4 @@
+import type {GGAuthorityHandler} from "@grest-ts/http"
 import {GGContractClass, GGPermissionChecker, IsObject, IsString} from "@grest-ts/schema"
 import {FORBIDDEN, NOT_AUTHORIZED, NOT_FOUND} from "@grest-ts/schema"
 import {describe, expect, test} from "vitest"
@@ -31,6 +32,10 @@ authority.register(Git.types.repo, (_tenant, id) => id === "site" || id === "mod
 const ann: GGAuthzSubject = {type: "user", id: "ann"}
 
 const fail = (p: Promise<unknown>) => p.then(() => undefined, e => e)
+
+
+// GGAuthzAuthority matches @grest-ts/http's handler by shape (src may not depend on http); this keeps the two in step.
+void (authority satisfies GGAuthorityHandler)
 
 describe("GGAuthzAuthority", () => {
     test("reads the id from the input, loads the row and decides", async () => {

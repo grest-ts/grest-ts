@@ -1,4 +1,4 @@
-import type {GGAuthzCondition} from "./authzSchemas"
+import type {GGAuthzCondition} from "../shared/authzSchemas"
 
 /** `undefined` = unknown: a missing attribute, or one of the wrong type for the operator. */
 export type Tri = boolean | undefined

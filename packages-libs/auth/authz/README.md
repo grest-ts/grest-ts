@@ -113,7 +113,6 @@ export const AppAuthz = defineAuthzModel({
 - **Registry.** Services, roles and token scopes register globally with where they were defined.
   The same name defined in two places throws and names both; re-evaluating the same definition
   (HMR, vitest projects) replaces it.
-- `new GGAuthz` also accepts a plain `GGAuthzModel` object.
 - `workloadTypes` lists the principal types approvals apply to (none by default).
 
 ### Resource names (RN)
@@ -163,14 +162,14 @@ mine:   {                                    permission: Docs.Read.onContext("cu
 | `.on(type, field)` | for an action on several types; `type` must be one of them |
 | `.on(tenantType)` | no id: the caller's tenant itself |
 | `.onContext([type,] source)` | the authority resolves the id from the request |
-| `.hide()` | a denial answers `NOT_FOUND`; the authority's `hidden(resource)` config does it per resource |
+| `.hide()` | a denial answers `NOT_FOUND`; the authority's `hidden(resource, action)` config does it per resource |
 | `.orCreateOn(type, field)` | an upsert: without the id field, check the parent `type` from `field` |
 | `.list()` | no check before the handler; it filters what it returns with `allowed` or a list plan |
 
 Every requirement carries `GG_AUTHZ_ERRORS` (`NOT_AUTHORIZED`, `FORBIDDEN`, `NOT_FOUND`,
 `APPROVAL_REQUIRED`, `INSUFFICIENT_SCOPE`, `STEP_UP_REQUIRED`), which grest-ts merges into the
 method's errors. List the authority in the schema's `use:` next to its credential wire; see
-`GGAuthority` in [`@grest-ts/http`](../../packages/http/http/README.md).
+`GGAuthority` in [`@grest-ts/http`](../../../packages/http/http/README.md).
 
 ---
 
@@ -272,7 +271,9 @@ Pass `properties` when the handler already holds the row. Optional config: `appr
 obtains an approval or throws; `hidden(resource, action)` answers `NOT_FOUND` per resource;
 `explainForbidden` replaces a bare `FORBIDDEN` with one that says why; `undeclared(call, action)`
 reports a handler deciding an action its method's requirements don't name; `approvalLevelAttribute`
-names a resource attribute that raises the approval level.
+names a resource attribute that raises the approval level. When an approval is for another
+resource than the one decided (a create's new row), `registerApprovalKey(action, (input, resource)
+=> ({type, id}))` names it; `APPROVAL_REQUIRED` then carries it as `key`.
 
 What a denial throws:
 
@@ -283,11 +284,11 @@ What a denial throws:
 | `STEP_UP_REQUIRED` (401, `{facts}`) | denied, and allowed once the step-up `facts` hold |
 | `FORBIDDEN` | denied otherwise; `debugMessage` is the `GGAuthz.explain` sentence |
 | `NOT_FOUND` | the resource doesn't resolve, or the denial is hidden |
-| `APPROVAL_REQUIRED` (403, `{action, resource, level}`) | the decision needs approval and no `approvals` is configured |
+| `APPROVAL_REQUIRED` (403, `{action, resource, level, key?}`) | the decision needs approval and no `approvals` is configured |
 | `Error` | a programming error: an action the model doesn't know, or one that doesn't apply to the RN's type |
 
-Without an authority, `authz.authorize(action, rn, facts?, properties?)` does the same for an RN,
-reading the subject from `GG_AUTHZ_SUBJECT`. Step-up facts are declared in the model and set from
+Without an authority, `authz.authorize(action, rn, context?, properties?)` does the same for an RN,
+reading the subject from `GG_AUTHZ_SUBJECT`; `context` carries request-time facts. Step-up facts are declared in the model and set from
 the token's `acr`/`amr` claims; mapping them to `acr_values` is yours.
 
 ---
