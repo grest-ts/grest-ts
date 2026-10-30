@@ -7,7 +7,7 @@ import {GGLocator} from "@grest-ts/locator";
 import type {OpenAPIV3_1} from "openapi-types";
 import {toOpenApi, ToOpenApiOptions} from "./toOpenApi";
 
-function readSwaggerAsset(filename: string): Buffer {
+export function readSwaggerAsset(filename: string): Buffer {
     // require.resolve handles workspace hoisting; resolving on use, not at import, lets a bundle that never serves docs skip swagger-ui-dist.
     const dist = dirname(createRequire(import.meta.url).resolve("swagger-ui-dist/swagger-ui-bundle.js"));
     return readFileSync(join(dist, filename));
