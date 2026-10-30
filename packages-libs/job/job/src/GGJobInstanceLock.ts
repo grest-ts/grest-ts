@@ -22,7 +22,7 @@ export class GGJobInstanceLock implements GGJobLock {
 
     async renew(id: string, owner: string, ttlMs: number): Promise<boolean> {
         const e = this.entries.get(id)
-        if (!e || e.owner !== owner) return false
+        if (!e || e.owner !== owner || e.lockedUntil === undefined || e.lockedUntil < Date.now()) return false
         e.lockedUntil = Date.now() + ttlMs
         return true
     }

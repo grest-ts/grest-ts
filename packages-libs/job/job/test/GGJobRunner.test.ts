@@ -238,4 +238,80 @@ describe("GGJobRunner", () => {
         expect(errors).toHaveLength(1)
         expect(job.processed).toEqual(["good"])
     })
+
+    test("exclusive: a short interval checked once per interval still runs at most once per interval", async () => {
+        const lock = new GGJobInstanceLock()
+        const a = new TestJob({intervalMs: 30_000, checkEveryMs: undefined, startupDelayMs: 1_000})
+        const b = new TestJob({intervalMs: 30_000, checkEveryMs: undefined, startupDelayMs: 17_000})
+        newRunner(lock, "a").add(a).start()
+        newRunner(lock, "b").add(b).start()
+
+        await vi.advanceTimersByTimeAsync(30_000)
+
+        expect(a.processed.length + b.processed.length).toBe(1)
+    })
+
+    test("exclusive: a data set that fails to load records no last run, so the next check runs it", async () => {
+        const release = vi.fn(async () => {})
+        const lock: GGJobLock = {acquire: async () => true, renew: async () => true, release}
+        let fail = true
+        const job = new TestJob({}, () => {
+            if (fail) throw new Error("db down")
+            return ["row"]
+        })
+        newRunner(lock, "a").add(job).start()
+
+        await vi.advanceTimersByTimeAsync(1_500)
+        expect(release).toHaveBeenLastCalledWith("test", "a", undefined)
+
+        fail = false
+        await vi.advanceTimersByTimeAsync(1_000)
+        expect(job.processed).toEqual(["row"])
+        expect(release).toHaveBeenLastCalledWith("test", "a", expect.any(Number))
+    })
+
+    test("exclusive: renews that keep failing for a whole TTL count as a lost lock", async () => {
+        const lock: GGJobLock = {acquire: async () => true, renew: async () => { throw new Error("unreachable") }, release: async () => {}}
+        const job = new TestJob({checkEveryMs: 60_000}, () => ["r1", "r2"], (_row, signal) => new Promise(r => {
+            signal.addEventListener("abort", () => r())
+        }))
+        newRunner(lock, "a").add(job).start()
+
+        await vi.advanceTimersByTimeAsync(3_000)
+        expect(job.processed).toEqual([])
+
+        await vi.advanceTimersByTimeAsync(1_500)
+        expect(job.processed).toEqual(["r1"])
+    })
+
+    test("item: a row locked by another instance is skipped, not counted, and ends the run's extra batches", async () => {
+        const lock = new GGJobInstanceLock()
+        await lock.acquire("test#r1", "other", 60_000)
+        const getDataSet = vi.fn(() => ["r1"])
+        const job = new TestJob({lock: "item", limit: 1, maxExtraRuns: 3}, getDataSet)
+        const runner = newRunner(lock, "a").add(job)
+        runner.start()
+
+        await vi.advanceTimersByTimeAsync(1_500)
+
+        expect(job.processed).toEqual([])
+        expect(getDataSet).toHaveBeenCalledTimes(1)
+        runner.scope.run(() => {
+            expect(GG_METRICS.get().get(GGJobMetrics.rows).getValue({job: "test", result: "OK"})).toBe(0)
+        })
+    })
+
+    test("a row whose describeRow throws is still counted as failed", async () => {
+        class BadDescribe extends TestJob {
+            describeRow(): unknown { throw new Error("describe") }
+        }
+        const job = new BadDescribe({lock: "none"}, () => ["bad", "good"], async row => {
+            if (row === "bad") throw new Error("boom")
+        })
+        newRunner(new GGJobInstanceLock(), "a").add(job).start()
+
+        await vi.advanceTimersByTimeAsync(1_500)
+
+        expect(job.processed).toEqual(["good"])
+    })
 })
