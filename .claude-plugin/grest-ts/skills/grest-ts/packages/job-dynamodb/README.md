@@ -23,7 +23,7 @@ class MyRuntime extends GGRuntime {
 }
 ```
 
-The first argument is anything with `getRawClient()`, typically a `GGDynamoDb` from [`@grest-ts/db-dynamodb`](@pkg/db-dynamodb). The client is read on every call, so it works before the runtime has connected and follows a reconnect after a config change.
+The first argument is anything with `getRawClient()`, typically a `GGDynamoDb` from [`@grest-ts/db-dynamodb`](@pkg/db-dynamodb). The client is taken on first use, so the lock can be built in `compose()` before the config is readable. It is not rebuilt when the DynamoDB config changes.
 
 ## The Table
 

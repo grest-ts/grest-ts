@@ -3,7 +3,7 @@ import {randomUUID} from "node:crypto"
 import {GGLocator, GGLocatorKey, GGLocatorServiceType, type GGLocatorScope} from "@grest-ts/locator"
 import {GGLog} from "@grest-ts/logger"
 import {GG_METRICS} from "@grest-ts/metrics"
-import type {GGJob, GGJobConfig} from "./GGJob"
+import type {GGJob} from "./GGJob"
 import type {GGJobLock} from "./GGJobLock"
 import {GGJobMetrics} from "./GGJobMetrics"
 
@@ -18,7 +18,6 @@ export interface GGJobRunnerOptions {
     lock: GGJobLock
     /** Unique per process. */
     owner?: string
-    now?: () => number
 }
 
 /** Runs its jobs from runtime start until teardown, which stops new rows, waits for running ones and frees locks. */
@@ -26,7 +25,6 @@ export class GGJobRunner {
 
     readonly owner: string
     readonly lock: GGJobLock
-    readonly now: () => number
     readonly scope: GGLocatorScope
 
     private readonly loops: JobLoop[] = []
@@ -35,7 +33,6 @@ export class GGJobRunner {
     constructor(options: GGJobRunnerOptions) {
         this.owner = options.owner ?? `${hostname()}-${process.pid}-${randomUUID().slice(0, 8)}`
         this.lock = options.lock
-        this.now = options.now ?? Date.now
         this.scope = GGLocator.getScope()
         this.scope.setWithLifecycle(GG_JOB_RUNNER, this, {
             type: GGLocatorServiceType.PERIODIC_JOBS,
@@ -67,7 +64,14 @@ export class GGJobRunner {
     }
 }
 
-type RunConfig = Required<Pick<GGJobConfig, "intervalMs" | "limit" | "parallel" | "maxExtraRuns">> & {enabled: boolean}
+interface RunConfig {
+    enabled: boolean
+    intervalMs: number
+    limit: number
+    parallel: number
+    maxExtraRuns: number
+    checkEveryMs: number
+}
 
 class JobLoop {
 
@@ -75,8 +79,7 @@ class JobLoop {
     private readonly runner: GGJobRunner
     private timer?: NodeJS.Timeout
     private running?: Promise<void>
-    private abort?: AbortController
-    private stopping = false
+    private readonly stopped = new AbortController()
 
     constructor(job: GGJob<unknown>, runner: GGJobRunner) {
         this.job = job
@@ -88,9 +91,8 @@ class JobLoop {
     }
 
     async stop(): Promise<void> {
-        this.stopping = true
+        this.stopped.abort()
         clearTimeout(this.timer)
-        this.abort?.abort()
         await this.running
     }
 
@@ -100,52 +102,57 @@ class JobLoop {
     }
 
     private runConfig(): RunConfig {
-        const {intervalMs, limit = DEFAULT_LIMIT, parallel = 1, maxExtraRuns = 0, settings} = this.job.config
-        const live = Object.fromEntries(Object.entries(settings?.get() ?? {}).filter(([, v]) => v !== undefined))
-        return {enabled: true, intervalMs, limit, parallel, maxExtraRuns, ...live}
+        const {intervalMs, limit = DEFAULT_LIMIT, parallel = 1, maxExtraRuns = 0, checkEveryMs, settings} = this.job.config
+        const live = settings?.get()
+        const interval = live?.intervalMs ?? intervalMs
+        return {
+            enabled: live?.enabled ?? true,
+            intervalMs: interval,
+            limit: live?.limit ?? limit,
+            parallel: live?.parallel ?? parallel,
+            maxExtraRuns: live?.maxExtraRuns ?? maxExtraRuns,
+            checkEveryMs: checkEveryMs ?? Math.min(interval, Math.max(MIN_CHECK_EVERY_MS, Math.min(interval / 10, MAX_CHECK_EVERY_MS))),
+        }
     }
 
     private tick(): void {
-        if (this.stopping) return
+        if (this.stopped.signal.aborted) return
         const config = this.runConfig()
         if (config.enabled && !this.running) {
             this.running = this.runOnce(config)
                 .catch(err => GGLog.error(this.job, "Job run failed", {job: this.job.config.name, err: (err as Error).message}))
                 .finally(() => { this.running = undefined })
         }
-        this.schedule(this.job.config.lock === "exclusive" ? this.checkEveryMs(config) : config.intervalMs)
-    }
-
-    private checkEveryMs({intervalMs}: RunConfig): number {
-        return this.job.config.checkEveryMs ?? Math.min(intervalMs, Math.max(MIN_CHECK_EVERY_MS, Math.min(intervalMs / 10, MAX_CHECK_EVERY_MS)))
+        this.schedule(this.job.config.lock === "exclusive" ? config.checkEveryMs : config.intervalMs)
     }
 
     private async runOnce(config: RunConfig): Promise<void> {
         const {name, lock, timeoutMs} = this.job.config
-        this.abort = new AbortController()
-        const signal = this.abort.signal
-        const startedAt = this.runner.now()
+        const signal = this.stopped.signal
+        const startedAt = Date.now()
         const overdue = this.runner.scope.setTimeout(() => {
             GGLog.warn(this.job, "Job still running past its timeout", {job: name, timeoutMs})
         }, timeoutMs)
         overdue.unref()
+        const run = (s: AbortSignal) => {
+            metric(() => GGJobMetrics.runs.inc(1, {job: name}))
+            return this.runBatches(config, s)
+        }
         try {
             if (lock === "exclusive") {
                 // Half a check of slack: a timer firing a few ms early must not push the run a whole interval back.
-                const ran = await this.withLock(name, signal, s => {
+                const due = {lastRunAtMost: startedAt - config.intervalMs + config.checkEveryMs / 2, ranAt: startedAt}
+                if (!await this.withLock(name, signal, s => {
                     GGLog.info(this.job, "Job run", {job: name, owner: this.runner.owner})
-                    metric(() => GGJobMetrics.runs.inc(1, {job: name}))
-                    return this.runBatches(config, s)
-                }, {lastRunAtMost: startedAt - config.intervalMs + this.checkEveryMs(config) / 2, ranAt: startedAt})
-                if (!ran) return
+                    return run(s)
+                }, due)) return
             } else {
-                metric(() => GGJobMetrics.runs.inc(1, {job: name}))
-                await this.runBatches(config, signal)
+                await run(signal)
             }
         } finally {
             clearTimeout(overdue)
         }
-        const durationMs = this.runner.now() - startedAt
+        const durationMs = Date.now() - startedAt
         metric(() => GGJobMetrics.runDuration.inc(durationMs, {job: name}))
         if (durationMs > config.intervalMs * WARN_RATIO) GGLog.warn(this.job, "Job run took most of its interval", {job: name, durationMs, intervalMs: config.intervalMs})
     }
@@ -187,7 +194,7 @@ class JobLoop {
     private async runBatches({limit, parallel, maxExtraRuns}: RunConfig, signal: AbortSignal): Promise<void> {
         const name = this.job.config.name
         for (let extra = 0; ; extra++) {
-            const startedAt = this.runner.now()
+            const startedAt = Date.now()
             let rows: unknown[]
             try {
                 rows = await this.job.getDataSet(limit)
@@ -207,7 +214,7 @@ class JobLoop {
             }
             await Promise.all(Array.from({length: Math.min(parallel, rows.length)}, worker))
 
-            const report = {rows: rows.length, failed, durationMs: this.runner.now() - startedAt}
+            const report = {rows: rows.length, failed, durationMs: Date.now() - startedAt}
             if (rows.length > 0) GGLog.info(this.job, "Job batch done", {job: name, ...report})
             await this.job.dataSetFinished?.(report)
                 .catch(err => GGLog.warn(this.job, "Job dataSetFinished failed", {job: name, err: (err as Error).message}))

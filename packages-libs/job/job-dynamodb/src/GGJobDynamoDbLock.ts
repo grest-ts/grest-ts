@@ -28,10 +28,9 @@ export class GGJobDynamoDbLock implements GGJobLock {
     private readonly db: {getRawClient(): DynamoDBClient}
     private readonly tableName: string
     private readonly now: () => number
-    private raw: DynamoDBClient | undefined
     private doc: DynamoDBDocumentClient | undefined
 
-    /** The raw client is read per call: GGDynamoDb's isn't connected at compose time and is rebuilt on config change. */
+    /** Takes the client on first use: GGDynamoDb's config can't be read at compose time. */
     constructor(db: {getRawClient(): DynamoDBClient}, options: GGJobDynamoDbLockOptions) {
         this.db = db
         this.tableName = options.tableName
@@ -100,11 +99,8 @@ export class GGJobDynamoDbLock implements GGJobLock {
     }
 
     private client(): DynamoDBDocumentClient {
-        const raw = this.db.getRawClient()
-        if (raw !== this.raw || !this.doc) {
-            this.raw = raw
-            this.doc = DynamoDBDocumentClient.from(raw)
-        }
+        // getRawClient() builds a new SDK client on every call, so it must be taken once.
+        this.doc ??= DynamoDBDocumentClient.from(this.db.getRawClient())
         return this.doc
     }
 }

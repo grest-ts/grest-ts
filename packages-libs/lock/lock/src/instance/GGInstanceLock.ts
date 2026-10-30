@@ -61,7 +61,6 @@ export class GGInstanceLock implements GGLock {
 
         const existing = this.locks.get(lockId);
 
-        // Can only renew if we hold it and it hasn't expired
         if (!existing || existing.owner !== owner || existing.expiresAt <= now) {
             return false;
         }

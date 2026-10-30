@@ -1,9 +1,8 @@
 import {GGTest} from "@grest-ts/testkit"
 import type {} from "@grest-ts/config/testkit"
 import {IsPosInt} from "@grest-ts/schema"
+import {sleep} from "@grest-ts/common"
 import {JobTestConfig, JobTestRuntime, processed} from "./JobTestRuntime"
-
-const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms))
 
 describe("GGJobRunner in a runtime", () => {
     const t = GGTest.startInline(JobTestRuntime)

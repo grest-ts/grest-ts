@@ -1,22 +1,20 @@
 import {afterEach, beforeEach, describe, expect, test, vi} from "vitest"
 import {GGLocatorScope} from "@grest-ts/locator"
 import {GGLog} from "@grest-ts/logger"
+import {sleep} from "@grest-ts/common"
 import {GGMetricsLoader, GG_METRICS} from "@grest-ts/metrics"
 import {GGJob, GGJobInstanceLock, GGJobMetrics, GGJobRunner, type GGJobConfig, type GGJobLock} from "@grest-ts/job"
+import {runJobOnce} from "@grest-ts/job/testkit"
 
 // Each runner gets its own scope, as each instance has its own runtime; sharing one lock makes them one fleet.
 function newRunner(lock: GGJobLock, owner: string): GGJobRunner {
     const scope = new GGLocatorScope(owner, undefined, owner)
+    GGLog.init(scope)
     return scope.run(() => {
-        GGLog.init()
         scope.setLifecycleOwner(() => {})
         new GGMetricsLoader()
         return new GGJobRunner({lock, owner})
     })
-}
-
-function metricValue(runner: GGJobRunner, read: () => unknown): unknown {
-    return runner.scope.run(read)
 }
 
 class TestJob extends GGJob<string> {
@@ -57,7 +55,6 @@ class TestJob extends GGJob<string> {
     }
 }
 
-const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms))
 
 describe("GGJobRunner", () => {
     beforeEach(() => { vi.useFakeTimers({now: 1_000_000}) })
@@ -220,12 +217,25 @@ describe("GGJobRunner", () => {
 
         await vi.advanceTimersByTimeAsync(3_000)
 
-        const value = (read: () => unknown) => metricValue(runner, read)
-        const store = () => GG_METRICS.get()
-        expect(value(() => store().get(GGJobMetrics.runs).getValue({job: "metered"}))).toBe(1)
-        expect(value(() => store().get(GGJobMetrics.rows).getValue({job: "metered", result: "OK"}))).toBe(2)
-        expect(value(() => store().get(GGJobMetrics.rows).getValue({job: "metered", result: "ERROR"}))).toBe(1)
-        expect(value(() => store().get(GGJobMetrics.rowsInFlight).getValue({job: "metered"}))).toBe(0)
-        expect(value(() => store().get(GGJobMetrics.lockLost).getValue({job: "metered"}))).toBe(1)
+        runner.scope.run(() => {
+            const metrics = GG_METRICS.get()
+            expect(metrics.get(GGJobMetrics.runs).getValue({job: "metered"})).toBe(1)
+            expect(metrics.get(GGJobMetrics.rows).getValue({job: "metered", result: "OK"})).toBe(2)
+            expect(metrics.get(GGJobMetrics.rows).getValue({job: "metered", result: "ERROR"})).toBe(1)
+            expect(metrics.get(GGJobMetrics.rowsInFlight).getValue({job: "metered"})).toBe(0)
+            expect(metrics.get(GGJobMetrics.lockLost).getValue({job: "metered"})).toBe(1)
+        })
+    })
+
+    test("runJobOnce runs one batch and returns row errors instead of throwing", async () => {
+        const job = new TestJob({lock: "none"}, () => ["bad", "good"], async row => {
+            if (row === "bad") throw new Error("boom")
+        })
+
+        const {rows, errors} = await runJobOnce(job)
+
+        expect(rows).toEqual(["bad", "good"])
+        expect(errors).toHaveLength(1)
+        expect(job.processed).toEqual(["good"])
     })
 })

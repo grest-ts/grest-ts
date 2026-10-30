@@ -10,14 +10,9 @@ interface Entry {
 export class GGJobInstanceLock implements GGJobLock {
 
     private readonly entries = new Map<string, Entry>()
-    private readonly now: () => number
-
-    constructor(now: () => number = Date.now) {
-        this.now = now
-    }
 
     async acquire(id: string, owner: string, ttlMs: number, lastRunAtMost?: number): Promise<boolean> {
-        const now = this.now()
+        const now = Date.now()
         const e = this.entries.get(id) ?? {}
         if (e.lockedUntil !== undefined && e.lockedUntil >= now) return false
         if (lastRunAtMost !== undefined && e.lastRunAt !== undefined && e.lastRunAt > lastRunAtMost) return false
@@ -28,7 +23,7 @@ export class GGJobInstanceLock implements GGJobLock {
     async renew(id: string, owner: string, ttlMs: number): Promise<boolean> {
         const e = this.entries.get(id)
         if (!e || e.owner !== owner) return false
-        e.lockedUntil = this.now() + ttlMs
+        e.lockedUntil = Date.now() + ttlMs
         return true
     }
 
