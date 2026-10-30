@@ -55,13 +55,15 @@ handleConnection = (incoming: typeof OrderEventsSocket.clientToServer, outgoing:
 }
 ```
 
-* Whatever `seed` sends is the first frame the connection gets from the broadcast.
+* A new member gets what `seed` sends before any broadcast.
 * Broadcasts made while `seed` is still running are queued and delivered right after it, so none
   are lost. They may already be reflected in the snapshot, so make deltas safe to apply twice
   (upsert / replace, not increment).
-* Joining again with a `seed` re-seeds the connection (a client that re-subscribes over a shared,
-  pooled socket gets a fresh snapshot); the newest seed wins.
-* If `seed` throws, the connection is left out and the error reaches the calling handler.
+* Joining again re-seeds the connection — a client that re-subscribes over a shared, pooled socket
+  gets a fresh snapshot. A newer seed supersedes one still running; the older one's sends are
+  dropped, so a stale snapshot never lands after a newer one.
+* If `seed` throws, an existing member stays subscribed and a new connection is left out; the
+  error reaches the calling handler.
 
 Let the client ask for the snapshot (`requestSnapshot` above) instead of seeding in
 `handleConnection`. The client sends it after registering its `incoming` handlers — on every

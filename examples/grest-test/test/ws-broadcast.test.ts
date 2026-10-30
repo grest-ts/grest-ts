@@ -83,6 +83,30 @@ describe("GGSocketBroadcast", () => {
         expect(member.received[2]).toEqual({snapshot: expect.arrayContaining([7])})
     })
 
+    test("a newer seed supersedes one still running; the stale snapshot is dropped", async () => {
+        const member = await connect()
+
+        await member.client.outgoing.requestSnapshot({delayMs: 200})
+        await member.client.outgoing.requestSnapshot({})
+        await member.client.outgoing.publish({value: 8})
+        await vi.waitFor(() => expect(member.received).toHaveLength(2))
+        await sleep(300)
+
+        expect(member.received).toEqual([{snapshot: expect.not.arrayContaining([8])}, {value: 8}])
+    })
+
+    test("a failing re-seed keeps a live member subscribed", async () => {
+        const member = await connect()
+
+        await member.client.outgoing.requestSnapshot({})
+        await vi.waitFor(() => expect(member.received).toHaveLength(1))
+        await member.client.outgoing.requestSnapshot({fail: true})
+        await member.client.outgoing.publish({value: 9})
+        await vi.waitFor(() => expect(member.received).toHaveLength(2))
+
+        expect(member.received[1]).toEqual({value: 9})
+    })
+
     test("a failing seed leaves the connection out", async () => {
         const failed = await connect()
         const member = await connect()

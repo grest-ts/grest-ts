@@ -19,50 +19,76 @@ export class GGSocketBroadcast<TDef extends GGDuplexContractDefinition> {
 
     public readonly out: GGSocketBroadcastOut<TDef>;
 
-    /** Live members map to `null`; members still being seeded map to their queued frames. */
-    private readonly members = new Map<Outgoing<TDef>, Frame[] | null>();
+    private readonly methods: readonly string[];
+    private readonly live = new Set<Outgoing<TDef>>();
+    /** The newest in-flight seed per connection, as the frames broadcast since it started. */
+    private readonly seeding = new Map<Outgoing<TDef>, Frame[]>();
     private readonly watched = new WeakSet<Outgoing<TDef>>();
 
     constructor(schema: GGWebSocketSchema<TDef>) {
+        this.methods = Object.keys(schema.contract.serverToClient.methods);
         const out: Record<string, (data: unknown) => void> = {};
-        for (const method of Object.keys(schema.contract.serverToClient.methods)) {
+        for (const method of this.methods) {
             out[method] = (data: unknown) => this.send(method, data);
         }
         this.out = out as unknown as GGSocketBroadcastOut<TDef>;
     }
 
     /**
-     * Adds the connection until it closes. With `seed`, the connection receives whatever `seed`
-     * sends first; broadcasts made while `seed` runs are queued and delivered right after it, so
-     * they may overlap the seeded state but are never lost. Joining again with a `seed` re-seeds
-     * (the newest seed wins); a throwing `seed` leaves the connection out.
+     * Adds the connection until it closes. With `seed`, the connection gets what `seed` sends before
+     * any broadcast made while it runs; those are queued and delivered right after it, so they may
+     * overlap the seeded state but are never lost. Joining again re-seeds: a newer seed supersedes
+     * one still running, whose sends are then dropped. A throwing `seed` keeps an existing
+     * membership as it was and leaves a new connection out.
      */
     public async join(outgoing: Outgoing<TDef>, seed?: (outgoing: Outgoing<TDef>) => void | Promise<void>): Promise<void> {
         if (!this.watched.has(outgoing)) {
             this.watched.add(outgoing);
-            outgoing.onClose(() => this.members.delete(outgoing));
+            outgoing.onClose(() => {
+                this.live.delete(outgoing);
+                this.seeding.delete(outgoing);
+            });
         }
         if (!seed) {
-            if (!this.members.has(outgoing)) this.members.set(outgoing, null);
+            this.live.add(outgoing);
             return;
         }
         const queue: Frame[] = [];
-        this.members.set(outgoing, queue);
+        const isCurrent = () => this.seeding.get(outgoing) === queue;
+        this.seeding.set(outgoing, queue);
         try {
-            await seed(outgoing);
+            await seed(this.gated(outgoing, isCurrent));
         } catch (error) {
-            if (this.members.get(outgoing) === queue) this.members.delete(outgoing);
+            if (isCurrent()) this.settle(outgoing, queue);
             throw error;
         }
-        if (this.members.get(outgoing) !== queue) return;
-        this.members.set(outgoing, null);
+        if (!isCurrent()) return;
+        this.live.add(outgoing);
+        this.settle(outgoing, queue);
+    }
+
+    private settle(outgoing: Outgoing<TDef>, queue: Frame[]): void {
+        this.seeding.delete(outgoing);
+        if (!this.live.has(outgoing)) return;
         for (const [method, data] of queue) void this.deliver(outgoing, method, data);
     }
 
+    private gated(outgoing: Outgoing<TDef>, isCurrent: () => boolean): Outgoing<TDef> {
+        const target = outgoing as Record<string, (data: unknown) => unknown>;
+        const gated: Record<string, unknown> = {
+            onClose: (callback: () => void) => outgoing.onClose(callback),
+            close: () => outgoing.close(),
+        };
+        for (const method of this.methods) {
+            gated[method] = (data: unknown) => isCurrent() ? target[method](data) : undefined;
+        }
+        return gated as Outgoing<TDef>;
+    }
+
     private send(method: string, data: unknown): void {
-        for (const [outgoing, queue] of this.members) {
-            if (queue) queue.push([method, data]);
-            else void this.deliver(outgoing, method, data);
+        for (const queue of this.seeding.values()) queue.push([method, data]);
+        for (const outgoing of this.live) {
+            if (!this.seeding.has(outgoing)) void this.deliver(outgoing, method, data);
         }
     }
 
