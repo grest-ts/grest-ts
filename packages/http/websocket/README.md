@@ -466,8 +466,8 @@ chain off the same `GGHttp` instance as `.http(...)`.
 
 ### Broadcasting
 
-`GGSocketBroadcast` fans one `serverToClient` message out to every joined connection, with an
-optional per-connection snapshot sent first:
+For live views of shared server state: `GGSocketBroadcast` pushes one `serverToClient` message to
+every joined connection of this process, with an optional per-connection snapshot sent first:
 
 ```typescript
 const orderEvents = new GGSocketBroadcast(OrderEventsSocket)
@@ -480,7 +480,8 @@ new GGHttp(httpServer)
 orderEvents.out.onOrder({order})   // every joined connection
 ```
 
-See [Broadcast](./README-broadcast.md) for the snapshot + delta pattern and its ordering guarantees.
+See [Broadcast](./README-broadcast.md) for what it is (and isn't) for, the snapshot + delta pattern
+and its ordering guarantees, and how to scope it across instances or per tenant.
 
 ## Client
 

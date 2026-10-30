@@ -12,8 +12,12 @@ export type GGSocketBroadcastOut<TDef extends GGDuplexContractDefinition> = {
 };
 
 /**
- * Server→client fan-out to every joined connection of one socket schema. `out` mirrors the
- * contract's `serverToClient`; each call is sent to all members, fire-and-forget.
+ * Pushes the same `serverToClient` message to every joined connection of one socket schema, and
+ * keeps late joiners consistent with a seed (snapshot) that no concurrent broadcast can overtake.
+ *
+ * Scope: the connections of this process only, as one audience. For several server instances,
+ * have each instance subscribe to a shared event and call `out` from there; for per-tenant or
+ * per-user audiences, use one instance per key.
  */
 export class GGSocketBroadcast<TDef extends GGDuplexContractDefinition> {
 

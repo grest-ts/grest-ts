@@ -1,6 +1,19 @@
 # WebSocket Broadcast
 
-How to push the same server→client message to every connected client with `GGSocketBroadcast`.
+`GGSocketBroadcast` pushes the same server→client message to every client subscribed to a socket,
+and gives each new subscriber a consistent starting point: a snapshot that no concurrent update
+can overtake or slip past.
+
+Use it for **live views of shared server state** — dashboards, lists, status panels — where every
+viewer sees the same data and the server pushes changes as they happen.
+
+It is **not**:
+
+* **A message bus between services.** Use `@grest-ts/events`.
+* **Per-user or per-tenant delivery out of the box.** One `GGSocketBroadcast` is one audience;
+  see [Scope](#scope).
+* **Shared between server instances.** It reaches the connections of the process it runs in;
+  see [Scope](#scope).
 
 ## Basic Broadcast
 
@@ -80,8 +93,15 @@ await client.connect(({incoming, outgoing}) => {
 })
 ```
 
-## Audiences
+## Scope
 
-One `GGSocketBroadcast` is one audience: every member gets every message. For per-tenant or
-per-user audiences, keep one instance per key, or track connections yourself as in the
+**One process.** Membership lives in memory, so `out` reaches only the connections of the
+process that calls it. With several server instances behind a load balancer, a change made on
+instance A must also reach clients connected to instance B: publish the change as an event
+(`@grest-ts/events`) and call `out` from each instance's subscriber. Each instance
+needs its own subscription — instances sharing one subscriber queue split the messages between
+them, so every update would reach only one instance's clients.
+
+**One audience.** Every member gets every message. For per-tenant or per-user audiences, keep one
+`GGSocketBroadcast` per key, or track connections yourself as in the
 [connection handler example](@pkg/websocket#connection-handler).
