@@ -253,6 +253,9 @@ export class GGAuthz {
             }
             for (const a of p.approvals ?? []) policy.approvals.push(this.approval(a, lenient(`approvals ${p.on}`)))
         }
+        if (!this.workloadTypes.size && (this.approvalFloor.length || [...this.policies.values()].some(p => p.approvals.some(a => a.actions.size)))) {
+            throw new Error("Approval levels apply only to model.workloadTypes, and the model names none")
+        }
         for (const g of policies.guardrails ?? []) {
             const guardrail: Guardrail = {
                 id: g.id,

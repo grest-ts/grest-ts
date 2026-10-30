@@ -146,14 +146,19 @@ function actionName(ref: GGAuthzActionRef): string {
     return typeof ref === "string" ? ref : ref.name
 }
 
-// Same name from the same place is a module re-evaluation (HMR, vitest projects), not a duplicate.
+// Same name from the same file is a module re-evaluation (HMR, vitest projects), not a duplicate. Compared without the
+// line and the query, which an HMR reload (`?t=…`) or an edit above the definition changes.
 function register<T extends {definedAt?: string}>(kind: Kind, name: string, value: T): T {
     const key = `${kind}:${name}`
-    if (registry.has(key) && registry.get(key) !== value.definedAt) {
+    if (registry.has(key) && fileOf(registry.get(key)) !== fileOf(value.definedAt)) {
         throw new Error(`Duplicate authz ${kind} ${name}: defined at ${registry.get(key) ?? "?"} and ${value.definedAt ?? "?"}`)
     }
     registry.set(key, value.definedAt)
     return value
+}
+
+function fileOf(at: string | undefined): string | undefined {
+    return at?.replace(/:\d+:\d+$/, "").replace(/\?.*$/, "")
 }
 
 const SELF = import.meta.url.replace(/^file:\/\//, "").replace(/\/[^/]*$/, "/")

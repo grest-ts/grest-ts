@@ -31,7 +31,7 @@ async function differential(world: World, requests: number, seed: number) {
     return {mismatches, tally}
 }
 
-// Slow (minutes): run with `npm run test:cedar`.
+// Slow (~30 s): run with `npm run test:cedar`.
 describe.runIf(process.env.GG_AUTHZ_CEDAR)("differential test against Cedar", () => {
     test("fixture world, 10k random requests", async () => {
         const {mismatches, tally} = await differential(fixtureWorld, 10_000, 1)

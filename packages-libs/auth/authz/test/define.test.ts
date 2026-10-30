@@ -19,12 +19,10 @@ describe("define functions", () => {
         expect(() => defineAuthzModel({partition: "acme", services: [Vm, Vm], roles: []})).toThrow("Duplicate action")
     })
 
-    test("a name defined in two places throws; re-evaluating the same definition does not", () => {
+    test("a name defined in two files throws; re-evaluating the same file does not", () => {
         for (let i = 0; i < 2; i++) defineAuthzService("loop", {types: {thing: ""}, actions: {Use: {on: ["thing"]}}})
-        defineAuthzService("twice", {types: {thing: ""}, actions: {}})
-        expect(() => defineAuthzService("twice", {types: {thing: ""}, actions: {}})).toThrow("Duplicate authz service twice")
-        defineAuthzRole("twice", {actions: []})
-        expect(() => defineAuthzRole("twice", {actions: []})).toThrow("Duplicate authz role twice")
+        expect(() => defineAuthzService("vm", {types: {thing: ""}, actions: {}})).toThrow(/Duplicate authz service vm: defined at .*world\.ts.* and .*define\.test\.ts/)
+        expect(() => defineAuthzRole("viewer", {actions: []})).toThrow("Duplicate authz role viewer")
     })
 
     test("bad names fail at definition", () => {

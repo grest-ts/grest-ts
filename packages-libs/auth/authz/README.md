@@ -111,9 +111,10 @@ export const AppAuthz = defineAuthzModel({
 - **Fail at load.** `defineAuthzModel` validates the model and every action it names, then
   deep-freezes it.
 - **Registry.** Services, roles and token scopes register globally with where they were defined.
-  The same name defined in two places throws and names both; re-evaluating the same definition
-  (HMR, vitest projects) replaces it.
-- `workloadTypes` lists the principal types approvals apply to (none by default).
+  The same name defined in two files throws and names both; re-evaluating the same file (HMR,
+  vitest projects) replaces it.
+- `workloadTypes` lists the principal types approvals apply to (none by default); an engine whose
+  model or policies set approval levels without any fails to build.
 
 ### Resource names (RN)
 
@@ -239,14 +240,16 @@ before the handler:
 const authority = new GGAuthzAuthority({
     partition: "acme", tenantType: Org.types.org,
     tenant: () => TENANT.get().id,
-    engine: tenantId => engines.get(tenantId),
+    engine: tenantId => engines.forTenant(tenantId),  // your per-tenant cache: Promise<GGAuthz>
     facts: (action, resource) => ...,              // request-time facts, e.g. published
     contexts: {currentDoc: () => ...},
 })
 authority.register(Docs.types.doc, (tenantId, id) => docs.loadForAuthz(tenantId, id))   // → {properties: {ancestors, attributes}, row} | undefined
 authority.assertLoaders([DocsApiContract, FoldersApiContract])
 
-DOCS_AUTHORITY.define(() => authority).create()
+// api package: export const DOCS_AUTHORITY = new GGAuthority("docs"), listed in the schemas' `use:`
+const DOCS_AUTHORITY_HANDLER = DOCS_AUTHORITY.define((handler: GGAuthorityHandler) => handler)
+DOCS_AUTHORITY_HANDLER.create(authority)                // in compose()
 ```
 
 - **Loaders** are registered per resource type by whoever owns the rows, and are tenant-scoped: a
@@ -288,7 +291,9 @@ What a denial throws:
 | `Error` | a programming error: an action the model doesn't know, or one that doesn't apply to the RN's type |
 
 Without an authority, `authz.authorize(action, rn, context?, properties?)` does the same for an RN,
-reading the subject from `GG_AUTHZ_SUBJECT`; `context` carries request-time facts. Step-up facts are declared in the model and set from
+reading the subject from `GG_AUTHZ_SUBJECT`; `context` carries request-time facts. A method whose
+handler decides with `authorize` or `authority.assert` and has no requirement of its own lists
+`...GG_AUTHZ_ERRORS` in its `errors`. Step-up facts are declared in the model and set from
 the token's `acr`/`amr` claims; mapping them to `acr_values` is yours.
 
 ---
