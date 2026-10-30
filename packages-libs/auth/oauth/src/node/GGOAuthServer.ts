@@ -467,7 +467,7 @@ export class GGOAuthServer {
 
     private authenticateServiceClient = (authorization: string | undefined): string => {
         const [scheme, encoded] = (authorization ?? "").split(" ")
-        const [id, secret] = Buffer.from(encoded ?? "", "base64").toString().split(":").map(decodeURIComponent)
+        const [id, secret] = Buffer.from(encoded ?? "", "base64").toString().split(":").map(safeDecode)
         const client = scheme?.toLowerCase() === "basic" && id ? this.service.get(id) : undefined
         const expected = client?.secret()
         if (!client || !expected || !equalSecrets(secret ?? "", expected)) throw new NOT_AUTHORIZED({debugMessage: "Unknown service client or wrong secret"})
@@ -699,6 +699,14 @@ function isAllowedDocumentUrl(clientId: string, prefixes: string[]): boolean {
 
 function requestedScopes(params: Record<string, unknown>): string[] {
     return String(params.scope ?? "").split(" ").filter(Boolean)
+}
+
+function safeDecode(value: string): string | undefined {
+    try {
+        return decodeURIComponent(value)
+    } catch {
+        return undefined
+    }
 }
 
 function equalSecrets(a: string, b: string): boolean {

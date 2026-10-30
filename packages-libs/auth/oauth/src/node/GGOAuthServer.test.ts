@@ -845,6 +845,15 @@ describe("GGOAuthServer", () => {
         expect(await backend().token(API).catch((e: unknown) => e)).toBeInstanceOf(FORBIDDEN)
     })
 
+    test("malformed service client credentials are NOT_AUTHORIZED, not a server error", async () => {
+        const call = (authorization: string) => fetch(`${ISSUER}/oauth-service/token`, {
+            method: "POST", headers: {authorization, "content-type": "application/json"}, body: JSON.stringify({resource: INTERNAL}),
+        }).then(r => r.json())
+        for (const authorization of [`Basic ${Buffer.from("backend:%E0%A4%A").toString("base64")}`, "Basic !!!", "Bearer x", ""]) {
+            expect((await call(authorization)).type).toBe("NOT_AUTHORIZED")
+        }
+    })
+
     test("a registered client can't use client_credentials", async () => {
         const res = await fetch(`${ISSUER}/oauth/register`, {
             method: "POST", headers: {"content-type": "application/json"},
