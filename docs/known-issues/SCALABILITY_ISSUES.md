@@ -8,47 +8,17 @@ Roughly in priority order.
 
 ---
 
-## 1. `GGLock`: process-local implementations only, and no owner or fencing
+## 1. `GGLock`: no fencing token, and leases follow the instance clock
 
-**Where:** `packages-libs/lock/lock/src/GGLock.ts:24,34,42`, `instance/GGInstanceLock.ts:33,72`, `asyncContext/GGLocatorScopeLock.ts`
+**Where:** `packages-libs/lock/lock/src/GGLock.ts`, `packages-libs/lock/lock/src/withLock.ts`, `packages-libs/lock/lock-dynamodb/src/GGDynamoDbLock.ts`
 
-**Breaks:** both shipped implementations hold state in the process (the scope lock only within one async scope). With N replicas, every instance "acquires" the lock, so anything built on it, including `GGPoller` leadership, runs N times. The interface has no owner: `renew`/`release(lockId)` can't tell holders apart, and `release` deletes unconditionally, so a holder whose lease expired can release a lock someone else now holds. The interface comment advertises Redis/DB implementations; none ships.
+**Breaks:** the owner stops a holder whose lease expired from renewing or releasing its successor's lock, but nothing stops it from *writing*. A holder paused past its TTL (GC, a blocked event loop) keeps working next to the new holder until it next renews; `withLock` aborts the work's signal then, up to `ttl / 3` later. Lease expiry compares instance clocks, so clock skew shortens or stretches leases.
 
 **Fix:**
-- Add an owner to the API: `acquire` returns a handle `{owner, token}`, and `renew` and `release` take it.
 - Return a monotonically increasing fencing token per acquire, so callers can use it as a write condition.
-- Ship a DynamoDB implementation: conditional put on `attribute_not_exists(pk) OR expiresAt < :now`, with store-side time.
-- Document `GGInstanceLock` as single-instance only.
+- Use store-side time where the store offers it.
 
-## 2. `GGPoller`: overlapping batches, invisible failures, no setting defaults
-
-**Where:** `packages-libs/poller/src/GGPoller.ts`, around these lines:
-
-| What | Lines |
-|---|---|
-| Next poll scheduled before the batch finishes | `:235` / `:293` |
-| `processingPromise` overwritten, so `stop()` awaits only the latest batch | `:107` |
-| Items skipped after leadership loss, but in-flight `run`s continue | `:249` |
-| `getData` / lock errors swallowed | `:156,182,226` |
-| `run` errors counted only as a metric | `:266` |
-| `onCompleted` rejection unhandled | `:234,282` |
-| Settings read with `!` and no defaults | `:60-69` |
-
-**Breaks:**
-- `getData` returns items that are still in flight, so they're processed twice unless every app remembers to claim rows.
-- `stop()` cuts earlier batches off mid-flight.
-- `getData` and lock failures produce neither a log nor a metric.
-- A missing `pollIntervalMs` busy-loops; a missing `batchSize` or `concurrency` calls `getData(NaN)`.
-
-**Fix:**
-- Don't schedule the next poll until the batch settles, or pass the in-flight IDs to `getData`.
-- Track every batch promise for `stop()`.
-- Log every swallowed error.
-- Catch `onCompleted`.
-- Validate and default the settings in the constructor.
-- Make the "claim rows in `getData`" requirement explicit in the `PollerHandler` docs.
-
-## 3. Kubernetes discovery clobbers the shared ConfigMap and has no cache
+## 2. Kubernetes discovery clobbers the shared ConfigMap and has no cache
 
 **Where:** `packages/discovery/discovery-kubernetes/src/GGKubernetesServiceDiscovery.ts:112-148` (register), `:181-216` (unregister), `:230` (`discoverApi`)
 
@@ -63,7 +33,7 @@ Roughly in priority order.
 - Cache with a TTL and apply a timeout.
 - Consider making `discoverApiViaDns` the default.
 
-## 4. Shutdown tears down business services before HTTP stops taking requests
+## 3. Shutdown tears down business services before HTTP stops taking requests
 
 **Where:** `packages/runtime/src/GGRuntime.ts:43-44` (hard-coded `shutdownTimeoutMs: 10000`), `:100-103`, `:195`, `:205-218`; `packages/locator/src/GGLocatorScope.ts` (`GGLocatorServiceType` order); `packages/http/http/src/server/GGHttpServer.ts:117,265` (3 s drain)
 
@@ -79,7 +49,7 @@ Roughly in priority order.
 - Catch the timeout and exit with an explicit code.
 - Document a `preStop` sleep for k8s and the LB deregistration delay.
 
-## 5. Events: silent local fallback, dropped publishes, crash on timer flush
+## 4. Events: silent local fallback, dropped publishes, crash on timer flush
 
 **Where:**
 - `packages/runtime/src/GGRuntime.ts:116-122` (local discovery when none is registered)
@@ -104,7 +74,7 @@ Roughly in priority order.
 - Document idempotent handlers and a DLQ.
 - Longer term, add an outbox helper for "DB write + publish".
 
-## 6. WebSocket: no backpressure, no `maxPayload`, no reconnect jitter, no cross-instance fan-out
+## 5. WebSocket: no backpressure, no `maxPayload`, no reconnect jitter, no cross-instance fan-out
 
 **Where:** `packages/http/websocket/src/adapter/NodeSocketAdapter.ts:22-23` (`ws.send` with no `bufferedAmount` check), `server/GGSocketServer.ts:193` (no `maxPayload`, so the `ws` default of 100 MiB applies), `:177` (process-local `activeSockets`), `:223-227` (closes every socket at once), `src/client/reconnectConnector.ts:304-307` (500 ms ×2, 30 s cap, no jitter)
 
@@ -116,7 +86,7 @@ Roughly in priority order.
 - Add full jitter to reconnects, and stagger closes on teardown.
 - Document or provide a cross-instance broadcast pattern via `@grest-ts/events`.
 
-## 7. Postgres: swallowed connect failure, no pool `error` listener
+## 6. Postgres: swallowed connect failure, no pool `error` listener
 
 **Where:** `packages-libs/db/db-postgre/src/GGPostgres.ts:37,59`; no `.on("error")` anywhere in db-postgre
 
@@ -131,7 +101,7 @@ Roughly in priority order.
 - Expose `connectionTimeoutMillis` / acquire timeout and statement timeout settings.
 - Document pool sizing as `db_max / instances`.
 
-## 8. HTTP client timeout doesn't cover the body or discovery
+## 7. HTTP client timeout doesn't cover the body or discovery
 
 **Where:** `packages/http/http/src/client/GGHttpSchema.createClient.ts:101` (15 s default), `:137-162` (discovery before the timer), `:170-171` (timer cleared before the body is parsed)
 
@@ -139,7 +109,7 @@ Roughly in priority order.
 
 **Fix:** start the timer before discovery and clear it after the body is parsed. Optionally accept an `AbortSignal` or deadline from the caller and pass it on.
 
-## 9. DynamoDB: missing primitives push apps toward unsafe patterns
+## 8. DynamoDB: missing primitives push apps toward unsafe patterns
 
 **Where:** `packages-libs/db/db-dynamodb/src/GGDynamoDb.ts` `getRawClient` (builds a new client per call); `GGDynamoDbTable.ts` `queryOne` (doesn't check uniqueness)
 
@@ -152,7 +122,7 @@ Roughly in priority order.
 - Add a `putUnique` helper using guard items.
 - Cache the raw client.
 
-## 10. AWS Secrets Manager config never refreshes
+## 9. AWS Secrets Manager config never refreshes
 
 **Where:** `packages/config/config-aws/src/GGConfigStoreAwsSecretsManager.ts:27-50`
 
@@ -160,9 +130,9 @@ Roughly in priority order.
 
 **Fix:** optional periodic refresh that fires the existing watch callbacks (as the file store does), plus documentation on dual-validity rotation.
 
-## 11. Testkit hides multi-instance bugs
+## 10. Testkit hides multi-instance bugs
 
-**Where:** `packages-libs/db/db-dynamodb/testkit/GGDynamoDbSchemaCloner.ts:48-49` (dynamodb-local), `packages-tooling/testkit/testkit/src/GGTest.ts:42` (`GG_COVERAGE_MODE=1` silently turns `startWorker` into inline), `packages-libs/poller/testkit/GGTestPollerStore.ts` (in-memory)
+**Where:** `packages-libs/db/db-dynamodb/testkit/GGDynamoDbSchemaCloner.ts:48-49` (dynamodb-local), `packages-tooling/testkit/testkit/src/GGTest.ts:42` (`GG_COVERAGE_MODE=1` silently turns `startWorker` into inline)
 
 **Breaks:**
 - dynamodb-local doesn't reproduce eventual consistency, so GSI and read-after-write races pass locally.

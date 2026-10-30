@@ -1,5 +1,6 @@
 import {GGConfigStore} from "../GGConfigStore";
 import {GGConfigKey, Widen} from "../GGConfigKey";
+import type {GGSetting} from "../keys/GGSetting";
 import {deepFreeze} from "@grest-ts/common";
 
 /**
@@ -14,14 +15,33 @@ type ConfigKeyOf<T, D extends 1[] = []> = D['length'] extends 5 ? never : {
 }[keyof T];
 
 /**
+ * True when a local config may leave this entry out, as at runtime: a setting falls back to its default, a key whose
+ * schema accepts undefined may be unset, and an object holding only such entries may be left out whole.
+ */
+type ConfigValueOptional<T, D extends 1[] = []> =
+    D['length'] extends 5 ? false :
+        T extends GGSetting<any> ? true :
+            T extends GGConfigKey<infer V> ? (undefined extends V ? true : false) :
+                {} extends ConfigValues<T, D> ? true : false;
+
+type OptionalKeyOf<T, D extends 1[]> = {
+    [K in ConfigKeyOf<T, D>]: ConfigValueOptional<T[K], [...D, 1]> extends true ? K : never
+}[ConfigKeyOf<T, D>];
+
+/**
  * Maps a config definition to the shape of values it expects.
  * GGConfigKey<V> → V, objects with config keys → recurse, everything else → excluded.
+ * Entries a local config may leave out (see ConfigValueOptional) are optional.
  */
 export type ConfigValues<T, D extends 1[] = []> =
     D['length'] extends 5 ? never :
         T extends GGConfigKey<infer V> ? Widen<V> :
             T extends object ? (
-                ConfigKeyOf<T, D> extends never ? never : { [K in ConfigKeyOf<T, D>]: ConfigValues<T[K], [...D, 1]> }
+                ConfigKeyOf<T, D> extends never ? never : {
+                    [K in Exclude<ConfigKeyOf<T, D>, OptionalKeyOf<T, D>>]: ConfigValues<T[K], [...D, 1]>
+                } & {
+                    [K in OptionalKeyOf<T, D>]?: ConfigValues<T[K], [...D, 1]>
+                }
                 ) : never;
 
 /**

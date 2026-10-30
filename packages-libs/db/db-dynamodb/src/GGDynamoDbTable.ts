@@ -106,6 +106,17 @@ export class GGDynamoDbTable<
         await this.db.delete(this.tableName, this.buildKey(pk, sk))
     }
 
+    /** Conditional delete. Returns true on success, false when the condition fails. */
+    async deleteConditional(
+        pk: T[PK],
+        conditionExpression: string,
+        values?: Record<string, unknown>,
+        attributeNames?: Record<string, string>,
+        sk?: unknown,
+    ): Promise<boolean> {
+        return this.db.deleteConditional(this.tableName, this.buildKey(pk, sk), conditionExpression, values, attributeNames)
+    }
+
     /**
      * `keyCondition` uses ExpressionAttributeValues placeholders (`:foo`);
      * pass the values map alongside. For non-PK queries, supply the GSI

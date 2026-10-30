@@ -1,0 +1,99 @@
+import {describe, it, expect} from 'vitest';
+import {GGLocatorScopeLock} from './GGLocatorScopeLock';
+import {GGLocatorScope} from '@grest-ts/locator';
+
+/**
+ * Helper to run test code within a GGLocatorScope.
+ */
+async function runInScope<T>(fn: () => Promise<T>): Promise<T> {
+    const scope = new GGLocatorScope('test');
+    return scope.run(fn);
+}
+
+describe('GGLocatorScopeLock', () => {
+        it('should share lock state with multiple GGLocatorScopeLock instances in same scope', async () => {
+            await runInScope(async () => {
+                const lock1 = new GGLocatorScopeLock();
+                const lock2 = new GGLocatorScopeLock();
+
+                await lock1.acquire('test-lock', 'a', 5000);
+
+                // Same scope, different instance - should see the lock
+                const result = await lock2.acquire('test-lock', 'a', 5000);
+                expect(result).toBe(false);
+            });
+        });
+
+    describe('context isolation', () => {
+        it('should isolate locks between different scopes', async () => {
+            const lock = new GGLocatorScopeLock();
+
+            // Acquire in first scope
+            await runInScope(async () => {
+                const result = await lock.acquire('test-lock', 'a', 5000);
+                expect(result).toBe(true);
+            });
+
+            // Should also acquire in second scope (isolated)
+            await runInScope(async () => {
+                const result = await lock.acquire('test-lock', 'a', 5000);
+                expect(result).toBe(true);
+            });
+        });
+
+        it('should not see locks from other scopes', async () => {
+            const lock = new GGLocatorScopeLock();
+
+            // Acquire in first scope and hold a reference to check later
+            let canRenewFromFirstScope = false;
+
+            const scope1 = new GGLocatorScope('test');
+            await scope1.run(async () => {
+                await lock.acquire('test-lock', 'a', 5000);
+                canRenewFromFirstScope = await lock.renew('test-lock', 'a', 5000);
+            });
+
+            expect(canRenewFromFirstScope).toBe(true);
+
+            // In second scope, the lock doesn't exist
+            await runInScope(async () => {
+                const result = await lock.renew('test-lock', 'a', 5000);
+                expect(result).toBe(false);
+            });
+        });
+
+        it('should allow concurrent locks in different scopes', async () => {
+            const lock = new GGLocatorScopeLock();
+
+            const results = await Promise.all([
+                runInScope(async () => lock.acquire('test-lock', 'a', 5000)),
+                runInScope(async () => lock.acquire('test-lock', 'a', 5000)),
+                runInScope(async () => lock.acquire('test-lock', 'a', 5000)),
+            ]);
+
+            // All should succeed because they're in different scopes
+            expect(results).toEqual([true, true, true]);
+        });
+    });
+
+    describe('nested scopes', () => {
+        it('should isolate lock storage in nested scopes', async () => {
+            const lock = new GGLocatorScopeLock();
+
+            await runInScope(async () => {
+                await lock.acquire('test-lock', 'a', 5000);
+
+                // Nested runInScope creates a new isolated scope
+                await runInScope(async () => {
+                    const result = await lock.acquire('test-lock', 'a', 5000);
+                    // Should succeed because nested scope is isolated
+                    expect(result).toBe(true);
+                });
+
+                // Original scope still holds its lock
+                const renewResult = await lock.renew('test-lock', 'a', 5000);
+                expect(renewResult).toBe(true);
+            });
+        });
+    });
+});

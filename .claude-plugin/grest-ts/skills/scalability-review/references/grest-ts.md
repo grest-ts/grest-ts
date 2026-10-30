@@ -14,12 +14,12 @@ Framework behaviours that work in dev and tests but break at scale or with more 
 - **Postgres: a failed connect at start-up is swallowed, and the pool has no `'error'` listener.** The instance reports started and then every query throws; an idle client error (DB restart, failover) crashes the process. Flag deployments without readiness checks that run a real query.
 - **The select builder allows `exec()` with no limit, and `execOne` doesn't add `LIMIT 1`.** → `.limit(n)` / `.limit1()`. `.limit([offset, n])` is offset paging; prefer keyset (`where id > :last`) for large tables. Use `.forUpdate()` inside `runInTransaction` for read-modify-write.
 
-## @grest-ts/lock, @grest-ts/poller
-- **The shipped `GGLock`s, `GGInstanceLock` and `GGLocatorScopeLock`, are process-local.** With N replicas every instance "holds" the lock. → implement `GGLock` on a shared store, e.g. DynamoDB `putConditional` with `attribute_not_exists(pk) OR expiresAt < :now`, using store-side time.
-- **The `GGLock` API has no owner or fencing token** (`acquire/renew/release(lockId)`, and release deletes unconditionally). A holder whose lease expired can renew or release someone else's lock. A custom implementation must track the owner, and work done under the lock should be fenced (see `multi-instance.md`).
-- **`GGPoller` has one leader only if its lock is distributed.** With a process-local lock, N replicas means N leaders processing the same rows.
-- **`GGPoller` re-polls while the previous batch is still running, and `run` calls already in flight continue after leadership is lost.** `getData` can return items that are already being processed. → `getData` must atomically *claim* rows (a conditional status flip; "optionally mark as processing" in the docs is effectively required), and `run` must be idempotent. `stop()` only waits for the latest batch.
-- **`GGPoller` failures are mostly invisible.** `getData` and lock errors get no log and no metric; `run` errors get a metric only; a throwing `onCompleted` is an unhandled rejection (crash). Settings have no defaults: a missing `pollIntervalMs` busy-loops, and a missing `batchSize` or `concurrency` gives `NaN`. Flag handlers without their own logging and `GGPollerConfig` resources missing any field. The package is marked under development.
+## @grest-ts/lock, @grest-ts/job
+- **`GGInstanceLock` and `GGLocatorScopeLock` are process-local.** With N replicas every instance "holds" the lock, so a `GGJob` runs N times. → `GGDynamoDbLock` (`@grest-ts/lock-dynamodb`) or another shared-store `GGLock`.
+- **No fencing token.** A holder paused past its TTL keeps working until its next renew (`withLock` aborts the work's signal then, up to `ttl / 3` later). Work under a lock should be idempotent or written conditionally. Flag work under `withLock` that ignores its `signal`.
+- **A `GGJob` runs on one instance at a time, so its throughput is one instance's.** Flag jobs whose data sets come back full every run or whose runs take most of their interval (the runner warns on both). → keep the job as a collector that publishes items to a queue (`@grest-ts/events`), and process them in consumers.
+- **`runOn: "everyInstance"` runs the job N times.** Flag it on anything but per-instance work (local caches, own config).
+- **Periodic work on `setInterval` in a multi-instance service runs once per instance.** → a `GGJob` on the runtime's `GGJobRunner`.
 
 ## @grest-ts/events (+ events-aws/azure/gcp)
 - **With no production `GG_DISCOVERY` registered, the runtime starts local discovery, and events silently use an in-memory, in-process broker.** Nothing errors; events just never leave the process. → register production discovery explicitly in `compose()`.
@@ -48,7 +48,7 @@ Framework behaviours that work in dev and tests but break at scale or with more 
 - **`.get()` at module scope, or cached in a constructor, pins the value** (also a convention rule), so hot-reloaded config reaches only some code paths.
 
 ## @grest-ts/testkit: why tests pass anyway
-- DynamoDB tests run on dynamodb-local, which doesn't reproduce eventual consistency, so GSI and read-after-write races pass. `GGTestPollerStore` is in-memory. With `GG_COVERAGE_MODE=1`, `startWorker` silently runs inline.
+- DynamoDB tests run on dynamodb-local, which doesn't reproduce eventual consistency, so GSI and read-after-write races pass. With `GG_COVERAGE_MODE=1`, `startWorker` silently runs inline.
 - → For multi-instance behaviour, use `GGTest.startWorker([MyRuntime, MyRuntime])` (separate workers) or `GGTest.startIsolated` (separate processes). Test conditional-write conflicts and idempotency explicitly, e.g. run the same claim twice and assert exactly one wins.
 
 ## Already handled (don't flag)

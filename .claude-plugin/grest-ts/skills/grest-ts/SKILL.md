@@ -355,6 +355,18 @@ describe("cross-service flow", () => {
 })
 ```
 
+### Periodic jobs
+
+Under `GGTest`, a runtime's `GGJob`s don't run on their own. Run one when the test needs it — it goes through the real runner (settings, lock) and sees the action's mocks:
+
+```typescript
+await t.jobs.run("expired-sessions")
+    .with(mockOf(Mailer).send.andReturn(undefined))
+    .toMatchObject({result: "DONE", rows: 2, failed: 0})
+```
+
+`t[1].jobs.run(...)` picks an instance; `await t.jobs.start()` starts the schedules for a test about scheduling. Never sleep waiting for a timed run.
+
 ---
 
 ## 6. @mockable and mockOf
@@ -583,6 +595,7 @@ const item = await client.get({id: 1}).orDefault(() => defaultItem)
 | Config management | `@grest-ts/config` | `GGConfig`, `GGResource`, `GGSecret` |
 | Logging | `@grest-ts/logger`, `@grest-ts/logger-console` | `GG_LOG`, `GGLoggerConsole` |
 | WebSocket | `@grest-ts/websocket` | `GGWebSocketSchema`, `GGRawWebSocketSchema` (contracts: `GGDuplexContract`, `GGRawSocketContract` from `@grest-ts/schema`) |
+| Periodic jobs, locks | `@grest-ts/job`, `@grest-ts/lock` | `GGJob`, `GGJobRunner`, `IsGGJobSettings`, `withLock` |
 | MySQL | `@grest-ts/db-mysql` | `GGMysql`, `GGMysqlConfig` |
 | PostgreSQL | `@grest-ts/db-postgre` | `GGPostgre` |
 
@@ -607,6 +620,10 @@ class ItemApiImpl implements IItemApi { ... }
 public async list(): Promise<Item[]> { ... }
 // ✅ Arrow function properties instead:
 public list = async (): Promise<Item[]> => { ... }
+
+// ❌ setInterval for periodic work: it runs once per instance and tests can't control it
+setInterval(() => cleanup(), 60_000)
+// ✅ A GGJob on the runtime's GGJobRunner (@grest-ts/job); in tests: await t.jobs.run("cleanup")
 
 // ❌ Module mocks in integration tests (jest.mock / vi.mock) — use @mockable + mockOf.
 //    Fine in a plain unit test of a single class.
@@ -664,7 +681,10 @@ Read these only when you need package-specific detail (exact API, options, advan
 - **@grest-ts/http** — `packages/http/README.md`
 - **@grest-ts/http-file** — `packages/http-file/README.md`
 - **@grest-ts/ipc** — `packages/ipc/README.md`
+- **@grest-ts/job** — `packages/job/README-patterns.md`, `packages/job/README.md`
 - **@grest-ts/locator** — `packages/locator/README.md`
+- **@grest-ts/lock** — `packages/lock/README.md`
+- **@grest-ts/lock-dynamodb** — `packages/lock-dynamodb/README.md`
 - **@grest-ts/logger** — `packages/logger/README-extending.md`, `packages/logger/README-testkit.md`, `packages/logger/README-usage.md`, `packages/logger/README.md`
 - **@grest-ts/logger-console** — `packages/logger-console/README.md`
 - **@grest-ts/metrics** — `packages/metrics/README-extending.md`, `packages/metrics/README-testkit.md`, `packages/metrics/README-usage.md`, `packages/metrics/README.md`

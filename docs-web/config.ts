@@ -30,6 +30,8 @@ export const DOC_TREE: Record<string, DocEntry[]> = {
         {auth: ["auth", "oauth", "service-auth", "authz"]},
         {db: ["db-mysql", "db-postgre", "db-dynamodb"]},
         {docs: ["api-docs", "openapi", "asyncapi"]},
+        "job",
+        {lock: ["lock", "lock-dynamodb"]},
     ],
     "Useful": [
         "sql",

@@ -29,6 +29,8 @@ export interface GGPackageInfo {
         gg: string[]
         /** External npm package names */
         external: string[]
+        /** @grest-ts/* names imported only from .d.ts files: type augmentations, so optional peers */
+        ggTypesOnly: string[]
     }
     /** Discovered imports from testkit/ files */
     testkitImports: {
@@ -142,7 +144,7 @@ export class GGParser {
                 depth,
                 config,
                 sourceFiles: [],
-                imports: { gg: [], external: [] },
+                imports: { gg: [], external: [], ggTypesOnly: [] },
                 testkitImports: { ggTestkit: [] },
                 vitestImports: { gg: [] },
                 hasTestDir: false,
@@ -177,8 +179,9 @@ export class GGParser {
                 : Promise.resolve(false)
         ])
 
-        const [imports, testkitImports, vitestImports] = await Promise.all([
+        const [imports, codeImports, testkitImports, vitestImports] = await Promise.all([
             this.parseImports(sourceFiles),
+            this.parseImports(sourceFiles.filter(f => !f.endsWith(".d.ts"))),
             this.parseTestkitImports(testkitFiles),
             this.parseVitestImports(vitestFiles)
         ])
@@ -191,7 +194,7 @@ export class GGParser {
             depth,
             config,
             sourceFiles,
-            imports,
+            imports: {...imports, ggTypesOnly: imports.gg.filter(name => !codeImports.gg.includes(name))},
             testkitImports,
             vitestImports,
             hasTestDir,
