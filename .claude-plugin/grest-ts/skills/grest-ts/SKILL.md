@@ -680,4 +680,4 @@ Read these only when you need package-specific detail (exact API, options, advan
 - **@grest-ts/testkit-vitest** — `packages/testkit-vitest/README.md`
 - **@grest-ts/trace** — `packages/trace/README.md`
 - **@grest-ts/trace-http** — `packages/trace-http/README.md`
-- **@grest-ts/websocket** — `packages/websocket/README.md`
+- **@grest-ts/websocket** — `packages/websocket/README-broadcast.md`, `packages/websocket/README.md`

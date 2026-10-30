@@ -60,7 +60,7 @@ export const LOG_COLORS = {
     bgBrightWhite: '\x1b[107m',
 };
 
-function parseLogLevel(value: string | undefined): LogLevel | undefined {
+export function parseLogLevel(value: string | undefined): LogLevel | undefined {
     if (!value) return undefined;
     const index = LOG_LEVELS.indexOf(value.toUpperCase());
     return index > 0 ? index as LogLevel : undefined;
