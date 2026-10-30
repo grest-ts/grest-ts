@@ -8,23 +8,17 @@ export const GGOAuthTestIPC = {
     }
 }
 
-interface TokenCache {
-    tokens: Map<string, unknown>
-    cachedToken(resource: string): Promise<string>
-}
-
 // Each test starts without cached service tokens: one a test mocked (or a real server issued) must not
 // answer the next test's calls, or that test's own token mock is never reached.
 let generation = 0
-const seen = new WeakMap<object, number>()
-const prototype = GGOAuthServiceClient.prototype as unknown as TokenCache
-const cachedToken = prototype.cachedToken
-prototype.cachedToken = function (this: TokenCache, resource: string) {
+const seen = new WeakMap<GGOAuthServiceClient, number>()
+const token = GGOAuthServiceClient.prototype.token
+GGOAuthServiceClient.prototype.token = function (this: GGOAuthServiceClient, resource: string): Promise<string> {
     if (seen.get(this) !== generation) {
-        this.tokens.clear()
+        this._tokens.clear()
         seen.set(this, generation)
     }
-    return cachedToken.call(this, resource)
+    return token.call(this, resource)
 }
 
 GGTestRuntimeWorker.onBeforeRuntimeStart(() => {

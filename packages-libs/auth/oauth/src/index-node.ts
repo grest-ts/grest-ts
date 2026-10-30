@@ -8,7 +8,7 @@ export type {GGOAuthHeadlessBrowserOptions, GGOAuthHeadlessClient, GGOAuthHeadle
 export {GGOAuthResourceServer} from "./node/GGOAuthResourceServer"
 export type {GGOAuthProtectedResource, GGOAuthResourceServerOptions} from "./node/GGOAuthResourceServer"
 export {GGOAuthServiceClient, accessTokenJwksUrl} from "./node/GGOAuthServiceClient"
-export {GGOAuthServiceApi, GGOAuthServiceApiContract, GG_OAUTH_SERVICE_CLIENT} from "./node/GGOAuthServiceApi"
+export {GGOAuthServiceApi, GGOAuthServiceApiContract, GG_OAUTH_SERVICE_CLIENT, SUBJECT_TOKEN_INVALID} from "./node/GGOAuthServiceApi"
 export type {GGOAuthServiceClientOptions} from "./node/GGOAuthServiceClient"
 export type {GGOAuthStore, GGOAuthPayload} from "./node/store/GGOAuthStore"
 export {InMemoryOAuthStore} from "./node/store/InMemoryOAuthStore"

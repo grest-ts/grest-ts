@@ -19,7 +19,7 @@ export class GGOAuthServiceClient {
 
     private readonly options: GGOAuthServiceClientOptions
     private readonly now: () => number
-    private readonly tokens = new Map<string, {pending: Promise<{token: string, expiresAt: number}>, expiresAt?: number}>()
+    public readonly _tokens = new Map<string, {pending: Promise<{token: string, expiresAt: number}>, expiresAt?: number}>()
     private _api: ReturnType<typeof GGOAuthServiceApi.createClient> | undefined
 
     constructor(options: GGOAuthServiceClientOptions) {
@@ -28,18 +28,15 @@ export class GGOAuthServiceClient {
     }
 
     // A token for `resource`, reused until shortly before it expires.
-    public token = async (resource: string): Promise<string> => await this.cachedToken(resource)
-
-    // On the prototype so the testkit can drop tokens between tests.
     // Concurrent callers share one request: the entry is set before the first await.
-    private async cachedToken(resource: string): Promise<string> {
-        const held = this.tokens.get(resource)
+    public async token(resource: string): Promise<string> {
+        const held = this._tokens.get(resource)
         if (held && (held.expiresAt === undefined || held.expiresAt - REFRESH_MARGIN_MS > this.now())) return (await held.pending).token
         const entry: {pending: Promise<{token: string, expiresAt: number}>, expiresAt?: number} = {pending: (async () => await this.api.token({resource}))()}
-        this.tokens.set(resource, entry)
+        this._tokens.set(resource, entry)
         entry.pending.then(
             t => { entry.expiresAt = t.expiresAt },
-            () => { if (this.tokens.get(resource) === entry) this.tokens.delete(resource) },
+            () => { if (this._tokens.get(resource) === entry) this._tokens.delete(resource) },
         )
         return (await entry.pending).token
     }

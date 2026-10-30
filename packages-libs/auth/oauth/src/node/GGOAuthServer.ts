@@ -9,7 +9,7 @@ import {GGHttp, type GGHttpServer} from "@grest-ts/http"
 import type {GGAccessPayload, GGAccessTokenData, GGAuthAccessToken, TokenVerifier} from "@grest-ts/auth"
 import {GGOAuthResourceServer, type GGOAuthProtectedResource} from "./GGOAuthResourceServer"
 import {toOidcAdapter, type GGOAuthStore} from "./store/GGOAuthStore"
-import {GG_OAUTH_SERVICE_CLIENT, GGOAuthServiceApi} from "./GGOAuthServiceApi"
+import {GG_OAUTH_SERVICE_CLIENT, GGOAuthServiceApi, SUBJECT_TOKEN_INVALID} from "./GGOAuthServiceApi"
 import {GGOAuthExternalSignIn, type GGOAuthExternalSignInOptions} from "./GGOAuthExternalSignIn"
 
 export interface GGOAuthFirstPartyClient {
@@ -488,8 +488,11 @@ export class GGOAuthServer {
     private exchange = async ({subjectToken, resource, params}: {subjectToken: string, resource: string, params: Record<string, string>}): Promise<GGAccessTokenData> => {
         const target = this.resource(resource)
         if (!target?.exchange) throw new FORBIDDEN({debugMessage: "Resource is not issuable by exchange"})
-        const subject = await target.exchange.from.verify(subjectToken).catch(() => undefined)
-        if (!subject) throw new FORBIDDEN({debugMessage: "Subject token is invalid or expired"})
+        const subject = await target.exchange.from.verify(subjectToken).catch((err: unknown) => {
+            if (err instanceof NOT_AUTHORIZED) return undefined
+            throw err
+        })
+        if (!subject) throw new SUBJECT_TOKEN_INVALID()
         const declared = Object.fromEntries((target.exchange.params ?? []).map(name => [name, params[name]]))
         const claims = await target.exchange.claims(subject.sub, declared)
         if (!claims) throw new FORBIDDEN({debugMessage: "No token for this subject"})

@@ -11,6 +11,7 @@ import {InMemoryOAuthStore} from "./store/InMemoryOAuthStore"
 import {DynamoOAuthStore} from "./store/DynamoOAuthStore"
 import {GGOAuthResourceServer} from "./GGOAuthResourceServer"
 import {GGOAuthServiceClient} from "./GGOAuthServiceClient"
+import {SUBJECT_TOKEN_INVALID} from "./GGOAuthServiceApi"
 import type {GGOAuthExternalSignIn} from "./GGOAuthExternalSignIn"
 import {GGOAuthHeadlessBrowser, type GGOAuthHeadlessStep} from "./GGOAuthHeadlessBrowser"
 
@@ -876,7 +877,7 @@ describe("GGOAuthServer", () => {
 
         const refused = (subjectToken: string, resource: string, params: Record<string, string>, client = backend()) => client.exchange(subjectToken, resource, params).catch((e: unknown) => e)
         expect(await refused(tokens.accessToken, ORG, {org_id: "o2"})).toBeInstanceOf(FORBIDDEN)
-        expect(await refused("garbage", ORG, {org_id: "o1"})).toBeInstanceOf(FORBIDDEN)
+        expect(await refused("garbage", ORG, {org_id: "o1"})).toBeInstanceOf(SUBJECT_TOKEN_INVALID)
         expect(await refused(tokens.accessToken, MCP, {org_id: "o1"})).toBeInstanceOf(FORBIDDEN)
         expect(await refused(tokens.accessToken, ORG, {org_id: "o1"}, backend("nope"))).toBeInstanceOf(NOT_AUTHORIZED)
     })

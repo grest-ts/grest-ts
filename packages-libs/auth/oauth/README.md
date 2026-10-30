@@ -95,8 +95,8 @@ contract, `GGOAuthServiceApi`, which they call with their secret:
   resource for the same subject, e.g. an org-scoped token from a user token. Same subject only: the
   issued token doesn't say which service asked for it.
 
-A wrong secret is `NOT_AUTHORIZED`; a resource the client may not have, or no token for the subject, is
-`FORBIDDEN`. These are not OAuth grants: `/oauth/token` offers neither `client_credentials` nor token exchange.
+A wrong secret is `NOT_AUTHORIZED`; an invalid or expired subject token is `SUBJECT_TOKEN_INVALID`
+(get a fresh one); a resource the client may not have, or no token for the subject, is `FORBIDDEN`. These are not OAuth grants: `/oauth/token` offers neither `client_credentials` nor token exchange.
 
 ```ts
 const org: GGOAuthResource<OrgClaims> = {
@@ -121,7 +121,7 @@ uses `GGOAuthResourceServer({authorizationServer, resources})`: `mount` serves e
 metadata and `protect` answers a missing or invalid token with the discovery challenge. Its resources'
 `accessToken` only verifies: a `GGAuthAccessToken` on a `JwksVerifier` (from `@grest-ts/auth`) reading
 the issuer's `/oauth/access-token-jwks`. `accessTokenJwksUrl(url?)` gives that URL: on `url`, or on the
-server discovery finds for `GGOAuthServiceApi` (`new JwksVerifier({jwks: accessTokenJwksUrl()})`).
+server discovery finds for `GGOAuthServiceApi`, since `mount` serves both (`new JwksVerifier({jwks: accessTokenJwksUrl()})`).
 When those keys can't be fetched (`JwksVerifier` throws `SERVER_ERROR`), `protect` answers 503 rather
 than sending the client to sign in again.
 
@@ -132,6 +132,8 @@ than sending the client to sign in again.
 
 With `@grest-ts/oauth` installed, `GGTest` makes service-token calls work without setup:
 - **The authorization server's runtime is running:** tokens are real, and the receiving service verifies them.
+  The caller's `secret` and the server's `serviceClients` entry must be the same value in the test config;
+  a mismatch is `NOT_AUTHORIZED`.
 - **It isn't:** `GGOAuthServiceApi` answers with a random placeholder token that expires at once (so it's
   never reused). A mocked API accepts it (`OtherApi.mock.x` never checks credentials); a real one refuses it.
 - **A test mocks `GGOAuthServiceApi.token`/`exchange` itself:** that mock answers while it is active.
