@@ -55,7 +55,7 @@ export const localConfig = createLocalConfig(AppConfig, {
 });
 ```
 
-`createLocalConfig` is a compile-time helper — it type-checks the values against your config definition.
+`createLocalConfig` is a compile-time helper — it type-checks the values against your config definition. Resources and secrets are required; settings may be left out, and then use their default.
 
 ### 3. Wire it up in your runtime
 
