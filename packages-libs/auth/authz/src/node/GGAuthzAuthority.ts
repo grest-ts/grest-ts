@@ -1,5 +1,5 @@
 import {FORBIDDEN, type GGPermission, GGPermissionChecker, type GGRequirement, type GGRequirementResource, NOT_AUTHORIZED, NOT_FOUND, requirementField} from "@grest-ts/schema"
-import type {GGAuthzActionRef} from "../shared/defineAuthz"
+import {actionName, type GGAuthzActionRef} from "../shared/defineAuthz"
 import {APPROVAL_REQUIRED, INSUFFICIENT_SCOPE, STEP_UP_REQUIRED} from "../shared/authzErrors"
 import {GG_AUTHZ_SUBJECT} from "./GG_AUTHZ_SUBJECT"
 import type {GGAuthz} from "./GGAuthz"
@@ -97,7 +97,7 @@ export class GGAuthzAuthority {
 
     /** For requirements on `action`: what its approval is for, from the input (handlers pass `key` to `assert`). */
     public registerApprovalKey(action: GGAuthzActionRef, key: GGAuthzApprovalKey): void {
-        const name = typeof action === "string" ? action : action.name
+        const name = actionName(action)
         if (this.approvalKeys.has(name)) throw new Error(`An approval key for ${name} is already registered`)
         this.approvalKeys.set(name, key)
     }
@@ -168,7 +168,7 @@ export class GGAuthzAuthority {
     private checked(action: GGAuthzActionRef): void {
         const subject = GG_AUTHZ_SUBJECT.get()
         const declared = subject && this.config.undeclared && this.declaredBy.get(subject)
-        const name = typeof action === "string" ? action : action.name
+        const name = actionName(action)
         if (declared && !declared.actions.has(name)) this.config.undeclared!(declared.call, name)
     }
 
@@ -203,7 +203,7 @@ export class GGAuthzAuthority {
     }
 
     private async decide(action: GGAuthzActionRef, resource: GGAuthzResourceRef, options?: {hidden?: boolean, key?: (resource: GGAuthzResolvedResource) => {type: string, id: string}}): Promise<GGAuthzApprovalNeed | undefined> {
-        const name = typeof action === "string" ? action : action.name
+        const name = actionName(action)
         const resolved = await this.resolve(resource)
         const [engine, facts] = await Promise.all([this.config.engine(resolved.tenant), this.config.facts?.(name, resolved)])
         try {
@@ -234,7 +234,7 @@ export class GGAuthzAuthority {
         if (!subject) throw new NOT_AUTHORIZED({debugMessage: "No GG_AUTHZ_SUBJECT in context"})
         const resolved = await this.resolve(resource)
         const engine = await this.config.engine(resolved.tenant)
-        const names = actions.map(a => typeof a === "string" ? a : a.name)
+        const names = actions.map(actionName)
         return await engine.missingActions({subject, actions: names, on: resolved.rn, context}) ?? names
     }
 
@@ -255,7 +255,7 @@ export class GGAuthzAuthority {
         if (!subject) throw new NOT_AUTHORIZED({debugMessage: "No GG_AUTHZ_SUBJECT in context"})
         const engine = await this.config.engine(this.config.tenant())
         const evaluations = await Promise.all(checks.map(async ({action, resource}): Promise<GGAuthzRequest | undefined> => {
-            const name = typeof action === "string" ? action : action.name
+            const name = actionName(action)
             const resolved = await this.resolve(resource).catch(e => {
                 if (NOT_FOUND.is(e)) return undefined
                 throw e

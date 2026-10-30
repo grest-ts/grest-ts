@@ -2,7 +2,7 @@ import {FORBIDDEN, NOT_AUTHORIZED} from "@grest-ts/schema"
 import {applyPlan} from "./applyPlan"
 import {expandActions, expandRoles, MAX_DEPTH, type OnUnknownAction} from "../shared/chain"
 import {type AttributeLookup, evalCondition, evalConditional, evalConditions, isResourceKey} from "./conditions"
-import {assertWorkloadTypes, type GGAuthzActionRef, validatedModels} from "../shared/defineAuthz"
+import {actionName, assertWorkloadTypes, type GGAuthzActionRef, validatedModels} from "../shared/defineAuthz"
 import {APPROVAL_REQUIRED, INSUFFICIENT_SCOPE, STEP_UP_REQUIRED} from "../shared/authzErrors"
 import {explain} from "./explain"
 import {GG_AUTHZ_SUBJECT} from "./GG_AUTHZ_SUBJECT"
@@ -274,7 +274,7 @@ export class GGAuthz {
 
     /** Authorizes the subject in GG_AUTHZ_SUBJECT; throws on denial. */
     public async authorize(action: GGAuthzActionRef, resource: string, context?: Record<string, unknown>, properties?: GGAuthzResourceProperties): Promise<GGAuthzDecision> {
-        const name = typeof action === "string" ? action : action.name
+        const name = actionName(action)
         const request: GGAuthzRequest = {subject: this.contextSubject(), action: {name}, resource: {type: GGAuthzRn.type(resource) ?? "", id: resource, properties}, context}
         return this.enforce(request, await this.evaluate(request))
     }

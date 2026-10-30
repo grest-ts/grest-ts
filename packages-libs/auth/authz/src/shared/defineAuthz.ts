@@ -143,7 +143,7 @@ export function definedAtOf(kind: Kind, name: string): string | undefined {
     return registry.get(`${kind}:${name}`)
 }
 
-function actionName(ref: GGAuthzActionRef): string {
+export function actionName(ref: GGAuthzActionRef): string {
     return typeof ref === "string" ? ref : ref.name
 }
 
