@@ -1,0 +1,56 @@
+{
+  "//": "THIS FILE IS GENERATED - DO NOT EDIT",
+  "name": "@grest-ts/service-auth",
+  "version": "0.0.100",
+  "type": "module",
+  "license": "MIT",
+  "description": "Service-to-service authentication for grest-ts: a shared-secret header wire, verified fail-closed and in constant time",
+  "exports": {
+    ".": {
+      "types": "./src/index-node.ts",
+      "import": "./src/index-node.ts"
+    }
+  },
+  "files": [
+    "src"
+  ],
+  "scripts": {
+    "typecheck": "tsc --noEmit -p src",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "test:coverage:html": "vitest run --coverage --reporter=html"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/grest-ts/grest-ts.git",
+    "directory": "packages-libs/auth/service-auth"
+  },
+  "homepage": "https://grest-ts.com/packages/service-auth",
+  "bugs": {
+    "url": "https://github.com/grest-ts/grest-ts/issues"
+  },
+  "keywords": [
+    "typescript",
+    "framework",
+    "contract",
+    "api",
+    "microservices",
+    "testing",
+    "auth",
+    "service-to-service",
+    "shared-secret",
+    "internal-api"
+  ],
+  "engines": {
+    "node": ">=24"
+  },
+  "peerDependencies": {
+    "@grest-ts/config": "0.0.100",
+    "@grest-ts/http": "0.0.100",
+    "@grest-ts/logger": "0.0.100",
+    "@grest-ts/schema": "0.0.100"
+  }
+}
