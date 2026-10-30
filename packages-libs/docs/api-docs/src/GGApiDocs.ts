@@ -10,13 +10,13 @@ import type {ApiDocsConfig, ApiDocsDocument} from "./docTypes";
 
 /**
  * Directory shipped with the package containing the Vite-built React UI.
- * Resolves to <pkg>/dist-ui regardless of whether this module is loaded
- * from src/ (in-tree dev) or dist/src/ (published tarball).
+ * Resolves to <pkg>/dist-ui whether this module is loaded from src/ (in-tree
+ * dev) or dist/src/ (published tarball), or to a dist-ui copied next to a
+ * bundle this module was inlined into.
  */
 const HERE = dirname(fileURLToPath(import.meta.url));
-const DIST_UI = existsSync(join(HERE, "..", "dist-ui"))
-    ? join(HERE, "..", "dist-ui")           // src/GGApiDocs.{ts,js}
-    : join(HERE, "..", "..", "dist-ui");    // dist/src/GGApiDocs.js
+const DIST_UI = [join(HERE, "dist-ui"), join(HERE, "..", "dist-ui"), join(HERE, "..", "..", "dist-ui")].find(existsSync)
+    ?? join(HERE, "..", "dist-ui");
 
 /**
  * One logical group inside a doc. `http` and `ws` arrays carry the actual
