@@ -42,7 +42,7 @@ export interface GGTestConfig {
     verboseProxy: boolean
 }
 
-const reusableNumbersInUse = new Set<number>();
+const takenWorkerSeats = new Set<number>();
 
 export class GGTestRunner {
 
@@ -79,7 +79,7 @@ export class GGTestRunner {
 
     private readonly hooks: Map<string, GGTestRunnerHook> = new Map()
 
-    private reusableNumber: number | undefined
+    private workerSeat: number | undefined
 
     constructor(ipcServer: IPCServer, discoveryServer: IGGLocalDiscoveryServer, userConfig?: Partial<GGTestConfig>) {
         this.testId = "t" + Math.random().toString(36).substring(2, 8);
@@ -146,17 +146,17 @@ export class GGTestRunner {
 
     /**
      * Unique among the run's concurrent runners, and the same small set of values every run: the run's slot, the
-     * worker, and the lowest number no live runner in this worker holds (released at teardown). For test resources a
-     * backend can't free, such as dynamodb-local's per-key databases.
+     * worker, and this runner's seat in the worker (the lowest one no live runner holds, given back at teardown). For
+     * test resources a backend can't free, such as dynamodb-local's per-key databases.
      */
     public get reusableId(): string {
-        if (this.reusableNumber === undefined) {
+        if (this.workerSeat === undefined) {
             let n = 0;
-            while (reusableNumbersInUse.has(n)) n++;
-            reusableNumbersInUse.add(n);
-            this.reusableNumber = n;
+            while (takenWorkerSeats.has(n)) n++;
+            takenWorkerSeats.add(n);
+            this.workerSeat = n;
         }
-        return `s${process.env.GG_TEST_SLOT ?? process.env.GG_TEST_RUN_ID}w${process.env.GG_TEST_WORKER ?? process.pid}n${this.reusableNumber}`;
+        return `s${process.env.GG_TEST_SLOT ?? process.env.GG_TEST_RUN_ID}w${process.env.GG_TEST_WORKER ?? process.pid}n${this.workerSeat}`;
     }
 
     /**
@@ -341,7 +341,7 @@ export class GGTestRunner {
             this.globalRuntimes.length = 0
             this.hooks.clear()
             // Only after the afterAll hooks cleaned up: a teardown that threw keeps it, so no later runner gets leftovers.
-            if (this.reusableNumber !== undefined) reusableNumbersInUse.delete(this.reusableNumber)
+            if (this.workerSeat !== undefined) takenWorkerSeats.delete(this.workerSeat)
         });
     }
 }
