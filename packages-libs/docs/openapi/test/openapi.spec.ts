@@ -5,6 +5,7 @@ import {
     ERROR, GGContractClass, GG_NO_PERMISSIONS } from "@grest-ts/schema";
 import {GGRpc, GGHttpSchema} from "@grest-ts/http";
 import {toOpenApi} from "../src/toOpenApi";
+import {schemaDescriptionToOpenApi} from "../src/schemaDescriptionToOpenApi";
 
 // ---------------------------------------------------------------------------
 // toOpenApi() — document-level tests
@@ -339,6 +340,17 @@ describe("toOpenApi", () => {
             };
             const S2 = new GGHttpSchema({contract: C, pathPrefix: "tp2", routes: {do: codecNoResponses as any}});
             expect(() => toOpenApi([S2])).toThrowError(/no responses/);
+        });
+    });
+});
+
+describe("schemaDescriptionToOpenApi", () => {
+    it("puts a nullable field's docs and default on the outer schema", () => {
+        const desc = IsString.orNull.docs({title: "Note", description: "Free text"}).toSchemaDescription();
+        expect(schemaDescriptionToOpenApi(desc)).toEqual({
+            oneOf: [{type: "string"}, {type: "null"}],
+            title: "Note",
+            description: "Free text",
         });
     });
 });

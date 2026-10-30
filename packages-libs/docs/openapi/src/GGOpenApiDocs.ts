@@ -1,20 +1,9 @@
-import {readFileSync} from "fs";
-import {dirname, join} from "path";
-import {createRequire} from "module";
 import type {GGHttpSchema} from "@grest-ts/http";
 import {GGHttp, GGHttpServer, GG_HTTP_SERVER} from "@grest-ts/http";
 import {GGLocator} from "@grest-ts/locator";
 import type {OpenAPIV3_1} from "openapi-types";
 import {toOpenApi, ToOpenApiOptions} from "./toOpenApi";
-import {GGOpenApiDocsGroups, GGOpenApiDocsGroupsOptions} from "./GGOpenApiDocsGroups";
-
-// Resolve swagger-ui-dist via require.resolve so workspace hoisting is handled correctly.
-const _require = createRequire(import.meta.url);
-const SWAGGER_UI_DIST = dirname(_require.resolve("swagger-ui-dist/swagger-ui-bundle.js"));
-
-function readSwaggerAsset(filename: string): Buffer {
-    return readFileSync(join(SWAGGER_UI_DIST, filename));
-}
+import {GGOpenApiDocsGroups, GGOpenApiDocsGroupsOptions, readSwaggerAsset} from "./GGOpenApiDocsGroups";
 
 export interface GGOpenApiDocsOptions extends ToOpenApiOptions {
     /**
