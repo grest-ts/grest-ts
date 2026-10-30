@@ -554,6 +554,14 @@ describe("GGOAuthServer", () => {
         expect(await browser.done(browser.submit(login, "login", {sub: "alice"}))).toBeInstanceOf(URL)
     })
 
+    test("a sign-in POST the browser flags same-origin passes from another origin of the issuer, a same-site one doesn't", async () => {
+        const browser = new Browser()
+        const login = await browser.page(authorizeUrl("app", FIRST_PARTY_REDIRECT, pkce().challenge))
+        const post = (site: string, origin: string) => browser.get(`/oauth/interaction/${login.uid}/login`, {method: "POST", headers: {origin, "sec-fetch-site": site}, body: new URLSearchParams({sub: "alice"})})
+        expect((await post("same-site", ISSUER)).status).toBe(403)
+        expect((await post("same-origin", "http://localhost:9")).status).toBe(303)
+    })
+
     test("the sign-in pages can't be framed or cached", async () => {
         const browser = new Browser()
         const login = await browser.page(authorizeUrl("app", FIRST_PARTY_REDIRECT, pkce().challenge))

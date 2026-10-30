@@ -164,8 +164,8 @@ const renderSignIn = async ({interaction, action, method, form, html, login, con
 - A first-party client never gets a consent prompt: it re-authorizes silently while the login
   session lives (single sign-on).
 - The request reaches your code only from the browser that started the flow (it holds the
-  flow's interaction cookie: SameSite=Lax, scoped to the path). A POST must also come from the issuer's
-  origin (`Origin` header) and be a form (`application/x-www-form-urlencoded`); the server answers 403 otherwise. Your pages can't be framed (`frame-ancestors 'none'`, `X-Frame-Options`).
+  flow's interaction cookie: SameSite=Lax, scoped to the path). A POST must also come from the page's
+  own origin (the browser's `Sec-Fetch-Site: same-origin`, or without it an `Origin` of the issuer) and be a form (`application/x-www-form-urlencoded`); the server answers 403 otherwise. Your pages can't be framed (`frame-ancestors 'none'`, `X-Frame-Options`).
   Don't send `Referrer-Policy: no-referrer` on them: browsers then post `Origin: null`, which is refused.
 - `html(status, body)` and `redirect(url)` (a 303) answer with the headers these pages need:
   `text/html; charset=utf-8`, `Referrer-Policy: same-origin` and `Cache-Control: no-store`. `res` is
@@ -180,7 +180,8 @@ const renderSignIn = async ({interaction, action, method, form, html, login, con
 - `extraParams` pass authorization parameters through to `interaction.params` (e.g. a sign-in
   method to start right away: `authorize({params: {start_with: "sso"}})`).
 - `sessionCookie` names the login session cookie. The default is `__Host-session` on an https issuer
-  (`_session` on http).
+  (`_session` on http). Browsers keep a `__Host-` cookie only over https, so name it yourself when an
+  https issuer is also reached over http (e.g. a dev proxy on localhost).
 - `errorPage(message)` renders the server's own error pages (an expired flow, an invalid request).
   `message` can echo request values (e.g. an OAuth `error_description`): HTML-escape it.
 
@@ -263,7 +264,8 @@ oauth.logout(undefined)   // ends the authorization server's login session too
   exactly that resource.
 - A discovered server's metadata must declare it as the issuer (RFC 8414).
 - With `server`, its metadata is used as fetched (e.g. the issuer reached through a dev proxy), and
-  `resource` defaults to the issuer it declares.
+  `resource` defaults to the issuer it declares. It may be a function, looked up once (e.g. read from
+  the API's RFC 9728 metadata when the dev proxy's origin isn't the resource's).
 - `iss` on the callback is required and must match the issuer (RFC 9207).
 - Each sign-in in progress is kept in `sessionStorage` under its own `state`, so sign-ins started in
   two tabs at once both complete.
@@ -303,8 +305,9 @@ api.createClient({wires: [{wire: USER_TOKEN_WIRE, value: () => tokens.accessToke
 
 - The issuer, first-party clients, keys and resources are handed to oidc-provider when the first
   OAuth request arrives. Changing them takes a restart; `allowedUrlPrefixes` is read on every fetch.
-- Sign-in happens on the issuer's origin: its pages refuse a POST from any other, and a login ticket
-  always points there (request hosts are client-controlled).
+- Sign-in happens on the issuer's origin: a login ticket always points there (request hosts are
+  client-controlled). A flow reached on another origin of the server (e.g. localhost behind a router)
+  works only in browsers that send `Sec-Fetch-Site`.
 - The issuer is an origin. Clients bind to it, so changing it disconnects them.
 - Resource metadata is served by the resource URL's path on any host, so give each resource its
   own path (e.g. the API at `/` and MCP at `/mcp`).

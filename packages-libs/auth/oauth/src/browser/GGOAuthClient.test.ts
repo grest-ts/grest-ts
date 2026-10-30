@@ -38,6 +38,16 @@ describe("GGOAuthClient redirects", () => {
         expect(new URL(assign.mock.calls[0][0]).searchParams.get("code_challenge_method")).toBe("S256")
     })
 
+    test("a resource lookup is asked once and its answer is the requested resource", async () => {
+        const lookup = vi.fn(async () => "https://api.example")
+        const oauth = new GGOAuthClient({server: SERVER, resource: lookup, clientId: "web", redirectUri: "https://app.example/cb", identity: () => ({})})
+        void oauth.authorize()
+        await vi.waitFor(() => expect(assign).toHaveBeenCalledTimes(1))
+        expect(new URL(assign.mock.calls[0][0]).searchParams.get("resource")).toBe("https://api.example")
+        await oauth.refresh({refreshToken: "rt"}).catch(() => undefined)
+        expect(lookup).toHaveBeenCalledTimes(1)
+    })
+
     test("prompt=login reaches the authorization request", async () => {
         void client().authorize({prompt: "login"})
         await vi.waitFor(() => expect(assign).toHaveBeenCalledTimes(1))

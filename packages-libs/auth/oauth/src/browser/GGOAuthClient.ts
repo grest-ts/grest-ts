@@ -11,8 +11,8 @@ export interface GGOAuthResult<I> {
 
 export type GGOAuthClientConfig<I> = GGOAuthClientOptions<I> & (
     // Where the authorization server's metadata is: the issuer, or another origin it is reached on.
-    // Tokens are for `resource`, or for the issuer itself.
-    | {server: string, resource?: string}
+    // Tokens are for `resource` (looked up once when a function), or for the issuer itself.
+    | {server: string, resource?: string | (() => Promise<string>)}
     // RFC 8707 resource the access token is for; its authorization server is discovered from the
     // resource's RFC 9728 metadata, the way any other OAuth client of that resource finds it.
     | {server?: undefined, resource: string}
@@ -41,6 +41,7 @@ const pendingKey = (state: string) => `gg-oauth-pending:${state}`
 export class GGOAuthClient<I = unknown> {
 
     private metadata: Promise<Metadata> | undefined
+    private resolvedResource: Promise<string> | undefined
     // The redirect away being prepared: a second one (e.g. a signed-out view starting sign-in while
     // logout redirects) waits for it — forever if it navigates, and takes over if it fails.
     private leaving: Promise<void> | undefined
@@ -168,7 +169,11 @@ export class GGOAuthClient<I = unknown> {
     // The resource is always sent: a request with `openid` and no resource would get a userinfo-only
     // token instead of an API token.
     private async resource(): Promise<string> {
-        return this.config.resource ?? (await this.discover()).issuer
+        const resource = this.config.resource
+        if (typeof resource !== "function") return resource ?? (await this.discover()).issuer
+        this.resolvedResource ??= resource()
+        this.resolvedResource.catch(() => { this.resolvedResource = undefined })
+        return this.resolvedResource
     }
 
     private discover(): Promise<Metadata> {
