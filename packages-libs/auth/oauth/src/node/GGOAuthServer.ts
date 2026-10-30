@@ -78,7 +78,7 @@ export interface GGOAuthInteraction {
 }
 
 // One request to the app's sign-in pages, under /oauth/interaction/:uid. Only reaches the app from the browser
-// that started the flow (it holds the interaction cookie); a POST also came from the issuer's origin.
+// that started the flow (it holds the interaction cookie); a POST also came from the page's own origin.
 export interface GGOAuthInteractionRequest {
     req: IncomingMessage
     res: ServerResponse
@@ -298,8 +298,10 @@ export class GGOAuthServer {
         const method = req.method as "GET" | "POST"
         let form: Record<string, string> = {}
         if (method === "POST") {
-            // The SameSite interaction cookie already keeps other sites out; Origin catches what it can't (a same-site page).
-            if (req.headers.origin !== this.origin()) return this.fail(res, 403, "Request refused")
+            // The SameSite interaction cookie already keeps other sites out; this catches what it can't (a same-site page).
+            // A browser's own same-origin flag also admits a flow served on another origin of the issuer (e.g. localhost).
+            const site = req.headers["sec-fetch-site"]
+            if (site ? site !== "same-origin" : req.headers.origin !== this.origin()) return this.fail(res, 403, "Request refused")
             const body = await readForm(req)
             if (!body) return this.fail(res, 403, "Request refused")
             form = body
