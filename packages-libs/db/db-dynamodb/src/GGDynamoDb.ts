@@ -338,7 +338,7 @@ export class GGDynamoDb {
             }))
             return true
         } catch (err) {
-            if ((err as {name?: string}).name === "ConditionalCheckFailedException") return false
+            if (isConditionFailed(err)) return false
             throw err
         }
     }
@@ -366,7 +366,7 @@ export class GGDynamoDb {
             }))
             return result.Attributes as T
         } catch (err) {
-            if ((err as {name?: string}).name === "ConditionalCheckFailedException") return undefined
+            if (isConditionFailed(err)) return undefined
             throw err
         }
     }
@@ -396,7 +396,7 @@ export class GGDynamoDb {
             }))
             return true
         } catch (err) {
-            if ((err as {name?: string}).name === "ConditionalCheckFailedException") return false
+            if (isConditionFailed(err)) return false
             throw err
         }
     }
@@ -500,4 +500,8 @@ export class GGDynamoDb {
             credentials: explicitCreds ?? (endpoint ? {accessKeyId: "local", secretAccessKey: "local"} : undefined),
         }))
     }
+}
+
+function isConditionFailed(err: unknown): boolean {
+    return (err as {name?: string}).name === "ConditionalCheckFailedException"
 }

@@ -31,16 +31,6 @@ describe("GGDynamoDbLock", () => {
         expect(await lock.acquire("expiry", "c", 10_000)).toBe(false)
     })
 
-    test("release with until keeps the lock taken by no one until then", async () => {
-        expect(await lock.acquire("cooldown", "a", 10_000)).toBe(true)
-        await lock.release("cooldown", "a", {until: Date.now() + 300})
-
-        expect(await lock.acquire("cooldown", "b", 10_000)).toBe(false)
-        expect(await lock.renew("cooldown", "a", 10_000)).toBe(false)
-        await sleep(350)
-        expect(await lock.acquire("cooldown", "b", 10_000)).toBe(true)
-    })
-
     test("release frees the lock straight away; a release by someone else does nothing", async () => {
         expect(await lock.acquire("free", "a", 10_000)).toBe(true)
         await lock.release("free", "b")

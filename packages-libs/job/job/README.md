@@ -61,7 +61,7 @@ The runner starts with the runtime. On teardown it stops new rows, waits for run
 | `item` | Every instance; each row is locked by `rowKey(row)` before `processRow`. | Many rows, and instances should share them. |
 | `none` | Every instance. `processRow` guards its own rows. | The data store claims rows itself (e.g. a conditional status flip). |
 
-An `exclusive` run that finishes keeps its lock until the next run is due (`release({until})`), and every instance checks every `checkEveryMs` whether it can take it. With `item`, `getDataSet` must drain itself (a processed row drops out of it), and `processRow` must re-check its row: another instance may have finished it after it was read.
+An `exclusive` run that finishes keeps its lock until the next run is due (`withLock`'s `holdUntil`), and every instance checks every `checkEveryMs` whether it can take it. With `item`, `getDataSet` must drain itself (a processed row drops out of it), and `processRow` must re-check its row: another instance may have finished it after it was read.
 
 ## Configuration
 

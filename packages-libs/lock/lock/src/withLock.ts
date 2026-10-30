@@ -9,7 +9,10 @@ export interface GGWithLockOptions {
     ttlMs: number;
     /** Aborts `fn`'s signal too. A run it aborted is released without `holdUntil`. */
     signal?: AbortSignal;
-    /** When `fn` completes without throwing or being aborted, the lock stays taken until this time (epoch ms). */
+    /**
+     * Epoch ms. When `fn` completes without throwing or being aborted, the lease is renewed to last until then instead
+     * of released, so nobody (this owner included) acquires the lock before: a cooldown.
+     */
     holdUntil?: number;
 }
 
@@ -60,7 +63,8 @@ export async function withLock(
         done = true;
         clearInterval(heartbeat);
         if (!lost.signal.aborted) {
-            await lock.release(lockId, owner, completed ? {until: holdUntil} : undefined)
+            const holdMs = completed && holdUntil !== undefined ? holdUntil - Date.now() : 0;
+            await (holdMs > 0 ? lock.renew(lockId, owner, holdMs) : lock.release(lockId, owner))
                 .catch(err => GGLog.warn(lock, "Lock release failed", {lockId, owner, err: (err as Error).message}));
         }
     }

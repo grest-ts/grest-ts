@@ -1,6 +1,6 @@
 import type {CreateTableCommandInput} from "@aws-sdk/client-dynamodb"
 import {type GGDynamoDb, GGDynamoDbTable} from "@grest-ts/db-dynamodb"
-import type {GGLock, GGLockReleaseOptions} from "@grest-ts/lock"
+import type {GGLock} from "@grest-ts/lock"
 import {IsNumber, IsObject, IsString} from "@grest-ts/schema"
 
 const ROW_TTL_SEC = 24 * 60 * 60
@@ -8,8 +8,7 @@ const OWNER = {"#owner": "owner"}
 
 export const IsGGDynamoDbLockRow = IsObject({
     id: IsString,
-    /** Absent while a `release({until})` keeps the lock taken by no one. */
-    owner: IsString.orUndefined,
+    owner: IsString,
     /** Epoch ms. The lock is free from this instant on. */
     lockedUntil: IsNumber,
     /** Epoch seconds, a day past `lockedUntil`: the DynamoDB TTL attribute. */
@@ -42,35 +41,30 @@ export class GGDynamoDbLock implements GGLock {
         this.table = new GGDynamoDbTable(db, options.tableName, IsGGDynamoDbLockRow, "id")
     }
 
-    acquire(id: string, owner: string, ttlMs: number): Promise<boolean> {
+    acquire(lockId: string, owner: string, ttlMs: number): Promise<boolean> {
         const now = Date.now()
         return this.table.putConditional(
-            this.row(id, owner, now + ttlMs),
+            this.row(lockId, owner, now + ttlMs),
             "attribute_not_exists(lockedUntil) OR lockedUntil <= :now",
             {":now": now},
         )
     }
 
-    renew(id: string, owner: string, ttlMs: number): Promise<boolean> {
+    renew(lockId: string, owner: string, ttlMs: number): Promise<boolean> {
         const now = Date.now()
         return this.table.putConditional(
-            this.row(id, owner, now + ttlMs),
+            this.row(lockId, owner, now + ttlMs),
             "#owner = :me AND lockedUntil > :now",
             {":me": owner, ":now": now},
             OWNER,
         )
     }
 
-    async release(id: string, owner: string, options?: GGLockReleaseOptions): Promise<void> {
-        const until = options?.until
-        if (until !== undefined && until > Date.now()) {
-            await this.table.putConditional(this.row(id, undefined, until), "#owner = :me", {":me": owner}, OWNER)
-        } else {
-            await this.table.deleteConditional(id, "#owner = :me", {":me": owner}, OWNER)
-        }
+    async release(lockId: string, owner: string): Promise<void> {
+        await this.table.deleteConditional(lockId, "#owner = :me", {":me": owner}, OWNER)
     }
 
-    private row(id: string, owner: string | undefined, lockedUntil: number): GGDynamoDbLockRow {
+    private row(id: string, owner: string, lockedUntil: number): GGDynamoDbLockRow {
         return {id, owner, lockedUntil, expiresAtSec: Math.ceil(lockedUntil / 1000) + ROW_TTL_SEC}
     }
 }

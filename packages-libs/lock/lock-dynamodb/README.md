@@ -40,7 +40,7 @@ await raw.send(new UpdateTimeToLiveCommand({
 | Attribute | Meaning |
 |---|---|
 | `id` | Lock id |
-| `owner` | Holder; absent while a `release({until})` keeps the lock taken by no one |
+| `owner` | Holder |
 | `lockedUntil` | Epoch ms; the lock is free from this instant |
 | `expiresAtSec` | `lockedUntil` + a day, in epoch seconds: rows nobody released are deleted by TTL |
 

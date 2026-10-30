@@ -260,9 +260,10 @@ describe("GGJobRunner", () => {
         expect(a.processed.length + b.processed.length).toBe(1)
     })
 
-    test("exclusive: a data set that fails to load releases the lock without a hold, so the next check runs it", async () => {
+    test("exclusive: a data set that fails to load releases the lock, so the next check runs it; a finished run holds it instead", async () => {
         const release = vi.fn(async () => {})
-        const lock = stubLock({release})
+        const renew = vi.fn(async () => true)
+        const lock = stubLock({release, renew})
         let fail = true
         const job = new TestJob({}, () => {
             if (fail) throw new Error("db down")
@@ -271,12 +272,14 @@ describe("GGJobRunner", () => {
         newRunner(lock, "a").add(job).start()
 
         await vi.advanceTimersByTimeAsync(1_500)
-        expect(release).toHaveBeenLastCalledWith("test", "a", undefined)
+        expect(release).toHaveBeenCalledWith("test", "a")
+        expect(renew).not.toHaveBeenCalled()
 
         fail = false
         await vi.advanceTimersByTimeAsync(1_000)
         expect(job.processed).toEqual(["row"])
-        expect(release).toHaveBeenLastCalledWith("test", "a", {until: expect.any(Number)})
+        expect(renew).toHaveBeenLastCalledWith("test", "a", expect.any(Number))
+        expect(release).toHaveBeenCalledTimes(1)
     })
 
     test("item: a row locked by another instance is skipped, not counted, and ends the run's extra batches", async () => {

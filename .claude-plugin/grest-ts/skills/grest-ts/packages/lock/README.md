@@ -11,14 +11,14 @@ Lease locks: a holder takes a lock for a TTL and renews it while it works. If th
 interface GGLock {
     acquire(lockId: string, owner: string, ttlMs: number): Promise<boolean>
     renew(lockId: string, owner: string, ttlMs: number): Promise<boolean>
-    release(lockId: string, owner: string, options?: {until?: number}): Promise<void>
+    release(lockId: string, owner: string): Promise<void>
 }
 ```
 
 - A lease is held until acquire (or renew) time + `ttlMs`. From that instant it has expired, whether or not anyone took it since.
 - `acquire` succeeds only when no live lease holds `lockId`, including one held by the same `owner`.
 - `renew` extends the lease while `owner` still holds it. `false` means the lock was lost: stop the work.
-- `release` does nothing unless `owner` holds the lock, so a holder whose lease expired can't release its successor's lock. With `until`, the lock stays taken by no one until then: a cooldown.
+- `release` does nothing unless `owner` holds the lock, so a holder whose lease expired can't release its successor's lock.
 
 `owner` must be unique per process; `newLockOwner()` gives hostname + pid + a random suffix.
 
@@ -40,7 +40,7 @@ const result = await withLock(lock, "rebuild-index", {owner, ttlMs: 30_000}, asy
 The lock is lost when a renew answers `false`, or when no renew has succeeded for two thirds of the TTL. The function's `signal` then aborts and the lock is not released: someone else may already hold it. The function must stop at the signal for the lock to protect anything. Options:
 
 - `signal`: aborts the work from outside, e.g. on shutdown.
-- `holdUntil`: after the function completes, the lock stays taken until then (`release({until})`). Not applied when the function threw or was aborted.
+- `holdUntil`: after the function completes, the lease is renewed to last until then instead of released, so nobody acquires the lock before: a cooldown. Not applied when the function threw or was aborted.
 
 For recurring work, [`@grest-ts/job`](@pkg/job) builds on this.
 
@@ -60,6 +60,6 @@ Implement `GGLock` on a store with atomic conditional writes, such as Redis `SET
 
 - `acquire`: write `{owner, lockedUntil: now + ttl}` if the row is missing or `lockedUntil <= now`.
 - `renew`: write a new `lockedUntil` if `owner` matches and `lockedUntil > now`.
-- `release`: delete the row if `owner` matches. With a future `until`, instead write `{lockedUntil: until}` with no owner.
+- `release`: delete the row if `owner` matches.
 
 Give rows of crashed holders a way to disappear (a TTL, or a cleanup), since nobody releases them. A lock still does not fence: a holder paused past its TTL keeps running until its next renew. Make the work under it idempotent.

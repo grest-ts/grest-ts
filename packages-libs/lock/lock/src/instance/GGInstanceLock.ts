@@ -1,83 +1,54 @@
-import {GGLock, GGLockReleaseOptions} from "../GGLock";
+import {GGLock} from "../GGLock";
 
-interface LockEntry {
-    owner?: string;
+export interface GGInstanceLockEntry {
+    owner: string;
     expiresAt: number;
 }
 
 /**
- * In-memory lock implementation for single-instance deployments.
- *
- * This lock is NOT distributed - it only works within a single process.
- * Use this for:
- * - Single-server deployments where you only have one instance
- * - Development and testing environments
- * - Scenarios where you need lock semantics but not distribution
- *
- * For distributed locking across multiple instances, use a Redis or
- * database-backed implementation instead.
+ * In-memory lock for one process: single-instance deployments, development and tests.
+ * With several instances it excludes nothing; use a shared store (e.g. `@grest-ts/lock-dynamodb`).
  *
  * @example
  * ```typescript
  * const lock = new GGInstanceLock();
- *
- * if (await lock.acquire('my-task', owner, 30000)) {
- *   try {
+ * await withLock(lock, 'my-task', {owner: newLockOwner(), ttlMs: 30000}, async signal => {
  *     // Do work while holding the lock
- *   } finally {
- *     await lock.release('my-task', owner);
- *   }
- * }
+ * });
  * ```
  */
 export class GGInstanceLock implements GGLock {
-    private readonly locks = new Map<string, LockEntry>();
+    private readonly locks = new Map<string, GGInstanceLockEntry>();
+
+    protected storage(): Map<string, GGInstanceLockEntry> {
+        return this.locks;
+    }
 
     async acquire(lockId: string, owner: string, ttlMs: number): Promise<boolean> {
+        const storage = this.storage();
         const now = Date.now();
-
-        // Clean up expired lock
-        const existing = this.locks.get(lockId);
-        if (existing && existing.expiresAt <= now) {
-            this.locks.delete(lockId);
-        }
-
-        // Check if lock is held
-        if (this.locks.has(lockId)) {
+        const existing = storage.get(lockId);
+        if (existing && existing.expiresAt > now) {
             return false;
         }
-
-        // Acquire the lock
-        this.locks.set(lockId, {
-            owner,
-            expiresAt: now + ttlMs
-        });
-
+        storage.set(lockId, {owner, expiresAt: now + ttlMs});
         return true;
     }
 
     async renew(lockId: string, owner: string, ttlMs: number): Promise<boolean> {
         const now = Date.now();
-
-        const existing = this.locks.get(lockId);
-
+        const existing = this.storage().get(lockId);
         if (!existing || existing.owner !== owner || existing.expiresAt <= now) {
             return false;
         }
-
-        // Extend the TTL
         existing.expiresAt = now + ttlMs;
         return true;
     }
 
-    async release(lockId: string, owner: string, options?: GGLockReleaseOptions): Promise<void> {
-        if (this.locks.get(lockId)?.owner !== owner) {
-            return;
-        }
-        if (options?.until !== undefined && options.until > Date.now()) {
-            this.locks.set(lockId, {expiresAt: options.until});
-        } else {
-            this.locks.delete(lockId);
+    async release(lockId: string, owner: string): Promise<void> {
+        const storage = this.storage();
+        if (storage.get(lockId)?.owner === owner) {
+            storage.delete(lockId);
         }
     }
 }
