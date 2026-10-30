@@ -38,6 +38,11 @@ jobs:
           --health-timeout 5s
           --health-retries 10
           --health-start-period 30s
+      # In-memory without -sharedDb: each access key gets its own tables (the DynamoDB tests rely on it).
+      dynamodb:
+        image: amazon/dynamodb-local
+        ports:
+          - 8001:8000
 
     steps:
       - name: Checkout

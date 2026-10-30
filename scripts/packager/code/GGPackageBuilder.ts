@@ -44,6 +44,7 @@ export interface PackageJson {
     dependencies?: Record<string, string>
     devDependencies?: Record<string, string>
     peerDependencies?: Record<string, string>
+    peerDependenciesMeta?: Record<string, {optional: true}>
     bin?: string | Record<string, string>
 }
 
@@ -128,6 +129,11 @@ export class GGPackageBuilder {
         // Add peerDependencies (node-only deps when package has browser target)
         if (Object.keys(peerDependencies).length > 0) {
             packageJson.peerDependencies = peerDependencies
+        }
+        // A package only referenced from .d.ts files adds types when installed; npm must not install it for everyone.
+        const optionalPeers = pkg.imports.ggTypesOnly.map(name => `@grest-ts/${name}`).filter(name => name in peerDependencies)
+        if (optionalPeers.length > 0) {
+            packageJson.peerDependenciesMeta = Object.fromEntries(optionalPeers.map(name => [name, {optional: true}]))
         }
 
         // Add devDependencies

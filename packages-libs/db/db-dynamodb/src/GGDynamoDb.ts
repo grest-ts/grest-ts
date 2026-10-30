@@ -338,7 +338,7 @@ export class GGDynamoDb {
             }))
             return true
         } catch (err) {
-            if ((err as {name?: string}).name === "ConditionalCheckFailedException") return false
+            if (isConditionFailed(err)) return false
             throw err
         }
     }
@@ -366,13 +366,39 @@ export class GGDynamoDb {
             }))
             return result.Attributes as T
         } catch (err) {
-            if ((err as {name?: string}).name === "ConditionalCheckFailedException") return undefined
+            if (isConditionFailed(err)) return undefined
             throw err
         }
     }
 
     async delete(table: string, key: Record<string, unknown>): Promise<void> {
         await this.getClient().send(new DeleteCommand({TableName: table, Key: key}))
+    }
+
+    /**
+     * Conditional delete. Returns true on success, false when the condition
+     * fails. Any other error is rethrown. See `putConditional` for `attributeNames`.
+     */
+    async deleteConditional(
+        table: string,
+        key: Record<string, unknown>,
+        conditionExpression: string,
+        values?: Record<string, unknown>,
+        attributeNames?: Record<string, string>,
+    ): Promise<boolean> {
+        try {
+            await this.getClient().send(new DeleteCommand({
+                TableName: table,
+                Key: key,
+                ConditionExpression: conditionExpression,
+                ...(values && Object.keys(values).length > 0 && {ExpressionAttributeValues: values}),
+                ...(attributeNames && {ExpressionAttributeNames: attributeNames}),
+            }))
+            return true
+        } catch (err) {
+            if (isConditionFailed(err)) return false
+            throw err
+        }
     }
 
     /**
@@ -474,4 +500,8 @@ export class GGDynamoDb {
             credentials: explicitCreds ?? (endpoint ? {accessKeyId: "local", secretAccessKey: "local"} : undefined),
         }))
     }
+}
+
+function isConditionFailed(err: unknown): boolean {
+    return (err as {name?: string}).name === "ConditionalCheckFailedException"
 }

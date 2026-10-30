@@ -5,5 +5,6 @@ definePackage({
     description: "Distributed lock interface and implementations for Grest Framework",
     keywords: ["distributed-lock", "locking", "concurrency"],
     targets: { node: true },
-    hasTests: true
+    hasTests: true,
+    publishToNpm: true
 })

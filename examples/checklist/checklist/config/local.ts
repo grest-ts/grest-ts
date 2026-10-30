@@ -18,7 +18,6 @@ export default createLocalConfig(ChecklistConfig, {
     },
     publisher: {
         userEvents: {
-            settings: {},
             resource: {options: {}},
             providerConfig: {
                 resource: {arn: "arn:aws:sns:eu-central-1:000000000000:user_events"},

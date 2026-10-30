@@ -656,6 +656,14 @@ Many packages provide testkit utilities making testing easier. These are
 | [`@grest-ts/db-postgre`](./packages-libs/db/db-postgre) | PostgreSQL utilities (thin layer over pg) |
 | [`@grest-ts/sql`](./packages-libs/sql)                  | Type-safe SQL query builder               |
 
+### Jobs (All optional)
+
+| Package                                                      | Purpose                                                              |
+|--------------------------------------------------------------|----------------------------------------------------------------------|
+| [`@grest-ts/job`](./packages-libs/job/job)                     | Recurring batch jobs that are safe to run on several instances       |
+| [`@grest-ts/lock`](./packages-libs/lock/lock)                  | Lease locks (`GGLock`, `withLock`) and in-memory implementations     |
+| [`@grest-ts/lock-dynamodb`](./packages-libs/lock/lock-dynamodb) | `GGLock` on DynamoDB, shared across instances                        |
+
 ### Auth (All optional)
 
 | Package                                              | Purpose                                                                                                            |
