@@ -53,8 +53,8 @@ A call is refused with `NOT_AUTHORIZED` when:
 - the header is missing or doesn't match,
 - the configured secret is empty (fail-closed: an unset secret never means "open").
 
-The comparison runs on HMAC-SHA256 digests of both values, so its timing reveals neither the
-secret's content nor its length. The secret is read on each request, so `.create()` may run
+The comparison runs on HMAC-SHA256 digests of both values, so its timing doesn't depend on how much
+of the presented value matches, or on whether its length matches the secret's. The secret is read on each request, so `.create()` may run
 before the config store is live, and a changed secret applies to the next request.
 
 ## 3. Client — attach
@@ -69,7 +69,7 @@ const notify = NotifyApi.createClient({
 await notify.publish(event)
 ```
 
-An empty secret on the client throws before the request is sent.
+An empty client secret is sent as is, and the server refuses it.
 
 ## 4. Config
 

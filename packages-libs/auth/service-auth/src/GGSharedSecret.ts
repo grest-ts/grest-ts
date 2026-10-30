@@ -37,14 +37,7 @@ export class GGSharedSecret {
 
     /** For a client's `wires`: `Api.createClient({wires: [GGSharedSecret.attach(WIRE, secret)]})`. */
     public static attach(wire: GGWireContextKey, secret: GGSecret<string>): GGHttpClientWire {
-        return {
-            wire,
-            value: () => {
-                const value = secret.reveal()
-                if (!value) throw new Error(`${wire.name} secret is empty`)
-                return value
-            },
-        }
+        return {wire, value: () => secret.reveal()}
     }
 
     public static equals(a: string, b: string): boolean {
