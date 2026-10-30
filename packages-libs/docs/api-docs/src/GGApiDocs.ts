@@ -1,22 +1,11 @@
-import {readFileSync, readdirSync, existsSync} from "fs";
-import {join, dirname, extname} from "path";
-import {fileURLToPath} from "url";
+import {extname} from "path";
 import type {GGHttpSchema} from "@grest-ts/http";
 import {GGHttpServer, GG_HTTP_SERVER} from "@grest-ts/http";
 import type {GGWebSocketSchema, GGRawWebSocketSchema} from "@grest-ts/websocket";
 import {GGLocator} from "@grest-ts/locator";
 import {buildContractDoc, type BuildContractDocOptions} from "./buildContractDoc";
 import type {ApiDocsConfig, ApiDocsDocument} from "./docTypes";
-
-/**
- * Directory shipped with the package containing the Vite-built React UI.
- * Resolves to <pkg>/dist-ui whether this module is loaded from src/ (in-tree
- * dev) or dist/src/ (published tarball), or to a dist-ui copied next to a
- * bundle this module was inlined into.
- */
-const HERE = dirname(fileURLToPath(import.meta.url));
-const DIST_UI = [join(HERE, "dist-ui"), join(HERE, "..", "dist-ui"), join(HERE, "..", "..", "dist-ui")].find(existsSync)
-    ?? join(HERE, "..", "dist-ui");
+import {viewerFiles} from "./viewer.gen";
 
 /**
  * One logical group inside a doc. `http` and `ws` arrays carry the actual
@@ -136,7 +125,7 @@ export class GGApiDocs {
         });
 
         // Bundled UI assets.
-        const assets = loadDistUiAssets();
+        const assets = loadViewerAssets();
         const assetsBase = `${docsPath}/assets`;
         for (const [filename, asset] of assets) {
             server.registerRoute("GET", `${assetsBase}/${filename}`, async (_req, res) => {
@@ -186,7 +175,7 @@ export function specToContractOptions(spec: ApiDocSpec, branding: ApiDocsBrandin
     };
 }
 
-// ── Asset loading from the shipped dist-ui ─────────────────────────────
+// ── Assets of the embedded Vite-built UI ───────────────────────────────
 
 interface VendoredAsset {
     body: Buffer;
@@ -194,15 +183,13 @@ interface VendoredAsset {
 }
 
 let _assetCache: Map<string, VendoredAsset> | undefined;
-function loadDistUiAssets(): Map<string, VendoredAsset> {
+function loadViewerAssets(): Map<string, VendoredAsset> {
     if (_assetCache) return _assetCache;
     const out = new Map<string, VendoredAsset>();
-    const assetsDir = join(DIST_UI, "assets");
-    for (const filename of readdirSync(assetsDir)) {
-        out.set(filename, {
-            body: readFileSync(join(assetsDir, filename)),
-            contentType: contentTypeFor(filename),
-        });
+    for (const [path, body] of Object.entries(viewerFiles)) {
+        if (!path.startsWith("assets/")) continue;
+        const filename = path.slice("assets/".length);
+        out.set(filename, {body: Buffer.from(body), contentType: contentTypeFor(filename)});
     }
     _assetCache = out;
     return out;
@@ -222,13 +209,6 @@ function contentTypeFor(filename: string): string {
 
 // ── Shell HTML — derived from the Vite-built index.html with a few rewrites ──
 
-let _shellTemplate: string | undefined;
-function loadShellTemplate(): string {
-    if (_shellTemplate) return _shellTemplate;
-    _shellTemplate = readFileSync(join(DIST_UI, "index.html"), "utf-8");
-    return _shellTemplate;
-}
-
 /**
  * Adapt the Vite-built index.html for the runtime mount path. Vite is
  * configured with `base: "./"` so its index.html uses relative `./assets/...`
@@ -241,7 +221,7 @@ function loadShellTemplate(): string {
  * knows which doc URLs to fetch and what to put in the dropdown.
  */
 function buildShellHtml(docsPath: string, docs: readonly ApiDocSpec[]): string {
-    const template = loadShellTemplate();
+    const template = viewerFiles["index.html"];
     const rewritten = template.replace(/(src|href)="(\.\/|\/)assets\//g, `$1="${docsPath}/assets/`);
     const config: ApiDocsConfig = {
         docs: docs.map(d => ({

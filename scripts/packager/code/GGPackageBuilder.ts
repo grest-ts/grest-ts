@@ -368,10 +368,6 @@ export class GGPackageBuilder {
             files.push("codegen")
         }
 
-        if (pkg.config.extraFiles) {
-            files.push(...pkg.config.extraFiles)
-        }
-
         return files
     }
 
