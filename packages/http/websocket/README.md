@@ -464,6 +464,24 @@ protected compose(): void {
 `.wsRaw(schema, handler)` registers byte-stream sockets (see "Byte-stream sockets"). Both
 chain off the same `GGHttp` instance as `.http(...)`.
 
+### Broadcasting
+
+`GGSocketBroadcast` fans one `serverToClient` message out to every joined connection, with an
+optional per-connection snapshot sent first:
+
+```typescript
+const orderEvents = new GGSocketBroadcast(OrderEventsSocket)
+
+new GGHttp(httpServer)
+    .ws(OrderEventsSocket, (incoming, outgoing) => incoming.on({
+        requestSnapshot: () => orderEvents.join(outgoing, async o => o.onSnapshot({orders: await orders.list()})),
+    }))
+
+orderEvents.out.onOrder({order})   // every joined connection
+```
+
+See [Broadcast](./README-broadcast.md) for the snapshot + delta pattern and its ordering guarantees.
+
 ## Client
 
 ### Typed Client via `createClient()`
