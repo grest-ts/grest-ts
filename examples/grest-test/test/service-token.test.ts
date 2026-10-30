@@ -13,7 +13,14 @@ describe("service token: target mocked, no authorization server", () => {
             .toEqual("mocked")
     })
 
-    test("a test's own mock of the token call replaces the placeholder", async () => {
+    test("a long-lived token one test mocked...", async () => {
+        await callOn(ServiceTokenCallerApi).callTarget()
+            .with(GGOAuthServiceApi.mock.token.andReturn({token: "long-lived", expiresAt: Date.now() + 3600_000}))
+            .with(ServiceTokenApi.mock.whoami.andReturn("mocked"))
+            .toEqual("mocked")
+    })
+
+    test("...isn't reused by the next: its own mock of the token call answers", async () => {
         await callOn(ServiceTokenCallerApi).callTarget()
             .with(GGOAuthServiceApi.mock.token.andReturn(new FORBIDDEN()).times(1))
             .with(ServiceTokenApi.mock.whoami.andReturn("mocked").times(0))

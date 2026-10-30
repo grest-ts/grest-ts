@@ -420,7 +420,7 @@ test("spy — call through but validate", async () => {
 - `spyOn(S).method` — calls real method but validates input/output.
 - `.responseToMatchObject(...)` — on a spyOn interceptor, validates the real return value.
 - A mock is active while its action runs — any call to that method in that window hits it, including from parallel requests. Unmocked `@mockable` calls run for real.
-- `.with(interceptor)` accepts a single interceptor or an array of interceptors.
+- `.with(a, b, …)` takes one or more interceptors as separate arguments (not an array); calls can also be chained.
 
 ### @testable — call any class directly from tests
 

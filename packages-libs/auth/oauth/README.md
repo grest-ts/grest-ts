@@ -136,6 +136,8 @@ With `@grest-ts/oauth` installed, `GGTest` makes service-token calls work withou
   never reused). A mocked API accepts it (`OtherApi.mock.x` never checks credentials); a real one refuses it.
 - **A test mocks `GGOAuthServiceApi.token`/`exchange` itself:** that mock answers while it is active.
 
+Cached service tokens are dropped before each test, so a token from one test never answers the next.
+
 ### Protected resources (MCP)
 
 `protect(server, resource, path, handler)` puts `path` behind the resource's token. It also
