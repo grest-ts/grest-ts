@@ -340,6 +340,7 @@ export class GGTestRunner {
 
             this.globalRuntimes.length = 0
             this.hooks.clear()
+            // Only after the afterAll hooks cleaned up: a teardown that threw keeps it, so no later runner gets leftovers.
             if (this.reusableNumber !== undefined) reusableNumbersInUse.delete(this.reusableNumber)
         });
     }

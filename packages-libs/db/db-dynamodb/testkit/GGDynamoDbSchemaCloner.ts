@@ -31,7 +31,7 @@ export interface GGDynamoDbProvisionOptions {
     setup: GGDynamoDbSetupFn
 }
 
-const cleared = new Set<string>()
+const cleared = new Map<string, Promise<void>>()
 
 export class GGDynamoDbSchemaCloner {
 
@@ -65,11 +65,15 @@ export class GGDynamoDbSchemaCloner {
         const ops = new GGDynamoDbTableOperations(connection)
         try {
             // The database is reused across runs: clear what a crashed run left, once, before any config in this
-            // process has provisioned into it (configs sharing a key share the database).
-            if (!cleared.has(accessKeyId)) {
-                cleared.add(accessKeyId)
-                await ops.dropAllTables()
+            // process provisions into it (configs sharing a key share the database, and provision in parallel).
+            const db = `${host.endpoint}|${host.region}|${accessKeyId}`
+            let clearing = cleared.get(db)
+            if (!clearing) {
+                clearing = ops.dropAllTables()
+                cleared.set(db, clearing)
+                clearing.catch(() => cleared.delete(db))
             }
+            await clearing
             await opts.setup({client: ops.client, doc: ops.docClient})
         } finally {
             ops.destroy()

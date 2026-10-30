@@ -25,13 +25,22 @@ function claimSlot(): number {
     fs.mkdirSync(dir, {recursive: true});
     // Runs starting together take turns, so none reads a half-written claim or replaces one just made.
     const lock = path.join(dir, "lock");
-    for (let since = Date.now(); ;) {
-        try { fs.mkdirSync(lock); break; } catch (err) {
+    const owner = path.join(lock, "pid");
+    for (;;) {
+        try {
+            fs.mkdirSync(lock);
+            fs.writeFileSync(owner, String(process.pid));
+            break;
+        } catch (err) {
             if ((err as NodeJS.ErrnoException).code !== "EEXIST") throw err;
         }
-        // A holder that died mid-claim never lets go; a claim takes milliseconds.
-        if (Date.now() - since > 10_000) { fs.rmSync(lock, {recursive: true, force: true}); since = Date.now(); }
-        Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 20);
+        // Only a dead holder loses the lock: one that died, or one that never wrote its pid within seconds.
+        let holder = 0;
+        try { holder = Number(fs.readFileSync(owner, "utf8")); } catch { /* not written yet */ }
+        let age = 0;
+        try { age = Date.now() - fs.statSync(lock).mtimeMs; } catch { continue; }
+        if (holder ? !isAlive(holder) : age > 5_000) fs.rmSync(lock, {recursive: true, force: true});
+        else Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 20);
     }
     try {
         for (let slot = 0; ; slot++) {
