@@ -1,14 +1,9 @@
-import {readFileSync, readdirSync, mkdirSync, writeFileSync, copyFileSync, existsSync} from "fs";
+import {mkdirSync, writeFileSync} from "fs";
 import {join, dirname} from "path";
-import {fileURLToPath} from "url";
 import {buildContractDoc} from "./buildContractDoc";
 import {specToContractOptions, validateDocSpecs, type ApiDocSpec, type ApiDocsBranding} from "./GGApiDocs";
 import type {ApiDocsConfig} from "./docTypes";
-
-const HERE = dirname(fileURLToPath(import.meta.url));
-const DIST_UI = existsSync(join(HERE, "..", "dist-ui"))
-    ? join(HERE, "..", "dist-ui")           // src/buildApiDocs.{ts,js}
-    : join(HERE, "..", "..", "dist-ui");    // dist/src/buildApiDocs.js
+import {viewerFiles} from "./viewer.gen";
 
 export interface BuildApiDocsOptions {
     /** Output directory. Created if missing; existing files overwritten. */
@@ -51,12 +46,11 @@ export async function buildApiDocs(options: BuildApiDocsOptions): Promise<void> 
     // Shell HTML (relative URLs to per-doc JSONs).
     writeFileSync(join(outDir, "index.html"), buildStaticShellHtml(docs));
 
-    // Assets — copy the Vite build output verbatim
-    const srcAssets = join(DIST_UI, "assets");
-    const dstAssets = join(outDir, "assets");
-    mkdirSync(dstAssets, {recursive: true});
-    for (const filename of readdirSync(srcAssets)) {
-        copyFileSync(join(srcAssets, filename), join(dstAssets, filename));
+    // Assets — the Vite build output verbatim
+    for (const [path, body] of Object.entries(viewerFiles)) {
+        if (!path.startsWith("assets/")) continue;
+        mkdirSync(dirname(join(outDir, path)), {recursive: true});
+        writeFileSync(join(outDir, path), body);
     }
 }
 
@@ -67,7 +61,7 @@ export async function buildApiDocs(options: BuildApiDocsOptions): Promise<void> 
  * Vite, so no rewriting is needed.
  */
 function buildStaticShellHtml(docs: readonly ApiDocSpec[]): string {
-    const template = readFileSync(join(DIST_UI, "index.html"), "utf-8");
+    const template = viewerFiles["index.html"];
     const config: ApiDocsConfig = {
         docs: docs.map(d => ({
             slug: d.slug,

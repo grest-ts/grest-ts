@@ -11,7 +11,4 @@ definePackage({
      *  Those are separate peer packages users install if they specifically need
      *  industry-standard spec exports. */
     dependencies: {},
-    /** Ship the Vite-built React UI alongside the source so installs don't
-     *  need to rebuild the bundle. */
-    extraFiles: ["dist-ui"]
 })
