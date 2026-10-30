@@ -7,7 +7,8 @@
  *
  *   npx @grest-ts/discovery-local
  */
-import {GGLog} from "@grest-ts/logger";
+import {GGLog, LogLevel} from "@grest-ts/logger";
+import {GGLoggerConsole} from "@grest-ts/logger-console";
 import {GGLocatorScope} from "@grest-ts/locator";
 import {IPCServer, IPCClient} from "@grest-ts/ipc";
 import {GGLocalDiscoveryServer} from "../local/GGLocalDiscoveryServer";
@@ -52,6 +53,8 @@ async function main(): Promise<void> {
 }
 
 const scope = new GGLocatorScope("discovery-local", undefined, "discovery-local");
+// Every proxied request logs at DEBUG; LOG_LEVEL=DEBUG shows them.
+GGLog.init(scope).addLogger(new GGLoggerConsole({minLevel: process.env.LOG_LEVEL ? undefined : LogLevel.INFO}));
 scope.run(main).catch((err) => {
     GGLog.error("discovery-local", err);
     process.exit(1);

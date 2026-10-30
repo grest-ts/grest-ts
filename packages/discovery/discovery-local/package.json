@@ -64,6 +64,7 @@
     "@grest-ts/ipc": "0.0.100",
     "@grest-ts/locator": "0.0.100",
     "@grest-ts/logger": "0.0.100",
+    "@grest-ts/logger-console": "0.0.100",
     "@grest-ts/schema": "0.0.100"
   },
   "devDependencies": {
