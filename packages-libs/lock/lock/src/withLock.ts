@@ -16,7 +16,10 @@ export interface GGWithLockOptions {
     holdUntil?: number;
 }
 
-/** `BUSY`: someone holds the lock, `fn` never ran. `LOST`: `fn` ran but the lock was lost mid-way. */
+/**
+ * `DONE`: `fn` returned, also after the caller's own `signal` aborted it. `BUSY`: someone holds the lock, `fn` never
+ * ran. `LOST`: `fn` ran but the lock was lost mid-way.
+ */
 export type GGWithLockResult = "DONE" | "BUSY" | "LOST";
 
 /** Unique per process: hostname, pid and a random suffix. */
@@ -25,7 +28,7 @@ export function newLockOwner(): string {
 }
 
 /**
- * Runs `fn` while holding `lockId`, renewing it every `ttlMs / 3`. The lock is lost when a renew fails, or when the
+ * Runs `fn` while holding `lockId`, renewing it every `ttlMs / 3`. Needs a `GGLocatorScope` (e.g. inside a runtime). The lock is lost when a renew fails, or when the
  * last renew that succeeded was sent two thirds of a TTL ago; `fn`'s signal is then aborted, and the lock is not
  * released (someone else may hold it). `fn` must stop at the signal for the lock to mean anything.
  */
@@ -36,6 +39,7 @@ export async function withLock(
     fn: (signal: AbortSignal) => Promise<void>,
 ): Promise<GGWithLockResult> {
     const {owner, ttlMs, signal, holdUntil} = options;
+    const scope = GGLocator.getScope();
     let renewedAt = Date.now();
     if (!await lock.acquire(lockId, owner, ttlMs)) return "BUSY";
     const lost = new AbortController();
@@ -46,10 +50,11 @@ export async function withLock(
         lost.abort();
         clearInterval(heartbeat);
     };
-    const heartbeat = GGLocator.getScope().setInterval(() => {
+    let renewing: Promise<void> | undefined;
+    const heartbeat = scope.setInterval(() => {
         const sentAt = Date.now();
         if (sentAt - renewedAt >= ttlMs * 2 / 3) return lose();
-        lock.renew(lockId, owner, ttlMs).then(ok => {
+        renewing = lock.renew(lockId, owner, ttlMs).then(ok => {
             if (ok) renewedAt = Math.max(renewedAt, sentAt);
             else lose();
         }, err => GGLog.warn(lock, "Lock renew failed", {lockId, owner, err: (err as Error).message}));
@@ -60,12 +65,21 @@ export async function withLock(
         await fn(signal ? AbortSignal.any([signal, lost.signal]) : lost.signal);
         completed = !signal?.aborted;
     } finally {
-        done = true;
         clearInterval(heartbeat);
+        // A renew still in flight would otherwise land after the hold below and shorten it.
+        await renewing;
+        done = true;
         if (!lost.signal.aborted) {
             const holdMs = completed && holdUntil !== undefined ? holdUntil - Date.now() : 0;
-            await (holdMs > 0 ? lock.renew(lockId, owner, holdMs) : lock.release(lockId, owner))
-                .catch(err => GGLog.warn(lock, "Lock release failed", {lockId, owner, err: (err as Error).message}));
+            if (holdMs > 0) {
+                await lock.renew(lockId, owner, holdMs).then(
+                    ok => { if (!ok) GGLog.warn(lock, "Lock hold failed: the lease was already lost", {lockId, owner}); },
+                    err => GGLog.warn(lock, "Lock hold failed", {lockId, owner, err: (err as Error).message}),
+                );
+            } else {
+                await lock.release(lockId, owner)
+                    .catch(err => GGLog.warn(lock, "Lock release failed", {lockId, owner, err: (err as Error).message}));
+            }
         }
     }
     return lost.signal.aborted ? "LOST" : "DONE";

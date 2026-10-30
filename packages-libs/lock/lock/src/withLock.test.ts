@@ -83,4 +83,28 @@ describe('withLock', () => {
         await vi.advanceTimersByTimeAsync(1_000);
         expect(await run).toBe('LOST');
     });
+
+    it('throws before acquiring when there is no GGLocatorScope', async () => {
+        const lock = new GGInstanceLock();
+        await expect(withLock(lock, 'job', {owner: 'a', ttlMs: 3000}, async () => {})).rejects.toThrow(/GGLocatorScope/);
+        expect(await lock.acquire('job', 'b', 3000)).toBe(true);
+    });
+
+    it('lets a renew in flight land before the hold, so it cannot shorten it', async () => {
+        const events: string[] = [];
+        const lock: GGLock = {
+            acquire: async () => true,
+            renew: (_id, _owner, ttlMs) => {
+                events.push(`renew ${ttlMs}`);
+                return new Promise(r => setTimeout(() => { events.push(`renewed ${ttlMs}`); r(true); }, ttlMs === 3000 ? 500 : 0));
+            },
+            release: async () => {},
+        };
+
+        const run = inScope(() => withLock(lock, 'job', {owner: 'a', ttlMs: 3000, holdUntil: Date.now() + 60_000}, () => new Promise(r => setTimeout(r, 1_100))));
+        await vi.advanceTimersByTimeAsync(2_000);
+
+        expect(await run).toBe('DONE');
+        expect(events).toEqual(['renew 3000', 'renewed 3000', `renew ${60_000 - 1_500}`, `renewed ${60_000 - 1_500}`]);
+    });
 });

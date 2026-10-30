@@ -80,7 +80,7 @@ Optional hooks: `rowKey(row)` (required for `item`), `dataSetFinished(report)` a
 
 ### Live Settings
 
-A `GGSetting` with the `IsGGJobSettings` schema overrides `intervalMs`, `limit`, `parallel` and `maxExtraRuns`, and `enabled: false` pauses the job. It is read at the start of every run, so changes need no deploy:
+A `GGSetting` with the `IsGGJobSettings` schema overrides `intervalMs`, `limit`, `parallel` and `maxExtraRuns`, and `enabled: false` pauses the job. It is read at the start of every run, so changes need no deploy. A lowered `intervalMs` on an `exclusive` job applies once the current hold runs out:
 
 ```typescript
 export const MyConfig = GGConfig.define("/my-service/", () => ({

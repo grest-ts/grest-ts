@@ -11,6 +11,7 @@ export interface GGInstanceLockEntry {
  *
  * @example
  * ```typescript
+ * // inside a GGLocatorScope, e.g. runtime code
  * const lock = new GGInstanceLock();
  * await withLock(lock, 'my-task', {owner: newLockOwner(), ttlMs: 30000}, async signal => {
  *     // Do work while holding the lock

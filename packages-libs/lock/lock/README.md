@@ -24,7 +24,7 @@ interface GGLock {
 
 ## withLock
 
-`withLock` acquires, renews every `ttlMs / 3`, and releases, and aborts the work when the lock is lost:
+`withLock` acquires, renews every `ttlMs / 3`, and releases, and aborts the work when the lock is lost. It runs inside a `GGLocatorScope` (any runtime code does):
 
 ```typescript
 import {newLockOwner, withLock} from "@grest-ts/lock"
