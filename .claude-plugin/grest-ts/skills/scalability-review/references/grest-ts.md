@@ -15,8 +15,8 @@ Framework behaviours that work in dev and tests but break at scale or with more 
 - **The select builder allows `exec()` with no limit, and `execOne` doesn't add `LIMIT 1`.** → `.limit(n)` / `.limit1()`. `.limit([offset, n])` is offset paging; prefer keyset (`where id > :last`) for large tables. Use `.forUpdate()` inside `runInTransaction` for read-modify-write.
 
 ## @grest-ts/lock, @grest-ts/job
-- **`GGInstanceLock`, `GGLocatorScopeLock` and `GGJobInstanceLock` are process-local.** With N replicas every instance "holds" the lock, so a `GGJob` runs N times. → `GGJobDynamoDbLock` (`@grest-ts/job-dynamodb`) or another shared-store `GGLock`.
-- **No fencing token.** A holder paused past its TTL keeps working until its next renew (`GGJobRunner` aborts the run's signal then, up to `ttl / 3` later). Work under a lock should be idempotent or written conditionally.
+- **`GGInstanceLock` and `GGLocatorScopeLock` are process-local.** With N replicas every instance "holds" the lock, so a `GGJob` runs N times. → `GGDynamoDbLock` (`@grest-ts/lock-dynamodb`) or another shared-store `GGLock`.
+- **No fencing token.** A holder paused past its TTL keeps working until its next renew (`withLock` aborts the work's signal then, up to `ttl / 3` later). Work under a lock should be idempotent or written conditionally. Flag work under `withLock` that ignores its `signal`.
 - **`GGJob` lock modes put the claiming on the job.** `item`: `getDataSet` must drain itself and `processRow` must re-check its row under the lock. `none`: `processRow` must claim rows itself (a conditional status flip). Flag `none`/`item` jobs whose `processRow` writes unconditionally.
 - **Periodic work on `setInterval` in a multi-instance service runs once per instance.** → a `GGJob` on the runtime's `GGJobRunner`.
 

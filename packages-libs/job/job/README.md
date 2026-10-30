@@ -5,13 +5,9 @@
 
 # @grest-ts/job
 
-Recurring, scheduled batch work over a data set you own: cleanups, reconciliation, backfills, expiry sweeps, an outbox relay. A job runs every `intervalMs`, loads the rows that need work (`getDataSet`) and processes each one (`processRow`). It is safe to run on several instances of the same service.
+Recurring batch work over a data set you own: cleanups, reconciliation, backfills, expiry sweeps, an outbox relay. A job runs every `intervalMs`, loads the rows that need work (`getDataSet`) and processes each one (`processRow`). Instances of a service coordinate through a [`GGLock`](@pkg/lock), so a job is safe to run on several of them.
 
-**This is not a queue.** There is no `enqueue`: the job finds its work by querying state, so a row that is missed or fails is picked up again on the next run. For per-event units of work pushed from elsewhere, use a message queue (e.g. `@grest-ts/events`). [Job processing patterns](./README-patterns.md) maps the patterns and when to move from one to the other.
-
-- **`GGJob<Row>`**: the job. Subclass it and implement `getDataSet` + `processRow`.
-- **`GGJobRunner`**: runs jobs for the lifetime of the runtime. It starts with the runtime and, on teardown, stops new rows, waits for running ones and frees its locks.
-- **`GGJobLock`**: what instances coordinate through. `GGJobInstanceLock` is in-memory (one process); [`@grest-ts/job-dynamodb`](@pkg/job-dynamodb) shares it across instances.
+**This is not a queue.** There is no `enqueue`: a job finds its work by querying state, so a row that is missed or fails is picked up on the next run. For units of work pushed from elsewhere, use a message queue. [Job patterns](./README-patterns.md) covers when to use which.
 
 ## Defining a Job
 
@@ -31,52 +27,48 @@ export class ExpiredSessionsJob extends GGJob<Session> {
         return this.sessions.listExpired(Date.now(), limit)
     }
 
-    async processRow(session: Session): Promise<void> {
+    async processRow(session: Session, signal: AbortSignal): Promise<void> {
         await this.sessions.delete(session.id)
     }
 }
 ```
 
-`name` is the lock id, so keep it stable across deployments.
+`name` is the lock id: keep it stable across deployments. `signal` aborts when the job lost its lock or the runtime is stopping; pass it on to long calls.
 
 ## Wiring in Runtime
 
 ```typescript
 import {GGJobRunner} from "@grest-ts/job"
-import {GGJobDynamoDbLock} from "@grest-ts/job-dynamodb"
+import {GGDynamoDbLock} from "@grest-ts/lock-dynamodb"
 
 class MyRuntime extends GGRuntime {
     protected compose(): void {
         const db = MyConfig.db.newDynamoDb()
 
-        new GGJobRunner({lock: new GGJobDynamoDbLock(db, {tableName: "job-locks"})})
+        new GGJobRunner({lock: new GGDynamoDbLock(db, {tableName: "my-service.locks"})})
             .add(new ExpiredSessionsJob(new SessionTable(db)))
     }
 }
 ```
 
-Use `new GGJobInstanceLock()` instead when only one instance runs, or in local development.
+The runner starts with the runtime. On teardown it stops new rows, waits for running ones and frees its locks. With a single instance, `new GGInstanceLock()` from `@grest-ts/lock` is enough.
 
 ## Lock Modes
 
 | `lock` | Who runs it | Use when |
 |---|---|---|
-| `exclusive` | One instance at a time runs the whole job, at most once per `intervalMs` across all instances. | The default. The run must not overlap itself. |
-| `item` | Every instance runs the job; each row is locked by `rowKey(row)` before `processRow`. | Many rows, and you want instances to share them. |
-| `none` | Every instance runs the job. `processRow` guards its own rows. | Rows are claimed by the data store itself (e.g. a conditional status flip). |
+| `exclusive` | One instance at a time, at most once per `intervalMs` across all of them. | The default. The run must not overlap itself. |
+| `item` | Every instance; each row is locked by `rowKey(row)` before `processRow`. | Many rows, and instances should share them. |
+| `none` | Every instance. `processRow` guards its own rows. | The data store claims rows itself (e.g. a conditional status flip). |
 
-With `item`, `getDataSet` must drain itself (a processed row must drop out of it), and `processRow` must re-check its row: it was read before another instance may have finished it.
-
-An `exclusive` job asks whether it is due every `checkEveryMs` (default `intervalMs / 10`, within 60 s–15 min), so when the instance that ran it stops, another one runs it when it is next due.
+An `exclusive` run that finishes keeps its lock until the next run is due (`release({until})`), and every instance checks every `checkEveryMs` whether it can take it. With `item`, `getDataSet` must drain itself (a processed row drops out of it), and `processRow` must re-check its row: another instance may have finished it after it was read.
 
 ## Configuration
 
-| Field | Default | Description |
+| Field | Default | |
 |---|---|---|
-| `name` | | Lock id; stable across deployments |
-| `lock` | | `exclusive`, `item` or `none` |
-| `intervalMs` | | Time between runs |
-| `timeoutMs` | | Lock TTL, renewed every `timeoutMs / 3` while the run (or row) is alive. A run still going past it is logged. |
+| `name`, `lock`, `intervalMs` | | See above |
+| `timeoutMs` | | Lock TTL, renewed while the run (or row) is alive. A run still going past it is logged. |
 | `limit` | `500` | Rows per batch, passed to `getDataSet` |
 | `parallel` | `1` | Rows processed concurrently |
 | `maxExtraRuns` | `0` | Further batches in the same run while a batch comes back full |
@@ -84,15 +76,13 @@ An `exclusive` job asks whether it is due every `checkEveryMs` (default `interva
 | `checkEveryMs` | `intervalMs / 10`, 60 s–15 min | How often an `exclusive` job checks whether it is due |
 | `settings` | | Live overrides, see below |
 
-Optional hooks on `GGJob`: `rowKey(row)` (required for `item`), `dataSetFinished(report)` after each batch, `describeRow(row)` for logs.
+Optional hooks: `rowKey(row)` (required for `item`), `dataSetFinished(report)` after each batch, `describeRow(row)` for logs.
 
 ### Live Settings
 
-Pass a `GGSetting` with the `IsGGJobSettings` schema to change a job without a deploy. It is read at the start of every run, and its fields override the configured ones:
+A `GGSetting` with the `IsGGJobSettings` schema overrides `intervalMs`, `limit`, `parallel` and `maxExtraRuns`, and `enabled: false` pauses the job. It is read at the start of every run, so changes need no deploy:
 
 ```typescript
-import {IsGGJobSettings} from "@grest-ts/job"
-
 export const MyConfig = GGConfig.define("/my-service/", () => ({
     expiredSessionsJob: new GGSetting("jobs/expired-sessions", IsGGJobSettings, {}, "Expired sessions job overrides"),
 }))
@@ -100,32 +90,15 @@ export const MyConfig = GGConfig.define("/my-service/", () => ({
 super({name: "expired-sessions", lock: "exclusive", intervalMs: 10 * 60_000, timeoutMs: 60_000, settings: MyConfig.expiredSessionsJob})
 ```
 
-| Field | Effect |
-|---|---|
-| `enabled` | `false` skips every run until it is set back |
-| `intervalMs`, `limit`, `parallel`, `maxExtraRuns` | Replace the configured value |
+## Failures
 
-## Failures and Shutdown
-
-- A row that throws is logged and counted. The rest of the batch still runs, and no extra batch follows.
-- A data set that fails to load fails the run, which is logged. An `exclusive` run that failed records no last run, so it runs again at the next check.
-- In `item` mode, a row whose lock another instance holds is skipped (`report.skipped`). A batch of only skipped rows gets no extra batch, since that would read them again.
-- When the lock is lost (a renew fails because the lease expired or another owner holds it, or no renew has succeeded for two thirds of `timeoutMs`), the run's `AbortSignal` fires and rows not yet started are skipped. A lost lock is never released, and an `item` row whose lock was lost counts as failed.
-- On teardown the runner aborts the signal and waits for running rows. An interrupted `exclusive` run records no last run, so another instance picks it up straight away.
-
-`processRow(row, signal)` gets that signal; pass it on to long calls.
+- A row that throws is logged and counted; the rest of the batch still runs, and no extra batch follows.
+- A data set that fails to load fails the run. An `exclusive` run that failed or was stopped holds no lock afterwards, so the next check runs it again.
+- When the lock is lost, the run's signal fires and rows not yet started are skipped (see `withLock` in [`@grest-ts/lock`](@pkg/lock)). An `item` row whose lock was lost counts as failed; one whose lock another instance holds is skipped (`report.skipped`).
 
 ## Metrics
 
-Recorded when the runtime has a `GGMetricsLoader`, labelled by `job`:
-
-| Metric | Type |
-|---|---|
-| `/job/runs_total` | counter |
-| `/job/run_duration_ms` | counter |
-| `/job/rows_total` (`result`: `OK` / `ERROR`) | counter |
-| `/job/rows_in_flight` | gauge |
-| `/job/lock_lost_total` | counter |
+Recorded when the runtime has a `GGMetricsLoader`, labelled by `job`: `/job/runs_total`, `/job/run_duration_ms`, `/job/rows_total` (`result`: `OK` / `ERROR`), `/job/rows_in_flight`, `/job/lock_lost_total`.
 
 ## Testing
 
@@ -136,12 +109,3 @@ import {runJobOnce} from "@grest-ts/job/testkit"
 
 const {rows, errors} = await runJobOnce(new ExpiredSessionsJob(table))
 ```
-
-## Writing a Lock
-
-A `GGJobLock` is a `GGLock` (see [`@grest-ts/lock`](@pkg/lock)) with two extras for `exclusive` jobs:
-
-- `acquire(id, owner, ttlMs, lastRunAtMost?)` succeeds only when no live lock holds `id` and, with `lastRunAtMost`, when the recorded last run started at or before it.
-- `release(id, owner, ranAt?)` records `ranAt` as the last run; without it, the lock is dropped entirely.
-
-Both must be atomic, and `renew` / `release` must do nothing unless `owner` holds the lock.

@@ -43,6 +43,15 @@ export interface GGLock {
      *
      * @param lockId - The lock to release
      * @param owner - The holder that acquired it
+     * @param options - `until` keeps the lock taken, by no owner, until that time
      */
-    release(lockId: string, owner: string): Promise<void>;
+    release(lockId: string, owner: string, options?: GGLockReleaseOptions): Promise<void>;
+}
+
+export interface GGLockReleaseOptions {
+    /**
+     * Epoch ms. The lock stays taken, by no owner, until then: nobody can acquire it before. A cooldown, e.g. a job
+     * that must not run again before its next interval. In the past or omitted, the lock is free straight away.
+     */
+    until?: number;
 }

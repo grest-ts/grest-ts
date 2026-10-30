@@ -10,7 +10,7 @@ Thin wrapper around the [AWS SDK v3 DynamoDB client](https://github.com/aws/aws-
 The package gives you three layers:
 
 - **`GGDynamoDbConfig`** — config wrapper. Defines the `GGResource` (region/endpoint) and `GGSecret` (credentials) keys for one DynamoDB connection. Use inside `GGConfig.define()`.
-- **`GGDynamoDb`** — the connection. Owns the SDK client, exposes raw `get` / `put` / `query` / `queryPage` / `scan` / `scanPage` / `delete` primitives plus a conditional-put helper.
+- **`GGDynamoDb`** — the connection. Owns the SDK client, exposes raw `get` / `put` / `query` / `queryPage` / `scan` / `scanPage` / `delete` primitives plus conditional put and delete helpers.
 - **`GGDynamoDbTable<T, PK>`** — schema-bound table gateway. Validates against a `GGSchema` on every write. Subclass it to add typed helpers for an entity (e.g. `getByOrgId`).
 
 ## Defining the Config
@@ -108,6 +108,9 @@ const rows = await db.query<UserRow>(
 
 // DELETE
 await db.delete("users", { userId: "u_123" })
+
+// Conditional DELETE — returns false if the condition fails
+await db.deleteConditional("users", { userId: "u_123" }, "#v = :expected", { ":expected": 2 }, { "#v": "version" })
 
 // SCAN — small tables / admin only
 const all = await db.scan<UserRow>("users")

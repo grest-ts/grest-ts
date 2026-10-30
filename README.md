@@ -660,9 +660,9 @@ Many packages provide testkit utilities making testing easier. These are
 
 | Package                                                      | Purpose                                                              |
 |--------------------------------------------------------------|----------------------------------------------------------------------|
-| [`@grest-ts/job`](./packages-libs/job/job)                   | Recurring batch jobs that are safe to run on several instances       |
-| [`@grest-ts/job-dynamodb`](./packages-libs/job/job-dynamodb) | DynamoDB lock for `@grest-ts/job`                                    |
-| [`@grest-ts/lock`](./packages-libs/lock/lock)                | Lease lock interface (`GGLock`) and in-memory implementations        |
+| [`@grest-ts/job`](./packages-libs/job/job)                     | Recurring batch jobs that are safe to run on several instances       |
+| [`@grest-ts/lock`](./packages-libs/lock/lock)                  | Lease locks (`GGLock`, `withLock`) and in-memory implementations     |
+| [`@grest-ts/lock-dynamodb`](./packages-libs/lock/lock-dynamodb) | `GGLock` on DynamoDB, shared across instances                        |
 
 ### Files (All optional)
 

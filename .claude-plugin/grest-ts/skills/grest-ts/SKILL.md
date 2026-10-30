@@ -664,9 +664,9 @@ Read these only when you need package-specific detail (exact API, options, advan
 - **@grest-ts/http-file** — `packages/http-file/README.md`
 - **@grest-ts/ipc** — `packages/ipc/README.md`
 - **@grest-ts/job** — `packages/job/README-patterns.md`, `packages/job/README.md`
-- **@grest-ts/job-dynamodb** — `packages/job-dynamodb/README.md`
 - **@grest-ts/locator** — `packages/locator/README.md`
 - **@grest-ts/lock** — `packages/lock/README.md`
+- **@grest-ts/lock-dynamodb** — `packages/lock-dynamodb/README.md`
 - **@grest-ts/logger** — `packages/logger/README-extending.md`, `packages/logger/README-testkit.md`, `packages/logger/README-usage.md`, `packages/logger/README.md`
 - **@grest-ts/logger-console** — `packages/logger-console/README.md`
 - **@grest-ts/metrics** — `packages/metrics/README-extending.md`, `packages/metrics/README-testkit.md`, `packages/metrics/README-usage.md`, `packages/metrics/README.md`

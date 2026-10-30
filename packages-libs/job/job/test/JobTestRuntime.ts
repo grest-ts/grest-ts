@@ -1,6 +1,7 @@
 import {GGRuntime} from "@grest-ts/runtime"
 import {GGConfig, GGConfigLocator, GGConfigStoreLocal, GGSetting} from "@grest-ts/config"
-import {GGJob, GGJobInstanceLock, GGJobRunner, IsGGJobSettings} from "@grest-ts/job"
+import {GGInstanceLock} from "@grest-ts/lock"
+import {GGJob, GGJobRunner, IsGGJobSettings} from "@grest-ts/job"
 
 export const JobTestConfig = GGConfig.define("/job_test/", () => ({
     counting: new GGSetting("counting", IsGGJobSettings, {}, "Overrides for the counting job"),
@@ -28,7 +29,7 @@ export class JobTestRuntime extends GGRuntime {
     protected compose(): void {
         new GGConfigLocator(JobTestConfig)
             .add(GGSetting, new GGConfigStoreLocal(JobTestConfig, {counting: {}}))
-        new GGJobRunner({lock: new GGJobInstanceLock()}).add(new CountingJob())
+        new GGJobRunner({lock: new GGInstanceLock()}).add(new CountingJob())
     }
 }
 

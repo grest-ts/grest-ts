@@ -1,10 +1,8 @@
-import {hostname} from "node:os"
-import {randomUUID} from "node:crypto"
 import {GGLocator, GGLocatorKey, GGLocatorServiceType, type GGLocatorScope} from "@grest-ts/locator"
 import {GGLog} from "@grest-ts/logger"
 import {GG_METRICS} from "@grest-ts/metrics"
+import {type GGLock, type GGWithLockResult, newLockOwner, withLock} from "@grest-ts/lock"
 import type {GGJob} from "./GGJob"
-import type {GGJobLock} from "./GGJobLock"
 import {GGJobMetrics} from "./GGJobMetrics"
 
 const GG_JOB_RUNNER = new GGLocatorKey<GGJobRunner>("GGJobRunner")
@@ -15,8 +13,8 @@ const MAX_CHECK_EVERY_MS = 15 * 60_000
 const WARN_RATIO = 0.7
 
 export interface GGJobRunnerOptions {
-    lock: GGJobLock
-    /** Unique per process. */
+    lock: GGLock
+    /** Unique per process. Default `newLockOwner()`. */
     owner?: string
 }
 
@@ -24,7 +22,7 @@ export interface GGJobRunnerOptions {
 export class GGJobRunner {
 
     readonly owner: string
-    readonly lock: GGJobLock
+    readonly lock: GGLock
     readonly scope: GGLocatorScope
 
     private readonly loops: JobLoop[] = []
@@ -32,7 +30,7 @@ export class GGJobRunner {
     private stopped = false
 
     constructor(options: GGJobRunnerOptions) {
-        this.owner = options.owner ?? `${hostname()}-${process.pid}-${randomUUID().slice(0, 8)}`
+        this.owner = options.owner ?? newLockOwner()
         this.lock = options.lock
         this.scope = GGLocator.getScope()
         this.scope.setWithLifecycle(GG_JOB_RUNNER, this, {
@@ -148,13 +146,14 @@ class JobLoop {
         }
         try {
             if (lock === "exclusive") {
-                // A tenth of a check of slack, for clock skew between instances: a check that finds the run a moment
-                // short of due must not push it a whole check back.
-                const due = {lastRunAtMost: startedAt - config.intervalMs + config.checkEveryMs / 10, ranAt: startedAt}
+                // A finished run holds the lock until the next one is due, so instances run it once per interval
+                // between them. A tenth of a check of slack, for clock skew between instances: a check that finds
+                // the run a moment short of due must not push it a whole check back.
+                const holdUntil = startedAt + config.intervalMs - config.checkEveryMs / 10
                 await this.withLock(name, signal, s => {
                     GGLog.info(this.job, "Job run", {job: name, owner: this.runner.owner})
                     return run(s)
-                }, due)
+                }, holdUntil)
             } else {
                 await run(signal)
             }
@@ -163,52 +162,11 @@ class JobLoop {
         }
     }
 
-    /**
-     * Lost-lock and stop both abort `fn`'s signal. A lock is lost when a renew fails, or when the last renew that
-     * succeeded was sent two thirds of a TTL ago: the next tick would come too late. A lost lock is never released.
-     */
-    private async withLock(
-        id: string,
-        parent: AbortSignal,
-        fn: (signal: AbortSignal) => Promise<void>,
-        due?: {lastRunAtMost: number, ranAt: number},
-    ): Promise<"OK" | "SKIPPED" | "LOST"> {
-        const {lock, owner, scope} = this.runner
-        const {name, timeoutMs: ttl} = this.job.config
-        let renewedAt = Date.now()
-        if (!await lock.acquire(id, owner, ttl, due?.lastRunAtMost)) return "SKIPPED"
-        const lost = new AbortController()
-        let done = false
-        const lose = () => {
-            if (done || lost.signal.aborted) return
-            GGLog.warn(this.job, "Lost job lock, aborting", {job: name, id})
-            metric(() => GGJobMetrics.lockLost.inc(1, {job: name}))
-            lost.abort()
-            clearInterval(heartbeat)
-        }
-        const heartbeat = scope.setInterval(() => {
-            const sentAt = Date.now()
-            if (sentAt - renewedAt >= ttl * 2 / 3) return lose()
-            lock.renew(id, owner, ttl).then(ok => {
-                if (ok) renewedAt = Math.max(renewedAt, sentAt)
-                else lose()
-            }, err => GGLog.warn(this.job, "Job lock heartbeat failed", {job: name, id, err: (err as Error).message}))
-        }, ttl / 3)
-        heartbeat.unref()
-        let completed = false
-        try {
-            await fn(AbortSignal.any([parent, lost.signal]))
-            completed = true
-        } finally {
-            done = true
-            clearInterval(heartbeat)
-            if (!lost.signal.aborted) {
-                // A run that was interrupted or threw records no last run, so it is picked up again at the next check.
-                await lock.release(id, owner, completed && !parent.aborted ? due?.ranAt : undefined)
-                    .catch(err => GGLog.warn(this.job, "Job lock release failed", {job: name, id, err: (err as Error).message}))
-            }
-        }
-        return lost.signal.aborted ? "LOST" : "OK"
+    private async withLock(id: string, signal: AbortSignal, fn: (signal: AbortSignal) => Promise<void>, holdUntil?: number): Promise<GGWithLockResult> {
+        const {lock, owner} = this.runner
+        const result = await withLock(lock, id, {owner, ttlMs: this.job.config.timeoutMs, signal, holdUntil}, fn)
+        if (result === "LOST") metric(() => GGJobMetrics.lockLost.inc(1, {job: this.job.config.name}))
+        return result
     }
 
     private async runBatches({limit, parallel, maxExtraRuns}: RunConfig, signal: AbortSignal): Promise<void> {
@@ -246,7 +204,7 @@ class JobLoop {
         try {
             if (this.job.config.lock === "item") {
                 const result = await this.withLock(`${job}#${this.job.rowKey!(row)}`, signal, s => this.job.processRow(row, s))
-                if (result === "SKIPPED") return result
+                if (result === "BUSY") return "SKIPPED"
                 if (result === "LOST") throw new Error("Lost the row's lock")
             } else {
                 await this.job.processRow(row, signal)

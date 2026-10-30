@@ -1,10 +1,10 @@
-import {GGLock} from "../GGLock";
+import {GGLock, GGLockReleaseOptions} from "../GGLock";
 import {GGLocator, GGLocatorKey} from "@grest-ts/locator";
 
 export const GGContextLockStorageKey = new GGLocatorKey<Map<string, LockEntry>>("GGLocatorScopeLock");
 
 interface LockEntry {
-    owner: string;
+    owner?: string;
     expiresAt: number;
 }
 
@@ -88,9 +88,14 @@ export class GGLocatorScopeLock implements GGLock {
         return true;
     }
 
-    async release(lockId: string, owner: string): Promise<void> {
+    async release(lockId: string, owner: string, options?: GGLockReleaseOptions): Promise<void> {
         const storage = this.getStorage();
-        if (storage.get(lockId)?.owner === owner) {
+        if (storage.get(lockId)?.owner !== owner) {
+            return;
+        }
+        if (options?.until !== undefined && options.until > Date.now()) {
+            storage.set(lockId, {expiresAt: options.until});
+        } else {
             storage.delete(lockId);
         }
     }

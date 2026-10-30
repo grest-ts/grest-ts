@@ -157,4 +157,23 @@ describe('GGInstanceLock', () => {
             expect(await lock.acquire('test-lock', 'c', 5000)).toBe(false);
         });
     });
+
+    describe('release until', () => {
+        it('should keep the lock taken, by no owner, until the given time', async () => {
+            await lock.acquire('test-lock', 'a', 5000);
+            await lock.release('test-lock', 'a', {until: Date.now() + 50});
+
+            expect(await lock.acquire('test-lock', 'b', 5000)).toBe(false);
+            expect(await lock.renew('test-lock', 'a', 5000)).toBe(false);
+
+            await new Promise(r => setTimeout(r, 100));
+            expect(await lock.acquire('test-lock', 'b', 5000)).toBe(true);
+        });
+
+        it('should free the lock straight away when until is in the past', async () => {
+            await lock.acquire('test-lock', 'a', 5000);
+            await lock.release('test-lock', 'a', {until: Date.now() - 1});
+            expect(await lock.acquire('test-lock', 'b', 5000)).toBe(true);
+        });
+    });
 });

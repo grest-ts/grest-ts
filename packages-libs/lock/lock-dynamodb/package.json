@@ -1,10 +1,10 @@
 {
   "//": "THIS FILE IS GENERATED - DO NOT EDIT",
-  "name": "@grest-ts/job-dynamodb",
+  "name": "@grest-ts/lock-dynamodb",
   "version": "0.0.100",
   "type": "module",
   "license": "MIT",
-  "description": "DynamoDB lock for @grest-ts/job",
+  "description": "DynamoDB implementation of GGLock, for locks shared across instances",
   "exports": {
     ".": {
       "types": "./src/index-node.ts",
@@ -26,9 +26,9 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/grest-ts/grest-ts.git",
-    "directory": "packages-libs/job/job-dynamodb"
+    "directory": "packages-libs/lock/lock-dynamodb"
   },
-  "homepage": "https://grest-ts.com/packages/job-dynamodb",
+  "homepage": "https://grest-ts.com/packages/lock-dynamodb",
   "bugs": {
     "url": "https://github.com/grest-ts/grest-ts/issues"
   },
@@ -39,19 +39,20 @@
     "api",
     "microservices",
     "testing",
-    "job",
+    "distributed-lock",
+    "locking",
     "dynamodb",
-    "aws",
-    "distributed-lock"
+    "aws"
   ],
   "engines": {
     "node": ">=24"
   },
   "dependencies": {
-    "@aws-sdk/client-dynamodb": "^3.750.0",
-    "@aws-sdk/lib-dynamodb": "^3.750.0"
+    "@aws-sdk/client-dynamodb": "^3.750.0"
   },
   "peerDependencies": {
-    "@grest-ts/job": "0.0.100"
+    "@grest-ts/db-dynamodb": "0.0.100",
+    "@grest-ts/lock": "0.0.100",
+    "@grest-ts/schema": "0.0.100"
   }
 }

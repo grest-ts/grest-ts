@@ -3,11 +3,12 @@ import {GGLocatorScope} from "@grest-ts/locator"
 import {GGLog} from "@grest-ts/logger"
 import {sleep} from "@grest-ts/common"
 import {GGMetricsLoader, GG_METRICS} from "@grest-ts/metrics"
-import {GGJob, GGJobInstanceLock, GGJobMetrics, GGJobRunner, type GGJobConfig, type GGJobLock} from "@grest-ts/job"
+import {GGInstanceLock, type GGLock} from "@grest-ts/lock"
+import {GGJob, GGJobMetrics, GGJobRunner, type GGJobConfig} from "@grest-ts/job"
 import {runJobOnce} from "@grest-ts/job/testkit"
 
 // Each runner gets its own scope, as each instance has its own runtime; sharing one lock makes them one fleet.
-function newRunner(lock: GGJobLock, owner: string): GGJobRunner {
+function newRunner(lock: GGLock, owner: string): GGJobRunner {
     const scope = new GGLocatorScope(owner, undefined, owner)
     GGLog.init(scope)
     return scope.run(() => {
@@ -17,7 +18,7 @@ function newRunner(lock: GGJobLock, owner: string): GGJobRunner {
     })
 }
 
-function stubLock(overrides: Partial<GGJobLock> = {}): GGJobLock {
+function stubLock(overrides: Partial<GGLock> = {}): GGLock {
     return {acquire: async () => true, renew: async () => true, release: async () => {}, ...overrides}
 }
 
@@ -71,7 +72,7 @@ describe("GGJobRunner", () => {
     afterEach(() => { vi.useRealTimers() })
 
     test("exclusive: two instances run the job once per interval between them", async () => {
-        const lock = new GGJobInstanceLock()
+        const lock = new GGInstanceLock()
         const a = new TestJob({startupDelayMs: 1_000})
         const b = new TestJob({startupDelayMs: 1_500})
         newRunner(lock, "a").add(a).start()
@@ -83,7 +84,7 @@ describe("GGJobRunner", () => {
     })
 
     test("exclusive: an hourly job asks for its lock every 6 min by default", async () => {
-        const lock = new GGJobInstanceLock()
+        const lock = new GGInstanceLock()
         const acquire = vi.spyOn(lock, "acquire")
         const job = new TestJob({intervalMs: 60 * 60_000, timeoutMs: 60_000, checkEveryMs: undefined})
         newRunner(lock, "a").add(job).start()
@@ -95,7 +96,7 @@ describe("GGJobRunner", () => {
     })
 
     test("exclusive: a slow run on one instance keeps the other out", async () => {
-        const lock = new GGJobInstanceLock()
+        const lock = new GGInstanceLock()
         const slow = async () => sleep(25_000)
         const a = new TestJob({startupDelayMs: 1_000}, undefined, slow)
         const b = new TestJob({startupDelayMs: 1_500}, undefined, slow)
@@ -108,7 +109,7 @@ describe("GGJobRunner", () => {
     })
 
     test("exclusive: when the instance that ran it stops, the other runs it when it is next due", async () => {
-        const lock = new GGJobInstanceLock()
+        const lock = new GGInstanceLock()
         const a = new TestJob({startupDelayMs: 1_000})
         const b = new TestJob({startupDelayMs: 1_500})
         const runnerA = newRunner(lock, "a").add(a)
@@ -125,7 +126,7 @@ describe("GGJobRunner", () => {
     })
 
     test("exclusive: a run interrupted by stop is picked up by the other instance straight away", async () => {
-        const lock = new GGJobInstanceLock()
+        const lock = new GGInstanceLock()
         const a = new TestJob({startupDelayMs: 1_000}, () => ["r1", "r2"], (_row, signal) => new Promise(r => {
             signal.addEventListener("abort", () => r())
             setTimeout(r, 5_000)
@@ -156,7 +157,7 @@ describe("GGJobRunner", () => {
     })
 
     test("item: instances share a draining data set and each row's work runs once", async () => {
-        const lock = new GGJobInstanceLock()
+        const lock = new GGInstanceLock()
         const pending = new Set(["r1", "r2", "r3", "r4", "r5", "r6"])
         const done: string[] = []
         const rows = () => [...pending]
@@ -183,7 +184,7 @@ describe("GGJobRunner", () => {
         const job = new TestJob({lock: "none"}, () => ["bad", "good"], async row => {
             if (row === "bad") throw new Error("boom")
         })
-        newRunner(new GGJobInstanceLock(), "a").add(job).start()
+        newRunner(new GGInstanceLock(), "a").add(job).start()
 
         await vi.advanceTimersByTimeAsync(1_500)
 
@@ -196,7 +197,7 @@ describe("GGJobRunner", () => {
             await sleep(10)
             pending.splice(pending.indexOf(row), 1)
         })
-        newRunner(new GGJobInstanceLock(), "a").add(job).start()
+        newRunner(new GGInstanceLock(), "a").add(job).start()
 
         await vi.advanceTimersByTimeAsync(2_000)
 
@@ -210,7 +211,7 @@ describe("GGJobRunner", () => {
             async getDataSet() { return [] }
             async processRow() {}
         }
-        expect(() => newRunner(new GGJobInstanceLock(), "a").add(new NoKey())).toThrow(/rowKey/)
+        expect(() => newRunner(new GGInstanceLock(), "a").add(new NoKey())).toThrow(/rowKey/)
     })
 
     test("metrics count runs, rows by result and lost locks", async () => {
@@ -248,7 +249,7 @@ describe("GGJobRunner", () => {
     })
 
     test("exclusive: a short interval checked once per interval still runs at most once per interval", async () => {
-        const lock = new GGJobInstanceLock()
+        const lock = new GGInstanceLock()
         const a = new TestJob({intervalMs: 30_000, checkEveryMs: undefined, startupDelayMs: 1_000})
         const b = new TestJob({intervalMs: 30_000, checkEveryMs: undefined, startupDelayMs: 17_000})
         newRunner(lock, "a").add(a).start()
@@ -259,7 +260,7 @@ describe("GGJobRunner", () => {
         expect(a.processed.length + b.processed.length).toBe(1)
     })
 
-    test("exclusive: a data set that fails to load records no last run, so the next check runs it", async () => {
+    test("exclusive: a data set that fails to load releases the lock without a hold, so the next check runs it", async () => {
         const release = vi.fn(async () => {})
         const lock = stubLock({release})
         let fail = true
@@ -275,23 +276,11 @@ describe("GGJobRunner", () => {
         fail = false
         await vi.advanceTimersByTimeAsync(1_000)
         expect(job.processed).toEqual(["row"])
-        expect(release).toHaveBeenLastCalledWith("test", "a", expect.any(Number))
-    })
-
-    test("exclusive: renews that keep failing for two thirds of a TTL count as a lost lock", async () => {
-        const lock = stubLock({renew: async () => { throw new Error("unreachable") }})
-        const job = new TestJob({checkEveryMs: 60_000}, () => ["r1", "r2"], untilAborted)
-        newRunner(lock, "a").add(job).start()
-
-        await vi.advanceTimersByTimeAsync(2_500)
-        expect(job.processed).toEqual([])
-
-        await vi.advanceTimersByTimeAsync(1_000)
-        expect(job.processed).toEqual(["r1"])
+        expect(release).toHaveBeenLastCalledWith("test", "a", {until: expect.any(Number)})
     })
 
     test("item: a row locked by another instance is skipped, not counted, and ends the run's extra batches", async () => {
-        const lock = new GGJobInstanceLock()
+        const lock = new GGInstanceLock()
         await lock.acquire("test#r1", "other", 60_000)
         const getDataSet = vi.fn(() => ["r1"])
         const job = new TestJob({lock: "item", limit: 1, maxExtraRuns: 3}, getDataSet)
@@ -312,7 +301,7 @@ describe("GGJobRunner", () => {
         const job = new BadDescribe({lock: "none"}, () => ["bad", "good"], async row => {
             if (row === "bad") throw new Error("boom")
         })
-        newRunner(new GGJobInstanceLock(), "a").add(job).start()
+        newRunner(new GGInstanceLock(), "a").add(job).start()
 
         await vi.advanceTimersByTimeAsync(1_500)
 

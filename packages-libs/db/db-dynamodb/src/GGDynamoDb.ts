@@ -376,6 +376,32 @@ export class GGDynamoDb {
     }
 
     /**
+     * Conditional delete. Returns true on success, false when the condition
+     * fails. Any other error is rethrown. See `putConditional` for `attributeNames`.
+     */
+    async deleteConditional(
+        table: string,
+        key: Record<string, unknown>,
+        conditionExpression: string,
+        values?: Record<string, unknown>,
+        attributeNames?: Record<string, string>,
+    ): Promise<boolean> {
+        try {
+            await this.getClient().send(new DeleteCommand({
+                TableName: table,
+                Key: key,
+                ConditionExpression: conditionExpression,
+                ...(values && Object.keys(values).length > 0 && {ExpressionAttributeValues: values}),
+                ...(attributeNames && {ExpressionAttributeNames: attributeNames}),
+            }))
+            return true
+        } catch (err) {
+            if ((err as {name?: string}).name === "ConditionalCheckFailedException") return false
+            throw err
+        }
+    }
+
+    /**
      * One page of a query, plus the cursor to continue it. Use this for a
      * listing whose caller pages (an API endpoint, a UI list); use `query`
      * when the caller needs the whole result set.

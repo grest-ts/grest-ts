@@ -47,6 +47,7 @@
     "node": ">=24"
   },
   "peerDependencies": {
-    "@grest-ts/locator": "0.0.100"
+    "@grest-ts/locator": "0.0.100",
+    "@grest-ts/logger": "0.0.100"
   }
 }

@@ -10,9 +10,9 @@ Roughly in priority order.
 
 ## 1. `GGLock`: no fencing token, and leases follow the instance clock
 
-**Where:** `packages-libs/lock/lock/src/GGLock.ts`, `packages-libs/job/job-dynamodb/src/GGJobDynamoDbLock.ts`
+**Where:** `packages-libs/lock/lock/src/GGLock.ts`, `packages-libs/lock/lock/src/withLock.ts`, `packages-libs/lock/lock-dynamodb/src/GGDynamoDbLock.ts`
 
-**Breaks:** the owner stops a holder whose lease expired from renewing or releasing its successor's lock, but nothing stops it from *writing*. A holder paused past its TTL (GC, a blocked event loop) keeps working next to the new holder until it next renews; `GGJobRunner` aborts the run's signal then, up to `ttl / 3` later. Lease expiry compares instance clocks, so clock skew shortens or stretches leases.
+**Breaks:** the owner stops a holder whose lease expired from renewing or releasing its successor's lock, but nothing stops it from *writing*. A holder paused past its TTL (GC, a blocked event loop) keeps working next to the new holder until it next renews; `withLock` aborts the work's signal then, up to `ttl / 3` later. Lease expiry compares instance clocks, so clock skew shortens or stretches leases.
 
 **Fix:**
 - Return a monotonically increasing fencing token per acquire, so callers can use it as a write condition.
