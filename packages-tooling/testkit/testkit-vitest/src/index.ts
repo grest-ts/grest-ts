@@ -28,6 +28,9 @@ import {GGExtensionDiscovery} from "@grest-ts/common";
 
 const scope = new GGLocatorScope("GGTestRoot").enter()
 
+// GGTestRunner.reusableId: unique among concurrent workers, 1..maxWorkers.
+process.env.GG_TEST_WORKER ??= process.env.VITEST_POOL_ID;
+
 GGLog.init();
 GGLog.add(new GGLoggerConsole());
 

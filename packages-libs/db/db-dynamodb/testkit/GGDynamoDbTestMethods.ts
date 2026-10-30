@@ -65,10 +65,10 @@ export class GGDynamoDbTestMethods {
         }
 
         // One database per accessKey, and dynamodb-local keeps a database's threads until it restarts, so the key
-        // repeats run after run: the run's slot, and a group named by worker slot and runner order, never random.
-        const group = options.group === undefined ? defaultGroup(test) : {name: options.group, release: () => {}}
-        const groupName = group.name
-        const accessKeyId = sanitizeAccessKey(`gg-test-${process.env.GG_TEST_SLOT ?? runId}-${groupName}`)
+        // must repeat run after run, never carry the run id.
+        const accessKeyId = sanitizeAccessKey(options.group === undefined
+            ? `gg-test-${test.reusableId}`
+            : `gg-test-${process.env.GG_TEST_SLOT ?? runId}-${options.group}`)
 
         const provisionOpts: GGDynamoDbProvisionOptions = {setup: options.setup}
 
@@ -103,29 +103,11 @@ export class GGDynamoDbTestMethods {
                 await GGTestSharedRef.release(`${this.config.name}:${accessKeyId}`, async () => {
                     await GGDynamoDbSchemaCloner.cleanup(provisionedHost, provisionedAccessKey)
                 })
-                group.release()
             },
         })
 
         return callOn(this.config.token)
     }
-}
-
-const runnerGroups = new WeakMap<object, number>()
-const groupsInUse = new Set<number>()
-
-// Unique among the run's concurrent suites (VITEST_POOL_ID is the worker's slot, and a suite holds its number until
-// its afterAll), and the same small set every run: a worker reuses the numbers its finished suites released.
-function defaultGroup(test: object): {name: string, release: () => void} {
-    let n = runnerGroups.get(test)
-    if (n === undefined) {
-        n = 0
-        while (groupsInUse.has(n)) n++
-        groupsInUse.add(n)
-        runnerGroups.set(test, n)
-    }
-    const held = n
-    return {name: `w${process.env.VITEST_POOL_ID ?? process.pid}n${held}`, release: () => groupsInUse.delete(held)}
 }
 
 function sanitizeAccessKey(s: string): string {

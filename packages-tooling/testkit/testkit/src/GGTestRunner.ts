@@ -42,6 +42,8 @@ export interface GGTestConfig {
     verboseProxy: boolean
 }
 
+const reusableNumbersInUse = new Set<number>();
+
 export class GGTestRunner {
 
     /**
@@ -76,6 +78,8 @@ export class GGTestRunner {
     private readonly extensionInstances = new Map<GGTestComponentType<any>, GGTestComponent>();
 
     private readonly hooks: Map<string, GGTestRunnerHook> = new Map()
+
+    private reusableNumber: number | undefined
 
     constructor(ipcServer: IPCServer, discoveryServer: IGGLocalDiscoveryServer, userConfig?: Partial<GGTestConfig>) {
         this.testId = "t" + Math.random().toString(36).substring(2, 8);
@@ -145,6 +149,21 @@ export class GGTestRunner {
      * Hooks run beforeAll (during start) and afterAll (during teardown).
      * Duplicate registrations with the same keyName are skipped.
      */
+    /**
+     * Unique among the run's concurrent runners, and the same small set of values every run: the run's slot, the
+     * worker, and the lowest number no live runner in this worker holds (released at teardown). For test resources a
+     * backend can't free, such as dynamodb-local's per-key databases.
+     */
+    public get reusableId(): string {
+        if (this.reusableNumber === undefined) {
+            let n = 0;
+            while (reusableNumbersInUse.has(n)) n++;
+            reusableNumbersInUse.add(n);
+            this.reusableNumber = n;
+        }
+        return `s${process.env.GG_TEST_SLOT ?? process.env.GG_TEST_RUN_ID}w${process.env.GG_TEST_WORKER ?? process.pid}n${this.reusableNumber}`;
+    }
+
     public registerHook(hook: GGTestRunnerHook): void {
         if (this.hooks.has(hook.keyName)) {
             GGLog.debug(this, `Hook already registered for ${hook.keyName}, skipping duplicate`);
@@ -321,6 +340,7 @@ export class GGTestRunner {
 
             this.globalRuntimes.length = 0
             this.hooks.clear()
+            if (this.reusableNumber !== undefined) reusableNumbersInUse.delete(this.reusableNumber)
         });
     }
 }
