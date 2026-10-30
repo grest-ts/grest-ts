@@ -171,8 +171,11 @@ export class GGOAuthClient<I = unknown> {
     private async resource(): Promise<string> {
         const resource = this.config.resource
         if (typeof resource !== "function") return resource ?? (await this.discover()).issuer
-        this.resolvedResource ??= resource()
-        this.resolvedResource.catch(() => { this.resolvedResource = undefined })
+        if (!this.resolvedResource) {
+            const lookup = resource()
+            lookup.catch(() => { if (this.resolvedResource === lookup) this.resolvedResource = undefined })
+            this.resolvedResource = lookup
+        }
         return this.resolvedResource
     }
 
