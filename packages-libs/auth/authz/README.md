@@ -34,6 +34,9 @@ effective access  =  grants  ∩  every cap that applies  −  hard noes
 
 ## Vocabulary
 
+Most apps need only principal, resource, action, role and binding. The rest is for denies, AI
+agents and approvals.
+
 The examples use a document platform: tenant `acme` → project → folder → doc.
 
 **Who, what, where**
