@@ -498,7 +498,7 @@
         "implementation": true,
         "npm": true
       },
-      "layer": 2,
+      "layer": 4,
       "color": "#1E3250",
       "category": "core",
       "group": "logger",
@@ -630,7 +630,7 @@
         "implementation": false,
         "npm": true
       },
-      "layer": 3,
+      "layer": 5,
       "color": "#4E79A7",
       "category": "core",
       "group": "schema",
@@ -931,6 +931,10 @@
     {
       "from": "discovery-local",
       "to": "logger"
+    },
+    {
+      "from": "discovery-local",
+      "to": "logger-console"
     },
     {
       "from": "discovery-local",
