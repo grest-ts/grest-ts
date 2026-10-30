@@ -6,6 +6,7 @@ node_modules
 **/*.d.ts.map
 *.tsbuildinfo
 package-lock.json
+!/package-lock.json
 **/dist/
 **/coverage/
 !jest.config.base.js

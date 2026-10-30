@@ -37,5 +37,7 @@ writeFileSync(rootPkgPath, JSON.stringify(rootPkgJson, null, 2) + "\n")
 
 // Regenerate all workspace package.json files to pick up the new version
 execSync("npm run generate", {stdio: "inherit", cwd: ROOT, timeout: 20000})
+// The lockfile records workspace versions too; refresh it so the release commit stays consistent.
+execSync("npm install --package-lock-only --ignore-scripts --no-audit --no-fund", {stdio: "inherit", cwd: ROOT, timeout: 120000})
 
 console.log(`Version: ${oldVersion} -> ${newVersion}`)

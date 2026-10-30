@@ -71,5 +71,34 @@
     "@grest-ts/schema-file": "0.0.100",
     "@grest-ts/testkit": "0.0.100",
     "@grest-ts/websocket": "0.0.100"
+  },
+  "peerDependenciesMeta": {
+    "@grest-ts/config": {
+      "optional": true
+    },
+    "@grest-ts/db-dynamodb": {
+      "optional": true
+    },
+    "@grest-ts/db-mysql": {
+      "optional": true
+    },
+    "@grest-ts/db-postgre": {
+      "optional": true
+    },
+    "@grest-ts/http": {
+      "optional": true
+    },
+    "@grest-ts/job": {
+      "optional": true
+    },
+    "@grest-ts/metrics": {
+      "optional": true
+    },
+    "@grest-ts/schema-file": {
+      "optional": true
+    },
+    "@grest-ts/websocket": {
+      "optional": true
+    }
   }
 }

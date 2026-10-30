@@ -210,6 +210,8 @@ async function buildPackage(name: string, dir: string): Promise<void> {
     copyNonTsAssets(join(dir, "src"), join(dir, "dist", "src"))
 }
 
+const isPublished = (path: string) => !/\.(test|spec)\.ts$|\.tsbuildinfo$/.test(path)
+
 /**
  * Assemble a package's staging directory under root dist/.
  * Copies compiled output + source files, writes rewritten package.json.
@@ -226,7 +228,7 @@ function assembleStaging(name: string, dir: string): void {
     const pkgJson = JSON.parse(readFileSync(join(dir, "package.json"), "utf-8"))
 
     // Copy compiled dist/ folder
-    cpSync(join(dir, "dist"), join(stagingDir, "dist"), {recursive: true})
+    cpSync(join(dir, "dist"), join(stagingDir, "dist"), {recursive: true, filter: isPublished})
 
     // Copy source folders listed in files array (src/, codegen/, bin/)
     // Skip directories that match export subpaths (e.g. "testkit") — the compiled
@@ -239,7 +241,7 @@ function assembleStaging(name: string, dir: string): void {
         if (exportSubpaths.has(entry)) continue
         const srcPath = join(dir, entry)
         if (existsSync(srcPath)) {
-            cpSync(srcPath, join(stagingDir, entry), {recursive: true})
+            cpSync(srcPath, join(stagingDir, entry), {recursive: true, filter: isPublished})
         }
     }
 
