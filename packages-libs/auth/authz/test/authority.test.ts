@@ -33,7 +33,6 @@ const ann: GGAuthzSubject = {type: "user", id: "ann"}
 
 const fail = (p: Promise<unknown>) => p.then(() => undefined, e => e)
 
-
 // GGAuthzAuthority matches @grest-ts/http's handler by shape (src may not depend on http); this keeps the two in step.
 void (authority satisfies GGAuthorityHandler)
 
