@@ -6,7 +6,7 @@ import {IsNumber, IsObject, IsString} from "@grest-ts/schema"
 const ROW_TTL_SEC = 24 * 60 * 60
 const OWNER = {"#owner": "owner"}
 
-export const IsGGDynamoDbLockRow = IsObject({
+const IsGGDynamoDbLockRow = IsObject({
     id: IsString,
     owner: IsString,
     /** Epoch ms. The lock is free from this instant on. */
@@ -14,7 +14,7 @@ export const IsGGDynamoDbLockRow = IsObject({
     /** Epoch seconds, a day past `lockedUntil`: the DynamoDB TTL attribute. */
     expiresAtSec: IsNumber,
 })
-export type GGDynamoDbLockRow = typeof IsGGDynamoDbLockRow.infer
+type GGDynamoDbLockRow = typeof IsGGDynamoDbLockRow.infer
 
 export interface GGDynamoDbLockOptions {
     /** A table created from `GGDynamoDbLock.tableDefinition(tableName)`. */

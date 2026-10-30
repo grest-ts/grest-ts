@@ -1,9 +1,5 @@
 import {GGLock} from "../GGLock";
 
-export interface GGInstanceLockEntry {
-    owner: string;
-    expiresAt: number;
-}
 
 /**
  * In-memory lock for one process: single-instance deployments, development and tests.
@@ -11,17 +7,16 @@ export interface GGInstanceLockEntry {
  *
  * @example
  * ```typescript
- * // inside a GGLocatorScope, e.g. runtime code
  * const lock = new GGInstanceLock();
- * await withLock(lock, 'my-task', {owner: newLockOwner(), ttlMs: 30000}, async signal => {
+ * await withLock(lock, 'my-task', {ttlMs: 30000}, async signal => {
  *     // Do work while holding the lock
  * });
  * ```
  */
 export class GGInstanceLock implements GGLock {
-    private locks?: Map<string, GGInstanceLockEntry>;
+    private locks?: Map<string, {owner: string, expiresAt: number}>;
 
-    protected storage(): Map<string, GGInstanceLockEntry> {
+    protected storage(): Map<string, {owner: string, expiresAt: number}> {
         return this.locks ??= new Map();
     }
 

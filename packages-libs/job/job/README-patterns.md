@@ -33,20 +33,27 @@ Use a message queue when:
 
 Many systems use both: a queue for the hot path, and a job that sweeps for whatever the queue missed.
 
-## Lock Modes as Patterns
+## Heavy Work: a Job Feeds a Queue
 
-| Pattern | `@grest-ts/job` |
-|---|---|
-| One worker, one row at a time (ordered, or a rate-limited API) | `lock: "exclusive"`, `parallel: 1` |
-| One worker, rows concurrently (I/O-bound work) | `lock: "exclusive"`, `parallel: N` |
-| All instances share a large data set | `lock: "item"`: a lock per row |
-| The data store claims rows itself | `lock: "none"`, with a conditional status update in `processRow` |
+A job runs on one instance at a time, so its throughput is one instance's. When there are many items, or each one is slow, keep the job as the collector and move the work to a queue:
 
-`parallel` doubles as a simple rate limit. For a token-bucket limit on an external API, keep `parallel` low and pace inside `processRow`.
+```
+oneInstance job (every interval)                     SQS                consumers (any number)
+getDataSet → rows that need work  ──publish each──▶  queue  ──▶  handler(item): do the work
+processRow → publish, mark the row queued            (retries, DLQ)
+```
+
+- `processRow` publishes the item (e.g. with `@grest-ts/events`), then marks the row as queued, so the next run doesn't publish it again. `getDataSet` skips queued rows, unless they have been queued too long: then the job republishes them, which makes it the safety net for lost messages.
+- Publish before marking: a crash in between publishes twice rather than never. Queues deliver at least once anyway, so handlers must be idempotent.
+- Consumers scale on their own and each message reaches one of them, so there's no contention between instances.
+
+Signs a job needs this: runs take most of their interval (the runner warns past 70% of it), or data sets come back full every run and `maxExtraRuns` isn't catching up.
+
+`parallel` covers I/O-bound work within one run, and doubles as a simple rate limit.
 
 ## Make Rows Safe to Run Twice
 
-A row can be processed twice: a run is stopped mid-row, a lock is lost after a long pause, or `item` mode's re-check races another instance. Make `processRow` idempotent:
+A row can be processed twice: a run is stopped mid-row and picked up again, or a lock is lost after a long pause while the next holder starts. Make every step idempotent:
 
 - write the result conditionally (`putConditional` on a version or status), so a second run is a no-op
 - or record what was done (an id per side effect) and skip it when present
@@ -64,7 +71,7 @@ await db.transaction(async tx => {
 })
 
 class OutboxRelayJob extends GGJob<OutboxRow> {
-    // ...constructor: name "outbox-relay", lock "exclusive", intervalMs 5_000
+    // ...constructor: super({name: "outbox-relay", settings: MyConfig.jobs.outboxRelay})
     getDataSet(limit: number) {
         return this.outbox.listUnsent(limit)
     }
@@ -79,8 +86,5 @@ The relay delivers at least once (a crash between publish and `markSent` publish
 
 ## Outgrowing a Job
 
-Signs it's time for a queue or a workflow engine:
-
-- runs take most of their interval (the runner warns when a run exceeds 70% of it)
-- data sets come back full every run (warned near `limit`), and `maxExtraRuns` isn't catching up
-- the work has many steps with compensation on failure: a workflow engine (e.g. Temporal) models that better than rows with status columns
+- many items or slow items: a job feeding a queue, as above
+- many steps with compensation on failure: a workflow engine (e.g. Temporal) models that better than rows with status columns

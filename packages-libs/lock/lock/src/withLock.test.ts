@@ -84,9 +84,11 @@ describe('withLock', () => {
         expect(await run).toBe('LOST');
     });
 
-    it('throws before acquiring when there is no GGLocatorScope', async () => {
+    it('works outside a GGLocatorScope, with a per-process owner by default', async () => {
         const lock = new GGInstanceLock();
-        await expect(withLock(lock, 'job', {owner: 'a', ttlMs: 3000}, async () => {})).rejects.toThrow(/GGLocatorScope/);
+        expect(await withLock(lock, 'job', {ttlMs: 3000}, async () => {
+            expect(await lock.acquire('job', 'b', 3000)).toBe(false);
+        })).toBe('DONE');
         expect(await lock.acquire('job', 'b', 3000)).toBe(true);
     });
 

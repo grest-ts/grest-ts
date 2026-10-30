@@ -20,7 +20,7 @@ class MyRuntime extends GGRuntime {
 }
 ```
 
-It writes through the `GGDynamoDb` from [`@grest-ts/db-dynamodb`](@pkg/db-dynamodb), so it follows that connection's config, and each row is validated against `IsGGDynamoDbLockRow`.
+It writes through the `GGDynamoDb` from [`@grest-ts/db-dynamodb`](@pkg/db-dynamodb), so it follows that connection's config, and validates each row it writes.
 
 ## The Table
 

@@ -3,15 +3,17 @@ import {GGConfig, GGConfigLocator, GGConfigStoreLocal, GGSetting} from "@grest-t
 import {GGInstanceLock} from "@grest-ts/lock"
 import {GGJob, GGJobRunner, IsGGJobSettings} from "@grest-ts/job"
 
+export const COUNTING = {intervalMs: 50, timeoutMs: 1_000, startupDelayMs: 0}
+
 export const JobTestConfig = GGConfig.define("/job_test/", () => ({
-    counting: new GGSetting("counting", IsGGJobSettings, {}, "Overrides for the counting job"),
+    counting: new GGSetting("counting", IsGGJobSettings, COUNTING, "The counting job"),
 }))
 
 export const processed: number[] = []
 
 class CountingJob extends GGJob<number> {
     constructor() {
-        super({name: "counting", lock: "none", intervalMs: 50, timeoutMs: 1_000, startupDelayMs: 0, settings: JobTestConfig.counting})
+        super({name: "counting", runOn: "everyInstance", settings: JobTestConfig.counting})
     }
 
     async getDataSet(): Promise<number[]> {
@@ -28,7 +30,7 @@ export class JobTestRuntime extends GGRuntime {
 
     protected compose(): void {
         new GGConfigLocator(JobTestConfig)
-            .add(GGSetting, new GGConfigStoreLocal(JobTestConfig, {counting: {}}))
+            .add(GGSetting, new GGConfigStoreLocal(JobTestConfig, {counting: COUNTING}))
         new GGJobRunner({lock: new GGInstanceLock()}).add(new CountingJob())
     }
 }

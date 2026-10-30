@@ -5,7 +5,8 @@ import {GGLog} from "@grest-ts/logger";
 import type {GGLock} from "./GGLock";
 
 export interface GGWithLockOptions {
-    owner: string;
+    /** Default: one per process, `newLockOwner()`. */
+    owner?: string;
     ttlMs: number;
     /** Aborts `fn`'s signal too. A run it aborted is released without `holdUntil`. */
     signal?: AbortSignal;
@@ -27,8 +28,10 @@ export function newLockOwner(): string {
     return `${hostname()}-${process.pid}-${randomUUID().slice(0, 8)}`;
 }
 
+let processOwner: string | undefined;
+
 /**
- * Runs `fn` while holding `lockId`, renewing it every `ttlMs / 3`. Needs a `GGLocatorScope` (e.g. inside a runtime). The lock is lost when a renew fails, or when the
+ * Runs `fn` while holding `lockId`, renewing it every `ttlMs / 3`. The lock is lost when a renew fails, or when the
  * last renew that succeeded was sent two thirds of a TTL ago; `fn`'s signal is then aborted, and the lock is not
  * released (someone else may hold it). `fn` must stop at the signal for the lock to mean anything.
  */
@@ -38,8 +41,12 @@ export async function withLock(
     options: GGWithLockOptions,
     fn: (signal: AbortSignal) => Promise<void>,
 ): Promise<GGWithLockResult> {
-    const {owner, ttlMs, signal, holdUntil} = options;
-    const scope = GGLocator.getScope();
+    const {ttlMs, signal, holdUntil} = options;
+    const owner = options.owner ?? (processOwner ??= newLockOwner());
+    // Inside a runtime, timers belong to its scope (stopped with it); outside one, plain timers.
+    const scope = GGLocator.tryGetScope();
+    const every = (fn: () => void, ms: number) => scope ? scope.setInterval(fn, ms) : setInterval(fn, ms);
+    const after = (fn: () => void, ms: number) => scope ? scope.setTimeout(fn, ms) : setTimeout(fn, ms);
     let renewedAt = Date.now();
     if (!await lock.acquire(lockId, owner, ttlMs)) return "BUSY";
     const lost = new AbortController();
@@ -52,7 +59,7 @@ export async function withLock(
     };
     // One renew at a time, so the hold below has only one to wait for.
     let renewing: Promise<void> | undefined;
-    const heartbeat = scope.setInterval(() => {
+    const heartbeat = every(() => {
         const sentAt = Date.now();
         if (sentAt - renewedAt >= ttlMs * 2 / 3) return lose();
         if (renewing) return;
@@ -73,7 +80,7 @@ export async function withLock(
         if (hold && renewing) {
             // A renew still in flight would otherwise land after the hold and shorten it. Past a TTL the lease is gone.
             let timer: NodeJS.Timeout | undefined;
-            await Promise.race([renewing, new Promise<void>(r => { timer = scope.setTimeout(r, ttlMs); })]);
+            await Promise.race([renewing, new Promise<void>(r => { timer = after(r, ttlMs); })]);
             clearTimeout(timer);
         }
         done = true;

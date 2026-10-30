@@ -1,7 +1,7 @@
 import {GGLocator, GGLocatorKey} from "@grest-ts/locator";
-import {GGInstanceLock, GGInstanceLockEntry} from "../instance/GGInstanceLock";
+import {GGInstanceLock} from "../instance/GGInstanceLock";
 
-export const GGContextLockStorageKey = new GGLocatorKey<Map<string, GGInstanceLockEntry>>("GGLocatorScopeLock");
+const STORAGE = new GGLocatorKey<Map<string, {owner: string, expiresAt: number}>>("GGLocatorScopeLock");
 
 /**
  * In-memory lock scoped to the current `GGLocatorScope`: each scope has its own, isolated lock state (e.g. one per
@@ -9,12 +9,12 @@ export const GGContextLockStorageKey = new GGLocatorKey<Map<string, GGInstanceLo
  */
 export class GGLocatorScopeLock extends GGInstanceLock {
 
-    protected override storage(): Map<string, GGInstanceLockEntry> {
+    protected override storage(): Map<string, {owner: string, expiresAt: number}> {
         const scope = GGLocator.getScope();
-        let storage = scope.tryGet(GGContextLockStorageKey);
+        let storage = scope.tryGet(STORAGE);
         if (!storage) {
             storage = new Map();
-            scope.set(GGContextLockStorageKey, storage);
+            scope.set(STORAGE, storage);
         }
         return storage;
     }

@@ -17,7 +17,8 @@ Framework behaviours that work in dev and tests but break at scale or with more 
 ## @grest-ts/lock, @grest-ts/job
 - **`GGInstanceLock` and `GGLocatorScopeLock` are process-local.** With N replicas every instance "holds" the lock, so a `GGJob` runs N times. → `GGDynamoDbLock` (`@grest-ts/lock-dynamodb`) or another shared-store `GGLock`.
 - **No fencing token.** A holder paused past its TTL keeps working until its next renew (`withLock` aborts the work's signal then, up to `ttl / 3` later). Work under a lock should be idempotent or written conditionally. Flag work under `withLock` that ignores its `signal`.
-- **`GGJob` lock modes put the claiming on the job.** `item`: `getDataSet` must drain itself and `processRow` must re-check its row under the lock. `none`: `processRow` must claim rows itself (a conditional status flip). Flag `none`/`item` jobs whose `processRow` writes unconditionally.
+- **A `GGJob` runs on one instance at a time, so its throughput is one instance's.** Flag jobs whose data sets come back full every run or whose runs take most of their interval (the runner warns on both). → keep the job as a collector that publishes items to a queue (`@grest-ts/events`), and process them in consumers.
+- **`runOn: "everyInstance"` runs the job N times.** Flag it on anything but per-instance work (local caches, own config).
 - **Periodic work on `setInterval` in a multi-instance service runs once per instance.** → a `GGJob` on the runtime's `GGJobRunner`.
 
 ## @grest-ts/events (+ events-aws/azure/gcp)

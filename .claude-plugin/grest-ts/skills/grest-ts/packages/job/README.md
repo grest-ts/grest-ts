@@ -5,21 +5,33 @@
 
 # @grest-ts/job
 
-Recurring batch work over a data set you own: cleanups, reconciliation, backfills, expiry sweeps, an outbox relay. A job runs every `intervalMs`, loads the rows that need work (`getDataSet`) and processes each one (`processRow`). Instances of a service coordinate through a [`GGLock`](@pkg/lock), so a job is safe to run on several of them.
+Recurring batch work over a data set you own: cleanups, reconciliation, backfills, expiry sweeps, an outbox relay. A job runs every `intervalMs`, loads the rows that need work (`getDataSet`) and processes each one (`processRow`). By default one instance at a time runs it, coordinated through a [`GGLock`](@pkg/lock).
 
-**This is not a queue.** There is no `enqueue`: a job finds its work by querying state, so a row that is missed or fails is picked up on the next run. For units of work pushed from elsewhere, use a message queue. [Job patterns](./README-patterns.md) covers when to use which.
+**This is not a queue.** There is no `enqueue`: a job finds its work by querying state, so a row that is missed or fails is picked up on the next run. For heavy item-level work, let a job feed a message queue instead: see [Job patterns](./README-patterns.md).
 
 ## Defining a Job
 
+A job's schedule and tuning live in a `GGSetting` with the `IsGGJobSettings` schema. Its default is the job's configuration; a stored value replaces it at runtime, without a deploy.
+
 ```typescript
-import {GGJob} from "@grest-ts/job"
+import {GGConfig, GGSetting} from "@grest-ts/config"
+import {GGJob, IsGGJobSettings} from "@grest-ts/job"
+
+export const MyConfig = GGConfig.define("/my-service/", () => ({
+    jobs: {
+        expiredSessions: new GGSetting("jobs/expired-sessions", IsGGJobSettings, {
+            intervalMs: 10 * 60_000,
+            timeoutMs: 60_000,
+        }, "Expired sessions job"),
+    },
+}))
 
 export class ExpiredSessionsJob extends GGJob<Session> {
 
     private readonly sessions: SessionTable
 
     constructor(sessions: SessionTable) {
-        super({name: "expired-sessions", lock: "exclusive", intervalMs: 10 * 60_000, timeoutMs: 60_000})
+        super({name: "expired-sessions", settings: MyConfig.jobs.expiredSessions})
         this.sessions = sessions
     }
 
@@ -34,6 +46,8 @@ export class ExpiredSessionsJob extends GGJob<Session> {
 ```
 
 `name` is the lock id: keep it stable across deployments. `signal` aborts when the job lost its lock or the runtime is stopping; pass it on to long calls.
+
+**Every step must be safe to run twice.** A lock is a lease: an instance that stalls past `timeoutMs` can overlap the next holder until it notices, and a stopped run is picked up again. Write results conditionally or idempotently, as above, where deleting an already-deleted session is harmless.
 
 ## Wiring in Runtime
 
@@ -53,48 +67,35 @@ class MyRuntime extends GGRuntime {
 
 The runner starts with the runtime. On teardown it stops new rows, waits for running ones and frees its locks. With a single instance, `new GGInstanceLock()` from `@grest-ts/lock` is enough.
 
-## Lock Modes
+## Where It Runs
 
-| `lock` | Who runs it | Use when |
-|---|---|---|
-| `exclusive` | One instance at a time, at most once per `intervalMs` across all of them. | The default. The run must not overlap itself. |
-| `item` | Every instance; each row is locked by `rowKey(row)` before `processRow`. | Many rows, and instances should share them. |
-| `none` | Every instance. `processRow` guards its own rows. | The data store claims rows itself (e.g. a conditional status flip). |
+| `runOn` | |
+|---|---|
+| `oneInstance` (default) | One instance at a time, at most once per `intervalMs` across all of them. A finished run keeps its lock until the next one is due; every instance checks every `checkEveryMs` whether it can take it. |
+| `everyInstance` | Every instance, for work each one must do itself, such as warming a local cache. |
 
-An `exclusive` run that finishes keeps its lock until the next run is due (`withLock`'s `holdUntil`), and every instance checks every `checkEveryMs` whether it can take it. With `item`, `getDataSet` must drain itself (a processed row drops out of it), and `processRow` must re-check its row: another instance may have finished it after it was read.
-
-## Configuration
+## Settings
 
 | Field | Default | |
 |---|---|---|
-| `name`, `lock`, `intervalMs` | | See above |
-| `timeoutMs` | | Lock TTL, renewed while the run (or row) is alive. A run still going past it is logged. |
+| `intervalMs` | required | Time between runs |
+| `timeoutMs` | required | Lock TTL, renewed while a run is alive; a run still going past it is logged |
+| `enabled` | `true` | `false` skips every run until it is set back |
 | `limit` | `500` | Rows per batch, passed to `getDataSet` |
 | `parallel` | `1` | Rows processed concurrently |
 | `maxExtraRuns` | `0` | Further batches in the same run while a batch comes back full |
+| `checkEveryMs` | `intervalMs / 10`, 60 s–15 min | How often a `oneInstance` job checks whether it is due |
 | `startupDelayMs` | 1–2 s, jittered | Delay before the first run |
-| `checkEveryMs` | `intervalMs / 10`, 60 s–15 min | How often an `exclusive` job checks whether it is due |
-| `settings` | | Live overrides, see below |
 
-Optional hooks: `rowKey(row)` (required for `item`), `dataSetFinished(report)` after each batch, `describeRow(row)` for logs.
+The runner reads the setting at the start of every run. A stored value replaces the whole default, as for any `GGSetting`, so store the full object: `{"intervalMs": 600000, "timeoutMs": 60000, "enabled": false}`. A lowered `intervalMs` on a `oneInstance` job applies once the current hold runs out.
 
-### Live Settings
-
-A `GGSetting` with the `IsGGJobSettings` schema overrides `intervalMs`, `limit`, `parallel` and `maxExtraRuns`, and `enabled: false` pauses the job. It is read at the start of every run, so changes need no deploy. A lowered `intervalMs` on an `exclusive` job applies once the current hold runs out:
-
-```typescript
-export const MyConfig = GGConfig.define("/my-service/", () => ({
-    expiredSessionsJob: new GGSetting("jobs/expired-sessions", IsGGJobSettings, {}, "Expired sessions job overrides"),
-}))
-
-super({name: "expired-sessions", lock: "exclusive", intervalMs: 10 * 60_000, timeoutMs: 60_000, settings: MyConfig.expiredSessionsJob})
-```
+Optional hooks: `dataSetFinished(report)` after each batch, `describeRow(row)` for logs.
 
 ## Failures
 
 - A row that throws is logged and counted; the rest of the batch still runs, and no extra batch follows.
-- A data set that fails to load fails the run. An `exclusive` run that failed or was stopped holds no lock afterwards, so the next check runs it again.
-- When the lock is lost, the run's signal fires and rows not yet started are skipped (see `withLock` in [`@grest-ts/lock`](@pkg/lock)). An `item` row whose lock was lost counts as failed; one whose lock another instance holds is skipped (`report.skipped`).
+- A data set that fails to load fails the run. A `oneInstance` run that failed or was stopped holds no lock afterwards, so the next check runs it again.
+- When the lock is lost, the run's signal fires and rows not yet started are skipped (see `withLock` in [`@grest-ts/lock`](@pkg/lock)).
 
 ## Metrics
 
@@ -109,3 +110,5 @@ import {runJobOnce} from "@grest-ts/job/testkit"
 
 const {rows, errors} = await runJobOnce(new ExpiredSessionsJob(table))
 ```
+
+In a `GGTest` runtime, change a job's setting with `t.config.update(MyConfig.jobs.expiredSessions, {...})`.

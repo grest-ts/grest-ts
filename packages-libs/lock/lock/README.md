@@ -20,18 +20,16 @@ interface GGLock {
 - `renew` extends the lease while `owner` still holds it. `false` means the lock was lost: stop the work.
 - `release` does nothing unless `owner` holds the lock, so a holder whose lease expired can't release its successor's lock.
 
-`owner` must be unique per process; `newLockOwner()` gives hostname + pid + a random suffix.
+`owner` must be unique per process; `newLockOwner()` gives hostname + pid + a random suffix, and `withLock` uses one per process unless told otherwise.
 
 ## withLock
 
-`withLock` acquires, renews every `ttlMs / 3`, and releases, and aborts the work when the lock is lost. It runs inside a `GGLocatorScope` (any runtime code does):
+`withLock` acquires, renews every `ttlMs / 3`, and releases, and aborts the work when the lock is lost:
 
 ```typescript
-import {newLockOwner, withLock} from "@grest-ts/lock"
+import {withLock} from "@grest-ts/lock"
 
-const owner = newLockOwner()
-
-const result = await withLock(lock, "rebuild-index", {owner, ttlMs: 30_000}, async signal => {
+const result = await withLock(lock, "rebuild-index", {ttlMs: 30_000}, async signal => {
     await rebuildIndex(signal)
 })
 // "DONE", "BUSY" (someone else holds it; the function never ran) or "LOST"

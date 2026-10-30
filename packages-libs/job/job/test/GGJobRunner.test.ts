@@ -4,7 +4,7 @@ import {GGLog} from "@grest-ts/logger"
 import {sleep} from "@grest-ts/common"
 import {GGMetricsLoader, GG_METRICS} from "@grest-ts/metrics"
 import {GGInstanceLock, type GGLock} from "@grest-ts/lock"
-import {GGJob, GGJobMetrics, GGJobRunner, type GGJobConfig} from "@grest-ts/job"
+import {GGJob, GGJobMetrics, GGJobRunner, type GGJobRunOn, type GGJobSettings} from "@grest-ts/job"
 import {runJobOnce} from "@grest-ts/job/testkit"
 
 // Each runner gets its own scope, as each instance has its own runtime; sharing one lock makes them one fleet.
@@ -24,9 +24,6 @@ function stubLock(overrides: Partial<GGLock> = {}): GGLock {
 
 const untilAborted = (_row: string, signal: AbortSignal) => new Promise<void>(r => signal.addEventListener("abort", () => r()))
 
-function rowCount(runner: GGJobRunner, result: "OK" | "ERROR"): unknown {
-    return runner.scope.run(() => GG_METRICS.get().get(GGJobMetrics.rows).getValue({job: "test", result}))
-}
 
 class TestJob extends GGJob<string> {
     readonly processed: string[] = []
@@ -37,11 +34,13 @@ class TestJob extends GGJob<string> {
     private readonly onRow: (row: string, signal: AbortSignal) => Promise<void>
 
     constructor(
-        config: Partial<GGJobConfig>,
+        config: Partial<GGJobSettings> & {name?: string, runOn?: GGJobRunOn} = {},
         rows: () => string[] = () => ["row"],
         onRow: (row: string, signal: AbortSignal) => Promise<void> = async () => {},
     ) {
-        super({name: "test", lock: "exclusive", intervalMs: 10_000, timeoutMs: 3_000, checkEveryMs: 1_000, startupDelayMs: 1_000, ...config})
+        const {name = "test", runOn, ...overrides} = config
+        const settings: GGJobSettings = {intervalMs: 10_000, timeoutMs: 3_000, checkEveryMs: 1_000, startupDelayMs: 1_000, ...overrides}
+        super({name, runOn, settings: {get: () => settings}})
         this.rows = rows
         this.onRow = onRow
     }
@@ -61,9 +60,6 @@ class TestJob extends GGJob<string> {
         }
     }
 
-    rowKey(row: string): string {
-        return row
-    }
 }
 
 
@@ -71,7 +67,7 @@ describe("GGJobRunner", () => {
     beforeEach(() => { vi.useFakeTimers({now: 1_000_000}) })
     afterEach(() => { vi.useRealTimers() })
 
-    test("exclusive: two instances run the job once per interval between them", async () => {
+    test("oneInstance: two instances run the job once per interval between them", async () => {
         const lock = new GGInstanceLock()
         const a = new TestJob({startupDelayMs: 1_000})
         const b = new TestJob({startupDelayMs: 1_500})
@@ -83,7 +79,7 @@ describe("GGJobRunner", () => {
         expect(a.processed.length + b.processed.length).toBe(4)
     })
 
-    test("exclusive: an hourly job asks for its lock every 6 min by default", async () => {
+    test("oneInstance: an hourly job asks for its lock every 6 min by default", async () => {
         const lock = new GGInstanceLock()
         const acquire = vi.spyOn(lock, "acquire")
         const job = new TestJob({intervalMs: 60 * 60_000, timeoutMs: 60_000, checkEveryMs: undefined})
@@ -95,7 +91,7 @@ describe("GGJobRunner", () => {
         expect(job.processed).toHaveLength(3)
     })
 
-    test("exclusive: a slow run on one instance keeps the other out", async () => {
+    test("oneInstance: a slow run on one instance keeps the other out", async () => {
         const lock = new GGInstanceLock()
         const slow = async () => sleep(25_000)
         const a = new TestJob({startupDelayMs: 1_000}, undefined, slow)
@@ -108,7 +104,7 @@ describe("GGJobRunner", () => {
         expect(a.running + b.running).toBe(1)
     })
 
-    test("exclusive: when the instance that ran it stops, the other runs it when it is next due", async () => {
+    test("oneInstance: when the instance that ran it stops, the other runs it when it is next due", async () => {
         const lock = new GGInstanceLock()
         const a = new TestJob({startupDelayMs: 1_000})
         const b = new TestJob({startupDelayMs: 1_500})
@@ -125,7 +121,7 @@ describe("GGJobRunner", () => {
         expect(b.processed).toHaveLength(1)
     })
 
-    test("exclusive: a run interrupted by stop is picked up by the other instance straight away", async () => {
+    test("oneInstance: a run interrupted by stop is picked up by the other instance straight away", async () => {
         const lock = new GGInstanceLock()
         const a = new TestJob({startupDelayMs: 1_000}, () => ["r1", "r2"], (_row, signal) => new Promise(r => {
             signal.addEventListener("abort", () => r())
@@ -144,7 +140,7 @@ describe("GGJobRunner", () => {
         expect(b.processed).toEqual(["row"])
     })
 
-    test("exclusive: a lost lock aborts the run, skips the rows not yet started and is not released", async () => {
+    test("oneInstance: a lost lock aborts the run, skips the rows not yet started and is not released", async () => {
         const release = vi.fn(async () => {})
         const lock = stubLock({renew: async () => false, release})
         const job = new TestJob({checkEveryMs: 60_000}, () => ["r1", "r2"], untilAborted)
@@ -156,32 +152,8 @@ describe("GGJobRunner", () => {
         expect(release).not.toHaveBeenCalled()
     })
 
-    test("item: instances share a draining data set and each row's work runs once", async () => {
-        const lock = new GGInstanceLock()
-        const pending = new Set(["r1", "r2", "r3", "r4", "r5", "r6"])
-        const done: string[] = []
-        const rows = () => [...pending]
-        // Re-checks under the row lock: the row was read before another instance may have finished it.
-        const work = async (row: string) => {
-            if (!pending.has(row)) return
-            await sleep(500)
-            pending.delete(row)
-            done.push(row)
-        }
-        const a = new TestJob({lock: "item", startupDelayMs: 1_000, parallel: 2}, rows, work)
-        const b = new TestJob({lock: "item", startupDelayMs: 1_000, parallel: 2}, rows, work)
-        newRunner(lock, "a").add(a).start()
-        newRunner(lock, "b").add(b).start()
-
-        await vi.advanceTimersByTimeAsync(30_000)
-
-        expect(done.sort()).toEqual(["r1", "r2", "r3", "r4", "r5", "r6"])
-        expect(a.processed.length).toBeGreaterThan(0)
-        expect(b.processed.length).toBeGreaterThan(0)
-    })
-
     test("a failing row is logged and the rest of the batch still runs", async () => {
-        const job = new TestJob({lock: "none"}, () => ["bad", "good"], async row => {
+        const job = new TestJob({runOn: "everyInstance"}, () => ["bad", "good"], async row => {
             if (row === "bad") throw new Error("boom")
         })
         newRunner(new GGInstanceLock(), "a").add(job).start()
@@ -193,7 +165,7 @@ describe("GGJobRunner", () => {
 
     test("a full batch runs again up to maxExtraRuns, in parallel up to `parallel`", async () => {
         const pending = Array.from({length: 10}, (_, i) => `r${i}`)
-        const job = new TestJob({lock: "none", limit: 3, maxExtraRuns: 2, parallel: 3}, () => pending, async row => {
+        const job = new TestJob({runOn: "everyInstance", limit: 3, maxExtraRuns: 2, parallel: 3}, () => pending, async row => {
             await sleep(10)
             pending.splice(pending.indexOf(row), 1)
         })
@@ -203,15 +175,6 @@ describe("GGJobRunner", () => {
 
         expect(job.processed).toHaveLength(9)
         expect(job.maxRunning).toBe(3)
-    })
-
-    test("item locking without rowKey is refused", () => {
-        class NoKey extends GGJob<string> {
-            constructor() { super({name: "nokey", lock: "item", intervalMs: 1_000, timeoutMs: 1_000}) }
-            async getDataSet() { return [] }
-            async processRow() {}
-        }
-        expect(() => newRunner(new GGInstanceLock(), "a").add(new NoKey())).toThrow(/rowKey/)
     })
 
     test("metrics count runs, rows by result and lost locks", async () => {
@@ -237,7 +200,7 @@ describe("GGJobRunner", () => {
     })
 
     test("runJobOnce runs one batch and returns row errors instead of throwing", async () => {
-        const job = new TestJob({lock: "none"}, () => ["bad", "good"], async row => {
+        const job = new TestJob({runOn: "everyInstance"}, () => ["bad", "good"], async row => {
             if (row === "bad") throw new Error("boom")
         })
 
@@ -248,7 +211,7 @@ describe("GGJobRunner", () => {
         expect(job.processed).toEqual(["good"])
     })
 
-    test("exclusive: a short interval checked once per interval still runs at most once per interval", async () => {
+    test("oneInstance: a short interval checked once per interval still runs at most once per interval", async () => {
         const lock = new GGInstanceLock()
         const a = new TestJob({intervalMs: 30_000, checkEveryMs: undefined, startupDelayMs: 1_000})
         const b = new TestJob({intervalMs: 30_000, checkEveryMs: undefined, startupDelayMs: 17_000})
@@ -260,7 +223,7 @@ describe("GGJobRunner", () => {
         expect(a.processed.length + b.processed.length).toBe(1)
     })
 
-    test("exclusive: a data set that fails to load releases the lock, so the next check runs it; a finished run holds it instead", async () => {
+    test("oneInstance: a data set that fails to load releases the lock, so the next check runs it; a finished run holds it instead", async () => {
         const release = vi.fn(async () => {})
         const renew = vi.fn(async () => true)
         const lock = stubLock({release, renew})
@@ -282,26 +245,11 @@ describe("GGJobRunner", () => {
         expect(release).toHaveBeenCalledTimes(1)
     })
 
-    test("item: a row locked by another instance is skipped, not counted, and ends the run's extra batches", async () => {
-        const lock = new GGInstanceLock()
-        await lock.acquire("test#r1", "other", 60_000)
-        const getDataSet = vi.fn(() => ["r1"])
-        const job = new TestJob({lock: "item", limit: 1, maxExtraRuns: 3}, getDataSet)
-        const runner = newRunner(lock, "a").add(job)
-        runner.start()
-
-        await vi.advanceTimersByTimeAsync(1_500)
-
-        expect(job.processed).toEqual([])
-        expect(getDataSet).toHaveBeenCalledTimes(1)
-        expect(rowCount(runner, "OK")).toBe(0)
-    })
-
     test("a row whose describeRow throws is still counted as failed", async () => {
         class BadDescribe extends TestJob {
             describeRow(): unknown { throw new Error("describe") }
         }
-        const job = new BadDescribe({lock: "none"}, () => ["bad", "good"], async row => {
+        const job = new BadDescribe({runOn: "everyInstance"}, () => ["bad", "good"], async row => {
             if (row === "bad") throw new Error("boom")
         })
         newRunner(new GGInstanceLock(), "a").add(job).start()
@@ -311,15 +259,26 @@ describe("GGJobRunner", () => {
         expect(job.processed).toEqual(["good"])
     })
 
-    test("item: a row whose lock is lost counts as failed", async () => {
-        const lock = stubLock({renew: async () => false})
-        const job = new TestJob({lock: "item"}, () => ["r1"], untilAborted)
-        const runner = newRunner(lock, "a").add(job)
-        runner.start()
 
-        await vi.advanceTimersByTimeAsync(2_500)
+    test("settings are read at the start of every run", async () => {
+        const getDataSet = vi.fn(async (limit: number) => [] as string[])
+        let settings: GGJobSettings = {intervalMs: 1_000, timeoutMs: 3_000, startupDelayMs: 0, limit: 5}
+        class Live extends GGJob<string> {
+            constructor() { super({name: "live", runOn: "everyInstance", settings: {get: () => settings}}) }
+            getDataSet = getDataSet
+            async processRow() {}
+        }
+        newRunner(new GGInstanceLock(), "a").add(new Live()).start()
 
-        expect(rowCount(runner, "ERROR")).toBe(1)
-        expect(rowCount(runner, "OK")).toBe(0)
+        await vi.advanceTimersByTimeAsync(10)
+        expect(getDataSet).toHaveBeenLastCalledWith(5)
+
+        settings = {...settings, limit: 7}
+        await vi.advanceTimersByTimeAsync(1_000)
+        expect(getDataSet).toHaveBeenLastCalledWith(7)
+
+        settings = {...settings, enabled: false}
+        await vi.advanceTimersByTimeAsync(3_000)
+        expect(getDataSet).toHaveBeenCalledTimes(2)
     })
 })
