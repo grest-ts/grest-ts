@@ -1,0 +1,57 @@
+{
+  "//": "THIS FILE IS GENERATED - DO NOT EDIT",
+  "name": "@grest-ts/job-dynamodb",
+  "version": "0.0.100",
+  "type": "module",
+  "license": "MIT",
+  "description": "DynamoDB lock for @grest-ts/job",
+  "exports": {
+    ".": {
+      "types": "./src/index-node.ts",
+      "import": "./src/index-node.ts"
+    }
+  },
+  "files": [
+    "src"
+  ],
+  "scripts": {
+    "typecheck": "tsc --noEmit -p src && tsc --noEmit -p test",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "test:coverage:html": "vitest run --coverage --reporter=html"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/grest-ts/grest-ts.git",
+    "directory": "packages-libs/job/job-dynamodb"
+  },
+  "homepage": "https://grest-ts.com/packages/job-dynamodb",
+  "bugs": {
+    "url": "https://github.com/grest-ts/grest-ts/issues"
+  },
+  "keywords": [
+    "typescript",
+    "framework",
+    "contract",
+    "api",
+    "microservices",
+    "testing",
+    "job",
+    "dynamodb",
+    "aws",
+    "distributed-lock"
+  ],
+  "engines": {
+    "node": ">=24"
+  },
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.750.0",
+    "@aws-sdk/lib-dynamodb": "^3.750.0"
+  },
+  "peerDependencies": {
+    "@grest-ts/job": "0.0.100"
+  }
+}

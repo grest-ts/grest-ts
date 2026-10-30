@@ -57,6 +57,15 @@ services:
       retries: 10
       start_period: 30s
 
+  # DynamoDB local for package tests (@grest-ts/job-dynamodb)
+  # Connection: http://localhost:8001 — in-memory, no -sharedDb, so each access key gets its own tables
+  dynamodb-test:
+    image: amazon/dynamodb-local
+    container_name: gg-dynamodb-test
+    restart: unless-stopped
+    ports:
+      - "8001:8000"
+
 volumes:
   postgres_data:
     name: gg-postgres-data

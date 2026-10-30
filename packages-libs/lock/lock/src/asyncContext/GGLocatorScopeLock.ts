@@ -4,6 +4,7 @@ import {GGLocator, GGLocatorKey} from "@grest-ts/locator";
 export const GGContextLockStorageKey = new GGLocatorKey<Map<string, LockEntry>>("GGLocatorScopeLock");
 
 interface LockEntry {
+    owner: string;
     expiresAt: number;
 }
 
@@ -25,11 +26,11 @@ interface LockEntry {
  * ```typescript
  * const lock = new GGContextLock();
  *
- * if (await lock.acquire('my-task', 30000)) {
+ * if (await lock.acquire('my-task', owner, 30000)) {
  *   try {
  *     // Do work while holding the lock
  *   } finally {
- *     await lock.release('my-task');
+ *     await lock.release('my-task', owner);
  *   }
  * }
  * ```
@@ -48,7 +49,7 @@ export class GGLocatorScopeLock implements GGLock {
         return storage;
     }
 
-    async acquire(lockId: string, ttlMs: number): Promise<boolean> {
+    async acquire(lockId: string, owner: string, ttlMs: number): Promise<boolean> {
         const storage = this.getStorage();
         const now = Date.now();
 
@@ -65,20 +66,21 @@ export class GGLocatorScopeLock implements GGLock {
 
         // Acquire the lock
         storage.set(lockId, {
+            owner,
             expiresAt: now + ttlMs
         });
 
         return true;
     }
 
-    async renew(lockId: string, ttlMs: number): Promise<boolean> {
+    async renew(lockId: string, owner: string, ttlMs: number): Promise<boolean> {
         const storage = this.getStorage();
         const now = Date.now();
 
         const existing = storage.get(lockId);
 
-        // Can only renew if lock exists and hasn't expired
-        if (!existing || existing.expiresAt <= now) {
+        // Can only renew if we hold it and it hasn't expired
+        if (!existing || existing.owner !== owner || existing.expiresAt <= now) {
             return false;
         }
 
@@ -87,8 +89,10 @@ export class GGLocatorScopeLock implements GGLock {
         return true;
     }
 
-    async release(lockId: string): Promise<void> {
+    async release(lockId: string, owner: string): Promise<void> {
         const storage = this.getStorage();
-        storage.delete(lockId);
+        if (storage.get(lockId)?.owner === owner) {
+            storage.delete(lockId);
+        }
     }
 }

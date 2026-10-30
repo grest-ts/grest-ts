@@ -1,0 +1,63 @@
+{
+  "//": "THIS FILE IS GENERATED - DO NOT EDIT",
+  "name": "@grest-ts/job",
+  "version": "0.0.100",
+  "type": "module",
+  "license": "MIT",
+  "description": "Recurring batch jobs that are safe to run on several instances",
+  "exports": {
+    ".": {
+      "types": "./src/index-node.ts",
+      "import": "./src/index-node.ts"
+    },
+    "./testkit": {
+      "types": "./src/testkit/runJobOnce.ts",
+      "import": "./src/testkit/runJobOnce.ts"
+    }
+  },
+  "files": [
+    "src"
+  ],
+  "scripts": {
+    "typecheck": "tsc --noEmit -p src && tsc --noEmit -p test",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "test:coverage:html": "vitest run --coverage --reporter=html"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/grest-ts/grest-ts.git",
+    "directory": "packages-libs/job/job"
+  },
+  "homepage": "https://grest-ts.com/packages/job",
+  "bugs": {
+    "url": "https://github.com/grest-ts/grest-ts/issues"
+  },
+  "keywords": [
+    "typescript",
+    "framework",
+    "contract",
+    "api",
+    "microservices",
+    "testing",
+    "job",
+    "scheduler",
+    "cron",
+    "batch",
+    "distributed-lock"
+  ],
+  "engines": {
+    "node": ">=24"
+  },
+  "peerDependencies": {
+    "@grest-ts/config": "0.0.100",
+    "@grest-ts/locator": "0.0.100",
+    "@grest-ts/lock": "0.0.100",
+    "@grest-ts/logger": "0.0.100",
+    "@grest-ts/metrics": "0.0.100",
+    "@grest-ts/schema": "0.0.100"
+  }
+}

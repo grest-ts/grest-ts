@@ -38,6 +38,7 @@
     "packages-libs/docs/*",
     "packages-libs/events/*",
     "packages-libs/intl/intl",
+    "packages-libs/job/*",
     "packages-libs/lock/lock",
     "packages-tooling/*",
     "packages-tooling/create-starter/template/api",

@@ -1,6 +1,7 @@
 import {GGLock} from "../GGLock";
 
 interface LockEntry {
+    owner: string;
     expiresAt: number;
 }
 
@@ -20,11 +21,11 @@ interface LockEntry {
  * ```typescript
  * const lock = new GGInstanceLock();
  *
- * if (await lock.acquire('my-task', 30000)) {
+ * if (await lock.acquire('my-task', owner, 30000)) {
  *   try {
  *     // Do work while holding the lock
  *   } finally {
- *     await lock.release('my-task');
+ *     await lock.release('my-task', owner);
  *   }
  * }
  * ```
@@ -32,7 +33,7 @@ interface LockEntry {
 export class GGInstanceLock implements GGLock {
     private readonly locks = new Map<string, LockEntry>();
 
-    async acquire(lockId: string, ttlMs: number): Promise<boolean> {
+    async acquire(lockId: string, owner: string, ttlMs: number): Promise<boolean> {
         const now = Date.now();
 
         // Clean up expired lock
@@ -48,19 +49,20 @@ export class GGInstanceLock implements GGLock {
 
         // Acquire the lock
         this.locks.set(lockId, {
+            owner,
             expiresAt: now + ttlMs
         });
 
         return true;
     }
 
-    async renew(lockId: string, ttlMs: number): Promise<boolean> {
+    async renew(lockId: string, owner: string, ttlMs: number): Promise<boolean> {
         const now = Date.now();
 
         const existing = this.locks.get(lockId);
 
-        // Can only renew if lock exists and hasn't expired
-        if (!existing || existing.expiresAt <= now) {
+        // Can only renew if we hold it and it hasn't expired
+        if (!existing || existing.owner !== owner || existing.expiresAt <= now) {
             return false;
         }
 
@@ -69,7 +71,9 @@ export class GGInstanceLock implements GGLock {
         return true;
     }
 
-    async release(lockId: string): Promise<void> {
-        this.locks.delete(lockId);
+    async release(lockId: string, owner: string): Promise<void> {
+        if (this.locks.get(lockId)?.owner === owner) {
+            this.locks.delete(lockId);
+        }
     }
 }
