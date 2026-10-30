@@ -1,7 +1,7 @@
 import {GGLocator, GGLocatorKey, GGLocatorServiceType, type GGLocatorScope} from "@grest-ts/locator"
 import {GGLog} from "@grest-ts/logger"
 import {GG_METRICS} from "@grest-ts/metrics"
-import {type GGLock, processLockOwner, withLock} from "@grest-ts/lock"
+import {type GGLock, newLockOwner, withLock} from "@grest-ts/lock"
 import type {GGJob} from "./GGJob"
 import {GGJobMetrics} from "./GGJobMetrics"
 
@@ -15,7 +15,7 @@ const WARN_RATIO = 0.7
 export interface GGJobRunnerOptions {
     /** What `oneInstance` jobs coordinate through. */
     lock: GGLock
-    /** Unique per process. Default `processLockOwner()`. */
+    /** Unique per runner. Default `newLockOwner()`. */
     owner?: string
 }
 
@@ -31,7 +31,7 @@ export class GGJobRunner {
     private stopped = false
 
     constructor(options: GGJobRunnerOptions) {
-        this.owner = options.owner ?? processLockOwner()
+        this.owner = options.owner ?? newLockOwner()
         this.lock = options.lock
         this.scope = GGLocator.getScope()
         this.scope.setWithLifecycle(GG_JOB_RUNNER, this, {
@@ -80,6 +80,7 @@ class JobLoop {
     private readonly runner: GGJobRunner
     private timer?: NodeJS.Timeout
     private running?: Promise<void>
+    private lastConfig?: RunConfig
     private readonly stopped = new AbortController()
 
     constructor(job: GGJob<unknown>, runner: GGJobRunner) {
@@ -88,7 +89,13 @@ class JobLoop {
     }
 
     start(): void {
-        this.schedule(this.job.config.settings.get().startupDelayMs ?? 1_000 + Math.random() * 1_000)
+        let startupDelayMs: number | undefined
+        try {
+            startupDelayMs = this.job.config.settings.get().startupDelayMs
+        } catch {
+            // tick() reports it.
+        }
+        this.schedule(startupDelayMs ?? 1_000 + Math.random() * 1_000)
     }
 
     async stop(): Promise<void> {
@@ -121,7 +128,15 @@ class JobLoop {
 
     private tick(): void {
         if (this.stopped.signal.aborted) return
-        const config = this.runConfig()
+        let config: RunConfig
+        try {
+            config = this.lastConfig = this.runConfig()
+        } catch (err) {
+            // An unreadable setting must not end the loop: keep the last good one, or retry in a minute.
+            GGLog.error(this.job, "Job settings unreadable", {job: this.job.config.name, err: (err as Error).message})
+            if (!this.lastConfig) return this.schedule(MIN_CHECK_EVERY_MS)
+            config = this.lastConfig
+        }
         if (config.enabled && !this.running) {
             this.running = this.runOnce(config)
                 .catch(err => GGLog.error(this.job, "Job run failed", {job: this.job.config.name, err: (err as Error).message}))

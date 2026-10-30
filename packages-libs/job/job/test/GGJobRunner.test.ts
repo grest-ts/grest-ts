@@ -4,7 +4,7 @@ import {GGLog} from "@grest-ts/logger"
 import {sleep} from "@grest-ts/common"
 import {GGMetricsLoader, GG_METRICS} from "@grest-ts/metrics"
 import {GGInstanceLock, type GGLock} from "@grest-ts/lock"
-import {GGJob, GGJobMetrics, GGJobRunner, type GGJobRunOn, type GGJobSettings} from "@grest-ts/job"
+import {GGJob, GGJobMetrics, GGJobRunner, IsGGJobSettings, type GGJobRunOn, type GGJobSettings} from "@grest-ts/job"
 import {runJobOnce} from "@grest-ts/job/testkit"
 
 // Each runner gets its own scope, as each instance has its own runtime; sharing one lock makes them one fleet.
@@ -280,5 +280,28 @@ describe("GGJobRunner", () => {
         settings = {...settings, enabled: false}
         await vi.advanceTimersByTimeAsync(3_000)
         expect(getDataSet).toHaveBeenCalledTimes(2)
+    })
+
+    test("a setting that becomes unreadable keeps the last good one instead of stopping the job", async () => {
+        const getDataSet = vi.fn(async () => [] as string[])
+        let broken = false
+        const good: GGJobSettings = {intervalMs: 1_000, timeoutMs: 3_000, startupDelayMs: 0}
+        class Flaky extends GGJob<string> {
+            constructor() { super({name: "flaky", runOn: "everyInstance", settings: {get: () => { if (broken) throw new Error("bad value"); return good }}}) }
+            getDataSet = getDataSet
+            async processRow() {}
+        }
+        newRunner(new GGInstanceLock(), "a").add(new Flaky()).start()
+        await vi.advanceTimersByTimeAsync(10)
+
+        broken = true
+        await vi.advanceTimersByTimeAsync(3_000)
+
+        expect(getDataSet).toHaveBeenCalledTimes(4)
+    })
+
+    test("settings must be whole numbers", () => {
+        expect(IsGGJobSettings.safeParse({intervalMs: 1_000, timeoutMs: 1_000, limit: 2.5}).success).toBe(false)
+        expect(IsGGJobSettings.safeParse({intervalMs: 1_000, timeoutMs: 1_000, limit: 3}).success).toBe(true)
     })
 })

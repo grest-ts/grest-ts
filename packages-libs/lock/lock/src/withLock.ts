@@ -5,7 +5,7 @@ import {GGLog} from "@grest-ts/logger";
 import type {GGLock} from "./GGLock";
 
 export interface GGWithLockOptions {
-    /** Default `processLockOwner()`. */
+    /** Default: a fresh `newLockOwner()` for this call. */
     owner?: string;
     ttlMs: number;
     /** Aborts `fn`'s signal too. A run it aborted is released without `holdUntil`. */
@@ -28,12 +28,7 @@ export function newLockOwner(): string {
     return `${hostname()}-${process.pid}-${randomUUID().slice(0, 8)}`;
 }
 
-let processOwner: string | undefined;
 
-/** One `newLockOwner()` for the whole process, the default owner of `withLock` and `GGJobRunner`. */
-export function processLockOwner(): string {
-    return processOwner ??= newLockOwner();
-}
 
 /**
  * Runs `fn` while holding `lockId`, renewing it every `ttlMs / 3`. The lock is lost when a renew fails, or when the
@@ -47,11 +42,11 @@ export async function withLock(
     fn: (signal: AbortSignal) => Promise<void>,
 ): Promise<GGWithLockResult> {
     const {ttlMs, signal, holdUntil} = options;
-    const owner = options.owner ?? processLockOwner();
+    const owner = options.owner ?? newLockOwner();
     // Inside a runtime, timers belong to its scope (stopped with it); outside one, plain timers.
     const scope = GGLocator.tryGetScope();
-    const every = (fn: () => void, ms: number) => scope ? scope.setInterval(fn, ms) : setInterval(fn, ms);
-    const after = (fn: () => void, ms: number) => scope ? scope.setTimeout(fn, ms) : setTimeout(fn, ms);
+    const every = (fn: () => void, ms: number) => (scope ? scope.setInterval(fn, ms) : setInterval(fn, ms)).unref();
+    const after = (fn: () => void, ms: number) => (scope ? scope.setTimeout(fn, ms) : setTimeout(fn, ms)).unref();
     let renewedAt = Date.now();
     if (!await lock.acquire(lockId, owner, ttlMs)) return "BUSY";
     const lost = new AbortController();
@@ -74,7 +69,6 @@ export async function withLock(
         }, err => GGLog.warn(lock, "Lock renew failed", {lockId, owner, err: (err as Error).message}))
             .finally(() => { renewing = undefined; });
     }, ttlMs / 3);
-    heartbeat.unref();
     let completed = false;
     try {
         await fn(signal ? AbortSignal.any([signal, lost.signal]) : lost.signal);
