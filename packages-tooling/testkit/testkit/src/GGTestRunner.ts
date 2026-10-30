@@ -42,6 +42,8 @@ export interface GGTestConfig {
     verboseProxy: boolean
 }
 
+const takenWorkerSeats = new Set<number>();
+
 export class GGTestRunner {
 
     /**
@@ -76,6 +78,8 @@ export class GGTestRunner {
     private readonly extensionInstances = new Map<GGTestComponentType<any>, GGTestComponent>();
 
     private readonly hooks: Map<string, GGTestRunnerHook> = new Map()
+
+    private workerSeat: number | undefined
 
     constructor(ipcServer: IPCServer, discoveryServer: IGGLocalDiscoveryServer, userConfig?: Partial<GGTestConfig>) {
         this.testId = "t" + Math.random().toString(36).substring(2, 8);
@@ -138,6 +142,21 @@ export class GGTestRunner {
      */
     public get started(): boolean {
         return this._started;
+    }
+
+    /**
+     * Unique among the run's concurrent runners, and the same small set of values every run: the run's slot, the
+     * worker, and this runner's seat in the worker (the lowest one no live runner holds, given back at teardown). For
+     * test resources a backend can't free, such as dynamodb-local's per-key databases.
+     */
+    public get reusableId(): string {
+        if (this.workerSeat === undefined) {
+            let n = 0;
+            while (takenWorkerSeats.has(n)) n++;
+            takenWorkerSeats.add(n);
+            this.workerSeat = n;
+        }
+        return `s${process.env.GG_TEST_SLOT ?? process.env.GG_TEST_RUN_ID}w${process.env.GG_TEST_WORKER ?? process.pid}n${this.workerSeat}`;
     }
 
     /**
@@ -321,6 +340,8 @@ export class GGTestRunner {
 
             this.globalRuntimes.length = 0
             this.hooks.clear()
+            // Only after the afterAll hooks cleaned up: a teardown that threw keeps it, so no later runner gets leftovers.
+            if (this.workerSeat !== undefined) takenWorkerSeats.delete(this.workerSeat)
         });
     }
 }

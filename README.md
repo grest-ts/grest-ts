@@ -664,6 +664,15 @@ Many packages provide testkit utilities making testing easier. These are
 | [`@grest-ts/lock`](./packages-libs/lock/lock)                  | Lease locks (`GGLock`, `withLock`) and in-memory implementations     |
 | [`@grest-ts/lock-dynamodb`](./packages-libs/lock/lock-dynamodb) | `GGLock` on DynamoDB, shared across instances                        |
 
+### Auth (All optional)
+
+| Package                                              | Purpose                                                                                                            |
+|------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------|
+| [`@grest-ts/auth`](./packages-libs/auth/auth)        | Access + refresh token auth — JWT signing, IdP strategies, HTTP/WS wires, client-side session                      |
+| [`@grest-ts/oauth`](./packages-libs/auth/oauth)      | OAuth 2.1 authorization server issuing `@grest-ts/auth` tokens, plus a browser code+PKCE client                    |
+| [`@grest-ts/service-auth`](./packages-libs/auth/service-auth) | Service-to-service auth — a shared-secret header wire, verified fail-closed and in constant time                  |
+| [`@grest-ts/authz`](./packages-libs/auth/authz)      | Authorization engine for contract requirements — IAM-style evaluation over a resource tree, list plans, approvals |
+
 ### Files (All optional)
 
 | Package                                            | Purpose                                                                                                                     |

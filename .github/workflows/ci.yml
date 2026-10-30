@@ -71,6 +71,14 @@ jobs:
       - name: Test
         run: npx tsx grest.2.vitest.ts
 
+      - name: Authz Cedar differential test
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ] && git diff --quiet "origin/${{ github.base_ref }}...HEAD" -- packages-libs/auth/authz; then
+            echo "packages-libs/auth/authz unchanged, skipping"
+            exit 0
+          fi
+          npm run test:cedar -w @grest-ts/authz
+
       # We want to make sure build also works.
       - name: Build
         run: npx tsx grest.4.build.ts
