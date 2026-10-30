@@ -2,7 +2,7 @@ import {FORBIDDEN, NOT_AUTHORIZED} from "@grest-ts/schema"
 import {applyPlan} from "./applyPlan"
 import {expandActions, expandRoles, MAX_DEPTH, type OnUnknownAction} from "../shared/chain"
 import {type AttributeLookup, evalCondition, evalConditional, evalConditions, isResourceKey} from "./conditions"
-import {type GGAuthzActionRef, validatedModels} from "../shared/defineAuthz"
+import {assertWorkloadTypes, type GGAuthzActionRef, validatedModels} from "../shared/defineAuthz"
 import {APPROVAL_REQUIRED, INSUFFICIENT_SCOPE, STEP_UP_REQUIRED} from "../shared/authzErrors"
 import {explain} from "./explain"
 import {GG_AUTHZ_SUBJECT} from "./GG_AUTHZ_SUBJECT"
@@ -204,6 +204,7 @@ export class GGAuthz {
 
     constructor(config: GGAuthzConfig) {
         this.model = validatedModels.has(config.model) ? config.model : IsGGAuthzModel.parse(config.model)
+        assertWorkloadTypes(this.model)
         const policies = IsGGAuthzPolicies.parse(config.policies)
         this.resolver = config.resolver
         this.approvals = config.approvals
@@ -252,9 +253,6 @@ export class GGAuthz {
                 for (const principal of s.principals) push(this.statementsByPrincipal, principal, statement)
             }
             for (const a of p.approvals ?? []) policy.approvals.push(this.approval(a, lenient(`approvals ${p.on}`)))
-        }
-        if (!this.workloadTypes.size && (this.approvalFloor.length || [...this.policies.values()].some(p => p.approvals.some(a => a.actions.size)))) {
-            throw new Error("Approval levels apply only to model.workloadTypes, and the model names none")
         }
         for (const g of policies.guardrails ?? []) {
             const guardrail: Guardrail = {

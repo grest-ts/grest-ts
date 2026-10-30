@@ -133,6 +133,7 @@ export function defineAuthzModel(spec: GGAuthzModelSpec): GGAuthzModel {
     for (const s of model.tokenScopes ?? []) for (const r of s.allow) expandActions(known, r.actions)
     for (const f of model.approvalFloor ?? []) expandActions(known, f.actions)
     if (model.grantAction) expandActions(known, [model.grantAction])
+    assertWorkloadTypes(model)
     deepFreeze(model)
     validatedModels.add(model)
     return model
@@ -146,19 +147,19 @@ function actionName(ref: GGAuthzActionRef): string {
     return typeof ref === "string" ? ref : ref.name
 }
 
-// Same name from the same file is a module re-evaluation (HMR, vitest projects), not a duplicate. Compared without the
-// line and the query, which an HMR reload (`?t=…`) or an edit above the definition changes.
+// Same name from the same place is a module re-evaluation (HMR, vitest projects), not a duplicate. Compared without the
+// query an HMR reload adds (`?t=…`); an edit above the definition before a reload still reads as a duplicate.
 function register<T extends {definedAt?: string}>(kind: Kind, name: string, value: T): T {
     const key = `${kind}:${name}`
-    if (registry.has(key) && fileOf(registry.get(key)) !== fileOf(value.definedAt)) {
+    if (registry.has(key) && placeOf(registry.get(key)) !== placeOf(value.definedAt)) {
         throw new Error(`Duplicate authz ${kind} ${name}: defined at ${registry.get(key) ?? "?"} and ${value.definedAt ?? "?"}`)
     }
     registry.set(key, value.definedAt)
     return value
 }
 
-function fileOf(at: string | undefined): string | undefined {
-    return at?.replace(/:\d+:\d+$/, "").replace(/\?.*$/, "")
+function placeOf(at: string | undefined): string | undefined {
+    return at?.replace(/\?[^:]*(?=:\d+:\d+$)/, "")
 }
 
 const SELF = import.meta.url.replace(/^file:\/\//, "").replace(/\/[^/]*$/, "/")
@@ -166,4 +167,9 @@ const SELF = import.meta.url.replace(/^file:\/\//, "").replace(/\/[^/]*$/, "/")
 function definedAt(): string | undefined {
     const frame = new Error().stack?.split("\n").slice(1).find(line => !line.includes(SELF))
     return frame?.trim().replace(/^at\s+/, "").replace(/^.*\((.*)\)$/, "$1")
+}
+
+/** Approval levels apply only to workload principals; a floor on a model that names none would silently do nothing. */
+export function assertWorkloadTypes(model: GGAuthzModel): void {
+    if (model.approvalFloor?.length && !model.workloadTypes?.length) throw new Error("model.approvalFloor applies only to model.workloadTypes, and the model names none")
 }

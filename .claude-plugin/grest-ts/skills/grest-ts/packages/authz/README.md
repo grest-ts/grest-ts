@@ -111,10 +111,10 @@ export const AppAuthz = defineAuthzModel({
 - **Fail at load.** `defineAuthzModel` validates the model and every action it names, then
   deep-freezes it.
 - **Registry.** Services, roles and token scopes register globally with where they were defined.
-  The same name defined in two files throws and names both; re-evaluating the same file (HMR,
-  vitest projects) replaces it.
-- `workloadTypes` lists the principal types approvals apply to (none by default); an engine whose
-  model or policies set approval levels without any fails to build.
+  The same name defined in two places throws and names both; re-evaluating the same definition
+  (HMR, vitest projects) replaces it.
+- `workloadTypes` lists the principal types approvals apply to (none by default); a model with an
+  `approvalFloor` but no workload types fails at load.
 
 ### Resource names (RN)
 
