@@ -3,8 +3,6 @@ import * as fs from 'fs';
 import * as path from 'path';
 import {pathToFileURL} from 'url';
 
-const LOCKFILES = ['package-lock.json', 'pnpm-lock.yaml', 'yarn.lock', 'bun.lockb', 'bun.lock'];
-
 /**
  * Discovers extension packages by scanning node_modules + monorepo packages
  * for a {name}/index-{name}.ts (or compiled .js) entry. Each discovered file
@@ -49,7 +47,7 @@ export class GGExtensionDiscovery {
         // Resolve extensions by reading package.json dependencies and walking up
         // node_modules directories (like Node.js module resolution).
         // This works regardless of hoisting, workspaces, pnpm, etc.
-        const depNames = new Set([...this.readDependencyNames(cwd), ...this.installedGrestPackages(cwd)]);
+        const depNames = this.readDependencyNames(cwd);
 
         for (const dep of depNames) {
             const pkgDir = this.resolvePackageDir(dep, cwd);
@@ -102,21 +100,6 @@ export class GGExtensionDiscovery {
             dir = path.dirname(dir);
         }
         return null;
-    }
-
-    // Declared or not: a @grest-ts package that arrives through another dependency still runs in the app's runtimes,
-    // so its extension must load too. Only up to the project root (its lockfile), so a stray ~/node_modules isn't loaded.
-    private installedGrestPackages(cwd: string): string[] {
-        const names: string[] = [];
-        let dir = cwd;
-        const root = path.parse(dir).root;
-        while (dir !== root) {
-            const scopeDir = path.join(dir, 'node_modules', '@grest-ts');
-            if (fs.existsSync(scopeDir)) names.push(...fs.readdirSync(scopeDir).map(name => `@grest-ts/${name}`));
-            if (LOCKFILES.some(file => fs.existsSync(path.join(dir, file)))) break;
-            dir = path.dirname(dir);
-        }
-        return names;
     }
 
     private readDependencyNames(cwd: string): string[] {

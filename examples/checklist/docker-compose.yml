@@ -57,7 +57,7 @@ services:
       retries: 10
       start_period: 30s
 
-  # DynamoDB local for package tests (@grest-ts/job-dynamodb)
+  # DynamoDB local for package tests (@grest-ts/lock-dynamodb)
   # Connection: http://localhost:8001 — in-memory, no -sharedDb, so each access key gets its own tables
   dynamodb-test:
     image: amazon/dynamodb-local

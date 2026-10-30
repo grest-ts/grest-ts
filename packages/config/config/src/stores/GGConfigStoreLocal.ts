@@ -18,7 +18,7 @@ type ConfigKeyOf<T, D extends 1[] = []> = D['length'] extends 5 ? never : {
  * True when a local config may leave this entry out, as at runtime: a setting falls back to its default, a key whose
  * schema accepts undefined may be unset, and an object holding only such entries may be left out whole.
  */
-export type ConfigValueOptional<T, D extends 1[] = []> =
+type ConfigValueOptional<T, D extends 1[] = []> =
     D['length'] extends 5 ? false :
         T extends GGSetting<any> ? true :
             T extends GGConfigKey<infer V> ? (undefined extends V ? true : false) :
