@@ -50,14 +50,17 @@ export async function withLock(
         lost.abort();
         clearInterval(heartbeat);
     };
+    // One renew at a time, so the hold below has only one to wait for.
     let renewing: Promise<void> | undefined;
     const heartbeat = scope.setInterval(() => {
         const sentAt = Date.now();
         if (sentAt - renewedAt >= ttlMs * 2 / 3) return lose();
+        if (renewing) return;
         renewing = lock.renew(lockId, owner, ttlMs).then(ok => {
-            if (ok) renewedAt = Math.max(renewedAt, sentAt);
+            if (ok) renewedAt = sentAt;
             else lose();
-        }, err => GGLog.warn(lock, "Lock renew failed", {lockId, owner, err: (err as Error).message}));
+        }, err => GGLog.warn(lock, "Lock renew failed", {lockId, owner, err: (err as Error).message}))
+            .finally(() => { renewing = undefined; });
     }, ttlMs / 3);
     heartbeat.unref();
     let completed = false;
@@ -66,11 +69,16 @@ export async function withLock(
         completed = !signal?.aborted;
     } finally {
         clearInterval(heartbeat);
-        // A renew still in flight would otherwise land after the hold below and shorten it.
-        await renewing;
+        const hold = completed && holdUntil !== undefined && holdUntil > Date.now();
+        if (hold && renewing) {
+            // A renew still in flight would otherwise land after the hold and shorten it. Past a TTL the lease is gone.
+            let timer: NodeJS.Timeout | undefined;
+            await Promise.race([renewing, new Promise<void>(r => { timer = scope.setTimeout(r, ttlMs); })]);
+            clearTimeout(timer);
+        }
         done = true;
         if (!lost.signal.aborted) {
-            const holdMs = completed && holdUntil !== undefined ? holdUntil - Date.now() : 0;
+            const holdMs = hold ? holdUntil! - Date.now() : 0;
             if (holdMs > 0) {
                 await lock.renew(lockId, owner, holdMs).then(
                     ok => { if (!ok) GGLog.warn(lock, "Lock hold failed: the lease was already lost", {lockId, owner}); },

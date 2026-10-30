@@ -19,10 +19,10 @@ export interface GGInstanceLockEntry {
  * ```
  */
 export class GGInstanceLock implements GGLock {
-    private readonly locks = new Map<string, GGInstanceLockEntry>();
+    private locks?: Map<string, GGInstanceLockEntry>;
 
     protected storage(): Map<string, GGInstanceLockEntry> {
-        return this.locks;
+        return this.locks ??= new Map();
     }
 
     async acquire(lockId: string, owner: string, ttlMs: number): Promise<boolean> {
