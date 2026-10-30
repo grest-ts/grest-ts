@@ -13,8 +13,6 @@ export interface GGOAuthServiceClientOptions {
 // A reused token is replaced this long before it expires, so it never expires in flight.
 const REFRESH_MARGIN_MS = 60_000
 
-// A backend of the app calling the authorization server's GGOAuthServiceApi as a registered service
-// client (see GGOAuthServer serviceClients): tokens for its own calls, and token exchange.
 export class GGOAuthServiceClient {
 
     private readonly options: GGOAuthServiceClientOptions
@@ -41,7 +39,6 @@ export class GGOAuthServiceClient {
         return (await entry.pending).token
     }
 
-    // Trades `subjectToken` (an access token) for one for `resource`, same subject.
     public exchange = async (subjectToken: string, resource: string, params: Record<string, string> = {}): Promise<{token: string, expiresAt: number}> =>
         await this.api.exchange({subjectToken, resource, params})
 

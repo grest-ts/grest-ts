@@ -45,7 +45,6 @@ export interface GGOAuthResource<C extends object> extends GGOAuthProtectedResou
     }
 }
 
-// A backend of the app: calls GGOAuthServiceApi with its secret, for its own tokens and token exchange.
 export interface GGOAuthServiceClientRegistration {
     clientId: string
     secret: () => string
@@ -474,7 +473,6 @@ export class GGOAuthServer {
         return client.clientId
     }
 
-    // The client is the subject: only for resources reserved to service clients.
     private serviceToken = async ({resource}: {resource: string}): Promise<GGAccessTokenData> => {
         const clientId = SERVICE_CLIENT.get()!
         const target = this.resource(resource)

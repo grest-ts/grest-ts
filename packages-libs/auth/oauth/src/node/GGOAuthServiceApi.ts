@@ -2,14 +2,12 @@ import {GGHeader, GGHttpSchema, GGRpc} from "@grest-ts/http"
 import {ERROR, FORBIDDEN, GG_NO_PERMISSIONS, GGContractClass, IsObject, IsRecord, IsString, NOT_AUTHORIZED, SERVER_ERROR} from "@grest-ts/schema"
 import {IsGGAccessTokenData} from "@grest-ts/auth"
 
-// `Basic base64(clientId:secret)` of a registered service client (GGOAuthServer serviceClients).
+// `Basic base64(clientId:secret)`, each part URI-encoded.
 export const GG_OAUTH_SERVICE_CLIENT = new GGHeader("authorization")
 
 // The subject token given to exchange is invalid or expired: get a fresh one, it's not a refusal.
 export const SUBJECT_TOKEN_INVALID = ERROR.define("SUBJECT_TOKEN_INVALID", 401)
 
-// What the authorization server offers the app's own backends. NOT_AUTHORIZED: wrong client credentials.
-// FORBIDDEN: the resource isn't the client's, or there is no token for this subject (claims answered undefined).
 export const GGOAuthServiceApiContract = new GGContractClass("GGOAuthServiceApi", {
     token: {
         input: IsObject({resource: IsString}),
