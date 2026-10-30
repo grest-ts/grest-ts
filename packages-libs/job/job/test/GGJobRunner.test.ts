@@ -304,6 +304,36 @@ describe("GGJobRunner", () => {
         expect(getDataSet).toHaveBeenCalledTimes(4)
     })
 
+    test("run() runs a job now, reports its batches, and leaves no cooldown behind", async () => {
+        const lock = new GGInstanceLock()
+        const pending = Array.from({length: 7}, (_, i) => `r${i}`)
+        const job = new TestJob({limit: 3, maxExtraRuns: 5}, () => pending, async row => {
+            pending.splice(pending.indexOf(row), 1)
+        })
+        const runner = newRunner(lock, "a").add(job)
+        const run = () => scopes.get(runner)!.run(() => runner.run("test"))
+
+        expect(await run()).toEqual({result: "DONE", rows: 7, failed: 0, batches: 3})
+        expect(await run()).toEqual({result: "DONE", rows: 0, failed: 0, batches: 1})
+        expect(await lock.acquire("test", "b", 1_000)).toBe(true)
+    })
+
+    test("run() is BUSY while another instance holds the lock and DISABLED when disabled; it rejects for a failed run or an unknown job", async () => {
+        const lock = new GGInstanceLock()
+        await lock.acquire("test", "b", 60_000)
+        const runner = newRunner(lock, "a").add(
+            new TestJob(),
+            new TestJob({name: "off", enabled: false}),
+            new TestJob({name: "broken"}, () => { throw new Error("db down") }),
+        )
+        const run = (name: string) => scopes.get(runner)!.run(() => runner.run(name))
+
+        expect(await run("test")).toEqual({result: "BUSY", rows: 0, failed: 0, batches: 0})
+        expect(await run("off")).toEqual({result: "DISABLED", rows: 0, failed: 0, batches: 0})
+        await expect(run("broken")).rejects.toThrow("db down")
+        await expect(run("nope")).rejects.toThrow("No job nope")
+    })
+
     test("settings must be whole numbers", () => {
         expect(IsGGJobSettings.safeParse({intervalMs: 1_000, timeoutMs: 1_000, limit: 2.5}).success).toBe(false)
         expect(IsGGJobSettings.safeParse({intervalMs: 1_000, timeoutMs: 1_000, limit: 3}).success).toBe(true)

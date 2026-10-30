@@ -7,7 +7,5 @@ definePackage({
     targets: {node: true},
     hasTests: true,
     publishToNpm: true,
-    customExports: {
-        "./testkit": "./src/testkit/runJobOnce.ts"
-    }
+    extendsTestKit: true,
 })

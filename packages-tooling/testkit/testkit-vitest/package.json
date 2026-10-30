@@ -63,6 +63,7 @@
     "@grest-ts/discovery-local": "0.0.100",
     "@grest-ts/http": "0.0.100",
     "@grest-ts/ipc": "0.0.100",
+    "@grest-ts/job": "0.0.100",
     "@grest-ts/locator": "0.0.100",
     "@grest-ts/logger": "0.0.100",
     "@grest-ts/logger-console": "0.0.100",

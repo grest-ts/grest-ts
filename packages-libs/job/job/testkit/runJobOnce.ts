@@ -1,4 +1,4 @@
-import type {GGJob} from "../GGJob"
+import type {GGJob} from "../src/GGJob"
 
 /** One batch, no runner and no locks: a job's own logic in a unit test. Row errors are returned, not thrown. */
 export async function runJobOnce<Row>(job: GGJob<Row>): Promise<{rows: Row[], errors: unknown[]}> {

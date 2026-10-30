@@ -5,7 +5,7 @@ import {type GGLock, newLockOwner, withLock} from "@grest-ts/lock"
 import type {GGJob} from "./GGJob"
 import {GGJobMetrics} from "./GGJobMetrics"
 
-const GG_JOB_RUNNER = new GGLocatorKey<GGJobRunner>("GGJobRunner")
+export const GG_JOB_RUNNER = new GGLocatorKey<GGJobRunner>("GGJobRunner")
 
 const DEFAULT_LIMIT = 500
 const MIN_CHECK_EVERY_MS = 60_000
@@ -16,6 +16,14 @@ export interface GGJobRunnerOptions {
     lock: GGLock
     /** Unique per runner. Default `newLockOwner()`. */
     owner?: string
+}
+
+export interface GGJobRunResult {
+    /** `BUSY`: another run or a cooldown holds the lock. `DISABLED`: the job's `enabled` setting is false. */
+    result: "DONE" | "BUSY" | "LOST" | "DISABLED"
+    rows: number
+    failed: number
+    batches: number
 }
 
 /** Runs its jobs from runtime start until teardown, which stops new rows, waits for running ones and frees locks. */
@@ -49,6 +57,17 @@ export class GGJobRunner {
         return this
     }
 
+    has(name: string): boolean {
+        return this.loops.some(l => l.job.config.name === name)
+    }
+
+    /** Runs a job now, outside its schedule, and leaves the schedule as it was. Rejects when the run fails. */
+    async run(name: string): Promise<GGJobRunResult> {
+        const loop = this.loops.find(l => l.job.config.name === name)
+        if (!loop) throw new Error(`No job ${name} (jobs: ${this.loops.map(l => l.job.config.name).join(", ")})`)
+        return loop.runNow()
+    }
+
     start(): void {
         if (this.started) return
         this.started = true
@@ -79,7 +98,7 @@ class JobLoop {
     private readonly lock: GGLock
     private readonly owner: string
     private timer?: NodeJS.Timeout
-    private running?: Promise<void>
+    private running?: Promise<unknown>
     private lastConfig?: RunConfig
     private readonly stopped = new AbortController()
 
@@ -140,14 +159,25 @@ class JobLoop {
             config = this.lastConfig
         }
         if (config.enabled && !this.running) {
-            this.running = this.runOnce(config)
+            this.track(this.runOnce(config, true))
                 .catch(err => GGLog.error(this.job, "Job run failed", {job: this.job.config.name, err: (err as Error).message}))
-                .finally(() => { this.running = undefined })
         }
         this.schedule(this.oneInstance ? config.checkEveryMs : config.intervalMs)
     }
 
-    private async runOnce(config: RunConfig): Promise<void> {
+    async runNow(): Promise<GGJobRunResult> {
+        const config = this.runConfig()
+        if (!config.enabled) return {result: "DISABLED", rows: 0, failed: 0, batches: 0}
+        if (this.running) return {result: "BUSY", rows: 0, failed: 0, batches: 0}
+        return this.track(this.runOnce(config, false))
+    }
+
+    private track<T>(run: Promise<T>): Promise<T> {
+        this.running = run.catch(() => {}).finally(() => { this.running = undefined })
+        return run
+    }
+
+    private async runOnce(config: RunConfig, hold: boolean): Promise<GGJobRunResult> {
         const name = this.job.config.name
         const signal = this.stopped.signal
         const startedAt = Date.now()
@@ -155,10 +185,11 @@ class JobLoop {
             GGLog.warn(this.job, "Job still running past its timeout", {job: name, timeoutMs: config.timeoutMs})
         }, config.timeoutMs)
         overdue.unref()
+        let totals = {rows: 0, failed: 0, batches: 0}
         const run = async (s: AbortSignal) => {
             metric(() => GGJobMetrics.runs.inc(1, {job: name}))
             try {
-                await this.runBatches(config, s)
+                totals = await this.runBatches(config, s)
             } finally {
                 const durationMs = Date.now() - startedAt
                 metric(() => GGJobMetrics.runDuration.inc(durationMs, {job: name}))
@@ -170,22 +201,24 @@ class JobLoop {
                 const {lock, owner} = this
                 // Hold the lock until the next run is due, so all instances share one run per interval. The slack
                 // absorbs clock skew: a check that finds the run just short of due must not delay it a whole check.
-                const holdUntil = startedAt + config.intervalMs - config.checkEveryMs / 10
+                const holdUntil = hold ? startedAt + config.intervalMs - config.checkEveryMs / 10 : undefined
                 const result = await withLock(lock, name, {owner, ttlMs: config.timeoutMs, signal, holdUntil}, s => {
                     GGLog.info(this.job, "Job run", {job: name, owner})
                     return run(s)
                 })
                 if (result === "LOST") metric(() => GGJobMetrics.lockLost.inc(1, {job: name}))
-            } else {
-                await run(signal)
+                return {result, ...totals}
             }
+            await run(signal)
+            return {result: "DONE", ...totals}
         } finally {
             clearTimeout(overdue)
         }
     }
 
-    private async runBatches({limit, parallel, maxExtraRuns}: RunConfig, signal: AbortSignal): Promise<void> {
+    private async runBatches({limit, parallel, maxExtraRuns}: RunConfig, signal: AbortSignal): Promise<{rows: number, failed: number, batches: number}> {
         const name = this.job.config.name
+        const totals = {rows: 0, failed: 0, batches: 0}
         for (let extra = 0; ; extra++) {
             const startedAt = Date.now()
             const rows = await this.job.getDataSet(limit)
@@ -201,11 +234,14 @@ class JobLoop {
             }
             await Promise.all(Array.from({length: Math.min(parallel, rows.length)}, worker))
 
+            totals.rows += rows.length
+            totals.failed += failed
+            totals.batches++
             const report = {rows: rows.length, failed, durationMs: Date.now() - startedAt}
             if (rows.length > 0) GGLog.info(this.job, "Job batch done", {job: name, ...report})
             await this.job.dataSetFinished?.(report)
                 .catch(err => GGLog.warn(this.job, "Job dataSetFinished failed", {job: name, err: (err as Error).message}))
-            if (signal.aborted || failed > 0 || rows.length < limit || extra >= maxExtraRuns) return
+            if (signal.aborted || failed > 0 || rows.length < limit || extra >= maxExtraRuns) return totals
         }
     }
 

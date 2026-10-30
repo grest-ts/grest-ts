@@ -47,7 +47,7 @@ export class GGExtensionDiscovery {
         // Resolve extensions by reading package.json dependencies and walking up
         // node_modules directories (like Node.js module resolution).
         // This works regardless of hoisting, workspaces, pnpm, etc.
-        const depNames = this.readDependencyNames(cwd);
+        const depNames = new Set([...this.readDependencyNames(cwd), ...this.installedGrestPackages(cwd)]);
 
         for (const dep of depNames) {
             const pkgDir = this.resolvePackageDir(dep, cwd);
@@ -100,6 +100,17 @@ export class GGExtensionDiscovery {
             dir = path.dirname(dir);
         }
         return null;
+    }
+
+    // Declared or not: a @grest-ts package that arrives through another dependency still runs in the app's runtimes,
+    // so its extension must load too.
+    private installedGrestPackages(cwd: string): string[] {
+        const names: string[] = [];
+        for (let dir = cwd; ; dir = path.dirname(dir)) {
+            const scopeDir = path.join(dir, 'node_modules', '@grest-ts');
+            if (fs.existsSync(scopeDir)) names.push(...fs.readdirSync(scopeDir).map(name => `@grest-ts/${name}`));
+            if (dir === path.dirname(dir)) return names;
+        }
     }
 
     private readDependencyNames(cwd: string): string[] {

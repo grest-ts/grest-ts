@@ -56,6 +56,10 @@ describe("my test", () => {
 
         // t.all() selects all runtimes
         await t.all().config.update(SHARED_KEY, value);
+
+        // t.myRuntime.jobs - from @grest-ts/job/testkit
+        // Jobs don't run on their own under GGTest; run one when the test needs it
+        await t.myRuntime.jobs.run("expired-sessions").toMatchObject({result: "DONE"});
     });
 
     test("schema extensions - mock/spy", async () => {

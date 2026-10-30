@@ -67,6 +67,8 @@ class MyRuntime extends GGRuntime {
 
 The runner starts with the runtime. On teardown it stops new rows, waits for running ones and frees its locks. With a single instance, `new GGInstanceLock()` from `@grest-ts/lock` is enough.
 
+`runner.run(name)` runs a job now, outside its schedule (e.g. from an admin endpoint), and leaves the schedule as it was.
+
 ## Where It Runs
 
 | `runOn` | |
@@ -103,12 +105,25 @@ Recorded when the runtime has a `GGMetricsLoader`, labelled by `job`: `/job/runs
 
 ## Testing
 
-`runJobOnce` runs one batch of a job's own logic, with no runner and no locks. Row errors are returned, not thrown:
+In a `GGTest` runtime, jobs don't run on their own: timed runs would race the test. Run one when the test needs it. The run goes through the runner as usual (settings, lock, batches) and sees the test's mocks:
+
+```typescript
+const t = GGTest.startWorker(MyRuntime)
+
+await t.jobs.run("expired-sessions")
+    .with(mockOf(SessionTable).listExpired.andReturn([session]))
+    .toEqual({result: "DONE", rows: 1, failed: 0, batches: 1})
+```
+
+- `result` is `DONE`, `BUSY` (another instance holds the lock), `LOST` or `DISABLED`. A run that fails fails the action.
+- With several instances, pick one: `t[1].jobs.run(...)`.
+- `await t.jobs.start()` starts the schedules, for a test about scheduling itself.
+- Change a job's setting with `t.config.update(MyConfig.jobs.expiredSessions, {...})`.
+
+`runJobOnce` runs one batch of a job's own logic in a unit test, with no runtime, runner or lock. Row errors are returned, not thrown:
 
 ```typescript
 import {runJobOnce} from "@grest-ts/job/testkit"
 
 const {rows, errors} = await runJobOnce(new ExpiredSessionsJob(table))
 ```
-
-In a `GGTest` runtime, change a job's setting with `t.config.update(MyConfig.jobs.expiredSessions, {...})`.

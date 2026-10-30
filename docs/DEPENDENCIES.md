@@ -21,7 +21,6 @@ flowchart TB
         events-gcp["events-gcp 🟢"]
         http-file["http-file 🟢🌐"]
         intl["intl 🟢🌐"]
-        job["job 🟢"]
         lock-dynamodb["lock-dynamodb 🟢"]
         oauth["oauth 🟢🌐"]
         schema-benchmark["schema-benchmark 🟢"]
@@ -37,7 +36,7 @@ flowchart TB
         db-mysql["db-mysql 🟢"]
         db-postgre["db-postgre 🟢"]
         events["events 🟢"]
-        lock["lock 🟢"]
+        job["job 🟢"]
         openapi["openapi 🟢"]
         testkit["testkit 🟢"]
         websocket["websocket 🟢🌐"]
@@ -45,6 +44,7 @@ flowchart TB
     subgraph L2[" "]
         config["config 🟢"]
         http["http 🟢🌐"]
+        lock["lock 🟢"]
         runtime["runtime 🟢"]
         testkit-runtime["testkit-runtime 🟢"]
     end
@@ -222,6 +222,7 @@ flowchart TB
     testkit-vitest --> discovery-local
     testkit-vitest --> http
     testkit-vitest --> ipc
+    testkit-vitest --> job
     testkit-vitest --> locator
     testkit-vitest --> logger
     testkit-vitest --> logger-console
@@ -450,12 +451,12 @@ flowchart TB
     linkStyle 156 stroke:#9C755F,stroke-width:2px
     linkStyle 157 stroke:#9C755F,stroke-width:2px
     linkStyle 158 stroke:#9C755F,stroke-width:2px
-    linkStyle 159 stroke:#BAB0AC,stroke-width:2px
+    linkStyle 159 stroke:#9C755F,stroke-width:2px
     linkStyle 160 stroke:#BAB0AC,stroke-width:2px
-    linkStyle 161 stroke:#86BCB6,stroke-width:2px
+    linkStyle 161 stroke:#BAB0AC,stroke-width:2px
     linkStyle 162 stroke:#86BCB6,stroke-width:2px
     linkStyle 163 stroke:#86BCB6,stroke-width:2px
-    linkStyle 164 stroke:#8CD17D,stroke-width:2px
+    linkStyle 164 stroke:#86BCB6,stroke-width:2px
     linkStyle 165 stroke:#8CD17D,stroke-width:2px
     linkStyle 166 stroke:#8CD17D,stroke-width:2px
     linkStyle 167 stroke:#8CD17D,stroke-width:2px
@@ -464,6 +465,7 @@ flowchart TB
     linkStyle 170 stroke:#8CD17D,stroke-width:2px
     linkStyle 171 stroke:#8CD17D,stroke-width:2px
     linkStyle 172 stroke:#8CD17D,stroke-width:2px
+    linkStyle 173 stroke:#8CD17D,stroke-width:2px
 ```
 
 ---
@@ -1444,6 +1446,9 @@ flowchart TB
 
 ```mermaid
 flowchart TB
+    subgraph Dependents[" "]
+        testkit-vitest["testkit-vitest 🟢"]
+    end
     subgraph Package[" "]
         job["job 🟢"]
     end
@@ -1455,6 +1460,7 @@ flowchart TB
         metrics["metrics 🟢"]
         schema["schema 🟢🌐"]
     end
+    testkit-vitest --> job
     job --> config
     job --> locator
     job --> lock
@@ -1462,6 +1468,7 @@ flowchart TB
     job --> metrics
     job --> schema
     style job fill:#9C755F,stroke:#9C755F,color:#fff
+    style testkit-vitest fill:#9C755F,stroke:#9C755F,color:#fff
     style config fill:#B07AA1,stroke:#B07AA1,color:#fff
     style locator fill:#BAB0AC,stroke:#BAB0AC,color:#fff
     style lock fill:#86BCB6,stroke:#86BCB6,color:#fff
@@ -1474,6 +1481,7 @@ flowchart TB
     linkStyle 3 stroke:#9C755F,stroke-width:2px
     linkStyle 4 stroke:#9C755F,stroke-width:2px
     linkStyle 5 stroke:#9C755F,stroke-width:2px
+    linkStyle 6 stroke:#9C755F,stroke-width:2px
 ```
 
 ### Locator
@@ -2275,6 +2283,7 @@ flowchart TB
         discovery-local["discovery-local 🟢"]
         http["http 🟢🌐"]
         ipc["ipc 🟢"]
+        job["job 🟢"]
         locator["locator 🟢"]
         logger["logger 🟢🌐"]
         logger-console["logger-console 🟢"]
@@ -2292,6 +2301,7 @@ flowchart TB
     testkit-vitest --> discovery-local
     testkit-vitest --> http
     testkit-vitest --> ipc
+    testkit-vitest --> job
     testkit-vitest --> locator
     testkit-vitest --> logger
     testkit-vitest --> logger-console
@@ -2309,6 +2319,7 @@ flowchart TB
     style discovery-local fill:#A0CBE8,stroke:#A0CBE8,color:#fff
     style http fill:#59A14F,stroke:#59A14F,color:#fff
     style ipc fill:#FF9DA7,stroke:#FF9DA7,color:#fff
+    style job fill:#9C755F,stroke:#9C755F,color:#fff
     style locator fill:#BAB0AC,stroke:#BAB0AC,color:#fff
     style logger fill:#B6992D,stroke:#B6992D,color:#fff
     style logger-console fill:#499894,stroke:#499894,color:#fff
@@ -2332,6 +2343,7 @@ flowchart TB
     linkStyle 13 stroke:#9C755F,stroke-width:2px
     linkStyle 14 stroke:#9C755F,stroke-width:2px
     linkStyle 15 stroke:#9C755F,stroke-width:2px
+    linkStyle 16 stroke:#9C755F,stroke-width:2px
 ```
 
 ### Trace
