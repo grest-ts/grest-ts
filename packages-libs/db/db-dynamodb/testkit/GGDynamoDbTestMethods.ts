@@ -18,8 +18,8 @@ export interface GGDynamoDbCloneTestOptions {
 
     /** Group name for shared isolation across workers. Tests with the same
      *  group share one accessKey (and therefore one isolated database);
-     *  different groups get different accessKeys. Defaults to the test
-     *  runner's testId, i.e. each test suite gets its own group. */
+     *  different groups get different accessKeys. Defaults to one group
+     *  per test suite. */
     group?: string
 }
 
@@ -64,10 +64,10 @@ export class GGDynamoDbTestMethods {
             throw new Error("GG_TEST_RUN_ID not set. Add globalSetup '@grest-ts/testkit-vitest/globalSetup' to vitest.config.ts.")
         }
 
-        const groupName = options.group ?? test.testId
-        // dynamodb-local accepts arbitrary accessKey strings. We just need
-        // it to be unique per group + safe as a key derivation seed.
-        const accessKeyId = sanitizeAccessKey(`gg-test-${runId}-${groupName}`)
+        // One database per accessKey, and dynamodb-local keeps a database's threads until it restarts, so the key
+        // repeats run after run: the run's slot, and a group named by worker slot and runner order, never random.
+        const groupName = options.group ?? defaultGroup(test)
+        const accessKeyId = sanitizeAccessKey(`gg-test-${process.env.GG_TEST_SLOT ?? runId}-${groupName}`)
 
         const provisionOpts: GGDynamoDbProvisionOptions = {setup: options.setup}
 
@@ -107,6 +107,19 @@ export class GGDynamoDbTestMethods {
 
         return callOn(this.config.token)
     }
+}
+
+const runnerGroups = new WeakMap<object, string>()
+let runnersSeen = 0
+
+// Unique among the run's concurrent suites (VITEST_POOL_ID is the worker's slot), and the same set every run.
+function defaultGroup(test: object): string {
+    let group = runnerGroups.get(test)
+    if (!group) {
+        group = `w${process.env.VITEST_POOL_ID ?? process.pid}n${++runnersSeen}`
+        runnerGroups.set(test, group)
+    }
+    return group
 }
 
 function sanitizeAccessKey(s: string): string {

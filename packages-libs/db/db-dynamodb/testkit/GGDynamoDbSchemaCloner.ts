@@ -62,6 +62,8 @@ export class GGDynamoDbSchemaCloner {
         }
         const ops = new GGDynamoDbTableOperations(connection)
         try {
+            // The database is reused across runs: clear what a crashed run left.
+            await ops.dropAllTables()
             await opts.setup({client: ops.client, doc: ops.docClient})
         } finally {
             ops.destroy()
