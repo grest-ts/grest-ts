@@ -13,7 +13,7 @@ const COMPARE_KEY = randomBytes(32)
  */
 export class GGSharedSecret {
 
-    /** Fail-closed: an empty configured secret refuses every request. Call once per wire; `.create(secret)` per runtime. */
+    /** Call once per wire (it `.define()`s it); `.create(secret)` once per runtime. */
     public static verify(wire: GGWireContextKey): GGWireHandlerRegistration<GGSecret<string>> {
         return wire.define((secret: GGSecret<string>) => ({
             process: async () => {

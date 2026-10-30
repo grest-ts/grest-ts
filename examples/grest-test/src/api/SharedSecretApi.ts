@@ -20,7 +20,6 @@ export const SharedSecretApi = new GGHttpSchema({
     }
 })
 
-// Public: each method calls SharedSecretApi through a client that attaches a configured secret.
 export const SharedSecretCallerApiContract = new GGContractClass("SharedSecretCallerApi", {
     withRightSecret: {
         success: IsString,
