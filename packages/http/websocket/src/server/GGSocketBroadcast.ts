@@ -1,8 +1,10 @@
 import {GGLog} from "@grest-ts/logger";
-import type {GGDuplexContractDefinition} from "@grest-ts/schema";
+import type {GGContractClient, GGDuplexContractDefinition} from "@grest-ts/schema";
 import type {GGWebSocketSchema} from "../schema/GGWebSocketSchema";
+import type {WebSocketOutgoing} from "../socket/WebSocketTypes";
 
-type Outgoing<TDef> = GGWebSocketSchema<TDef>["serverToClient"];
+type Audience<TDef extends GGDuplexContractDefinition> = GGContractClient<TDef["serverToClient"]>;
+type Outgoing<TDef extends GGDuplexContractDefinition> = WebSocketOutgoing<Audience<TDef>>;
 type Frame = [method: string, data: unknown];
 
 /**
@@ -11,7 +13,7 @@ type Frame = [method: string, data: unknown];
  */
 export class GGSocketBroadcast<TDef extends GGDuplexContractDefinition> {
 
-    public readonly out: Omit<Outgoing<TDef>, "onClose" | "close">;
+    public readonly out: Audience<TDef>;
 
     private readonly members = new Set<Outgoing<TDef>>();
     private readonly seeding = new Map<Outgoing<TDef>, Frame[]>();
@@ -21,7 +23,7 @@ export class GGSocketBroadcast<TDef extends GGDuplexContractDefinition> {
         for (const method of Object.keys(schema.contract.serverToClient.methods)) {
             out[method] = (data: unknown) => this.send(method, data);
         }
-        this.out = out as Omit<Outgoing<TDef>, "onClose" | "close">;
+        this.out = out as Audience<TDef>;
     }
 
     /**
@@ -35,6 +37,7 @@ export class GGSocketBroadcast<TDef extends GGDuplexContractDefinition> {
         outgoing.onClose(() => {
             closed = true;
             this.members.delete(outgoing);
+            this.seeding.delete(outgoing);
         });
         if (seed) {
             const queue: Frame[] = [];
@@ -45,20 +48,19 @@ export class GGSocketBroadcast<TDef extends GGDuplexContractDefinition> {
                 this.seeding.delete(outgoing);
             }
             if (closed) return;
-            for (const [method, data] of queue) this.deliver(outgoing, method, data);
+            for (const [method, data] of queue) void this.deliver(outgoing, method, data);
         }
         this.members.add(outgoing);
     }
 
     private send(method: string, data: unknown): void {
-        for (const outgoing of this.members) this.deliver(outgoing, method, data);
+        for (const outgoing of this.members) void this.deliver(outgoing, method, data);
         for (const queue of this.seeding.values()) queue.push([method, data]);
     }
 
-    private deliver(outgoing: Outgoing<TDef>, method: string, data: unknown): void {
+    private async deliver(outgoing: Outgoing<TDef>, method: string, data: unknown): Promise<void> {
         try {
-            Promise.resolve((outgoing as unknown as Record<string, (data: unknown) => unknown>)[method](data))
-                .catch(error => GGLog.warn(this, "Broadcast send failed", {method, error: (error as Error).message}));
+            await (outgoing as Record<string, (data: unknown) => unknown>)[method](data);
         } catch (error) {
             GGLog.warn(this, "Broadcast send failed", {method, error: (error as Error).message});
         }
