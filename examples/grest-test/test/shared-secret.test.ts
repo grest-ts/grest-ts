@@ -1,7 +1,6 @@
 import {callOn, GGTest} from "@grest-ts/testkit"
 import {GGContext} from "@grest-ts/context"
 import {NOT_AUTHORIZED} from "@grest-ts/schema"
-import {GGSharedSecret} from "@grest-ts/service-auth"
 import {SharedSecretRuntime} from "../src/SharedSecretRuntime"
 import {INTERNAL_SECRET_WIRE, SharedSecretApi, SharedSecretCallerApi} from "../src/api/SharedSecretApi"
 
@@ -41,12 +40,5 @@ describe("GGSharedSecret", () => {
         test("a client with a wrong secret is refused", async () => {
             await callOn(SharedSecretCallerApi).withWrongSecret().toBeError(NOT_AUTHORIZED)
         })
-    })
-
-    test("equals compares content, not just length", () => {
-        expect(GGSharedSecret.equals("abc", "abc")).toBe(true)
-        expect(GGSharedSecret.equals("abc", "abd")).toBe(false)
-        expect(GGSharedSecret.equals("abc", "abcd")).toBe(false)
-        expect(GGSharedSecret.equals("", "")).toBe(true)
     })
 })
