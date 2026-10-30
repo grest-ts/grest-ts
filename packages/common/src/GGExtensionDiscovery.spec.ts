@@ -28,4 +28,15 @@ describe('GGExtensionDiscovery', () => {
 
         expect(await new GGExtensionDiscovery('testkit').scan(dir)).toEqual([transitive, declared].sort());
     });
+
+    it('stops at the project root, so node_modules above it are not scanned', async () => {
+        dir = fs.mkdtempSync(path.join(tmpdir(), 'gg-ext-'));
+        install('@grest-ts/outside', true);
+        const project = path.join(dir, 'project');
+        fs.mkdirSync(project);
+        fs.writeFileSync(path.join(project, 'package.json'), '{}');
+        fs.writeFileSync(path.join(project, 'package-lock.json'), '{}');
+
+        expect(await new GGExtensionDiscovery('testkit').scan(project)).toEqual([]);
+    });
 });

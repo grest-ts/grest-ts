@@ -58,7 +58,10 @@ export class GGJobRunner {
         return this
     }
 
-    /** Runs a job now, outside its schedule, and leaves the schedule as it was. Rejects when the run fails. */
+    /**
+     * Runs a job now and leaves the schedule as it was; rejects when the run fails. A `oneInstance` job is `BUSY` until
+     * its last scheduled run's cooldown ends, as on any instance.
+     */
     async run(name: string): Promise<GGJobRunResult> {
         const loop = this.loops.find(l => l.job.config.name === name)
         if (!loop) throw new Error(`No job ${name} (jobs: ${this.loops.map(l => l.job.config.name).join(", ")})`)
@@ -163,6 +166,7 @@ class JobLoop {
     }
 
     async runNow(): Promise<GGJobRunResult> {
+        if (this.stopped.signal.aborted) throw new Error(`Job ${this.job.config.name}: the runner has stopped`)
         const config = this.runConfig()
         if (!config.enabled) return {result: "DISABLED", ...NO_RUN}
         if (this.running) return {result: "BUSY", ...NO_RUN}
@@ -231,10 +235,10 @@ class JobLoop {
             }
             await Promise.all(Array.from({length: Math.min(parallel, rows.length)}, worker))
 
-            totals.rows += rows.length
+            totals.rows += next
             totals.failed += failed
             totals.batches++
-            const report = {rows: rows.length, failed, durationMs: Date.now() - startedAt}
+            const report = {rows: next, failed, durationMs: Date.now() - startedAt}
             if (rows.length > 0) GGLog.info(this.job, "Job batch done", {job: name, ...report})
             await this.job.dataSetFinished?.(report)
                 .catch(err => GGLog.warn(this.job, "Job dataSetFinished failed", {job: name, err: (err as Error).message}))

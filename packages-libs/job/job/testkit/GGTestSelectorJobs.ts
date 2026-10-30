@@ -14,7 +14,8 @@ export class GGTestSelectorJobs extends GGTestSelectorExtension {
 
     /** Starts the selected runtimes' job schedules, as outside tests. */
     async start(): Promise<void> {
-        await this.forEachParallel(async runtime => { await runtime.sendCommand(GGJobIPC.worker.start, undefined) })
+        const started = await Promise.all(this.runtimes.map(runtime => runtime.sendCommand(GGJobIPC.worker.start, undefined)))
+        if (!started.includes(true)) throw new Error(`No job runner in ${this.runtimes.map(r => r.name).join(", ")}`)
     }
 }
 

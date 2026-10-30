@@ -334,6 +334,18 @@ describe("GGJobRunner", () => {
         await expect(run("nope")).rejects.toThrow("No job nope")
     })
 
+    test("run() counts only the rows it started when the lock is lost, and rejects once the runner stopped", async () => {
+        const runner = newRunner(stubLock({renew: async () => false}), "a").add(new TestJob({}, () => ["a", "b", "c"], untilAborted))
+        const run = () => scopes.get(runner)!.run(() => runner.run("test"))
+
+        const lost = run()
+        await vi.advanceTimersByTimeAsync(3_000)
+        expect(await lost).toEqual({result: "LOST", rows: 1, failed: 0, batches: 1})
+
+        await runner.stop()
+        await expect(run()).rejects.toThrow("the runner has stopped")
+    })
+
     test("settings must be whole numbers", () => {
         expect(IsGGJobSettings.safeParse({intervalMs: 1_000, timeoutMs: 1_000, limit: 2.5}).success).toBe(false)
         expect(IsGGJobSettings.safeParse({intervalMs: 1_000, timeoutMs: 1_000, limit: 3}).success).toBe(true)

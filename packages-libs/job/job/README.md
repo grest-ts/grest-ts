@@ -67,7 +67,7 @@ class MyRuntime extends GGRuntime {
 
 The runner starts with the runtime. On teardown it stops new rows, waits for running ones and frees its locks. With a single instance, `new GGInstanceLock()` from `@grest-ts/lock` is enough.
 
-`runner.run(name)` runs a job now, outside its schedule (e.g. from an admin endpoint), and leaves the schedule as it was.
+`runner.run(name)` runs a job now and leaves the schedule as it was. A `oneInstance` job answers `BUSY` until its last scheduled run's cooldown ends: the lock is what keeps it to one run per interval.
 
 ## Where It Runs
 

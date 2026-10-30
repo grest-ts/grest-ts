@@ -4,7 +4,7 @@ import {GG_JOB_RUNNER, GGJobRunner} from "../src/GGJobRunner"
 
 export const GGJobIPC = {
     worker: {
-        start: IPCClient.defineRequest<void, void>("job.start"),
+        start: IPCClient.defineRequest<void, boolean>("job.start"),
     },
 }
 
@@ -18,5 +18,6 @@ GGTestRuntimeWorker.onBeforeRuntimeStart(() => {
     GG_TEST_RUNTIME_WORKER.get().onIpcRequest(GGJobIPC.worker.start, () => {
         const runner = GG_JOB_RUNNER.tryGet()
         if (runner) start.call(runner)
+        return !!runner
     })
 })
