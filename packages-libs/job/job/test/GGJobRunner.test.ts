@@ -17,6 +17,16 @@ function newRunner(lock: GGJobLock, owner: string): GGJobRunner {
     })
 }
 
+function stubLock(overrides: Partial<GGJobLock> = {}): GGJobLock {
+    return {acquire: async () => true, renew: async () => true, release: async () => {}, ...overrides}
+}
+
+const untilAborted = (_row: string, signal: AbortSignal) => new Promise<void>(r => signal.addEventListener("abort", () => r()))
+
+function rowCount(runner: GGJobRunner, result: "OK" | "ERROR"): unknown {
+    return runner.scope.run(() => GG_METRICS.get().get(GGJobMetrics.rows).getValue({job: "test", result}))
+}
+
 class TestJob extends GGJob<string> {
     readonly processed: string[] = []
     running = 0
@@ -135,10 +145,8 @@ describe("GGJobRunner", () => {
 
     test("exclusive: a lost lock aborts the run, skips the rows not yet started and is not released", async () => {
         const release = vi.fn(async () => {})
-        const lock: GGJobLock = {acquire: async () => true, renew: async () => false, release}
-        const job = new TestJob({checkEveryMs: 60_000}, () => ["r1", "r2"], (_row, signal) => new Promise(r => {
-            signal.addEventListener("abort", () => r())
-        }))
+        const lock = stubLock({renew: async () => false, release})
+        const job = new TestJob({checkEveryMs: 60_000}, () => ["r1", "r2"], untilAborted)
         newRunner(lock, "a").add(job).start()
 
         await vi.advanceTimersByTimeAsync(3_000)
@@ -206,7 +214,7 @@ describe("GGJobRunner", () => {
     })
 
     test("metrics count runs, rows by result and lost locks", async () => {
-        const lock: GGJobLock = {acquire: async () => true, renew: async () => false, release: async () => {}}
+        const lock = stubLock({renew: async () => false})
         const job = new TestJob({name: "metered", checkEveryMs: 60_000}, () => ["bad", "good", "slow"], (row, signal) => {
             if (row === "bad") return Promise.reject(new Error("boom"))
             if (row === "good") return Promise.resolve()
@@ -253,7 +261,7 @@ describe("GGJobRunner", () => {
 
     test("exclusive: a data set that fails to load records no last run, so the next check runs it", async () => {
         const release = vi.fn(async () => {})
-        const lock: GGJobLock = {acquire: async () => true, renew: async () => true, release}
+        const lock = stubLock({release})
         let fail = true
         const job = new TestJob({}, () => {
             if (fail) throw new Error("db down")
@@ -271,10 +279,8 @@ describe("GGJobRunner", () => {
     })
 
     test("exclusive: renews that keep failing for two thirds of a TTL count as a lost lock", async () => {
-        const lock: GGJobLock = {acquire: async () => true, renew: async () => { throw new Error("unreachable") }, release: async () => {}}
-        const job = new TestJob({checkEveryMs: 60_000}, () => ["r1", "r2"], (_row, signal) => new Promise(r => {
-            signal.addEventListener("abort", () => r())
-        }))
+        const lock = stubLock({renew: async () => { throw new Error("unreachable") }})
+        const job = new TestJob({checkEveryMs: 60_000}, () => ["r1", "r2"], untilAborted)
         newRunner(lock, "a").add(job).start()
 
         await vi.advanceTimersByTimeAsync(2_500)
@@ -296,9 +302,7 @@ describe("GGJobRunner", () => {
 
         expect(job.processed).toEqual([])
         expect(getDataSet).toHaveBeenCalledTimes(1)
-        runner.scope.run(() => {
-            expect(GG_METRICS.get().get(GGJobMetrics.rows).getValue({job: "test", result: "OK"})).toBe(0)
-        })
+        expect(rowCount(runner, "OK")).toBe(0)
     })
 
     test("a row whose describeRow throws is still counted as failed", async () => {
@@ -316,18 +320,14 @@ describe("GGJobRunner", () => {
     })
 
     test("item: a row whose lock is lost counts as failed", async () => {
-        const lock: GGJobLock = {acquire: async () => true, renew: async () => false, release: async () => {}}
-        const job = new TestJob({lock: "item"}, () => ["r1"], (_row, signal) => new Promise(r => {
-            signal.addEventListener("abort", () => r())
-        }))
+        const lock = stubLock({renew: async () => false})
+        const job = new TestJob({lock: "item"}, () => ["r1"], untilAborted)
         const runner = newRunner(lock, "a").add(job)
         runner.start()
 
         await vi.advanceTimersByTimeAsync(2_500)
 
-        runner.scope.run(() => {
-            expect(GG_METRICS.get().get(GGJobMetrics.rows).getValue({job: "test", result: "ERROR"})).toBe(1)
-            expect(GG_METRICS.get().get(GGJobMetrics.rows).getValue({job: "test", result: "OK"})).toBe(0)
-        })
+        expect(rowCount(runner, "ERROR")).toBe(1)
+        expect(rowCount(runner, "OK")).toBe(0)
     })
 })

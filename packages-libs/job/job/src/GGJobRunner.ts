@@ -136,16 +136,20 @@ class JobLoop {
             GGLog.warn(this.job, "Job still running past its timeout", {job: name, timeoutMs})
         }, timeoutMs)
         overdue.unref()
-        let ran = false
-        const run = (s: AbortSignal) => {
-            ran = true
+        const run = async (s: AbortSignal) => {
             metric(() => GGJobMetrics.runs.inc(1, {job: name}))
-            return this.runBatches(config, s)
+            try {
+                await this.runBatches(config, s)
+            } finally {
+                const durationMs = Date.now() - startedAt
+                metric(() => GGJobMetrics.runDuration.inc(durationMs, {job: name}))
+                if (durationMs > config.intervalMs * WARN_RATIO) GGLog.warn(this.job, "Job run took most of its interval", {job: name, durationMs, intervalMs: config.intervalMs})
+            }
         }
         try {
             if (lock === "exclusive") {
                 // A tenth of a check of slack, for clock skew between instances: a check that finds the run a moment
-                // short of due must not push it a whole check back. It stays below a tenth of the interval.
+                // short of due must not push it a whole check back.
                 const due = {lastRunAtMost: startedAt - config.intervalMs + config.checkEveryMs / 10, ranAt: startedAt}
                 await this.withLock(name, signal, s => {
                     GGLog.info(this.job, "Job run", {job: name, owner: this.runner.owner})
@@ -156,11 +160,6 @@ class JobLoop {
             }
         } finally {
             clearTimeout(overdue)
-            if (ran) {
-                const durationMs = Date.now() - startedAt
-                metric(() => GGJobMetrics.runDuration.inc(durationMs, {job: name}))
-                if (durationMs > config.intervalMs * WARN_RATIO) GGLog.warn(this.job, "Job run took most of its interval", {job: name, durationMs, intervalMs: config.intervalMs})
-            }
         }
     }
 
@@ -173,11 +172,11 @@ class JobLoop {
         parent: AbortSignal,
         fn: (signal: AbortSignal) => Promise<void>,
         due?: {lastRunAtMost: number, ranAt: number},
-    ): Promise<"busy" | "lost" | "done"> {
+    ): Promise<"OK" | "SKIPPED" | "LOST"> {
         const {lock, owner, scope} = this.runner
         const {name, timeoutMs: ttl} = this.job.config
         let renewedAt = Date.now()
-        if (!await lock.acquire(id, owner, ttl, due?.lastRunAtMost)) return "busy"
+        if (!await lock.acquire(id, owner, ttl, due?.lastRunAtMost)) return "SKIPPED"
         const lost = new AbortController()
         let done = false
         const lose = () => {
@@ -188,8 +187,8 @@ class JobLoop {
             clearInterval(heartbeat)
         }
         const heartbeat = scope.setInterval(() => {
-            if (Date.now() - renewedAt >= ttl * 2 / 3) return lose()
             const sentAt = Date.now()
+            if (sentAt - renewedAt >= ttl * 2 / 3) return lose()
             lock.renew(id, owner, ttl).then(ok => {
                 if (ok) renewedAt = Math.max(renewedAt, sentAt)
                 else lose()
@@ -209,7 +208,7 @@ class JobLoop {
                     .catch(err => GGLog.warn(this.job, "Job lock release failed", {job: name, id, err: (err as Error).message}))
             }
         }
-        return lost.signal.aborted ? "lost" : "done"
+        return lost.signal.aborted ? "LOST" : "OK"
     }
 
     private async runBatches({limit, parallel, maxExtraRuns}: RunConfig, signal: AbortSignal): Promise<void> {
@@ -247,8 +246,8 @@ class JobLoop {
         try {
             if (this.job.config.lock === "item") {
                 const result = await this.withLock(`${job}#${this.job.rowKey!(row)}`, signal, s => this.job.processRow(row, s))
-                if (result === "busy") return "SKIPPED"
-                if (result === "lost") throw new Error("Lost the row's lock")
+                if (result === "SKIPPED") return result
+                if (result === "LOST") throw new Error("Lost the row's lock")
             } else {
                 await this.job.processRow(row, signal)
             }

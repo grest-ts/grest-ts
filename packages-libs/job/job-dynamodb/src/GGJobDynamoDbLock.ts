@@ -3,6 +3,8 @@ import {DeleteCommand, DynamoDBDocumentClient, UpdateCommand} from "@aws-sdk/lib
 import type {GGJobLock} from "@grest-ts/job"
 
 const ROW_TTL_SEC = 24 * 60 * 60
+const TTL_ATTRIBUTE = "expiresAtSec"
+const NAMES = {"#owner": "owner", "#exp": TTL_ATTRIBUTE}
 
 export interface GGJobDynamoDbLockOptions {
     /** A table created from `GGJobDynamoDbLock.tableDefinition(tableName)`. */
@@ -18,7 +20,7 @@ export interface GGJobDynamoDbLockOptions {
 export class GGJobDynamoDbLock implements GGJobLock {
 
     /** Enable DynamoDB TTL on this attribute. */
-    static readonly TTL_ATTRIBUTE = "expiresAtSec"
+    static readonly TTL_ATTRIBUTE = TTL_ATTRIBUTE
 
     static tableDefinition(tableName: string): CreateTableCommandInput {
         return {
@@ -47,8 +49,8 @@ export class GGJobDynamoDbLock implements GGJobLock {
             TableName: this.tableName,
             Key: {id},
             UpdateExpression: "SET #owner = :me, lockedUntil = :until, #exp = :exp",
-            ConditionExpression: "(attribute_not_exists(lockedUntil) OR lockedUntil < :now)" + due,
-            ExpressionAttributeNames: {"#owner": "owner", "#exp": GGJobDynamoDbLock.TTL_ATTRIBUTE},
+            ConditionExpression: "(attribute_not_exists(lockedUntil) OR lockedUntil <= :now)" + due,
+            ExpressionAttributeNames: NAMES,
             ExpressionAttributeValues: {
                 ":me": owner, ":now": now, ":until": now + ttlMs, ":exp": this.expiresAtSec(now + ttlMs),
                 ...(lastRunAtMost === undefined ? {} : {":most": lastRunAtMost}),
@@ -63,8 +65,8 @@ export class GGJobDynamoDbLock implements GGJobLock {
             TableName: this.tableName,
             Key: {id},
             UpdateExpression: "SET lockedUntil = :until, #exp = :exp",
-            ConditionExpression: "#owner = :me AND lockedUntil >= :now",
-            ExpressionAttributeNames: {"#owner": "owner", "#exp": GGJobDynamoDbLock.TTL_ATTRIBUTE},
+            ConditionExpression: "#owner = :me AND lockedUntil > :now",
+            ExpressionAttributeNames: NAMES,
             ExpressionAttributeValues: {":me": owner, ":now": now, ":until": until, ":exp": this.expiresAtSec(until)},
         }))
     }
@@ -83,7 +85,7 @@ export class GGJobDynamoDbLock implements GGJobLock {
                 Key: {id},
                 UpdateExpression: "SET lastRunAt = :ranAt REMOVE #owner, lockedUntil, #exp",
                 ConditionExpression: "#owner = :me",
-                ExpressionAttributeNames: {"#owner": "owner", "#exp": GGJobDynamoDbLock.TTL_ATTRIBUTE},
+                ExpressionAttributeNames: NAMES,
                 ExpressionAttributeValues: {":me": owner, ":ranAt": ranAt},
             }))
     }

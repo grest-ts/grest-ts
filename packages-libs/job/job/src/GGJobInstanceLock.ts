@@ -14,7 +14,7 @@ export class GGJobInstanceLock implements GGJobLock {
     async acquire(id: string, owner: string, ttlMs: number, lastRunAtMost?: number): Promise<boolean> {
         const now = Date.now()
         const e = this.entries.get(id) ?? {}
-        if (e.lockedUntil !== undefined && e.lockedUntil >= now) return false
+        if (e.lockedUntil !== undefined && e.lockedUntil > now) return false
         if (lastRunAtMost !== undefined && e.lastRunAt !== undefined && e.lastRunAt > lastRunAtMost) return false
         this.entries.set(id, {...e, owner, lockedUntil: now + ttlMs})
         return true
@@ -22,7 +22,7 @@ export class GGJobInstanceLock implements GGJobLock {
 
     async renew(id: string, owner: string, ttlMs: number): Promise<boolean> {
         const e = this.entries.get(id)
-        if (!e || e.owner !== owner || e.lockedUntil === undefined || e.lockedUntil < Date.now()) return false
+        if (!e || e.owner !== owner || e.lockedUntil === undefined || e.lockedUntil <= Date.now()) return false
         e.lockedUntil = Date.now() + ttlMs
         return true
     }

@@ -8,7 +8,8 @@
  * - External services (etcd, Consul, ZooKeeper)
  *
  * The lock MUST:
- * - Have automatic expiry (TTL-based, so crashed holders don't block forever)
+ * - Have automatic expiry (TTL-based, so crashed holders don't block forever). A lease is held until
+ *   acquire/renew time + ttlMs; from that instant on it has expired, whether or not anyone acquired it since.
  * - Support renewal (extend lease while still holding)
  * - Only let the owner that holds it renew or release it
  * - Be safe for concurrent calls
@@ -26,7 +27,7 @@ export interface GGLock {
     acquire(lockId: string, owner: string, ttlMs: number): Promise<boolean>;
 
     /**
-     * Renew the lock's TTL. Only succeeds while `owner` still holds the lock.
+     * Renew the lock's TTL. Only succeeds while `owner` holds an unexpired lease.
      * Used for heartbeat - extend lease while processing.
      *
      * @param lockId - The lock to renew
