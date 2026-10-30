@@ -18,8 +18,8 @@ export interface GGDynamoDbCloneTestOptions {
 
     /** Group name for shared isolation across workers. Tests with the same
      *  group share one accessKey (and therefore one isolated database);
-     *  different groups get different accessKeys. Defaults to the test
-     *  runner's testId, i.e. each test suite gets its own group. */
+     *  different groups get different accessKeys. Defaults to one group
+     *  per test suite. */
     group?: string
 }
 
@@ -64,10 +64,11 @@ export class GGDynamoDbTestMethods {
             throw new Error("GG_TEST_RUN_ID not set. Add globalSetup '@grest-ts/testkit-vitest/globalSetup' to vitest.config.ts.")
         }
 
-        const groupName = options.group ?? test.testId
-        // dynamodb-local accepts arbitrary accessKey strings. We just need
-        // it to be unique per group + safe as a key derivation seed.
-        const accessKeyId = sanitizeAccessKey(`gg-test-${runId}-${groupName}`)
+        // One database per accessKey, and dynamodb-local keeps a database's threads until it restarts, so the key
+        // must repeat run after run, never carry the run id.
+        const accessKeyId = sanitizeAccessKey(options.group === undefined
+            ? `gg-test-${test.reusableId}`
+            : `gg-test-${process.env.GG_TEST_SLOT ?? runId}-${options.group}`)
 
         const provisionOpts: GGDynamoDbProvisionOptions = {setup: options.setup}
 
