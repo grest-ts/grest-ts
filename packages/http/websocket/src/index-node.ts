@@ -26,6 +26,7 @@ export {assertValidSocketPath, wildcardPathBase} from "./schema/socketPath";
 export type {GGWsUpgrade, GGServerHeartbeatOption} from "./server/GGSocketServer";
 export * from "./server/GGWebSocketSchema.startServer";
 export * from "./server/GGRawWebSocketSchema.startServer";
+export * from "./server/GGSocketBroadcast";
 
 // Client
 export * from "./client/GGWebSocketSchema.createClient";

@@ -34,6 +34,7 @@ export class IPCServer {
 
         // Create HTTP server
         this.httpServer = http.createServer(async (req, res) => {
+            this.scope.ensureEntered();
             await new GGContext("LocalRouter").run(async () => {
                 GG_TRACE.init();
                 await this.httpHandler.handleRequest(req, res);

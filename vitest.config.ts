@@ -11,6 +11,7 @@ export default defineConfig({
       'packages-libs/auth/auth',
       'packages-libs/auth/authz',
       'packages-libs/auth/oauth',
+      'packages-libs/auth/service-auth',
       'packages-libs/db/db-dynamodb',
       'packages-libs/docs/api-docs',
       'packages-libs/docs/asyncapi',
