@@ -1,7 +1,7 @@
 {
   "//": "THIS FILE IS GENERATED - DO NOT EDIT",
   "name": "@grest-ts/oauth",
-  "version": "0.0.99",
+  "version": "0.0.100",
   "type": "module",
   "license": "MIT",
   "description": "OAuth 2.1 authorization server (panva oidc-provider on GGHttpServer) issuing @grest-ts/auth tokens, plus a browser code+PKCE client for GGAuthSession",
@@ -65,10 +65,10 @@
     "oidc-provider": "9.13.0"
   },
   "peerDependencies": {
-    "@grest-ts/auth": "0.0.99",
-    "@grest-ts/db-dynamodb": "0.0.99",
-    "@grest-ts/http": "0.0.99",
-    "@grest-ts/logger": "0.0.99",
-    "@grest-ts/schema": "0.0.99"
+    "@grest-ts/auth": "0.0.100",
+    "@grest-ts/db-dynamodb": "0.0.100",
+    "@grest-ts/http": "0.0.100",
+    "@grest-ts/logger": "0.0.100",
+    "@grest-ts/schema": "0.0.100"
   }
 }
