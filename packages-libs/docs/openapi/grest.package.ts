@@ -4,7 +4,7 @@ definePackage({
     name: "@grest-ts/openapi",
     description: "OpenAPI 3.1 spec generation and Swagger UI server for grest-ts",
     keywords: ["openapi", "swagger", "api-docs", "openapi3"],
-    targets: {node: true},
+    targets: {node: true, browser: true},
     hasTests: true,
     publishToNpm: true,
     dependencies: {

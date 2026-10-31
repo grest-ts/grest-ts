@@ -120,6 +120,10 @@ export function schemaDescriptionToOpenApi(
             );
     }
 
+    if (desc.nullable) {
+        schema = {oneOf: [schema, {type: 'null'}]};
+    }
+
     const {docs, defaultValue} = desc;
     if (docs || defaultValue !== undefined) {
         schema = {
@@ -132,10 +136,6 @@ export function schemaDescriptionToOpenApi(
             ...(docs?.deprecated === true ? {deprecated: true} : {}),
             ...(defaultValue !== undefined ? {default: defaultValue} : {}),
         };
-    }
-
-    if (desc.nullable) {
-        schema = {oneOf: [schema, {type: 'null'}]};
     }
 
     return schema;
