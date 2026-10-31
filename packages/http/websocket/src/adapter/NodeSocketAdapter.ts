@@ -77,6 +77,18 @@ export class NodeSocketAdapter implements SocketAdapter {
         this.ws.send(data);
     }
 
+    pause(): void {
+        this.ws.pause();
+    }
+
+    resume(): void {
+        this.ws.resume();
+    }
+
+    bufferedAmount(): number {
+        return this.ws.bufferedAmount;
+    }
+
     onRawMessage(handler: (data: Uint8Array, isBinary: boolean) => void): void {
         // node `ws` delivers every frame as a Buffer (a Uint8Array subclass) plus the frame type.
         this.ws.on('message', (raw: Buffer, isBinary: boolean) => handler(raw, isBinary));

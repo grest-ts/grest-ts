@@ -156,6 +156,23 @@ export class GGRawSocket {
         return this;
     }
 
+    /**
+     * Stop reading inbound frames until `resume()` — so a stream piped to a slower destination
+     * doesn't buffer without bound. No-op where the transport can't pause (browsers).
+     */
+    public pause(): void {
+        this.adapter.pause?.();
+    }
+
+    public resume(): void {
+        this.adapter.resume?.();
+    }
+
+    /** Bytes sent but not yet written to the network; a producer can wait for it to drain. */
+    public get bufferedAmount(): number {
+        return this.adapter.bufferedAmount?.() ?? 0;
+    }
+
     public onError(handler: (error: Error) => void): this {
         this.adapter.onError(handler);
         return this;

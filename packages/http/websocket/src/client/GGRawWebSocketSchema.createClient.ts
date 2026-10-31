@@ -66,6 +66,14 @@ export interface GGRawWebSocketClient {
     /** Immediately close. Disables further auto-reconnect. */
     close(): void
 
+    /** Stop reading inbound frames until `resume()` (backpressure); no-op in browsers. */
+    pause(): void
+
+    resume(): void
+
+    /** Bytes sent but not yet written to the network. */
+    readonly bufferedAmount: number
+
     /** Fires once, when the client has stopped reconnecting. */
     onClose(cb: (reason: GGWebSocketCloseReason, error?: Error) => void): this
 
@@ -147,6 +155,9 @@ GGRawWebSocketSchema.prototype.createClient = function (
             if (socket) socket.onMessage(handler)
             return this
         },
+        pause: () => connector.current()?.pause(),
+        resume: () => connector.current()?.resume(),
+        get bufferedAmount(): number { return connector.current()?.bufferedAmount ?? 0 },
         disconnect: () => connector.disconnect(),
         close: () => connector.close(),
         onClose(cb): any { connector.onClose(cb); return this },

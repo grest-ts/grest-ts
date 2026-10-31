@@ -78,4 +78,8 @@ export class BrowserSocketAdapter implements SocketAdapter {
             else handler(new Uint8Array(d as ArrayBuffer), true);
         });
     }
+
+    bufferedAmount(): number {
+        return this.ws.bufferedAmount;
+    }
 }
