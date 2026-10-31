@@ -67,15 +67,17 @@ function checkField(resource: GGRequirementResource | undefined, required: boole
     nodeAt(input, id.field, at, id.field, required)
 }
 
-/** The parent field is a required `{type, id}` whose `type` can only be one of `types`. */
+/** The parent field is a required `{type, id}`: a literal `type` that can only be one of `types`, and a string `id`. */
 function checkParent(field: string, types: readonly string[], input: GGSchemaDescription | undefined, at: string): void {
     const parent = nodeAt(input, field, at, field, true)
     if (parent.nullable) throw new Error(`${at}: the requirement reads input.${field}, which is nullable; make it required`)
     const variants = parent.node.kind === "discriminated" ? parent.node.variants : [parent]
     for (const v of variants) {
         const node = v.node
+        const required = (key: string) => node.kind === "object" && node.required.includes(key) && !node.properties[key]!.nullable
         const tag = node.kind === "object" ? node.properties.type?.node : undefined
-        if (node.kind !== "object" || tag?.kind !== "literal" || !node.properties.id) {
+        const id = node.kind === "object" ? node.properties.id?.node : undefined
+        if (tag?.kind !== "literal" || id?.kind !== "string" || !required("type") || !required("id")) {
             throw new Error(`${at}: the requirement reads input.${field} as a parent, which must be {type, id} with a literal type`)
         }
         const other = tag.values.filter(t => !types.includes(t as string))

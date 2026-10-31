@@ -145,6 +145,9 @@ describe("requirements inside a parent", () => {
             create: {input: IsObject({parent: IsString}), errors: [SERVER_ERROR], permission: within("docs:Write", "parent")},
         })).toThrow("must be {type, id} with a literal type")
         expect(() => new GGContractClass("Docs", {
+            create: {input: IsObject({parent: IsObject({type: IsLiteral("org:project"), id: IsString.orUndefined})}), errors: [SERVER_ERROR], permission: within("docs:Write", "parent")},
+        })).toThrow("must be {type, id} with a literal type")
+        expect(() => new GGContractClass("Docs", {
             create: {input: IsObject({parent: IsPlace}), errors: [SERVER_ERROR], permission: within("docs:Write", "parent", ["org:org"])},
         })).toThrow("input.parent may name org:project, org:member, which the requirement's type can't be in (org:org)")
     })
