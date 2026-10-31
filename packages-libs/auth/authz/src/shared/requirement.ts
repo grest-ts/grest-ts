@@ -16,11 +16,12 @@ export interface GGAuthzRequirement<Field extends string = never, Types extends 
 
 type IsUnion<T, U = T> = T extends unknown ? ([U] extends [T] ? false : true) : never
 
-export interface GGAuthzActionBuilders<Types extends string> {
+/** `Own`: the types the action names; `Types`: those and the parents they can be in. */
+export interface GGAuthzActionBuilders<Own extends string, Types extends string = Own> {
     /** On the tenant itself, e.g. a create checked on the caller's org. */
     on<T extends Types>(type: T): GGAuthzRequirement<never, Types>
-    /** The resource id is that input field (the action must have one resource type). */
-    on<const F extends string>(field: IsUnion<Types> extends true ? never : F): GGAuthzRequirement<F, Types>
+    /** The resource id is that input field (the action must name one resource type). */
+    on<const F extends string>(field: IsUnion<Own> extends true ? never : F): GGAuthzRequirement<F, Types>
     on<T extends Types, const F extends string>(type: T, field: F): GGAuthzRequirement<F, Types>
     /** The authority resolves the id from the request, e.g. the document the caller has open. */
     onContext(source: string): GGAuthzRequirement<never, Types>
@@ -28,7 +29,7 @@ export interface GGAuthzActionBuilders<Types extends string> {
     /** Inside the parent that input field names (a `{type, id}` from `parentRef`), decided on that parent: a create or
      *  a list. The action must have one type with `in`, or name it. */
     in<const F extends string>(field: F): GGAuthzRequirement<F, Types>
-    in<T extends Types, const F extends string>(type: T, field: F): GGAuthzRequirement<F, Types>
+    in<T extends Own, const F extends string>(type: T, field: F): GGAuthzRequirement<F, Types>
     /** No check before the handler; it filters what it returns. */
     list(): GGRequirement<never, GGAuthzError>
 }

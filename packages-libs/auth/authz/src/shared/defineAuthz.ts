@@ -6,8 +6,9 @@ import {type GGAuthzApprovalLevel, type GGAuthzCondition, type GGAuthzModel, typ
 
 export type GGAuthzActionRef = string | {readonly name: string}
 
-export interface GGAuthzDefinedAction<Name extends string = string, Types extends string = string> extends GGAuthzActionBuilders<Types> {
+export interface GGAuthzDefinedAction<Name extends string = string, Own extends string = string, Types extends string = Own> extends GGAuthzActionBuilders<Own, Types> {
     readonly name: Name
+    /** The types it names and the parents they can be in. */
     readonly resourceTypes: readonly Types[]
     readonly description?: string
 }
@@ -43,7 +44,7 @@ export type GGAuthzService<Service extends string = string, Types extends Record
     parentRef<const K extends {[T in keyof Types & string]: Types[T] extends {in: readonly string[]} ? T : never}[keyof Types & string]>(type: K): GGSchema<GGAuthzParentRef<ParentsOf<Service, Types[K]>>>
     readonly actions: readonly GGAuthzDefinedAction[]
     readonly definedAt?: string
-} & {readonly [K in keyof Actions & string]: GGAuthzDefinedAction<`${Service}:${K}`, TypeName<Service, Actions[K]["on"][number]>>}
+} & {readonly [K in keyof Actions & string]: GGAuthzDefinedAction<`${Service}:${K}`, TypeName<Service, Actions[K]["on"][number]>, TypeName<Service, Actions[K]["on"][number]> | ParentsOf<Service, Types[Actions[K]["on"][number] & keyof Types]>>}
 
 export interface GGAuthzDefinedRole {
     readonly name: string

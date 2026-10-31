@@ -50,6 +50,9 @@ describe("types with parents", () => {
         expect(Clouds.Read.in("parent").resource).toEqual(Clouds.Write.in("parent").resource)
         expect(Clouds.Write.on("cloudId").resource).toEqual({type: "clouds:cloud", id: {field: "cloudId"}})
         expect(Clouds.Write.on(Places.types.org).resource).toEqual({type: "places:org"})
+        expect(Clouds.Write.on(Places.types.project, "projectId").resource).toEqual({type: "places:project", id: {field: "projectId"}})
+        // @ts-expect-error an image has no parents, and Write isn't on it
+        expect(() => Clouds.Write.in(Clouds.types.image, "parent")).toThrow("has no `in`")
         expect(() => Places.ReadProject.in("parent")).toThrow("none of its types has `in`: name the type")
     })
 
