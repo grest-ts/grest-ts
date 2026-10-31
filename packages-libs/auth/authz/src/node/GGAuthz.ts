@@ -634,9 +634,10 @@ export class GGAuthz {
     }
 
     private async lookup(request: GGAuthzRequest, p: Principals, loader: Loader, roots: Roots): Promise<AttributeLookup> {
+        const given = request.subject.properties?.attributes
         const [principal, actor, resource] = await Promise.all([
-            roots.principal ? loader.attributes(p.authority.key) : undefined,
-            roots.actor ? request.subject.properties?.attributes ?? loader.attributes(p.actor.key) : undefined,
+            roots.principal ? (p.authority === p.actor ? given : undefined) ?? loader.attributes(p.authority.key) : undefined,
+            roots.actor ? given ?? loader.attributes(p.actor.key) : undefined,
             roots.resource ? request.resource.properties?.attributes ?? loader.attributes(request.resource.id) : undefined,
         ])
         return key => {

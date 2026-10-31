@@ -47,4 +47,12 @@ describe("the actor's attributes from the request", () => {
         expect((await authz.evaluate(asActor({project: "api"}))).decision).toBe(false)
         expect((await authz.evaluate(asActor())).decision).toBe(false)
     })
+
+    test("are the principal's too when it acts for itself", async () => {
+        const policies = {bindings: [{principal: "everyone", role: "operator", on: org, conditions: [{key: "principal.project", op: "eq" as const, value: "web"}]}]}
+        const authz = new GGAuthz({model, policies, resolver})
+        const asSelf = (attributes: Record<string, unknown>): GGAuthzRequest => ({...stop({ancestors: [org]}), subject: {type: "user", id: "ann", properties: {attributes}}})
+        expect((await authz.evaluate(asSelf({project: "web"}))).decision).toBe(true)
+        expect((await authz.evaluate(asSelf({project: "api"}))).decision).toBe(false)
+    })
 })

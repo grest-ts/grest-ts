@@ -79,7 +79,7 @@ export const IsGGAuthzRule = IsObject({
     when: IsWhen,
     unless: IsUnless,
     conditions: IsConditions,
-    approval: IsLiteral("auto", "ask-once", "ask", "critical", "dangerous").orUndefined.docs({
+    approval: IsLiteral(...GG_AUTHZ_APPROVAL_LEVELS.filter((l): l is Exclude<GGAuthzApprovalLevel, "humans-only"> => l !== "humans-only")).orUndefined.docs({
         description: "In a ceiling: the approval level a workload passing through this rule needs. A ceiling takes its least strict matching rule; the strictest ceiling counts. Leave an action out to deny it",
     }),
 })
@@ -176,7 +176,7 @@ export const IsGGAuthzSubject = IsObject({
         scopes: IsArray(IsString).orUndefined.docs({description: "Token scopes: a ceiling, like a boundary"}),
         via: IsArray(IsGGAuthzEntity).orUndefined.docs({description: "Further acting principals between the authority and this one (a delegation chain): each one's boundaries apply, each must clear denies"}),
         restrictions: IsArray(IsGGAuthzRule).orUndefined.docs({description: "A per-request ceiling, e.g. from the token's authorization details: nothing outside these rules"}),
-        attributes: IsRecord(IsString, IsUnknown).orUndefined.docs({description: "The acting principal's attributes (`actor.*`), as the caller knows them for this request; the resolver isn't asked"}),
+        attributes: IsRecord(IsString, IsUnknown).orUndefined.docs({description: "The acting principal's attributes (`actor.*`, and `principal.*` when it acts for itself), as the caller knows them for this request; the resolver isn't asked"}),
     }).orUndefined,
 })
 export type GGAuthzSubject = typeof IsGGAuthzSubject.infer
