@@ -47,7 +47,9 @@ export class GGExtensionDiscovery {
         // Resolve extensions by reading package.json dependencies and walking up
         // node_modules directories (like Node.js module resolution).
         // This works regardless of hoisting, workspaces, pnpm, etc.
-        const depNames = this.readDependencyNames(cwd);
+        // Installed @grest-ts packages count too: a runtime that uses one only transitively still needs its
+        // extensions (e.g. @grest-ts/job's testkit pauses scheduled runs under GGTest).
+        const depNames = new Set([...this.readDependencyNames(cwd), ...this.installedFrameworkPackages(cwd)]);
 
         for (const dep of depNames) {
             const pkgDir = this.resolvePackageDir(dep, cwd);
@@ -100,6 +102,20 @@ export class GGExtensionDiscovery {
             dir = path.dirname(dir);
         }
         return null;
+    }
+
+    private installedFrameworkPackages(cwd: string): string[] {
+        const names: string[] = [];
+        let dir = cwd;
+        const root = path.parse(dir).root;
+        while (dir !== root) {
+            const scopeDir = path.join(dir, 'node_modules', '@grest-ts');
+            if (fs.existsSync(scopeDir)) {
+                names.push(...fs.readdirSync(scopeDir).map(name => `@grest-ts/${name}`));
+            }
+            dir = path.dirname(dir);
+        }
+        return names;
     }
 
     private readDependencyNames(cwd: string): string[] {
