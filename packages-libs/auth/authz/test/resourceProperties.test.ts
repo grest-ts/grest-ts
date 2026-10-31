@@ -36,3 +36,15 @@ describe("resource properties from the caller's row", () => {
         expect((await authz.evaluate(stop({ancestors: [org, ws]}))).context.reasons[0]).toMatchObject({layer: "request", kind: "invalid"})
     })
 })
+
+describe("the actor's attributes from the request", () => {
+
+    test("feed actor conditions, so the resolver isn't asked", async () => {
+        const policies = {bindings: [{principal: "everyone", role: "operator", on: org, conditions: [{key: "actor.project", op: "eq" as const, value: "web"}]}]}
+        const authz = new GGAuthz({model, policies, resolver})
+        const asActor = (attributes?: Record<string, unknown>): GGAuthzRequest => ({...stop({ancestors: [org]}), subject: {type: "user", id: "ann", properties: {attributes}}})
+        expect((await authz.evaluate(asActor({project: "web"}))).decision).toBe(true)
+        expect((await authz.evaluate(asActor({project: "api"}))).decision).toBe(false)
+        expect((await authz.evaluate(asActor())).decision).toBe(false)
+    })
+})
