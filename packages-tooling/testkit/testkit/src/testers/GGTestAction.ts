@@ -8,11 +8,7 @@ import {GG_TRACE} from "@grest-ts/trace";
 import {Raw} from "@grest-ts/schema";
 import {DeepPartial} from "@grest-ts/common";
 import {GGExpectations} from "../utils/GGExpectations";
-
-interface WaitForInterceptor {
-    interceptor: IGGTestInterceptor;
-    timeout: number;
-}
+import {DEFAULT_WAIT_FOR_MS, GGPendingWait, waitForInterceptors} from "./waitForInterceptors";
 
 /**
  * Configuration for a test action's logging behavior.
@@ -59,7 +55,7 @@ export abstract class GGTestAction<T> implements Promise<T> {
     protected readonly ctx: GGContext;
     private readonly config: GGTestActionConfig;
     protected readonly interceptors: IGGTestInterceptor[] = [];
-    protected readonly _waitForInterceptors: WaitForInterceptor[] = [];
+    protected readonly _waitForInterceptors: GGPendingWait[] = [];
     private readonly definedInSourceFile: string;
 
     protected readonly responseExpectations: GGExpectations<any> = new GGExpectations()
@@ -153,20 +149,23 @@ export abstract class GGTestAction<T> implements Promise<T> {
      * happens later (e.g., background job, delayed log, async notification).
      * The test will poll until the expectation is satisfied or timeout is reached.
      *
+     * Its listener stays until the expectation is met or times out, then goes, so a later repeat of the same
+     * message is unexpected.
+     *
      * @param expectation - The expectation to wait for
-     * @param timeout - Max time to wait in ms (default: 5000)
+     * @param timeout - Max time to wait in ms (default: the expectation's `.within(ms)`, else 5000)
      *
      * @example
      * // Action returns immediately, but logs after 100ms
      * await client.triggerBackgroundJob({id: 123})
-     *     .waitFor(t.logs.expect("Job 123 completed"), 10000);
+     *     .waitFor(t.logs.expect("Job 123 completed").within(1000));
      */
-    public waitFor(expectation: IGGTestWith, timeout: number = 5000): this {
+    public waitFor(expectation: IGGTestWith, timeout?: number): this {
         const interceptor = expectation.createInterceptor();
         this.interceptors.push(interceptor);
         this._waitForInterceptors.push({
             interceptor,
-            timeout
+            timeout: timeout ?? expectation.waitTimeoutMs?.() ?? DEFAULT_WAIT_FOR_MS
         });
         return this;
     }
@@ -195,51 +194,47 @@ export abstract class GGTestAction<T> implements Promise<T> {
                 this.logMsg("execute", this.config.logData.message),
                 this.config.logData.request
             )
+            const waiting = new Set(this._waitForInterceptors.map(w => w.interceptor));
+            const registered = new Set<IGGTestInterceptor>();
+            const release = async (interceptor: IGGTestInterceptor) => {
+                if (registered.delete(interceptor)) await interceptor.unregister();
+            };
             let rawResult: tActionRawData = undefined;
-            try {
-                await Promise.all(this.interceptors.map(i => i.register()));
-                rawResult = await this.executeAction()
-                await new Promise(resolve => setTimeout(resolve, 25));
-            } finally {
-                await Promise.all(this.interceptors.map(i => i.unregister()));
-            }
-
-            const waitForSet = new Set(this._waitForInterceptors.map(w => w.interceptor));
-
-            // Validate non-wait interceptors immediately
-            for (const interceptor of this.interceptors) {
-                if (!waitForSet.has(interceptor)) {
-                    await interceptor.validate();
-                }
-            }
-
-            // Check for validation errors from non-wait interceptors
-            for (const interceptor of this.interceptors) {
-                if (!waitForSet.has(interceptor)) {
-                    const error = interceptor.getMockValidationError();
-                    if (error) {
-                        throw error;
-                    }
-                }
-            }
-
             let result: any = undefined;
-            if (!this.config.noResponse) {
-                result = await this.processRawResponse(rawResult);
-                this.responseExpectations.check(result);
-            }
-
-            if (this._waitForInterceptors.length > 0) {
-                await this._waitForAllInterceptors();
-            }
-
-            // Validate wait interceptors after waiting
-            for (const {interceptor} of this._waitForInterceptors) {
-                await interceptor.validate();
-                const error = interceptor.getMockValidationError();
-                if (error) {
-                    throw error;
+            try {
+                try {
+                    await Promise.all(this.interceptors.map(async i => {
+                        await i.register();
+                        registered.add(i);
+                    }));
+                    rawResult = await this.executeAction()
+                    // Grace for a message sent alongside the response that arrives just after it.
+                    await new Promise(resolve => setTimeout(resolve, 25));
+                } finally {
+                    await Promise.all(this.interceptors.filter(i => !waiting.has(i)).map(release));
                 }
+
+                for (const interceptor of this.interceptors) {
+                    if (waiting.has(interceptor)) continue;
+                    await interceptor.validate();
+                    const error = interceptor.getMockValidationError();
+                    if (error) throw error;
+                }
+
+                if (!this.config.noResponse) {
+                    result = await this.processRawResponse(rawResult);
+                    this.responseExpectations.check(result);
+                }
+
+                await waitForInterceptors(this._waitForInterceptors, release);
+
+                for (const {interceptor} of this._waitForInterceptors) {
+                    await interceptor.validate();
+                    const error = interceptor.getMockValidationError();
+                    if (error) throw error;
+                }
+            } finally {
+                await Promise.all([...registered].map(release));
             }
 
             GGLog.info(this,
@@ -272,41 +267,6 @@ export abstract class GGTestAction<T> implements Promise<T> {
      */
     protected processRawResponse(result: tActionRawData): Promise<T> {
         return result;
-    }
-
-    private async _waitForAllInterceptors(): Promise<void> {
-        const pending = new Map(
-            this._waitForInterceptors.map(w => [w.interceptor, w.timeout])
-        );
-
-        const checkInterval = 20;
-        const actionEndTime = Date.now();
-
-        return new Promise((resolve, reject) => {
-            const check = () => {
-                const elapsed = Date.now() - actionEndTime;
-
-                for (const [interceptor, timeout] of pending) {
-                    if (interceptor.isCalled()) {
-                        pending.delete(interceptor);
-                    } else if (elapsed > timeout) {
-                        reject(new Error(
-                            `[Test Failed] Timeout waiting for interceptor after ${timeout}ms`
-                        ));
-                        return;
-                    }
-                }
-
-                if (pending.size === 0) {
-                    resolve();
-                    return;
-                }
-
-                setTimeout(check, checkInterval);
-            };
-
-            check();
-        });
     }
 
     private logMsg(type: "new" | "execute" | "finished", msg: string): string {

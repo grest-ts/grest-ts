@@ -129,12 +129,15 @@ GGWebSocketSchema.prototype[CALL_ON_FACTORY] = function (
 
                 // Set handler for unexpected messages
                 socket.setUnknownMessageHandler((messagePath: string, data: any) => {
+                    const method = messagePath.split('.').pop();
                     throw new GGTestError({
                         test: "Unexpected socket message received: " + messagePath,
-                        expected: "-",
-                        received: "Called",
+                        expected: "No message, or one an action's .with()/.waitFor() expects",
+                        received: data,
                         extra: "All socket messages must be mocked/expected in tests.\n" +
-                            "Did you forget to add .with(api.mock." + messagePath.split('.').pop() + ".toMatchObject(...)) to your test?"
+                            "A .with(api.mock." + method + "...) listens only while its action runs (plus 25 ms);\n" +
+                            "a .waitFor(api.mock." + method + "...) until it is satisfied or times out.\n" +
+                            "A message that comes later, or once more after being satisfied, lands here."
                     });
                 });
 

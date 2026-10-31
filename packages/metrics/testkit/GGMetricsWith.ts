@@ -26,6 +26,7 @@ export class GGMetricsWith<TLabels extends GGMetricLabels> implements IGGTestWit
     private readonly metricName: string;
     private readonly labelNames: readonly string[];
     private readonly runtimes: GGTestRuntime[];
+    private _within?: number;
 
     constructor(metricKey: GGMetricKey<TLabels>, runtimes: GGTestRuntime[]) {
         this.metricName = metricKey.name;
@@ -35,6 +36,16 @@ export class GGMetricsWith<TLabels extends GGMetricLabels> implements IGGTestWit
         if (this.runtimes.length > 1) {
             throw new Error("Can only apply Metrics actions on one runtime. Make your selection more precise!");
         }
+    }
+
+    /** How long `.waitFor()` waits for this, instead of its 5 s default. */
+    within(timeMs: number): this {
+        this._within = timeMs;
+        return this;
+    }
+
+    waitTimeoutMs(): number | undefined {
+        return this._within;
     }
 
     inc(labels: TLabels, delta: number = 1): this {

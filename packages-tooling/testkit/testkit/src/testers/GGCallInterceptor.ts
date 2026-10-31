@@ -172,7 +172,7 @@ export abstract class GGCallInterceptor implements IGGTestInterceptor {
         if (this.noOfTimesCalled < this.times) {
             throw new GGTestError({
                 context: `[${this.getKey()}]`,
-                test: "Interceptor called too few times!",
+                test: this.noOfTimesCalled ? "Interceptor called too few times!" : "Interceptor was never called!",
                 expected: `Called ${this.times} time(s)`,
                 received: `Called ${this.noOfTimesCalled} time(s)`,
                 sourceFile: this.definedInSourceFile
@@ -184,8 +184,9 @@ export abstract class GGCallInterceptor implements IGGTestInterceptor {
         return this.validationError;
     }
 
+    /** Done: called as often as expected, or a call failed its expectations. */
     public isCalled(): boolean {
-        return this.noOfTimesCalled > 0;
+        return this.noOfTimesCalled >= this.times || this.validationError !== undefined;
     }
 
     // -------------------------------------------

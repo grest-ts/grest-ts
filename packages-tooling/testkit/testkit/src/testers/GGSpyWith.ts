@@ -23,6 +23,7 @@ export class GGSpyWith<RequestBody = any, ResponseData = any, ErrorsUnion = any>
 
     private _sleep: number = 0;
     private _times: number = 1;
+    private _within?: number;
 
     constructor(interceptorFactory: InterceptorFactory, config: Record<string, any>) {
         this.interceptorFactory = interceptorFactory;
@@ -57,6 +58,16 @@ export class GGSpyWith<RequestBody = any, ResponseData = any, ErrorsUnion = any>
     /**
      * Expect this mock to be called amount of times.
      */
+    /** How long `.waitFor()` waits for this, instead of its 5 s default. */
+    public within(timeMs: number): this {
+        this._within = timeMs;
+        return this;
+    }
+
+    public waitTimeoutMs(): number | undefined {
+        return this._within;
+    }
+
     public times(amount: number): this {
         this._times = amount;
         return this;

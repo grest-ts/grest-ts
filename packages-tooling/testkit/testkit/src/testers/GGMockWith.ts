@@ -16,6 +16,7 @@ export class GGMockWith<RequestBody = any, ResponseData = any, ErrorsUnion = any
     private readonly definedInSourceFile: string;
     private _sleep: number = 0;
     private _times: number = 1;
+    private _within?: number;
 
     private readonly expectations: GGExpectations<RequestBody> = new GGExpectations();
     private returnData?: ResponseData | ErrorsUnion | ((input: Raw<RequestBody>) => Raw<ResponseData | ErrorsUnion>);
@@ -38,6 +39,16 @@ export class GGMockWith<RequestBody = any, ResponseData = any, ErrorsUnion = any
             returnData: this.returnData
         };
         return new this.interceptorFactory(test, config);
+    }
+
+    /** How long `.waitFor()` waits for this, instead of its 5 s default. */
+    public within(timeMs: number): this {
+        this._within = timeMs;
+        return this;
+    }
+
+    public waitTimeoutMs(): number | undefined {
+        return this._within;
     }
 
     public sleep(timeMs: number): this {
