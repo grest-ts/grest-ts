@@ -87,6 +87,8 @@ interface Conditional {
 interface Rule extends Conditional {
     actions: Set<string>
     resources?: Matcher[]
+    /** In a ceiling: the level a workload passing through it needs (-1: none). */
+    approval: number
     source: GGAuthzRule
 }
 
@@ -464,11 +466,18 @@ export class GGAuthz {
 
         const passed: GGAuthzReason[] = []
         const failed: GGAuthzReason[] = []
+        // Rules within a ceiling are a union: its least strict matching rule sets its level. Ceilings intersect: the strictest counts.
+        let ceilingLevel: {level: number, source: string} = {level: -1, source: ""}
         for (const c of this.ceilings(e.request.subject, e.p, e.chainSet)) {
-            const r = c.rules.find(r => this.matches(r, e) === true)
+            let r: Rule | undefined
+            for (const m of c.rules) {
+                if ((!r || m.approval < r.approval) && this.matches(m, e) === true) r = m
+                if (r?.approval === -1) break
+            }
             const id = c.ids ? c.ids[c.rules.indexOf(r!)] ?? c.id : c.id
             if (r) passed.push({layer: c.layer, kind: "ceiling-passed", id, on: c.on, actions: r.source.actions})
             else failed.push({layer: c.layer, kind: "ceiling-failed", id: c.id, on: c.on})
+            if (r && r.approval > ceilingLevel.level) ceilingLevel = {level: r.approval, source: `${c.layer} ${id}`}
         }
         if (failed.length) {
             if (!bindingsOnly && failed.every(f => f.layer === "scope") && this.grants(e).length && !(e.p.workload && this.approvalFor(action, e.chain).level === "humans-only")) {
@@ -483,7 +492,7 @@ export class GGAuthz {
 
         const reasons = [...allowed, ...passed]
         if (!e.p.workload) return {decision: true, context: {outcome: "allow", reasons}}
-        const approval = this.approvalFor(action, e.chain)
+        const approval = this.approvalFor(action, e.chain, ceilingLevel)
         reasons.push(approval)
         if (approval.level === "humans-only") return deny([approval])
         return {
@@ -530,7 +539,7 @@ export class GGAuthz {
         return ceilings
     }
 
-    private approvalFor(action: string, chain: string[]): GGAuthzReason {
+    private approvalFor(action: string, chain: string[], ceiling?: {level: number, source: string}): GGAuthzReason {
         let floor = this.floorLevel(action)
         let floorOn: string | undefined
         let level = -1
@@ -553,6 +562,9 @@ export class GGAuthz {
         if (level < floor) {
             level = floor
             on = floorOn
+        }
+        if (ceiling && ceiling.level > level) {
+            return {layer: "approval", kind: "approval", level: GG_AUTHZ_APPROVAL_LEVELS[ceiling.level]!, locked: false, lowered, message: ceiling.source}
         }
         const resolved = GG_AUTHZ_APPROVAL_LEVELS[Math.max(0, level)]!
         const message = on ? undefined : level < 0 ? "default" : "platform floor"
@@ -622,9 +634,10 @@ export class GGAuthz {
     }
 
     private async lookup(request: GGAuthzRequest, p: Principals, loader: Loader, roots: Roots): Promise<AttributeLookup> {
+        const given = request.subject.properties?.attributes
         const [principal, actor, resource] = await Promise.all([
-            roots.principal ? loader.attributes(p.authority.key) : undefined,
-            roots.actor ? loader.attributes(p.actor.key) : undefined,
+            roots.principal ? (p.authority === p.actor ? given : undefined) ?? loader.attributes(p.authority.key) : undefined,
+            roots.actor ? given ?? loader.attributes(p.actor.key) : undefined,
             roots.resource ? request.resource.properties?.attributes ?? loader.attributes(request.resource.id) : undefined,
         ])
         return key => {
@@ -689,6 +702,7 @@ export class GGAuthz {
             when: r.when,
             unless: r.unless,
             conditions: r.conditions,
+            approval: r.approval ? GG_AUTHZ_APPROVAL_LEVELS.indexOf(r.approval) : -1,
             source: r,
         }
     }
