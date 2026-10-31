@@ -11,7 +11,8 @@ import {GGHttpSchema} from '../schema/GGHttpSchema'
 import {GGRpc} from '../rpc/GGHttpRouteRPC'
 import {createClient} from './GGHttpSchema.createClient'
 import {GGConnectionSettingsKey} from '../schema/GGConnectionSettingsKey'
-import {invalidateTlsPinAgent} from './nodeConnectionTransport.node.js'
+import {invalidateTlsPinAgent, registerConnectionDialer} from './nodeConnectionTransport.node.js'
+import {connect as netConnect} from 'node:net'
 // Side-effect import: registers nodeDefaultTransport as the default for url-less node clients.
 import './GGHttpSchema.createClient.node.js'
 
@@ -316,5 +317,39 @@ describe('connection settings — custom CA & mTLS', () => {
         })
         const res = await client.ping({msg: "hi"}).asResult()
         expect(res.success).toBe(false)
+    })
+
+    it('dials a registered host through the dialer, still verifying the pin over the stream', async () => {
+        const dir = mkdtempSync(join(tmpdir(), "gg-dial-"))
+        const t = genCert(dir, "tunneled")
+        const other = genCert(dir, "other")
+        const target = await startServer(t.cert, t.key, "from-tunnel")
+        const dialed: string[] = []
+        const unregister = registerConnectionDialer({
+            matches: host => host.endsWith(".tunnel.invalid"),
+            dial: async ({host, port}) => {
+                dialed.push(`${host}:${port}`)
+                return netConnect(target.port, "127.0.0.1")
+            },
+        })
+        try {
+            const client = createClient(PingApi, {url: ""})
+            const ok = await inScope(
+                {host: "vm1.tunnel.invalid", port: 9600, tlsPin: {fingerprint256: target.fingerprint256}},
+                () => client.ping({msg: "hi"}),
+            )
+            expect(ok.msg).toBe("from-tunnel")
+            expect(dialed).toContain("vm1.tunnel.invalid:9600")
+
+            const bad = await inScope(
+                {host: "vm2.tunnel.invalid", port: 9600, tlsPin: {fingerprint256: new X509Certificate(other.cert).fingerprint256}},
+                () => client.ping({msg: "hi"}).asResult(),
+            )
+            expect(bad.success).toBe(false)
+        } finally {
+            unregister()
+            await target.close()
+            rmSync(dir, {recursive: true, force: true})
+        }
     })
 })

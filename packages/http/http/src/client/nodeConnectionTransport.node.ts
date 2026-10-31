@@ -1,5 +1,6 @@
 import {createHash} from "node:crypto"
-import type {TLSSocket} from "node:tls"
+import type {Duplex} from "node:stream"
+import {connect as tlsConnect, type TLSSocket} from "node:tls"
 import {Agent, buildConnector, type Dispatcher} from "undici"
 import type {GGConnectionSettings} from "@grest-ts/context"
 import type {GGHttpTransport} from "./GGHttpSchema.createClient"
@@ -19,9 +20,33 @@ function normalizeFingerprint(input: string): string {
     return input.replace(/:/g, "").toLowerCase()
 }
 
+/**
+ * Opens the byte stream for hosts that aren't reachable by a plain TCP dial (a tunnel, a broker).
+ * TLS — including pin verification — still runs end to end over the returned stream.
+ */
+export interface GGConnectionDialer {
+    matches(host: string): boolean
+    dial(target: {host: string, port: number}): Promise<Duplex>
+}
+
+const DIALERS: GGConnectionDialer[] = []
+
+/** Process-wide; returns an unregister function. */
+export function registerConnectionDialer(dialer: GGConnectionDialer): () => void {
+    DIALERS.push(dialer)
+    return () => {
+        const i = DIALERS.indexOf(dialer)
+        if (i >= 0) DIALERS.splice(i, 1)
+    }
+}
+
+function dialerFor(host: string | undefined): GGConnectionDialer | undefined {
+    return host ? DIALERS.find(d => d.matches(host)) : undefined
+}
+
 /** Which settings shape the TLS connection (and therefore the dispatcher). */
 function needsDispatcher(s: GGConnectionSettings): boolean {
-    return !!(s.tlsPin || s.ca || s.clientCert)
+    return !!(s.tlsPin || s.ca || s.clientCert || dialerFor(s.host))
 }
 
 /** tls.connect options shared by both the pinned and the standard connector. */
@@ -47,35 +72,45 @@ function connectOptions(s: GGConnectionSettings) {
 function buildAgent(s: GGConnectionSettings): Agent {
     const connect = connectOptions(s)
     const pin = s.tlsPin
-    if (!pin) {
-        return new Agent({connect})
+    const expected = pin ? normalizeFingerprint(pin.fingerprint256) : undefined
+    if (expected !== undefined && !/^[0-9a-f]{64}$/.test(expected)) {
+        throw new Error(`pinned TLS: fingerprint must be 64 hex chars (got "${pin!.fingerprint256}")`)
     }
-    const expected = normalizeFingerprint(pin.fingerprint256)
-    if (!/^[0-9a-f]{64}$/.test(expected)) {
-        throw new Error(`pinned TLS: fingerprint must be 64 hex chars (got "${pin.fingerprint256}")`)
+    const tlsOptions = pin ? {...connect, rejectUnauthorized: false, servername: pin.servername} : connect
+    const baseConnector = buildConnector(tlsOptions)
+    const verified = (cb: buildConnector.Callback) => (err: Error | null, socket: unknown) => {
+        if (err) return cb(err, null)
+        if (expected === undefined) return cb(null, socket as TLSSocket)
+        const failure = pinFailure(socket as TLSSocket, expected)
+        if (failure) {
+            (socket as TLSSocket).destroy()
+            return cb(failure, null)
+        }
+        cb(null, socket as TLSSocket)
     }
-    const baseConnector = buildConnector({...connect, rejectUnauthorized: false, servername: pin.servername})
     return new Agent({
         connect(opts, cb) {
-            baseConnector(opts, (err, socket) => {
-                if (err) return cb(err, null)
-                const tls = socket as TLSSocket
-                if (typeof tls.getPeerX509Certificate !== "function") {
-                    socket.destroy()
-                    return cb(new Error("pinned TLS requires an https target"), null)
-                }
-                if (!tls.isSessionReused()) {
-                    const raw = tls.getPeerX509Certificate()?.fingerprint256
-                    const actual = raw ? normalizeFingerprint(raw) : undefined
-                    if (actual !== expected) {
-                        tls.destroy()
-                        return cb(new Error(`pinned TLS: cert fingerprint mismatch — expected ${expected}, got ${actual ?? "<none>"}`), null)
-                    }
-                }
-                cb(null, socket)
-            })
+            const dialer = dialerFor(opts.hostname)
+            if (!dialer) return baseConnector(opts, verified(cb))
+            dialer.dial({host: opts.hostname, port: Number(opts.port)}).then(stream => {
+                const tls = tlsConnect({...tlsOptions, socket: stream, servername: pin?.servername ?? opts.servername ?? undefined, ALPNProtocols: ["http/1.1"]})
+                const done = verified(cb)
+                tls.once("secureConnect", () => done(null, tls))
+                tls.once("error", e => done(e, null))
+            }, e => cb(e, null))
         },
     })
+}
+
+/** A resumed TLS session doesn't re-send the cert and proves knowledge of the original master secret,
+ *  so the fingerprint re-check is safely skipped. */
+function pinFailure(tls: TLSSocket, expected: string): Error | undefined {
+    if (typeof tls.getPeerX509Certificate !== "function") return new Error("pinned TLS requires an https target")
+    if (tls.isSessionReused()) return undefined
+    const raw = tls.getPeerX509Certificate()?.fingerprint256
+    const actual = raw ? normalizeFingerprint(raw) : undefined
+    if (actual !== expected) return new Error(`pinned TLS: cert fingerprint mismatch — expected ${expected}, got ${actual ?? "<none>"}`)
+    return undefined
 }
 
 /**
