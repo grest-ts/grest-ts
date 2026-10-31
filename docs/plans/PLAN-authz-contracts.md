@@ -54,18 +54,28 @@ Facts worth knowing:
 8. **Vocabulary** is fixed by the authz README's Vocabulary section. Most apps need only principal, resource,
    action, role and binding.
 
+9. **A type declares where it can live; actions follow.** `types: {cloud: {description, in: [Org.types.org,
+   Org.types.project, Org.types.member]}}`. Every action on `cloud` also applies to those parent types, so a create or
+   list is decided on the parent node. Dropping a place (e.g. extensions on repos) is one edit to that list.
+10. **`.in(field)` and `parentRef`.** `Clouds.Write.in("parent")` decides the action on the node the input field
+    names; the field holds `{type, id}` built by `Clouds.parentRef("cloud")` (`type` is the full type name,
+    `org:project`). `.on("cloudId")` decides on the item itself. The field is named `parent`, as in Google's AIP
+    standard methods: `list`/`create` take `parent`, `get`/`update`/`delete` take the item's id.
+11. **`byField` is deleted.** A different action per input value contradicts point 2; its only use, kratt's scope
+    tables, is replaced by point 10.
+12. **Reaching a place is the engine's job, not a second requirement.** A grant on the org reaching too far is cut by
+    rules in the model: kratt's `repoVisible` (every repo of a project or repo node must be visible; items carry their
+    node's `repos`) and member privacy (another member's personal items: only their owner or an admin). No per-type
+    "reach" action on the contract. Upserts split into `create`/`update` where the id is minted.
+
+Not chosen for now: a cache of GitHub repo visibility (a project of its own; it doesn't change decisions), grants
+with an expiry (H).
+
 ## Open questions
 
 Each has the options seen so far. Pick, refine or reject.
 
-**A. Scope requirements without hand-written tables.** A method that takes "a scope" (`{type: "project", projectId}`
-or `{type: "org"}`) needs "the caller can reach this scope" plus the item action.
-- (a) Keep `byField` and hand tables, as now.
-- (b) `X.in("scope")`: one polymorphic requirement. The authority reads `scope.type`, resolves it to a resource and
-  checks a per-type "reach" action declared once in the model. Replaces `byField` for scopes; `byField` stays for
-  methods where each case really needs a different action.
-- (c) The model declares type parents (`types: {project: {parent: org}}`), and the contract only says
-  `.in("scope")`; the reach action comes from the type.
+**A.** Decided: Settled 9–12.
 
 **B. What `.list()` means.** Today: "no check before the handler; the handler filters". With settled point 4, is a
 bare `.list()` still needed, or should every list be `.on(scope)` plus `allowed` on rows when rows can be hidden

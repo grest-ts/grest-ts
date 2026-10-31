@@ -56,13 +56,14 @@ describe("requirements — HTTP end-to-end", () => {
         await callOn(RequirementDocsApi, scope).save({folderId: "f9"}).toBeError(FORBIDDEN)
     })
 
-    test("byField: only the case the input takes reaches the authority, reading the nested field", async () => {
+    test("in: decided on the parent the input names", async () => {
         scope = as("alice")
-        expect(await callOn(RequirementDocsApi, scope).file({docId: "d1", place: {type: "folder", folderId: "f1"}})).toBe("filed:d1:folder")
+        expect(await callOn(RequirementDocsApi, scope).file({docId: "d1", place: {type: "docs:folder", id: "f1"}})).toBe("filed:d1:docs:folder")
         expect(AUTHORITY_SEEN.splice(0).map(s => s.split(" ")[0])).toEqual(["docs:Write", "docs:Write"])
-        await callOn(RequirementDocsApi, scope).file({docId: "d1", place: {type: "folder", folderId: "f9"}}).toBeError(FORBIDDEN)
-        expect(await callOn(RequirementDocsApi, scope).file({docId: "d1", place: {type: "desk"}})).toBe("filed:d1:desk")
-        expect(AUTHORITY_SEEN.splice(0)).toHaveLength(3)
+        await callOn(RequirementDocsApi, scope).file({docId: "d1", place: {type: "docs:folder", id: "f9"}}).toBeError(FORBIDDEN)
+        expect(await callOn(RequirementDocsApi, scope).file({docId: "d1", place: {type: "docs:desk", id: "alice"}})).toBe("filed:d1:docs:desk")
+        await callOn(RequirementDocsApi, scope).file({docId: "d1", place: {type: "docs:desk", id: "bob"}}).toBeError(FORBIDDEN)
+        AUTHORITY_SEEN.splice(0)
     })
 
     test("list: the authority is asked, with no resource", async () => {

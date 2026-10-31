@@ -1,5 +1,5 @@
 import {GGAuthority, GGHttpSchema, GGRpc} from "@grest-ts/http"
-import {byField, FORBIDDEN, GGContractClass, type GGRequirement, type GGRequirementResource, IsArray, IsDiscriminated, IsLiteral, IsObject, IsString, NOT_AUTHORIZED, NOT_FOUND, SERVER_ERROR, VALIDATION_ERROR} from "@grest-ts/schema"
+import {FORBIDDEN, GGContractClass, type GGRequirement, type GGRequirementResource, IsArray, IsLiteral, IsObject, IsString, NOT_AUTHORIZED, NOT_FOUND, SERVER_ERROR, VALIDATION_ERROR} from "@grest-ts/schema"
 import {USER_TOKEN_WIRE, WirePermission} from "./WireAuthApi"
 
 // What a model library's builders would produce: data only, so the contract stays browser-safe.
@@ -7,15 +7,13 @@ const ERRORS = [NOT_AUTHORIZED, FORBIDDEN, NOT_FOUND] as const
 type Errors = typeof ERRORS[number]
 const on = <const F extends string>(action: string, type: string, field: F, extra?: {hidden?: true, createOn?: GGRequirementResource<F>}): GGRequirement<F, Errors> =>
     Object.freeze({__permission: "requirement", action, resource: {type, id: {field}}, errors: ERRORS, ...extra})
+const within = <const F extends string>(action: string, type: string, field: F, types: string[]): GGRequirement<F, Errors> =>
+    Object.freeze({__permission: "requirement", action, resource: {type, in: {field, types}}, errors: ERRORS})
 const list = (action: string): GGRequirement<string, Errors> => Object.freeze({__permission: "requirement", action, list: true, errors: ERRORS})
 
 export const DOCS_AUTHORITY = new GGAuthority("docs")
 
-const IsPlace = IsDiscriminated("type", {
-    desk: IsObject({type: IsLiteral("desk")}),
-    folder: IsObject({type: IsLiteral("folder"), folderId: IsString}),
-})
-const PlaceAccess = byField(IsPlace, "type", {desk: null, folder: on("docs:Write", "docs:folder", "folderId")})
+const IsPlace = IsObject({type: IsLiteral("docs:desk", "docs:folder"), id: IsString})
 
 export const RequirementDocsApiContract = new GGContractClass("RequirementDocsApi", {
     read: {
@@ -40,7 +38,7 @@ export const RequirementDocsApiContract = new GGContractClass("RequirementDocsAp
         input: IsObject({docId: IsString, place: IsPlace}),
         success: IsString,
         errors: [VALIDATION_ERROR, SERVER_ERROR],
-        permission: {allOf: [on("docs:Write", "docs:doc", "docId"), PlaceAccess.at("place")]},
+        permission: {allOf: [on("docs:Write", "docs:doc", "docId"), within("docs:Write", "docs:doc", "place", ["docs:desk", "docs:folder"])]},
     },
     list: {
         success: IsArray(IsString),

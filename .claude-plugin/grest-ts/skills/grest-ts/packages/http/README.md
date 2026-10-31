@@ -244,11 +244,9 @@ DOCS_AUTHORITY_HANDLER.create(engine)                                     // in 
 
 - **Order:** wires authenticate → scope strings are checked (before the input is read) → the input is validated → each requirement goes to the authority → the handler runs. Invalid input never reaches the authority.
 - **Mixing:** `{allOf: ["admin", requirement]}` needs both. A requirement can't sit inside `anyOf`.
-- **By a discriminated union:** `byField(IsScope, "type", {org: null, project: ReadProject.on("projectId")})` picks the
-  requirement by the input's discriminator (`null`: no check). tsc wants exactly one case per value, each reading only
-  its own variant's fields; `.at("scope")` is the same for a union under the input's `scope`, `.pick(["org"])` keeps some
-  cases for an input with fewer variants. Contract construction checks the cases match the input's union; the server
-  passes the authority only the case taken, and `requirementsOf` lists them all.
+- **Inside a parent:** a requirement whose resource has `in: {field, types}` reads a `{type, id}` from that input
+  field and is decided on that parent (e.g. a create or a list in a project). Contract construction checks the field is
+  a required `{type, id}` whose `type` can only be one of `types`.
 - **Startup:** a schema whose methods declare requirements must `use:` exactly one authority, and that authority must be created in the runtime; otherwise the server refuses to start. A requirement-only method needs no permission-resolving wire.
 - **HTTP only.** WebSocket and raw socket contracts refuse requirements.
 - The handler still loads data through its own tenancy-checked queries: the authority decides access, not existence.

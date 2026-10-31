@@ -7,6 +7,7 @@ const ALLOWED = new Set([
     "alice docs:Read docs:doc/d1",
     "alice docs:Write docs:doc/d1",
     "alice docs:Write docs:folder/f1",
+    "alice docs:Write docs:desk/alice",
     "bob docs:Write docs:doc/d1",
 ])
 
@@ -19,8 +20,10 @@ export const DOCS_AUTHORITY_HANDLER = DOCS_AUTHORITY.define((seen: string[]) => 
         if (r.list) return
         const fromInput = r.resource?.id && "field" in r.resource.id ? requirementField(input, r.resource.id.field) : undefined
         const resource = fromInput === undefined && r.createOn ? r.createOn : r.resource!
+        const parent = resource.in && requirementField(input, resource.in.field) as {type: string, id: string}
         const id = resource.id && "field" in resource.id ? requirementField(input, resource.id.field) : undefined
-        if (ALLOWED.has(`${USER_DATA.get()!.username} ${r.action} ${resource.type}/${id}`)) return
+        const target = parent ? `${parent.type}/${parent.id}` : `${resource.type}/${id}`
+        if (ALLOWED.has(`${USER_DATA.get()!.username} ${r.action} ${target}`)) return
         throw r.hidden ? new NOT_FOUND() : new FORBIDDEN()
     },
 }))

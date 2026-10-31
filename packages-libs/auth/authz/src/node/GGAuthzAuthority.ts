@@ -136,6 +136,10 @@ export class GGAuthzAuthority {
             for (const [method, {permission}] of Object.entries(contract.methods)) {
                 for (const r of GGPermissionChecker.requirementsOf(permission)) {
                     for (const resource of [r.resource, r.createOn]) {
+                        if (resource?.in) {
+                            for (const t of resource.in.types) if (t !== this.config.tenantType && !this.loaders.has(t)) problems.push(`${contract.name}.${method}: no loader for ${t}, a parent of ${resource.type}`)
+                            continue
+                        }
                         if (!resource || resource.type === this.config.tenantType) continue
                         if (!resource.id) problems.push(`${contract.name}.${method}: ${resource.type} has no id, and only ${this.config.tenantType} means the caller's tenant`)
                         else if (!this.loaders.has(resource.type)) problems.push(`${contract.name}.${method}: no loader for ${resource.type}`)
@@ -161,7 +165,7 @@ export class GGAuthzAuthority {
         const creating = requirement.createOn && (id && "field" in id ? requirementField(fields, id.field) : undefined) === undefined
         const target = creating ? requirement.createOn! : requirement.resource!
         const keyOf = this.approvalKeys.get(requirement.action)
-        await this.enforce(requirement.action, {type: target.type, id: this.idOf(target, fields)}, {hidden: requirement.hidden, key: keyOf && (resource => keyOf(fields, resource))})
+        await this.enforce(requirement.action, this.refOf(target, fields), {hidden: requirement.hidden, key: keyOf && (resource => keyOf(fields, resource))})
     }
 
     private checked(action: GGAuthzActionRef): void {
@@ -271,6 +275,15 @@ export class GGAuthzAuthority {
             const d = decisions[next++]!
             return d.decision && d.context.outcome !== "allow-with-approval"
         })
+    }
+
+    private refOf(resource: GGRequirementResource, fields: Record<string, unknown>): GGAuthzResourceRef {
+        if (!resource.in) return {type: resource.type, id: this.idOf(resource, fields)}
+        const parent = requirementField(fields, resource.in.field) as {type?: unknown, id?: unknown} | undefined
+        if (typeof parent?.type !== "string" || typeof parent.id !== "string" || !resource.in.types.includes(parent.type)) {
+            throw new Error(`Requirement field ${resource.in.field} is not a parent of ${resource.type}`)
+        }
+        return {type: parent.type, id: parent.id}
     }
 
     private idOf(resource: GGRequirementResource, fields: Record<string, unknown>): string {

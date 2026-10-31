@@ -1,12 +1,9 @@
 import {describe, expect, it} from "vitest";
 import {
-    byField,
     FORBIDDEN,
     GG_ANY_PERMISSION,
     GG_NO_PERMISSIONS,
     GGContractClass,
-    IsLiteral,
-    IsObject,
     IsString,
     NOT_AUTHORIZED,
     SERVER_ERROR,
@@ -65,16 +62,6 @@ describe("toOpenApi — permission → security mapping", () => {
         const list = Object.freeze({__permission: "requirement", action: "items:Read", list: true, errors: [NOT_AUTHORIZED, FORBIDDEN]})
         expect(opSecurity(toOpenApi([makeApi("ReqApi", "list", list)]), "list")).toEqual([{BearerAuth: []}])
         expect(opSecurity(toOpenApi([makeApi("ReqAllApi", "list", {allOf: ["items:admin", list]})]), "list")).toEqual([{BearerAuth: ["items:admin"]}])
-    });
-
-    it("byField → bearerAuth with no scopes, like a requirement", () => {
-        const IsInput = IsObject({type: IsLiteral("a")})
-        const list = Object.freeze({__permission: "requirement", action: "items:Read", list: true, errors: [NOT_AUTHORIZED, FORBIDDEN]}) as any
-        const contract = new GGContractClass("ByFieldApi", {
-            list: {input: IsInput, success: IsString, errors: [NOT_AUTHORIZED, FORBIDDEN, SERVER_ERROR], permission: byField(IsInput, "type", {a: list})},
-        })
-        const api = new GGHttpSchema({contract: contract as any, pathPrefix: "byfield", routes: {list: GGRpc.POST("list")}})
-        expect(opSecurity(toOpenApi([api]), "list")).toEqual([{BearerAuth: []}])
     });
 
     it("bare string scope → bearerAuth with single scope", () => {

@@ -150,8 +150,11 @@ export const AppAuthz = defineAuthzModel({
 })
 ```
 
-- **Creating things.** Check a create on the parent: `Docs.Write` applies to a folder too. An
-  action's `on` may also name another service's type as `service:type`; the model fails if no
+- **Where a type lives.** `types: {doc: {description: "A document", in: ["folder", Org.types.project]}}`
+  says a doc can be inside a folder or a project. Every action on `doc` then also applies to those
+  types, so a create or a list is decided on the parent (`.in(field)`, §2). To stop docs living in
+  projects, remove it from that list.
+- An action's `on` may also name another service's type as `service:type`; the model fails if no
   service declares it.
 - **Fail at load.** `defineAuthzModel` validates the model and every action it names, then
   deep-freezes it.
@@ -195,18 +198,25 @@ An action builds a grest-ts `GGRequirement` for a contract method's `permission:
 so contracts stay browser-safe:
 
 ```ts
-delete: {input: IsObject({docId: IsDocId}), permission: Docs.Delete.on("docId")}
-invite: {input: IsInvite,                    permission: Org.ManageAccess.on(Org.types.org)}    // the caller's tenant
-list:   {                                    permission: Docs.Read.list()}
-save:   {input: IsSaveDoc,                   permission: Docs.Write.on(Docs.types.doc, "docId").orCreateOn(Docs.types.folder, "folderId")}
-mine:   {                                    permission: Docs.Read.onContext("currentDoc")}
+const IsDocParent = Docs.parentRef("doc")   // {type: "docs:folder" | "org:project", id: string}
+
+list:   {input: IsObject({parent: IsDocParent}),             permission: Docs.Read.in("parent")}
+create: {input: IsObject({parent: IsDocParent, ...fields}),  permission: Docs.Write.in("parent")}
+update: {input: IsObject({docId: IsDocId, ...fields}),       permission: Docs.Write.on("docId")}
+delete: {input: IsObject({docId: IsDocId}),                  permission: Docs.Delete.on("docId")}
+invite: {input: IsInvite,                                    permission: Org.ManageAccess.on(Org.types.org)}    // the caller's tenant
+mine:   {                                                    permission: Docs.Read.onContext("currentDoc")}
 ```
+
+`list`/`create` take the `parent`, `get`/`update`/`delete` the item's id, as in Google's API design
+standard methods.
 
 | Builder | |
 |---|---|
 | `.on(field)` | the id is that input field; the action must have one resource type. Checked against the input at compile time and when the contract is built |
 | `.on(type, field)` | for an action on several types; `type` must be one of them |
 | `.on(tenantType)` | no id: the caller's tenant itself |
+| `.in([type,] field)` | inside the parent that input field names, as `{type, id}` from `parentRef(type)`: decided on the parent. The type must have `in`. Contract construction checks the field can only name its parents |
 | `.onContext([type,] source)` | the authority resolves the id from the request |
 | `.hide()` | a denial answers `NOT_FOUND`; the authority's `hidden(resource, action)` config does it per resource |
 | `.orCreateOn(type, field)` | an upsert: without the id field, check the parent `type` from `field` |

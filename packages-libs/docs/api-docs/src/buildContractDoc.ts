@@ -15,7 +15,7 @@ import type {GGHttpSchema} from "@grest-ts/http";
 import type {GGHeaderSchema, GGTransportMiddleware} from "@grest-ts/context";
 import type {GGWebSocketSchema, GGRawWebSocketSchema} from "@grest-ts/websocket";
 import type {ANY_ERROR_CLS, GGPermission, GGSchema} from "@grest-ts/schema";
-import {GG_ANY_PERMISSION, GG_NO_PERMISSIONS, GGPermissionChecker, isRequirement, isRequirementByField} from "@grest-ts/schema";
+import {GG_ANY_PERMISSION, GG_NO_PERMISSIONS, GGPermissionChecker, isRequirement} from "@grest-ts/schema";
 import {JsonSchemaAdapter} from "./jsonSchemaAdapter";
 import type {
     ApiDocsDocument, AuthDoc, ContractDoc, ErrorDoc, GroupDoc,
@@ -604,7 +604,6 @@ function toPermissionTree(p: GGPermission): PermissionTree {
     if (p === GG_ANY_PERMISSION) return {kind: "anyAuth"};
     if (typeof p === "string") return {kind: "scope", scope: p};
     if (isRequirement(p)) return {kind: "requirement", action: p.action, description: GGPermissionChecker.describePermission(p)};
-    if (isRequirementByField(p)) return {kind: "requirement", action: GGPermissionChecker.requirementsOf(p).map(r => r.action).join(", "), description: GGPermissionChecker.describePermission(p)};
     if (p && typeof p === "object") {
         if ("allOf" in p) return {kind: "allOf", children: p.allOf.map(toPermissionTree)};
         if ("anyOf" in p) return {kind: "anyOf", children: p.anyOf.map(toPermissionTree)};
