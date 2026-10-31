@@ -11,5 +11,8 @@ export interface IGGTestWith {
      * interceptors require `.waitFor()`.
      */
     requiresWaitFor?(): boolean;
+
+    /** How long `.waitFor()` waits when given no timeout, set with `.within(ms)`. */
+    waitTimeoutMs?(): number | undefined;
 }
 

@@ -3,6 +3,7 @@ import {RuntimeConstructor, RuntimeInput, StartResult, Selector} from "./testers
 import {GGTestMode, GGTestRuntime, GGTestRuntimeConfig} from "./GGTestRuntime";
 import {createStartResult} from "./testers/GGTestSelector";
 import {IGGTestWith} from "./testers/IGGTestWith";
+import {DEFAULT_WAIT_FOR_MS, waitForInterceptors} from "./testers/waitForInterceptors";
 
 // -------------------------------------------------
 // GGTest - Static API for test setup
@@ -118,7 +119,7 @@ export class GGTest {
      * Polls the expectation every 20ms until it's satisfied or timeout is reached.
      *
      * @param expectation - The expectation to wait for
-     * @param timeout - Max time to wait in ms (default: 5000)
+     * @param timeout - Max time to wait in ms (default: the expectation's `.within(ms)`, else 5000)
      *
      * @example
      * // Wait for a log after injecting an event
@@ -129,43 +130,23 @@ export class GGTest {
      * // Wait for a metric to be incremented
      * await GGTest.waitFor(t.main.metrics.expect(SomeMetric).inc({label: 'value'}));
      */
-    public static async waitFor(expectation: IGGTestWith, timeout: number = 5000): Promise<void> {
+    public static async waitFor(expectation: IGGTestWith, timeout?: number): Promise<void> {
         const interceptor = expectation.createInterceptor();
-        const checkInterval = 20;
-        const startTime = Date.now();
-
-        await interceptor.register();
-
+        let registered = false;
+        const release = async () => {
+            if (!registered) return;
+            registered = false;
+            await interceptor.unregister();
+        };
         try {
-            await new Promise<void>((resolve, reject) => {
-                const check = () => {
-                    const elapsed = Date.now() - startTime;
-
-                    if (interceptor.isCalled()) {
-                        resolve();
-                        return;
-                    }
-
-                    if (elapsed > timeout) {
-                        reject(new Error(
-                            `[GGTest.waitFor] Timeout after ${timeout}ms waiting for expectation`
-                        ));
-                        return;
-                    }
-
-                    setTimeout(check, checkInterval);
-                };
-
-                check();
-            });
-
+            await interceptor.register();
+            registered = true;
+            await waitForInterceptors([{interceptor, timeout: timeout ?? expectation.waitTimeoutMs?.() ?? DEFAULT_WAIT_FOR_MS}], release);
             await interceptor.validate();
             const error = interceptor.getMockValidationError();
-            if (error) {
-                throw error;
-            }
+            if (error) throw error;
         } finally {
-            await interceptor.unregister();
+            await release();
         }
     }
 

@@ -254,6 +254,11 @@ await alice.user.login({username: "alice", password: "wrong"})
 
 Assertions chain naturally with `.with()` and `.waitFor()`:
 
+- `.with(x)` listens only while the action runs (plus 25 ms), and checks `x` right after.
+- `.waitFor(x)` keeps listening after the action until `x` is met or times out (5 s), then stops: a later repeat of
+  the same message is unexpected. `x.within(ms)` sets that time where you write the expectation, so a broken test
+  fails in what the call should take, not in the default.
+
 ```typescript
 await alice.user.login(loginData)
     .with(BlockerApi.spy.checkBlock.toMatchObject({username: "alice"}))
