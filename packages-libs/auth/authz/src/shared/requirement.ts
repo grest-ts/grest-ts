@@ -16,15 +16,20 @@ export interface GGAuthzRequirement<Field extends string = never, Types extends 
 
 type IsUnion<T, U = T> = T extends unknown ? ([U] extends [T] ? false : true) : never
 
-export interface GGAuthzActionBuilders<Types extends string> {
+/** `Own`: the types the action names; `Types`: those and the parents they can be in. */
+export interface GGAuthzActionBuilders<Own extends string, Types extends string = Own> {
     /** On the tenant itself, e.g. a create checked on the caller's org. */
     on<T extends Types>(type: T): GGAuthzRequirement<never, Types>
-    /** The resource id is that input field (the action must have one resource type). */
-    on<const F extends string>(field: IsUnion<Types> extends true ? never : F): GGAuthzRequirement<F, Types>
+    /** The resource id is that input field (the action must name one resource type). */
+    on<const F extends string>(field: IsUnion<Own> extends true ? never : F): GGAuthzRequirement<F, Types>
     on<T extends Types, const F extends string>(type: T, field: F): GGAuthzRequirement<F, Types>
     /** The authority resolves the id from the request, e.g. the document the caller has open. */
     onContext(source: string): GGAuthzRequirement<never, Types>
     onContext<T extends Types>(type: T, source: string): GGAuthzRequirement<never, Types>
+    /** Inside the parent that input field names (a `{type, id}` from `parentRef`), decided on that parent: a create or
+     *  a list. The action must have one type with `in`, or name it. */
+    in<const F extends string>(field: F): GGAuthzRequirement<F, Types>
+    in<T extends Own, const F extends string>(type: T, field: F): GGAuthzRequirement<F, Types>
     /** No check before the handler; it filters what it returns. */
     list(): GGRequirement<never, GGAuthzError>
 }
@@ -40,6 +45,7 @@ function requirement(action: string, resourceTypes: readonly string[], parts: Pa
     const data = {__permission: "requirement", action, ...parts, errors: GG_AUTHZ_ERRORS}
     for (const r of [parts.resource, parts.createOn]) {
         if (r?.id) Object.freeze(r.id)
+        if (r?.in) Object.freeze(r.in)
         if (r) Object.freeze(r)
     }
     Object.defineProperties(data, {
@@ -54,11 +60,11 @@ function requirement(action: string, resourceTypes: readonly string[], parts: Pa
 }
 
 /** The builders on a defined action; non-enumerable, so the action still reads as plain data. */
-export function actionBuilders(action: string, resourceTypes: readonly string[]): PropertyDescriptorMap {
+export function actionBuilders(action: string, resourceTypes: readonly string[], own: readonly string[], parents: ReadonlyMap<string, readonly string[]>): PropertyDescriptorMap {
     const typeOf = (type: string | undefined) => {
         if (type === undefined) {
-            if (resourceTypes.length !== 1) throw new Error(`${action} applies to ${resourceTypes.join(", ")}: name the type`)
-            return resourceTypes[0]!
+            if (own.length !== 1) throw new Error(`${action} applies to ${own.join(", ")}: name the type`)
+            return own[0]!
         }
         if (!resourceTypes.includes(type)) throw new Error(`${action} doesn't apply to ${type}`)
         return type
@@ -71,9 +77,17 @@ export function actionBuilders(action: string, resourceTypes: readonly string[])
     const onContext = (a: string, b?: string) => b === undefined
         ? requirement(action, resourceTypes, {resource: {type: typeOf(undefined), id: {context: a}}})
         : requirement(action, resourceTypes, {resource: {type: typeOf(a), id: {context: b}}})
+    const within = (a: string, b?: string) => {
+        const type = b === undefined ? [...parents.keys()] : [a]
+        if (b === undefined && type.length !== 1) throw new Error(`${action}: ${type.length ? `${type.join(", ")} have` : "none of its types has"} \`in\`: name the type`)
+        const types = parents.get(type[0]!)
+        if (!types) throw new Error(`${action}: ${type[0]} has no \`in\`, or the action isn't on it`)
+        return requirement(action, resourceTypes, {resource: {type: type[0]!, in: {field: b ?? a, types}}})
+    }
     return {
         on: {value: on},
         onContext: {value: onContext},
+        in: {value: within},
         list: {value: () => requirement(action, resourceTypes, {list: true})},
     }
 }
