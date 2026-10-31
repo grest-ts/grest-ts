@@ -14,6 +14,7 @@ export type {
     GGAuthzRuleSpec,
     GGAuthzService,
     GGAuthzServiceSpec,
+    GGAuthzTypeSpec,
 } from "./shared/defineAuthz"
 export {describeAuthzModel, documentAuthzModel} from "./shared/describeAuthz"
 export type {GGAuthzActionInfo, GGAuthzCatalog, GGAuthzDescribeOptions, GGAuthzRoleInfo} from "./shared/describeAuthz"
