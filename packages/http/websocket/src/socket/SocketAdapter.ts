@@ -44,4 +44,14 @@ export interface SocketAdapter {
      * (e.g. a terminal: text control JSON vs binary keystrokes).
      */
     onRawMessage?(handler: (data: Uint8Array, isBinary: boolean) => void): void;
+
+    /**
+     * Stop / restart reading inbound frames (backpressure for a byte stream piped elsewhere).
+     * Optional: browsers can't pause a WebSocket.
+     */
+    pause?(): void;
+    resume?(): void;
+
+    /** Bytes queued for sending but not yet written to the network. */
+    bufferedAmount?(): number;
 }

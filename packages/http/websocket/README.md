@@ -627,8 +627,15 @@ The handler's `socket` is a `GGRawSocket` (import the type from `@grest-ts/webso
 - `client.onClose(cb)` / `client.disconnect()` / `client.close()` — lifecycle
 - `client.onDisconnect(cb)` — fires on every socket drop, before any reconnect attempt
 - `client.onError(cb)`, `client.forceReconnect()`, `client.isConnected`
+- `client.pause()` / `client.resume()` / `client.bufferedAmount` — flow control (also on the server's `GGRawSocket`)
 
 A reconnected byte stream is a **fresh** stream — bytes sent while it was down are not replayed.
+
+**Flow control.** Neither end buffers without bound on its own: when you pipe a raw socket into a
+slower destination (another socket, a TCP connection), `pause()` the source while the destination's
+`bufferedAmount` is high and `resume()` it once drained. Pausing stops reading from the network, so
+TCP backpressure reaches the sender. Browsers can't pause a WebSocket — there `pause()`/`resume()`
+are no-ops and `bufferedAmount` still reports the send queue.
 
 ### `customClient: true` — foreign clients
 

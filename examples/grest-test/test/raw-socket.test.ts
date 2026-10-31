@@ -249,6 +249,31 @@ describe("createClient (real client, end-to-end)", () => {
         })
     })
 
+    test("pause holds inbound frames until resume (backpressure for piped streams)", async () => {
+        await inTokenContext("secret-alice", async () => {
+            const client = RawEchoApi.createClient({
+                url: GG_TEST_RUNNER.get().discoveryServer.getRoutingUrl("RawEchoApi"),
+                query: {room: "flow"},
+                reconnect: false,
+            })
+            await client.connect()
+            try {
+                const got: string[] = []
+                client.onMessage((data) => got.push(Buffer.from(data).toString()))
+                client.pause()
+                client.send("one")
+                client.send("two")
+                await new Promise((r) => setTimeout(r, 300))
+                expect(got).toEqual([])
+                expect(client.bufferedAmount).toBeGreaterThanOrEqual(0)
+                client.resume()
+                await vi.waitFor(() => expect(got).toEqual(["alice@flow:one", "alice@flow:two"]))
+            } finally {
+                client.close()
+            }
+        })
+    })
+
     test("a bad token rejects connect() with the typed handshake error", async () => {
         await inTokenContext("not-a-real-token", async () => {
             const client = RawEchoApi.createClient({
