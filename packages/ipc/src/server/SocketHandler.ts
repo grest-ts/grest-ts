@@ -73,6 +73,12 @@ export class SocketHandler {
         const routeToUrl = this.routeResolver(url)
         if (routeToUrl) {
             GGLog.debug(this, `Proxying WS ${req.url} -> ${routeToUrl}`);
+            // http-proxy listens on the client socket only once the target answers the upgrade; a client
+            // that resets before then would otherwise throw an uncaught ECONNRESET and take the router down.
+            socket.on('error', (err) => {
+                GGLog.debug(this, `WebSocket client socket error ${req.url}: ${err.message}`);
+                socket.destroy();
+            });
             this.proxy.ws(req, socket, head, {target: routeToUrl}, (err: any) => {
                 const code = err?.code ?? err?.errors?.[0]?.code ?? 'UNKNOWN';
                 GGLog.error(this, `WebSocket proxy error [${code}] ${req.url} -> ${routeToUrl}: ${err.message}`);
