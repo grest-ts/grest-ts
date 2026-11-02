@@ -31,9 +31,8 @@ export class GGConfigStoreEnv<Key extends GGConfigKey = GGConfigKey> extends GGC
     }
 
     public override async start(): Promise<void> {
-        this.keys.forEach(key => {
-            this.#valuesCache.set(key, this.resolveValue(key, this.read(key), true));
-        });
+        this.resolveValues(new Map(this.keys.map(key => [key, this.read(key)])), true)
+            .forEach((value, key) => this.#valuesCache.set(key, value));
         await super.start();
     }
 

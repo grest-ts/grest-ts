@@ -8,6 +8,7 @@
 AWS Secrets Manager store for `@grest-ts/config`.
 
 Fetches a single JSON secret from AWS Secrets Manager at startup and serves values from cache.
+Every `refreshIntervalMs` it checks for a new secret version. A new version is validated as a whole: if valid, it replaces all values and notifies watchers of changed keys; if not, the last good values stay and the error goes to `GGConfigLocator.onReloadError` (critical log) on every poll until the secret is fixed.
 Path resolution is identical to `GGConfigStoreFile` — `key.name.split("/")` walks the JSON tree.
 
 ## Usage
@@ -31,6 +32,7 @@ new GGConfigLocator(AppConfig)
 | `region`          | no       | AWS region (falls back to SDK default / environment)         |
 | `accessKeyId`     | no       | Explicit credentials (falls back to SDK default chain)       |
 | `secretAccessKey` | no       | Explicit credentials (falls back to SDK default chain)       |
+| `refreshIntervalMs` | no     | How often to check for a new secret version (default 3 minutes) |
 
 ## Secret Format
 

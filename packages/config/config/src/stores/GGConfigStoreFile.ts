@@ -24,8 +24,8 @@ export class GGConfigStoreFile<Key extends GGConfigKey> extends GGConfigStore<Ke
     }
 
     public override async start(): Promise<void> {
-        await super.start();
         await this.refresh(true);
+        await super.start();
         // Watch the directory: atomic writes rename a new inode over the file, which a file watch never sees.
         const name = basename(this.file);
         this.#watcher = fs.watch(dirname(this.file), (_eventType, filename) => {
@@ -53,10 +53,7 @@ export class GGConfigStoreFile<Key extends GGConfigKey> extends GGConfigStore<Ke
             throw new Error(`Settings file is empty: ${this.file}`)
         }
         const fileJson = JSON.parse(fileContent);
-        const values = new Map<GGConfigKey, unknown>();
-        this.keys.forEach(key => {
-            values.set(key, this.resolveValue(key, readConfigPath(fileJson, key.name), isInitialLoad));
-        });
+        const values = this.resolveValues(new Map(this.keys.map(key => [key, readConfigPath(fileJson, key.name)])), isInitialLoad);
         const previous = this.#valuesCache;
         this.#valuesCache = values;
         if (isInitialLoad) return;

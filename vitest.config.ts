@@ -25,6 +25,7 @@ export default defineConfig({
       'packages-tooling/testkit/testkit-vitest',
       'packages/common',
       'packages/config/config',
+      'packages/config/config-aws',
       'packages/context',
       'packages/discovery/discovery-local',
       'packages/http/http',

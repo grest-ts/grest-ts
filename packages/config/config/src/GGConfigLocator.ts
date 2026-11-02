@@ -3,15 +3,27 @@ import {GGConfigKey, GGConfigKeyConstructor} from "./GGConfigKey";
 import {GGLocator, GGLocatorServiceType} from "@grest-ts/locator";
 import {GG_CONFIG} from "./GG_CONFIG";
 import {ConfigValues, GGConfigStoreLocal} from "./stores/GGConfigStoreLocal";
+import {GGLog} from "@grest-ts/logger";
 
 export type GGConfigDefinition<T> = T & {
     __isGGConfigDefinition: never,
     __getKeysMap: () => ReadonlyMap<GGConfigKeyConstructor, GGConfigKey[]>
 };
 
+export interface GGConfigLocatorOptions {
+    /**
+     * Production only: when a store fails its initial load, log a critical error and retry every startupRetryMs
+     * instead of failing startup. Services that start after config (database, http, jobs) wait until it loads.
+     */
+    readonly startupRetryMs?: number
+}
+
 export class GGConfigLocator<T extends object> {
 
     #isStarted = false;
+    #isTornDown = false;
+    #cancelRetryWait: (() => void) | undefined = undefined;
+    readonly #options: GGConfigLocatorOptions;
     readonly #config: GGConfigDefinition<T>;
     readonly #storesList: GGConfigStore<GGConfigKey>[] = []
     readonly #storesMap: Map<string, GGConfigStore<GGConfigKey>> = new Map()
@@ -23,9 +35,10 @@ export class GGConfigLocator<T extends object> {
      * @param localConfig - Optional local config values. If provided, stores will use this instead of the real values when not running in production.
      *  new GGConfigLocator(MyConfig, localConfig) is shorthand for this: new GGConfigLocator(MyConfig).add(AllKeys, new GGConfigStoreLocal(MyConfig, localConfig))
      */
-    constructor(config: GGConfigDefinition<T>, localConfig?: ConfigValues<T>) {
+    constructor(config: GGConfigDefinition<T>, localConfig?: ConfigValues<T>, options: GGConfigLocatorOptions = {}) {
         if (!config) throw new Error("Config definition is required");
         this.#config = config;
+        this.#options = options;
         this.localConfig = localConfig ? new GGConfigStoreLocal<T>(config, localConfig) : undefined
         GGLocator.getScope().setWithLifecycle(GG_CONFIG, this, {
             type: GGLocatorServiceType.CONFIG,
@@ -45,7 +58,14 @@ export class GGConfigLocator<T extends object> {
      * Called when a running store fails to reload and keeps its last good values, or when a watcher fails during a reload.
      */
     public onReloadError = (error: Error): void => {
-        console.error("Config reload failed, keeping previous values:", error);
+        GGLog.critical(this, "Config reload failed, keeping previous values", error);
+    }
+
+    /**
+     * Called when a store fails its initial load and startup retries it (see GGConfigLocatorOptions.startupRetryMs).
+     */
+    public onStartupError = (error: Error, retryInMs: number): void => {
+        GGLog.critical(this, `Config failed to load, startup paused, retrying in ${retryInMs}ms`, error);
     }
 
     /**
@@ -110,10 +130,32 @@ export class GGConfigLocator<T extends object> {
         })
         Object.freeze(this.#storesMap);
         Object.freeze(this.#storesList);
-        await Promise.all(this.#storesList.map((store) => store.start()));
+        await Promise.all(this.#storesList.map((store) => this.#startStore(store)));
+    }
+
+    async #startStore(store: GGConfigStore<GGConfigKey>): Promise<void> {
+        const retryMs = process.env.NODE_ENV === "production" ? this.#options.startupRetryMs : undefined;
+        while (true) {
+            try {
+                return await store.start();
+            } catch (error) {
+                if (retryMs === undefined || this.#isTornDown) throw error;
+                this.onStartupError(error instanceof Error ? error : new Error(String(error)), retryMs);
+                await new Promise<void>(resolve => {
+                    const timer = setTimeout(resolve, retryMs);
+                    this.#cancelRetryWait = () => {
+                        clearTimeout(timer);
+                        resolve();
+                    };
+                });
+                if (this.#isTornDown) throw new Error("Config startup aborted by teardown");
+            }
+        }
     }
 
     public async teardown(): Promise<void> {
+        this.#isTornDown = true;
+        this.#cancelRetryWait?.();
         await Promise.all(this.#storesList.map(s => s.teardown()));
     }
 }

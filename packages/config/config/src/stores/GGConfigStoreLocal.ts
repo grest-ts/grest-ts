@@ -99,9 +99,8 @@ export class GGConfigStoreLocal<Struct extends object, Key extends GGConfigKey =
             );
         }
 
-        this.keys.forEach(key => {
-            this.#valuesCache.set(key, this.resolveValue(key, this.#values.get(key), true));
-        });
+        this.resolveValues(new Map(this.keys.map(key => [key, this.#values.get(key)])), true)
+            .forEach((value, key) => this.#valuesCache.set(key, value));
 
         await super.start();
     }

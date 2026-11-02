@@ -102,7 +102,8 @@ export class GGConfig {
                 if (value !== undefined) defaulted.push(key.name);
             }
             const check = key.schema.safeParse(value);
-            if (check.success === false) invalid.push({name: key.name, issues: check.issues.toJSON()});
+            // Without the failing values: the document is usually a secret.
+            if (check.success === false) invalid.push({name: key.name, issues: check.issues.toJSON().map(({value: _, ...issue}) => issue)});
         }
         const unknown: string[] = [];
         collectUnknown(document, "", keys.map(k => k.name), unknown);

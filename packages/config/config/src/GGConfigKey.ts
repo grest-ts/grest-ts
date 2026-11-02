@@ -104,5 +104,5 @@ function captureDefinitionLocation(): string | undefined {
             return line.substring(0, line.length - 1).trim().replace("at <anonymous> (", "")
         }
     }
-    return stack;
+    return undefined;
 }

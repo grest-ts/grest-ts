@@ -1,5 +1,6 @@
 import {GGConfigKey} from "./GGConfigKey";
 import {GG_CONFIG} from "./GG_CONFIG";
+import type {GGIssuesList} from "@grest-ts/schema";
 
 export type ConfigUpdateCallback = (value: any) => void | Promise<void>;
 
@@ -33,14 +34,27 @@ export abstract class GGConfigStore<Key extends GGConfigKey> {
      * validation will fail — this is how missing required keys are caught.
      */
     protected resolveValue<T>(key: GGConfigKey<T>, storeValue: unknown, isInitialLoad: boolean = false): T {
-        const val = storeValue !== undefined ? storeValue : key.getDefault();
-        const check = key.schema.safeParse(val);
-        if (check.success === false) {
-            const errors = JSON.stringify(check.issues.toJSON(), null, 2).replaceAll("\n", "\n\t\t")
-            throw new Error(`Config validation failed for "${key.name}" during ${isInitialLoad ? "initial-load" : "reload"}.\n\tDefined at:\n\t\t${key.definedAt}\n\tIssues:\n\t\t${errors}`);
-        } else {
-            return check.value as T;
+        return this.resolveValues(new Map([[key as GGConfigKey, storeValue]]), isInitialLoad).get(key) as T;
+    }
+
+    /**
+     * resolveValue() for many keys at once: validates all of them and throws one error naming every failing key.
+     */
+    protected resolveValues(storeValues: ReadonlyMap<GGConfigKey, unknown>, isInitialLoad: boolean = false): Map<GGConfigKey, unknown> {
+        const values = new Map<GGConfigKey, unknown>();
+        const failures: string[] = [];
+        storeValues.forEach((storeValue, key) => {
+            const check = key.schema.safeParse(storeValue !== undefined ? storeValue : key.getDefault());
+            if (check.success === false) {
+                failures.push(describeFailure(key, check.issues));
+            } else {
+                values.set(key, check.value);
+            }
+        });
+        if (failures.length > 0) {
+            throw new Error(`Config validation failed during ${isInitialLoad ? "initial-load" : "reload"}:\n\t${failures.join("\n\t")}`);
         }
+        return values;
     }
 
     public async start(): Promise<void> {
@@ -98,4 +112,14 @@ export abstract class GGConfigStore<Key extends GGConfigKey> {
             }
         }
     }
+}
+
+// Issue messages only: a failing value may be (part of) a secret.
+function describeFailure(key: GGConfigKey, issues: GGIssuesList): string {
+    const messages: string[] = [];
+    for (let i = 0; i < issues.length; i++) {
+        const path = issues.getPath(i);
+        messages.push(path ? `${path}: ${issues.getMessage(i)}` : issues.getMessage(i));
+    }
+    return `"${key.name}": ${messages.join("; ")}${key.definedAt ? ` (defined at ${key.definedAt})` : ""}`;
 }
