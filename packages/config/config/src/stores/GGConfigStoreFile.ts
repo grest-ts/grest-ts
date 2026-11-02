@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import {GGConfigStore} from "../GGConfigStore";
 import {GGConfigKey} from "../GGConfigKey";
 import {readConfigPath} from "../configPath";
+import {GGConfigLoadError} from "../GGConfigLoadError";
 import {basename, dirname, join} from "node:path";
 import {fileURLToPath} from "node:url";
 
@@ -46,15 +47,29 @@ export class GGConfigStoreFile<Key extends GGConfigKey> extends GGConfigStore<Ke
     }
 
     public async refresh(isInitialLoad: boolean): Promise<void> {
-        const fileContent = fs.readFileSync(this.file, 'utf-8');
-        if (!fileContent) {
-            throw new Error(`Settings file is empty: ${this.file}`)
-        }
-        const fileJson = JSON.parse(fileContent);
+        const fileJson = this.#read();
         const values = this.resolveValues(key => readConfigPath(fileJson, key.name), isInitialLoad);
         const previous = this.#valuesCache;
         this.#valuesCache = values;
         if (!isInitialLoad) await this.notifyChanged(previous, values);
+    }
+
+    #read(): unknown {
+        let fileContent: string;
+        try {
+            fileContent = fs.readFileSync(this.file, 'utf-8');
+        } catch (error) {
+            throw new GGConfigLoadError(`Cannot read settings file ${this.file}: ${(error as Error).message}`, {cause: error});
+        }
+        if (!fileContent) {
+            throw new GGConfigLoadError(`Settings file is empty: ${this.file}`);
+        }
+        try {
+            return JSON.parse(fileContent);
+        } catch {
+            // The parser's message quotes the text around the error, which may be secret.
+            throw new GGConfigLoadError(`Settings file is not valid JSON: ${this.file}`);
+        }
     }
 
     public getValue<T>(key: GGConfigKey<T>): T {

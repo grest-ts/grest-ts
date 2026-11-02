@@ -4,6 +4,7 @@ import {GGLocator, GGLocatorServiceType} from "@grest-ts/locator";
 import {GG_CONFIG} from "./GG_CONFIG";
 import {ConfigValues, GGConfigStoreLocal} from "./stores/GGConfigStoreLocal";
 import {GGLog} from "@grest-ts/logger";
+import {GGConfigLoadError} from "./GGConfigLoadError";
 import {setTimeout} from "node:timers/promises";
 
 export type GGConfigDefinition<T> = T & {
@@ -13,8 +14,8 @@ export type GGConfigDefinition<T> = T & {
 
 export interface GGConfigLocatorOptions {
     /**
-     * Production only: when a store fails its initial load, log a critical error and retry every startupRetryMs
-     * instead of failing startup. Services that start after config (database, http, jobs) wait until it loads.
+     * Production only: when a store fails its initial load with a GGConfigLoadError (config unreadable or invalid), log a
+     * critical error and retry every startupRetryMs instead of failing startup. Other errors still fail startup. Services that start after config (database, http, jobs) wait until it loads.
      */
     readonly startupRetryMs?: number
 }
@@ -139,8 +140,8 @@ export class GGConfigLocator<T extends object> {
             try {
                 return await store.start();
             } catch (error) {
-                if (retryMs === undefined || this.#tornDown.signal.aborted) throw error;
-                this.onStartupError(error instanceof Error ? error : new Error(String(error)), retryMs);
+                if (retryMs === undefined || !(error instanceof GGConfigLoadError) || this.#tornDown.signal.aborted) throw error;
+                this.onStartupError(error, retryMs);
                 await setTimeout(retryMs, undefined, {signal: this.#tornDown.signal}).catch(() => {
                     throw new Error("Config startup aborted by teardown");
                 });

@@ -4,6 +4,7 @@ export * from './GG_CONFIG';
 export * from './GGConfigLocator';
 export * from "./GGConfigKey";
 export * from "./GGConfigStore";
+export * from "./GGConfigLoadError";
 export * from "./stores/GGConfigStoreFile";
 export * from "./stores/GGConfigStoreLocal";
 export * from "./stores/GGConfigStoreEnv";

@@ -1,5 +1,5 @@
 import {SecretsManagerClient, GetSecretValueCommand} from "@aws-sdk/client-secrets-manager";
-import {GGConfigStore, GGConfigKey, readConfigPath} from "@grest-ts/config";
+import {GGConfigStore, GGConfigKey, GGConfigLoadError, readConfigPath} from "@grest-ts/config";
 
 export interface GGConfigStoreAwsSecretsManagerOptions {
     readonly secretName: string;
@@ -75,17 +75,21 @@ export class GGConfigStoreAwsSecretsManager<Key extends GGConfigKey> extends GGC
     }
 
     async #fetch(): Promise<unknown> {
-        const response = await this.client!.send(new GetSecretValueCommand({
-            SecretId: this.options.secretName,
-        }));
-        if (!response.SecretString) {
-            throw new Error(`AWS Secrets Manager secret "${this.options.secretName}" has no string value`);
+        const name = this.options.secretName;
+        let secretString: string | undefined;
+        try {
+            secretString = (await this.client!.send(new GetSecretValueCommand({SecretId: name}))).SecretString;
+        } catch (error) {
+            throw new GGConfigLoadError(`Cannot read AWS Secrets Manager secret "${name}": ${(error as Error).name}: ${(error as Error).message}`, {cause: error});
+        }
+        if (!secretString) {
+            throw new GGConfigLoadError(`AWS Secrets Manager secret "${name}" has no string value`);
         }
         try {
-            return JSON.parse(response.SecretString);
+            return JSON.parse(secretString);
         } catch {
             // The parser's message quotes the text around the error, which is secret.
-            throw new Error(`AWS Secrets Manager secret "${this.options.secretName}" is not valid JSON`);
+            throw new GGConfigLoadError(`AWS Secrets Manager secret "${name}" is not valid JSON`);
         }
     }
 

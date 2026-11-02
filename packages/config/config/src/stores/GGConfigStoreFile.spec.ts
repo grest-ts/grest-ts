@@ -99,7 +99,7 @@ describe('GGConfigStoreFile', () => {
 
     it('reports a deleted file, keeps the last good values and reloads when it is written back', async () => {
         fs.unlinkSync(file);
-        await until(() => expect(reloadErrors.map(e => (e as NodeJS.ErrnoException).code)).toEqual(["ENOENT"]));
+        await until(() => expect(reloadErrors.map(e => (e.cause as NodeJS.ErrnoException).code)).toEqual(["ENOENT"]));
         expect(values()).toEqual([1000, "app", {host: "localhost"}]);
 
         writeAtomic(doc(3500));

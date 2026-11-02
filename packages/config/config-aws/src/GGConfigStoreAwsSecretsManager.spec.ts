@@ -3,6 +3,7 @@ import {SecretsManagerClient} from "@aws-sdk/client-secrets-manager";
 import {IsPosInt, IsString} from "@grest-ts/schema";
 import {GGLocatorScope} from "@grest-ts/locator";
 import {sleep} from "@grest-ts/common";
+import {GGLog} from "@grest-ts/logger";
 import {GGConfig, GGConfigKey, GGConfigKeyConstructor, GGConfigLocator, GGConfigStore, GGSecret, GGSetting} from "@grest-ts/config";
 import {GGConfigStoreAwsSecretsManager} from "./GGConfigStoreAwsSecretsManager";
 
@@ -66,6 +67,35 @@ describe('GGConfigStoreAwsSecretsManager', () => {
         expect(store.getValue(Config.token)).toBe("second");
         expect(port).not.toHaveBeenCalled();
         await locator.teardown();
+    }));
+
+    it('logs each changed key, with the value for settings but never for secrets', () => scope.run(async () => {
+        const {store, locator} = await started();
+        const info = vi.spyOn(GGLog, "info").mockImplementation(() => undefined);
+        version("v2", doc("second-secret", 8080));
+        await until(() => expect(store.getValue(Config.port)).toBe(8080));
+        const lines = info.mock.calls.map(call => call[1]);
+        expect(lines).toEqual(expect.arrayContaining([
+            'Config "/aws_app/token" changed (secret, value not logged)',
+            'Config "/aws_app/port" changed: 4000 → 8080',
+        ]));
+        expect(JSON.stringify(info.mock.calls.map(call => call.slice(1)))).not.toContain("second-secret");
+        info.mockRestore();
+        await locator.teardown();
+    }));
+
+    it('pauses a production startup while the secret cannot be read, then starts', () => scope.run(async () => {
+        vi.stubEnv("NODE_ENV", "production");
+        send.mockRejectedValueOnce(Object.assign(new Error("Secrets Manager can't find the specified secret."), {name: "ResourceNotFoundException"}));
+        const store = new GGConfigStoreAwsSecretsManager<GGConfigKey>({secretName: "app/prod", refreshIntervalMs: 60_000});
+        const locator = new PlainConfigLocator(Config, undefined, {startupRetryMs: 10}).add([GGSecret, GGSetting], store);
+        const startupErrors: Error[] = [];
+        locator.onStartupError = (error) => void startupErrors.push(error);
+        await locator.start();
+        expect(startupErrors.map(e => e.message)).toEqual(['Cannot read AWS Secrets Manager secret "app/prod": ResourceNotFoundException: Secrets Manager can\'t find the specified secret.']);
+        expect(store.getValue(Config.token)).toBe("first");
+        await locator.teardown();
+        vi.unstubAllEnvs();
     }));
 
     it('does not notify while the secret is unchanged', () => scope.run(async () => {

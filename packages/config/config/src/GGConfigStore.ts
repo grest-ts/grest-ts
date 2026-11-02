@@ -2,6 +2,9 @@ import {GGConfigKey} from "./GGConfigKey";
 import {GG_CONFIG} from "./GG_CONFIG";
 import type {GGIssuesList} from "@grest-ts/schema";
 import {isDeepStrictEqual} from "node:util";
+import {GGLog} from "@grest-ts/logger";
+import {GGConfigLoadError} from "./GGConfigLoadError";
+import {GGSecret} from "./keys/GGSecret";
 
 export type ConfigUpdateCallback = (value: any) => void | Promise<void>;
 
@@ -64,6 +67,11 @@ export abstract class GGConfigStore<Key extends GGConfigKey> {
      */
     protected async notifyChanged(previous: ReadonlyMap<GGConfigKey, unknown>, next: ReadonlyMap<GGConfigKey, unknown>): Promise<void> {
         const changed = this.keys.filter(key => !isDeepStrictEqual(previous.get(key), next.get(key)));
+        for (const key of changed) {
+            GGLog.info(this, key instanceof GGSecret
+                ? `Config "${key.name}" changed (secret, value not logged)`
+                : `Config "${key.name}" changed: ${JSON.stringify(previous.get(key))} → ${JSON.stringify(next.get(key))}`);
+        }
         await Promise.all(changed.map(key => this.notify(key).catch(this.reportReloadError)));
     }
 
@@ -135,6 +143,6 @@ function describeFailure(key: GGConfigKey, issues: GGIssuesList): string {
     return `"${key.name}": ${issues.toMessage()}${key.definedAt ? ` (defined at ${key.definedAt})` : ""}`;
 }
 
-function validationError(failures: string[], isInitialLoad: boolean): Error {
-    return new Error(`Config validation failed during ${isInitialLoad ? "initial-load" : "reload"}:\n\t${failures.join("\n\t")}`);
+function validationError(failures: string[], isInitialLoad: boolean): GGConfigLoadError {
+    return new GGConfigLoadError(`Config validation failed during ${isInitialLoad ? "initial-load" : "reload"}:\n\t${failures.join("\n\t")}`);
 }

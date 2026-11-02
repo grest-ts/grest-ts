@@ -18,10 +18,12 @@ class PlainConfigLocator extends GGConfigLocator<any> {
 class DocStore extends GGConfigStore<GGConfigKey> {
     public doc: Record<string, unknown> = {};
     public loads = 0;
+    public bug: Error | undefined = undefined;
     #values = new Map<GGConfigKey, unknown>();
 
     public override async start(): Promise<void> {
         this.loads++;
+        if (this.bug) throw this.bug;
         this.#values = this.resolveValues(key => this.doc[key.name], true);
         await super.start();
     }
@@ -89,6 +91,14 @@ describe('GGConfigLocator', () => {
         await starting;
         expect(store.getValue(Config.token)).toBe("t0k3n");
         await loc.teardown();
+    }));
+
+    it('in production, fails startup at once on an error that is not a config load error', () => scope.run(async () => {
+        vi.stubEnv("NODE_ENV", "production");
+        store.bug = new TypeError("store bug");
+        await expect(locator({startupRetryMs: 10}).start()).rejects.toThrow("store bug");
+        expect(store.loads).toBe(1);
+        expect(startupErrors).toEqual([]);
     }));
 
     it('in production, teardown aborts a paused startup', () => scope.run(async () => {
