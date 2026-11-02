@@ -32,6 +32,7 @@ function refreshToken(overrides: {accessTtlMs?: number; refreshTtlMs?: number} =
         access: new GGAuthAccessToken({
             signer: new HmacSigner("unit-test-secret-which-is-long-enough"),
             claimSchema: IsClaims,
+            audience: "app-user",
             accessTtlMs: overrides.accessTtlMs ?? 15 * 60 * 1000,
         }),
     })
@@ -48,6 +49,7 @@ function graceRefreshToken(reuseGraceMs: number, clock: {now: number}) {
         access: new GGAuthAccessToken({
             signer: new HmacSigner("unit-test-secret-which-is-long-enough"),
             claimSchema: IsClaims,
+            audience: "app-user",
             accessTtlMs: 15 * 60 * 1000,
         }),
     })
@@ -89,6 +91,7 @@ describe("GGAuthRefreshToken — issue & refresh", () => {
             access: new GGAuthAccessToken({
                 signer: new HmacSigner("unit-test-secret-which-is-long-enough"),
                 claimSchema: IsClaims,
+                audience: "app-user",
             }),
         })
         const pair = await auth.issue("user-1", {permissions: [Perm.Read]})
@@ -105,6 +108,7 @@ describe("GGAuthRefreshToken — issue & refresh", () => {
             access: new GGAuthAccessToken({
                 signer: new HmacSigner("unit-test-secret-which-is-long-enough"),
                 claimSchema: IsClaims,
+                audience: "app-user",
                 accessTtlMs: 15 * 60 * 1000,
             }),
         })

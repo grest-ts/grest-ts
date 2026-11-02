@@ -178,7 +178,7 @@ export class GGOAuthServer {
         // Resources sharing a signer are told apart only by audience: a token for one must never
         // verify as another's (e.g. an app's MCP token as the first-party API token).
         const audiences = options.resources.map(r => r.accessToken.audience)
-        if (audiences.some(a => !a) || new Set(audiences).size !== audiences.length) {
+        if (new Set(audiences).size !== audiences.length) {
             throw new Error("GGOAuthServer: every resource's accessToken needs its own audience")
         }
         this.options = options
@@ -586,7 +586,7 @@ export class GGOAuthServer {
                         const resource = this.usableResource(indicator, client.clientId)
                         return {
                             scope: resource.scopes.join(" "),
-                            audience: resource.accessToken.audience ?? indicator,
+                            audience: resource.accessToken.audience,
                             accessTokenTTL: Math.floor(resource.accessToken.accessTtlMs / 1000),
                             accessTokenFormat: "jwt",
                             // Placeholder: the token endpoint re-signs every access token with the resource's own signer.

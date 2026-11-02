@@ -30,7 +30,7 @@ export class JwksVerifier implements TokenVerifier {
     public verify = async (token: string): Promise<Record<string, unknown>> => {
         const keys = await this.keySet().catch((err: Error) => { throw err instanceof SERVER_ERROR ? err : unavailable(err) })
         try {
-            const {payload} = await jwtVerify(token, keys, {algorithms: this.algorithms})
+            const {payload} = await jwtVerify(token, keys, {algorithms: this.algorithms, requiredClaims: ["exp"]})
             return payload as Record<string, unknown>
         } catch (err) {
             if (err instanceof SERVER_ERROR) throw err
