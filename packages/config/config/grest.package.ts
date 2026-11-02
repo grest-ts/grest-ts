@@ -8,5 +8,5 @@ definePackage({
     targets: {node: true},
     extendsTestKit: true,
     hasTests: true,
-    allowedPackages: ["@grest-ts/common", "@grest-ts/schema", "@grest-ts/locator"]
+    allowedPackages: ["@grest-ts/common", "@grest-ts/schema", "@grest-ts/locator", "@grest-ts/logger"]
 })

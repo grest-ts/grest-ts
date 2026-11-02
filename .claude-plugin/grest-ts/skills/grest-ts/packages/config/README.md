@@ -103,6 +103,13 @@ Settings have a default value. Secrets and resources do not — their values mus
 
 All keys require a `@grest-ts/schema` validator. Values are validated when loaded from a store.
 Invalid config at startup prevents the service from starting. Invalid config during a runtime reload is rejected and an error is raised — the previous valid value remains in effect.
+A store validates all its keys before failing, so the error names every missing or invalid key. Errors never include the failing values, since they may be secrets.
+
+To pause startup instead of failing in production, pass `startupRetryMs`: a store whose initial load fails with a `GGConfigLoadError` (config unreadable or invalid) is retried at that interval, each failure goes to `GGConfigLocator.onStartupError` (default: critical log). Any other error still fails startup. Config starts first, so database, HTTP and jobs wait until it loads; nothing serves traffic in the meantime. Outside production startup still fails immediately.
+
+```typescript
+new GGConfigLocator(AppConfig, localConfig, {startupRetryMs: 10_000})
+```
 
 ```typescript
 import {IsString, IsPosInt, IsBoolean, IsLiteral} from "@grest-ts/schema"
@@ -148,7 +155,8 @@ new GGConfigLocator(AppConfig)
 Reads values from a JSON file. Watches the file's directory and automatically reloads (100ms debounce), so both in-place writes and atomic writes (write a temp file, then `rename` it over the target) are picked up.
 
 - **Initial load** fails loudly: a missing, empty, unparsable or invalid file makes `start()` throw.
-- **Reloads** are all-or-nothing: every key is validated before any value changes. If anything fails (unreadable file, empty file, bad JSON, schema failure), the store keeps its last good values and reports the error to `GGConfigLocator.onReloadError` (default: `console.error`; override it to route to your logger or alerting). A deleted file is reported the same way; writing it back triggers a reload.
+- **Reloads** are all-or-nothing: every key is validated before any value changes. If anything fails (unreadable file, empty file, bad JSON, schema failure), the store keeps its last good values and reports the error to `GGConfigLocator.onReloadError` (default: critical log; override it to route to alerting). A deleted file is reported the same way; writing it back triggers a reload.
+- **Changed keys** are logged at info level with old and new value; a `GGSecret` logs only its name.
 - **Watchers** (`key.watch()`) fire once per reload, only for keys whose validated value changed (deep equality). A watcher that throws goes to `onNotifyError`; if that throws (the default), the error is passed to `onReloadError` instead of escaping as an unhandled rejection.
 
 The key path `/app/server/port` maps to `app.server.port` in JSON:

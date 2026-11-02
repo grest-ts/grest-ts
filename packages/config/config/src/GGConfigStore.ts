@@ -1,10 +1,15 @@
 import {GGConfigKey} from "./GGConfigKey";
 import {GG_CONFIG} from "./GG_CONFIG";
+import type {GGIssuesList} from "@grest-ts/schema";
+import {isDeepStrictEqual} from "node:util";
+import {GGLog} from "@grest-ts/logger";
+import {GGConfigLoadError} from "./GGConfigLoadError";
 
 export type ConfigUpdateCallback = (value: any) => void | Promise<void>;
 
 /**
- * Important when extending: Use resolveValue() to resolve and validate config values.
+ * Important when extending: Use resolveValue() / resolveValues() to resolve and validate config values.
+ * start() may be called again after it throws (GGConfigLocator startupRetryMs): load and validate before calling super.start().
  */
 export abstract class GGConfigStore<Key extends GGConfigKey> {
 
@@ -33,15 +38,41 @@ export abstract class GGConfigStore<Key extends GGConfigKey> {
      * validation will fail — this is how missing required keys are caught.
      */
     protected resolveValue<T>(key: GGConfigKey<T>, storeValue: unknown, isInitialLoad: boolean = false): T {
-        const val = storeValue !== undefined ? storeValue : key.getDefault();
-        const check = key.schema.safeParse(val);
-        if (check.success === false) {
-            const errors = JSON.stringify(check.issues.toJSON(), null, 2).replaceAll("\n", "\n\t\t")
-            throw new Error(`Config validation failed for "${key.name}" during ${isInitialLoad ? "initial-load" : "reload"}.\n\tDefined at:\n\t\t${key.definedAt}\n\tIssues:\n\t\t${errors}`);
-        } else {
-            return check.value as T;
-        }
+        const check = validate(key, storeValue);
+        if (check.success === false) throw validationError([describeFailure(key, check.issues)], isInitialLoad);
+        return check.value;
     }
+
+    /**
+     * resolveValue() for every key of this store: validates all of them and throws one error naming every failing key.
+     */
+    protected resolveValues(read: (key: Key) => unknown, isInitialLoad: boolean = false): Map<GGConfigKey, unknown> {
+        const values = new Map<GGConfigKey, unknown>();
+        const failures: string[] = [];
+        for (const key of this.keys) {
+            const check = validate(key, read(key));
+            if (check.success === false) {
+                failures.push(describeFailure(key, check.issues));
+            } else {
+                values.set(key, check.value);
+            }
+        }
+        if (failures.length > 0) throw validationError(failures, isInitialLoad);
+        return values;
+    }
+
+    /**
+     * After a reload: notifies watchers of the keys whose value changed, routing their errors to GGConfigLocator.onReloadError.
+     */
+    protected async notifyChanged(previous: ReadonlyMap<GGConfigKey, unknown>, next: ReadonlyMap<GGConfigKey, unknown>): Promise<void> {
+        const changed = this.keys.filter(key => !isDeepStrictEqual(previous.get(key), next.get(key)));
+        for (const key of changed) {
+            GGLog.info(this, `Config "${key.name}" changed: ${describe(key, previous.get(key))} → ${describe(key, next.get(key))}`);
+        }
+        await Promise.all(changed.map(key => this.notify(key).catch(this.reportReloadError)));
+    }
+
+    protected reportReloadError = (error: Error): void => GG_CONFIG.get().onReloadError(error);
 
     public async start(): Promise<void> {
         if (this.isStarted === true) {
@@ -98,4 +129,25 @@ export abstract class GGConfigStore<Key extends GGConfigKey> {
             }
         }
     }
+}
+
+function describe(key: GGConfigKey, value: unknown): string {
+    try {
+        return key.describeValue(value);
+    } catch {
+        return "(not printable)";
+    }
+}
+
+function validate<T>(key: GGConfigKey<T>, storeValue: unknown) {
+    return key.schema.safeParse(storeValue !== undefined ? storeValue : key.getDefault());
+}
+
+// Issue messages only: a failing value may be (part of) a secret.
+function describeFailure(key: GGConfigKey, issues: GGIssuesList): string {
+    return `"${key.name}": ${issues.toMessage()}${key.definedAt ? ` (defined at ${key.definedAt})` : ""}`;
+}
+
+function validationError(failures: string[], isInitialLoad: boolean): GGConfigLoadError {
+    return new GGConfigLoadError(`Config validation failed during ${isInitialLoad ? "initial-load" : "reload"}:\n\t${failures.join("\n\t")}`);
 }

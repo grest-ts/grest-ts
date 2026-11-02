@@ -1,3 +1,5 @@
+import {GGConfigLoadError} from "./GGConfigLoadError";
+
 /**
  * Reads a key's value out of a JSON config document: `/app/db/host` → `doc.app.db.host`.
  * Shared by the document-backed stores and GGConfig.check so they resolve paths identically.
@@ -24,4 +26,17 @@ export function writeConfigPath(doc: Record<string, unknown>, keyName: string, v
         current = current[segments[i]] as Record<string, unknown>;
     }
     current[segments[segments.length - 1]] = value;
+}
+
+/**
+ * Parses a JSON config document, throwing GGConfigLoadError for empty or invalid text.
+ * The parser's own message is dropped: it quotes the text around the error, which may be secret.
+ */
+export function parseConfigJson(text: string | undefined, source: string): unknown {
+    if (!text) throw new GGConfigLoadError(`${source} is empty`);
+    try {
+        return JSON.parse(text);
+    } catch {
+        throw new GGConfigLoadError(`${source} is not valid JSON`);
+    }
 }

@@ -56,13 +56,20 @@ export class GGIssuesList {
 
     public toString(): string {
         if (this._length === 0) return "Validation failed";
+        return `Validation failed: ${this.toMessage()}`;
+    }
+
+    /**
+     * Issues as "path: message; ..." without the failing values (only what the message templates print).
+     */
+    public toMessage(): string {
         const messages: string[] = [];
         for (let i = 0; i < this._length; i++) {
             const path = this.getPath(i);
             const message = this.getMessage(i);
             messages.push(path ? `${path}: ${message}` : message);
         }
-        return `Validation failed: ${messages.join("; ")}`;
+        return messages.join("; ");
     }
 
     public some(predicate: (issue: { path: string, code: string, params?: object }) => boolean): boolean {

@@ -7,6 +7,7 @@ definePackage({
     keywords: ["configuration", "aws", "secrets-manager"],
     targets: {node: true},
     implementationFor: "@grest-ts/config",
+    hasTests: true,
     dependencies: {
         "@aws-sdk/client-secrets-manager": "^3.991.0"
     }
