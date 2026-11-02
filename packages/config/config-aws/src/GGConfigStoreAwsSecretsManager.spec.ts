@@ -2,6 +2,7 @@ import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import {SecretsManagerClient} from "@aws-sdk/client-secrets-manager";
 import {IsPosInt, IsString} from "@grest-ts/schema";
 import {GGLocatorScope} from "@grest-ts/locator";
+import {sleep} from "@grest-ts/common";
 import {GGConfig, GGConfigKey, GGConfigKeyConstructor, GGConfigLocator, GGConfigStore, GGSecret, GGSetting} from "@grest-ts/config";
 import {GGConfigStoreAwsSecretsManager} from "./GGConfigStoreAwsSecretsManager";
 
@@ -103,11 +104,27 @@ describe('GGConfigStoreAwsSecretsManager', () => {
         await store.teardown();
     }));
 
+    it('does not start or poll when torn down during the initial fetch', () => scope.run(async () => {
+        let release!: () => void;
+        send.mockImplementationOnce(() => new Promise(resolve => release = () => resolve(secret)));
+        const store = new GGConfigStoreAwsSecretsManager<GGConfigKey>({secretName: "app/prod", refreshIntervalMs: 20});
+        store.setKeys([Config.token, Config.port]);
+        const starting = store.start();
+        await until(() => expect(release).toBeDefined());
+        await store.teardown();
+        release();
+
+        await expect(starting).rejects.toThrow(/torn down while starting/);
+        expect(store.started).toBe(false);
+        await sleep(100);
+        expect(send).toHaveBeenCalledTimes(1);
+    }));
+
     it('stops polling after teardown', () => scope.run(async () => {
         const {locator} = await started();
         await locator.teardown();
         const calls = send.mock.calls.length;
-        await new Promise(resolve => setTimeout(resolve, 100));
+        await sleep(100);
         expect(send.mock.calls.length).toBe(calls);
     }));
 });

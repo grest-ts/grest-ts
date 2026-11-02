@@ -60,7 +60,7 @@ export class GGIssuesList {
     }
 
     /**
-     * Issues as "path: message; ..." without the values that failed.
+     * Issues as "path: message; ..." without the failing values (only what the message templates print).
      */
     public toMessage(): string {
         const messages: string[] = [];

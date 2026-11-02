@@ -23,6 +23,8 @@ export class GGConfigStoreAwsSecretsManager<Key extends GGConfigKey> extends GGC
     private client: SecretsManagerClient | null = null;
     #valuesCache: Map<GGConfigKey, unknown> = new Map();
     #refreshTimer: NodeJS.Timeout | null = null;
+    // Bumped by teardown, so a fetch or poll that was in flight across it neither starts nor reschedules anything.
+    #generation = 0;
 
     constructor(options: GGConfigStoreAwsSecretsManagerOptions) {
         super();
@@ -40,12 +42,15 @@ export class GGConfigStoreAwsSecretsManager<Key extends GGConfigKey> extends GGC
             } : {}),
         });
 
-        await this.refresh(true);
+        const generation = this.#generation;
+        await this.#refresh(true, generation);
+        if (generation !== this.#generation) throw new Error(`AWS Secrets Manager store "${this.options.secretName}" was torn down while starting`);
         await super.start();
         this.#scheduleRefresh();
     }
 
     public override async teardown(): Promise<void> {
+        this.#generation++;
         clearTimeout(this.#refreshTimer ?? undefined);
         this.#refreshTimer = null;
         if (this.client) {
@@ -56,9 +61,9 @@ export class GGConfigStoreAwsSecretsManager<Key extends GGConfigKey> extends GGC
         await super.teardown();
     }
 
-    public async refresh(isInitialLoad: boolean = false): Promise<void> {
+    async #refresh(isInitialLoad: boolean, generation: number): Promise<void> {
         const json = await this.#fetch();
-        if (!isInitialLoad && !this.isStarted) return;
+        if (generation !== this.#generation) return;
         const values = this.resolveValues(key => readConfigPath(json, key.name), isInitialLoad);
         const previous = this.#valuesCache;
         this.#valuesCache = values;
@@ -85,11 +90,14 @@ export class GGConfigStoreAwsSecretsManager<Key extends GGConfigKey> extends GGC
     }
 
     #scheduleRefresh(): void {
+        const generation = this.#generation;
         this.#refreshTimer = setTimeout(async () => {
-            await this.refresh().catch(error => {
-                if (this.isStarted) this.reportReloadError(error);
-            });
-            if (this.isStarted) this.#scheduleRefresh();
+            try {
+                await this.#refresh(false, generation);
+            } catch (error) {
+                if (generation === this.#generation) this.reportReloadError(error as Error);
+            }
+            if (generation === this.#generation) this.#scheduleRefresh();
         }, this.options.refreshIntervalMs ?? 180_000);
         this.#refreshTimer.unref();
     }

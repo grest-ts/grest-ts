@@ -6,7 +6,8 @@ import {isDeepStrictEqual} from "node:util";
 export type ConfigUpdateCallback = (value: any) => void | Promise<void>;
 
 /**
- * Important when extending: Use resolveValue() to resolve and validate config values.
+ * Important when extending: Use resolveValue() / resolveValues() to resolve and validate config values.
+ * start() may be called again after it throws (GGConfigLocator startupRetryMs): load and validate before calling super.start().
  */
 export abstract class GGConfigStore<Key extends GGConfigKey> {
 
