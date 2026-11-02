@@ -4,7 +4,6 @@ import type {GGIssuesList} from "@grest-ts/schema";
 import {isDeepStrictEqual} from "node:util";
 import {GGLog} from "@grest-ts/logger";
 import {GGConfigLoadError} from "./GGConfigLoadError";
-import {GGSecret} from "./keys/GGSecret";
 
 export type ConfigUpdateCallback = (value: any) => void | Promise<void>;
 
@@ -68,9 +67,7 @@ export abstract class GGConfigStore<Key extends GGConfigKey> {
     protected async notifyChanged(previous: ReadonlyMap<GGConfigKey, unknown>, next: ReadonlyMap<GGConfigKey, unknown>): Promise<void> {
         const changed = this.keys.filter(key => !isDeepStrictEqual(previous.get(key), next.get(key)));
         for (const key of changed) {
-            GGLog.info(this, key instanceof GGSecret
-                ? `Config "${key.name}" changed (secret, value not logged)`
-                : `Config "${key.name}" changed: ${JSON.stringify(previous.get(key))} → ${JSON.stringify(next.get(key))}`);
+            GGLog.info(this, `Config "${key.name}" changed: ${key.describeValue(previous.get(key))} → ${key.describeValue(next.get(key))}`);
         }
         await Promise.all(changed.map(key => this.notify(key).catch(this.reportReloadError)));
     }

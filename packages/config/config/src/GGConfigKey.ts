@@ -72,6 +72,11 @@ export abstract class GGConfigKey<T = unknown> {
         return this.getStore().watch(this, listener);
     }
 
+    /** How a value of this key appears in logs. */
+    public describeValue(value: T | undefined): string {
+        return JSON.stringify(value);
+    }
+
     public abstract getStoreKey(): string;
 
     public getStore() {

@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import {GGConfigStore} from "../GGConfigStore";
 import {GGConfigKey} from "../GGConfigKey";
-import {readConfigPath} from "../configPath";
+import {parseConfigJson, readConfigPath} from "../configPath";
 import {GGConfigLoadError} from "../GGConfigLoadError";
 import {basename, dirname, join} from "node:path";
 import {fileURLToPath} from "node:url";
@@ -61,15 +61,7 @@ export class GGConfigStoreFile<Key extends GGConfigKey> extends GGConfigStore<Ke
         } catch (error) {
             throw new GGConfigLoadError(`Cannot read settings file ${this.file}: ${(error as Error).message}`, {cause: error});
         }
-        if (!fileContent) {
-            throw new GGConfigLoadError(`Settings file is empty: ${this.file}`);
-        }
-        try {
-            return JSON.parse(fileContent);
-        } catch {
-            // The parser's message quotes the text around the error, which may be secret.
-            throw new GGConfigLoadError(`Settings file is not valid JSON: ${this.file}`);
-        }
+        return parseConfigJson(fileContent, `Settings file ${this.file}`);
     }
 
     public getValue<T>(key: GGConfigKey<T>): T {

@@ -47,7 +47,8 @@ describe('GGConfigStoreAwsSecretsManager', () => {
     });
 
     afterEach(() => {
-        send.mockRestore();
+        vi.restoreAllMocks();
+        vi.unstubAllEnvs();
     });
 
     it('loads the secret at startup', () => scope.run(async () => {
@@ -76,11 +77,10 @@ describe('GGConfigStoreAwsSecretsManager', () => {
         await until(() => expect(store.getValue(Config.port)).toBe(8080));
         const lines = info.mock.calls.map(call => call[1]);
         expect(lines).toEqual(expect.arrayContaining([
-            'Config "/aws_app/token" changed (secret, value not logged)',
+            'Config "/aws_app/token" changed: (secret) → (secret)',
             'Config "/aws_app/port" changed: 4000 → 8080',
         ]));
         expect(JSON.stringify(info.mock.calls.map(call => call.slice(1)))).not.toContain("second-secret");
-        info.mockRestore();
         await locator.teardown();
     }));
 
@@ -95,7 +95,6 @@ describe('GGConfigStoreAwsSecretsManager', () => {
         expect(startupErrors.map(e => e.message)).toEqual(['Cannot read AWS Secrets Manager secret "app/prod": ResourceNotFoundException: Secrets Manager can\'t find the specified secret.']);
         expect(store.getValue(Config.token)).toBe("first");
         await locator.teardown();
-        vi.unstubAllEnvs();
     }));
 
     it('does not notify while the secret is unchanged', () => scope.run(async () => {
