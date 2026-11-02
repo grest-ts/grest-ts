@@ -36,7 +36,7 @@ flowchart TB
         events["events 🟢"]
         job["job 🟢"]
         oauth["oauth 🟢🌐"]
-        openapi["openapi 🟢"]
+        openapi["openapi 🟢🌐"]
         testkit["testkit 🟢"]
         websocket["websocket 🟢🌐"]
     end
@@ -90,6 +90,7 @@ flowchart TB
     code-generator --> http
     config --> common
     config --> locator
+    config --> logger
     config --> schema
     config-aws --> config
     context --> common
@@ -320,36 +321,36 @@ flowchart TB
     linkStyle 17 stroke:#FF9DA7,stroke-width:2px
     linkStyle 18 stroke:#FF9DA7,stroke-width:2px
     linkStyle 19 stroke:#FF9DA7,stroke-width:2px
-    linkStyle 20 stroke:#9C755F,stroke-width:2px
-    linkStyle 21 stroke:#BAB0AC,stroke-width:2px
+    linkStyle 20 stroke:#FF9DA7,stroke-width:2px
+    linkStyle 21 stroke:#9C755F,stroke-width:2px
     linkStyle 22 stroke:#BAB0AC,stroke-width:2px
-    linkStyle 23 stroke:#8CD17D,stroke-width:2px
+    linkStyle 23 stroke:#BAB0AC,stroke-width:2px
     linkStyle 24 stroke:#8CD17D,stroke-width:2px
     linkStyle 25 stroke:#8CD17D,stroke-width:2px
     linkStyle 26 stroke:#8CD17D,stroke-width:2px
-    linkStyle 27 stroke:#B6992D,stroke-width:2px
+    linkStyle 27 stroke:#8CD17D,stroke-width:2px
     linkStyle 28 stroke:#B6992D,stroke-width:2px
     linkStyle 29 stroke:#B6992D,stroke-width:2px
     linkStyle 30 stroke:#B6992D,stroke-width:2px
-    linkStyle 31 stroke:#499894,stroke-width:2px
+    linkStyle 31 stroke:#B6992D,stroke-width:2px
     linkStyle 32 stroke:#499894,stroke-width:2px
     linkStyle 33 stroke:#499894,stroke-width:2px
     linkStyle 34 stroke:#499894,stroke-width:2px
-    linkStyle 35 stroke:#D37295,stroke-width:2px
-    linkStyle 36 stroke:#A0CBE8,stroke-width:2px
+    linkStyle 35 stroke:#499894,stroke-width:2px
+    linkStyle 36 stroke:#D37295,stroke-width:2px
     linkStyle 37 stroke:#A0CBE8,stroke-width:2px
-    linkStyle 38 stroke:#FFBE7D,stroke-width:2px
+    linkStyle 38 stroke:#A0CBE8,stroke-width:2px
     linkStyle 39 stroke:#FFBE7D,stroke-width:2px
     linkStyle 40 stroke:#FFBE7D,stroke-width:2px
     linkStyle 41 stroke:#FFBE7D,stroke-width:2px
     linkStyle 42 stroke:#FFBE7D,stroke-width:2px
     linkStyle 43 stroke:#FFBE7D,stroke-width:2px
     linkStyle 44 stroke:#FFBE7D,stroke-width:2px
-    linkStyle 45 stroke:#D4A6C8,stroke-width:2px
+    linkStyle 45 stroke:#FFBE7D,stroke-width:2px
     linkStyle 46 stroke:#D4A6C8,stroke-width:2px
-    linkStyle 47 stroke:#4E79A7,stroke-width:2px
+    linkStyle 47 stroke:#D4A6C8,stroke-width:2px
     linkStyle 48 stroke:#4E79A7,stroke-width:2px
-    linkStyle 49 stroke:#F28E2B,stroke-width:2px
+    linkStyle 49 stroke:#4E79A7,stroke-width:2px
     linkStyle 50 stroke:#F28E2B,stroke-width:2px
     linkStyle 51 stroke:#F28E2B,stroke-width:2px
     linkStyle 52 stroke:#F28E2B,stroke-width:2px
@@ -358,19 +359,19 @@ flowchart TB
     linkStyle 55 stroke:#F28E2B,stroke-width:2px
     linkStyle 56 stroke:#F28E2B,stroke-width:2px
     linkStyle 57 stroke:#F28E2B,stroke-width:2px
-    linkStyle 58 stroke:#E15759,stroke-width:2px
+    linkStyle 58 stroke:#F28E2B,stroke-width:2px
     linkStyle 59 stroke:#E15759,stroke-width:2px
     linkStyle 60 stroke:#E15759,stroke-width:2px
     linkStyle 61 stroke:#E15759,stroke-width:2px
-    linkStyle 62 stroke:#76B7B2,stroke-width:2px
+    linkStyle 62 stroke:#E15759,stroke-width:2px
     linkStyle 63 stroke:#76B7B2,stroke-width:2px
     linkStyle 64 stroke:#76B7B2,stroke-width:2px
     linkStyle 65 stroke:#76B7B2,stroke-width:2px
-    linkStyle 66 stroke:#59A14F,stroke-width:2px
+    linkStyle 66 stroke:#76B7B2,stroke-width:2px
     linkStyle 67 stroke:#59A14F,stroke-width:2px
     linkStyle 68 stroke:#59A14F,stroke-width:2px
     linkStyle 69 stroke:#59A14F,stroke-width:2px
-    linkStyle 70 stroke:#EDC948,stroke-width:2px
+    linkStyle 70 stroke:#59A14F,stroke-width:2px
     linkStyle 71 stroke:#EDC948,stroke-width:2px
     linkStyle 72 stroke:#EDC948,stroke-width:2px
     linkStyle 73 stroke:#EDC948,stroke-width:2px
@@ -378,49 +379,49 @@ flowchart TB
     linkStyle 75 stroke:#EDC948,stroke-width:2px
     linkStyle 76 stroke:#EDC948,stroke-width:2px
     linkStyle 77 stroke:#EDC948,stroke-width:2px
-    linkStyle 78 stroke:#B07AA1,stroke-width:2px
+    linkStyle 78 stroke:#EDC948,stroke-width:2px
     linkStyle 79 stroke:#B07AA1,stroke-width:2px
     linkStyle 80 stroke:#B07AA1,stroke-width:2px
     linkStyle 81 stroke:#B07AA1,stroke-width:2px
-    linkStyle 82 stroke:#FF9DA7,stroke-width:2px
+    linkStyle 82 stroke:#B07AA1,stroke-width:2px
     linkStyle 83 stroke:#FF9DA7,stroke-width:2px
     linkStyle 84 stroke:#FF9DA7,stroke-width:2px
-    linkStyle 85 stroke:#9C755F,stroke-width:2px
+    linkStyle 85 stroke:#FF9DA7,stroke-width:2px
     linkStyle 86 stroke:#9C755F,stroke-width:2px
     linkStyle 87 stroke:#9C755F,stroke-width:2px
     linkStyle 88 stroke:#9C755F,stroke-width:2px
     linkStyle 89 stroke:#9C755F,stroke-width:2px
-    linkStyle 90 stroke:#BAB0AC,stroke-width:2px
+    linkStyle 90 stroke:#9C755F,stroke-width:2px
     linkStyle 91 stroke:#BAB0AC,stroke-width:2px
     linkStyle 92 stroke:#BAB0AC,stroke-width:2px
     linkStyle 93 stroke:#BAB0AC,stroke-width:2px
     linkStyle 94 stroke:#BAB0AC,stroke-width:2px
     linkStyle 95 stroke:#BAB0AC,stroke-width:2px
-    linkStyle 96 stroke:#86BCB6,stroke-width:2px
-    linkStyle 97 stroke:#8CD17D,stroke-width:2px
+    linkStyle 96 stroke:#BAB0AC,stroke-width:2px
+    linkStyle 97 stroke:#86BCB6,stroke-width:2px
     linkStyle 98 stroke:#8CD17D,stroke-width:2px
-    linkStyle 99 stroke:#B6992D,stroke-width:2px
+    linkStyle 99 stroke:#8CD17D,stroke-width:2px
     linkStyle 100 stroke:#B6992D,stroke-width:2px
     linkStyle 101 stroke:#B6992D,stroke-width:2px
-    linkStyle 102 stroke:#499894,stroke-width:2px
+    linkStyle 102 stroke:#B6992D,stroke-width:2px
     linkStyle 103 stroke:#499894,stroke-width:2px
-    linkStyle 104 stroke:#D37295,stroke-width:2px
+    linkStyle 104 stroke:#499894,stroke-width:2px
     linkStyle 105 stroke:#D37295,stroke-width:2px
     linkStyle 106 stroke:#D37295,stroke-width:2px
-    linkStyle 107 stroke:#A0CBE8,stroke-width:2px
+    linkStyle 107 stroke:#D37295,stroke-width:2px
     linkStyle 108 stroke:#A0CBE8,stroke-width:2px
-    linkStyle 109 stroke:#FFBE7D,stroke-width:2px
+    linkStyle 109 stroke:#A0CBE8,stroke-width:2px
     linkStyle 110 stroke:#FFBE7D,stroke-width:2px
     linkStyle 111 stroke:#FFBE7D,stroke-width:2px
     linkStyle 112 stroke:#FFBE7D,stroke-width:2px
     linkStyle 113 stroke:#FFBE7D,stroke-width:2px
     linkStyle 114 stroke:#FFBE7D,stroke-width:2px
     linkStyle 115 stroke:#FFBE7D,stroke-width:2px
-    linkStyle 116 stroke:#D4A6C8,stroke-width:2px
+    linkStyle 116 stroke:#FFBE7D,stroke-width:2px
     linkStyle 117 stroke:#D4A6C8,stroke-width:2px
     linkStyle 118 stroke:#D4A6C8,stroke-width:2px
     linkStyle 119 stroke:#D4A6C8,stroke-width:2px
-    linkStyle 120 stroke:#4E79A7,stroke-width:2px
+    linkStyle 120 stroke:#D4A6C8,stroke-width:2px
     linkStyle 121 stroke:#4E79A7,stroke-width:2px
     linkStyle 122 stroke:#4E79A7,stroke-width:2px
     linkStyle 123 stroke:#4E79A7,stroke-width:2px
@@ -428,16 +429,16 @@ flowchart TB
     linkStyle 125 stroke:#4E79A7,stroke-width:2px
     linkStyle 126 stroke:#4E79A7,stroke-width:2px
     linkStyle 127 stroke:#4E79A7,stroke-width:2px
-    linkStyle 128 stroke:#E15759,stroke-width:2px
+    linkStyle 128 stroke:#4E79A7,stroke-width:2px
     linkStyle 129 stroke:#E15759,stroke-width:2px
-    linkStyle 130 stroke:#76B7B2,stroke-width:2px
-    linkStyle 131 stroke:#59A14F,stroke-width:2px
+    linkStyle 130 stroke:#E15759,stroke-width:2px
+    linkStyle 131 stroke:#76B7B2,stroke-width:2px
     linkStyle 132 stroke:#59A14F,stroke-width:2px
     linkStyle 133 stroke:#59A14F,stroke-width:2px
     linkStyle 134 stroke:#59A14F,stroke-width:2px
-    linkStyle 135 stroke:#EDC948,stroke-width:2px
+    linkStyle 135 stroke:#59A14F,stroke-width:2px
     linkStyle 136 stroke:#EDC948,stroke-width:2px
-    linkStyle 137 stroke:#FF9DA7,stroke-width:2px
+    linkStyle 137 stroke:#EDC948,stroke-width:2px
     linkStyle 138 stroke:#FF9DA7,stroke-width:2px
     linkStyle 139 stroke:#FF9DA7,stroke-width:2px
     linkStyle 140 stroke:#FF9DA7,stroke-width:2px
@@ -447,8 +448,8 @@ flowchart TB
     linkStyle 144 stroke:#FF9DA7,stroke-width:2px
     linkStyle 145 stroke:#FF9DA7,stroke-width:2px
     linkStyle 146 stroke:#FF9DA7,stroke-width:2px
-    linkStyle 147 stroke:#9C755F,stroke-width:2px
-    linkStyle 148 stroke:#BAB0AC,stroke-width:2px
+    linkStyle 147 stroke:#FF9DA7,stroke-width:2px
+    linkStyle 148 stroke:#9C755F,stroke-width:2px
     linkStyle 149 stroke:#BAB0AC,stroke-width:2px
     linkStyle 150 stroke:#BAB0AC,stroke-width:2px
     linkStyle 151 stroke:#BAB0AC,stroke-width:2px
@@ -466,12 +467,12 @@ flowchart TB
     linkStyle 163 stroke:#BAB0AC,stroke-width:2px
     linkStyle 164 stroke:#BAB0AC,stroke-width:2px
     linkStyle 165 stroke:#BAB0AC,stroke-width:2px
-    linkStyle 166 stroke:#86BCB6,stroke-width:2px
+    linkStyle 166 stroke:#BAB0AC,stroke-width:2px
     linkStyle 167 stroke:#86BCB6,stroke-width:2px
-    linkStyle 168 stroke:#8CD17D,stroke-width:2px
+    linkStyle 168 stroke:#86BCB6,stroke-width:2px
     linkStyle 169 stroke:#8CD17D,stroke-width:2px
     linkStyle 170 stroke:#8CD17D,stroke-width:2px
-    linkStyle 171 stroke:#B6992D,stroke-width:2px
+    linkStyle 171 stroke:#8CD17D,stroke-width:2px
     linkStyle 172 stroke:#B6992D,stroke-width:2px
     linkStyle 173 stroke:#B6992D,stroke-width:2px
     linkStyle 174 stroke:#B6992D,stroke-width:2px
@@ -480,6 +481,7 @@ flowchart TB
     linkStyle 177 stroke:#B6992D,stroke-width:2px
     linkStyle 178 stroke:#B6992D,stroke-width:2px
     linkStyle 179 stroke:#B6992D,stroke-width:2px
+    linkStyle 180 stroke:#B6992D,stroke-width:2px
 ```
 
 ---
@@ -528,7 +530,7 @@ flowchart TB
     subgraph Dependencies[" "]
         http["http 🟢🌐"]
         locator["locator 🟢"]
-        openapi["openapi 🟢"]
+        openapi["openapi 🟢🌐"]
         schema["schema 🟢🌐"]
         websocket["websocket 🟢🌐"]
     end
@@ -737,6 +739,7 @@ flowchart TB
     subgraph Dependencies[" "]
         common["common 🟢🌐"]
         locator["locator 🟢"]
+        logger["logger 🟢🌐"]
         schema["schema 🟢🌐"]
     end
     config-aws --> config
@@ -752,6 +755,7 @@ flowchart TB
     testkit-vitest --> config
     config --> common
     config --> locator
+    config --> logger
     config --> schema
     style config fill:#FF9DA7,stroke:#FF9DA7,color:#fff
     style config-aws fill:#9C755F,stroke:#9C755F,color:#fff
@@ -767,6 +771,7 @@ flowchart TB
     style testkit-vitest fill:#BAB0AC,stroke:#BAB0AC,color:#fff
     style common fill:#B07AA1,stroke:#B07AA1,color:#fff
     style locator fill:#86BCB6,stroke:#86BCB6,color:#fff
+    style logger fill:#499894,stroke:#499894,color:#fff
     style schema fill:#F28E2B,stroke:#F28E2B,color:#fff
     linkStyle 0 stroke:#9C755F,stroke-width:2px
     linkStyle 1 stroke:#8CD17D,stroke-width:2px
@@ -782,6 +787,7 @@ flowchart TB
     linkStyle 11 stroke:#FF9DA7,stroke-width:2px
     linkStyle 12 stroke:#FF9DA7,stroke-width:2px
     linkStyle 13 stroke:#FF9DA7,stroke-width:2px
+    linkStyle 14 stroke:#FF9DA7,stroke-width:2px
 ```
 
 ### Config Aws
@@ -813,7 +819,7 @@ flowchart TB
         intl["intl 🟢🌐"]
         ipc["ipc 🟢"]
         oauth["oauth 🟢🌐"]
-        openapi["openapi 🟢"]
+        openapi["openapi 🟢🌐"]
         runtime["runtime 🟢"]
         testkit["testkit 🟢"]
         trace["trace 🟢🌐"]
@@ -1323,7 +1329,7 @@ flowchart TB
         code-generator["code-generator 🟢"]
         http-file["http-file 🟢🌐"]
         oauth["oauth 🟢🌐"]
-        openapi["openapi 🟢"]
+        openapi["openapi 🟢🌐"]
         service-auth["service-auth 🟢"]
         testkit-vitest["testkit-vitest 🟢"]
         websocket["websocket 🟢🌐"]
@@ -1559,7 +1565,7 @@ flowchart TB
         lock["lock 🟢"]
         logger["logger 🟢🌐"]
         metrics["metrics 🟢"]
-        openapi["openapi 🟢"]
+        openapi["openapi 🟢🌐"]
         runtime["runtime 🟢"]
         testkit["testkit 🟢"]
         testkit-runtime["testkit-runtime 🟢"]
@@ -1703,6 +1709,7 @@ flowchart TB
 ```mermaid
 flowchart TB
     subgraph Dependents[" "]
+        config["config 🟢"]
         db-dynamodb["db-dynamodb 🟢"]
         db-mysql["db-mysql 🟢"]
         db-postgre["db-postgre 🟢"]
@@ -1733,6 +1740,7 @@ flowchart TB
         common["common 🟢🌐"]
         locator["locator 🟢"]
     end
+    config --> logger
     db-dynamodb --> logger
     db-mysql --> logger
     db-postgre --> logger
@@ -1758,6 +1766,7 @@ flowchart TB
     logger --> common
     logger --> locator
     style logger fill:#499894,stroke:#499894,color:#fff
+    style config fill:#FF9DA7,stroke:#FF9DA7,color:#fff
     style db-dynamodb fill:#8CD17D,stroke:#8CD17D,color:#fff
     style db-mysql fill:#B6992D,stroke:#B6992D,color:#fff
     style db-postgre fill:#499894,stroke:#499894,color:#fff
@@ -1782,30 +1791,31 @@ flowchart TB
     style websocket fill:#B6992D,stroke:#B6992D,color:#fff
     style common fill:#B07AA1,stroke:#B07AA1,color:#fff
     style locator fill:#86BCB6,stroke:#86BCB6,color:#fff
-    linkStyle 0 stroke:#8CD17D,stroke-width:2px
-    linkStyle 1 stroke:#B6992D,stroke-width:2px
-    linkStyle 2 stroke:#499894,stroke-width:2px
-    linkStyle 3 stroke:#A0CBE8,stroke-width:2px
-    linkStyle 4 stroke:#FFBE7D,stroke-width:2px
-    linkStyle 5 stroke:#D4A6C8,stroke-width:2px
-    linkStyle 6 stroke:#4E79A7,stroke-width:2px
-    linkStyle 7 stroke:#F28E2B,stroke-width:2px
-    linkStyle 8 stroke:#E15759,stroke-width:2px
-    linkStyle 9 stroke:#76B7B2,stroke-width:2px
-    linkStyle 10 stroke:#59A14F,stroke-width:2px
-    linkStyle 11 stroke:#EDC948,stroke-width:2px
-    linkStyle 12 stroke:#9C755F,stroke-width:2px
-    linkStyle 13 stroke:#BAB0AC,stroke-width:2px
-    linkStyle 14 stroke:#8CD17D,stroke-width:2px
-    linkStyle 15 stroke:#D37295,stroke-width:2px
-    linkStyle 16 stroke:#FFBE7D,stroke-width:2px
-    linkStyle 17 stroke:#4E79A7,stroke-width:2px
-    linkStyle 18 stroke:#59A14F,stroke-width:2px
-    linkStyle 19 stroke:#FF9DA7,stroke-width:2px
-    linkStyle 20 stroke:#BAB0AC,stroke-width:2px
-    linkStyle 21 stroke:#B6992D,stroke-width:2px
-    linkStyle 22 stroke:#499894,stroke-width:2px
+    linkStyle 0 stroke:#FF9DA7,stroke-width:2px
+    linkStyle 1 stroke:#8CD17D,stroke-width:2px
+    linkStyle 2 stroke:#B6992D,stroke-width:2px
+    linkStyle 3 stroke:#499894,stroke-width:2px
+    linkStyle 4 stroke:#A0CBE8,stroke-width:2px
+    linkStyle 5 stroke:#FFBE7D,stroke-width:2px
+    linkStyle 6 stroke:#D4A6C8,stroke-width:2px
+    linkStyle 7 stroke:#4E79A7,stroke-width:2px
+    linkStyle 8 stroke:#F28E2B,stroke-width:2px
+    linkStyle 9 stroke:#E15759,stroke-width:2px
+    linkStyle 10 stroke:#76B7B2,stroke-width:2px
+    linkStyle 11 stroke:#59A14F,stroke-width:2px
+    linkStyle 12 stroke:#EDC948,stroke-width:2px
+    linkStyle 13 stroke:#9C755F,stroke-width:2px
+    linkStyle 14 stroke:#BAB0AC,stroke-width:2px
+    linkStyle 15 stroke:#8CD17D,stroke-width:2px
+    linkStyle 16 stroke:#D37295,stroke-width:2px
+    linkStyle 17 stroke:#FFBE7D,stroke-width:2px
+    linkStyle 18 stroke:#4E79A7,stroke-width:2px
+    linkStyle 19 stroke:#59A14F,stroke-width:2px
+    linkStyle 20 stroke:#FF9DA7,stroke-width:2px
+    linkStyle 21 stroke:#BAB0AC,stroke-width:2px
+    linkStyle 22 stroke:#B6992D,stroke-width:2px
     linkStyle 23 stroke:#499894,stroke-width:2px
+    linkStyle 24 stroke:#499894,stroke-width:2px
 ```
 
 ### Logger Console
@@ -1946,7 +1956,7 @@ flowchart TB
         asyncapi["asyncapi 🟢"]
     end
     subgraph Package[" "]
-        openapi["openapi 🟢"]
+        openapi["openapi 🟢🌐"]
     end
     subgraph Dependencies[" "]
         context["context 🟢🌐"]
@@ -2048,7 +2058,7 @@ flowchart TB
         lock-dynamodb["lock-dynamodb 🟢"]
         logger-console["logger-console 🟢"]
         oauth["oauth 🟢🌐"]
-        openapi["openapi 🟢"]
+        openapi["openapi 🟢🌐"]
         schema-benchmark["schema-benchmark 🟢"]
         schema-file["schema-file 🟢🌐"]
         service-auth["service-auth 🟢"]

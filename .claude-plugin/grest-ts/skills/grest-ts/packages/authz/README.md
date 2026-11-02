@@ -78,7 +78,7 @@ The examples use a document platform: tenant `acme` → project → folder → d
 
 | Term | Means | Example |
 |---|---|---|
-| approval level | whether a person must confirm a workload's allowed request: `auto` < `ask-once` < `ask` < `critical` < `humans-only` | an assistant reading salaries: `ask` |
+| approval level | whether a person must confirm a workload's allowed request: `auto` < `ask-once` < `ask` < `critical` < `dangerous` < `humans-only` | an assistant reading salaries: `ask` |
 | approval floor | a level the model always enforces | exporting always asks |
 | locked | a level that resources below can't lower | |
 
@@ -459,12 +459,16 @@ So a `when: ["frozen"]` deny holds until the caller says `frozen: false`.
 
 A third outcome besides allow and deny, `allow-with-approval`, for workloads only.
 
-- Levels, least to most strict: `auto` < `ask-once` < `ask` < `critical` < `humans-only`.
+- Levels, least to most strict: `auto` < `ask-once` < `ask` < `critical` < `dangerous` < `humans-only`.
 - Resource policies set levels per action (`approvals`), inherited down the tree. **The deepest
   setting wins**, so a doc may lower an unlocked folder default.
 - `locked: true` makes a level a minimum for everything below; a lowering attempt is ignored and
   reported (`lowered` in the reason). `model.approvalFloor` is always locked.
 - Two matching rules in one policy: the stricter wins.
+- **A ceiling rule may carry a level** (`approval` on a boundary, guardrail ceiling, token-scope or
+  restriction rule). Within a ceiling the least strict matching rule counts, across ceilings the
+  strictest, and the result never lowers the tree's level or a locked floor. No rule carries
+  `humans-only`: leave the action out of the ceiling instead.
 - **An approval never widens access**: it is computed only when the request would otherwise be
   allowed. `humans-only` denies workloads; `auto` still sets `audit: true`; humans get no level.
 

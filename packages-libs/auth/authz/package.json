@@ -1,7 +1,7 @@
 {
   "//": "THIS FILE IS GENERATED - DO NOT EDIT",
   "name": "@grest-ts/authz",
-  "version": "0.0.100",
+  "version": "0.0.101",
   "type": "module",
   "license": "MIT",
   "description": "Authorization engine for hierarchical resources — IAM-style deny/cap/grant evaluation, contract requirements, list plans and approvals",
@@ -59,9 +59,9 @@
     "node": ">=24"
   },
   "peerDependencies": {
-    "@grest-ts/common": "0.0.100",
-    "@grest-ts/context": "0.0.100",
-    "@grest-ts/schema": "0.0.100"
+    "@grest-ts/common": "0.0.101",
+    "@grest-ts/context": "0.0.101",
+    "@grest-ts/schema": "0.0.101"
   },
   "devDependencies": {
     "@cedar-policy/cedar-wasm": "4.14.0"
