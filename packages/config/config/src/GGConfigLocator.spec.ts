@@ -71,8 +71,8 @@ describe('GGConfigLocator', () => {
             '\t"/locator_app/db": port: Value must be at least 1');
     }));
 
-    it('fails startup outside production even with startupRetryMs', () => scope.run(async () => {
-        await expect(locator({startupRetryMs: 10}).start()).rejects.toThrow(/\/locator_app\/token/);
+    it('fails startup at once outside production', () => scope.run(async () => {
+        await expect(locator().start()).rejects.toThrow(/\/locator_app\/token/);
         expect(store.loads).toBe(1);
         expect(startupErrors).toEqual([]);
     }));
@@ -91,6 +91,28 @@ describe('GGConfigLocator', () => {
         await starting;
         expect(store.getValue(Config.token)).toBe("t0k3n");
         await loc.teardown();
+    }));
+
+    it('in production, retries by default', () => scope.run(async () => {
+        vi.stubEnv("NODE_ENV", "production");
+        const loc = locator();
+        const starting = loc.start();
+        await until(() => expect(startupErrors).toHaveLength(1));
+        expect(startupErrors[0].message).toMatch(/\/locator_app\/token/);
+        await loc.teardown();
+        await expect(starting).rejects.toThrow(/aborted by teardown/);
+    }));
+
+    it('in production, startupRetryMs 0 fails startup at once', () => scope.run(async () => {
+        vi.stubEnv("NODE_ENV", "production");
+        await expect(locator({startupRetryMs: 0}).start()).rejects.toThrow(/\/locator_app\/token/);
+        expect(startupErrors).toEqual([]);
+    }));
+
+    it('in production, gives up after startupTimeoutMs with the last error', () => scope.run(async () => {
+        vi.stubEnv("NODE_ENV", "production");
+        await expect(locator({startupRetryMs: 10, startupTimeoutMs: 50}).start()).rejects.toThrow(/\/locator_app\/token/);
+        expect(store.loads).toBeGreaterThan(1);
     }));
 
     it('in production, fails startup at once on an error that is not a config load error', () => scope.run(async () => {

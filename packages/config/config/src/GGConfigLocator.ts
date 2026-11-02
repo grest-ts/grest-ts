@@ -16,9 +16,11 @@ export interface GGConfigLocatorOptions {
     /**
      * Production only: when a store's initial load fails with a GGConfigLoadError (config unreadable or invalid),
      * log a critical error and retry every startupRetryMs instead of failing startup. Services that start after
-     * config (database, http, jobs) wait until it loads.
+     * config (database, http, jobs) wait until it loads. Default 10 seconds; 0 fails startup at once.
      */
     readonly startupRetryMs?: number
+    /** How long startup keeps retrying before it fails with the last error. Default 10 minutes. */
+    readonly startupTimeoutMs?: number
 }
 
 export class GGConfigLocator<T extends object> {
@@ -136,12 +138,17 @@ export class GGConfigLocator<T extends object> {
     }
 
     async #startStore(store: GGConfigStore<GGConfigKey>): Promise<void> {
-        const retryMs = process.env.NODE_ENV === "production" ? this.#options.startupRetryMs : undefined;
+        const retryMs = process.env.NODE_ENV === "production" ? this.#options.startupRetryMs ?? 10_000 : 0;
+        const deadline = Date.now() + (this.#options.startupTimeoutMs ?? 600_000);
         while (true) {
             try {
                 return await store.start();
             } catch (error) {
-                if (retryMs === undefined || !(error instanceof GGConfigLoadError) || this.#tornDown.signal.aborted) throw error;
+                if (!retryMs || !(error instanceof GGConfigLoadError) || this.#tornDown.signal.aborted) throw error;
+                if (Date.now() + retryMs > deadline) {
+                    GGLog.critical(this, "Config still failing to load, giving up on startup", error);
+                    throw error;
+                }
                 this.onStartupError(error, retryMs);
                 await setTimeout(retryMs, undefined, {signal: this.#tornDown.signal}).catch(() => {
                     throw new Error("Config startup aborted by teardown");

@@ -105,10 +105,11 @@ All keys require a `@grest-ts/schema` validator. Values are validated when loade
 Invalid config at startup prevents the service from starting. Invalid config during a runtime reload is rejected and an error is raised — the previous valid value remains in effect.
 A store validates all its keys before failing, so the error names every missing or invalid key. Errors never include the failing values, since they may be secrets.
 
-To pause startup instead of failing in production, pass `startupRetryMs`: a store whose initial load fails with a `GGConfigLoadError` (config unreadable or invalid) is retried at that interval, each failure goes to `GGConfigLocator.onStartupError` (default: critical log). Any other error still fails startup. Config starts first, so database, HTTP and jobs wait until it loads; nothing serves traffic in the meantime. Outside production startup still fails immediately.
+In production a store whose initial load fails with a `GGConfigLoadError` (config unreadable or invalid) doesn't fail startup: it is retried every 10 seconds, and each failure goes to `GGConfigLocator.onStartupError` (default: critical log). Config starts first, so database, HTTP and jobs wait until it loads; nothing serves traffic in the meantime. After 10 minutes startup gives up and fails with the last error. Any other error fails startup at once, and outside production startup always fails immediately.
 
 ```typescript
-new GGConfigLocator(AppConfig, localConfig, {startupRetryMs: 10_000})
+new GGConfigLocator(AppConfig, localConfig, {startupRetryMs: 5_000, startupTimeoutMs: 120_000})
+new GGConfigLocator(AppConfig, localConfig, {startupRetryMs: 0}) // e.g. a one-shot job: fail at once
 ```
 
 ```typescript
