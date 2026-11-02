@@ -84,6 +84,19 @@ describe('GGConfigStoreAwsSecretsManager', () => {
         await locator.teardown();
     }));
 
+    it('still notifies watchers when a changed value cannot be described', () => scope.run(async () => {
+        const {store, locator} = await started();
+        vi.spyOn(GGSetting.prototype, "describeValue").mockImplementation(() => {
+            throw new TypeError("not serializable");
+        });
+        const port = vi.fn();
+        store.watch(Config.port, port);
+        version("v2", doc("first", 9090));
+        await until(() => expect(port).toHaveBeenCalledExactlyOnceWith(9090));
+        expect(reloadErrors).toEqual([]);
+        await locator.teardown();
+    }));
+
     it('pauses a production startup while the secret cannot be read, then starts', () => scope.run(async () => {
         vi.stubEnv("NODE_ENV", "production");
         send.mockRejectedValueOnce(Object.assign(new Error("Secrets Manager can't find the specified secret."), {name: "ResourceNotFoundException"}));

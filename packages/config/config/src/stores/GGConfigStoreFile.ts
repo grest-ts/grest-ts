@@ -59,7 +59,7 @@ export class GGConfigStoreFile<Key extends GGConfigKey> extends GGConfigStore<Ke
         try {
             fileContent = fs.readFileSync(this.file, 'utf-8');
         } catch (error) {
-            throw new GGConfigLoadError(`Cannot read settings file ${this.file}: ${(error as Error).message}`, {cause: error});
+            throw new GGConfigLoadError(`Cannot read settings file: ${(error as Error).message}`, {cause: error});
         }
         return parseConfigJson(fileContent, `Settings file ${this.file}`);
     }

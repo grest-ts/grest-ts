@@ -79,6 +79,7 @@ export class GGConfigStoreAwsSecretsManager<Key extends GGConfigKey> extends GGC
         const {SecretString} = await this.client!.send(new GetSecretValueCommand({SecretId: name})).catch(error => {
             throw new GGConfigLoadError(`Cannot read AWS Secrets Manager secret "${name}": ${error.name}: ${error.message}`, {cause: error});
         });
+        if (SecretString === undefined) throw new GGConfigLoadError(`AWS Secrets Manager secret "${name}" has no string value`);
         return parseConfigJson(SecretString, `AWS Secrets Manager secret "${name}"`);
     }
 

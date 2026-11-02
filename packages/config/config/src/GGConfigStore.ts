@@ -67,7 +67,7 @@ export abstract class GGConfigStore<Key extends GGConfigKey> {
     protected async notifyChanged(previous: ReadonlyMap<GGConfigKey, unknown>, next: ReadonlyMap<GGConfigKey, unknown>): Promise<void> {
         const changed = this.keys.filter(key => !isDeepStrictEqual(previous.get(key), next.get(key)));
         for (const key of changed) {
-            GGLog.info(this, `Config "${key.name}" changed: ${key.describeValue(previous.get(key))} → ${key.describeValue(next.get(key))}`);
+            GGLog.info(this, `Config "${key.name}" changed: ${describe(key, previous.get(key))} → ${describe(key, next.get(key))}`);
         }
         await Promise.all(changed.map(key => this.notify(key).catch(this.reportReloadError)));
     }
@@ -128,6 +128,14 @@ export abstract class GGConfigStore<Key extends GGConfigKey> {
                 }
             }
         }
+    }
+}
+
+function describe(key: GGConfigKey, value: unknown): string {
+    try {
+        return key.describeValue(value);
+    } catch {
+        return "(not printable)";
     }
 }
 
