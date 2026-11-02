@@ -44,7 +44,7 @@ export class GGDynamoDbTestMethods {
      *
      * @example
      * GGTest.with(MyConfig.dynamo).clone({
-     *     host: {endpoint: "http://localhost:8001", region: "eu-west-1"},
+     *     host: {endpoint: "http://localhost:8002", region: "eu-west-1"},
      *     setup: async client => {
      *         await client.send(new CreateTableCommand({...}))
      *         await client.send(new PutCommand({...}))

@@ -3,7 +3,7 @@ import {GGConfig, GGConfigLocator, GGConfigStoreLocal, GGResource, GGSecret} fro
 import {GGDynamoDbConfig} from "@grest-ts/db-dynamodb"
 import {GGDynamoDbLock} from "@grest-ts/lock-dynamodb"
 
-export const ENDPOINT = process.env.DYNAMODB_TEST_ENDPOINT ?? "http://localhost:8001"
+export const ENDPOINT = process.env.DYNAMODB_TEST_ENDPOINT ?? "http://localhost:8002"
 export const TABLE = "locks"
 
 export const LockTestConfig = GGConfig.define("/lock_dynamodb_test/", () => ({
