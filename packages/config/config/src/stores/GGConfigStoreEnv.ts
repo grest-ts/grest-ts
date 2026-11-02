@@ -18,7 +18,7 @@ export class GGConfigStoreEnv<Key extends GGConfigKey = GGConfigKey> extends GGC
 
     readonly #prefix: string;
     readonly #env: NodeJS.ProcessEnv;
-    readonly #valuesCache = new Map<GGConfigKey, unknown>();
+    #valuesCache = new Map<GGConfigKey, unknown>();
 
     constructor(options: GGConfigStoreEnvOptions = {}) {
         super();
@@ -31,8 +31,7 @@ export class GGConfigStoreEnv<Key extends GGConfigKey = GGConfigKey> extends GGC
     }
 
     public override async start(): Promise<void> {
-        this.resolveValues(new Map(this.keys.map(key => [key, this.read(key)])), true)
-            .forEach((value, key) => this.#valuesCache.set(key, value));
+        this.#valuesCache = this.resolveValues(key => this.read(key), true);
         await super.start();
     }
 

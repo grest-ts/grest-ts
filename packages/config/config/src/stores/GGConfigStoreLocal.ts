@@ -79,7 +79,7 @@ export function createLocalConfig<T extends object>(_config: T, values: ConfigVa
 export class GGConfigStoreLocal<Struct extends object, Key extends GGConfigKey = GGConfigKey> extends GGConfigStore<Key> {
 
     readonly #values = new Map<GGConfigKey, unknown>();
-    readonly #valuesCache = new Map<GGConfigKey, unknown>();
+    #valuesCache = new Map<GGConfigKey, unknown>();
 
     constructor(config: Struct, values: ConfigValues<Struct>) {
         super();
@@ -99,8 +99,7 @@ export class GGConfigStoreLocal<Struct extends object, Key extends GGConfigKey =
             );
         }
 
-        this.resolveValues(new Map(this.keys.map(key => [key, this.#values.get(key)])), true)
-            .forEach((value, key) => this.#valuesCache.set(key, value));
+        this.#valuesCache = this.resolveValues(key => this.#values.get(key), true);
 
         await super.start();
     }

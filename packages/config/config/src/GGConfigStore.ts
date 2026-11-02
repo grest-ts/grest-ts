@@ -1,6 +1,7 @@
 import {GGConfigKey} from "./GGConfigKey";
 import {GG_CONFIG} from "./GG_CONFIG";
 import type {GGIssuesList} from "@grest-ts/schema";
+import {isDeepStrictEqual} from "node:util";
 
 export type ConfigUpdateCallback = (value: any) => void | Promise<void>;
 
@@ -34,28 +35,38 @@ export abstract class GGConfigStore<Key extends GGConfigKey> {
      * validation will fail — this is how missing required keys are caught.
      */
     protected resolveValue<T>(key: GGConfigKey<T>, storeValue: unknown, isInitialLoad: boolean = false): T {
-        return this.resolveValues(new Map([[key as GGConfigKey, storeValue]]), isInitialLoad).get(key) as T;
+        const check = validate(key, storeValue);
+        if (check.success === false) throw validationError([describeFailure(key, check.issues)], isInitialLoad);
+        return check.value;
     }
 
     /**
-     * resolveValue() for many keys at once: validates all of them and throws one error naming every failing key.
+     * resolveValue() for every key of this store: validates all of them and throws one error naming every failing key.
      */
-    protected resolveValues(storeValues: ReadonlyMap<GGConfigKey, unknown>, isInitialLoad: boolean = false): Map<GGConfigKey, unknown> {
+    protected resolveValues(read: (key: Key) => unknown, isInitialLoad: boolean = false): Map<GGConfigKey, unknown> {
         const values = new Map<GGConfigKey, unknown>();
         const failures: string[] = [];
-        storeValues.forEach((storeValue, key) => {
-            const check = key.schema.safeParse(storeValue !== undefined ? storeValue : key.getDefault());
+        for (const key of this.keys) {
+            const check = validate(key, read(key));
             if (check.success === false) {
                 failures.push(describeFailure(key, check.issues));
             } else {
                 values.set(key, check.value);
             }
-        });
-        if (failures.length > 0) {
-            throw new Error(`Config validation failed during ${isInitialLoad ? "initial-load" : "reload"}:\n\t${failures.join("\n\t")}`);
         }
+        if (failures.length > 0) throw validationError(failures, isInitialLoad);
         return values;
     }
+
+    /**
+     * After a reload: notifies watchers of the keys whose value changed, routing their errors to GGConfigLocator.onReloadError.
+     */
+    protected async notifyChanged(previous: ReadonlyMap<GGConfigKey, unknown>, next: ReadonlyMap<GGConfigKey, unknown>): Promise<void> {
+        const changed = this.keys.filter(key => !isDeepStrictEqual(previous.get(key), next.get(key)));
+        await Promise.all(changed.map(key => this.notify(key).catch(this.reportReloadError)));
+    }
+
+    protected reportReloadError = (error: Error): void => GG_CONFIG.get().onReloadError(error);
 
     public async start(): Promise<void> {
         if (this.isStarted === true) {
@@ -114,12 +125,15 @@ export abstract class GGConfigStore<Key extends GGConfigKey> {
     }
 }
 
+function validate<T>(key: GGConfigKey<T>, storeValue: unknown) {
+    return key.schema.safeParse(storeValue !== undefined ? storeValue : key.getDefault());
+}
+
 // Issue messages only: a failing value may be (part of) a secret.
 function describeFailure(key: GGConfigKey, issues: GGIssuesList): string {
-    const messages: string[] = [];
-    for (let i = 0; i < issues.length; i++) {
-        const path = issues.getPath(i);
-        messages.push(path ? `${path}: ${issues.getMessage(i)}` : issues.getMessage(i));
-    }
-    return `"${key.name}": ${messages.join("; ")}${key.definedAt ? ` (defined at ${key.definedAt})` : ""}`;
+    return `"${key.name}": ${issues.toMessage()}${key.definedAt ? ` (defined at ${key.definedAt})` : ""}`;
+}
+
+function validationError(failures: string[], isInitialLoad: boolean): Error {
+    return new Error(`Config validation failed during ${isInitialLoad ? "initial-load" : "reload"}:\n\t${failures.join("\n\t")}`);
 }

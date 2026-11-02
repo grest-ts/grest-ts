@@ -22,7 +22,7 @@ class DocStore extends GGConfigStore<GGConfigKey> {
 
     public override async start(): Promise<void> {
         this.loads++;
-        this.#values = this.resolveValues(new Map(this.keys.map(key => [key, this.doc[key.name]])), true);
+        this.#values = this.resolveValues(key => this.doc[key.name], true);
         await super.start();
     }
 

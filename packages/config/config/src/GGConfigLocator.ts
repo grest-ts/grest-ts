@@ -4,6 +4,7 @@ import {GGLocator, GGLocatorServiceType} from "@grest-ts/locator";
 import {GG_CONFIG} from "./GG_CONFIG";
 import {ConfigValues, GGConfigStoreLocal} from "./stores/GGConfigStoreLocal";
 import {GGLog} from "@grest-ts/logger";
+import {setTimeout} from "node:timers/promises";
 
 export type GGConfigDefinition<T> = T & {
     __isGGConfigDefinition: never,
@@ -21,8 +22,7 @@ export interface GGConfigLocatorOptions {
 export class GGConfigLocator<T extends object> {
 
     #isStarted = false;
-    #isTornDown = false;
-    #cancelRetryWait: (() => void) | undefined = undefined;
+    readonly #tornDown = new AbortController();
     readonly #options: GGConfigLocatorOptions;
     readonly #config: GGConfigDefinition<T>;
     readonly #storesList: GGConfigStore<GGConfigKey>[] = []
@@ -139,23 +139,17 @@ export class GGConfigLocator<T extends object> {
             try {
                 return await store.start();
             } catch (error) {
-                if (retryMs === undefined || this.#isTornDown) throw error;
+                if (retryMs === undefined || this.#tornDown.signal.aborted) throw error;
                 this.onStartupError(error instanceof Error ? error : new Error(String(error)), retryMs);
-                await new Promise<void>(resolve => {
-                    const timer = setTimeout(resolve, retryMs);
-                    this.#cancelRetryWait = () => {
-                        clearTimeout(timer);
-                        resolve();
-                    };
+                await setTimeout(retryMs, undefined, {signal: this.#tornDown.signal}).catch(() => {
+                    throw new Error("Config startup aborted by teardown");
                 });
-                if (this.#isTornDown) throw new Error("Config startup aborted by teardown");
             }
         }
     }
 
     public async teardown(): Promise<void> {
-        this.#isTornDown = true;
-        this.#cancelRetryWait?.();
+        this.#tornDown.abort();
         await Promise.all(this.#storesList.map(s => s.teardown()));
     }
 }

@@ -67,7 +67,7 @@ describe('GGConfigStoreAwsSecretsManager', () => {
         await locator.teardown();
     }));
 
-    it('ignores a poll that returns the loaded version', () => scope.run(async () => {
+    it('does not notify while the secret is unchanged', () => scope.run(async () => {
         const {store, locator} = await started();
         const token = vi.fn();
         store.watch(Config.token, token);
