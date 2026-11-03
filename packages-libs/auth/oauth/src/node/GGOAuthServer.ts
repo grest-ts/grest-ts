@@ -387,16 +387,23 @@ export class GGOAuthServer {
     private async browserRequest(req: IncomingMessage, res: ServerResponse, target: typeof TOKEN_PATH | typeof REVOCATION_PATH): Promise<void> {
         if (this.options.browserSession?.enabled?.() === false) return this.fail(res, 404, "Not found")
         const form = await readForm(req)
-        const client = form && this.firstParty.get(form.client_id ?? "")
+        if (!form) return this.fail(res, 400, "Request refused")
+        const client = this.firstParty.get(form.client_id ?? "")
         const origin = req.headers.origin
         const site = req.headers["sec-fetch-site"]
+        // Other clients (e.g. a third-party SPA) get the plain endpoint: only a first-party client's refresh token lives here.
+        const keepsCookie = !!client && client.refreshTokens !== false
         // The exact origin, not SameSite alone: a sibling subdomain is same-site and its requests carry the cookie.
-        if (!form || !client || client.refreshTokens === false || !origin || !client.redirectUris.some(u => new URL(u).origin === origin)
-            || (site && site !== "same-origin" && site !== "same-site")) return this.fail(res, 403, "Request refused")
-        res.setHeader("access-control-allow-origin", origin)
-        res.setHeader("access-control-allow-credentials", "true")
-        res.setHeader("vary", "Origin")
+        if (keepsCookie && (!origin || !client.redirectUris.some(u => new URL(u).origin === origin) || (site && site !== "same-origin" && site !== "same-site"))) {
+            return this.fail(res, 403, "Request refused")
+        }
+        if (origin) {
+            res.setHeader("access-control-allow-origin", origin)
+            res.setHeader("access-control-allow-credentials", "true")
+            res.setHeader("vary", "Origin")
+        }
         res.setHeader("cache-control", "no-store")
+        if (!keepsCookie) return this.dispatchForm(req, res, target, form)
         const cookie = readCookie(req, this.browserCookie())
         if (target === TOKEN_PATH && form.grant_type === "refresh_token") {
             // A page-held token (from before the server kept it) is still accepted once: its rotation moves into the cookie.
@@ -416,8 +423,12 @@ export class GGOAuthServer {
             form.token = cookie
         }
         browserRequests.add(req)
-        req.url = target
-        // oidc-provider reads a pre-parsed body when the stream is already consumed.
+        await this.dispatchForm(req, res, target, form)
+    }
+
+    // oidc-provider reads a pre-parsed body when the stream is already consumed.
+    private async dispatchForm(req: IncomingMessage, res: ServerResponse, path: string, form: Record<string, string>): Promise<void> {
+        req.url = path
         ;(req as IncomingMessage & {body?: unknown}).body = form
         await this.dispatch(req, res)
     }

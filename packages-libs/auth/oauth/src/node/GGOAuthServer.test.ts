@@ -987,10 +987,17 @@ describe("GGOAuthServer", () => {
                 expect(refused.res.status).toBe(403)
                 expect(refused.res.headers.get("access-control-allow-credentials")).toBeNull()
             }
-            for (const clientId of ["identity", "unknown"]) {
-                expect((await post("/oauth/browser/token", {grant_type: "refresh_token", client_id: clientId}, {cookie})).res.status).toBe(403)
-            }
             expect((await refresh(cookie)).json!.access_token).toEqual(expect.any(String))
+        })
+
+        test("any other client gets the plain token endpoint: its refresh token in the body, no cookie", async () => {
+            const clientId = await register()
+            const {tokens} = await signIn(new Browser(), clientId, THIRD_PARTY_REDIRECT)
+            const thirdParty = await post("/oauth/browser/token", {grant_type: "refresh_token", refresh_token: tokens.refreshToken!, client_id: clientId}, {origin: "https://claude.ai", site: "cross-site"})
+            expect(thirdParty.json!.refresh_token).toEqual(expect.any(String))
+            bearers.add(thirdParty.json!.refresh_token)
+            expect(thirdParty.setCookie).toBeUndefined()
+            expect(thirdParty.res.headers.get("access-control-allow-origin")).toBe("https://claude.ai")
         })
 
         test("logout revokes the cookie's token and clears the cookie", async () => {

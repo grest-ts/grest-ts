@@ -320,8 +320,10 @@ new GGOAuthServer({
 - A request must come from one of the client's redirect origins exactly (`Origin`), and not be
   `Sec-Fetch-Site: cross-site`. A sibling subdomain is same-site, so `SameSite` alone wouldn't keep it out.
   CORS answers only that origin, with credentials.
-- Only for `firstPartyClients` with refresh tokens. Other clients, `/oauth/token` and revocation
-  are unchanged.
+- Only `firstPartyClients` with refresh tokens keep theirs in the cookie. Any other client a
+  `GGOAuthClient` drives (e.g. a third-party SPA) gets the plain token endpoint's behaviour at the
+  browser endpoint: its refresh token in the body, stored by `withOAuth`. `/oauth/token` and
+  revocation are unchanged.
 - A refresh token the page still holds (from before the switch) is accepted once at the browser
   endpoint, and its rotation moves into the cookie. Switching off again sends users through sign-in
   once: their token is in a cookie the page can't read.
