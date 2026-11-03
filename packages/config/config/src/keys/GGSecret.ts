@@ -13,10 +13,6 @@ export class GGSecret<T> extends GGConfigKey<T> {
         return GGSecret.NAME
     }
 
-    public override describeValue(): string {
-        return "(secret)";
-    }
-
     public reveal(): T {
         return this.getValue();
     }

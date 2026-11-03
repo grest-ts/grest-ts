@@ -29,7 +29,7 @@ export class HmacSigner implements TokenSigner {
 
     public verify = async (token: string): Promise<Record<string, unknown>> => {
         try {
-            const {payload} = await jwtVerify(token, this.key(), {algorithms: [this.alg]})
+            const {payload} = await jwtVerify(token, this.key(), {algorithms: [this.alg], requiredClaims: ["exp"]})
             return payload as Record<string, unknown>
         } catch (err) {
             throw toNotAuthorized(err)

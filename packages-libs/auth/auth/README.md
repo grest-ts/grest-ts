@@ -132,6 +132,7 @@ const userTokenEngine = new GGAuthRefreshToken({
   access: new GGAuthAccessToken({
     signer: new HmacSigner(SECRET),               // or any TokenSigner (below)
     claimSchema: IsUserClaims,
+    audience: "app-user",                         // required; verify rejects tokens for any other
     accessTtlMs: 60 * 60 * 1000,                  // short-lived, stateless
   }),
 })
@@ -404,7 +405,7 @@ export const OrgScopedApi = new GGHttpSchema({
 
 ```ts
 // server — a second, store-less engine; selectOrg issues it behind the user guard
-const orgTokenEngine = new GGAuthAccessToken({signer: new HmacSigner(SECRET + "-org"), claimSchema: IsOrgUser, accessTtlMs: 8 * 60 * 60 * 1000})
+const orgTokenEngine = new GGAuthAccessToken({signer: new HmacSigner(SECRET + "-org"), claimSchema: IsOrgUser, audience: "app-org", accessTtlMs: 8 * 60 * 60 * 1000})
 
 class OrgService {
   selectOrg = async ({orgId}: SelectOrgRequest): Promise<SelectOrgResponse> => {
