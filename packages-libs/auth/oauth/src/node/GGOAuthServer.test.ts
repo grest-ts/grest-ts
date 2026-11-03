@@ -935,7 +935,7 @@ describe("GGOAuthServer", () => {
         }
         const refresh = (cookie?: string) => post("/oauth/browser/token", {grant_type: "refresh_token", client_id: "app", resource: API}, {cookie})
 
-        test("the metadata names the browser endpoints", async () => {
+        test("the metadata names the browser endpoints beside the token endpoint", async () => {
             const meta = await (await fetch(`${ISSUER}/.well-known/oauth-authorization-server`)).json()
             expect(meta.gg_browser_token_endpoint).toBe(`${ISSUER}/oauth/browser/token`)
             expect(meta.gg_browser_logout_endpoint).toBe(`${ISSUER}/oauth/browser/logout`)
