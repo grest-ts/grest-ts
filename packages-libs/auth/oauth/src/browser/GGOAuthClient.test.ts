@@ -231,6 +231,11 @@ describe("GGOAuthClient refresh token held by the server", () => {
         expect(new URLSearchParams(callTo(metadata.gg_browser_token_endpoint)![1].body as URLSearchParams).get("refresh_token")).toBe("rt-old")
     })
 
+    test("a server that doesn't rotate leaves the page's own refresh token in place", async () => {
+        const result = await client().refresh({refreshToken: "rt-kept"})
+        expect(result.tokens.refresh?.token).toBe("rt-kept")
+    })
+
     test("without browser endpoints and without a token there is nothing to refresh with", async () => {
         await expect(client().refresh({})).rejects.toThrow(NOT_AUTHORIZED)
         expect(callTo(METADATA.token_endpoint)).toBeUndefined()

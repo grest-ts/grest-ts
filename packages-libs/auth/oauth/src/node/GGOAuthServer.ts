@@ -683,24 +683,26 @@ export class GGOAuthServer {
         provider.use(async (ctx, next) => {
             const target = ctx.method === "POST" ? BROWSER_TARGETS[ctx.path] : undefined
             if (!target) return next()
-            if (!this.browserSessionEnabled()) return void (ctx.status = 404)
-            const form = await readForm(ctx.req)
-            if (!form) return void (ctx.status = 400)
-            const client = firstParty.get(form.client_id ?? "")
-            // Any other client (e.g. a third-party SPA) gets the plain endpoint: its refresh token isn't this server's to keep.
-            const keepsCookie = !!client && client.refreshTokens !== false
+            // Before any refusal: a page has to be able to read why. Nothing here reads the cookie for an origin
+            // other than the client's own.
             const origin = ctx.get("origin")
-            const site = ctx.get("sec-fetch-site")
-            // The exact origin, not SameSite alone: a sibling subdomain is same-site and its requests carry the cookie.
-            if (keepsCookie && (!isClientOrigin(client, origin) || (site && site !== "same-origin" && site !== "same-site"))) return void (ctx.status = 403)
             if (origin && origin !== "null") {
                 ctx.set("access-control-allow-origin", origin)
                 ctx.set("access-control-allow-credentials", "true")
                 ctx.vary("Origin")
             }
             ctx.set("cache-control", "no-store")
+            if (!this.browserSessionEnabled()) return void (ctx.status = 404)
+            const form = await readForm(ctx.req)
+            if (!form) return void (ctx.status = 400)
+            const client = firstParty.get(form.client_id ?? "")
+            const site = ctx.get("sec-fetch-site")
+            // Only the client's exact origin (not SameSite alone: a sibling subdomain is same-site and its requests
+            // carry the cookie), and not from another site. Anything else gets the plain endpoint, token in the body:
+            // a third-party SPA, or an app on another site than this server, which can't keep a SameSite cookie.
+            const keepsCookie = !!client && client.refreshTokens !== false && isClientOrigin(client, origin) && site !== "cross-site"
             // Plain http (local dev) can't keep a __Host- cookie.
-            const name = ctx.secure ? "__Host-gg_refresh" : "gg_refresh"
+            const name = `${ctx.secure ? "__Host-" : ""}gg_refresh_${client?.clientId.replace(/[^\w-]/g, "_")}`
             const setCookie = (value: string | null, maxAgeSec?: number) =>
                 ctx.cookies.set(name, value, {httpOnly: true, secure: ctx.secure, sameSite: "strict", path: "/", maxAge: maxAgeSec && maxAgeSec * 1000, overwrite: true, signed: false})
             const cookie = keepsCookie ? ctx.cookies.get(name, {signed: false}) : undefined
@@ -730,7 +732,7 @@ export class GGOAuthServer {
             if (ctx.status === 200 && typeof body?.refresh_token === "string") {
                 setCookie(body.refresh_token, ctx.oidc.entities.RotatedRefreshToken?.remainingTTL ?? refreshTtlSec)
                 delete body.refresh_token
-            } else if (target === REVOCATION_PATH || body?.error === "invalid_grant") {
+            } else if (target === REVOCATION_PATH || (body?.error === "invalid_grant" && form.grant_type === "refresh_token")) {
                 setCookie(null)
             }
         })

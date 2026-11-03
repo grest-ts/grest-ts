@@ -924,12 +924,12 @@ describe("GGOAuthServer", () => {
         async function post(path: string, body: Record<string, string>, o: {cookie?: string, origin?: string, site?: string} = {}) {
             const res = await fetch(`${ISSUER}${path}`, {
                 method: "POST",
-                headers: {...(o.origin === "" ? {} : {origin: o.origin ?? APP_ORIGIN}), "sec-fetch-site": o.site ?? "same-site", ...(o.cookie ? {cookie: `gg_refresh=${o.cookie}`} : {})},
+                headers: {...(o.origin === "" ? {} : {origin: o.origin ?? APP_ORIGIN}), "sec-fetch-site": o.site ?? "same-site", ...(o.cookie ? {cookie: `gg_refresh_app=${o.cookie}`} : {})},
                 body: new URLSearchParams(body),
             })
             const json = await res.json().catch(() => undefined) as Record<string, any> | undefined
-            const setCookie = res.headers.getSetCookie().find(c => c.startsWith("gg_refresh="))
-            const cookie = setCookie?.split(";")[0].slice("gg_refresh=".length)
+            const setCookie = res.headers.getSetCookie().find(c => c.startsWith("gg_refresh_app="))
+            const cookie = setCookie?.split(";")[0].slice("gg_refresh_app=".length)
             for (const value of [json?.access_token, cookie]) if (value) bearers.add(value)
             return {res, json, setCookie, cookie}
         }
@@ -948,7 +948,7 @@ describe("GGOAuthServer", () => {
             expect(signedIn.json!.refresh_token).toBeUndefined()
             expect(signedIn.res.headers.get("access-control-allow-origin")).toBe(APP_ORIGIN)
             expect(signedIn.res.headers.get("access-control-allow-credentials")).toBe("true")
-            expect(signedIn.setCookie).toMatch(/^gg_refresh=[\w-]+; path=\/; expires=[^;]+; samesite=strict; httponly$/)
+            expect(signedIn.setCookie).toMatch(/^gg_refresh_app=[\w-]+; path=\/; expires=[^;]+; samesite=strict; httponly$/)
             expect(Date.parse(signedIn.setCookie!.match(/expires=([^;]+)/)![1]) - Date.now()).toBeGreaterThan(29 * 24 * 3600 * 1000)
 
             const refreshed = await refresh(signedIn.cookie)
@@ -962,7 +962,7 @@ describe("GGOAuthServer", () => {
             const res = await fetch(`${ISSUER}/oauth/browser/token`, {method: "POST", headers: {origin: APP_ORIGIN, "x-forwarded-proto": "https"}, body: new URLSearchParams(await code())})
             const setCookie = res.headers.getSetCookie()[0]
             bearers.add(setCookie.split(";")[0].split("=")[1])
-            expect(setCookie).toMatch(/^__Host-gg_refresh=[\w-]+; path=\/; expires=[^;]+; samesite=strict; secure; httponly$/)
+            expect(setCookie).toMatch(/^__Host-gg_refresh_app=[\w-]+; path=\/; expires=[^;]+; samesite=strict; secure; httponly$/)
         })
 
         test("a replayed cookie is reuse: refused, cleared, and the rotated one dies too", async () => {
@@ -988,14 +988,31 @@ describe("GGOAuthServer", () => {
             expect(res.json!.error).toBe("invalid_grant")
         })
 
-        test("only the client's own origin, same-site, gets in", async () => {
+        test("only the client's own origin on the same site reaches the cookie; any other request is the plain endpoint", async () => {
             const {cookie} = await post("/oauth/browser/token", await code())
             for (const o of [{origin: "https://evil.example"}, {origin: "https://sibling.app.example"}, {origin: ""}, {site: "cross-site"}]) {
-                const refused = await post("/oauth/browser/token", {grant_type: "refresh_token", client_id: "app"}, {cookie, ...o})
-                expect(refused.res.status).toBe(403)
-                expect(refused.res.headers.get("access-control-allow-credentials")).toBeNull()
+                const plain = await post("/oauth/browser/token", {grant_type: "refresh_token", client_id: "app", resource: API}, {cookie, ...o})
+                expect(plain.json!.error).toBe("invalid_request")
+                expect(plain.setCookie).toBeUndefined()
             }
             expect((await refresh(cookie)).json!.access_token).toEqual(expect.any(String))
+        })
+
+        test("the app on another site than the server gets its refresh token in the body", async () => {
+            const {tokens} = await signIn(new Browser(), "app", FIRST_PARTY_REDIRECT)
+            const crossSite = await post("/oauth/browser/token", {grant_type: "refresh_token", refresh_token: tokens.refreshToken!, client_id: "app", resource: API}, {site: "cross-site"})
+            expect(crossSite.json!.refresh_token).toEqual(expect.any(String))
+            bearers.add(crossSite.json!.refresh_token)
+            expect(crossSite.setCookie).toBeUndefined()
+        })
+
+        test("a failed code exchange leaves the cookie alone", async () => {
+            const {cookie} = await post("/oauth/browser/token", await code())
+            const used = await code()
+            await post("/oauth/browser/token", used)
+            const again = await post("/oauth/browser/token", used, {cookie})
+            expect(again.json!.error).toBe("invalid_grant")
+            expect(again.setCookie).toBeUndefined()
         })
 
         test("any other client gets the plain token endpoint: its refresh token in the body, no cookie", async () => {
@@ -1020,7 +1037,9 @@ describe("GGOAuthServer", () => {
             browserSessionEnabled = false
             const meta = await (await fetch(`${ISSUER}/.well-known/oauth-authorization-server`)).json()
             expect(meta.gg_browser_token_endpoint).toBeUndefined()
-            expect((await post("/oauth/browser/token", await code())).res.status).toBe(404)
+            const off = await post("/oauth/browser/token", await code())
+            expect(off.res.status).toBe(404)
+            expect(off.res.headers.get("access-control-allow-origin")).toBe(APP_ORIGIN)
             const {tokens} = await signIn(new Browser(), "app", FIRST_PARTY_REDIRECT)
             expect(tokens.refreshToken).toEqual(expect.any(String))
         })

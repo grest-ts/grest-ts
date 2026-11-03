@@ -176,10 +176,13 @@ export class GGOAuthClient<I = unknown> {
         }
         const now = Date.now()
         const access = String(json.access_token)
+        // A server that doesn't rotate leaves the token out of a refresh: the page's own stays valid. At the browser
+        // endpoint none returned means the server keeps it.
+        const refreshToken = json.refresh_token ? String(json.refresh_token) : browser ? undefined : body.refresh_token
         return {
             tokens: {
                 access: {token: access, expiresAt: now + Number(json.expires_in) * 1000},
-                ...(json.refresh_token ? {refresh: {token: String(json.refresh_token), expiresAt: now + (this.config.refreshTtlMs ?? 30 * 24 * 3600 * 1000)}} : {}),
+                ...(refreshToken ? {refresh: {token: refreshToken, expiresAt: now + (this.config.refreshTtlMs ?? 30 * 24 * 3600 * 1000)}} : {}),
             },
             data: this.config.identity(access),
         }

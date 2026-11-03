@@ -309,22 +309,19 @@ new GGOAuthServer({
 })
 ```
 
-- The cookie is `__Host-gg_refresh` (`HttpOnly; Secure; SameSite=Strict; Path=/`) on a request that
-  came in over https (behind a proxy: with `proxy: true`), `gg_refresh` without `Secure` over plain
-  http (local dev). It expires with the refresh token's absolute lifetime. Rotation, reuse revocation and claims run as at `/oauth/token`.
-- **The app must be same-site with the server** (e.g. `app.example.com` and `auth.example.com`, or
-  `localhost` on two ports): otherwise the browser doesn't send a `SameSite=Strict` cookie. Turn the
-  browser session off for an app on another site.
-- A request must come from one of the client's redirect origins exactly (`Origin`), and not be
-  `Sec-Fetch-Site: cross-site`. A sibling subdomain is same-site, so `SameSite` alone wouldn't keep it out.
-  CORS answers only that origin, with credentials.
+- The cookie is `__Host-gg_refresh_<clientId>` (`HttpOnly; Secure; SameSite=Strict; Path=/`) on a
+  request that came in over https (behind a proxy: with `proxy: true`), `gg_refresh_<clientId>`
+  without `Secure` over plain http (local dev). It expires with the refresh token's absolute
+  lifetime. Rotation, reuse revocation and claims run as at `/oauth/token`.
+- Only a request from one of a first-party client's redirect origins exactly (`Origin`), not
+  `Sec-Fetch-Site: cross-site`, reaches the cookie. A sibling subdomain is same-site, so `SameSite`
+  alone wouldn't keep it out. Every other request gets the plain token endpoint's behaviour at the
+  browser endpoint, its refresh token in the body (stored by `withOAuth`): a third-party SPA, a
+  first-party client without refresh tokens, or an app on another site than the server, which
+  can't keep a `SameSite=Strict` cookie anyway. `/oauth/token` and revocation are unchanged.
 - An anonymous page load makes no request: with no cached access token the session starts signed out.
 - Switched off while a page is open, the browser endpoints answer 404: the client ends the session
   and signs in again on fresh metadata.
-- Only `firstPartyClients` with refresh tokens keep theirs in the cookie. Any other client a
-  `GGOAuthClient` drives (e.g. a third-party SPA) gets the plain token endpoint's behaviour at the
-  browser endpoint: its refresh token in the body, stored by `withOAuth`. `/oauth/token` and
-  revocation are unchanged.
 - A refresh token the page still holds (from before the switch) is accepted once at the browser
   endpoint, and its rotation moves into the cookie. Switching off again sends users through sign-in
   once: their token is in a cookie the page can't read.
