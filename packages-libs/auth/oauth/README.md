@@ -296,18 +296,11 @@ oauth.logout(undefined)   // ends the authorization server's login session too
 
 ## Browser session
 
-By default a first-party client's refresh token never reaches the page: `GGOAuthServer` keeps it
+A first-party client's refresh token never reaches the page: `GGOAuthServer` keeps it
 in an HttpOnly cookie on its own host and serves the browser at `/oauth/browser/token` and
 `/oauth/browser/logout`. Its metadata names them (`gg_browser_token_endpoint`,
 `gg_browser_logout_endpoint`), and `GGOAuthClient` uses them whenever they are named. An XSS can
 still use the session while the page is open, but it can't take a refresh token away with it.
-
-```ts
-new GGOAuthServer({
-    // ...
-    browserSession: {enabled: () => config.browserRefreshCookie.get()},   // read per request: a runtime switch (default on)
-})
-```
 
 - The cookie is `__Host-gg_refresh_<base64url(clientId)>` (`HttpOnly; Secure; SameSite=Strict; Path=/`) on a
   request that came in over https (behind a proxy: with `proxy: true`), `gg_refresh_<base64url(clientId)>`
@@ -320,11 +313,8 @@ new GGOAuthServer({
   first-party client without refresh tokens, or an app on another site than the server, which
   can't keep a `SameSite=Strict` cookie anyway. `/oauth/token` and revocation are unchanged.
 - An anonymous page load makes no request: with no cached access token the session starts signed out.
-- Switched off while a page is open, the browser endpoints answer 404: the client ends the session
-  and signs in again on fresh metadata.
-- A refresh token the page still holds (from before the switch) is accepted once at the browser
-  endpoint, and its rotation moves into the cookie. Switching off again sends users through sign-in
-  once: their token is in a cookie the page can't read.
+- A refresh token the page still holds (e.g. from an older server) is accepted once at the browser
+  endpoint, and its rotation moves into the cookie.
 
 ## Headless sign-in (scripts, tests)
 

@@ -129,11 +129,6 @@ export interface GGOAuthServerOptions {
     // Absolute refresh lifetime: rotation never extends it (OAuth for browser apps, RFC 10017).
     refreshTtlSec?: number
     sessionTtlSec?: number
-    // First-party clients' refresh tokens stay in an HttpOnly cookie on this server instead of reaching
-    // the page (OAuth for browser apps, RFC 10017): GGOAuthClient finds the browser endpoints in the
-    // metadata. On by default; needs the app on the same site as this server (SameSite=Strict).
-    // `enabled` is read per request: a runtime switch.
-    browserSession?: {enabled?: () => boolean}
     // Trust X-Forwarded-Proto (behind a TLS-terminating load balancer). X-Forwarded-Host is never
     // trusted: clients can send it through a load balancer that doesn't set it.
     proxy?: boolean
@@ -372,10 +367,6 @@ export class GGOAuthServer {
             resource: this.requestedResource(interaction.params, clientId).resource(),
             params: Object.fromEntries(extra.filter(k => typeof interaction.params[k] === "string").map(k => [k, String(interaction.params[k])])),
         }
-    }
-
-    private browserSessionEnabled(): boolean {
-        return this.options.browserSession?.enabled?.() !== false
     }
 
     private origin(): string {
@@ -692,7 +683,6 @@ export class GGOAuthServer {
                 ctx.vary("Origin")
             }
             ctx.set("cache-control", "no-store")
-            if (!this.browserSessionEnabled()) return void (ctx.status = 404)
             const form = await readForm(ctx.req)
             if (!form) return void (ctx.status = 400)
             const client = firstParty.get(form.client_id ?? "")
@@ -743,10 +733,8 @@ export class GGOAuthServer {
             if (ctx.oidc?.route === "discovery") {
                 const meta = ctx.body as {scopes_supported: string[], token_endpoint: string, gg_browser_token_endpoint?: string, gg_browser_logout_endpoint?: string}
                 meta.scopes_supported = [...OIDC_SCOPES, ...new Set(o.resources.flatMap(r => r.scopes))]
-                if (this.browserSessionEnabled()) {
-                    meta.gg_browser_token_endpoint = new URL(BROWSER_TOKEN_PATH, meta.token_endpoint).href
-                    meta.gg_browser_logout_endpoint = new URL(BROWSER_LOGOUT_PATH, meta.token_endpoint).href
-                }
+                meta.gg_browser_token_endpoint = new URL(BROWSER_TOKEN_PATH, meta.token_endpoint).href
+                meta.gg_browser_logout_endpoint = new URL(BROWSER_LOGOUT_PATH, meta.token_endpoint).href
             }
             // A new body: oidc-provider reuses its own between requests.
             if (ctx.oidc?.route === "jwks") ctx.body = {keys: [...(ctx.body as {keys: object[]}).keys, ...await this.resourceJwks()]}
