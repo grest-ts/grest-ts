@@ -33,6 +33,7 @@ const userToken = new GGAuthAccessToken({signer: new HmacSigner("app-token-secre
 const userPermissions = new Map<string, string[] | undefined>([["alice", ["read", "write"]]])
 // Set to make the next claims lookup fail as if the store/IdP were down.
 let failClaimsOnce = false
+let browserSessionEnabled = true
 
 
 // Like a KMS key: it signs, but its private key never leaves it.
@@ -162,6 +163,7 @@ class OAuthTestRuntime extends GGRuntime {
             errorPage: (message) => `<p>${message}</p>`,
             extraParams: ["start_with"],
             sessionCookie: () => SESSION_COOKIE,
+            browserSession: {enabled: () => browserSessionEnabled},
             firstPartyClients: () => [
                 {clientId: "app", name: "The App", redirectUris: [FIRST_PARTY_REDIRECT], postLogoutRedirectUris: ["https://app.example/"]},
                 {clientId: "identity", name: "The App", redirectUris: [IDENTITY_REDIRECT], refreshTokens: false},
@@ -902,6 +904,152 @@ describe("GGOAuthServer", () => {
         const body = await token({grant_type: "urn:ietf:params:oauth:grant-type:token-exchange", client_id: "app", subject_token: tokens.accessToken, subject_token_type: "urn:ietf:params:oauth:token-type:access_token", resource: ORG, org_id: "o1"})
         expect(body.access_token).toBeUndefined()
         expect(body.error).toEqual(expect.any(String))
+    })
+
+    describe("browser session", () => {
+        const APP_ORIGIN = "https://app.example"
+        afterEach(() => { browserSessionEnabled = true })
+
+        async function code(): Promise<Record<string, string>> {
+            const browser = new Browser()
+            await signIn(browser, "app", FIRST_PARTY_REDIRECT)
+            const {verifier, challenge} = pkce()
+            const location = await browser.done(authorizeUrl("app", FIRST_PARTY_REDIRECT, challenge))
+            bearers.add(location.searchParams.get("code")!)
+            return {grant_type: "authorization_code", code: location.searchParams.get("code")!, code_verifier: verifier, redirect_uri: FIRST_PARTY_REDIRECT, client_id: "app", resource: API}
+        }
+
+        // As the app's page posts: its own Origin, same-site with the server, the cookie riding along.
+        async function post(path: string, body: Record<string, string>, o: {cookie?: string, origin?: string, site?: string} = {}) {
+            const res = await fetch(`${ISSUER}${path}`, {
+                method: "POST",
+                headers: {...(o.origin === "" ? {} : {origin: o.origin ?? APP_ORIGIN}), "sec-fetch-site": o.site ?? "same-site", ...(o.cookie ? {cookie: `gg_refresh_YXBw=${o.cookie}`} : {})},
+                body: new URLSearchParams(body),
+            })
+            const json = await res.json().catch(() => undefined) as Record<string, any> | undefined
+            const setCookie = res.headers.getSetCookie().find(c => c.startsWith("gg_refresh_YXBw="))
+            const cookie = setCookie?.split(";")[0].slice("gg_refresh_YXBw=".length)
+            for (const value of [json?.access_token, cookie]) if (value) bearers.add(value)
+            return {res, json, setCookie, cookie}
+        }
+        const refresh = (cookie?: string) => post("/oauth/browser/token", {grant_type: "refresh_token", client_id: "app", resource: API}, {cookie})
+
+        test("the metadata names the browser endpoints beside the token endpoint", async () => {
+            const meta = await (await fetch(`${ISSUER}/.well-known/oauth-authorization-server`)).json()
+            expect(meta.gg_browser_token_endpoint).toBe(`${ISSUER}/oauth/browser/token`)
+            expect(meta.gg_browser_logout_endpoint).toBe(`${ISSUER}/oauth/browser/logout`)
+        })
+
+        test("code and refresh keep the refresh token in an HttpOnly, SameSite=Strict cookie, never in the body", async () => {
+            const signedIn = await post("/oauth/browser/token", await code())
+            expect(signedIn.res.status).toBe(200)
+            expect((await userToken.verify(signedIn.json!.access_token)).sub).toBe("alice")
+            expect(signedIn.json!.refresh_token).toBeUndefined()
+            expect(signedIn.res.headers.get("access-control-allow-origin")).toBe(APP_ORIGIN)
+            expect(signedIn.res.headers.get("access-control-allow-credentials")).toBe("true")
+            expect(signedIn.setCookie).toMatch(/^gg_refresh_YXBw=[\w-]+; path=\/; expires=[^;]+; samesite=strict; httponly$/)
+            expect(Date.parse(signedIn.setCookie!.match(/expires=([^;]+)/)![1]) - Date.now()).toBeGreaterThan(29 * 24 * 3600 * 1000)
+
+            const refreshed = await refresh(signedIn.cookie)
+            expect((await userToken.verify(refreshed.json!.access_token)).sub).toBe("alice")
+            expect(refreshed.json!.refresh_token).toBeUndefined()
+            expect(refreshed.cookie).toEqual(expect.any(String))
+            expect(refreshed.cookie).not.toBe(signedIn.cookie)
+        })
+
+        test("over https (as the proxy forwards it) the cookie is __Host- and Secure", async () => {
+            const res = await fetch(`${ISSUER}/oauth/browser/token`, {method: "POST", headers: {origin: APP_ORIGIN, "x-forwarded-proto": "https"}, body: new URLSearchParams(await code())})
+            const setCookie = res.headers.getSetCookie()[0]
+            bearers.add(setCookie.split(";")[0].split("=")[1])
+            expect(setCookie).toMatch(/^__Host-gg_refresh_YXBw=[\w-]+; path=\/; expires=[^;]+; samesite=strict; secure; httponly$/)
+        })
+
+        test("a replayed cookie is reuse: refused, cleared, and the rotated one dies too", async () => {
+            const {cookie} = await post("/oauth/browser/token", await code())
+            const rotated = (await refresh(cookie)).cookie
+            const replay = await refresh(cookie)
+            expect(replay.json!.error).toBe("invalid_grant")
+            expect(replay.setCookie).toContain("expires=Thu, 01 Jan 1970")
+            expect((await refresh(rotated)).json!.error).toBe("invalid_grant")
+        })
+
+        test("a page-held refresh token is taken once and moves into the cookie", async () => {
+            const {tokens} = await signIn(new Browser(), "app", FIRST_PARTY_REDIRECT)
+            const moved = await post("/oauth/browser/token", {grant_type: "refresh_token", refresh_token: tokens.refreshToken!, client_id: "app", resource: API})
+            expect(moved.json!.access_token).toEqual(expect.any(String))
+            expect(moved.json!.refresh_token).toBeUndefined()
+            expect((await refresh(moved.cookie)).json!.access_token).toEqual(expect.any(String))
+        })
+
+        test("without a cookie a refresh is invalid_grant", async () => {
+            const res = await refresh()
+            expect(res.res.status).toBe(400)
+            expect(res.json!.error).toBe("invalid_grant")
+        })
+
+        test("only the client's own origin on the same site reaches the cookie; any other request is the plain endpoint", async () => {
+            const {cookie} = await post("/oauth/browser/token", await code())
+            for (const o of [{origin: "https://evil.example"}, {origin: "https://sibling.app.example"}, {origin: ""}, {origin: "null"}, {site: "cross-site"}, {site: "none"}]) {
+                const plain = await post("/oauth/browser/token", {grant_type: "refresh_token", client_id: "app", resource: API}, {cookie, ...o})
+                expect(plain.json!.error).toBe("invalid_request")
+                expect(plain.setCookie).toBeUndefined()
+            }
+            expect((await refresh(cookie)).json!.access_token).toEqual(expect.any(String))
+        })
+
+        test("the app on another site than the server gets its refresh token in the body", async () => {
+            const {tokens} = await signIn(new Browser(), "app", FIRST_PARTY_REDIRECT)
+            const crossSite = await post("/oauth/browser/token", {grant_type: "refresh_token", refresh_token: tokens.refreshToken!, client_id: "app", resource: API}, {site: "cross-site"})
+            expect(crossSite.json!.refresh_token).toEqual(expect.any(String))
+            bearers.add(crossSite.json!.refresh_token)
+            expect(crossSite.setCookie).toBeUndefined()
+        })
+
+        test("a dead token the page sent leaves the cookie alone", async () => {
+            const {cookie} = await post("/oauth/browser/token", await code())
+            const stale = await post("/oauth/browser/token", {grant_type: "refresh_token", refresh_token: "not-a-token", client_id: "app", resource: API}, {cookie})
+            expect(stale.json!.error).toBe("invalid_grant")
+            expect(stale.setCookie).toBeUndefined()
+            expect((await refresh(cookie)).json!.access_token).toEqual(expect.any(String))
+        })
+
+        test("a failed code exchange leaves the cookie alone", async () => {
+            const {cookie} = await post("/oauth/browser/token", await code())
+            const used = await code()
+            await post("/oauth/browser/token", used)
+            const again = await post("/oauth/browser/token", used, {cookie})
+            expect(again.json!.error).toBe("invalid_grant")
+            expect(again.setCookie).toBeUndefined()
+        })
+
+        test("any other client gets the plain token endpoint: its refresh token in the body, no cookie", async () => {
+            const clientId = await register()
+            const {tokens} = await signIn(new Browser(), clientId, THIRD_PARTY_REDIRECT)
+            const thirdParty = await post("/oauth/browser/token", {grant_type: "refresh_token", refresh_token: tokens.refreshToken!, client_id: clientId}, {origin: "https://claude.ai", site: "cross-site"})
+            expect(thirdParty.json!.refresh_token).toEqual(expect.any(String))
+            bearers.add(thirdParty.json!.refresh_token)
+            expect(thirdParty.setCookie).toBeUndefined()
+            expect(thirdParty.res.headers.get("access-control-allow-origin")).toBe("https://claude.ai")
+        })
+
+        test("logout revokes the cookie's token and clears the cookie", async () => {
+            const {cookie} = await post("/oauth/browser/token", await code())
+            const out = await post("/oauth/browser/logout", {client_id: "app"}, {cookie})
+            expect(out.res.status).toBe(200)
+            expect(out.setCookie).toContain("expires=Thu, 01 Jan 1970")
+            expect((await refresh(cookie)).json!.error).toBe("invalid_grant")
+        })
+
+        test("switched off: no browser endpoints; the token endpoint returns refresh tokens as before", async () => {
+            browserSessionEnabled = false
+            const meta = await (await fetch(`${ISSUER}/.well-known/oauth-authorization-server`)).json()
+            expect(meta.gg_browser_token_endpoint).toBeUndefined()
+            const off = await post("/oauth/browser/token", await code())
+            expect(off.res.status).toBe(404)
+            expect(off.res.headers.get("access-control-allow-origin")).toBe(APP_ORIGIN)
+            const {tokens} = await signIn(new Browser(), "app", FIRST_PARTY_REDIRECT)
+            expect(tokens.refreshToken).toEqual(expect.any(String))
+        })
     })
 
     test("no stored row holds a bearer value, in its key or payload", async () => {

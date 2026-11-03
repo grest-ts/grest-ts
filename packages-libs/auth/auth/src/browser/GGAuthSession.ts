@@ -25,6 +25,11 @@ export interface GGTokenSessionConfig<I = unknown> {
     localStorageKey: string
 }
 
+export interface GGOAuthSessionConfig<I = unknown> {
+    refresh: (token: {refreshToken?: string}) => Promise<GGAuthResult<I>>
+    localStorageKey: string
+}
+
 export interface GGCookieSessionConfig<I = unknown> {
     refresh: () => Promise<GGAuthResult<I>>
     logout: () => Promise<void>
@@ -35,7 +40,7 @@ export class GGAuthSession<D extends DerivedMap = {}, I = unknown> {
     private readonly _rootKey: Wire
     private readonly _refresh: (refreshToken?: string) => Promise<GGAuthResult<I>>
     private readonly _logout: (() => Promise<void>) | undefined
-    private readonly _storage: "localStorage" | "cookie"
+    private readonly _storage: "localStorage" | "cookie" | "auto"
     private readonly _cacheKey: string
     private readonly _derivedConfigs: Record<string, {key: Wire; mint: (params: unknown) => Promise<DerivedTokenResult<unknown>>}> = {}
 
@@ -44,7 +49,7 @@ export class GGAuthSession<D extends DerivedMap = {}, I = unknown> {
     protected constructor(
         key: Wire,
         refresh: (refreshToken?: string) => Promise<GGAuthResult<I>>,
-        storage: "localStorage" | "cookie",
+        storage: "localStorage" | "cookie" | "auto",
         logout: (() => Promise<void>) | undefined,
         cacheKey: string,
     ) {
@@ -67,6 +72,12 @@ export class GGAuthSession<D extends DerivedMap = {}, I = unknown> {
 
     static withCookie<I = unknown>(key: Wire, config: GGCookieSessionConfig<I>): GGAuthSession<{}, I> {
         return new this(key, () => config.refresh(), "cookie", config.logout, "") as unknown as GGAuthSession<{}, I>
+    }
+
+    // For a GGOAuthClient: the authorization server decides where the refresh token lives — returned
+    // tokens are kept in localStorage, a server-held one (HttpOnly cookie) never reaches the page.
+    static withOAuth<I = unknown>(key: Wire, config: GGOAuthSessionConfig<I>): GGAuthSession<{}, I> {
+        return new this(key, (token) => config.refresh({refreshToken: token}), "auto", undefined, config.localStorageKey) as unknown as GGAuthSession<{}, I>
     }
 
     public addDerived<N extends string, Par, DData>(
@@ -184,7 +195,7 @@ export class GGAuthSession<D extends DerivedMap = {}, I = unknown> {
         return this._getSession().onLogout(cb)
     }
 
-    /** For revoking it at sign-out (token mode; undefined in cookie mode). */
+    /** For revoking it at sign-out (undefined while the server holds it). */
     public getRefreshToken(): string | undefined {
         return this._session?.currentRefreshToken()
     }

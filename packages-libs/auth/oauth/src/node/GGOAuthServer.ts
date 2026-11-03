@@ -129,6 +129,11 @@ export interface GGOAuthServerOptions {
     // Absolute refresh lifetime: rotation never extends it (OAuth for browser apps, RFC 10017).
     refreshTtlSec?: number
     sessionTtlSec?: number
+    // First-party clients' refresh tokens stay in an HttpOnly cookie on this server instead of reaching
+    // the page (OAuth for browser apps, RFC 10017): GGOAuthClient finds the browser endpoints in the
+    // metadata. On by default; needs the app on the same site as this server (SameSite=Strict).
+    // `enabled` is read per request: a runtime switch.
+    browserSession?: {enabled?: () => boolean}
     // Trust X-Forwarded-Proto (behind a TLS-terminating load balancer). X-Forwarded-Host is never
     // trusted: clients can send it through a load balancer that doesn't set it.
     proxy?: boolean
@@ -137,6 +142,11 @@ export interface GGOAuthServerOptions {
 const BASE = "/oauth"
 const AUTHORIZATION_PATH = `${BASE}/authorize`
 const TOKEN_PATH = `${BASE}/token`
+const REVOCATION_PATH = `${BASE}/revoke`
+const BROWSER_TOKEN_PATH = `${BASE}/browser/token`
+const BROWSER_LOGOUT_PATH = `${BASE}/browser/logout`
+// Each browser endpoint is the provider's own endpoint with the refresh token kept in a cookie.
+const BROWSER_TARGETS: Record<string, string> = {[BROWSER_TOKEN_PATH]: TOKEN_PATH, [BROWSER_LOGOUT_PATH]: REVOCATION_PATH}
 // Only the resources' access-token keys: what a resource server should trust. /oauth/jwks also lists
 // the ID-token key, derived from `secret`, so trusting it would let that secret mint access tokens.
 export const ACCESS_TOKEN_JWKS_PATH = `${BASE}/access-token-jwks`
@@ -364,6 +374,10 @@ export class GGOAuthServer {
         }
     }
 
+    private browserSessionEnabled(): boolean {
+        return this.options.browserSession?.enabled?.() !== false
+    }
+
     private origin(): string {
         return new URL(this.options.issuer()).origin
     }
@@ -542,7 +556,7 @@ export class GGOAuthServer {
             },
             routes: {
                 authorization: AUTHORIZATION_PATH, token: TOKEN_PATH, registration: `${BASE}/register`,
-                jwks: `${BASE}/jwks`, revocation: `${BASE}/revoke`, end_session: `${BASE}/logout`, userinfo: `${BASE}/userinfo`,
+                jwks: `${BASE}/jwks`, revocation: REVOCATION_PATH, end_session: `${BASE}/logout`, userinfo: `${BASE}/userinfo`,
                 introspection: `${BASE}/introspect`, pushed_authorization_request: `${BASE}/par`, code_verification: `${BASE}/device`,
                 device_authorization: `${BASE}/device/auth`, backchannel_authentication: `${BASE}/backchannel`, challenge: `${BASE}/challenge`,
             },
@@ -570,7 +584,7 @@ export class GGOAuthServer {
                         // Referer) skips the confirmation click.
                         const client = ctx.oidc.client && firstParty.get(ctx.oidc.client.clientId)
                         const referer = URL.parse(ctx.get("referer"))?.origin
-                        if (client && referer && client.redirectUris.some(u => new URL(u).origin === referer)) {
+                        if (client && referer && isClientOrigin(client, referer)) {
                             const confirmed = form.replace("</form>", `<input type="hidden" name="logout" value="yes"/></form>`)
                             ctx.body = `<!DOCTYPE html><html><body>${confirmed}<script>document.forms[0].submit()</script></body></html>`
                             return
@@ -666,10 +680,74 @@ export class GGOAuthServer {
         }
         const provider = new Provider(o.issuer(), config)
         provider.proxy = !!o.proxy
+        provider.use(async (ctx, next) => {
+            const target = ctx.method === "POST" ? BROWSER_TARGETS[ctx.path] : undefined
+            if (!target) return next()
+            // Before any refusal: a page has to be able to read why. Nothing here reads the cookie for an origin
+            // other than the client's own.
+            const origin = ctx.get("origin")
+            if (origin && origin !== "null") {
+                ctx.set("access-control-allow-origin", origin)
+                ctx.set("access-control-allow-credentials", "true")
+                ctx.vary("Origin")
+            }
+            ctx.set("cache-control", "no-store")
+            if (!this.browserSessionEnabled()) return void (ctx.status = 404)
+            const form = await readForm(ctx.req)
+            if (!form) return void (ctx.status = 400)
+            const client = firstParty.get(form.client_id ?? "")
+            const site = ctx.get("sec-fetch-site")
+            // Only the client's exact origin (not SameSite alone: a sibling subdomain is same-site and its requests
+            // carry the cookie), and not from another site. Anything else gets the plain endpoint, token in the body:
+            // a third-party SPA, or an app on another site than this server, which can't keep a SameSite cookie.
+            const keepsCookie = !!client && client.refreshTokens !== false && isClientOrigin(client, origin) && (!site || site === "same-origin" || site === "same-site")
+            // Plain http (local dev) can't keep a __Host- cookie.
+            const name = `${ctx.secure ? "__Host-" : ""}gg_refresh_${Buffer.from(client?.clientId ?? "").toString("base64url")}`
+            const setCookie = (value: string | null, maxAgeSec?: number) =>
+                ctx.cookies.set(name, value, {httpOnly: true, secure: ctx.secure, sameSite: "strict", path: "/", maxAge: maxAgeSec && maxAgeSec * 1000, overwrite: true, signed: false})
+            const cookie = keepsCookie ? ctx.cookies.get(name, {signed: false}) : undefined
+            // A token the page still holds (from before the server kept it) is taken once: its rotation moves into the cookie.
+            const fromCookie = keepsCookie && target === TOKEN_PATH && form.grant_type === "refresh_token" && !form.refresh_token
+            if (keepsCookie && target === TOKEN_PATH && form.grant_type === "refresh_token") {
+                form.refresh_token ||= cookie ?? ""
+                if (!form.refresh_token) {
+                    ctx.status = 400
+                    ctx.body = {error: "invalid_grant", error_description: "no refresh token"}
+                    return
+                }
+            }
+            if (keepsCookie && target === REVOCATION_PATH) {
+                if (!cookie) {
+                    setCookie(null)
+                    ctx.body = ""
+                    return
+                }
+                form.token = cookie
+            }
+            // oidc-provider reads a pre-parsed body when the stream is already consumed.
+            ;(ctx.req as IncomingMessage & {body?: unknown}).body = form
+            ctx.path = target
+            await next()
+            if (!keepsCookie) return
+            const body = ctx.body as {refresh_token?: unknown, error?: unknown} | undefined
+            if (ctx.status === 200 && typeof body?.refresh_token === "string") {
+                setCookie(body.refresh_token, ctx.oidc.entities.RotatedRefreshToken?.remainingTTL ?? refreshTtlSec)
+                delete body.refresh_token
+            } else if (target === REVOCATION_PATH || (body?.error === "invalid_grant" && fromCookie)) {
+                setCookie(null)
+            }
+        })
         // Resource scopes aren't OIDC scopes, so the provider leaves them out of its metadata.
         provider.use(async (ctx, next) => {
             await next()
-            if (ctx.oidc?.route === "discovery") (ctx.body as {scopes_supported: string[]}).scopes_supported = [...OIDC_SCOPES, ...new Set(o.resources.flatMap(r => r.scopes))]
+            if (ctx.oidc?.route === "discovery") {
+                const meta = ctx.body as {scopes_supported: string[], token_endpoint: string, gg_browser_token_endpoint?: string, gg_browser_logout_endpoint?: string}
+                meta.scopes_supported = [...OIDC_SCOPES, ...new Set(o.resources.flatMap(r => r.scopes))]
+                if (this.browserSessionEnabled()) {
+                    meta.gg_browser_token_endpoint = new URL(BROWSER_TOKEN_PATH, meta.token_endpoint).href
+                    meta.gg_browser_logout_endpoint = new URL(BROWSER_LOGOUT_PATH, meta.token_endpoint).href
+                }
+            }
             // A new body: oidc-provider reuses its own between requests.
             if (ctx.oidc?.route === "jwks") ctx.body = {keys: [...(ctx.body as {keys: object[]}).keys, ...await this.resourceJwks()]}
             const body = ctx.body as {access_token?: unknown} | undefined
@@ -687,6 +765,11 @@ export class GGOAuthServer {
         this._provider = provider
         return provider
     }
+}
+
+// "null" is every opaque origin (a custom-scheme redirect's, a sandboxed frame's), never one client's.
+function isClientOrigin(client: GGOAuthFirstPartyClient, origin: string): boolean {
+    return origin !== "" && origin !== "null" && client.redirectUris.some(u => new URL(u).origin === origin)
 }
 
 function isAllowedDocumentUrl(clientId: string, prefixes: string[]): boolean {
