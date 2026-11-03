@@ -121,7 +121,7 @@ export class BaseAuthSession<D extends DerivedMap> {
         const cached = this.ports.cache.read()
         const now = this.ports.clock.now()
 
-        if (this.config.storage !== "localStorage") {
+        if (this.config.storage === "cookie") {
             if (!cached?.access) {
                 this.setState({status: "restoring", refreshing: false, degraded: false})
                 this.notifyListeners()

@@ -714,11 +714,10 @@ describe("auto mode", () => {
         expect(cache.read()?.refresh).toBeUndefined()
     })
 
-    test("init with no cache tries a refresh; NOT_AUTHORIZED → anonymous", async () => {
+    test("init with no cached access token is anonymous, without a request", async () => {
         const {session, refreshFn} = makeSession({storage: "auto"})
-        refreshFn.mockRejectedValue(new NOT_AUTHORIZED())
         await session.init()
-        expect(refreshFn).toHaveBeenCalledWith(undefined)
+        expect(refreshFn).not.toHaveBeenCalled()
         expect(session.getState().status).toBe("anonymous")
     })
 

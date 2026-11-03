@@ -115,11 +115,14 @@ export class GGOAuthClient<I = unknown> {
     // when the server supports it).
     public logout = (refreshToken: string | undefined): Promise<void> => this.leave(async () => {
         const meta = await this.discover()
-        const revoke = refreshToken && meta.revocation_endpoint
-            ? fetch(meta.revocation_endpoint, {method: "POST", keepalive: true, signal: AbortSignal.timeout(5000), body: new URLSearchParams({token: refreshToken, client_id: this.config.clientId})}).then(() => undefined, () => undefined)
-            : meta.gg_browser_logout_endpoint
-                ? fetch(meta.gg_browser_logout_endpoint, {method: "POST", keepalive: true, credentials: "include", signal: AbortSignal.timeout(5000), body: new URLSearchParams({client_id: this.config.clientId})}).then(() => undefined, () => undefined)
-                : Promise.resolve()
+        // A page-held token is revoked directly; otherwise the server revokes the one in its cookie.
+        const endpoint = refreshToken ? meta.revocation_endpoint : meta.gg_browser_logout_endpoint
+        const revoke = endpoint
+            ? fetch(endpoint, {
+                method: "POST", keepalive: true, signal: AbortSignal.timeout(5000), ...(refreshToken ? {} : {credentials: "include" as const}),
+                body: new URLSearchParams({...(refreshToken ? {token: refreshToken} : {}), client_id: this.config.clientId}),
+            }).then(() => undefined, () => undefined)
+            : Promise.resolve()
         if (!meta.end_session_endpoint) {
             await revoke
             return undefined
@@ -162,6 +165,11 @@ export class GGOAuthClient<I = unknown> {
         })
         const json = await res.json().catch(() => ({})) as Record<string, unknown>
         if (!res.ok) {
+            // The server switched its browser session off since the metadata was read: sign in again, on fresh metadata.
+            if (browser && res.status === 404) {
+                this.metadata = undefined
+                throw new NOT_AUTHORIZED({debugMessage: "OAuth browser session is off"})
+            }
             // invalid_grant = the refresh/code is dead → fatal for the session; anything else may be transient.
             if (res.status === 400 || res.status === 401) throw new NOT_AUTHORIZED({debugMessage: `OAuth ${String(json.error)}`})
             throw new Error(`OAuth token endpoint ${res.status}`)

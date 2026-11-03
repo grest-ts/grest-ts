@@ -236,6 +236,19 @@ describe("GGOAuthClient refresh token held by the server", () => {
         expect(callTo(METADATA.token_endpoint)).toBeUndefined()
     })
 
+    test("a browser endpoint switched off since the metadata was read ends the session and re-reads the metadata", async () => {
+        browserMetadata()
+        const oauth = client()
+        fetchMock.mockImplementation(async (url: string) => {
+            if (url.endsWith("/.well-known/oauth-authorization-server")) return new Response(JSON.stringify(metadata))
+            return new Response("", {status: 404})
+        })
+        await expect(oauth.refresh({})).rejects.toThrow(NOT_AUTHORIZED)
+        delete (metadata as Record<string, string | undefined>).gg_browser_token_endpoint
+        await expect(oauth.refresh({})).rejects.toThrow(NOT_AUTHORIZED)
+        expect(fetchMock.mock.calls.filter(([u]) => String(u).endsWith("/.well-known/oauth-authorization-server"))).toHaveLength(2)
+    })
+
     test("logout clears the cookie at the browser logout endpoint", async () => {
         browserMetadata()
         await client().logout(undefined)

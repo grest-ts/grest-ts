@@ -948,7 +948,8 @@ describe("GGOAuthServer", () => {
             expect(signedIn.json!.refresh_token).toBeUndefined()
             expect(signedIn.res.headers.get("access-control-allow-origin")).toBe(APP_ORIGIN)
             expect(signedIn.res.headers.get("access-control-allow-credentials")).toBe("true")
-            expect(signedIn.setCookie).toMatch(/; Path=\/; Max-Age=\d{6,}; HttpOnly; SameSite=Strict$/)
+            expect(signedIn.setCookie).toMatch(/^gg_refresh=[\w-]+; path=\/; expires=[^;]+; samesite=strict; httponly$/)
+            expect(Date.parse(signedIn.setCookie!.match(/expires=([^;]+)/)![1]) - Date.now()).toBeGreaterThan(29 * 24 * 3600 * 1000)
 
             const refreshed = await refresh(signedIn.cookie)
             expect((await userToken.verify(refreshed.json!.access_token)).sub).toBe("alice")
@@ -957,12 +958,19 @@ describe("GGOAuthServer", () => {
             expect(refreshed.cookie).not.toBe(signedIn.cookie)
         })
 
+        test("over https (as the proxy forwards it) the cookie is __Host- and Secure", async () => {
+            const res = await fetch(`${ISSUER}/oauth/browser/token`, {method: "POST", headers: {origin: APP_ORIGIN, "x-forwarded-proto": "https"}, body: new URLSearchParams(await code())})
+            const setCookie = res.headers.getSetCookie()[0]
+            bearers.add(setCookie.split(";")[0].split("=")[1])
+            expect(setCookie).toMatch(/^__Host-gg_refresh=[\w-]+; path=\/; expires=[^;]+; samesite=strict; secure; httponly$/)
+        })
+
         test("a replayed cookie is reuse: refused, cleared, and the rotated one dies too", async () => {
             const {cookie} = await post("/oauth/browser/token", await code())
             const rotated = (await refresh(cookie)).cookie
             const replay = await refresh(cookie)
             expect(replay.json!.error).toBe("invalid_grant")
-            expect(replay.setCookie).toContain("Max-Age=0")
+            expect(replay.setCookie).toContain("expires=Thu, 01 Jan 1970")
             expect((await refresh(rotated)).json!.error).toBe("invalid_grant")
         })
 
@@ -1004,7 +1012,7 @@ describe("GGOAuthServer", () => {
             const {cookie} = await post("/oauth/browser/token", await code())
             const out = await post("/oauth/browser/logout", {client_id: "app"}, {cookie})
             expect(out.res.status).toBe(200)
-            expect(out.setCookie).toContain("Max-Age=0")
+            expect(out.setCookie).toContain("expires=Thu, 01 Jan 1970")
             expect((await refresh(cookie)).json!.error).toBe("invalid_grant")
         })
 

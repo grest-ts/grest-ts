@@ -58,6 +58,7 @@ export interface CoreConfig<D extends DerivedMap = {}> {
     derived?: D
     // "auto": the refresh token is wherever the server put it — a returned one is stored like
     // "localStorage", none means the server holds it (an HttpOnly cookie) and refresh() gets undefined.
+    // Without a cached access token it starts anonymous, as "localStorage" does.
     storage: "localStorage" | "cookie" | "auto"
     logout?: () => Promise<void>
     refreshLeadMs: number
