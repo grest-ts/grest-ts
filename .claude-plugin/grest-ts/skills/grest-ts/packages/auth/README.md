@@ -247,8 +247,10 @@ export class AppRuntime extends GGRuntime {
 ### Signing in with an OIDC identity provider (`@grest-ts/auth/oidc-rp`)
 
 `OidcRelyingParty` is the server side of "Sign in with Okta / Entra / any OIDC IdP": a confidential
-client (authorization code + PKCE, `client_secret_basic`, nonce, ID token signature checked) on
-[openid-client](https://github.com/panva/openid-client). Its settings are getters, read at use.
+client (authorization code + PKCE, nonce, ID token signature checked) on
+[openid-client](https://github.com/panva/openid-client). Its settings are getters, read at use. The client
+secret goes as `client_secret_basic` unless `clientAuthMethod` returns `"client_secret_post"` — Okta needs
+post: openid-client percent-encodes Basic credentials (RFC 6749 §2.3.1), and Okta doesn't decode them.
 
 ```ts
 import {OidcRelyingParty} from "@grest-ts/auth/oidc-rp"

@@ -12,10 +12,15 @@ export interface OidcRelyingPartyOptions {
     redirectUri: () => string
     // Space-separated, e.g. "openid email profile offline_access".
     scope: () => string
+    // How the client secret reaches the token endpoint (default client_secret_basic). openid-client percent-encodes Basic
+    // credentials (RFC 6749 §2.3.1), `-` `_` `.` `~` included, and Okta doesn't decode them: use client_secret_post there.
+    clientAuthMethod?: () => OidcClientAuthMethod
     // ExternalIdentity.provider (default "oidc").
     provider?: string
     fetch?: oidc.CustomFetch
 }
+
+export type OidcClientAuthMethod = "client_secret_basic" | "client_secret_post"
 
 // Kept server-side (e.g. a signed cookie) between the redirect and the callback; the PKCE verifier must never travel in the URL.
 export interface OidcAuthorizationChecks {
@@ -36,7 +41,7 @@ export type OidcRefresh =
     // The IdP no longer honours the session: the user was deactivated or unassigned, or the grant expired or was revoked.
     | {ended: true, reason: string}
 
-// A confidential OIDC client (authorization code + PKCE, client_secret_basic) on openid-client.
+// A confidential OIDC client (authorization code + PKCE) on openid-client.
 export class OidcRelyingParty {
 
     private cached: {key: string, config: Promise<oidc.Configuration>} | undefined
@@ -106,18 +111,20 @@ export class OidcRelyingParty {
         const issuer = this.options.issuer()
         const clientId = this.options.clientId()
         const secret = this.options.clientSecret()
-        const key = JSON.stringify([issuer, clientId, secret])
+        // client_secret_basic: the OIDC default when a client registers no method, and what IdPs default new apps to.
+        const authMethod = this.options.clientAuthMethod?.() ?? "client_secret_basic"
+        const key = JSON.stringify([issuer, clientId, secret, authMethod])
         if (this.cached?.key !== key) {
-            const config = this.discover(issuer, clientId, secret)
+            const config = this.discover(issuer, clientId, secret, authMethod)
             config.catch(() => { if (this.cached?.config === config) this.cached = undefined })
             this.cached = {key, config}
         }
         return this.cached.config
     }
 
-    private async discover(issuer: string, clientId: string, secret: string | undefined): Promise<oidc.Configuration> {
-        // client_secret_basic: the OIDC default when a client registers no method, and what IdPs default new apps to.
-        const config = await oidc.discovery(new URL(issuer), clientId, undefined, oidc.ClientSecretBasic(secret), this.options.fetch ? {[oidc.customFetch]: this.options.fetch} : undefined)
+    private async discover(issuer: string, clientId: string, secret: string | undefined, authMethod: OidcClientAuthMethod): Promise<oidc.Configuration> {
+        const clientAuth = authMethod === "client_secret_post" ? oidc.ClientSecretPost(secret) : oidc.ClientSecretBasic(secret)
+        const config = await oidc.discovery(new URL(issuer), clientId, undefined, clientAuth, this.options.fetch ? {[oidc.customFetch]: this.options.fetch} : undefined)
         // The ID token arrives over the TLS back-channel, where the spec lets clients skip the JWS check; verify it anyway.
         oidc.enableNonRepudiationChecks(config)
         return config
