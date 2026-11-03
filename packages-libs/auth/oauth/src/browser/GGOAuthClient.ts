@@ -33,7 +33,7 @@ export interface GGOAuthClientOptions<I> {
 type Pending = {verifier: string, returnTo?: string}
 type Metadata = {
     issuer: string, authorization_endpoint: string, token_endpoint: string, revocation_endpoint?: string, end_session_endpoint?: string,
-    // GGOAuthServer's browserSession: the refresh token lives in an HttpOnly cookie on the server.
+    // GGOAuthServer's browser session: the refresh token lives in an HttpOnly cookie on the server.
     gg_browser_token_endpoint?: string, gg_browser_logout_endpoint?: string,
 }
 
@@ -165,11 +165,6 @@ export class GGOAuthClient<I = unknown> {
         })
         const json = await res.json().catch(() => ({})) as Record<string, unknown>
         if (!res.ok) {
-            // The server switched its browser session off since the metadata was read: sign in again, on fresh metadata.
-            if (browser && res.status === 404) {
-                this.metadata = undefined
-                throw new NOT_AUTHORIZED({debugMessage: "OAuth browser session is off"})
-            }
             // invalid_grant = the refresh/code is dead → fatal for the session; anything else may be transient.
             if (res.status === 400 || res.status === 401) throw new NOT_AUTHORIZED({debugMessage: `OAuth ${String(json.error)}`})
             throw new Error(`OAuth token endpoint ${res.status}`)

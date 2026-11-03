@@ -33,7 +33,6 @@ const userToken = new GGAuthAccessToken({signer: new HmacSigner("app-token-secre
 const userPermissions = new Map<string, string[] | undefined>([["alice", ["read", "write"]]])
 // Set to make the next claims lookup fail as if the store/IdP were down.
 let failClaimsOnce = false
-let browserSessionEnabled = true
 
 
 // Like a KMS key: it signs, but its private key never leaves it.
@@ -163,7 +162,6 @@ class OAuthTestRuntime extends GGRuntime {
             errorPage: (message) => `<p>${message}</p>`,
             extraParams: ["start_with"],
             sessionCookie: () => SESSION_COOKIE,
-            browserSession: {enabled: () => browserSessionEnabled},
             firstPartyClients: () => [
                 {clientId: "app", name: "The App", redirectUris: [FIRST_PARTY_REDIRECT], postLogoutRedirectUris: ["https://app.example/"]},
                 {clientId: "identity", name: "The App", redirectUris: [IDENTITY_REDIRECT], refreshTokens: false},
@@ -908,7 +906,6 @@ describe("GGOAuthServer", () => {
 
     describe("browser session", () => {
         const APP_ORIGIN = "https://app.example"
-        afterEach(() => { browserSessionEnabled = true })
 
         async function code(): Promise<Record<string, string>> {
             const browser = new Browser()
@@ -1038,17 +1035,6 @@ describe("GGOAuthServer", () => {
             expect(out.res.status).toBe(200)
             expect(out.setCookie).toContain("expires=Thu, 01 Jan 1970")
             expect((await refresh(cookie)).json!.error).toBe("invalid_grant")
-        })
-
-        test("switched off: no browser endpoints; the token endpoint returns refresh tokens as before", async () => {
-            browserSessionEnabled = false
-            const meta = await (await fetch(`${ISSUER}/.well-known/oauth-authorization-server`)).json()
-            expect(meta.gg_browser_token_endpoint).toBeUndefined()
-            const off = await post("/oauth/browser/token", await code())
-            expect(off.res.status).toBe(404)
-            expect(off.res.headers.get("access-control-allow-origin")).toBe(APP_ORIGIN)
-            const {tokens} = await signIn(new Browser(), "app", FIRST_PARTY_REDIRECT)
-            expect(tokens.refreshToken).toEqual(expect.any(String))
         })
     })
 
