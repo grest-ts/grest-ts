@@ -706,6 +706,15 @@ describe("auto mode", () => {
         expect(cache.read()?.refresh).toBeUndefined()
     })
 
+    test("the same refresh token handed back keeps its expiry", async () => {
+        const {session, cache, clock} = makeSession({storage: "auto", refreshResult: {tokens: {access: {token: "at-2", expiresAt: 9_000_000}, refresh: {token: "rt-1", expiresAt: 99_000_000_000}}}})
+        session.start(makePair("at-1", 3_000_000, "rt-1"))
+        const issued = cache.read()!.refresh!.expiresAt
+        clock.advance(3_000_000)
+        await session.ensureFresh()
+        expect(cache.read()?.refresh).toEqual({token: "rt-1", expiresAt: issued})
+    })
+
     test("a refresh without a refresh token drops the stored one", async () => {
         const {session, cache, clock} = makeSession({storage: "auto", refreshResult: {tokens: makePair("at-2", 3_000_000)}})
         session.start(makePair("at-1", 3_000_000, "rt-old"))

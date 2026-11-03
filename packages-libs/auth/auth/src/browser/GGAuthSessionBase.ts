@@ -266,7 +266,7 @@ export class BaseAuthSession<D extends DerivedMap> {
             const next: GGTokenPair = {
                 access: result.tokens.access,
                 refresh: this.config.storage === "cookie" ? undefined
-                    : this.config.storage === "auto" ? result.tokens.refresh
+                    : this.config.storage === "auto" ? keepExpiry(result.tokens.refresh, this.shared?.refresh)
                     : (result.tokens.refresh ?? this.shared?.refresh),
             }
             this.commitShared(next)
@@ -496,4 +496,9 @@ export class BaseAuthSession<D extends DerivedMap> {
     private fireLogout(): void {
         for (const l of this.logoutListeners) l()
     }
+}
+
+// The same token handed back (a server that doesn't rotate) keeps the expiry it was issued with.
+function keepExpiry(next: GGTokenPair["refresh"], current: GGTokenPair["refresh"]): GGTokenPair["refresh"] {
+    return next && current?.token === next.token ? current : next
 }

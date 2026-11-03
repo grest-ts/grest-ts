@@ -309,8 +309,8 @@ new GGOAuthServer({
 })
 ```
 
-- The cookie is `__Host-gg_refresh_<clientId>` (`HttpOnly; Secure; SameSite=Strict; Path=/`) on a
-  request that came in over https (behind a proxy: with `proxy: true`), `gg_refresh_<clientId>`
+- The cookie is `__Host-gg_refresh_<base64url(clientId)>` (`HttpOnly; Secure; SameSite=Strict; Path=/`) on a
+  request that came in over https (behind a proxy: with `proxy: true`), `gg_refresh_<base64url(clientId)>`
   without `Secure` over plain http (local dev). It expires with the refresh token's absolute
   lifetime. Rotation, reuse revocation and claims run as at `/oauth/token`.
 - Only a request from one of a first-party client's redirect origins exactly (`Origin`), not

@@ -924,12 +924,12 @@ describe("GGOAuthServer", () => {
         async function post(path: string, body: Record<string, string>, o: {cookie?: string, origin?: string, site?: string} = {}) {
             const res = await fetch(`${ISSUER}${path}`, {
                 method: "POST",
-                headers: {...(o.origin === "" ? {} : {origin: o.origin ?? APP_ORIGIN}), "sec-fetch-site": o.site ?? "same-site", ...(o.cookie ? {cookie: `gg_refresh_app=${o.cookie}`} : {})},
+                headers: {...(o.origin === "" ? {} : {origin: o.origin ?? APP_ORIGIN}), "sec-fetch-site": o.site ?? "same-site", ...(o.cookie ? {cookie: `gg_refresh_YXBw=${o.cookie}`} : {})},
                 body: new URLSearchParams(body),
             })
             const json = await res.json().catch(() => undefined) as Record<string, any> | undefined
-            const setCookie = res.headers.getSetCookie().find(c => c.startsWith("gg_refresh_app="))
-            const cookie = setCookie?.split(";")[0].slice("gg_refresh_app=".length)
+            const setCookie = res.headers.getSetCookie().find(c => c.startsWith("gg_refresh_YXBw="))
+            const cookie = setCookie?.split(";")[0].slice("gg_refresh_YXBw=".length)
             for (const value of [json?.access_token, cookie]) if (value) bearers.add(value)
             return {res, json, setCookie, cookie}
         }
@@ -948,7 +948,7 @@ describe("GGOAuthServer", () => {
             expect(signedIn.json!.refresh_token).toBeUndefined()
             expect(signedIn.res.headers.get("access-control-allow-origin")).toBe(APP_ORIGIN)
             expect(signedIn.res.headers.get("access-control-allow-credentials")).toBe("true")
-            expect(signedIn.setCookie).toMatch(/^gg_refresh_app=[\w-]+; path=\/; expires=[^;]+; samesite=strict; httponly$/)
+            expect(signedIn.setCookie).toMatch(/^gg_refresh_YXBw=[\w-]+; path=\/; expires=[^;]+; samesite=strict; httponly$/)
             expect(Date.parse(signedIn.setCookie!.match(/expires=([^;]+)/)![1]) - Date.now()).toBeGreaterThan(29 * 24 * 3600 * 1000)
 
             const refreshed = await refresh(signedIn.cookie)
@@ -962,7 +962,7 @@ describe("GGOAuthServer", () => {
             const res = await fetch(`${ISSUER}/oauth/browser/token`, {method: "POST", headers: {origin: APP_ORIGIN, "x-forwarded-proto": "https"}, body: new URLSearchParams(await code())})
             const setCookie = res.headers.getSetCookie()[0]
             bearers.add(setCookie.split(";")[0].split("=")[1])
-            expect(setCookie).toMatch(/^__Host-gg_refresh_app=[\w-]+; path=\/; expires=[^;]+; samesite=strict; secure; httponly$/)
+            expect(setCookie).toMatch(/^__Host-gg_refresh_YXBw=[\w-]+; path=\/; expires=[^;]+; samesite=strict; secure; httponly$/)
         })
 
         test("a replayed cookie is reuse: refused, cleared, and the rotated one dies too", async () => {
@@ -990,7 +990,7 @@ describe("GGOAuthServer", () => {
 
         test("only the client's own origin on the same site reaches the cookie; any other request is the plain endpoint", async () => {
             const {cookie} = await post("/oauth/browser/token", await code())
-            for (const o of [{origin: "https://evil.example"}, {origin: "https://sibling.app.example"}, {origin: ""}, {site: "cross-site"}]) {
+            for (const o of [{origin: "https://evil.example"}, {origin: "https://sibling.app.example"}, {origin: ""}, {origin: "null"}, {site: "cross-site"}, {site: "none"}]) {
                 const plain = await post("/oauth/browser/token", {grant_type: "refresh_token", client_id: "app", resource: API}, {cookie, ...o})
                 expect(plain.json!.error).toBe("invalid_request")
                 expect(plain.setCookie).toBeUndefined()
@@ -1004,6 +1004,14 @@ describe("GGOAuthServer", () => {
             expect(crossSite.json!.refresh_token).toEqual(expect.any(String))
             bearers.add(crossSite.json!.refresh_token)
             expect(crossSite.setCookie).toBeUndefined()
+        })
+
+        test("a dead token the page sent leaves the cookie alone", async () => {
+            const {cookie} = await post("/oauth/browser/token", await code())
+            const stale = await post("/oauth/browser/token", {grant_type: "refresh_token", refresh_token: "not-a-token", client_id: "app", resource: API}, {cookie})
+            expect(stale.json!.error).toBe("invalid_grant")
+            expect(stale.setCookie).toBeUndefined()
+            expect((await refresh(cookie)).json!.access_token).toEqual(expect.any(String))
         })
 
         test("a failed code exchange leaves the cookie alone", async () => {

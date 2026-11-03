@@ -700,14 +700,15 @@ export class GGOAuthServer {
             // Only the client's exact origin (not SameSite alone: a sibling subdomain is same-site and its requests
             // carry the cookie), and not from another site. Anything else gets the plain endpoint, token in the body:
             // a third-party SPA, or an app on another site than this server, which can't keep a SameSite cookie.
-            const keepsCookie = !!client && client.refreshTokens !== false && isClientOrigin(client, origin) && site !== "cross-site"
+            const keepsCookie = !!client && client.refreshTokens !== false && isClientOrigin(client, origin) && (!site || site === "same-origin" || site === "same-site")
             // Plain http (local dev) can't keep a __Host- cookie.
-            const name = `${ctx.secure ? "__Host-" : ""}gg_refresh_${client?.clientId.replace(/[^\w-]/g, "_")}`
+            const name = `${ctx.secure ? "__Host-" : ""}gg_refresh_${Buffer.from(client?.clientId ?? "").toString("base64url")}`
             const setCookie = (value: string | null, maxAgeSec?: number) =>
                 ctx.cookies.set(name, value, {httpOnly: true, secure: ctx.secure, sameSite: "strict", path: "/", maxAge: maxAgeSec && maxAgeSec * 1000, overwrite: true, signed: false})
             const cookie = keepsCookie ? ctx.cookies.get(name, {signed: false}) : undefined
+            // A token the page still holds (from before the server kept it) is taken once: its rotation moves into the cookie.
+            const fromCookie = keepsCookie && target === TOKEN_PATH && form.grant_type === "refresh_token" && !form.refresh_token
             if (keepsCookie && target === TOKEN_PATH && form.grant_type === "refresh_token") {
-                // A token the page still holds (from before the server kept it) is taken once: its rotation moves into the cookie.
                 form.refresh_token ||= cookie ?? ""
                 if (!form.refresh_token) {
                     ctx.status = 400
@@ -732,7 +733,7 @@ export class GGOAuthServer {
             if (ctx.status === 200 && typeof body?.refresh_token === "string") {
                 setCookie(body.refresh_token, ctx.oidc.entities.RotatedRefreshToken?.remainingTTL ?? refreshTtlSec)
                 delete body.refresh_token
-            } else if (target === REVOCATION_PATH || (body?.error === "invalid_grant" && form.grant_type === "refresh_token")) {
+            } else if (target === REVOCATION_PATH || (body?.error === "invalid_grant" && fromCookie)) {
                 setCookie(null)
             }
         })
@@ -766,8 +767,9 @@ export class GGOAuthServer {
     }
 }
 
+// "null" is every opaque origin (a custom-scheme redirect's, a sandboxed frame's), never one client's.
 function isClientOrigin(client: GGOAuthFirstPartyClient, origin: string): boolean {
-    return client.redirectUris.some(u => new URL(u).origin === origin)
+    return origin !== "" && origin !== "null" && client.redirectUris.some(u => new URL(u).origin === origin)
 }
 
 function isAllowedDocumentUrl(clientId: string, prefixes: string[]): boolean {
