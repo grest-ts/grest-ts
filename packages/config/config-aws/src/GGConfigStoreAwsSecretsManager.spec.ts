@@ -70,30 +70,19 @@ describe('GGConfigStoreAwsSecretsManager', () => {
         await locator.teardown();
     }));
 
-    it('logs each changed key, with the value for settings but never for secrets', () => scope.run(async () => {
+    it('logs the name of each changed key, never its value', () => scope.run(async () => {
         const {store, locator} = await started();
         const info = vi.spyOn(GGLog, "info").mockImplementation(() => undefined);
         version("v2", doc("second-secret", 8080));
         await until(() => expect(store.getValue(Config.port)).toBe(8080));
         const lines = info.mock.calls.map(call => call[1]);
         expect(lines).toEqual(expect.arrayContaining([
-            'Config "/aws_app/token" changed: (secret) → (secret)',
-            'Config "/aws_app/port" changed: 4000 → 8080',
+            'Config "/aws_app/token" changed',
+            'Config "/aws_app/port" changed',
         ]));
-        expect(JSON.stringify(info.mock.calls.map(call => call.slice(1)))).not.toContain("second-secret");
-        await locator.teardown();
-    }));
-
-    it('still notifies watchers when a changed value cannot be described', () => scope.run(async () => {
-        const {store, locator} = await started();
-        vi.spyOn(GGSetting.prototype, "describeValue").mockImplementation(() => {
-            throw new TypeError("not serializable");
-        });
-        const port = vi.fn();
-        store.watch(Config.port, port);
-        version("v2", doc("first", 9090));
-        await until(() => expect(port).toHaveBeenCalledExactlyOnceWith(9090));
-        expect(reloadErrors).toEqual([]);
+        const logged = JSON.stringify(info.mock.calls.map(call => call.slice(1)));
+        expect(logged).not.toContain("second-secret");
+        expect(logged).not.toContain("8080");
         await locator.teardown();
     }));
 

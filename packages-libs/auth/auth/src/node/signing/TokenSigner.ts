@@ -1,6 +1,6 @@
 import type {JWK} from "jose"
 
-// verify() must check signature + temporal claims and throw NOT_AUTHORIZED on failure.
+// verify() must check signature + temporal claims (with `exp` required) and throw NOT_AUTHORIZED on failure.
 export interface TokenVerifier {
     verify(token: string): Promise<Record<string, unknown>>
 }

@@ -303,15 +303,14 @@ async function register(redirectUris = [THIRD_PARTY_REDIRECT]): Promise<string> 
 
 describe("GGOAuthServer resources", () => {
     const base = {issuer: () => ISSUER, store: new InMemoryOAuthStore(), secret: () => "s", interactionPage: async () => {}, scopes: ["x"] as [string]}
-    const resource = (audience: string | undefined) => ({
-        resource: () => `${ISSUER}/${audience ?? "none"}`,
+    const resource = (audience: string) => ({
+        resource: () => `${ISSUER}/${audience}`,
         accessToken: new GGAuthAccessToken({signer: new HmacSigner("k"), claimSchema: IsClaims, audience}),
         scopes: ["x"] as [string],
         claims: async () => ({permissions: []}),
     })
 
     test("each resource needs its own audience (shared signer)", () => {
-        expect(() => new GGOAuthServer({...base, resources: [resource("a"), resource(undefined)]})).toThrow(/own audience/)
         expect(() => new GGOAuthServer({...base, resources: [resource("a"), resource("a")]})).toThrow(/own audience/)
         expect(() => new GGOAuthServer({...base, resources: [resource("a"), resource("b")]})).not.toThrow()
     })
