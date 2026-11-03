@@ -121,7 +121,7 @@ export class BaseAuthSession<D extends DerivedMap> {
         const cached = this.ports.cache.read()
         const now = this.ports.clock.now()
 
-        if (this.config.storage === "cookie") {
+        if (this.config.storage !== "localStorage") {
             if (!cached?.access) {
                 this.setState({status: "restoring", refreshing: false, degraded: false})
                 this.notifyListeners()
@@ -265,8 +265,8 @@ export class BaseAuthSession<D extends DerivedMap> {
             this.identity = result.data
             const next: GGTokenPair = {
                 access: result.tokens.access,
-                refresh: this.config.storage === "cookie"
-                    ? undefined
+                refresh: this.config.storage === "cookie" ? undefined
+                    : this.config.storage === "auto" ? result.tokens.refresh
                     : (result.tokens.refresh ?? this.shared?.refresh),
             }
             this.commitShared(next)
@@ -462,6 +462,7 @@ export class BaseAuthSession<D extends DerivedMap> {
     private canRefresh(): boolean {
         if (this.config.storage === "cookie") return true
         const refresh = this.shared?.refresh
+        if (this.config.storage === "auto" && !refresh) return true
         return !!refresh?.token && refresh.expiresAt > this.ports.clock.now()
     }
 

@@ -3,7 +3,7 @@ export {IsGGRefreshToken, IsGGRefreshTokenData, IsGGAccessToken, IsGGAccessToken
 export type {GGAuthTokensResult} from "./shared/tokenSchemas"
 export {GGAuthSession} from "./browser/GGAuthSession"
 export type {DerivedToken} from "./browser/GGAuthSessionBase"
-export type {GGAuthResult, GGTokenSessionConfig, GGCookieSessionConfig} from "./browser/GGAuthSession"
+export type {GGAuthResult, GGTokenSessionConfig, GGCookieSessionConfig, GGOAuthSessionConfig} from "./browser/GGAuthSession"
 export type {
     GGTokenPair,
     TokenKey,

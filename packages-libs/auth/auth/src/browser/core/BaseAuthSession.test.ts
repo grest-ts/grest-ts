@@ -123,7 +123,7 @@ function makeSession<D extends DerivedMap = {}>(overrides: {
     scheduler?: FakeScheduler
     slot?: FakeKey
     refreshResult?: AuthResult
-    storage?: "localStorage" | "cookie"
+    storage?: "localStorage" | "cookie" | "auto"
 } = {}): SessionSetup<D> {
     const clock = overrides.clock ?? new FakeClock()
     const lock = overrides.lock ?? new FakeLock()
@@ -682,6 +682,53 @@ describe("cookie mode", () => {
         session.start(makePair("at-1", 3_000_000))
         session.logout()
         expect(logoutFn).toHaveBeenCalled()
+    })
+})
+
+describe("auto mode", () => {
+    test("a returned refresh token is stored and sent on refresh", async () => {
+        const {session, cache, clock, refreshFn} = makeSession({storage: "auto"})
+        session.start(makePair("at-1", 3_000_000, "rt-1"))
+        expect(cache.read()?.refresh?.token).toBe("rt-1")
+        clock.advance(3_000_000)
+        await session.ensureFresh()
+        expect(refreshFn).toHaveBeenCalledWith("rt-1")
+        expect(cache.read()?.refresh?.token).toBe("rt-2")
+    })
+
+    test("without a refresh token, refreshes with undefined (the server holds it)", async () => {
+        const {session, cache, clock, refreshFn} = makeSession({storage: "auto", refreshResult: {tokens: makePair("at-2", 3_000_000)}})
+        session.start(makePair("at-1", 3_000_000))
+        clock.advance(3_000_000)
+        await session.ensureFresh()
+        expect(refreshFn).toHaveBeenCalledWith(undefined)
+        expect(cache.read()?.access.token).toBe("at-2")
+        expect(cache.read()?.refresh).toBeUndefined()
+    })
+
+    test("a refresh without a refresh token drops the stored one", async () => {
+        const {session, cache, clock} = makeSession({storage: "auto", refreshResult: {tokens: makePair("at-2", 3_000_000)}})
+        session.start(makePair("at-1", 3_000_000, "rt-old"))
+        clock.advance(3_000_000)
+        await session.ensureFresh()
+        expect(cache.read()?.refresh).toBeUndefined()
+    })
+
+    test("init with no cache tries a refresh; NOT_AUTHORIZED → anonymous", async () => {
+        const {session, refreshFn} = makeSession({storage: "auto"})
+        refreshFn.mockRejectedValue(new NOT_AUTHORIZED())
+        await session.init()
+        expect(refreshFn).toHaveBeenCalledWith(undefined)
+        expect(session.getState().status).toBe("anonymous")
+    })
+
+    test("an expired stored refresh token is not sent", async () => {
+        const {session, clock, refreshFn} = makeSession({storage: "auto"})
+        session.start({access: {token: "at-1", expiresAt: clock.now() + 1000}, refresh: {token: "rt-1", expiresAt: clock.now() + 2000}})
+        clock.advance(5000)
+        await expect(session.ensureFresh()).rejects.toThrow()
+        expect(refreshFn).not.toHaveBeenCalled()
+        expect(session.getState().status).toBe("expired")
     })
 })
 

@@ -10,7 +10,7 @@ import type {GGAccessPayload, GGAccessTokenData, GGAuthAccessToken, TokenVerifie
 import {GGOAuthResourceServer, type GGOAuthProtectedResource} from "./GGOAuthResourceServer"
 import {toOidcAdapter, type GGOAuthStore} from "./store/GGOAuthStore"
 import {GG_OAUTH_SERVICE_CLIENT, GGOAuthServiceApi, SUBJECT_TOKEN_INVALID} from "./GGOAuthServiceApi"
-import {GGOAuthExternalSignIn, type GGOAuthExternalSignInOptions} from "./GGOAuthExternalSignIn"
+import {GGOAuthExternalSignIn, readCookie, type GGOAuthExternalSignInOptions} from "./GGOAuthExternalSignIn"
 
 export interface GGOAuthFirstPartyClient {
     clientId: string
@@ -129,6 +129,12 @@ export interface GGOAuthServerOptions {
     // Absolute refresh lifetime: rotation never extends it (OAuth for browser apps, RFC 10017).
     refreshTtlSec?: number
     sessionTtlSec?: number
+    // First-party clients' refresh tokens stay in an HttpOnly cookie on this server instead of reaching
+    // the page (OAuth for browser apps, RFC 10017): GGOAuthClient finds the browser endpoints in the
+    // metadata. On by default; needs the app on the same site as this server (SameSite=Strict).
+    // `enabled` is read per request (a runtime switch); `cookie` defaults to "__Host-gg_refresh" on an
+    // https issuer, "gg_refresh" otherwise.
+    browserSession?: {enabled?: () => boolean, cookie?: () => string}
     // Trust X-Forwarded-Proto (behind a TLS-terminating load balancer). X-Forwarded-Host is never
     // trusted: clients can send it through a load balancer that doesn't set it.
     proxy?: boolean
@@ -137,6 +143,9 @@ export interface GGOAuthServerOptions {
 const BASE = "/oauth"
 const AUTHORIZATION_PATH = `${BASE}/authorize`
 const TOKEN_PATH = `${BASE}/token`
+const REVOCATION_PATH = `${BASE}/revoke`
+const BROWSER_TOKEN_PATH = `${BASE}/browser/token`
+const BROWSER_LOGOUT_PATH = `${BASE}/browser/logout`
 // Only the resources' access-token keys: what a resource server should trust. /oauth/jwks also lists
 // the ID-token key, derived from `secret`, so trusting it would let that secret mint access tokens.
 export const ACCESS_TOKEN_JWKS_PATH = `${BASE}/access-token-jwks`
@@ -150,6 +159,8 @@ const TICKET = "GGOAuthTicket"
 const GRANT_USAGE = "GrantUsage"
 // Claims resolved during a refresh before the presented token was consumed (see rotateRefreshToken).
 const prefetchedClaims = new WeakMap<object, {resource: string, claims: object}>()
+// Requests that came in on a browser endpoint: their refresh token goes to and from the cookie.
+const browserRequests = new WeakSet<IncomingMessage>()
 // Comparing fixed-length HMAC digests keeps timingSafeEqual from leaking the secret's length.
 const COMPARE_KEY = randomBytes(32)
 
@@ -209,6 +220,9 @@ export class GGOAuthServer {
                 res.end(JSON.stringify({keys: await this.resourceJwks()}))
                 return
             }
+            if ((path === BROWSER_TOKEN_PATH || path === BROWSER_LOGOUT_PATH) && req.method === "POST") {
+                return this.browserRequest(req, res, path === BROWSER_TOKEN_PATH ? TOKEN_PATH : REVOCATION_PATH)
+            }
             const interaction = path.match(INTERACTION_PATH)
             if (interaction && (req.method === "GET" || req.method === "POST")) {
                 res.setHeader("cache-control", "no-store")
@@ -218,8 +232,7 @@ export class GGOAuthServer {
                 if (action === "complete" && req.method === "GET") return this.finishInteraction(req, res, uid)
                 return this.interactionPage(req, res, uid, action)
             }
-            this._callback ??= this.provider().callback()
-            await this._callback(req, res)
+            await this.dispatch(req, res)
         }
         for (const method of ["GET", "POST"] as const) server.registerRoute(method, `${BASE}/*`, handle, "GGOAuthServer")
         server.registerRoute("GET", "/.well-known/openid-configuration", handle, "GGOAuthServer")
@@ -362,6 +375,60 @@ export class GGOAuthServer {
             resource: this.requestedResource(interaction.params, clientId).resource(),
             params: Object.fromEntries(extra.filter(k => typeof interaction.params[k] === "string").map(k => [k, String(interaction.params[k])])),
         }
+    }
+
+    private async dispatch(req: IncomingMessage, res: ServerResponse): Promise<void> {
+        this._callback ??= this.provider().callback()
+        await this._callback(req, res)
+    }
+
+    // A browser endpoint runs the provider's own token or revocation endpoint (rotation, reuse revocation,
+    // claims unchanged) with the cookie's refresh token; the provider middleware moves issued ones into it.
+    private async browserRequest(req: IncomingMessage, res: ServerResponse, target: typeof TOKEN_PATH | typeof REVOCATION_PATH): Promise<void> {
+        if (this.options.browserSession?.enabled?.() === false) return this.fail(res, 404, "Not found")
+        const form = await readForm(req)
+        const client = form && this.firstParty.get(form.client_id ?? "")
+        const origin = req.headers.origin
+        const site = req.headers["sec-fetch-site"]
+        // The exact origin, not SameSite alone: a sibling subdomain is same-site and its requests carry the cookie.
+        if (!form || !client || client.refreshTokens === false || !origin || !client.redirectUris.some(u => new URL(u).origin === origin)
+            || (site && site !== "same-origin" && site !== "same-site")) return this.fail(res, 403, "Request refused")
+        res.setHeader("access-control-allow-origin", origin)
+        res.setHeader("access-control-allow-credentials", "true")
+        res.setHeader("vary", "Origin")
+        res.setHeader("cache-control", "no-store")
+        const cookie = readCookie(req, this.browserCookie())
+        if (target === TOKEN_PATH && form.grant_type === "refresh_token") {
+            // A page-held token (from before the server kept it) is still accepted once: its rotation moves into the cookie.
+            form.refresh_token ||= cookie ?? ""
+            if (!form.refresh_token) {
+                res.writeHead(400, {"content-type": "application/json"})
+                res.end(JSON.stringify({error: "invalid_grant", error_description: "no refresh token"}))
+                return
+            }
+        }
+        if (target === REVOCATION_PATH) {
+            if (!cookie) {
+                res.writeHead(200, {"set-cookie": this.refreshCookie("", 0)})
+                res.end()
+                return
+            }
+            form.token = cookie
+        }
+        browserRequests.add(req)
+        req.url = target
+        // oidc-provider reads a pre-parsed body when the stream is already consumed.
+        ;(req as IncomingMessage & {body?: unknown}).body = form
+        await this.dispatch(req, res)
+    }
+
+    private browserCookie(): string {
+        return this.options.browserSession?.cookie?.() ?? (new URL(this.options.issuer()).protocol === "https:" ? "__Host-gg_refresh" : "gg_refresh")
+    }
+
+    private refreshCookie(value: string, maxAgeSec: number): string {
+        const secure = new URL(this.options.issuer()).protocol === "https:" ? "; Secure" : ""
+        return `${this.browserCookie()}=${value}; Path=/; Max-Age=${maxAgeSec}; HttpOnly${secure}; SameSite=Strict`
     }
 
     private origin(): string {
@@ -542,7 +609,7 @@ export class GGOAuthServer {
             },
             routes: {
                 authorization: AUTHORIZATION_PATH, token: TOKEN_PATH, registration: `${BASE}/register`,
-                jwks: `${BASE}/jwks`, revocation: `${BASE}/revoke`, end_session: `${BASE}/logout`, userinfo: `${BASE}/userinfo`,
+                jwks: `${BASE}/jwks`, revocation: REVOCATION_PATH, end_session: `${BASE}/logout`, userinfo: `${BASE}/userinfo`,
                 introspection: `${BASE}/introspect`, pushed_authorization_request: `${BASE}/par`, code_verification: `${BASE}/device`,
                 device_authorization: `${BASE}/device/auth`, backchannel_authentication: `${BASE}/backchannel`, challenge: `${BASE}/challenge`,
             },
@@ -669,11 +736,29 @@ export class GGOAuthServer {
         // Resource scopes aren't OIDC scopes, so the provider leaves them out of its metadata.
         provider.use(async (ctx, next) => {
             await next()
-            if (ctx.oidc?.route === "discovery") (ctx.body as {scopes_supported: string[]}).scopes_supported = [...OIDC_SCOPES, ...new Set(o.resources.flatMap(r => r.scopes))]
+            if (ctx.oidc?.route === "discovery") {
+                const meta = ctx.body as {scopes_supported: string[], token_endpoint: string, gg_browser_token_endpoint?: string, gg_browser_logout_endpoint?: string}
+                meta.scopes_supported = [...OIDC_SCOPES, ...new Set(o.resources.flatMap(r => r.scopes))]
+                if (o.browserSession?.enabled?.() !== false) {
+                    meta.gg_browser_token_endpoint = new URL(BROWSER_TOKEN_PATH, meta.token_endpoint).href
+                    meta.gg_browser_logout_endpoint = new URL(BROWSER_LOGOUT_PATH, meta.token_endpoint).href
+                }
+            }
             // A new body: oidc-provider reuses its own between requests.
             if (ctx.oidc?.route === "jwks") ctx.body = {keys: [...(ctx.body as {keys: object[]}).keys, ...await this.resourceJwks()]}
             const body = ctx.body as {access_token?: unknown} | undefined
             if (ctx.oidc?.route === "token" && typeof body?.access_token === "string") body.access_token = await this.resign(body.access_token)
+        })
+        provider.use(async (ctx, next) => {
+            await next()
+            if (!browserRequests.has(ctx.req)) return
+            const body = ctx.body as {refresh_token?: unknown, error?: unknown} | undefined
+            if (ctx.oidc?.route === "token" && ctx.status === 200 && typeof body?.refresh_token === "string") {
+                ctx.append("set-cookie", this.refreshCookie(body.refresh_token, ctx.oidc.entities.RotatedRefreshToken?.remainingTTL ?? refreshTtlSec))
+                delete body.refresh_token
+            } else if (ctx.oidc?.route === "revocation" || (ctx.oidc?.route === "token" && body?.error === "invalid_grant" && ctx.oidc.params?.grant_type === "refresh_token")) {
+                ctx.append("set-cookie", this.refreshCookie("", 0))
+            }
         })
         provider.use(async (ctx, next) => {
             await next()

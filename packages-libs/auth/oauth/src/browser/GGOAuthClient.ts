@@ -31,7 +31,11 @@ export interface GGOAuthClientOptions<I> {
 }
 
 type Pending = {verifier: string, returnTo?: string}
-type Metadata = {issuer: string, authorization_endpoint: string, token_endpoint: string, revocation_endpoint?: string, end_session_endpoint?: string}
+type Metadata = {
+    issuer: string, authorization_endpoint: string, token_endpoint: string, revocation_endpoint?: string, end_session_endpoint?: string,
+    // GGOAuthServer's browserSession: the refresh token lives in an HttpOnly cookie on the server.
+    gg_browser_token_endpoint?: string, gg_browser_logout_endpoint?: string,
+}
 
 // Keyed by state: two tabs signing in at once each find their own.
 const pendingKey = (state: string) => `gg-oauth-pending:${state}`
@@ -101,8 +105,11 @@ export class GGOAuthClient<I = unknown> {
         return {result, returnTo: pending.returnTo}
     }
 
-    public refresh = async ({refreshToken}: {refreshToken: string}): Promise<GGOAuthResult<I>> =>
-        this.token({grant_type: "refresh_token", refresh_token: refreshToken})
+    // Without a refresh token the server must hold one (its cookie); otherwise there is nothing to refresh with.
+    public refresh = async ({refreshToken}: {refreshToken?: string}): Promise<GGOAuthResult<I>> => {
+        if (!refreshToken && !(await this.discover()).gg_browser_token_endpoint) throw new NOT_AUTHORIZED({debugMessage: "No refresh token"})
+        return this.token({grant_type: "refresh_token", ...(refreshToken ? {refresh_token: refreshToken} : {})})
+    }
 
     // Revokes the refresh token and ends the authorization server's login session (redirects away
     // when the server supports it).
@@ -110,7 +117,9 @@ export class GGOAuthClient<I = unknown> {
         const meta = await this.discover()
         const revoke = refreshToken && meta.revocation_endpoint
             ? fetch(meta.revocation_endpoint, {method: "POST", keepalive: true, signal: AbortSignal.timeout(5000), body: new URLSearchParams({token: refreshToken, client_id: this.config.clientId})}).then(() => undefined, () => undefined)
-            : Promise.resolve()
+            : meta.gg_browser_logout_endpoint
+                ? fetch(meta.gg_browser_logout_endpoint, {method: "POST", keepalive: true, credentials: "include", signal: AbortSignal.timeout(5000), body: new URLSearchParams({client_id: this.config.clientId})}).then(() => undefined, () => undefined)
+                : Promise.resolve()
         if (!meta.end_session_endpoint) {
             await revoke
             return undefined
@@ -145,8 +154,10 @@ export class GGOAuthClient<I = unknown> {
 
     private async token(body: Record<string, string>): Promise<GGOAuthResult<I>> {
         const meta = await this.discover()
-        const res = await fetch(meta.token_endpoint, {
+        const browser = meta.gg_browser_token_endpoint
+        const res = await fetch(browser ?? meta.token_endpoint, {
             method: "POST",
+            ...(browser ? {credentials: "include"} : {}),
             body: new URLSearchParams({...body, client_id: this.config.clientId, resource: await this.resource()}),
         })
         const json = await res.json().catch(() => ({})) as Record<string, unknown>

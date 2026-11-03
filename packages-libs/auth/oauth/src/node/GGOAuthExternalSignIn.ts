@@ -89,7 +89,7 @@ export class GGOAuthExternalSignIn<D = undefined> {
     }
 }
 
-function readCookie(req: IncomingMessage, name: string): string | undefined {
+export function readCookie(req: IncomingMessage, name: string): string | undefined {
     for (const part of (req.headers.cookie ?? "").split(";")) {
         const eq = part.indexOf("=")
         if (eq > 0 && part.slice(0, eq).trim() === name) return part.slice(eq + 1).trim()

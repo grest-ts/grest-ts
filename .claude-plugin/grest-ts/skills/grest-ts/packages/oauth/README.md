@@ -270,7 +270,7 @@ const oauth = new GGOAuthClient({
     redirectUri: `${location.origin}/oauth/callback`, postLogoutRedirectUri: `${location.origin}/`,
     identity: (token) => toUser(decodeAccessToken(token)),   // session.get() data; UI-only, unverified
 })
-const session = GGAuthSession.withToken(USER_WIRE, {localStorageKey: "auth", refresh: oauth.refresh})
+const session = GGAuthSession.withOAuth(USER_WIRE, {localStorageKey: "auth", refresh: oauth.refresh})
 
 if (oauth.isCallback(location.href)) session.start((await oauth.handleCallback(location.href)).result)
 else if (!session.isLoggedIn()) await oauth.authorize({returnTo: location.pathname + location.search})
@@ -289,8 +289,42 @@ oauth.logout(undefined)   // ends the authorization server's login session too
 - Each sign-in in progress is kept in `sessionStorage` under its own `state`, so sign-ins started in
   two tabs at once both complete.
 - `invalid_grant` on refresh surfaces as `NOT_AUTHORIZED`, which ends the session.
+- Where the refresh token lives is the server's call (see [Browser session](#browser-session)):
+  `withOAuth` keeps a returned one in localStorage and otherwise refreshes with the server's cookie.
 - `authorize({prompt: "login"})` asks for a fresh sign-in even while the login session lives;
   `authorize({params})` adds the server's `extraParams`.
+
+## Browser session
+
+By default a first-party client's refresh token never reaches the page: `GGOAuthServer` keeps it
+in an HttpOnly cookie on its own host and serves the browser at `/oauth/browser/token` and
+`/oauth/browser/logout`. Its metadata names them (`gg_browser_token_endpoint`,
+`gg_browser_logout_endpoint`), and `GGOAuthClient` uses them whenever they are named. An XSS can
+still use the session while the page is open, but it can't take a refresh token away with it.
+
+```ts
+new GGOAuthServer({
+    // ...
+    browserSession: {
+        enabled: () => config.browserRefreshCookie.get(),   // read per request: a runtime switch (default on)
+        cookie: () => "__Host-app_refresh",                 // default "__Host-gg_refresh" (https issuer), else "gg_refresh"
+    },
+})
+```
+
+- The cookie is `HttpOnly; SameSite=Strict; Path=/` (`Secure` on an https issuer), and expires with
+  the refresh token's absolute lifetime. Rotation, reuse revocation and claims run as at `/oauth/token`.
+- **The app must be same-site with the server** (e.g. `app.example.com` and `auth.example.com`, or
+  `localhost` on two ports): otherwise the browser doesn't send a `SameSite=Strict` cookie. Turn the
+  browser session off for an app on another site.
+- A request must come from one of the client's redirect origins exactly (`Origin`), and not be
+  `Sec-Fetch-Site: cross-site`. A sibling subdomain is same-site, so `SameSite` alone wouldn't keep it out.
+  CORS answers only that origin, with credentials.
+- Only for `firstPartyClients` with refresh tokens. Other clients, `/oauth/token` and revocation
+  are unchanged.
+- A refresh token the page still holds (from before the switch) is accepted once at the browser
+  endpoint, and its rotation moves into the cookie. Switching off again sends users through sign-in
+  once: their token is in a cookie the page can't read.
 
 ## Headless sign-in (scripts, tests)
 

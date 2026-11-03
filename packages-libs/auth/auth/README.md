@@ -344,6 +344,10 @@ in an httpOnly cookie scoped to the refresh endpoint, `refresh` is called with n
 `logout` calls your server to clear it. Everything else is identical. The access token always rides
 the `Authorization` header in memory regardless of mode.
 
+`GGAuthSession.withOAuth(wire, {refresh, localStorageKey})` is for an OAuth server that decides
+where the refresh token lives (`@grest-ts/oauth`'s `GGOAuthClient`): a refresh token the server
+returns is kept like `withToken`; without one, `refresh` gets no token and the server uses its cookie.
+
 ---
 
 ## 5. Sockets — same wire, same story
@@ -455,7 +459,7 @@ serialized by a Web Lock so a single-use refresh token is never replayed).
 passwords). `OidcRelyingParty` from `@grest-ts/auth/oidc-rp` (`openid-client`).
 
 **Client (`@grest-ts/auth`, browser entry)** — `GGAuthSession.withToken(wire, {refresh, localStorageKey})`
-/ `.withCookie(wire, {refresh, logout})` / `.addDerived(name, wire, {mint})`; instance methods
+/ `.withCookie(wire, {refresh, logout})` / `.withOAuth(wire, {refresh, localStorageKey})` / `.addDerived(name, wire, {mint})`; instance methods
 `init`, `start`, `logout`, `getState`, `isLoggedIn`, `get`, `subscribe`, `onRefreshed`, `onLogout`,
 `getAccessToken`, `derived.<name>.select/clear`.
 

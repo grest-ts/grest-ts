@@ -1,4 +1,5 @@
 import {afterEach, beforeEach, describe, expect, test, vi} from "vitest"
+import {NOT_AUTHORIZED} from "@grest-ts/schema"
 import {GGOAuthClient} from "./GGOAuthClient"
 
 const SERVER = "https://auth.example"
@@ -187,5 +188,59 @@ describe("GGOAuthClient callback", () => {
         const other = await started(client(), "/")
         await expect(client().handleCallback(callback(other, "&iss=https%3A%2F%2Fevil.example"))).rejects.toThrow()
         expect(tokenRequests).toEqual([])
+    })
+})
+
+describe("GGOAuthClient refresh token held by the server", () => {
+    let metadata: Record<string, string>
+    let fetchMock: ReturnType<typeof vi.fn>
+
+    beforeEach(() => {
+        metadata = {...METADATA}
+        fetchMock = vi.fn(async (url: string) => {
+            if (url.endsWith("/.well-known/oauth-authorization-server")) return new Response(JSON.stringify(metadata))
+            return new Response(JSON.stringify({access_token: "at", expires_in: 60}))
+        })
+        vi.stubGlobal("window", {location: {assign: vi.fn()}, addEventListener: vi.fn()})
+        vi.stubGlobal("fetch", fetchMock)
+    })
+    afterEach(() => vi.unstubAllGlobals())
+
+    const client = () => new GGOAuthClient({server: SERVER, clientId: "web", redirectUri: "https://app.example/cb", identity: () => ({})})
+    const browserMetadata = () => Object.assign(metadata, {
+        gg_browser_token_endpoint: `${SERVER}/oauth/browser/token`,
+        gg_browser_logout_endpoint: `${SERVER}/oauth/browser/logout`,
+    })
+    const callTo = (url: string) => fetchMock.mock.calls.find(([u]) => u === url) as [string, RequestInit] | undefined
+
+    test("refreshes at the browser endpoint with the cookie, sending no token", async () => {
+        browserMetadata()
+        const result = await client().refresh({})
+        expect(result.tokens.refresh).toBeUndefined()
+        const [, init] = callTo(metadata.gg_browser_token_endpoint)!
+        expect(init.credentials).toBe("include")
+        const body = new URLSearchParams(init.body as URLSearchParams)
+        expect(body.get("grant_type")).toBe("refresh_token")
+        expect(body.has("refresh_token")).toBe(false)
+        expect(callTo(METADATA.token_endpoint)).toBeUndefined()
+    })
+
+    test("a token the page still holds is sent once, to be moved into the cookie", async () => {
+        browserMetadata()
+        await client().refresh({refreshToken: "rt-old"})
+        expect(new URLSearchParams(callTo(metadata.gg_browser_token_endpoint)![1].body as URLSearchParams).get("refresh_token")).toBe("rt-old")
+    })
+
+    test("without browser endpoints and without a token there is nothing to refresh with", async () => {
+        await expect(client().refresh({})).rejects.toThrow(NOT_AUTHORIZED)
+        expect(callTo(METADATA.token_endpoint)).toBeUndefined()
+    })
+
+    test("logout clears the cookie at the browser logout endpoint", async () => {
+        browserMetadata()
+        await client().logout(undefined)
+        const [, init] = callTo(metadata.gg_browser_logout_endpoint)!
+        expect(init.credentials).toBe("include")
+        expect(new URLSearchParams(init.body as URLSearchParams).get("client_id")).toBe("web")
     })
 })
