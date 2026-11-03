@@ -18,10 +18,24 @@ export class GGLocalDiscoveryResilientClient extends GGLocalDiscoveryClient {
     }
 
     public override async register(): Promise<void> {
-        if (!this.isLeader && !this.discoveryServer && !this.client.isConnected()) {
-            await this.becomeLeaderOrFollower();
+        if (this.isLeader || this.discoveryServer || this.client.isConnected()) {
+            return super.register();
         }
-        await super.register();
+        // Becoming leader puts our entries in our own router; becoming a
+        // follower publishes them on connect, retrying if the leader yields
+        // mid-request. No separate register request that a yield to a bin
+        // could cut off and fail startup.
+        await this.becomeLeaderOrFollower();
+        GGLog.info(this, `Registered ${this.entries.length} routes`);
+    }
+
+    public override async discoverApi(apiName: string): Promise<string> {
+        // As leader, answer from our own router rather than over IPC to
+        // ourselves, which a yield to a bin could cut off mid-request.
+        if (this.discoveryServer?.getRoute(apiName)) {
+            return this.discoveryServer.getRoutingUrl(apiName);
+        }
+        return super.discoverApi(apiName);
     }
 
     public override async unregister(): Promise<void> {
@@ -42,6 +56,12 @@ export class GGLocalDiscoveryResilientClient extends GGLocalDiscoveryClient {
         if (await router.start()) {
             this.discoveryServer = router;
             this.isLeader = true;
+            // Write our entries straight into our own router rather than over
+            // IPC to ourselves: a bin can make the router yield at any moment,
+            // cutting that request off and failing startup. Covers both first
+            // startup and taking over after a leader died. onYield re-publishes
+            // them to the bin.
+            this.entries.forEach(entry => router.addRoute(entry));
             router.onYield = async () => {
                 GGLog.warn(this, "Yielding leadership to authoritative discovery (bin); will not bid for the port again in this runtime");
                 this.seenBinBasedMaster = true;
@@ -74,8 +94,7 @@ export class GGLocalDiscoveryResilientClient extends GGLocalDiscoveryClient {
             // Re-publish entries on every successful connect — covers
             // initial register, follower-on-leader-death, and post-yield
             // reconnect uniformly. Server-side dedup on (clientId, api)
-            // makes this idempotent, so the wrapped register()'s own
-            // super.register() call is a harmless no-op.
+            // makes this idempotent.
             if (this.entries.length > 0) {
                 await this.client.sendFrameworkRequest(GGDiscoveryIPC.discoveryServer.register, this.entries);
             }
