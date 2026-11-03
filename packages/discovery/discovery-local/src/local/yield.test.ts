@@ -1,5 +1,6 @@
 import {IPCServer, IPCClient} from "@grest-ts/ipc";
 import {GGLocatorScope} from "@grest-ts/locator";
+import {sleep} from "@grest-ts/common";
 import {GGLocalDiscoveryServer} from "./GGLocalDiscoveryServer";
 import {GGLocalDiscoveryResilientClient} from "./GGLocalDiscoveryResilientClient";
 import {GGDiscoveryIPC, DiscoveryServerKind} from "./GGDiscoveryIPC";
@@ -16,6 +17,14 @@ async function isPortFree(port: number): Promise<boolean> {
     const ok = await probe.start();
     if (ok) await probe.teardown();
     return ok;
+}
+
+async function freePort(): Promise<number> {
+    const probe = new IPCServer(0);
+    await probe.start();
+    const port = probe.getPort();
+    await probe.teardown();
+    return port;
 }
 
 describe("yield protocol", () => {
@@ -64,6 +73,92 @@ describe("yield protocol", () => {
 
         expect(await isPortFree(port)).toBe(true);
         await resilient.unregister();
+    });
+
+    test("embedded leader registers in-process, so yielding to a bin can't cut its register off", async () => {
+        const port = await freePort();
+
+        const subscope = new GGLocatorScope("LeaderRegisterTest");
+        subscope.setLifecycleOwner(() => undefined);
+        subscope.enter();
+        const resilient = new GGLocalDiscoveryResilientClient(port);
+        resilient.registerRoutes([{runtime: "test", api: "myapi", protocol: "http", port: 1234, pathPrefix: "/api/my/"}]);
+        await resilient.register();
+
+        // No IPC round trip to our own router, which a yield could close mid-request.
+        const internals = resilient as unknown as {client: IPCClient, discoveryServer?: GGLocalDiscoveryServer};
+        expect(internals.discoveryServer?.getRoute("myapi")?.baseUrl).toBe("http://localhost:1234");
+        expect(await resilient.discoverApi("myapi")).toBe(`http://localhost:${port}`);
+        expect(internals.client.isConnected()).toBe(false);
+
+        const asker = new IPCClient(port);
+        await asker.connect();
+        await asker.sendFrameworkRequest(GGDiscoveryIPC.discoveryServer.requestYield, undefined);
+        asker.disconnect();
+
+        for (let i = 0; i < 40 && !(await isPortFree(port)); i++) await sleep(50, "wait for router to release the port");
+        const bin = new GGLocalDiscoveryServer(new IPCServer(port), DiscoveryServerKind.Bin);
+        try {
+            expect(await bin.start()).toBe(true);
+            for (let i = 0; i < 40 && !bin.getRoute("myapi"); i++) await sleep(100, "wait for handover to re-publish");
+            expect(bin.getRoute("myapi")?.baseUrl).toBe("http://localhost:1234");
+        } finally {
+            await resilient.unregister();
+            await bin.teardown();
+        }
+    });
+
+    test("follower publishes its routes once on connect, with no second register request a yield could cut off", async () => {
+        const {server: leader, port} = await startServer(DiscoveryServerKind.Embedded);
+        const ipc = (leader as unknown as {server: IPCServer}).server;
+        let registers = 0;
+        ipc.onFrameworkMessage(GGDiscoveryIPC.discoveryServer.register, async (routes) => {
+            registers++;
+            routes.forEach(route => leader.addRoute(route));
+        });
+
+        const subscope = new GGLocatorScope("FollowerRegisterTest");
+        subscope.setLifecycleOwner(() => undefined);
+        subscope.enter();
+        const resilient = new GGLocalDiscoveryResilientClient(port);
+        resilient.registerRoutes([{runtime: "test", api: "myapi", protocol: "http", port: 1234, pathPrefix: "/api/my/"}]);
+        try {
+            await resilient.register();
+            expect(registers).toBe(1);
+            expect(leader.getRoute("myapi")?.baseUrl).toBe("http://localhost:1234");
+        } finally {
+            await resilient.unregister();
+            await leader.teardown();
+        }
+    });
+
+    test("follower that takes over from a dead embedded leader carries its own routes", async () => {
+        const port = await freePort();
+
+        const scopeA = new GGLocatorScope("DeadLeaderA");
+        scopeA.setLifecycleOwner(() => undefined);
+        scopeA.enter();
+        const a = new GGLocalDiscoveryResilientClient(port);
+        a.registerRoutes([{runtime: "a", api: "a-api", protocol: "http", port: 1111, pathPrefix: "/api/a/"}]);
+        await a.register();
+
+        const scopeB = new GGLocatorScope("DeadLeaderB");
+        scopeB.setLifecycleOwner(() => undefined);
+        scopeB.enter();
+        const b = new GGLocalDiscoveryResilientClient(port);
+        b.registerRoutes([{runtime: "b", api: "b-api", protocol: "http", port: 2222, pathPrefix: "/api/b/"}]);
+        await b.register();
+
+        const bRouter = () => (b as unknown as {discoveryServer?: GGLocalDiscoveryServer}).discoveryServer;
+        expect(bRouter()).toBeUndefined();
+
+        try {
+            await a.unregister();
+            for (let i = 0; i < 40 && !bRouter(); i++) await sleep(50, "wait for follower to take over");
+            expect(bRouter()?.getRoute("b-api")?.baseUrl).toBe("http://localhost:2222");
+        } finally {
+            await b.unregister();
+        }
     });
 
     test("addRoute dedups (same clientId, same api) on re-register", async () => {
