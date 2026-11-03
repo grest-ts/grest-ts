@@ -2,7 +2,7 @@ import {createHash} from "node:crypto"
 import {describe, test, expect, beforeAll, beforeEach} from "vitest"
 import {SignJWT, exportJWK, generateKeyPair, type CryptoKey, type JWTPayload} from "jose"
 import {NOT_AUTHORIZED} from "@grest-ts/schema"
-import {OidcRelyingParty} from "./OidcRelyingParty"
+import {OidcRelyingParty, type OidcClientAuthMethod} from "./OidcRelyingParty"
 
 const ISSUER = "https://idp.test"
 const CLIENT_ID = "app-client"
@@ -110,6 +110,21 @@ describe("OidcRelyingParty", () => {
         expect(fake.lastTokenRequest?.get("redirect_uri")).toBe(REDIRECT)
         const basic = atob(fake.lastTokenAuthorization!.replace(/^Basic /, "")).split(":").map(decodeURIComponent)
         expect(basic).toEqual([CLIENT_ID, "s3cret"])
+        expect(fake.lastTokenRequest?.get("client_secret")).toBeNull()
+    })
+
+    test("sends the client secret in the body with client_secret_post, and picks up a change at use", async () => {
+        let method: OidcClientAuthMethod = "client_secret_post"
+        const party = new OidcRelyingParty({
+            issuer: () => ISSUER, clientId: () => CLIENT_ID, clientSecret: () => "s3~cret", redirectUri: () => REDIRECT,
+            scope: () => "openid", clientAuthMethod: () => method, fetch: fake.fetch as never,
+        })
+        await signIn(party)
+        expect(fake.lastTokenAuthorization).toBeUndefined()
+        expect([fake.lastTokenRequest?.get("client_id"), fake.lastTokenRequest?.get("client_secret")]).toEqual([CLIENT_ID, "s3~cret"])
+        method = "client_secret_basic"
+        await signIn(party)
+        expect(atob(fake.lastTokenAuthorization!.replace(/^Basic /, "")).split(":").map(decodeURIComponent)).toEqual([CLIENT_ID, "s3~cret"])
         expect(fake.lastTokenRequest?.get("client_secret")).toBeNull()
     })
 
