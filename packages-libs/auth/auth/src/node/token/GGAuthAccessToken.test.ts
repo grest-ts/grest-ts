@@ -22,12 +22,12 @@ async function expectAuthError(p: Promise<unknown>, code: string): Promise<void>
     expect(err.getDebugContext()?.debugMessage).toContain(code)
 }
 
-function accessToken(overrides: { accessTtlMs?: number; audience?: string } = {}) {
+function accessToken(overrides: { accessTtlMs?: number; audience?: string; signer?: HmacSigner } = {}) {
     return new GGAuthAccessToken({
-        signer: new HmacSigner("unit-test-secret-which-is-long-enough"),
+        signer: overrides.signer ?? new HmacSigner("unit-test-secret-which-is-long-enough"),
         claimSchema: IsClaims,
         accessTtlMs: overrides.accessTtlMs ?? 15 * 60 * 1000,
-        audience: overrides.audience,
+        audience: overrides.audience ?? "app-user",
     })
 }
 
@@ -37,6 +37,7 @@ describe("GGAuthAccessToken", () => {
         const auth = new GGAuthAccessToken({
             signer: new HmacSigner("unit-test-secret-which-is-long-enough"),
             claimSchema: IsClaims,
+            audience: "app-user",
             now: () => now,  // no accessTtlMs → default
         })
         const access = await auth.issue("user-1", {permissions: [Perm.Read]})
@@ -57,6 +58,7 @@ describe("GGAuthAccessToken", () => {
             signer: new HmacSigner("secret-secret-secret-secret-secret"),
             claimSchema: IsObject({orgId: IsString, admin: IsBoolean, permissions: IsArray(IsEnum(Perm))}),
             accessTtlMs: 60_000,
+            audience: "app-user",
         })
         const access = await auth.issue("user-1", {orgId: "org-9", admin: true, permissions: [Perm.Read]})
         const payload = await auth.verify(access.token)
@@ -95,5 +97,15 @@ describe("GGAuthAccessToken", () => {
         const orgAuth = accessToken({audience: "kratt-org"})
         const access = await userAuth.issue("user-1", {permissions: [Perm.Read]})
         await expectAuthError(orgAuth.verify(access.token), "TOKEN_INVALID")
+    })
+
+    test("an audience is required", () => {
+        expect(() => accessToken({audience: ""})).toThrow(/audience is required/)
+    })
+
+    test("token without exp is rejected", async () => {
+        const signer = new HmacSigner("unit-test-secret-which-is-long-enough")
+        const token = await signer.sign({sub: "user-1", aud: "app-user", iat: Math.floor(Date.now() / 1000), data: {permissions: []}})
+        await expectAuthError(accessToken({signer}).verify(token), "TOKEN_INVALID")
     })
 })

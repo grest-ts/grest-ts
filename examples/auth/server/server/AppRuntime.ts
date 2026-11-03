@@ -29,12 +29,14 @@ export class AppRuntime extends GGRuntime {
             access: new GGAuthAccessToken({
                 signer: new HmacSigner(SECRET),
                 claimSchema: IsUserClaims,
+                audience: "app-user",
                 accessTtlMs: 60 * 60 * 1000
             })
         })
         const orgTokenEngine = new GGAuthAccessToken({
             signer: new HmacSigner(SECRET + "-org"),
             claimSchema: IsOrgUser,
+            audience: "app-org",
             accessTtlMs: 8 * 60 * 60 * 1000,
         })
 

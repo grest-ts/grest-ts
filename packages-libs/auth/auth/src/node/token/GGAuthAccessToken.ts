@@ -22,8 +22,8 @@ export interface GGAuthAccessTokenOptions<C extends object, S extends TokenVerif
     // Access token lifetime. Defaults to 30 min — short-lived by design, paired with
     // rotating refresh so expiry is seamless. Override for stricter/looser policy.
     accessTtlMs?: number
-    // When set, tokens carry `aud` and verifyAccess rejects a different audience.
-    audience?: string
+    // Tokens carry `aud` and verify rejects a different audience.
+    audience: string
     // When set, tokens carry `iss` and verify rejects another issuer. Read per call (config).
     issuer?: () => string
     now?: () => number
@@ -38,7 +38,7 @@ export class GGAuthAccessToken<C extends object, S extends TokenVerifier = Token
     public readonly signer: S
     private readonly claims: GGSchema<C>
     public readonly accessTtlMs: number
-    public readonly audience: string | undefined
+    public readonly audience: string
     public readonly issuer: (() => string) | undefined
     private readonly now: () => number
 
@@ -46,6 +46,7 @@ export class GGAuthAccessToken<C extends object, S extends TokenVerifier = Token
         this.signer = options.signer
         this.claims = options.claimSchema ?? (IsObject({}) as unknown as GGSchema<C>)
         this.accessTtlMs = options.accessTtlMs ?? 30 * 60 * 1000
+        if (!options.audience) throw new Error("GGAuthAccessToken: audience is required")
         this.audience = options.audience
         this.issuer = options.issuer
         this.now = options.now ?? Date.now
@@ -61,7 +62,8 @@ export class GGAuthAccessToken<C extends object, S extends TokenVerifier = Token
         const payload = await this.signer.verify(accessToken)
         const sub = payload["sub"]
         if (typeof sub !== "string") throw new NOT_AUTHORIZED({debugMessage: "TOKEN_INVALID: missing sub"})
-        if (this.audience !== undefined && payload["aud"] !== this.audience) {
+        if (typeof payload["exp"] !== "number") throw new NOT_AUTHORIZED({debugMessage: "TOKEN_INVALID: missing exp"})
+        if (payload["aud"] !== this.audience) {
             throw new NOT_AUTHORIZED({debugMessage: "TOKEN_INVALID: wrong audience"})
         }
         if (this.issuer && payload["iss"] !== this.issuer()) {
@@ -72,7 +74,7 @@ export class GGAuthAccessToken<C extends object, S extends TokenVerifier = Token
             data: Object.freeze(claims),
             sub,
             iat: Number(payload["iat"]),
-            exp: Number(payload["exp"]),
+            exp: payload["exp"],
             ...(typeof payload["auth_time"] === "number" ? {auth_time: payload["auth_time"]} : {}),
         } as GGAccessPayload<C>
     }
@@ -92,7 +94,7 @@ export class GGAuthAccessToken<C extends object, S extends TokenVerifier = Token
         // Only reachable through issue/_sign, whose types require S to be a TokenSigner.
         const token = await (this.signer as TokenVerifier as TokenSigner).sign({
             data: this.claims.parse(claims),
-            ...(this.audience !== undefined ? {aud: this.audience} : {}),
+            aud: this.audience,
             ...(this.issuer ? {iss: this.issuer()} : {}),
             sub: subject,
             iat: Math.floor(nowMs / 1000),
