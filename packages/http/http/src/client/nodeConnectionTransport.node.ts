@@ -14,6 +14,8 @@ import type {GGHttpTransport} from "./GGHttpSchema.createClient"
 const DEFAULT_MAX_AGENTS = 2048
 const DEFAULT_IDLE_TTL_MS = 5 * 60_000
 const DEFAULT_SWEEP_INTERVAL_MS = 60_000
+// undici's default 300 s headersTimeout would silently cap slow calls below the client's own `timeout`.
+const AGENT_TIMEOUTS = {headersTimeout: 0}
 
 function normalizeFingerprint(input: string): string {
     return input.replace(/:/g, "").toLowerCase()
@@ -48,7 +50,7 @@ function buildAgent(s: GGConnectionSettings): Agent {
     const connect = connectOptions(s)
     const pin = s.tlsPin
     if (!pin) {
-        return new Agent({connect})
+        return new Agent({...AGENT_TIMEOUTS, connect})
     }
     const expected = normalizeFingerprint(pin.fingerprint256)
     if (!/^[0-9a-f]{64}$/.test(expected)) {
@@ -56,6 +58,7 @@ function buildAgent(s: GGConnectionSettings): Agent {
     }
     const baseConnector = buildConnector({...connect, rejectUnauthorized: false, servername: pin.servername})
     return new Agent({
+        ...AGENT_TIMEOUTS,
         connect(opts, cb) {
             baseConnector(opts, (err, socket) => {
                 if (err) return cb(err, null)
