@@ -61,7 +61,6 @@ export const ORG_TOKEN_WIRE_HANDLER = ORG_TOKEN_WIRE.define((orgs: WireOrgServic
 export const AGENT = new GGContextKey("wireTestAgent", IsObject({workspace: IsString}))
 
 export class WireAgentService {
-    // The token must be "agent-secret"; the workspace hint names the agent.
     public verify(token: string | undefined, workspace: string | undefined): {workspace: string} {
         if (token !== "agent-secret" || !workspace) throw new NOT_AUTHORIZED({debugMessage: "Invalid agent token"})
         return {workspace}

@@ -3,6 +3,7 @@ import {GGContractMethod} from "@grest-ts/schema";
 import {ClientHttpRouteToRpcTransformClientConfig, GGHttpFetchRequest} from "../../schema/GGHttpSchema";
 import {GGContextKey, type GGConnectionSettings, type GGTransportMiddleware} from "@grest-ts/context";
 import {GGContextKeySynchronizer} from "../../client/GGContextKeySynchronizer";
+import {expandWireAlternatives} from "../../schema/GGWireAlternatives";
 
 export class GGRpcRequestBuilder {
 
@@ -45,7 +46,7 @@ export class GGRpcRequestBuilder {
                 body: undefined
             }
         }
-        for (const mw of this.middlewares ?? []) {
+        for (const mw of expandWireAlternatives(this.middlewares ?? [])) {
             if (mw instanceof GGContextKey) {
                 await GGContextKeySynchronizer.waitFor(mw)
             }

@@ -2,6 +2,7 @@ import {describe, expect, it} from "vitest"
 import {GGHeader} from "./GGHeader"
 import {GGWireAlternatives} from "./GGWireAlternatives"
 import {checkWireConflicts} from "../server/checkers/checkWireConflicts"
+import {checkWiresImplemented} from "../server/checkers/checkWiresImplemented"
 
 const USER = new GGHeader("authorization", {scheme: "bearer"})
 const AGENT = new GGHeader("x-agent-token")
@@ -21,6 +22,11 @@ describe("GGWireAlternatives", () => {
         const other = new GGHeader("authorization")
         const schema = {name: "Clash", apiMiddlewares: [new GGWireAlternatives([USER], [other])]}
         expect(() => checkWireConflicts([schema], [])).toThrow(/same header "authorization"/)
+    })
+
+    it("refuses at start a group without a .define()d wire", () => {
+        const schema = {name: "Ambient", apiMiddlewares: [new GGWireAlternatives([USER], [AGENT])]}
+        expect(() => checkWiresImplemented([schema], [])).toThrow(/needs a .define\(\)d wire[\s\S]*Ambient/)
     })
 
     it("has no active wires before a request chose a group", () => {

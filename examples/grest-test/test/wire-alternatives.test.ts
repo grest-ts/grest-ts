@@ -38,8 +38,18 @@ describe("alternative wires: a user token OR an agent token", () => {
         await expect(callOn(WireEitherApi, as({agent: "wrong", workspace: "ws-1"})).whoami()).rejects.toThrow(/NOT_AUTHORIZED/)
     })
 
+    test("a bad credential in the first group refuses even with a valid second group", async () => {
+        await expect(callOn(WireEitherApi, as({user: "nobody", agent: "agent-secret", workspace: "ws-1"})).whoami()).rejects.toThrow(/NOT_AUTHORIZED/)
+    })
+
     test("with both, the first group wins and the other group's values are dropped", async () => {
         expect(await callOn(WireEitherApi, as({user: "alice", workspace: "ws-1"})).whoami()).toBe("user:alice")
+        expect(await callOn(WireEitherApi, as({user: "alice", agent: "agent-secret", workspace: "ws-1"})).whoami()).toBe("user:alice")
+    })
+
+    test("an ambient wire alone doesn't pick its group; a partial group refuses", async () => {
+        await expect(callOn(WireEitherApi, as({workspace: "ws-1"})).whoami()).rejects.toThrow(/NOT_AUTHORIZED/)
+        await expect(callOn(WireEitherApi, as({agent: "agent-secret"})).whoami()).rejects.toThrow(/NOT_AUTHORIZED/)
     })
 
     test("only the chosen group's wires grant permissions", async () => {

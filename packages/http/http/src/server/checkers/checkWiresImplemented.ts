@@ -4,7 +4,7 @@
  */
 import {GGWireContextKey} from "../../schema/GGWireContextKey"
 import {wireIsDefined} from "../../schema/GGWireContextKey.node.js"
-import {expandWireAlternatives} from "../../schema/GGWireAlternatives"
+import {expandWireAlternatives, GGWireAlternatives} from "../../schema/GGWireAlternatives"
 import type {GGTransportMiddleware} from "@grest-ts/context"
 
 interface HttpSchemaLike {
@@ -22,16 +22,26 @@ export function checkWiresImplemented(
     webSocketSchemas: readonly WebSocketSchemaLike[],
 ): void {
     const surfaces: {name: string; wires: readonly GGTransportMiddleware[]}[] = [
-        ...httpSchemas.map(s => ({name: s.name, wires: expandWireAlternatives(s.apiMiddlewares)})),
-        ...webSocketSchemas.map(s => ({name: s.name, wires: expandWireAlternatives(s.middlewares)})),
+        ...httpSchemas.map(s => ({name: s.name, wires: s.apiMiddlewares})),
+        ...webSocketSchemas.map(s => ({name: s.name, wires: s.middlewares})),
     ]
+    const unverified: string[] = []
     const missing: string[] = []
     for (const surface of surfaces) {
         for (const mw of surface.wires) {
+            if (!(mw instanceof GGWireAlternatives)) continue
+            for (const group of mw.groups) {
+                if (!group.some(wireIsDefined)) unverified.push(`  ${surface.name}  [${group.map(w => w.name).join(", ")}]`)
+            }
+        }
+        for (const mw of expandWireAlternatives(surface.wires)) {
             if (mw instanceof GGWireContextKey && wireIsDefined(mw) && !mw.hasHandler()) {
                 missing.push(`  ${surface.name}  uses wire "${mw.name}"`)
             }
         }
+    }
+    if (unverified.length > 0) {
+        throw new Error(`GGHttpServer: every GGWireAlternatives group needs a .define()d wire to authenticate it:\n\n${unverified.join("\n")}`)
     }
     if (missing.length > 0) {
         throw new Error(
