@@ -36,6 +36,40 @@ describe("reasons carry the deciding id and the author's ref", () => {
         ])
     })
 
+    test("token scope and restriction rules; the strictest ceiling sets the level", async () => {
+        const authz = new GGAuthz({
+            model: {...model, tokenScopes: [{name: "repo:write", allow: [{actions: ["git:Push"], approval: "ask", ref: "scope-rule"}]}]},
+            policies: {bindings: [{principal: "user:ann", role: "writer", on: org}]},
+            resolver: new GGAuthzMemoryResolver(data),
+        })
+        const d = await decide(authz, agent({scopes: ["repo:write"], restrictions: [{actions: ["git:Push"], approval: "critical", ref: "restriction-rule"}]}), "git:Push")
+        expect(d.context.reasons).toEqual(expect.arrayContaining([
+            expect.objectContaining({layer: "scope", kind: "ceiling-passed", id: "repo:write", ref: "scope-rule"}),
+            expect.objectContaining({layer: "restriction", kind: "ceiling-passed", ref: "restriction-rule"}),
+            expect.objectContaining({layer: "approval", level: "critical", source: "restriction", ref: "restriction-rule"}),
+        ]))
+    })
+
+    test("a guardrail ceiling's level carries where it is attached", async () => {
+        const authz = engine({guardrails: [{id: "careful", on: org, principals: ["agent:*"], ceiling: [{actions: ["git:*"], approval: "dangerous", ref: "g-rule"}]}]})
+        const d = await decide(authz, agent(), "git:Push")
+        expect(d.context.reasons.find(r => r.layer === "approval")).toMatchObject({level: "dangerous", source: "guardrail", id: "careful", on: org, ref: "g-rule"})
+        const request = {subject: agent(), action: {name: "git:Push"}, resource: {type: "git:repo", id: repo("site")}}
+        expect(GGAuthz.explain(request, d)).toContain("approval level dangerous (guardrail careful)")
+    })
+
+    test("a policy below the platform floor leaves the floor as the source", async () => {
+        const authz = engine({resourcePolicies: [{on: repo("site"), approvals: [{actions: ["git:Delete"], level: "auto"}]}]})
+        const approval = (await decide(authz, agent(), "git:Delete")).context.reasons.find(r => r.layer === "approval")
+        expect(approval).toMatchObject({level: "ask", source: "floor", lowered: {on: repo("site"), level: "auto"}})
+    })
+
+    test("canGrant reasons carry the requested binding's ref", async () => {
+        const binding = {principal: "user:ben", role: "writer", on: repo("site"), ref: "grant-1"}
+        expect((await engine().canGrant({subject: {type: "user", id: "ann"}, binding})).context.reasons).toContainEqual(expect.objectContaining({layer: "grant", ref: "grant-1"}))
+        expect((await engine().canGrant({subject: {type: "user", id: "ben"}, binding})).context.reasons).toEqual([expect.objectContaining({kind: "escalation", ref: "grant-1"})])
+    })
+
     test("guardrail and statement denies", async () => {
         const authz = engine({
             guardrails: [{id: "no-delete", on: org, deny: [{actions: ["git:Delete"], ref: "assignment-7"}]}],

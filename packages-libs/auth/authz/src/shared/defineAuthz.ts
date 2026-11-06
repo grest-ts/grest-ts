@@ -60,6 +60,7 @@ export interface GGAuthzRuleSpec {
     when?: readonly string[]
     unless?: readonly string[]
     conditions?: readonly GGAuthzCondition[]
+    ref?: string
 }
 
 export interface GGAuthzDefinedTokenScope {

@@ -22,6 +22,7 @@ import {
     type GGAuthzPlan,
     type GGAuthzPlanFilter,
     type GGAuthzPolicies,
+    type GGAuthzCeilingLayer,
     type GGAuthzReason,
     type GGAuthzRemedy,
     type GGAuthzRequest,
@@ -135,7 +136,7 @@ interface Guardrail {
 }
 
 interface Ceiling {
-    layer: "guardrail" | "boundary" | "scope" | "restriction"
+    layer: GGAuthzCeilingLayer
     id: string
     on?: string
     rules: Rule[]
@@ -144,8 +145,9 @@ interface Ceiling {
 
 interface CeilingLevel {
     level: number
-    layer: Ceiling["layer"]
+    layer: GGAuthzCeilingLayer
     id: string
+    on?: string
     ref?: string
 }
 
@@ -332,9 +334,9 @@ export class GGAuthz {
         const missing = await this.missingWith(subject, [...actions], on, context, loader)
         if (!missing) return invalid(`Scope chain of ${on} is cyclic or deeper than ${MAX_DEPTH}`)
         if (missing.length) {
-            return deny([{layer: "grant", kind: "escalation", role: binding.role, on, actions: missing, message: `granting role ${binding.role} on ${on} needs ${missing.join(", ")}, which the grantor doesn't hold there`}])
+            return deny([{layer: "grant", kind: "escalation", role: binding.role, on, actions: missing, ref: binding.ref, message: `granting role ${binding.role} on ${on} needs ${missing.join(", ")}, which the grantor doesn't hold there`}])
         }
-        const held: GGAuthzReason = {layer: "grant", kind: "binding", role: binding.role, on, message: `the grantor holds every action of role ${binding.role} on ${on}`}
+        const held: GGAuthzReason = {layer: "grant", kind: "binding", role: binding.role, on, ref: binding.ref, message: `the grantor holds every action of role ${binding.role} on ${on}`}
         return {...granted, context: {...granted.context, reasons: [...granted.context.reasons, held]}}
     }
 
@@ -475,7 +477,7 @@ export class GGAuthz {
         const passed: GGAuthzReason[] = []
         const failed: GGAuthzReason[] = []
         // Rules within a ceiling are a union: its least strict matching rule sets its level. Ceilings intersect: the strictest counts.
-        let ceilingLevel: CeilingLevel = {level: -1, layer: "restriction", id: ""}
+        let ceilingLevel: CeilingLevel | undefined
         for (const c of this.ceilings(e.request.subject, e.p, e.chainSet)) {
             let r: Rule | undefined
             for (const m of c.rules) {
@@ -485,16 +487,17 @@ export class GGAuthz {
             const id = c.ids ? c.ids[c.rules.indexOf(r!)] ?? c.id : c.id
             if (r) passed.push({layer: c.layer, kind: "ceiling-passed", id, on: c.on, actions: r.source.actions, ref: r.source.ref})
             else failed.push({layer: c.layer, kind: "ceiling-failed", id: c.id, on: c.on})
-            if (r && r.approval > ceilingLevel.level) ceilingLevel = {level: r.approval, layer: c.layer, id, ref: r.source.ref}
+            if (r && r.approval > (ceilingLevel?.level ?? -1)) ceilingLevel = {level: r.approval, layer: c.layer, id, on: c.on, ref: r.source.ref}
         }
         if (failed.length) {
-            if (!bindingsOnly && failed.every(f => f.layer === "scope") && this.grants(e).length && !(e.p.workload && this.approvalFor(action, e.chain).level === "humans-only")) {
+            // A ceiling hides the humans-only level beneath it; report it too, so a caller needn't re-evaluate without the ceiling.
+            const approval = !bindingsOnly && e.p.workload ? this.approvalFor(action, e.chain) : undefined
+            if (approval?.level === "humans-only") return deny([...failed, approval])
+            if (!bindingsOnly && failed.every(f => f.layer === "scope") && this.grants(e).length) {
                 const scopes = [...this.tokenScopes].filter(([, rules]) => rules.some(r => this.matches(r, e) === true)).map(([name]) => name)
                 if (scopes.length) return deny(failed, {scopes})
             }
-            // A ceiling hides the humans-only level beneath it; report it too, so a caller needn't re-evaluate without the ceiling.
-            const approval = !bindingsOnly && e.p.workload ? this.approvalFor(action, e.chain) : undefined
-            return deny(approval?.level === "humans-only" ? [...failed, approval] : failed)
+            return deny(failed)
         }
 
         const allowed = this.grants(e, bindingsOnly)
@@ -576,7 +579,7 @@ export class GGAuthz {
         if (ceiling && ceiling.level > level) {
             return {
                 layer: "approval", kind: "approval", level: GG_AUTHZ_APPROVAL_LEVELS[ceiling.level]!, locked: false, lowered,
-                message: `${ceiling.layer} ${ceiling.id}`, source: ceiling.layer, id: ceiling.id, ref: ceiling.ref,
+                message: `${ceiling.layer} ${ceiling.id}`, source: ceiling.layer, id: ceiling.id, on: ceiling.on, ref: ceiling.ref,
             }
         }
         const resolved = GG_AUTHZ_APPROVAL_LEVELS[Math.max(0, level)]!
