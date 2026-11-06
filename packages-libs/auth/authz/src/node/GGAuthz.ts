@@ -546,6 +546,7 @@ export class GGAuthz {
         }
         const restrictions = subject.properties?.restrictions
         if (restrictions) ceilings.push({layer: "restriction", id: "request restrictions", rules: restrictions.map(r => this.rule(r))})
+        for (const set of subject.properties?.restrictionSets ?? []) ceilings.push({layer: "restriction", id: set.id, rules: set.rules.map(r => this.rule(r))})
         return ceilings
     }
 
@@ -672,9 +673,10 @@ export class GGAuthz {
 
     private rootsFor(subject: GGAuthzSubject): Roots {
         const restrictions = subject.properties?.restrictions
-        if (!restrictions) return this.roots
+        const sets = subject.properties?.restrictionSets
+        if (!restrictions && !sets) return this.roots
         const roots = {...this.roots}
-        for (const r of restrictions) mark(roots, r.conditions)
+        for (const r of [...restrictions ?? [], ...sets?.flatMap(s => s.rules) ?? []]) mark(roots, r.conditions)
         return roots
     }
 
