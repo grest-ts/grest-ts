@@ -1,6 +1,6 @@
 import type {HttpMethod} from "@grest-ts/common";
 import {GGContractMethod} from "@grest-ts/schema";
-import {ClientHttpRouteToRpcTransformClientConfig, expandWireAlternatives, GGContextKeySynchronizer, GGHttpFetchRequest} from "@grest-ts/http";
+import {ClientHttpRouteToRpcTransformClientConfig, GGContextKeySynchronizer, GGHttpFetchRequest, outboundWires} from "@grest-ts/http";
 import {GGContextKey, type GGTransportMiddleware} from "@grest-ts/context";
 
 export class GGFileUploadRequestBuilder {
@@ -33,7 +33,7 @@ export class GGFileUploadRequestBuilder {
             headers: {}, // No Content-Type! fetch() auto-sets it with correct boundary for FormData
             body: formData
         }
-        for (const mw of expandWireAlternatives(this.middlewares ?? [])) {
+        for (const mw of outboundWires(this.middlewares ?? [])) {
             if (mw instanceof GGContextKey) {
                 await GGContextKeySynchronizer.waitFor(mw)
             }

@@ -1,4 +1,7 @@
-import {describe, expect, it} from "vitest"
+import {describe, expect, it, vi} from "vitest"
+import {GGContext} from "@grest-ts/context"
+import {SERVER_ERROR} from "@grest-ts/schema"
+import {GGRpcRequestBuilder} from "../rpc/RpcRequest/GGRpcRequestBuilder"
 import {GGHeader} from "./GGHeader"
 import {GGWireAlternatives} from "./GGWireAlternatives"
 import {checkWireConflicts} from "../server/checkers/checkWireConflicts"
@@ -31,5 +34,41 @@ describe("GGWireAlternatives", () => {
 
     it("has no active wires before a request chose a group", () => {
         expect(new GGWireAlternatives([USER], [AGENT]).activeWires()).toEqual([])
+    })
+
+    it("refreshes and sends only the group the client holds a value for", async () => {
+        await new GGContext("wire-alternatives-client").run(async () => {
+            const user = new GGHeader("authorization", {scheme: "bearer"})
+            const agent = new GGHeader("x-agent-token")
+            const userRecover = vi.fn(async () => {
+                throw new Error("refresh failed")
+            })
+            user.defineClient({isStale: () => true, recover: userRecover})
+            const agentRecover = vi.fn(async () => agent.set("fresh-agent"))
+            agent.defineClient({isStale: () => true, recover: agentRecover})
+            agent.set("stale-agent")
+
+            const builder = new GGRpcRequestBuilder("GET", "x", {
+                pathPrefix: "/",
+                contract: {errors: [SERVER_ERROR]},
+                middlewares: [new GGWireAlternatives([user], [agent])],
+            })
+            const request = await builder.createRequest(undefined)
+
+            expect(userRecover).not.toHaveBeenCalled()
+            expect(agentRecover).toHaveBeenCalledTimes(1)
+            expect(request.headers).toEqual({"x-agent-token": "fresh-agent"})
+        })
+    })
+
+    it("sends the first group's wires when the client holds values for several", async () => {
+        await new GGContext("wire-alternatives-client").run(async () => {
+            const alternatives = new GGWireAlternatives([USER], [AGENT])
+            USER.set("u")
+            AGENT.set("a")
+            const outbound = {headers: {} as Record<string, string>}
+            alternatives.update(outbound)
+            expect(outbound.headers).toEqual({authorization: "Bearer u"})
+        })
     })
 })

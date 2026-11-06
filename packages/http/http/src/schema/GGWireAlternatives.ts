@@ -35,12 +35,17 @@ export class GGWireAlternatives implements GGTransportMiddleware {
         Object.freeze(this)
     }
 
+    /** The group a client sends: the first one holding any value, else the first. */
+    public outboundWires(): readonly GGWireContextKey[] {
+        return this.groups.find(g => g.some(w => w.get() !== undefined)) ?? this.groups[0]!
+    }
+
     public update(outbound: GGOutbound): void {
-        for (const w of this.wires) w.update?.(outbound)
+        for (const w of this.outboundWires()) (w as GGTransportMiddleware).update?.(outbound)
     }
 
     public connectionSettings(settings: GGConnectionSettings): void {
-        for (const w of this.wires) w.connectionSettings?.(settings)
+        for (const w of this.outboundWires()) (w as GGTransportMiddleware).connectionSettings?.(settings)
     }
 
     public parse(inbound: GGInbound): void {
@@ -70,6 +75,11 @@ export class GGWireAlternatives implements GGTransportMiddleware {
     public respond(response: GGResponse): void {
         for (const w of this.wires) w.respond?.(response)
     }
+}
+
+/** The middlewares a client sends, each GGWireAlternatives replaced by its outbound group. */
+export function outboundWires(middlewares: readonly GGTransportMiddleware[]): GGTransportMiddleware[] {
+    return middlewares.flatMap((mw): readonly GGTransportMiddleware[] => mw instanceof GGWireAlternatives ? mw.outboundWires() : [mw])
 }
 
 /** The middlewares with each GGWireAlternatives replaced by its wires. */
