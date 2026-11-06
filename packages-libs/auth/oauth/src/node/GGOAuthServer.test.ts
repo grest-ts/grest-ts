@@ -794,6 +794,18 @@ describe("GGOAuthServer", () => {
         expect((await token({grant_type: "refresh_token", refresh_token: connected.tokens.refreshToken!, client_id: mcpClient})).access_token).toEqual(expect.any(String))
     })
 
+    test("logout without a redirect ends on a page that loads nothing from other hosts", async () => {
+        const browser = new Browser()
+        await signIn(browser, "app", FIRST_PARTY_REDIRECT)
+        const page = await (await browser.get("/oauth/logout")).text()
+        const action = page.match(/action="([^"]+)"/)![1]
+        const fields = Object.fromEntries([...page.matchAll(/<input type="hidden" name="([^"]+)" value="([^"]*)"/g)].map(m => [m[1], m[2]]))
+        const done = await browser.get(action, {method: "POST", headers: {"content-type": "application/x-www-form-urlencoded"}, body: new URLSearchParams({...fields, logout: "yes"}).toString()})
+        const success = await (await browser.get(done.headers.get("location")!)).text()
+        expect(success).toContain("You are signed out.")
+        expect(success).not.toMatch(/https?:\/\//)
+    })
+
     test("a login ticket link never points at a host the request named itself", async () => {
         // A client can't set Host from fetch; X-Forwarded-Host (trusted behind a proxy) feeds the same value.
         const res = await fetch(authorizeUrl("app", FIRST_PARTY_REDIRECT, pkce().challenge), {redirect: "manual", headers: {"x-forwarded-host": "evil.example"}})
