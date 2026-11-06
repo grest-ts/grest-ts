@@ -5,6 +5,7 @@ export * from "./schema/GGCookie";
 export * from "./schema/GGWireContextKey";
 export * from "./schema/GGAuthority";
 export * from "./schema/GGHeader";
+export * from "./schema/GGWireAlternatives";
 export * from "./schema/GGConnectionSettingsKey";
 export * from "./schema/GGLoopbackGuard";
 export * from "./rpc/GGHttpRouteRPC";

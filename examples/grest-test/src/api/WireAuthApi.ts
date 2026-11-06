@@ -1,4 +1,4 @@
-import {GGRpc, GGHeader, GGHttpSchema} from "@grest-ts/http"
+import {GGRpc, GGHeader, GGHttpSchema, GGWireAlternatives} from "@grest-ts/http"
 import {GGWebSocketSchema} from "@grest-ts/websocket"
 import {FORBIDDEN, GGContractClass, GG_NO_PERMISSIONS, IsArray, IsEnum, IsObject, IsString, NOT_AUTHORIZED, SERVER_ERROR, GGDuplexContract} from "@grest-ts/schema"
 import {enumOf, type Values} from "@grest-ts/common"
@@ -112,4 +112,31 @@ export const WireLiveApi = new GGWebSocketSchema({
     contract: WireLiveApiContract,
     path: "ws/wire-live",
     use: [USER_TOKEN_WIRE],
+})
+
+// ---- alternative wires: a user's token OR an agent's token + workspace hint ------------------
+export const AGENT_TOKEN_WIRE = new GGHeader("x-agent-token", {})
+export const AGENT_WORKSPACE_WIRE = new GGHeader("x-agent-workspace")
+
+export const WireEitherApiContract = new GGContractClass("WireEitherApi", {
+    whoami: {
+        success: IsString,
+        errors: [NOT_AUTHORIZED, SERVER_ERROR],
+        permission: GG_NO_PERMISSIONS,
+    },
+    adminOnly: {
+        success: IsString,
+        errors: [NOT_AUTHORIZED, FORBIDDEN, SERVER_ERROR],
+        permission: WirePermission.ADMIN,
+    },
+})
+
+export const WireEitherApi = new GGHttpSchema({
+    contract: WireEitherApiContract,
+    pathPrefix: "api/wire-either",
+    use: [new GGWireAlternatives([USER_TOKEN_WIRE], [AGENT_TOKEN_WIRE, AGENT_WORKSPACE_WIRE])],
+    routes: {
+        whoami: GGRpc.GET("whoami"),
+        adminOnly: GGRpc.GET("admin"),
+    }
 })

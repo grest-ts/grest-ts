@@ -3,6 +3,7 @@ import {ClientHttpRouteToRpcTransformClientCodec, GGHttpCodec, GGHttpSchema} fro
 import {isBrowser} from "@grest-ts/common";
 import {GGContext, GGContextStore, type GGConnectionSettings} from "@grest-ts/context";
 import type {GGWireContextKey} from "../schema/GGWireContextKey";
+import {expandWireAlternatives} from "../schema/GGWireAlternatives";
 
 
 declare module "../schema/GGHttpSchema" {
@@ -128,7 +129,7 @@ export function createClient<TContract extends GGContractApiDefinition>(
     }
 
     for (const {wire} of config.wires ?? []) {
-        if (!httpSchema.apiMiddlewares.includes(wire)) {
+        if (!expandWireAlternatives(httpSchema.apiMiddlewares).includes(wire)) {
             throw new Error(`Wire "${wire.name}" is not used by ${httpSchema.name}, so its value would never be sent.`);
         }
     }

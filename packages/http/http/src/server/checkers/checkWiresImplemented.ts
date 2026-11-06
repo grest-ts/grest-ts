@@ -4,24 +4,26 @@
  */
 import {GGWireContextKey} from "../../schema/GGWireContextKey"
 import {wireIsDefined} from "../../schema/GGWireContextKey.node.js"
+import {expandWireAlternatives} from "../../schema/GGWireAlternatives"
+import type {GGTransportMiddleware} from "@grest-ts/context"
 
 interface HttpSchemaLike {
     name: string
-    apiMiddlewares: readonly unknown[]
+    apiMiddlewares: readonly GGTransportMiddleware[]
 }
 
 interface WebSocketSchemaLike {
     name: string
-    middlewares: readonly unknown[]
+    middlewares: readonly GGTransportMiddleware[]
 }
 
 export function checkWiresImplemented(
     httpSchemas: readonly HttpSchemaLike[],
     webSocketSchemas: readonly WebSocketSchemaLike[],
 ): void {
-    const surfaces: {name: string; wires: readonly unknown[]}[] = [
-        ...httpSchemas.map(s => ({name: s.name, wires: s.apiMiddlewares})),
-        ...webSocketSchemas.map(s => ({name: s.name, wires: s.middlewares})),
+    const surfaces: {name: string; wires: readonly GGTransportMiddleware[]}[] = [
+        ...httpSchemas.map(s => ({name: s.name, wires: expandWireAlternatives(s.apiMiddlewares)})),
+        ...webSocketSchemas.map(s => ({name: s.name, wires: expandWireAlternatives(s.middlewares)})),
     ]
     const missing: string[] = []
     for (const surface of surfaces) {

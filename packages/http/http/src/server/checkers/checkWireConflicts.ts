@@ -9,6 +9,7 @@
  */
 import type {GGTransportMiddleware} from "@grest-ts/context"
 import {GGWireContextKey} from "../../schema/GGWireContextKey"
+import {expandWireAlternatives} from "../../schema/GGWireAlternatives"
 
 interface SchemaLike {
     name: string
@@ -27,8 +28,8 @@ export function checkWireConflicts(
     webSocketSchemas: readonly {name: string; middlewares: readonly GGTransportMiddleware[]}[],
 ): void {
     const schemas: SchemaLike[] = [
-        ...httpSchemas.map(s => ({name: s.name, wires: s.apiMiddlewares})),
-        ...webSocketSchemas.map(s => ({name: s.name, wires: s.middlewares})),
+        ...httpSchemas.map(s => ({name: s.name, wires: expandWireAlternatives(s.apiMiddlewares)})),
+        ...webSocketSchemas.map(s => ({name: s.name, wires: expandWireAlternatives(s.middlewares)})),
     ]
 
     const conflicts: string[] = []
