@@ -23,6 +23,9 @@ export const IsGGAuthzPrincipalSelector = IsString.regex(/^(?:everyone|[a-z][a-z
     example: "group:eng",
 })
 export const IsGGAuthzFactName = IsString.regex(/^[A-Za-z][A-Za-z0-9_]*$/).docs({title: "Fact name", example: "mfa"})
+export const GG_AUTHZ_CEILING_LAYERS = ["guardrail", "boundary", "scope", "restriction"] as const
+export type GGAuthzCeilingLayer = typeof GG_AUTHZ_CEILING_LAYERS[number]
+
 export const GG_AUTHZ_APPROVAL_LEVELS = ["auto", "ask-once", "ask", "critical", "dangerous", "humans-only"] as const
 export const IsGGAuthzApprovalLevel = IsLiteral(...GG_AUTHZ_APPROVAL_LEVELS).docs({
     title: "Approval level",
@@ -70,6 +73,8 @@ export const IsGGAuthzRole = IsObject({
 })
 export type GGAuthzRole = typeof IsGGAuthzRole.infer
 
+const IsRef = IsString.orUndefined.docs({description: "Opaque to the engine: returned as `ref` on the reasons this decides, e.g. the caller's own record id"})
+
 const IsActions = IsArray(IsGGAuthzActionPattern)
 const IsResources = IsArray(IsGGAuthzRnMatcher).orUndefined.docs({description: "Any must match; omitted = any resource"})
 
@@ -82,6 +87,7 @@ export const IsGGAuthzRule = IsObject({
     approval: IsLiteral(...GG_AUTHZ_APPROVAL_LEVELS.filter((l): l is Exclude<GGAuthzApprovalLevel, "humans-only"> => l !== "humans-only")).orUndefined.docs({
         description: "In a ceiling: the approval level a workload passing through this rule needs. A ceiling takes its least strict matching rule; the strictest ceiling counts. Leave an action out to deny it",
     }),
+    ref: IsRef,
 })
 export type GGAuthzRule = typeof IsGGAuthzRule.infer
 
@@ -118,6 +124,7 @@ export const IsGGAuthzBinding = IsObject({
     when: IsWhen,
     unless: IsUnless,
     conditions: IsConditions,
+    ref: IsRef,
 })
 export type GGAuthzBinding = typeof IsGGAuthzBinding.infer
 
@@ -168,6 +175,12 @@ export const IsGGAuthzEntity = IsObject({
 })
 export type GGAuthzEntity = typeof IsGGAuthzEntity.infer
 
+export const IsGGAuthzRestrictionSet = IsObject({
+    id: IsString.nonEmpty.docs({description: "Reported as the reason `id` when this set decides"}),
+    rules: IsArray(IsGGAuthzRule),
+})
+export type GGAuthzRestrictionSet = typeof IsGGAuthzRestrictionSet.infer
+
 export const IsGGAuthzSubject = IsObject({
     type: IsString.nonEmpty,
     id: IsString.nonEmpty,
@@ -176,6 +189,10 @@ export const IsGGAuthzSubject = IsObject({
         scopes: IsArray(IsString).orUndefined.docs({description: "Token scopes: a ceiling, like a boundary"}),
         via: IsArray(IsGGAuthzEntity).orUndefined.docs({description: "Further acting principals between the authority and this one (a delegation chain): each one's boundaries apply, each must clear denies"}),
         restrictions: IsArray(IsGGAuthzRule).orUndefined.docs({description: "A per-request ceiling, e.g. from the token's authorization details: nothing outside these rules"}),
+        restrictionSets: IsArray(IsGGAuthzRestrictionSet).refine(
+            sets => new Set(sets.map(s => s.id)).size === sets.length,
+            new GGIssueKey("restrictionSetIds", "Restriction set ids must be unique"),
+        ).orUndefined.docs({description: "More per-request ceilings, each like `restrictions`, e.g. a workload's own and those of the app it acts via; they intersect. Ids are unique"}),
         attributes: IsRecord(IsString, IsUnknown).orUndefined.docs({description: "The acting principal's attributes (`actor.*`, and `principal.*` when it acts for itself), as the caller knows them for this request; the resolver isn't asked"}),
     }).orUndefined,
 })
@@ -200,10 +217,10 @@ export const IsGGAuthzRequest = IsObject({
 export type GGAuthzRequest = typeof IsGGAuthzRequest.infer
 
 export const IsGGAuthzReason = IsObject({
-    layer: IsLiteral("request", "guardrail", "deny", "boundary", "scope", "restriction", "allow", "approval", "default", "grant"),
+    layer: IsLiteral("request", "deny", ...GG_AUTHZ_CEILING_LAYERS, "allow", "approval", "default", "grant"),
     kind: IsLiteral("invalid", "denied", "ceiling-failed", "ceiling-passed", "binding", "statement", "approval", "no-grant", "escalation"),
     message: IsString.orUndefined,
-    id: IsString.orUndefined.docs({description: "Guardrail / boundary id, token scope name or statement sid"}),
+    id: IsString.orUndefined.docs({description: "Guardrail / boundary id, token scope name, restriction set id or statement sid"}),
     on: IsString.orUndefined.docs({description: "Where the deciding binding / policy / guardrail is attached"}),
     principal: IsString.orUndefined,
     role: IsString.orUndefined,
@@ -211,6 +228,10 @@ export const IsGGAuthzReason = IsObject({
     level: IsGGAuthzApprovalLevel.orUndefined,
     locked: IsBoolean.orUndefined.docs({description: "The resolved level is a locked minimum: nothing below may lower it"}),
     lowered: IsObject({on: IsString, level: IsGGAuthzApprovalLevel}).orUndefined.docs({description: "A descendant's attempt to go below a locked minimum, ignored"}),
+    source: IsLiteral("default", "floor", "policy", ...GG_AUTHZ_CEILING_LAYERS).orUndefined.docs({
+        description: "On an approval reason, what set the level: nothing (`default`), `model.approvalFloor` (`floor`), a resource policy's approvals (`policy`, see `on`) or a ceiling rule (its layer, see `id`)",
+    }),
+    ref: IsString.orUndefined.docs({description: "The deciding binding's or rule's `ref`"}),
 })
 export type GGAuthzReason = typeof IsGGAuthzReason.infer
 

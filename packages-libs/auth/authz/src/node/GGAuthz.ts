@@ -22,9 +22,11 @@ import {
     type GGAuthzPlan,
     type GGAuthzPlanFilter,
     type GGAuthzPolicies,
+    type GGAuthzCeilingLayer,
     type GGAuthzReason,
     type GGAuthzRemedy,
     type GGAuthzRequest,
+    type GGAuthzRestrictionSet,
     type GGAuthzResourceProperties,
     type GGAuthzRule,
     type GGAuthzSubject,
@@ -97,6 +99,7 @@ interface Binding extends Conditional {
     role: string
     on: string
     actions: Set<string>
+    ref?: string
 }
 
 interface Statement extends Rule {
@@ -134,11 +137,19 @@ interface Guardrail {
 }
 
 interface Ceiling {
-    layer: "guardrail" | "boundary" | "scope" | "restriction"
+    layer: GGAuthzCeilingLayer
     id: string
     on?: string
     rules: Rule[]
     ids?: string[]
+}
+
+interface CeilingLevel {
+    level: number
+    layer: GGAuthzCeilingLayer
+    id: string
+    on?: string
+    ref?: string
 }
 
 interface Identity {
@@ -233,7 +244,7 @@ export class GGAuthz {
         for (const b of policies.bindings ?? []) {
             const actions = this.roles.get(b.role)
             if (!actions) throw new Error(`Unknown role ${b.role}`)
-            const binding: Binding = {principal: b.principal, role: b.role, on: b.on, actions, when: b.when, unless: b.unless, conditions: b.conditions}
+            const binding: Binding = {principal: b.principal, role: b.role, on: b.on, actions, when: b.when, unless: b.unless, conditions: b.conditions, ref: b.ref}
             mark(this.roots, b.conditions)
             push(this.bindingsByScope, b.on, binding)
             push(this.bindingsByPrincipal, b.principal, binding)
@@ -324,9 +335,9 @@ export class GGAuthz {
         const missing = await this.missingWith(subject, [...actions], on, context, loader)
         if (!missing) return invalid(`Scope chain of ${on} is cyclic or deeper than ${MAX_DEPTH}`)
         if (missing.length) {
-            return deny([{layer: "grant", kind: "escalation", role: binding.role, on, actions: missing, message: `granting role ${binding.role} on ${on} needs ${missing.join(", ")}, which the grantor doesn't hold there`}])
+            return deny([{layer: "grant", kind: "escalation", role: binding.role, on, actions: missing, ref: binding.ref, message: `granting role ${binding.role} on ${on} needs ${missing.join(", ")}, which the grantor doesn't hold there`}])
         }
-        const held: GGAuthzReason = {layer: "grant", kind: "binding", role: binding.role, on, message: `the grantor holds every action of role ${binding.role} on ${on}`}
+        const held: GGAuthzReason = {layer: "grant", kind: "binding", role: binding.role, on, ref: binding.ref, message: `the grantor holds every action of role ${binding.role} on ${on}`}
         return {...granted, context: {...granted.context, reasons: [...granted.context.reasons, held]}}
     }
 
@@ -453,12 +464,12 @@ export class GGAuthz {
             for (const g of this.guardrailsByScope.get(scope) ?? []) {
                 if (!applies(g.principals, g.except, e.p)) continue
                 for (const r of g.deny) {
-                    if (denies(r)) denied.push({layer: "guardrail", kind: "denied", id: g.id, on: g.on, actions: r.source.actions})
+                    if (denies(r)) denied.push({layer: "guardrail", kind: "denied", id: g.id, on: g.on, actions: r.source.actions, ref: r.source.ref})
                 }
             }
             for (const s of this.policies.get(scope)?.statements ?? []) {
                 if (s.effect === "deny" && applies(s.principals, s.except, e.p) && denies(s)) {
-                    denied.push({layer: "deny", kind: "denied", id: s.sid, on: s.on, actions: s.source.actions})
+                    denied.push({layer: "deny", kind: "denied", id: s.sid, on: s.on, actions: s.source.actions, ref: s.source.ref})
                 }
             }
         }
@@ -467,7 +478,7 @@ export class GGAuthz {
         const passed: GGAuthzReason[] = []
         const failed: GGAuthzReason[] = []
         // Rules within a ceiling are a union: its least strict matching rule sets its level. Ceilings intersect: the strictest counts.
-        let ceilingLevel: {level: number, source: string} = {level: -1, source: ""}
+        let ceilingLevel: CeilingLevel | undefined
         for (const c of this.ceilings(e.request.subject, e.p, e.chainSet)) {
             let r: Rule | undefined
             for (const m of c.rules) {
@@ -475,12 +486,15 @@ export class GGAuthz {
                 if (r?.approval === -1) break
             }
             const id = c.ids ? c.ids[c.rules.indexOf(r!)] ?? c.id : c.id
-            if (r) passed.push({layer: c.layer, kind: "ceiling-passed", id, on: c.on, actions: r.source.actions})
+            if (r) passed.push({layer: c.layer, kind: "ceiling-passed", id, on: c.on, actions: r.source.actions, ref: r.source.ref})
             else failed.push({layer: c.layer, kind: "ceiling-failed", id: c.id, on: c.on})
-            if (r && r.approval > ceilingLevel.level) ceilingLevel = {level: r.approval, source: `${c.layer} ${id}`}
+            if (r && r.approval > (ceilingLevel?.level ?? -1)) ceilingLevel = {level: r.approval, layer: c.layer, id, on: c.on, ref: r.source.ref}
         }
         if (failed.length) {
-            if (!bindingsOnly && failed.every(f => f.layer === "scope") && this.grants(e).length && !(e.p.workload && this.approvalFor(action, e.chain).level === "humans-only")) {
+            // A ceiling hides the humans-only level beneath it; report it too, so a caller needn't re-evaluate without the ceiling.
+            const approval = !bindingsOnly && e.p.workload ? this.approvalFor(action, e.chain) : undefined
+            if (approval?.level === "humans-only") return deny([...failed, approval])
+            if (!bindingsOnly && failed.every(f => f.layer === "scope") && this.grants(e).length) {
                 const scopes = [...this.tokenScopes].filter(([, rules]) => rules.some(r => this.matches(r, e) === true)).map(([name]) => name)
                 if (scopes.length) return deny(failed, {scopes})
             }
@@ -507,13 +521,13 @@ export class GGAuthz {
         for (const scope of e.chain) {
             for (const b of this.bindingsByScope.get(scope) ?? []) {
                 if (ids.has(b.principal) && b.actions.has(e.action) && this.conditions(b, e) === true) {
-                    allowed.push({layer: "allow", kind: "binding", principal: b.principal, role: b.role, on: b.on})
+                    allowed.push({layer: "allow", kind: "binding", principal: b.principal, role: b.role, on: b.on, ref: b.ref})
                 }
             }
             if (bindingsOnly) continue
             for (const s of this.policies.get(scope)?.statements ?? []) {
                 if (s.effect === "allow" && matchAny(s.principals, ids) && !matchAny(s.except, ids) && this.matches(s, e) === true) {
-                    allowed.push({layer: "allow", kind: "statement", id: s.sid, on: s.on, principal: s.principals.find(p => ids.has(p)), actions: s.source.actions})
+                    allowed.push({layer: "allow", kind: "statement", id: s.sid, on: s.on, principal: s.principals.find(p => ids.has(p)), actions: s.source.actions, ref: s.source.ref})
                 }
             }
         }
@@ -534,12 +548,11 @@ export class GGAuthz {
             const rules = granted.flatMap(s => this.tokenScopes.get(s)!)
             ceilings.push({layer: "scope", id: "token scopes", rules, ids: granted.flatMap(s => this.tokenScopes.get(s)!.map(() => s))})
         }
-        const restrictions = subject.properties?.restrictions
-        if (restrictions) ceilings.push({layer: "restriction", id: "request restrictions", rules: restrictions.map(r => this.rule(r))})
+        for (const set of restrictionSets(subject)) ceilings.push({layer: "restriction", id: set.id, rules: set.rules.map(r => this.requestRule(r))})
         return ceilings
     }
 
-    private approvalFor(action: string, chain: string[], ceiling?: {level: number, source: string}): GGAuthzReason {
+    private approvalFor(action: string, chain: string[], ceiling?: CeilingLevel): GGAuthzReason {
         let floor = this.floorLevel(action)
         let floorOn: string | undefined
         let level = -1
@@ -564,11 +577,15 @@ export class GGAuthz {
             on = floorOn
         }
         if (ceiling && ceiling.level > level) {
-            return {layer: "approval", kind: "approval", level: GG_AUTHZ_APPROVAL_LEVELS[ceiling.level]!, locked: false, lowered, message: ceiling.source}
+            return {
+                layer: "approval", kind: "approval", level: GG_AUTHZ_APPROVAL_LEVELS[ceiling.level]!, locked: false, lowered,
+                message: `${ceiling.layer} ${ceiling.id}`, source: ceiling.layer, id: ceiling.id, on: ceiling.on, ref: ceiling.ref,
+            }
         }
         const resolved = GG_AUTHZ_APPROVAL_LEVELS[Math.max(0, level)]!
+        const source = on ? "policy" : level < 0 ? "default" : "floor"
         const message = on ? undefined : level < 0 ? "default" : "platform floor"
-        return {layer: "approval", kind: "approval", level: resolved, on, locked: level >= 0 && level === floor, lowered, message}
+        return {layer: "approval", kind: "approval", level: resolved, on, locked: level >= 0 && level === floor, lowered, message, source}
     }
 
     private floorLevel(action: string): number {
@@ -657,10 +674,10 @@ export class GGAuthz {
     }
 
     private rootsFor(subject: GGAuthzSubject): Roots {
-        const restrictions = subject.properties?.restrictions
-        if (!restrictions) return this.roots
+        const sets = restrictionSets(subject)
+        if (!sets.length) return this.roots
         const roots = {...this.roots}
-        for (const r of restrictions) mark(roots, r.conditions)
+        for (const set of sets) for (const r of set.rules) mark(roots, r.conditions)
         return roots
     }
 
@@ -696,6 +713,16 @@ export class GGAuthz {
 
     private rule(r: GGAuthzRule, onUnknown?: OnUnknownAction): Rule {
         mark(this.roots, r.conditions)
+        return this.compile(r, onUnknown)
+    }
+
+    /** A request's own ceiling rule: its conditions are marked per request (`rootsFor`), and an action the model
+     *  doesn't know only narrows it. */
+    private requestRule(r: GGAuthzRule): Rule {
+        return this.compile(r, () => true)
+    }
+
+    private compile(r: GGAuthzRule, onUnknown?: OnUnknownAction): Rule {
         return {
             actions: expandActions(this.actions, r.actions, onUnknown),
             resources: r.resources?.map(m => GGAuthzRn.isExact(m) ? {exact: m.slice(1)} : GGAuthzRn.isPattern(m) ? {prefix: m.slice(0, -1)} : {within: m}),
@@ -750,6 +777,12 @@ function planFilter(within: string | undefined, source: Conditional & {resources
     if (source.unless) f.unless = source.unless
     if (residual.length) f.conditions = residual
     return f
+}
+
+function restrictionSets(subject: GGAuthzSubject): GGAuthzRestrictionSet[] {
+    const restrictions = subject.properties?.restrictions
+    const sets = subject.properties?.restrictionSets ?? []
+    return restrictions ? [{id: "request restrictions", rules: restrictions}, ...sets] : sets
 }
 
 function mark(roots: Roots, conditions: GGAuthzCondition[] | undefined): void {

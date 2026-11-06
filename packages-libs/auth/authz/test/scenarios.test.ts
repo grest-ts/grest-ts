@@ -43,7 +43,10 @@ describe("agent reading a release secret under the agent boundary", () => {
     })
     test("the boundary caps what the agent may do even when the human may", async () => {
         const d = await check(req("agent:ws-ann", "org:ManageMembers", rn.web, {for: "user:cleo"}))
-        expect(d.context.reasons).toEqual([expect.objectContaining({layer: "boundary", kind: "ceiling-failed", id: "agents"})])
+        expect(d.context.reasons).toEqual([
+            expect.objectContaining({layer: "boundary", kind: "ceiling-failed", id: "agents"}),
+            expect.objectContaining({layer: "approval", level: "humans-only", source: "policy"}),
+        ])
         expect((await check(req("user:cleo", "org:ManageMembers", rn.web))).decision).toBe(true)
     })
     test("an agent's own bindings don't count when it acts for a human", async () => {
