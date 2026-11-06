@@ -105,7 +105,7 @@ function setupRoutes<TContract extends GGContractApiDefinition>(
             scope.ensureEntered();
             return new GGContext("REQ", parentContext, true).run(async () => {
                 GG_TRACE.init();
-                GG_HTTP_REQUEST.set({port: server.port ?? 0, method: req.method ?? "", path: req.url ?? ""});
+                GG_HTTP_REQUEST.set({port: server.port ?? 0, method: req.method ?? "", path: req.url ?? "", peerAddress: req.socket?.remoteAddress, userAgent: header(req, "user-agent"), forwardedFor: header(req, "x-forwarded-for")});
                 GG_COOKIE_WRITES.set(cookieWriteNames);
                 const startTime = performance.now()
                 let rpcResult: ERROR<string, unknown> | OK<unknown> | undefined
@@ -159,4 +159,9 @@ function metrics(
             path: path
         });
     }
+}
+
+function header(req: http.IncomingMessage, name: string): string | undefined {
+    const value = req.headers[name]
+    return typeof value === "string" ? value : undefined
 }

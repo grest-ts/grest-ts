@@ -241,7 +241,10 @@ export class GGSocketServer<Query, TSocket extends ServerSocket = GGSocket> {
             GG_TRACE.init()
             GG_WS_CONNECTION.set({
                 port: this.http.port,
-                path: this.path
+                path: this.path,
+                peerAddress: req.socket?.remoteAddress,
+                userAgent: typeof req.headers["user-agent"] === "string" ? req.headers["user-agent"] : undefined,
+                forwardedFor: typeof req.headers["x-forwarded-for"] === "string" ? req.headers["x-forwarded-for"] : undefined,
             })
             try {
                 // Parse and validate query parameters
