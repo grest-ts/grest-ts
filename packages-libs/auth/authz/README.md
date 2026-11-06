@@ -420,7 +420,10 @@ subject: {
   `except: ["user:ben", "agent:*"]`.
 - **Approvals** apply if any acting principal is a workload.
 - **Restrictions** are a per-request ceiling, e.g. from a token's authorization details. They never
-  grant.
+  grant. `restrictionSets: [{id, rules}]` adds more such ceilings, each named: an agent can carry its
+  own restrictions and those of the app it acts via, and they intersect like any ceilings (an action
+  missing from any set is denied, the strictest set's approval level counts). A refusing set is
+  reported with its `id`.
 
 ### Conditions and facts
 
