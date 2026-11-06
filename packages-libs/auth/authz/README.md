@@ -422,8 +422,9 @@ subject: {
 - **Restrictions** are a per-request ceiling, e.g. from a token's authorization details. They never
   grant. `restrictionSets: [{id, rules}]` adds more such ceilings, each named: an agent can carry its
   own restrictions and those of the app it acts via, and they intersect like any ceilings (an action
-  missing from any set is denied, the strictest set's approval level counts). A refusing set is
-  reported with its `id`.
+  missing from any set is denied, the strictest set's approval level counts). Every refusing set is
+  reported with its `id`. A set with no rules allows nothing; `restrictionSets: []` adds no ceiling.
+  An action the model doesn't know is left out of a request's restriction, which only narrows it.
 
 ### Conditions and facts
 

@@ -25,6 +25,7 @@ import {
     type GGAuthzReason,
     type GGAuthzRemedy,
     type GGAuthzRequest,
+    type GGAuthzRestrictionSet,
     type GGAuthzResourceProperties,
     type GGAuthzRule,
     type GGAuthzSubject,
@@ -534,9 +535,7 @@ export class GGAuthz {
             const rules = granted.flatMap(s => this.tokenScopes.get(s)!)
             ceilings.push({layer: "scope", id: "token scopes", rules, ids: granted.flatMap(s => this.tokenScopes.get(s)!.map(() => s))})
         }
-        const restrictions = subject.properties?.restrictions
-        if (restrictions) ceilings.push({layer: "restriction", id: "request restrictions", rules: restrictions.map(r => this.rule(r))})
-        for (const set of subject.properties?.restrictionSets ?? []) ceilings.push({layer: "restriction", id: set.id, rules: set.rules.map(r => this.rule(r))})
+        for (const set of restrictionSets(subject)) ceilings.push({layer: "restriction", id: set.id, rules: set.rules.map(r => this.requestRule(r))})
         return ceilings
     }
 
@@ -658,11 +657,10 @@ export class GGAuthz {
     }
 
     private rootsFor(subject: GGAuthzSubject): Roots {
-        const restrictions = subject.properties?.restrictions
-        const sets = subject.properties?.restrictionSets
-        if (!restrictions && !sets) return this.roots
+        const sets = restrictionSets(subject)
+        if (!sets.length) return this.roots
         const roots = {...this.roots}
-        for (const r of [...restrictions ?? [], ...sets?.flatMap(s => s.rules) ?? []]) mark(roots, r.conditions)
+        for (const set of sets) for (const r of set.rules) mark(roots, r.conditions)
         return roots
     }
 
@@ -698,6 +696,16 @@ export class GGAuthz {
 
     private rule(r: GGAuthzRule, onUnknown?: OnUnknownAction): Rule {
         mark(this.roots, r.conditions)
+        return this.compile(r, onUnknown)
+    }
+
+    /** A request's own ceiling rule: its conditions are marked per request (`rootsFor`), and an action the model
+     *  doesn't know only narrows it. */
+    private requestRule(r: GGAuthzRule): Rule {
+        return this.compile(r, () => true)
+    }
+
+    private compile(r: GGAuthzRule, onUnknown?: OnUnknownAction): Rule {
         return {
             actions: expandActions(this.actions, r.actions, onUnknown),
             resources: r.resources?.map(m => GGAuthzRn.isExact(m) ? {exact: m.slice(1)} : GGAuthzRn.isPattern(m) ? {prefix: m.slice(0, -1)} : {within: m}),
@@ -752,6 +760,12 @@ function planFilter(within: string | undefined, source: Conditional & {resources
     if (source.unless) f.unless = source.unless
     if (residual.length) f.conditions = residual
     return f
+}
+
+function restrictionSets(subject: GGAuthzSubject): GGAuthzRestrictionSet[] {
+    const restrictions = subject.properties?.restrictions
+    const sets = subject.properties?.restrictionSets ?? []
+    return restrictions ? [{id: "request restrictions", rules: restrictions}, ...sets] : sets
 }
 
 function mark(roots: Roots, conditions: GGAuthzCondition[] | undefined): void {
