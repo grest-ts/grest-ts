@@ -196,7 +196,7 @@ export class GGAuthzAuthority {
 
     private async denial(e: unknown, action: string, resource: GGAuthzResolvedResource, hidden?: boolean): Promise<unknown> {
         if (!FORBIDDEN.is(e) && !INSUFFICIENT_SCOPE.is(e) && !STEP_UP_REQUIRED.is(e)) return e
-        const hide = hidden || this.config.hidden?.(resource, action) === true
+        const hide = !!(hidden || this.config.hidden?.(resource, action))
         try {
             const heard: unknown = this.config.denied?.(action, resource, hide)
             if (heard instanceof Promise) heard.catch(() => undefined)
