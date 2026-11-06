@@ -2,7 +2,8 @@ import {createHash, generateKeyPairSync, randomBytes, sign as cryptoSign} from "
 import {importJWK, SignJWT} from "jose"
 import {createServer} from "node:net"
 import {GGRuntime} from "@grest-ts/runtime"
-import {GGHttpServer} from "@grest-ts/http"
+import {GG_HTTP_REQUEST, GGHttpServer} from "@grest-ts/http"
+import {GG_TRACE} from "@grest-ts/trace"
 import {FORBIDDEN, IsArray, IsObject, IsString, NOT_AUTHORIZED} from "@grest-ts/schema"
 import {GGAuthAccessToken, HmacSigner, JwksVerifier, JwsSigningStrategy, type JwsSigner} from "@grest-ts/auth"
 import {ACCESS_TOKEN_JWKS_PATH, deriveEs256Jwk, GGOAuthServer, type GGOAuthInteraction, type GGOAuthResource} from "./GGOAuthServer"
@@ -148,6 +149,7 @@ class OAuthTestRuntime extends GGRuntime {
             interactionPage: async ({res, method, action, form, interaction, login, consent, deny, html, redirect}) => {
                 if (action === "html") return html(200, "<p>page</p>")
                 if (action === "redirect") return redirect("https://elsewhere.example/")
+                if (action === "peer") return html(200, JSON.stringify({userAgent: GG_HTTP_REQUEST.get()?.userAgent, traced: GG_TRACE.has()}))
                 if (method === "GET") {
                     res.writeHead(200, {"content-type": "application/json"})
                     res.end(JSON.stringify({interaction}))
@@ -582,6 +584,13 @@ describe("GGOAuthServer", () => {
             expect(res.headers.get("referrer-policy")).toBe("same-origin")
             expect(res.headers.get("cache-control")).toBe("no-store")
         }
+    })
+
+    test("a sign-in page runs in a request context: it sees the request and a trace", async () => {
+        const browser = new Browser()
+        const login = await browser.page(authorizeUrl("app", FIRST_PARTY_REDIRECT, pkce().challenge))
+        const res = await browser.get(`/oauth/interaction/${login.uid}/peer`, {headers: {"user-agent": "probe/1.0"}})
+        expect(await res.json()).toEqual({userAgent: "probe/1.0", traced: true})
     })
 
     test("consent is refused while the user still has to sign in", async () => {

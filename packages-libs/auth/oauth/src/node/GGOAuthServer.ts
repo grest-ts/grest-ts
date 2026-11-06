@@ -4,8 +4,9 @@ import {decodeJwt} from "jose"
 import Provider, {errors as oidcErrors, type ClientMetadata, type Configuration, type InteractionResults, type KoaContextWithOIDC} from "oidc-provider"
 import {FORBIDDEN, IsString, NOT_AUTHORIZED, NOT_FOUND} from "@grest-ts/schema"
 import {GGLog} from "@grest-ts/logger"
-import {GGContextKey} from "@grest-ts/context"
-import {GGHttp, type GGHttpServer} from "@grest-ts/http"
+import {GGContext, GGContextKey, GGContextStore} from "@grest-ts/context"
+import {GG_TRACE} from "@grest-ts/trace"
+import {GG_HTTP_REQUEST, GGHttp, httpRequestContext, type GGHttpServer} from "@grest-ts/http"
 import type {GGAccessPayload, GGAccessTokenData, GGAuthAccessToken, TokenVerifier} from "@grest-ts/auth"
 import {GGOAuthResourceServer, type GGOAuthProtectedResource} from "./GGOAuthResourceServer"
 import {toOidcAdapter, type GGOAuthStore} from "./store/GGOAuthStore"
@@ -206,7 +207,11 @@ export class GGOAuthServer {
     }
 
     public mount(server: GGHttpServer): void {
-        const handle = async (req: IncomingMessage, res: ServerResponse) => {
+        // A request context like a schema route's, so a sign-in's hooks can tell who called (audit, rate limits).
+        const parentContext = GGContextStore.tryGetContext()
+        const handle = (req: IncomingMessage, res: ServerResponse) => new GGContext("oauth-request", parentContext, true).run(async () => {
+            GG_TRACE.init()
+            GG_HTTP_REQUEST.set(httpRequestContext(req, server.port ?? 0))
             delete req.headers["x-forwarded-host"]
             const path = new URL(req.url ?? "/", "http://x").pathname
             if (path === ACCESS_TOKEN_JWKS_PATH && req.method === "GET") {
@@ -225,7 +230,7 @@ export class GGOAuthServer {
             }
             this._callback ??= this.provider().callback()
             await this._callback(req, res)
-        }
+        })
         for (const method of ["GET", "POST"] as const) server.registerRoute(method, `${BASE}/*`, handle, "GGOAuthServer")
         server.registerRoute("GET", "/.well-known/openid-configuration", handle, "GGOAuthServer")
         server.registerRoute("GET", "/.well-known/oauth-authorization-server", handle, "GGOAuthServer")

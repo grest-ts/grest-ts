@@ -109,6 +109,25 @@ describe("GGAuthzAuthority", () => {
         expect(FORBIDDEN.is(await fail(as(ann, () => explaining.authorize(Vm.StopWorkspace.on("workspaceId"), {workspaceId: "dan-1"}))))).toBe(true)
     })
 
+    test("denied hears every refusal, hidden or not, before it is explained; can/allowed and allows never reach it", async () => {
+        const heard: string[] = []
+        const auditing = new GGAuthzAuthority({
+            partition: "acme", tenantType: Org.types.org, tenant: () => "acme", engine: async () => engine,
+            hidden: r => r.id === "cleo-1",
+            explainForbidden: async () => new FORBIDDEN({displayMessage: "why"}),
+            denied: (action, r, hidden) => {
+                heard.push(`${action} ${r.id} ${hidden}`)
+                throw new Error("audit down")
+            },
+        })
+        auditing.register(Vm.types.workspace, (_tenant, id) => workspaces[id] ? {properties: {ancestors: [workspaces[id]!, rn.org]}} : undefined)
+        expect(FORBIDDEN.is(await fail(as(ann, () => auditing.authorize(Vm.StopWorkspace.on("workspaceId"), {workspaceId: "dan-1"}))))).toBe(true)
+        expect(NOT_FOUND.is(await fail(as(ann, () => auditing.authorize(Vm.StopWorkspace.on("workspaceId"), {workspaceId: "cleo-1"}))))).toBe(true)
+        await as(ann, () => auditing.authorize(Vm.StopWorkspace.on("workspaceId"), {workspaceId: "ann-1"}))
+        expect(await as(ann, () => auditing.can(Vm.StopWorkspace, {type: Vm.types.workspace, id: "dan-1"}))).toBe(false)
+        expect(heard).toEqual([`${Vm.StopWorkspace.name} dan-1 false`, `${Vm.StopWorkspace.name} cleo-1 true`])
+    })
+
     test("a row is loaded once per request: every requirement part and the handler's row() share it", async () => {
         workspaceLoads.length = 0
         // A wire sets a new subject per request.

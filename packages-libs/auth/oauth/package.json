@@ -76,7 +76,8 @@
     "@grest-ts/discovery": "0.0.101",
     "@grest-ts/http": "0.0.101",
     "@grest-ts/logger": "0.0.101",
-    "@grest-ts/schema": "0.0.101"
+    "@grest-ts/schema": "0.0.101",
+    "@grest-ts/trace": "0.0.101"
   },
   "devDependencies": {
     "@grest-ts/testkit": "0.0.101"
