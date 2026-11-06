@@ -582,6 +582,10 @@ export class GGOAuthServer {
                         }
                         ctx.body = `<!DOCTYPE html><html><body>${form.replace("</form>", `<button name="logout" value="yes">Sign out</button></form>`)}</body></html>`
                     },
+                    // The provider's default page @imports Google Fonts.
+                    postLogoutSuccessSource: async (ctx) => {
+                        ctx.body = `<!DOCTYPE html><html><body><p>You are signed out.</p></body></html>`
+                    },
                 },
                 resourceIndicators: {
                     enabled: true,
