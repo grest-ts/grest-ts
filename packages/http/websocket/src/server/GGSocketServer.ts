@@ -19,7 +19,7 @@ import {GG_METRICS} from "@grest-ts/metrics";
 import {withTimeout} from "@grest-ts/common";
 import {GGContext, type GGInbound, type GGTransportMiddleware} from "@grest-ts/context";
 import {GG_DISCOVERY} from "@grest-ts/discovery";
-import {GGHttpServer} from "@grest-ts/http";
+import {GGHttpServer, requestPeer} from "@grest-ts/http";
 import {GGRawSocket} from "../socket/GGRawSocket";
 import {wildcardPathBase} from "../schema/socketPath";
 
@@ -239,13 +239,7 @@ export class GGSocketServer<Query, TSocket extends ServerSocket = GGSocket> {
         const context = new GGContext("ws-connection", undefined, true);
         await context.run(async () => {
             GG_TRACE.init()
-            GG_WS_CONNECTION.set({
-                port: this.http.port,
-                path: this.path,
-                peerAddress: req.socket?.remoteAddress,
-                userAgent: typeof req.headers["user-agent"] === "string" ? req.headers["user-agent"] : undefined,
-                forwardedFor: typeof req.headers["x-forwarded-for"] === "string" ? req.headers["x-forwarded-for"] : undefined,
-            })
+            GG_WS_CONNECTION.set({port: this.http.port, path: this.path, ...requestPeer(req)})
             try {
                 // Parse and validate query parameters
                 const parsedUrl = url.parse(req.url || '', true);

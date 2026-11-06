@@ -18,9 +18,14 @@ export const GG_HTTP_REQUEST = new GGContextKey<HttpRequestContext>('http-reques
 /** What a handler sees of the request it serves: for a route registered on the server directly (not through a
  *  schema) to set too. */
 export function httpRequestContext(req: http.IncomingMessage, port: number): HttpRequestContext {
-    const header = (name: string) => typeof req.headers[name] === "string" ? req.headers[name] as string : undefined;
-    return {
-        port, method: req.method ?? "", path: req.url ?? "", pathTemplate: undefined,
-        peerAddress: req.socket?.remoteAddress, userAgent: header("user-agent"), forwardedFor: header("x-forwarded-for"),
+    return {port, method: req.method ?? "", path: req.url ?? "", pathTemplate: undefined, ...requestPeer(req)};
+}
+
+/** Who sent the request: shared by GG_HTTP_REQUEST and a websocket upgrade's connection context. */
+export function requestPeer(req: http.IncomingMessage): Pick<HttpRequestContext, "peerAddress" | "userAgent" | "forwardedFor"> {
+    const header = (name: string) => {
+        const value = req.headers[name];
+        return typeof value === "string" && value !== "" ? value : undefined;
     };
+    return {peerAddress: req.socket?.remoteAddress, userAgent: header("user-agent"), forwardedFor: header("x-forwarded-for")};
 }

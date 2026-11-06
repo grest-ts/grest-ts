@@ -69,7 +69,8 @@ export interface GGAuthzAuthorityConfig {
      *  throw, keeps the denial. Only `assert`/`authorize` ask: listings filter instead. */
     explainForbidden?(action: string, resource: GGAuthzResolvedResource): Promise<InstanceType<typeof FORBIDDEN> | undefined>
     /** Every refusal `assert`/`authorize`/`approvalNeed` decided, before it's explained or hidden (`hidden`: it answers
-     *  NOT_FOUND). For audit and alerting; a throw is ignored. Listings filter instead, so they never get here. */
+     *  NOT_FOUND). For audit and alerting; a throw or an async hook's rejection is ignored. Listings filter instead, so
+     *  they never get here. */
     denied?(action: string, resource: GGAuthzResolvedResource, hidden: boolean): void
     /** A handler decided an action its method's requirements don't name (`assert`, `can` or `approvalNeed`, in a
      *  request that ran requirements; `allowed` filters, so it's free). Throw to refuse it. */
@@ -194,12 +195,13 @@ export class GGAuthzAuthority {
     }
 
     private async denial(e: unknown, action: string, resource: GGAuthzResolvedResource, hidden?: boolean): Promise<unknown> {
-        const refused = FORBIDDEN.is(e) || INSUFFICIENT_SCOPE.is(e) || STEP_UP_REQUIRED.is(e)
-        const hide = !!(hidden || this.config.hidden?.(resource, action))
-        if (refused) {
-            try { this.config.denied?.(action, resource, hide) } catch { /* a notification: never changes the answer */ }
-        }
-        if (hide && refused) {
+        if (!FORBIDDEN.is(e) && !INSUFFICIENT_SCOPE.is(e) && !STEP_UP_REQUIRED.is(e)) return e
+        const hide = hidden || this.config.hidden?.(resource, action) === true
+        try {
+            const heard: unknown = this.config.denied?.(action, resource, hide)
+            if (heard instanceof Promise) heard.catch(() => undefined)
+        } catch { /* a notification: never changes the answer */ }
+        if (hide) {
             return new NOT_FOUND({displayMessage: "Not found", debugMessage: (e as {context?: {debugMessage?: string}}).context?.debugMessage})
         }
         if (FORBIDDEN.is(e)) return await this.config.explainForbidden?.(action, resource).catch(() => undefined) ?? e

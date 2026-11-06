@@ -4,7 +4,7 @@ import {decodeJwt} from "jose"
 import Provider, {errors as oidcErrors, type ClientMetadata, type Configuration, type InteractionResults, type KoaContextWithOIDC} from "oidc-provider"
 import {FORBIDDEN, IsString, NOT_AUTHORIZED, NOT_FOUND} from "@grest-ts/schema"
 import {GGLog} from "@grest-ts/logger"
-import {GGContext, GGContextKey} from "@grest-ts/context"
+import {GGContext, GGContextKey, GGContextStore} from "@grest-ts/context"
 import {GG_TRACE} from "@grest-ts/trace"
 import {GG_HTTP_REQUEST, GGHttp, httpRequestContext, type GGHttpServer} from "@grest-ts/http"
 import type {GGAccessPayload, GGAccessTokenData, GGAuthAccessToken, TokenVerifier} from "@grest-ts/auth"
@@ -208,7 +208,8 @@ export class GGOAuthServer {
 
     public mount(server: GGHttpServer): void {
         // A request context like a schema route's, so a sign-in's hooks can tell who called (audit, rate limits).
-        const handle = (req: IncomingMessage, res: ServerResponse) => new GGContext("oauth-request").run(async () => {
+        const parentContext = GGContextStore.tryGetContext()
+        const handle = (req: IncomingMessage, res: ServerResponse) => new GGContext("oauth-request", parentContext, true).run(async () => {
             GG_TRACE.init()
             GG_HTTP_REQUEST.set(httpRequestContext(req, server.port ?? 0))
             delete req.headers["x-forwarded-host"]

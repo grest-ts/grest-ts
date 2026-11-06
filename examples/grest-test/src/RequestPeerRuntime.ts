@@ -7,12 +7,14 @@ export class RequestPeerRuntime extends GGRuntime {
 
     protected compose(): void {
         const httpServer = new GGHttpServer()
-        new GGHttp(httpServer).http(RequestPeerApi, {
-            whoAmI: async () => {
-                const {peerAddress, userAgent, forwardedFor} = GG_HTTP_REQUEST.get()!
-                return {peerAddress, userAgent, forwardedFor}
-            },
-        })
+        new GGHttp(httpServer).http(RequestPeerApi, new RequestPeerApiImpl())
+    }
+}
+
+class RequestPeerApiImpl {
+    public whoAmI = async () => {
+        const {peerAddress, userAgent, forwardedFor} = GG_HTTP_REQUEST.get()!
+        return {peerAddress, userAgent, forwardedFor}
     }
 }
 
