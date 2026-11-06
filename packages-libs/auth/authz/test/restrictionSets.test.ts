@@ -1,5 +1,5 @@
 import {describe, expect, test, vi} from "vitest"
-import {GGAuthz, GGAuthzMemoryResolver, type GGAuthzSubject} from "../src/index-node"
+import {GGAuthz, GGAuthzMemoryResolver, IsGGAuthzSubject, type GGAuthzSubject} from "../src/index-node"
 
 const org = "rn:acme:org:acme:org/acme"
 const repo = (id: string) => `rn:acme:git:acme:repo/${id}`
@@ -50,6 +50,11 @@ describe("restriction sets: several per-request ceilings", () => {
     test("an empty list adds no ceiling; a set without rules allows nothing", async () => {
         expect((await decide(agent({restrictionSets: []}), "git:Delete")).decision).toBe(true)
         expect((await decide(agent({restrictionSets: [{id: "none", rules: []}]}), "git:Read")).context.reasons).toEqual([expect.objectContaining({kind: "ceiling-failed", id: "none"})])
+    })
+
+    test("the subject schema rejects duplicate set ids", () => {
+        expect(IsGGAuthzSubject.is(agent({restrictionSets: [own, app]}))).toBe(true)
+        expect(IsGGAuthzSubject.is(agent({restrictionSets: [own, {...app, id: "own"}]}))).toBe(false)
     })
 
     test("an action the model doesn't know only narrows a set", async () => {
