@@ -70,6 +70,8 @@ export const IsGGAuthzRole = IsObject({
 })
 export type GGAuthzRole = typeof IsGGAuthzRole.infer
 
+const IsRef = IsString.orUndefined.docs({description: "Opaque to the engine: returned as `ref` on the reasons this decides, e.g. the caller's own record id"})
+
 const IsActions = IsArray(IsGGAuthzActionPattern)
 const IsResources = IsArray(IsGGAuthzRnMatcher).orUndefined.docs({description: "Any must match; omitted = any resource"})
 
@@ -82,6 +84,7 @@ export const IsGGAuthzRule = IsObject({
     approval: IsLiteral(...GG_AUTHZ_APPROVAL_LEVELS.filter((l): l is Exclude<GGAuthzApprovalLevel, "humans-only"> => l !== "humans-only")).orUndefined.docs({
         description: "In a ceiling: the approval level a workload passing through this rule needs. A ceiling takes its least strict matching rule; the strictest ceiling counts. Leave an action out to deny it",
     }),
+    ref: IsRef,
 })
 export type GGAuthzRule = typeof IsGGAuthzRule.infer
 
@@ -118,6 +121,7 @@ export const IsGGAuthzBinding = IsObject({
     when: IsWhen,
     unless: IsUnless,
     conditions: IsConditions,
+    ref: IsRef,
 })
 export type GGAuthzBinding = typeof IsGGAuthzBinding.infer
 
@@ -211,6 +215,10 @@ export const IsGGAuthzReason = IsObject({
     level: IsGGAuthzApprovalLevel.orUndefined,
     locked: IsBoolean.orUndefined.docs({description: "The resolved level is a locked minimum: nothing below may lower it"}),
     lowered: IsObject({on: IsString, level: IsGGAuthzApprovalLevel}).orUndefined.docs({description: "A descendant's attempt to go below a locked minimum, ignored"}),
+    source: IsLiteral("default", "floor", "policy", "guardrail", "boundary", "scope", "restriction").orUndefined.docs({
+        description: "On an approval reason, what set the level: nothing (`default`), `model.approvalFloor` (`floor`), a resource policy's approvals (`policy`, see `on`) or a ceiling rule (its layer, see `id`)",
+    }),
+    ref: IsString.orUndefined.docs({description: "The deciding binding's or rule's `ref`"}),
 })
 export type GGAuthzReason = typeof IsGGAuthzReason.infer
 
