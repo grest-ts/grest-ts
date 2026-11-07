@@ -18,6 +18,12 @@ export class InMemoryOAuthStore implements GGOAuthStore {
         this.rows.set(`${model}:${id}`, {model, id, payload, expiresAt: expiresInSec ? this.now() + expiresInSec * 1000 : undefined})
     }
 
+    public insert = async (model: string, id: string, payload: GGOAuthPayload, expiresInSec: number): Promise<boolean> => {
+        if (this.live(this.rows.get(`${model}:${id}`))) return false
+        await this.upsert(model, id, payload, expiresInSec)
+        return true
+    }
+
     public find = async (model: string, id: string): Promise<GGOAuthPayload | undefined> => this.live(this.rows.get(`${model}:${id}`))?.payload
 
     public findByUid = async (model: string, uid: string) => this.findWhere(model, p => p.uid === uid)

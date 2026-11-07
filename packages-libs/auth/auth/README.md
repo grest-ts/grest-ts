@@ -132,7 +132,7 @@ const userTokenEngine = new GGAuthRefreshToken({
   access: new GGAuthAccessToken({
     signer: new HmacSigner(SECRET),               // or any TokenSigner (below)
     claimSchema: IsUserClaims,
-    audience: "app-user",                         // required; verify rejects tokens for any other
+    audience: "app-user",                         // required; verify rejects tokens whose aud (a string or a list) doesn't name it
     accessTtlMs: 60 * 60 * 1000,                  // short-lived, stateless
   }),
 })

@@ -1,12 +1,12 @@
 import {createHash, generateKeyPairSync, randomBytes, sign as cryptoSign} from "node:crypto"
-import {importJWK, SignJWT} from "jose"
+import {decodeJwt, importJWK, SignJWT} from "jose"
 import {createServer} from "node:net"
 import {GGRuntime} from "@grest-ts/runtime"
 import {GG_HTTP_REQUEST, GGHttpServer} from "@grest-ts/http"
 import {GG_TRACE} from "@grest-ts/trace"
 import {FORBIDDEN, IsArray, IsObject, IsString, NOT_AUTHORIZED} from "@grest-ts/schema"
 import {GGAuthAccessToken, HmacSigner, JwksVerifier, JwsSigningStrategy, type JwsSigner} from "@grest-ts/auth"
-import {ACCESS_TOKEN_JWKS_PATH, deriveEs256Jwk, GGOAuthServer, type GGOAuthInteraction, type GGOAuthResource} from "./GGOAuthServer"
+import {ACCESS_TOKEN_JWKS_PATH, deriveEs256Jwk, GGOAuthServer, type GGOAuthInteraction, type GGOAuthResource, type GGOAuthTokenClient} from "./GGOAuthServer"
 import type {GGDynamoDb} from "@grest-ts/db-dynamodb"
 import {InMemoryOAuthStore} from "./store/InMemoryOAuthStore"
 import {DynamoOAuthStore} from "./store/DynamoOAuthStore"
@@ -14,7 +14,7 @@ import {GGOAuthResourceServer} from "./GGOAuthResourceServer"
 import {GGOAuthServiceClient} from "./GGOAuthServiceClient"
 import {SUBJECT_TOKEN_INVALID} from "./GGOAuthServiceApi"
 import type {GGOAuthExternalSignIn} from "./GGOAuthExternalSignIn"
-import {GGOAuthHeadlessBrowser, type GGOAuthHeadlessStep} from "./GGOAuthHeadlessBrowser"
+import {GGOAuthHeadlessBrowser, type GGOAuthHeadlessStep, type GGOAuthPageAnswer} from "./GGOAuthHeadlessBrowser"
 
 const IsClaims = IsObject({permissions: IsArray(IsString)})
 type Claims = typeof IsClaims.infer
@@ -50,16 +50,31 @@ function sealedSigner(kid: string): JwsSigner {
 // A second resource, as for an MCP server: its own audience, tokens that grant no permissions, and an
 // asymmetric signer the authorization server can't read the key of.
 const MCP = `${ISSUER}/mcp`
+// Whom the MCP resource's claims were last resolved for.
+let mcpClient: GGOAuthTokenClient | undefined
 const mcpToken = new GGAuthAccessToken({signer: new JwsSigningStrategy(sealedSigner("sealed-1")), claimSchema: IsClaims, audience: "app-mcp", issuer: () => ISSUER})
 const mcp: GGOAuthResource<Claims> = {
     resource: () => MCP,
     accessToken: mcpToken,
     scopes: ["mcp"],
-    claims: async (sub) => userPermissions.get(sub) ? {permissions: []} : undefined,
+    subPaths: true,
+    claims: async (sub, client) => {
+        mcpClient = client
+        return userPermissions.get(sub) ? {permissions: []} : undefined
+    },
 }
 // The app's backend: a service client with its own resource, and the one that trades a user token
 // for an org-scoped token (token exchange).
 const INTERNAL = `${ISSUER}/internal`
+// A resource served by another process's resource server (as an MCP hub beside the auth service): both define it alike.
+const hubPort = await freePort()
+const HUB = `http://localhost:${hubPort}/hub`
+const hubDefinition = () => ({
+    resource: () => HUB,
+    accessToken: new GGAuthAccessToken({signer: new HmacSigner("hub-secret"), claimSchema: IsClaims, audience: "app-hub"}),
+    scopes: ["hub"] as [string],
+    subPaths: true,
+})
 const internalToken = new GGAuthAccessToken({signer: new HmacSigner("internal-secret"), claimSchema: IsClaims, audience: "app-internal"})
 const ORG = `${ISSUER}/org`
 const orgToken = new GGAuthAccessToken({signer: new JwsSigningStrategy(sealedSigner("sealed-org")), claimSchema: IsClaims, audience: "app-org"})
@@ -88,8 +103,13 @@ function fakeDynamo() {
             return row
         },
         put: async (_table: string, item: {pk: string}) => { rows.set(item.pk, item) },
-        putConditional: async (_table: string, item: {pk: string}) => {
+        putConditional: async (_table: string, item: {pk: string}, condition: string, values?: {":now": number}) => {
             const row = rows.get(item.pk)
+            if (condition.startsWith("attribute_not_exists(pk) OR")) {
+                if (row && (row.expiresAtSec as number) > values![":now"]) return false
+                rows.set(item.pk, item)
+                return true
+            }
             if (!row || row.consumedAt !== undefined) return false
             rows.set(item.pk, item)
             return true
@@ -143,7 +163,7 @@ class OAuthTestRuntime extends GGRuntime {
                     params: ["org_id"],
                     claims: async (sub, params) => params.org_id === "o1" && userPermissions.get(sub) ? {permissions: ["org:" + sub]} : undefined,
                 },
-            }],
+            }, {...hubDefinition(), claims: async () => ({permissions: []})}],
             serviceClients: () => [{clientId: "backend", secret: () => "backend-secret"}],
             // The app's sign-in pages, reduced to what a test drives: the page as JSON, and a "login" that trusts the posted subject.
             interactionPage: async ({res, method, action, form, interaction, login, consent, deny, html, redirect}) => {
@@ -156,7 +176,7 @@ class OAuthTestRuntime extends GGRuntime {
                     return
                 }
                 if (action === "login") return login({accountId: form.sub})
-                if (action === "consent") return consent()
+                if (action === "consent") return consent(form.org ? {org: form.org} : undefined)
                 if (action === "deny") return deny()
                 res.writeHead(404)
                 res.end()
@@ -201,6 +221,38 @@ class OAuthTestRuntime extends GGRuntime {
         new GGOAuthResourceServer({authorizationServer: () => ISSUER, resources: [unreachableKeys]}).protect(server, unreachableKeys, "/mcp-down", async (_req, res) => {
             res.writeHead(200)
             res.end()
+        })
+    }
+}
+
+const rootPort = await freePort()
+const ROOT = `http://localhost:${rootPort}`
+const rootSigner = new HmacSigner("root-secret")
+
+class RootTestRuntime extends GGRuntime {
+    public static readonly NAME = "oauth-root-test"
+
+    protected compose(): void {
+        const server = new GGHttpServer({port: rootPort})
+        const root = {resource: () => ROOT, accessToken: new GGAuthAccessToken({signer: rootSigner, claimSchema: IsClaims, audience: "app-root"}), scopes: ["root"] as [string], subPaths: true}
+        new GGOAuthResourceServer({authorizationServer: () => ISSUER, resources: [root]}).protect(server, root, "/", async (_req, res) => {
+            res.writeHead(200)
+            res.end("ok")
+        })
+    }
+}
+
+class HubTestRuntime extends GGRuntime {
+    public static readonly NAME = "oauth-hub-test"
+
+    protected compose(): void {
+        const server = new GGHttpServer({port: hubPort})
+        const hub = hubDefinition()
+        const resources = new GGOAuthResourceServer({authorizationServer: () => ISSUER, resources: [hub]})
+        resources.mount(server)
+        resources.protect(server, hub, "/hub", async (_req, res, token) => {
+            res.writeHead(200, {"content-type": "application/json"})
+            res.end(JSON.stringify({hub: token.sub}))
         })
     }
 }
@@ -349,7 +401,7 @@ describe("GGOAuthServer", () => {
         })
         expect(meta.token_endpoint_auth_methods_supported).toContain("none")
         expect(meta.response_types_supported).toEqual(["code"])
-        expect(meta.scopes_supported).toEqual(["openid", "offline_access", "api", "mcp", "internal", "org"])
+        expect(meta.scopes_supported).toEqual(["openid", "offline_access", "api", "mcp", "internal", "org", "hub"])
         const jwks = await (await fetch(meta.jwks_uri)).json()
         // The ID-token key and the asymmetric resources' signers; HMAC resources publish nothing.
         expect(jwks.keys).toEqual([expect.objectContaining({kty: "EC", crv: "P-256", alg: "ES256"}), expect.objectContaining({kid: "sealed-1"}), expect.objectContaining({kid: "sealed-org"})])
@@ -427,7 +479,7 @@ describe("GGOAuthServer", () => {
         expect((await userToken.verify(tokens.accessToken)).sub).toBe("bob")
     })
 
-    test("third-party client registers, needs consent once, and gets a token only for its resource", async () => {
+    test("third-party client registers, consents, and gets a token only for its resource", async () => {
         const clientId = await register()
         const browser = new Browser()
         const {pages, tokens} = await signIn(browser, clientId, THIRD_PARTY_REDIRECT)
@@ -436,13 +488,101 @@ describe("GGOAuthServer", () => {
         expect((await mcpToken.verify(tokens.accessToken)).data.permissions).toEqual([])
         await expect(userToken.verify(tokens.accessToken)).rejects.toThrow()
 
-        const again = await browser.done(authorizeUrl(clientId, THIRD_PARTY_REDIRECT, pkce().challenge))
-        expect(again.searchParams.get("code")).toEqual(expect.any(String))
-
         expect(await oauth.listGrants("alice")).toEqual(expect.arrayContaining([
             expect.objectContaining({clientId, clientName: "Claude", firstParty: false}),
             expect.objectContaining({clientId: "app", firstParty: true}),
         ]))
+    })
+
+    // Signs `browser` in to `clientId` for `resource`, consenting with `org` as the grant's data when asked.
+    const connect = (browser: Browser, clientId: string, resource: string, org?: string, params: Record<string, string> = {}) => {
+        const prompts: string[] = []
+        const tokens = browser.signIn({clientId, redirectUri: THIRD_PARTY_REDIRECT, resource, scope: resource.startsWith(HUB) ? "hub" : "mcp", params}, (page): GGOAuthPageAnswer => {
+            const {prompt} = JSON.parse(page.html).interaction as GGOAuthInteraction
+            prompts.push(prompt)
+            return prompt === "login" ? {action: "login", form: {sub: "alice"}} : {action: "consent", form: org ? {org} : {}}
+        })
+        return tokens.then(t => ({tokens: t, prompts}))
+    }
+    const grantsOf = async (clientId: string) => (await oauth.listGrants("alice")).filter(g => g.clientId === clientId)
+
+    test("authorizing the same resource again reuses its grant and data; another resource URL is another grant", async () => {
+        const clientId = await register()
+        await connect(new Browser(), clientId, `${MCP}/work`, "o1")
+        const [work] = await grantsOf(clientId)
+
+        const again = await connect(new Browser(), clientId, `${MCP}/work`)
+        expect(again.prompts).toEqual(["login"])
+        expect(await grantsOf(clientId)).toEqual([expect.objectContaining({grantId: work.grantId})])
+        expect(mcpClient!.grant).toEqual({grantId: work.grantId, data: {org: "o1"}})
+        // The data is fixed when the grant is made: a consent with other data doesn't change it.
+        const reconsent = await connect(new Browser(), clientId, `${MCP}/work`, "o9", {prompt: "consent"})
+        expect(reconsent.prompts).toEqual(["login", "consent"])
+        expect(mcpClient!.grant).toEqual({grantId: work.grantId, data: {org: "o1"}})
+
+        const home = await connect(new Browser(), clientId, `${MCP}/home`, "o2")
+        expect(home.prompts).toEqual(["login", "consent"])
+        expect((await grantsOf(clientId)).map(g => g.grantId)).toEqual(expect.arrayContaining([work.grantId, mcpClient!.grant!.grantId]))
+        expect(await grantsOf(clientId)).toHaveLength(2)
+        expect(mcpClient!.grant!.data).toEqual({org: "o2"})
+    })
+
+    test("of two concurrent first consents for one resource URL, both end on one grant", async () => {
+        const clientId = await register()
+        const consentPage = async (browser: Browser) => browser.page(browser.submit(await browser.page(authorizeUrl(clientId, THIRD_PARTY_REDIRECT, pkce().challenge)), "login", {sub: "alice"}))
+        const browsers = [new Browser(), new Browser()]
+        const pages = await Promise.all(browsers.map(consentPage))
+        // Slow reads: both look the grant up before either creates it.
+        dynamo.slowReads = true
+        const done = await Promise.all(browsers.map((b, i) => b.done(b.submit(pages[i], "consent", {org: `o${i}`})))).finally(() => { dynamo.slowReads = false })
+        expect(done.map(url => url.searchParams.get("code"))).toEqual([expect.any(String), expect.any(String)])
+        expect(await grantsOf(clientId)).toHaveLength(1)
+    })
+
+    test("claims get the grant id and its consent data; grant() reads it only for its own subject", async () => {
+        const clientId = await register()
+        const {tokens} = await connect(new Browser(), clientId, MCP, "o1")
+        const [{grantId}] = await grantsOf(clientId)
+        expect(mcpClient).toEqual({clientId, name: "Claude", grant: {grantId, data: {org: "o1"}}})
+        expect(await oauth.grant("alice", grantId)).toEqual({grantId, accountId: "alice", clientId, clientName: "Claude", data: {org: "o1"}})
+        expect(await oauth.grant("bob", grantId)).toBeUndefined()
+
+        mcpClient = undefined
+        await token({grant_type: "refresh_token", refresh_token: tokens.refreshToken!, client_id: clientId})
+        expect(mcpClient!.grant).toEqual({grantId, data: {org: "o1"}})
+    })
+
+    test("a resource server in another process serves the sub-resources the authorization server issues for", async () => {
+        const hubRuntime = await new HubTestRuntime().start()
+        onTestFinished(() => hubRuntime.teardown())
+        const clientId = await register()
+        const prm = await (await fetch(`http://localhost:${hubPort}/.well-known/oauth-protected-resource/hub/work`)).json()
+        expect(prm).toMatchObject({resource: `${HUB}/work`, authorization_servers: [ISSUER], scopes_supported: ["hub"]})
+        const {tokens} = await connect(new Browser(), clientId, `${HUB}/work`)
+        const call = (url: string) => fetch(url, {method: "POST", headers: {authorization: `Bearer ${tokens.accessToken}`}})
+        expect(await (await call(`${HUB}/work`)).json()).toEqual({hub: "alice"})
+        expect((await call(`${HUB}/home`)).status).toBe(401)
+    })
+
+    test("a resource served at / with subPaths takes a token only at the URL it was issued for", async () => {
+        const rootRuntime = await new RootTestRuntime().start()
+        onTestFinished(() => rootRuntime.teardown())
+        const now = Math.floor(Date.now() / 1000)
+        const bearer = await rootSigner.sign({sub: "alice", aud: ["app-root", ROOT], iat: now, exp: now + 60, data: {permissions: []}})
+        const call = (path: string) => fetch(`${ROOT}${path}`, {headers: {authorization: `Bearer ${bearer}`}})
+        expect(await (await call("/")).text()).toBe("ok")
+        const other = await call("/x")
+        expect(other.status).toBe(401)
+        expect(other.headers.get("www-authenticate")).toContain(`resource_metadata="${ROOT}/.well-known/oauth-protected-resource/x"`)
+    })
+
+    test("a sub-resource indicator must be a plain URL under a resource with subPaths", async () => {
+        const clientId = await register()
+        for (const resource of [`${MCP}/work?x=1`, `${MCP}/work#x`, `${MCP}//work`, `${MCP}/a/../work`, `${INTERNAL}/x`]) {
+            const res = await new Browser().get(authorizeUrl(clientId, THIRD_PARTY_REDIRECT, pkce().challenge, {resource}))
+            expect(new URL(res.headers.get("location")!, ISSUER).searchParams.get("error")).toBe("invalid_target")
+        }
+        expect((await fetch(`${ISSUER}/.well-known/oauth-protected-resource/api/x`)).status).toBe(404)
     })
 
     test("a third-party client can't get a token for a first-party-only resource", async () => {
@@ -500,6 +640,26 @@ describe("GGOAuthServer", () => {
         expect(api).toEqual({resource: API, authorization_servers: [ISSUER], scopes_supported: ["api"], bearer_methods_supported: ["header"]})
         expect((await fetch(`${ISSUER}/.well-known/oauth-protected-resource`)).status).toBe(404)
         expect((await fetch(`${ISSUER}/.well-known/oauth-protected-resource/other`)).status).toBe(404)
+    })
+
+    test("each URL under a protected path is a resource of its own: its own metadata, and only its own tokens", async () => {
+        const prm = await (await fetch(`${ISSUER}/.well-known/oauth-protected-resource/mcp/work`)).json()
+        expect(prm).toMatchObject({resource: `${MCP}/work`, authorization_servers: [ISSUER], scopes_supported: ["mcp"]})
+        expect((await fetch(`${ISSUER}/.well-known/oauth-protected-resource/mcpx`)).status).toBe(404)
+        const anon = await fetch(`${MCP}/work`, {method: "POST"})
+        expect(anon.headers.get("www-authenticate")).toBe(`Bearer resource_metadata="${ISSUER}/.well-known/oauth-protected-resource/mcp/work", scope="mcp"`)
+
+        const clientId = await register()
+        const work = (await connect(new Browser(), clientId, `${MCP}/work`)).tokens.accessToken
+        const plain = (await connect(new Browser(), clientId, MCP)).tokens.accessToken
+        expect(decodeJwt(work).aud).toEqual(["app-mcp", `${MCP}/work`])
+        const call = (url: string, accessToken: string) => fetch(url, {method: "POST", headers: {authorization: `Bearer ${accessToken}`}})
+        expect(await (await call(`${MCP}/work`, work)).json()).toEqual({hello: "alice"})
+        for (const [url, accessToken] of [[`${MCP}/home`, work], [MCP, work], [`${MCP}/work`, plain]]) {
+            const refused = await call(url, accessToken)
+            expect(refused.status).toBe(401)
+            expect(refused.headers.get("www-authenticate")).toContain(`error="invalid_token"`)
+        }
     })
 
     test("a loopback (CLI) client matches on any port and is asked for consent every time", async () => {
@@ -766,6 +926,11 @@ describe("GGOAuthServer", () => {
         expect(await store.find("GrantUsage", grant.grantId)).toBeDefined()
         await oauth.revokeGrant("alice", grant.grantId)
         expect(await store.find("GrantUsage", grant.grantId)).toBeUndefined()
+        expect(await oauth.grant("alice", grant.grantId)).toBeUndefined()
+        // Its GrantKey went with it: authorizing the resource again is a new grant.
+        const reconnected = await connect(browser, clientId, MCP)
+        expect(reconnected.prompts).toEqual(["consent"])
+        expect((await grantsOf(clientId)).map(g => g.grantId)).not.toContain(grant.grantId)
         expect((await token({grant_type: "refresh_token", refresh_token: tokens.refreshToken!, client_id: clientId})).error).toBe("invalid_grant")
         expect((await oauth.listGrants("alice")).map(g => g.grantId)).not.toContain(grant.grantId)
 

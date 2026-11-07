@@ -31,7 +31,7 @@ export interface GGOAuthResource<C extends object> extends GGOAuthProtectedResou
     accessToken: GGAuthAccessToken<C>
     // Re-run at every issuance (code exchange and each refresh), like GGAuthRefreshToken's resolve:
     // permission changes apply on refresh. undefined = subject gone → invalid_grant.
-    claims: (subject: string, client: {clientId: string, name: string}) => Promise<C | undefined>
+    claims: (subject: string, client: GGOAuthTokenClient) => Promise<C | undefined>
     // Who may get tokens for it. "any" (default): every client that signs a user in. "firstParty": only
     // pre-registered first-party clients. "service": only service clients, by GGOAuthServiceApi.token
     // (the subject is the client id); service clients get no other resource.
@@ -44,6 +44,26 @@ export interface GGOAuthResource<C extends object> extends GGOAuthProtectedResou
         params?: string[]
         claims: (subject: string, params: Record<string, string | undefined>) => Promise<C | undefined>
     }
+}
+
+// What the app stores on a grant at consent (e.g. which org the connection acts in).
+export type GGOAuthGrantData = Record<string, string>
+
+// Who a token is issued to, and the grant it is issued under (none for a service client).
+export interface GGOAuthTokenClient {
+    clientId: string
+    name: string
+    grant?: {grantId: string, data: GGOAuthGrantData}
+}
+
+// A user's grant to a client for one resource URL. Authorizing the same resource again reuses it; a client
+// added at two URLs (e.g. /mcp/work and /mcp/home) holds two.
+export interface GGOAuthGrant {
+    grantId: string
+    accountId: string
+    clientId: string
+    clientName: string
+    data: GGOAuthGrantData
 }
 
 export interface GGOAuthServiceClientRegistration {
@@ -93,8 +113,9 @@ export interface GGOAuthInteractionRequest {
     redirect: (url: string) => void
     // Each ends the request with a redirect back into the flow.
     login: (result: {accountId: string, amr?: string[]}) => Promise<void>
-    // Grants what the client asked for. Only while prompt is "consent".
-    consent: () => Promise<void>
+    // Grants what the client asked for, on the user's grant to it for this resource URL. A new grant keeps `data`
+    // for its lifetime; an existing one keeps what it has. Only while prompt is "consent".
+    consent: (data?: GGOAuthGrantData) => Promise<void>
     deny: () => Promise<void>
 }
 
@@ -154,6 +175,8 @@ const PAGE_HEADERS = {"content-type": "text/html; charset=utf-8", "referrer-poli
 const TICKET = "GGOAuthTicket"
 // Not an oidc-provider model: when each grant last got tokens, for listGrants. Carries grantId, so revoking the grant removes it.
 const GRANT_USAGE = "GrantUsage"
+// Nor this: the grant of (account, third-party client, resource URL), under grantKey. Revoked with the grant, expires with it.
+const GRANT_KEY = "GrantKey"
 // Claims resolved during a refresh before the presented token was consumed (see rotateRefreshToken).
 const prefetchedClaims = new WeakMap<object, {resource: string, claims: object}>()
 // Comparing fixed-length HMAC digests keeps timingSafeEqual from leaking the secret's length.
@@ -167,6 +190,7 @@ const SERVICE_CLIENT_HANDLER = GG_OAUTH_SERVICE_CLIENT.define((authenticate: (au
 }))
 
 type Ticket = {uid: string, result: InteractionResults}
+type Grant = InstanceType<Provider["Grant"]> & {appData?: GGOAuthGrantData}
 
 // OAuth 2.1 authorization server on a GGHttpServer. Protocol (PKCE, DCR, CIMD, resource indicators,
 // RFC 9207 iss, refresh rotation + reuse revocation, revocation, discovery) is panva oidc-provider;
@@ -178,7 +202,7 @@ export class GGOAuthServer {
     private _firstParty: Map<string, GGOAuthFirstPartyClient> | undefined
     private _service: Map<string, GGOAuthServiceClientRegistration> | undefined
     private readonly options: GGOAuthServerOptions
-    private readonly resourceServer: GGOAuthResourceServer
+    private readonly resourceServer: GGOAuthResourceServer<GGOAuthResource<any>>
 
     constructor(options: GGOAuthServerOptions) {
         // Resources sharing a signer are told apart only by audience: a token for one must never
@@ -290,6 +314,15 @@ export class GGOAuthServer {
             }))
     }
 
+    // undefined once the grant is revoked or expired.
+    public grant = async (subject: string, grantId: string): Promise<GGOAuthGrant | undefined> => {
+        const p = this.provider()
+        const grant: Grant | undefined = await p.Grant.find(grantId)
+        if (grant?.accountId !== subject) return undefined
+        const client = await p.Client.find(grant.clientId!).catch(() => undefined)
+        return {grantId, accountId: subject, clientId: grant.clientId!, clientName: String(client?.clientName ?? grant.clientId), data: grant.appData ?? {}}
+    }
+
     // Kills the grant's refresh tokens and codes now; already-issued access tokens live out their TTL.
     public revokeGrant = async (subject: string, grantId: string): Promise<void> => {
         const grant = await this.provider().Grant.find(grantId)
@@ -339,11 +372,12 @@ export class GGOAuthServer {
             },
             interaction: await this.describeInteraction(found),
             login: ({accountId, amr}) => finish({login: {accountId, amr}}),
-            consent: async () => {
+            consent: async (data = {}) => {
                 const accountId = found.session?.accountId
                 if (found.prompt.name !== "consent" || !accountId) return this.fail(res, 400, "Sign in first")
-                const existing = found.grantId ? await p.Grant.find(found.grantId) : undefined
-                const grant = existing?.accountId === accountId ? existing : new p.Grant({accountId, clientId: String(found.params.client_id)})
+                const clientId = String(found.params.client_id)
+                const indicator = this.requestedIndicator(found.params, clientId)
+                const grant = await this.connectionGrant(accountId, clientId, indicator) ?? await this.newConnectionGrant(accountId, clientId, indicator, data)
                 this.grantRequested(grant, found.params)
                 await p.interactionFinished(req, res, {consent: {grantId: await grant.save()}}, {mergeWithLastSubmission: true})
             },
@@ -369,7 +403,7 @@ export class GGOAuthServer {
                 loopbackOnly: hosts.length > 0 && hosts.every(h => /^(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/.test(h)),
             },
             scopes: requestedScopes(interaction.params),
-            resource: this.requestedResource(interaction.params, clientId).resource(),
+            resource: this.requestedIndicator(interaction.params, clientId),
             params: Object.fromEntries(extra.filter(k => typeof interaction.params[k] === "string").map(k => [k, String(interaction.params[k])])),
         }
     }
@@ -429,27 +463,56 @@ export class GGOAuthServer {
         const requested = requestedScopes(params)
         const oidc = requested.filter(s => OIDC_SCOPES.includes(s))
         if (oidc.length) grant.addOIDCScope(oidc.join(" "))
-        const resource = this.requestedResource(params, String(grant.clientId))
-        const resourceScopes = requested.filter(s => resource.scopes.includes(s))
-        if (resourceScopes.length) grant.addResourceScope(resource.resource(), resourceScopes.join(" "))
+        const indicator = this.requestedIndicator(params, String(grant.clientId))
+        const resourceScopes = requested.filter(s => this.resourceAt(indicator)!.scopes.includes(s))
+        if (resourceScopes.length) grant.addResourceScope(indicator, resourceScopes.join(" "))
     }
 
-    private requestedResource(params: Record<string, unknown>, clientId: string): GGOAuthResource<any> {
+    private requestedIndicator(params: Record<string, unknown>, clientId: string): string {
         const indicator = typeof params.resource === "string" ? params.resource : undefined
-        return (indicator && this.resource(indicator)) || this.defaultResource(clientId)
+        return indicator && this.resourceAt(indicator) ? indicator : this.defaultResource(clientId).resource()
+    }
+
+    // The user's grant to a third-party client for this resource URL, by its GrantKey row: what a re-authorization reuses.
+    private async connectionGrant(accountId: string, clientId: string, indicator: string): Promise<Grant | undefined> {
+        const key = grantKey(accountId, clientId, indicator)
+        const pointer = await this.options.store.find(GRANT_KEY, key)
+        const grant: Grant | undefined = pointer && await this.provider().Grant.find(String(pointer.grantId))
+        // Left by a revocation that failed half-way (oidc-provider removes the grant and its rows concurrently).
+        if (pointer && !grant) await this.options.store.destroy(GRANT_KEY, key)
+        return grant
+    }
+
+    // Of two concurrent first consents, the one that loses the GrantKey row drops its grant and joins the winner's.
+    private async newConnectionGrant(accountId: string, clientId: string, indicator: string, data: GGOAuthGrantData): Promise<Grant> {
+        const grant: Grant = new (this.provider().Grant)({accountId, clientId})
+        grant.appData = data
+        await grant.save()
+        if (await this.options.store.insert(GRANT_KEY, grantKey(accountId, clientId, indicator), {grantId: grant.jti}, grant.remainingTTL)) return grant
+        await grant.destroy()
+        const winner = await this.connectionGrant(accountId, clientId, indicator)
+        if (!winner) throw new Error("GGOAuthServer: a concurrent consent's grant is gone")
+        return winner
+    }
+
+    private resourceAt(indicator: string | undefined): GGOAuthResource<any> | undefined {
+        return indicator === undefined ? undefined : this.resourceServer.resourceAt(indicator)
     }
 
     private resource(indicator: string | undefined): GGOAuthResource<any> | undefined {
         return this.options.resources.find(r => r.resource() === indicator)
     }
 
-    private clientOf(ctx: KoaContextWithOIDC): {clientId: string, name: string} {
+    // The token endpoint has loaded the code's or refresh token's grant.
+    private clientOf(ctx: KoaContextWithOIDC): GGOAuthTokenClient {
         const client = ctx.oidc.client!
-        return {clientId: client.clientId, name: this.firstParty.get(client.clientId)?.name ?? String(client.clientName ?? client.clientId)}
+        const grant: Grant = ctx.oidc.entities.Grant!
+        const name = this.firstParty.get(client.clientId)?.name ?? String(client.clientName ?? client.clientId)
+        return {clientId: client.clientId, name, grant: {grantId: grant.jti, data: grant.appData ?? {}}}
     }
 
     private usableResource(indicator: string, clientId: string): GGOAuthResource<any> {
-        const resource = this.resource(indicator)
+        const resource = this.resourceAt(indicator)
         if (!resource) throw new oidcErrors.InvalidTarget()
         if (!this.mayUse(resource, clientId)) throw new oidcErrors.InvalidTarget("resource not available to this client")
         return resource
@@ -469,9 +532,10 @@ export class GGOAuthServer {
     // leaves. A placeholder-signed token that escaped any other way verifies nowhere.
     private async resign(token: string): Promise<string> {
         const claims = decodeJwt(token)
-        const resource = this.options.resources.find(r => r.accessToken.audience === claims["aud"])
+        const resource = this.resourceAt(String(claims["aud"]))
         if (!resource) throw new Error("GGOAuthServer: issued an access token for an unknown audience")
-        return resource.accessToken.signer.sign(claims)
+        // The token kind's audience (what its wire verifies) and the exact resource URL it was issued for.
+        return resource.accessToken.signer.sign({...claims, aud: [resource.accessToken.audience, claims["aud"]]})
     }
 
     private authenticateServiceClient = (authorization: string | undefined): string => {
@@ -508,7 +572,7 @@ export class GGOAuthServer {
     }
 
     private ttlOf(indicator: string | undefined): number {
-        const resource = this.resource(indicator)
+        const resource = this.resourceAt(indicator)
         return resource ? Math.floor(resource.accessToken.accessTtlMs / 1000) : 600
     }
 
@@ -600,7 +664,7 @@ export class GGOAuthServer {
                         const resource = this.usableResource(indicator, client.clientId)
                         return {
                             scope: resource.scopes.join(" "),
-                            audience: resource.accessToken.audience,
+                            audience: indicator,
                             accessTokenTTL: Math.floor(resource.accessToken.accessTtlMs / 1000),
                             accessTokenFormat: "jwt",
                             // Placeholder: the token endpoint re-signs every access token with the resource's own signer.
@@ -609,13 +673,17 @@ export class GGOAuthServer {
                     },
                 },
             },
-            // First-party clients never see a consent screen: an existing login session is enough.
+            // First-party clients never see a consent screen: an existing login session is enough. A third-party
+            // client gets the user's grant to it for the requested resource, whichever session made it.
             loadExistingGrant: async (ctx) => {
                 const client = ctx.oidc.client!
                 const session = ctx.oidc.session!
-                const grantId = ctx.oidc.result?.consent?.grantId || session.grantIdFor(client.clientId)
-                if (grantId) return ctx.oidc.provider.Grant.find(grantId)
-                if (!firstParty.has(client.clientId) || !session.accountId) return undefined
+                const consented = ctx.oidc.result?.consent?.grantId
+                if (consented) return ctx.oidc.provider.Grant.find(consented)
+                if (!session.accountId) return undefined
+                if (!firstParty.has(client.clientId)) return this.connectionGrant(session.accountId, client.clientId, this.requestedIndicator(ctx.oidc.params as Record<string, unknown>, client.clientId))
+                const existing = session.grantIdFor(client.clientId)
+                if (existing) return ctx.oidc.provider.Grant.find(existing)
                 const grant = new ctx.oidc.provider.Grant({accountId: session.accountId, clientId: client.clientId})
                 this.grantRequested(grant, ctx.oidc.params as Record<string, unknown>)
                 await grant.save()
@@ -647,13 +715,12 @@ export class GGOAuthServer {
                 return true
             },
             extraTokenClaims: async (_ctx: KoaContextWithOIDC, token) => {
-                if (token.kind !== "AccessToken" && token.kind !== "ClientCredentials") return undefined
+                if (token.kind !== "AccessToken") return undefined
                 const at = token as InstanceType<Provider["AccessToken"]>
-                const resource = this.resource(at.resourceServer?.identifier())
+                const resource = this.resourceAt(at.resourceServer?.identifier())
                 if (!resource) return undefined
-                const subject = token.kind === "ClientCredentials" ? String(at.clientId) : String(at.accountId)
                 const prefetched = prefetchedClaims.get(_ctx)
-                const claims = prefetched?.resource === resource.resource() ? prefetched.claims : await resource.claims(subject, this.clientOf(_ctx))
+                const claims = prefetched?.resource === resource.resource() ? prefetched.claims : await resource.claims(String(at.accountId), this.clientOf(_ctx))
                 if (!claims) throw new oidcErrors.InvalidGrant("subject is no longer valid")
                 // On refresh, the sign-in time the refresh token copied from its code: a refresh never makes a token fresh.
                 const authTime = (_ctx.oidc.entities.AuthorizationCode ?? _ctx.oidc.entities.RefreshToken)?.authTime
@@ -679,6 +746,10 @@ export class GGOAuthServer {
             },
         }
         const provider = new Provider(o.issuer(), config)
+        // The app's data rides in the grant's own row: written with it in one put, revoked with it.
+        const inPayload: unknown = provider.Grant.IN_PAYLOAD
+        if (!Array.isArray(inPayload) || !inPayload.includes("accountId")) throw new Error("GGOAuthServer: oidc-provider's Grant model changed; can't keep grant data on it")
+        Object.defineProperty(provider.Grant, "IN_PAYLOAD", {value: [...inPayload, "appData"]})
         provider.proxy = !!o.proxy
         provider.use(async (ctx, next) => {
             const target = ctx.method === "POST" ? BROWSER_TARGETS[ctx.path] : undefined
@@ -773,6 +844,10 @@ function isAllowedDocumentUrl(clientId: string, prefixes: string[]): boolean {
     const url = URL.parse(clientId)
     if (!url || url.protocol !== "https:" || url.port !== "" || url.username || url.password) return false
     return prefixes.some(prefix => (url.origin + url.pathname).startsWith(prefix))
+}
+
+function grantKey(accountId: string, clientId: string, indicator: string): string {
+    return createHash("sha256").update(JSON.stringify([accountId, clientId, indicator])).digest("base64url")
 }
 
 function requestedScopes(params: Record<string, unknown>): string[] {
