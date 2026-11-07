@@ -35,7 +35,7 @@ describe("reasons carry the deciding id and the author's ref", () => {
             expect.objectContaining({layer: "approval", level: "critical", source: "ask", ref: "ask-1"}),
         ])
         const request = {subject: agent(), action: {name: "git:Push"}, resource: {type: "git:repo", id: repo("site")}}
-        expect(GGAuthz.explain(request, d)).toContain("approval level critical (ask)")
+        expect(GGAuthz.explain(request, d)).toContain("approval level critical (ask ask-1)")
     })
 
     test("token scope and restriction rules", async () => {

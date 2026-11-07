@@ -113,7 +113,7 @@ export const IsGGAuthzAsk = IsObject({
     when: IsWhen,
     unless: IsUnless,
     conditions: IsConditions,
-    level: IsLiteral("ask-once", "ask", "critical", "dangerous"),
+    level: IsLiteral(...GG_AUTHZ_APPROVAL_LEVELS.filter((l): l is Exclude<GGAuthzApprovalLevel, "auto" | "humans-only"> => l !== "auto" && l !== "humans-only")),
     ref: IsRef,
 }).docs({description: "Raises a workload's approval level; applies unless its facts or conditions are known not to hold. Never permits"})
 export type GGAuthzAsk = typeof IsGGAuthzAsk.infer
@@ -249,8 +249,8 @@ export const IsGGAuthzReason = IsObject({
     level: IsGGAuthzApprovalLevel.orUndefined,
     locked: IsBoolean.orUndefined.docs({description: "The resolved level is a locked minimum: nothing below may lower it"}),
     lowered: IsObject({on: IsString, level: IsGGAuthzApprovalLevel}).orUndefined.docs({description: "A descendant's attempt to go below a locked minimum, ignored"}),
-    source: IsLiteral("default", "floor", "policy", "ask").orUndefined.docs({
-        description: "On an approval reason, what set the level: nothing (`default`), `model.approvalFloor` (`floor`), a resource policy's approvals (`policy`, see `on`) or one of the subject's `asks` (`ask`, see `ref`)",
+    source: IsLiteral("default", "floor", "policy", "ask", "attribute").orUndefined.docs({
+        description: "On an approval reason, what set the level: nothing (`default`), `model.approvalFloor` (`floor`), a resource policy's approvals (`policy`, see `on`), one of the subject's `asks` (`ask`, see `ref`) or the resource's `approvalLevelAttribute` (`attribute`)",
     }),
     ref: IsString.orUndefined.docs({description: "The deciding binding's, rule's or ask's `ref`"}),
 })

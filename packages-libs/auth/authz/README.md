@@ -88,8 +88,9 @@ The examples use a document platform: tenant `acme` → project → folder → d
 1. A deny statement or guardrail deny matches → **no**.
 2. A ceiling, boundary, token scope or restriction doesn't cover it → **no**.
 3. A binding or allow statement matches → **yes**.
-4. For workloads: the approval level (the strictest of floor, resource policies and the request's
-   asks) is attached, or `humans-only` → **no**.
+4. For workloads: the approval level is attached, or `humans-only` → **no**. Resource policies set
+   it down the tree (the deepest wins unless an ancestor locked it); the floor, the request's asks and
+   the resource's level attribute only raise it.
 
 Nothing matched → **no**.
 
@@ -252,6 +253,7 @@ attributes are read on every request, so changes to them need no rebuild.
 | `resolver` | the scope tree, groups and attributes, below |
 | `facts?` | `(name, request) => boolean \| undefined`; default: boolean values from `request.context` |
 | `approvals?` | `(request, decision) => Promise<void>`: obtains approval or throws |
+| `approvalLevelAttribute?` | a resource attribute holding an approval level that raises a workload's (§5) |
 | `unknownActions?` | `"throw"` (default) or `"ignore"` |
 
 **`unknownActions: "ignore"`** is for tenant data that still names actions of an uninstalled
@@ -331,8 +333,7 @@ In handlers, for checks that depend on the row's state:
 Pass `properties` when the handler already holds the row. Optional config: `approvals(need)`
 obtains an approval or throws; `hidden(resource, action)` answers `NOT_FOUND` per resource;
 `explainForbidden` replaces a bare `FORBIDDEN` with one that says why; `undeclared(call, action)`
-reports a handler deciding an action its method's requirements don't name; `approvalLevelAttribute`
-names a resource attribute that raises the approval level. When an approval is for another
+reports a handler deciding an action its method's requirements don't name. When an approval is for another
 resource than the one decided (a create's new row), `registerApprovalKey(action, (input, resource)
 => ({type, id}))` names it; `APPROVAL_REQUIRED` then carries it as `key`.
 
@@ -479,6 +480,10 @@ A third outcome besides allow and deny, `allow-with-approval`, for workloads onl
   anywhere never erases an ask and an ask never lowers a locked floor. Asks never permit: the action
   must still pass every ceiling and be granted. No ask carries `auto` or `humans-only`: leave the
   action out of a restriction instead.
+- **A resource attribute may raise it too**: `approvalLevelAttribute` in the engine config names the
+  attribute (e.g. a critical secret's `approvalLevel`), raising even `auto` (`source: "attribute"`).
+  An absent attribute raises nothing; a failed load is an error, not a decision.
+- **An ask naming an unknown action throws**, like a policy would: a typo must not silently never ask.
 - **Floors and asks fail toward asking**: one applies when it names the action, its resources
   match, and none of its facts or conditions is known to be false. An unknown raises the level.
 - **An approval never widens access**: it is computed only when the request would otherwise be

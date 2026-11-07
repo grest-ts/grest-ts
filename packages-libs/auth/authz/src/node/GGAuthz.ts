@@ -59,6 +59,8 @@ export interface GGAuthzConfig {
     facts?: GGAuthzFacts
     /** Without it, `authorize` throws APPROVAL_REQUIRED for decisions that need approval. */
     approvals?: GGAuthzApprovals
+    /** A resource attribute holding an approval level that raises a workload's (e.g. a critical secret). */
+    approvalLevelAttribute?: string
     /**
      * `ignore`: actions in `policies` the model doesn't know (e.g. from an uninstalled module) are skipped and listed in
      * `inactive`, instead of failing the build. Default `throw`.
@@ -175,6 +177,7 @@ interface Eval {
     p: Principals
     get: AttributeLookup
     facts: Map<string, boolean | undefined>
+    asks: Approval[]
 }
 
 interface Loader {
@@ -197,6 +200,7 @@ export class GGAuthz {
     private readonly roles: Map<string, Set<string>>
     private readonly workloadTypes: Set<string>
     private readonly approvalFloor: Approval[]
+    private readonly levelKey?: string
     private readonly tokenScopes = new Map<string, Rule[]>()
     private readonly bindingsByScope = new Map<string, Binding[]>()
     private readonly bindingsByPrincipal = new Map<string, Binding[]>()
@@ -233,6 +237,8 @@ export class GGAuthz {
         for (const s of this.model.tokenScopes ?? []) this.tokenScopes.set(s.name, s.allow.map(r => this.rule(r)))
         this.approvalFloor = (this.model.approvalFloor ?? []).map(a => ({...this.approval(a), locked: true}))
         for (const a of this.model.approvalFloor ?? []) mark(this.roots, a.conditions)
+        this.levelKey = config.approvalLevelAttribute && `resource.${config.approvalLevelAttribute}`
+        this.roots.resource ||= !!this.levelKey
         if (this.model.grantAction && !this.actions.has(this.model.grantAction)) throw new Error(`Unknown action ${this.model.grantAction}`)
 
         for (const b of policies.bindings ?? []) {
@@ -443,7 +449,8 @@ export class GGAuthz {
     }
 
     private eval(request: GGAuthzRequest, chain: string[], p: Principals, get: AttributeLookup, facts: Map<string, boolean | undefined>): Eval {
-        return {request, action: request.action.name, rn: request.resource.id, chain, chainSet: new Set(chain), p, get, facts}
+        const asks = (request.subject.properties?.asks ?? []).map(a => this.approval(a))
+        return {request, action: request.action.name, rn: request.resource.id, chain, chainSet: new Set(chain), p, get, facts, asks}
     }
 
     /** `bindingsOnly`: only bindings grant, as `canGrant` needs; no remedies. There a deny the scope can't decide only
@@ -564,9 +571,12 @@ export class GGAuthz {
             level = floor
             on = floorOn
         }
-        const asks = applying((e.request.subject.properties?.asks ?? []).map(a => this.approval(a, () => true)))
-        const ask = asks.reduce<Approval | undefined>((top, a) => a.level > (top?.level ?? level) ? a : top, undefined)
-        if (ask) return {layer: "approval", kind: "approval", level: GG_AUTHZ_APPROVAL_LEVELS[ask.level]!, locked: false, lowered, message: "ask", source: "ask", ref: ask.ref}
+        const ask = applying(e.asks).reduce<Approval | undefined>((top, a) => a.level > (top?.level ?? level) ? a : top, undefined)
+        const attribute = this.levelKey ? GG_AUTHZ_APPROVAL_LEVELS.indexOf(e.get(this.levelKey) as GGAuthzApprovalLevel) : -1
+        if (attribute > Math.max(level, ask?.level ?? -1)) {
+            return {layer: "approval", kind: "approval", level: GG_AUTHZ_APPROVAL_LEVELS[attribute]!, locked: false, lowered, message: `resource ${this.levelKey}`, source: "attribute"}
+        }
+        if (ask) return {layer: "approval", kind: "approval", level: GG_AUTHZ_APPROVAL_LEVELS[ask.level]!, locked: false, lowered, message: ask.ref ? `ask ${ask.ref}` : "ask", source: "ask", ref: ask.ref}
         const resolved = GG_AUTHZ_APPROVAL_LEVELS[Math.max(0, level)]!
         const source = on ? "policy" : level < 0 ? "default" : "floor"
         const message = on ? undefined : level < 0 ? "default" : "platform floor"
