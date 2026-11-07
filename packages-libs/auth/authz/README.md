@@ -79,7 +79,8 @@ The examples use a document platform: tenant `acme` → project → folder → d
 | Term | Means | Example |
 |---|---|---|
 | approval level | whether a person must confirm a workload's allowed request: `auto` < `ask-once` < `ask` < `critical` < `dangerous` < `humans-only` | an assistant reading salaries: `ask` |
-| approval floor | a level the model always enforces | exporting always asks |
+| approval floor | a level the model always enforces, optionally only where its conditions hold | exporting always asks |
+| ask | a level a workload's request carries for itself: it raises, never lowers or permits | this agent asks before every push |
 | locked | a level that resources below can't lower | |
 
 **How one request is decided**
@@ -87,7 +88,9 @@ The examples use a document platform: tenant `acme` → project → folder → d
 1. A deny statement or guardrail deny matches → **no**.
 2. A ceiling, boundary, token scope or restriction doesn't cover it → **no**.
 3. A binding or allow statement matches → **yes**.
-4. For workloads: the approval level is attached, or `humans-only` → **no**.
+4. For workloads: the approval level is attached, or `humans-only` → **no**. Resource policies set
+   it down the tree (the deepest wins unless an ancestor locked it); the floor, the request's asks and
+   the resource's level attribute only raise it.
 
 Nothing matched → **no**.
 
@@ -162,7 +165,8 @@ export const AppAuthz = defineAuthzModel({
   The same name defined in two places throws and names both; re-evaluating the same definition
   (HMR, vitest projects) replaces it.
 - `workloadTypes` lists the principal types approvals apply to (none by default); a model with an
-  `approvalFloor` but no workload types fails at load.
+  `approvalFloor` but no workload types fails at load. A floor rule may carry `when`, `unless` and
+  `conditions` (it applies unless they are known not to hold); a `humans-only` one may not.
 
 ### Resource names (RN)
 
@@ -249,6 +253,7 @@ attributes are read on every request, so changes to them need no rebuild.
 | `resolver` | the scope tree, groups and attributes, below |
 | `facts?` | `(name, request) => boolean \| undefined`; default: boolean values from `request.context` |
 | `approvals?` | `(request, decision) => Promise<void>`: obtains approval or throws |
+| `approvalLevelAttribute?` | a resource attribute holding an approval level that raises a workload's (§5) |
 | `unknownActions?` | `"throw"` (default) or `"ignore"` |
 
 **`unknownActions: "ignore"`** is for tenant data that still names actions of an uninstalled
@@ -328,8 +333,7 @@ In handlers, for checks that depend on the row's state:
 Pass `properties` when the handler already holds the row. Optional config: `approvals(need)`
 obtains an approval or throws; `hidden(resource, action)` answers `NOT_FOUND` per resource;
 `explainForbidden` replaces a bare `FORBIDDEN` with one that says why; `undeclared(call, action)`
-reports a handler deciding an action its method's requirements don't name; `approvalLevelAttribute`
-names a resource attribute that raises the approval level. When an approval is for another
+reports a handler deciding an action its method's requirements don't name. When an approval is for another
 resource than the one decided (a create's new row), `registerApprovalKey(action, (input, resource)
 => ({type, id}))` names it; `APPROVAL_REQUIRED` then carries it as `key`.
 
@@ -422,7 +426,7 @@ subject: {
 - **Restrictions** are a per-request ceiling, e.g. from a token's authorization details. They never
   grant. `restrictionSets: [{id, rules}]` adds more such ceilings, each named: an agent can carry its
   own restrictions and those of the app it acts via, and they intersect like any ceilings (an action
-  missing from any set is denied, the strictest set's approval level counts). Every refusing set is
+  missing from any set is denied). Sets only allow: levels come from `asks`. Every refusing set is
   reported with its `id`, so ids must be unique (the subject schema rejects duplicates). A set with no
   rules allows nothing; `restrictionSets: []` adds no ceiling.
   An action the model doesn't know is left out of a request's restriction, which only narrows it.
@@ -470,10 +474,18 @@ A third outcome besides allow and deny, `allow-with-approval`, for workloads onl
 - `locked: true` makes a level a minimum for everything below; a lowering attempt is ignored and
   reported (`lowered` in the reason). `model.approvalFloor` is always locked.
 - Two matching rules in one policy: the stricter wins.
-- **A ceiling rule may carry a level** (`approval` on a boundary, guardrail ceiling, token-scope or
-  restriction rule). Within a ceiling the least strict matching rule counts, across ceilings the
-  strictest, and the result never lowers the tree's level or a locked floor. No rule carries
-  `humans-only`: leave the action out of the ceiling instead.
+- **Asks raise a level per request**: `subject.properties.asks: [{actions, resources?, when?,
+  unless?, conditions?, level, ref?}]`, e.g. what a workload's assignments ask. The strictest ask
+  that applies counts, and only when it is stricter than the floor and the tree, so an allow
+  anywhere never erases an ask and an ask never lowers a locked floor. Asks never permit: the action
+  must still pass every ceiling and be granted. No ask carries `auto` or `humans-only`: leave the
+  action out of a restriction instead.
+- **A resource attribute may raise it too**: `approvalLevelAttribute` in the engine config names the
+  attribute (e.g. a critical secret's `approvalLevel`), raising even `auto` (`source: "attribute"`).
+  An absent attribute raises nothing; a failed load is an error, not a decision.
+- **An ask naming an unknown action throws**, like a policy would: a typo must not silently never ask.
+- **Floors and asks fail toward asking**: one applies when it names the action, its resources
+  match, and none of its facts or conditions is known to be false. An unknown raises the level.
 - **An approval never widens access**: it is computed only when the request would otherwise be
   allowed. `humans-only` denies workloads; `auto` still sets `audit: true`; humans get no level.
 
@@ -523,8 +535,7 @@ boundary, token scope or statement, and `ref` returns whatever opaque string the
 author put on the deciding binding or rule (`ref` on `GGAuthzBinding` and `GGAuthzRule`, so on
 statements and guardrail, boundary, scope and restriction rules too), e.g. the caller's own record id.
 An approval reason's `source` says what set the level: `default`, `floor` (`model.approvalFloor`),
-`policy` (a resource policy's approvals, at `on`) or a ceiling layer (`boundary`, `restriction`, … with
-its `id` and the rule's `ref`). `message` is for humans; don't match on it. A `ref` on request `restrictions` is the caller's, as
+`policy` (a resource policy's approvals, at `on`) or `ask` (one of the subject's asks, with its `ref`). `message` is for humans; don't match on it. A `ref` on request `restrictions` is the caller's, as
 trusted as the rest of the request. When a ceiling denies a
 workload whose level would be `humans-only` anyway, that approval reason is reported too.
 

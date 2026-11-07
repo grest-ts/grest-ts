@@ -216,9 +216,10 @@ describe("GGAuthzAuthority", () => {
     })
 
     describe("approvals", () => {
+        const raising = new GGAuthz({model, policies, resolver: new GGAuthzMemoryResolver(data), approvalLevelAttribute: "approvalLevel"})
         const agent: GGAuthzSubject = {type: "agent", id: "ws-ann", properties: {onBehalfOf: {type: "user", id: "ann"}}}
         const make = (approvals?: GGAuthzAuthorityConfig["approvals"]) => {
-            const a = new GGAuthzAuthority({partition: "acme", tenantType: Org.types.org, tenant: () => "acme", engine: async () => engine, approvals, approvalLevelAttribute: "approvalLevel"})
+            const a = new GGAuthzAuthority({partition: "acme", tenantType: Org.types.org, tenant: () => "acme", engine: async () => raising, approvals})
             a.register(Vm.types.workspace, (_t, id) => ({properties: {ancestors: [rn.web, rn.org], attributes: id === "ann-1" ? {} : {approvalLevel: "critical"}}}))
             return a
         }

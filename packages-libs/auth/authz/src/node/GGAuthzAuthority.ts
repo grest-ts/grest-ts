@@ -4,7 +4,7 @@ import {APPROVAL_REQUIRED, INSUFFICIENT_SCOPE, STEP_UP_REQUIRED} from "../shared
 import {GG_AUTHZ_SUBJECT} from "./GG_AUTHZ_SUBJECT"
 import type {GGAuthz} from "./GGAuthz"
 import {GGAuthzRn} from "../shared/GGAuthzRn"
-import {GG_AUTHZ_APPROVAL_LEVELS, type GGAuthzApprovalLevel, type GGAuthzRequest, type GGAuthzResourceProperties} from "../shared/authzSchemas"
+import {type GGAuthzApprovalLevel, type GGAuthzRequest, type GGAuthzResourceProperties} from "../shared/authzSchemas"
 
 type Awaitable<T> = T | Promise<T>
 
@@ -61,8 +61,6 @@ export interface GGAuthzAuthorityConfig {
     /** An allow that needs approval: return when a live approval covers it, else throw (`APPROVAL_REQUIRED` with the
      *  key, for the caller to ask and retry). Without it the authority throws APPROVAL_REQUIRED itself. */
     approvals?(need: GGAuthzApprovalNeed): Promise<void>
-    /** A resource attribute holding an approval level that raises the engine's (e.g. a critical secret). */
-    approvalLevelAttribute?: string
     /** Whether a denial of `action` on this resource answers NOT_FOUND without `.hide()`, e.g. on what someone else owns. */
     hidden?(resource: GGAuthzResolvedResource, action: string): boolean
     /** A FORBIDDEN that says why, in place of a decided, unhidden denial of `action` on this resource; undefined, or a
@@ -229,10 +227,7 @@ export class GGAuthzAuthority {
     }
 
     private need(action: string, resource: GGAuthzResolvedResource, level: GGAuthzApprovalLevel, key?: {type: string, id: string}): GGAuthzApprovalNeed {
-        const raised = this.config.approvalLevelAttribute && resource.properties.attributes?.[this.config.approvalLevelAttribute]
-        const rank = (l: unknown) => GG_AUTHZ_APPROVAL_LEVELS.indexOf(l as GGAuthzApprovalLevel)
-        const effective = rank(raised) > rank(level) ? raised as GGAuthzApprovalLevel : level
-        return {action, resource, level: effective, key: key ? {...key, rn: this.rnOf(key.type, key.id)} : {type: resource.type, id: resource.id, rn: resource.rn}}
+        return {action, resource, level, key: key ? {...key, rn: this.rnOf(key.type, key.id)} : {type: resource.type, id: resource.id, rn: resource.rn}}
     }
 
     public async can(action: GGAuthzActionRef, resource: GGAuthzResourceRef): Promise<boolean> {
