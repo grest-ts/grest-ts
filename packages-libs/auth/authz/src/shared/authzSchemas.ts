@@ -130,7 +130,7 @@ export const IsGGAuthzModel = IsObject({
     actions: IsArray(IsGGAuthzAction),
     roles: IsArray(IsGGAuthzRole),
     tokenScopes: IsArray(IsGGAuthzTokenScope).orUndefined,
-    workloadTypes: IsArray(IsString).orUndefined.docs({description: "Principal types that approvals apply to, e.g. `agent`; none by default"}),
+    workloadTypes: IsArray(IsString).orUndefined.docs({description: "Principal types that act for a human (`onBehalfOf`), e.g. `conn`: asks and floors apply to them and `humans-only` refuses them; none by default"}),
     approvalFloor: IsArray(IsGGAuthzFloorRule).orUndefined.docs({description: "Platform minimum approval levels, always locked"}),
     stepUpFacts: IsArray(IsGGAuthzFactName).orUndefined.docs({description: "Facts a caller can make true by re-authenticating, e.g. `mfa` from the token's `acr`/`amr`"}),
     grantAction: IsGGAuthzActionName.orUndefined.docs({description: "Needed on a scope to create bindings there (`canGrant`)"}),
@@ -212,7 +212,7 @@ export const IsGGAuthzSubject = IsObject({
         restrictionSets: IsArray(IsGGAuthzRestrictionSet).refine(
             sets => new Set(sets.map(s => s.id)).size === sets.length,
             new GGIssueKey("restrictionSetIds", "Restriction set ids must be unique"),
-        ).orUndefined.docs({description: "More per-request ceilings, each like `restrictions`, e.g. a workload's own and those of the app it acts via; they intersect. Ids are unique"}),
+        ).orUndefined.docs({description: "More per-request ceilings, each like `restrictions`, e.g. what a workload is given and what its human's own denies leave; they intersect. Ids are unique"}),
         asks: IsArray(IsGGAuthzAsk).orUndefined.docs({description: "Approval levels for this request: the strictest applying one raises the level, never lowers it"}),
         attributes: IsRecord(IsString, IsUnknown).orUndefined.docs({description: "The acting principal's attributes (`actor.*`, and `principal.*` when it acts for itself), as the caller knows them for this request; the resolver isn't asked"}),
     }).orUndefined,

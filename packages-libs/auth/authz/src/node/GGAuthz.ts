@@ -402,7 +402,8 @@ export class GGAuthz {
         return Object.keys(values).length ? {action, resourceType, include, exclude, require, values} : {action, resourceType, include, exclude, require}
     }
 
-    private async enforce(request: GGAuthzRequest, decision: GGAuthzDecision): Promise<GGAuthzDecision> {
+    /** Throws for `decision` (of `request`) as `authorize` does. */
+    public async enforce(request: GGAuthzRequest, decision: GGAuthzDecision): Promise<GGAuthzDecision> {
         if (!decision.decision) {
             const debug = {debugMessage: explain(request, decision)}
             const remedy = decision.context.remedy

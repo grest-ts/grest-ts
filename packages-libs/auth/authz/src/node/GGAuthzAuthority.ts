@@ -4,7 +4,7 @@ import {APPROVAL_REQUIRED, INSUFFICIENT_SCOPE, STEP_UP_REQUIRED} from "../shared
 import {GG_AUTHZ_SUBJECT} from "./GG_AUTHZ_SUBJECT"
 import type {GGAuthz} from "./GGAuthz"
 import {GGAuthzRn} from "../shared/GGAuthzRn"
-import {type GGAuthzApprovalLevel, type GGAuthzRequest, type GGAuthzResourceProperties} from "../shared/authzSchemas"
+import {type GGAuthzApprovalLevel, type GGAuthzDecision, type GGAuthzRequest, type GGAuthzResourceProperties} from "../shared/authzSchemas"
 
 type Awaitable<T> = T | Promise<T>
 
@@ -63,13 +63,13 @@ export interface GGAuthzAuthorityConfig {
     approvals?(need: GGAuthzApprovalNeed): Promise<void>
     /** Whether a denial of `action` on this resource answers NOT_FOUND without `.hide()`, e.g. on what someone else owns. */
     hidden?(resource: GGAuthzResolvedResource, action: string): boolean
-    /** A FORBIDDEN that says why, in place of a decided, unhidden denial of `action` on this resource; undefined, or a
-     *  throw, keeps the denial. Only `assert`/`authorize` ask: listings filter instead. */
-    explainForbidden?(action: string, resource: GGAuthzResolvedResource): Promise<InstanceType<typeof FORBIDDEN> | undefined>
-    /** Every refusal `assert`/`authorize`/`approvalNeed` decided, before it's explained or hidden (`hidden`: it answers
-     *  NOT_FOUND). For audit and alerting; a throw or an async hook's rejection is ignored. Listings filter instead, so
-     *  they never get here. */
-    denied?(action: string, resource: GGAuthzResolvedResource, hidden: boolean): void
+    /** A FORBIDDEN that says why, in place of a decided, unhidden denial of `action` on this resource (`decision`: the
+     *  engine's); undefined, or a throw, keeps the denial. Only `assert`/`authorize` ask: listings filter instead. */
+    explainForbidden?(action: string, resource: GGAuthzResolvedResource, decision: GGAuthzDecision): Promise<InstanceType<typeof FORBIDDEN> | undefined>
+    /** Every refusal `assert`/`authorize`/`approvalNeed` decided (`decision`: the engine's), before it's explained or
+     *  hidden (`hidden`: it answers NOT_FOUND). For audit and alerting; a throw or an async hook's rejection is ignored.
+     *  Listings filter instead, so they never get here. */
+    denied?(action: string, resource: GGAuthzResolvedResource, hidden: boolean, decision: GGAuthzDecision): void
     /** A handler decided an action its method's requirements don't name (`assert`, `can` or `approvalNeed`, in a
      *  request that ran requirements; `allowed` filters, so it's free). Throw to refuse it. */
     undeclared?(call: GGAuthzCall, action: string): void
@@ -192,17 +192,17 @@ export class GGAuthzAuthority {
         throw new APPROVAL_REQUIRED({action: need.action, resource: need.resource.rn, level: need.level, key: need.key.rn === need.resource.rn ? undefined : need.key.rn})
     }
 
-    private async denial(e: unknown, action: string, resource: GGAuthzResolvedResource, hidden?: boolean): Promise<unknown> {
+    private async denial(e: unknown, action: string, resource: GGAuthzResolvedResource, decision: GGAuthzDecision, hidden?: boolean): Promise<unknown> {
         if (!FORBIDDEN.is(e) && !INSUFFICIENT_SCOPE.is(e) && !STEP_UP_REQUIRED.is(e)) return e
         const hide = !!(hidden || this.config.hidden?.(resource, action))
         try {
-            const heard: unknown = this.config.denied?.(action, resource, hide)
+            const heard: unknown = this.config.denied?.(action, resource, hide, decision)
             if (heard instanceof Promise) heard.catch(() => undefined)
         } catch { /* a notification: never changes the answer */ }
         if (hide) {
             return new NOT_FOUND({displayMessage: "Not found", debugMessage: (e as {context?: {debugMessage?: string}}).context?.debugMessage})
         }
-        if (FORBIDDEN.is(e)) return await this.config.explainForbidden?.(action, resource).catch(() => undefined) ?? e
+        if (FORBIDDEN.is(e)) return await this.config.explainForbidden?.(action, resource, decision).catch(() => undefined) ?? e
         return e
     }
 
@@ -216,13 +216,17 @@ export class GGAuthzAuthority {
     private async decide(action: GGAuthzActionRef, resource: GGAuthzResourceRef, options?: {hidden?: boolean, key?: (resource: GGAuthzResolvedResource) => {type: string, id: string}}): Promise<GGAuthzApprovalNeed | undefined> {
         const name = actionName(action)
         const resolved = await this.resolve(resource)
+        const subject = GG_AUTHZ_SUBJECT.get()
+        if (!subject) throw new NOT_AUTHORIZED({debugMessage: "No GG_AUTHZ_SUBJECT in context"})
         const [engine, facts] = await Promise.all([this.config.engine(resolved.tenant), this.config.facts?.(name, resolved)])
+        const request: GGAuthzRequest = {subject, action: {name}, resource: {type: GGAuthzRn.type(resolved.rn) ?? "", id: resolved.rn, properties: resolved.properties}, context: facts}
+        const decision = await engine.evaluate(request)
         try {
-            await engine.authorize(name, resolved.rn, facts, resolved.properties)
+            await engine.enforce(request, decision)
             return undefined
         } catch (e) {
             if (APPROVAL_REQUIRED.is(e)) return this.need(name, resolved, e.data!.level, options?.key?.(resolved))
-            throw await this.denial(e, name, resolved, options?.hidden)
+            throw await this.denial(e, name, resolved, decision, options?.hidden)
         }
     }
 
