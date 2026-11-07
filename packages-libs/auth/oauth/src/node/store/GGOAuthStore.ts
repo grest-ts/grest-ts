@@ -11,6 +11,8 @@ export type GGOAuthPayload = Record<string, unknown> & {
 
 export interface GGOAuthStore {
     upsert(model: string, id: string, payload: GGOAuthPayload, expiresInSec: number | undefined): Promise<void>
+    // Writes the row only if no live one exists: of two concurrent inserts, one returns false.
+    insert(model: string, id: string, payload: GGOAuthPayload, expiresInSec: number): Promise<boolean>
     find(model: string, id: string): Promise<GGOAuthPayload | undefined>
     findByUid(model: string, uid: string): Promise<GGOAuthPayload | undefined>
     // Mark consumed (not delete): a second use of a code / rotated refresh token is detected as replay.
@@ -24,10 +26,10 @@ export interface GGOAuthStore {
     destroySessions(accountId: string): Promise<void>
 }
 
-// What revoking a grant removes: oidc-provider's codes and tokens, and the server's own GrantUsage. An Interaction carries
+// What revoking a grant removes: oidc-provider's codes and tokens, and the server's own GrantUsage and GrantKey. An Interaction carries
 // the grantId it would extend and must outlive it: another account finishing a sign-in first ends the old session
 // (revoking its grants), then resumes the interaction.
-export const GRANT_BOUND: ReadonlySet<string> = new Set(["AccessToken", "AuthorizationCode", "RefreshToken", "DeviceCode", "BackchannelAuthenticationRequest", "GrantUsage"])
+export const GRANT_BOUND: ReadonlySet<string> = new Set(["AccessToken", "AuthorizationCode", "RefreshToken", "DeviceCode", "BackchannelAuthenticationRequest", "GrantUsage", "GrantKey"])
 
 // oidc-provider's adapter shape: `new Adapter(modelName)` per model.
 export function toOidcAdapter(store: GGOAuthStore): AdapterConstructor {

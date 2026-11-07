@@ -38,18 +38,12 @@ export class DynamoOAuthStore extends GGDynamoDbTable<OAuthRow, "pk"> implements
     }
 
     public upsert = async (model: string, id: string, payload: GGOAuthPayload, expiresInSec: number | undefined): Promise<void> => {
-        await this.put({
-            pk: keyOf(model, id),
-            model,
-            id: model === "Grant" ? id : undefined,
-            // An Interaction copies its login session's id as session.cookie; oidc-provider never reads it back.
-            payload: JSON.stringify({...payload, jti: undefined, session: payload.session && {...payload.session as object, cookie: undefined}}),
-            grantId: GRANT_BOUND.has(model) ? payload.grantId : undefined,
-            uid: payload.uid,
-            accountId: BY_ACCOUNT.has(model) ? payload.accountId : undefined,
-            expiresAtSec: expiresInSec ? Math.floor(Date.now() / 1000) + expiresInSec : undefined,
-        })
+        await this.put(this.rowOf(model, id, payload, expiresInSec))
     }
+
+    // An expired row still there (TTL deletion lags) counts as absent.
+    public insert = async (model: string, id: string, payload: GGOAuthPayload, expiresInSec: number): Promise<boolean> =>
+        this.putConditional(this.rowOf(model, id, payload, expiresInSec), "attribute_not_exists(pk) OR expiresAtSec <= :now", {":now": Math.floor(Date.now() / 1000)})
 
     public find = async (model: string, id: string): Promise<GGOAuthPayload | undefined> => {
         const payload = this.payloadOf(await this.get(keyOf(model, id)))
@@ -95,6 +89,20 @@ export class DynamoOAuthStore extends GGDynamoDbTable<OAuthRow, "pk"> implements
             await Promise.all(page.items.map(row => this.delete(row.pk)))
             cursor = page.cursor
         } while (cursor)
+    }
+
+    private rowOf(model: string, id: string, payload: GGOAuthPayload, expiresInSec: number | undefined): OAuthRow {
+        return {
+            pk: keyOf(model, id),
+            model,
+            id: model === "Grant" ? id : undefined,
+            // An Interaction copies its login session's id as session.cookie; oidc-provider never reads it back.
+            payload: JSON.stringify({...payload, jti: undefined, session: payload.session && {...payload.session as object, cookie: undefined}}),
+            grantId: GRANT_BOUND.has(model) ? payload.grantId : undefined,
+            uid: payload.uid,
+            accountId: BY_ACCOUNT.has(model) ? payload.accountId : undefined,
+            expiresAtSec: expiresInSec ? Math.floor(Date.now() / 1000) + expiresInSec : undefined,
+        }
     }
 
     private payloadOf(row: OAuthRow | undefined): GGOAuthPayload | undefined {

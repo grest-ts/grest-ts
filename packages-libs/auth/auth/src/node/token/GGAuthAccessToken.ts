@@ -22,7 +22,7 @@ export interface GGAuthAccessTokenOptions<C extends object, S extends TokenVerif
     // Access token lifetime. Defaults to 30 min — short-lived by design, paired with
     // rotating refresh so expiry is seamless. Override for stricter/looser policy.
     accessTtlMs?: number
-    // Tokens carry `aud` and verify rejects a different audience.
+    // Tokens carry `aud`; verify rejects one that doesn't name this audience (alone or in a list).
     audience: string
     // When set, tokens carry `iss` and verify rejects another issuer. Read per call (config).
     issuer?: () => string
@@ -63,7 +63,7 @@ export class GGAuthAccessToken<C extends object, S extends TokenVerifier = Token
         const sub = payload["sub"]
         if (typeof sub !== "string") throw new NOT_AUTHORIZED({debugMessage: "TOKEN_INVALID: missing sub"})
         if (typeof payload["exp"] !== "number") throw new NOT_AUTHORIZED({debugMessage: "TOKEN_INVALID: missing exp"})
-        if (payload["aud"] !== this.audience) {
+        if (![payload["aud"]].flat().includes(this.audience)) {
             throw new NOT_AUTHORIZED({debugMessage: "TOKEN_INVALID: wrong audience"})
         }
         if (this.issuer && payload["iss"] !== this.issuer()) {
