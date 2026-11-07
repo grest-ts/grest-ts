@@ -4,7 +4,7 @@ import {createServer} from "node:net"
 import {GGRuntime} from "@grest-ts/runtime"
 import {GG_HTTP_REQUEST, GGHttpServer} from "@grest-ts/http"
 import {GG_TRACE} from "@grest-ts/trace"
-import {FORBIDDEN, IsArray, IsObject, IsString, NOT_AUTHORIZED, NOT_FOUND} from "@grest-ts/schema"
+import {FORBIDDEN, IsArray, IsObject, IsString, NOT_AUTHORIZED} from "@grest-ts/schema"
 import {GGAuthAccessToken, HmacSigner, JwksVerifier, JwsSigningStrategy, type JwsSigner} from "@grest-ts/auth"
 import {ACCESS_TOKEN_JWKS_PATH, deriveEs256Jwk, GGOAuthServer, type GGOAuthInteraction, type GGOAuthResource, type GGOAuthTokenClient} from "./GGOAuthServer"
 import type {GGDynamoDb} from "@grest-ts/db-dynamodb"
@@ -93,8 +93,13 @@ function fakeDynamo() {
             return row
         },
         put: async (_table: string, item: {pk: string}) => { rows.set(item.pk, item) },
-        putConditional: async (_table: string, item: {pk: string}) => {
+        putConditional: async (_table: string, item: {pk: string}, condition: string, values?: {":now": number}) => {
             const row = rows.get(item.pk)
+            if (condition.startsWith("attribute_not_exists(pk) OR")) {
+                if (row && (row.expiresAtSec as number) > values![":now"]) return false
+                rows.set(item.pk, item)
+                return true
+            }
             if (!row || row.consumedAt !== undefined) return false
             rows.set(item.pk, item)
             return true
@@ -448,9 +453,9 @@ describe("GGOAuthServer", () => {
     })
 
     // Signs `browser` in to `clientId` for `resource`, consenting with `org` as the grant's data when asked.
-    const connect = (browser: Browser, clientId: string, resource: string, org?: string) => {
+    const connect = (browser: Browser, clientId: string, resource: string, org?: string, params: Record<string, string> = {}) => {
         const prompts: string[] = []
-        const tokens = browser.signIn({clientId, redirectUri: THIRD_PARTY_REDIRECT, resource, scope: "mcp"}, (page): GGOAuthPageAnswer => {
+        const tokens = browser.signIn({clientId, redirectUri: THIRD_PARTY_REDIRECT, resource, scope: "mcp", params}, (page): GGOAuthPageAnswer => {
             const {prompt} = JSON.parse(page.html).interaction as GGOAuthInteraction
             prompts.push(prompt)
             return prompt === "login" ? {action: "login", form: {sub: "alice"}} : {action: "consent", form: org ? {org} : {}}
@@ -468,6 +473,10 @@ describe("GGOAuthServer", () => {
         expect(again.prompts).toEqual(["login"])
         expect(await grantsOf(clientId)).toEqual([expect.objectContaining({grantId: work.grantId})])
         expect(mcpClient!.grant).toEqual({grantId: work.grantId, data: {org: "o1"}})
+        // The data is fixed when the grant is made: a consent with other data doesn't change it.
+        const reconsent = await connect(new Browser(), clientId, `${MCP}/work`, "o9", {prompt: "consent"})
+        expect(reconsent.prompts).toEqual(["login", "consent"])
+        expect(mcpClient!.grant).toEqual({grantId: work.grantId, data: {org: "o1"}})
 
         const home = await connect(new Browser(), clientId, `${MCP}/home`, "o2")
         expect(home.prompts).toEqual(["login", "consent"])
@@ -476,16 +485,38 @@ describe("GGOAuthServer", () => {
         expect(mcpClient!.grant!.data).toEqual({org: "o2"})
     })
 
-    test("claims get the grant id and its consent data", async () => {
+    test("of two concurrent first consents for one resource URL, both end on one grant", async () => {
+        const clientId = await register()
+        const consentPage = async (browser: Browser) => browser.page(browser.submit(await browser.page(authorizeUrl(clientId, THIRD_PARTY_REDIRECT, pkce().challenge)), "login", {sub: "alice"}))
+        const browsers = [new Browser(), new Browser()]
+        const pages = await Promise.all(browsers.map(consentPage))
+        // Slow reads: both look the grant up before either creates it.
+        dynamo.slowReads = true
+        const done = await Promise.all(browsers.map((b, i) => b.done(b.submit(pages[i], "consent", {org: `o${i}`})))).finally(() => { dynamo.slowReads = false })
+        expect(done.map(url => url.searchParams.get("code"))).toEqual([expect.any(String), expect.any(String)])
+        expect(await grantsOf(clientId)).toHaveLength(1)
+    })
+
+    test("claims get the grant id and its consent data; grant() reads it only for its own subject", async () => {
         const clientId = await register()
         const {tokens} = await connect(new Browser(), clientId, MCP, "o1")
         const [{grantId}] = await grantsOf(clientId)
         expect(mcpClient).toEqual({clientId, name: "Claude", grant: {grantId, data: {org: "o1"}}})
-        expect(await oauth.grant(grantId)).toEqual({grantId, accountId: "alice", clientId, clientName: "Claude", data: {org: "o1"}})
+        expect(await oauth.grant("alice", grantId)).toEqual({grantId, accountId: "alice", clientId, clientName: "Claude", data: {org: "o1"}})
+        expect(await oauth.grant("bob", grantId)).toBeUndefined()
 
-        await oauth.setGrantData(grantId, {org: "o2"})
+        mcpClient = undefined
         await token({grant_type: "refresh_token", refresh_token: tokens.refreshToken!, client_id: clientId})
-        expect(mcpClient!.grant).toEqual({grantId, data: {org: "o2"}})
+        expect(mcpClient!.grant).toEqual({grantId, data: {org: "o1"}})
+    })
+
+    test("a sub-resource indicator must be a plain URL under a protected resource", async () => {
+        const clientId = await register()
+        for (const resource of [`${MCP}/work?x=1`, `${MCP}/work#x`, `${MCP}//work`, `${MCP}/a/../work`, `${INTERNAL}/x`]) {
+            const res = await new Browser().get(authorizeUrl(clientId, THIRD_PARTY_REDIRECT, pkce().challenge, {resource}))
+            expect(new URL(res.headers.get("location")!, ISSUER).searchParams.get("error")).toBe("invalid_target")
+        }
+        expect((await fetch(`${ISSUER}/.well-known/oauth-protected-resource/api/x`)).status).toBe(404)
     })
 
     test("a third-party client can't get a token for a first-party-only resource", async () => {
@@ -829,8 +860,11 @@ describe("GGOAuthServer", () => {
         expect(await store.find("GrantUsage", grant.grantId)).toBeDefined()
         await oauth.revokeGrant("alice", grant.grantId)
         expect(await store.find("GrantUsage", grant.grantId)).toBeUndefined()
-        expect(await oauth.grant(grant.grantId)).toBeUndefined()
-        await expect(oauth.setGrantData(grant.grantId, {})).rejects.toBeInstanceOf(NOT_FOUND)
+        expect(await oauth.grant("alice", grant.grantId)).toBeUndefined()
+        // Its GrantKey went with it: authorizing the resource again is a new grant.
+        const reconnected = await connect(browser, clientId, MCP)
+        expect(reconnected.prompts).toEqual(["consent"])
+        expect((await grantsOf(clientId)).map(g => g.grantId)).not.toContain(grant.grantId)
         expect((await token({grant_type: "refresh_token", refresh_token: tokens.refreshToken!, client_id: clientId})).error).toBe("invalid_grant")
         expect((await oauth.listGrants("alice")).map(g => g.grantId)).not.toContain(grant.grantId)
 
