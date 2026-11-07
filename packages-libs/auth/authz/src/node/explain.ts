@@ -35,7 +35,7 @@ function describe(r: GGAuthzReason): string {
         case "statement":
             return `resource policy${at} allows ${r.principal}${actions}`
         case "approval": {
-            const source = r.on ? `set${at}${r.locked ? ", locked" : ""}` : r.message
+            const source = r.source === "policy" ? `set${at}${r.locked ? ", locked" : ""}` : r.message
             const lowered = r.lowered ? `; ${r.lowered.on} tried to lower it to ${r.lowered.level}` : ""
             return r.level === "humans-only" ? `approval level humans-only (${source}) shuts out workload principals${lowered}` : `approval level ${r.level} (${source})${lowered}`
         }

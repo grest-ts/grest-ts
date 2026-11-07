@@ -488,7 +488,7 @@ A third outcome besides allow and deny, `allow-with-approval`, for workloads onl
 A statement whose conditions don't hold simply doesn't apply, for denies, ceilings and allows alike.
 Every layer is a conjunction, so **the outcome doesn't depend on the order**; the order only decides
 which reasons are reported. A deny reports the first layer that denied, with every matching
-statement in it. An allow reports every grant, every ceiling that passed, and the approval level.
+statement in it (plus a workload's `humans-only` approval level when a ceiling denied, see §7). An allow reports every grant, every ceiling that passed, and the approval level.
 
 ---
 
@@ -509,9 +509,19 @@ const decision = await authz.evaluate({
 // {decision: true, context: {outcome: "allow-with-approval", approval: "ask", audit: true, reasons: [
 //     {layer: "allow", kind: "statement", id: "ben-reads", on: "rn:…/salaries", principal: "user:ben", actions: ["docs:Read"]},
 //     {layer: "boundary", kind: "ceiling-passed", id: "assistants", actions: ["docs:Read"]},
-//     {layer: "approval", kind: "approval", level: "ask", on: "rn:…/salaries", locked: false},
+//     {layer: "approval", kind: "approval", level: "ask", on: "rn:…/salaries", locked: false, source: "policy"},
 // ]}}
 ```
+
+Reasons are data, not just text: `layer` and `kind` say which step decided, `id` names the guardrail,
+boundary, token scope or statement, and `ref` returns whatever opaque string the
+author put on the deciding binding or rule (`ref` on `GGAuthzBinding` and `GGAuthzRule`, so on
+statements and guardrail, boundary, scope and restriction rules too), e.g. the caller's own record id.
+An approval reason's `source` says what set the level: `default`, `floor` (`model.approvalFloor`),
+`policy` (a resource policy's approvals, at `on`) or a ceiling layer (`boundary`, `restriction`, … with
+its `id` and the rule's `ref`). `message` is for humans; don't match on it. A `ref` on request `restrictions` is the caller's, as
+trusted as the rest of the request. When a ceiling denies a
+workload whose level would be `humans-only` anyway, that approval reason is reported too.
 
 `allow-with-approval` is `decision: true`, so check `context.outcome` before acting. On a deny,
 `context.remedy` is `{scopes}` or `{stepUp}`. Validate outside requests with `IsGGAuthzRequest`.
