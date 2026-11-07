@@ -1,6 +1,6 @@
 import {GGContractExecutor, GGValidator, SERVER_ERROR, VALIDATION_ERROR} from "@grest-ts/schema";
 import {GGContext, GGContextKey, GGContextStore, GGOutbound, type GGTransportMiddleware} from "@grest-ts/context";
-import {GGContextKeySynchronizer} from "@grest-ts/http";
+import {GGContextKeySynchronizer, outboundWires} from "@grest-ts/http";
 import {withTimeout} from "@grest-ts/common";
 import {GG_TRACE} from "@grest-ts/trace";
 import {SocketAdapter} from "../socket/SocketAdapter";
@@ -38,7 +38,7 @@ export function buildHandshakeHeaders(middlewares: readonly GGTransportMiddlewar
  */
 export async function gateMiddlewares(middlewares: readonly GGTransportMiddleware[] | undefined): Promise<void> {
     if (!middlewares) return;
-    for (const mw of middlewares) {
+    for (const mw of outboundWires(middlewares)) {
         if (mw instanceof GGContextKey) {
             await GGContextKeySynchronizer.waitFor(mw);
         }

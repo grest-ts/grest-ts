@@ -1,7 +1,7 @@
 import {GGContextKey} from "@grest-ts/context"
 import {deepFreeze} from "@grest-ts/common"
 import {IsArray, IsObject, IsString, NOT_AUTHORIZED} from "@grest-ts/schema"
-import {IsOrgWirePermission, IsWireUser, ORG_TOKEN_WIRE, OrgWirePermission, USER_TOKEN_WIRE, WirePermission, WireUser} from "./api/WireAuthApi"
+import {AGENT_TOKEN_WIRE, AGENT_WORKSPACE_WIRE, IsOrgWirePermission, IsWireUser, ORG_TOKEN_WIRE, OrgWirePermission, USER_TOKEN_WIRE, WirePermission, WireUser} from "./api/WireAuthApi"
 
 // Durable principal — server-only, minted inside process() and deep-frozen so a handler
 // can't mutate permissions to escalate.
@@ -55,4 +55,30 @@ export const ORG_TOKEN_WIRE_HANDLER = ORG_TOKEN_WIRE.define((orgs: WireOrgServic
         ORG_USER.set(deepFreeze(orgs.verify(ORG_TOKEN_WIRE.get())))
     },
     permissions: async () => ORG_USER.get()!.permissions,
+}))
+
+// ---- agent wire (an alternative to the user wire) --------------------------------------------
+export const AGENT = new GGContextKey("wireTestAgent", IsObject({workspace: IsString}))
+
+export class WireAgentService {
+    public verify(token: string | undefined, workspace: string | undefined): {workspace: string} {
+        if (token !== "agent-secret" || !workspace) throw new NOT_AUTHORIZED({debugMessage: "Invalid agent token"})
+        return {workspace}
+    }
+}
+
+export class WireEitherService {
+    public whoami = async (): Promise<string> => {
+        const agent = AGENT.get()
+        const who = agent ? `agent:${agent.workspace}` : `user:${USER_DATA.get()!.username}`
+        // Leaks the other group's ambient value, if any survived.
+        return AGENT_WORKSPACE_WIRE.get() && !agent ? `${who}+workspace-leaked` : who
+    }
+    public adminOnly = async (): Promise<string> => `admin-ok:${USER_DATA.get()!.username}`
+}
+
+export const AGENT_TOKEN_WIRE_HANDLER = AGENT_TOKEN_WIRE.define((agents: WireAgentService) => ({
+    process: async () => {
+        AGENT.set(deepFreeze(agents.verify(AGENT_TOKEN_WIRE.get(), AGENT_WORKSPACE_WIRE.get())))
+    },
 }))

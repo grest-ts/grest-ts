@@ -18,6 +18,7 @@ import {GG_NO_PERMISSIONS, GGContractMethod, GGPermission, GGPermissionChecker} 
 import type {GGTransportMiddleware} from "@grest-ts/context"
 import {GGWireContextKey} from "../../schema/GGWireContextKey"
 import "../../schema/GGWireContextKey.node.js"
+import {expandWireAlternatives} from "../../schema/GGWireAlternatives"
 import {GGAuthority} from "../../schema/GGAuthority"
 import "../../schema/GGAuthority.node.js"
 
@@ -66,7 +67,7 @@ function checkAuthorities(httpSchemas: readonly HttpSchemaLike[]): void {
 }
 
 function hasPermissionWire(wires: readonly GGTransportMiddleware[]): boolean {
-    return wires.some(mw => mw instanceof GGWireContextKey && mw.hasPermissions())
+    return expandWireAlternatives(wires).some(mw => mw instanceof GGWireContextKey && mw.hasPermissions())
 }
 
 export function checkPermissionsAtStart(
