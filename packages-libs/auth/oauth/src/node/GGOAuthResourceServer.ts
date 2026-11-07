@@ -1,8 +1,9 @@
 import type {IncomingMessage, ServerResponse} from "node:http"
+import {decodeJwt} from "jose"
 import type {GGHttpServer} from "@grest-ts/http"
 import {SERVER_ERROR} from "@grest-ts/schema"
 import type {GGAccessPayload, GGAuthAccessToken, TokenVerifier} from "@grest-ts/auth"
-import {RESOURCE_METADATA, resourceMetadataPath, resourceMetadataUrl} from "../shared/resourceMetadata"
+import {innermostResource, RESOURCE_METADATA, resourceMetadataPath, resourceMetadataUrl} from "../shared/resourceMetadata"
 
 // An API that accepts the authorization server's tokens. It verifies them and holds no AS state.
 export interface GGOAuthProtectedResource<C extends object> {
@@ -36,7 +37,8 @@ export class GGOAuthResourceServer {
         server.announce(RESOURCE_METADATA, "GGOAuthResourceServer")
     }
 
-    // Serves `path` and everything under it (e.g. /mcp/<label>, so a client can add the resource more than once).
+    // Serves `path` and everything under it: each URL is a resource of its own (e.g. /mcp/<label>, so a client can
+    // add it more than once) and takes only tokens issued for exactly that URL.
     // Requests without a valid token for `resource` get 401 + `WWW-Authenticate: Bearer
     // resource_metadata=…`, the discovery handshake MCP clients run before signing in.
     public protect<C extends object>(
@@ -46,10 +48,12 @@ export class GGOAuthResourceServer {
         handle: (req: IncomingMessage, res: ServerResponse, token: GGAccessPayload<C>) => Promise<void>,
     ): void {
         const guarded = async (req: IncomingMessage, res: ServerResponse) => {
+            const url = resource.resource() + new URL(req.url ?? "/", "http://x").pathname.slice(path.length)
             const auth = req.headers.authorization
+            const bearer = auth?.toLowerCase().startsWith("bearer ") ? auth.slice(7) : undefined
             let token: GGAccessPayload<C> | undefined
             try {
-                token = auth?.toLowerCase().startsWith("bearer ") ? await resource.accessToken.verify(auth.slice(7)) : undefined
+                token = bearer ? await resource.accessToken.verify(bearer) : undefined
             } catch (err) {
                 // The keys can't be fetched: an invalid_token answer would send the client to sign in again.
                 if (err instanceof SERVER_ERROR) {
@@ -58,9 +62,9 @@ export class GGOAuthResourceServer {
                     return
                 }
             }
-            if (!token) {
+            if (!token || ![decodeJwt(bearer!).aud].flat().includes(url)) {
                 res.writeHead(401, {
-                    "www-authenticate": `Bearer resource_metadata="${resourceMetadataUrl(resource.resource())}", scope="${resource.scopes.join(" ")}"${auth ? `, error="invalid_token"` : ""}`,
+                    "www-authenticate": `Bearer resource_metadata="${resourceMetadataUrl(url)}", scope="${resource.scopes.join(" ")}"${auth ? `, error="invalid_token"` : ""}`,
                 })
                 res.end()
                 return
@@ -76,10 +80,7 @@ export class GGOAuthResourceServer {
 
     private resourceMetadata = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
         const path = new URL(req.url ?? "/", "http://x").pathname
-        // A path under a resource's answers that resource (the innermost one), which MCP clients accept for a server URL below it.
-        const resource = this.options.resources
-            .filter(r => `${path}/`.startsWith(`${resourceMetadataPath(r.resource())}/`))
-            .sort((a, b) => b.resource().length - a.resource().length)[0]
+        const resource = innermostResource(this.options.resources, path, r => resourceMetadataPath(r.resource()))
         if (!resource) {
             res.writeHead(404)
             res.end()
@@ -87,7 +88,7 @@ export class GGOAuthResourceServer {
         }
         res.writeHead(200, {"content-type": "application/json"})
         res.end(JSON.stringify({
-            resource: resource.resource(),
+            resource: resource.resource() + path.slice(resourceMetadataPath(resource.resource()).length),
             authorization_servers: [this.options.authorizationServer()],
             scopes_supported: resource.scopes,
             bearer_methods_supported: ["header"],

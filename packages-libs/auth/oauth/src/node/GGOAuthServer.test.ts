@@ -1,5 +1,5 @@
 import {createHash, generateKeyPairSync, randomBytes, sign as cryptoSign} from "node:crypto"
-import {importJWK, SignJWT} from "jose"
+import {decodeJwt, importJWK, SignJWT} from "jose"
 import {createServer} from "node:net"
 import {GGRuntime} from "@grest-ts/runtime"
 import {GG_HTTP_REQUEST, GGHttpServer} from "@grest-ts/http"
@@ -161,7 +161,7 @@ class OAuthTestRuntime extends GGRuntime {
                     return
                 }
                 if (action === "login") return login({accountId: form.sub})
-                if (action === "consent") return consent(form)
+                if (action === "consent") return consent(form.org ? {org: form.org} : undefined)
                 if (action === "deny") return deny()
                 res.writeHead(404)
                 res.end()
@@ -447,23 +447,39 @@ describe("GGOAuthServer", () => {
         ]))
     })
 
-    test("a third-party client authorizing again gets a new grant", async () => {
+    // Signs `browser` in to `clientId` for `resource`, consenting with `org` as the grant's data when asked.
+    const connect = (browser: Browser, clientId: string, resource: string, org?: string) => {
+        const prompts: string[] = []
+        const tokens = browser.signIn({clientId, redirectUri: THIRD_PARTY_REDIRECT, resource, scope: "mcp"}, (page): GGOAuthPageAnswer => {
+            const {prompt} = JSON.parse(page.html).interaction as GGOAuthInteraction
+            prompts.push(prompt)
+            return prompt === "login" ? {action: "login", form: {sub: "alice"}} : {action: "consent", form: org ? {org} : {}}
+        })
+        return tokens.then(t => ({tokens: t, prompts}))
+    }
+    const grantsOf = async (clientId: string) => (await oauth.listGrants("alice")).filter(g => g.clientId === clientId)
+
+    test("authorizing the same resource again reuses its grant and data; another resource URL is another grant", async () => {
         const clientId = await register()
-        const browser = new Browser()
-        const first = await signIn(browser, clientId, THIRD_PARTY_REDIRECT)
-        const second = await signIn(browser, clientId, THIRD_PARTY_REDIRECT)
-        expect(second.pages.map(p => p.prompt)).toEqual(["consent"])
-        expect((await oauth.listGrants("alice")).filter(g => g.clientId === clientId)).toHaveLength(2)
-        for (const {tokens} of [first, second]) {
-            expect((await token({grant_type: "refresh_token", refresh_token: tokens.refreshToken!, client_id: clientId})).access_token).toEqual(expect.any(String))
-        }
+        await connect(new Browser(), clientId, `${MCP}/work`, "o1")
+        const [work] = await grantsOf(clientId)
+
+        const again = await connect(new Browser(), clientId, `${MCP}/work`)
+        expect(again.prompts).toEqual(["login"])
+        expect(await grantsOf(clientId)).toEqual([expect.objectContaining({grantId: work.grantId})])
+        expect(mcpClient!.grant).toEqual({grantId: work.grantId, data: {org: "o1"}})
+
+        const home = await connect(new Browser(), clientId, `${MCP}/home`, "o2")
+        expect(home.prompts).toEqual(["login", "consent"])
+        expect((await grantsOf(clientId)).map(g => g.grantId)).toEqual(expect.arrayContaining([work.grantId, mcpClient!.grant!.grantId]))
+        expect(await grantsOf(clientId)).toHaveLength(2)
+        expect(mcpClient!.grant!.data).toEqual({org: "o2"})
     })
 
     test("claims get the grant id and its consent data", async () => {
         const clientId = await register()
-        const tokens = await new Browser().signIn({clientId, redirectUri: THIRD_PARTY_REDIRECT, ...target(clientId)}, (page): GGOAuthPageAnswer =>
-            JSON.parse(page.html).interaction.prompt === "login" ? {action: "login", form: {sub: "alice"}} : {action: "consent", form: {org: "o1"}})
-        const {grantId} = (await oauth.listGrants("alice")).find(g => g.clientId === clientId)!
+        const {tokens} = await connect(new Browser(), clientId, MCP, "o1")
+        const [{grantId}] = await grantsOf(clientId)
         expect(mcpClient).toEqual({clientId, name: "Claude", grant: {grantId, data: {org: "o1"}}})
         expect(await oauth.grant(grantId)).toEqual({grantId, accountId: "alice", clientId, clientName: "Claude", data: {org: "o1"}})
 
@@ -529,16 +545,24 @@ describe("GGOAuthServer", () => {
         expect((await fetch(`${ISSUER}/.well-known/oauth-protected-resource/other`)).status).toBe(404)
     })
 
-    test("metadata under a resource path names that resource, and the path under it takes only that resource's token", async () => {
+    test("each URL under a protected path is a resource of its own: its own metadata, and only its own tokens", async () => {
         const prm = await (await fetch(`${ISSUER}/.well-known/oauth-protected-resource/mcp/work`)).json()
-        expect(prm).toMatchObject({resource: MCP, scopes_supported: ["mcp"]})
+        expect(prm).toMatchObject({resource: `${MCP}/work`, authorization_servers: [ISSUER], scopes_supported: ["mcp"]})
         expect((await fetch(`${ISSUER}/.well-known/oauth-protected-resource/mcpx`)).status).toBe(404)
+        const anon = await fetch(`${MCP}/work`, {method: "POST"})
+        expect(anon.headers.get("www-authenticate")).toBe(`Bearer resource_metadata="${ISSUER}/.well-known/oauth-protected-resource/mcp/work", scope="mcp"`)
 
-        expect((await fetch(`${MCP}/work`, {method: "POST"})).status).toBe(401)
-        const app = await signIn(new Browser(), "app", FIRST_PARTY_REDIRECT)
-        expect((await fetch(`${MCP}/work`, {method: "POST", headers: {authorization: `Bearer ${app.tokens.accessToken}`}})).status).toBe(401)
-        const {tokens} = await signIn(new Browser(), await register(), THIRD_PARTY_REDIRECT)
-        expect(await (await fetch(`${MCP}/work`, {method: "POST", headers: {authorization: `Bearer ${tokens.accessToken}`}})).json()).toEqual({hello: "alice"})
+        const clientId = await register()
+        const work = (await connect(new Browser(), clientId, `${MCP}/work`)).tokens.accessToken
+        const plain = (await connect(new Browser(), clientId, MCP)).tokens.accessToken
+        expect(decodeJwt(work).aud).toEqual(["app-mcp", `${MCP}/work`])
+        const call = (url: string, accessToken: string) => fetch(url, {method: "POST", headers: {authorization: `Bearer ${accessToken}`}})
+        expect(await (await call(`${MCP}/work`, work)).json()).toEqual({hello: "alice"})
+        for (const [url, accessToken] of [[`${MCP}/home`, work], [MCP, work], [`${MCP}/work`, plain]]) {
+            const refused = await call(url, accessToken)
+            expect(refused.status).toBe(401)
+            expect(refused.headers.get("www-authenticate")).toContain(`error="invalid_token"`)
+        }
     })
 
     test("a loopback (CLI) client matches on any port and is asked for consent every time", async () => {
@@ -797,16 +821,14 @@ describe("GGOAuthServer", () => {
         expect((await token({grant_type: "refresh_token", refresh_token: tokens.refreshToken!, client_id: "app"})).error).toBe("invalid_grant")
     })
 
-    test("revoking a grant kills its refresh token and data; revokeAll ends the login session", async () => {
+    test("revoking a grant kills its refresh token; revokeAll ends the login session", async () => {
         const clientId = await register()
         const browser = new Browser()
         const {tokens} = await signIn(browser, clientId, THIRD_PARTY_REDIRECT)
         const grant = (await oauth.listGrants("alice")).find(g => g.clientId === clientId)!
         expect(await store.find("GrantUsage", grant.grantId)).toBeDefined()
-        expect(await store.find("GrantData", grant.grantId)).toBeDefined()
         await oauth.revokeGrant("alice", grant.grantId)
         expect(await store.find("GrantUsage", grant.grantId)).toBeUndefined()
-        expect(await store.find("GrantData", grant.grantId)).toBeUndefined()
         expect(await oauth.grant(grant.grantId)).toBeUndefined()
         await expect(oauth.setGrantData(grant.grantId, {})).rejects.toBeInstanceOf(NOT_FOUND)
         expect((await token({grant_type: "refresh_token", refresh_token: tokens.refreshToken!, client_id: clientId})).error).toBe("invalid_grant")

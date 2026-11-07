@@ -24,10 +24,10 @@ export interface GGOAuthStore {
     destroySessions(accountId: string): Promise<void>
 }
 
-// What revoking a grant removes: oidc-provider's codes and tokens, and the server's own GrantUsage and GrantData. An Interaction carries
+// What revoking a grant removes: oidc-provider's codes and tokens, and the server's own GrantUsage. An Interaction carries
 // the grantId it would extend and must outlive it: another account finishing a sign-in first ends the old session
 // (revoking its grants), then resumes the interaction.
-export const GRANT_BOUND: ReadonlySet<string> = new Set(["AccessToken", "AuthorizationCode", "RefreshToken", "DeviceCode", "BackchannelAuthenticationRequest", "GrantUsage", "GrantData"])
+export const GRANT_BOUND: ReadonlySet<string> = new Set(["AccessToken", "AuthorizationCode", "RefreshToken", "DeviceCode", "BackchannelAuthenticationRequest", "GrantUsage"])
 
 // oidc-provider's adapter shape: `new Adapter(modelName)` per model.
 export function toOidcAdapter(store: GGOAuthStore): AdapterConstructor {

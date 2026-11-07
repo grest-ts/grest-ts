@@ -33,6 +33,10 @@ kind: audience, claims and TTL. A token for one resource is therefore rejected b
 Every resource must set its own `audience` (the constructor refuses otherwise): with a shared signer,
 the audience is the only thing that tells the tokens apart.
 
+Every URL under a resource's URL is a resource of it too (e.g. `/mcp/work` under `/mcp`): same token kind,
+but a token's `aud` is `[kind audience, the exact URL it was requested for]`. The kind's wire accepts it
+anywhere; `protect` only at that URL.
+
 ```ts
 import {GGOAuthServer, type GGOAuthResource} from "@grest-ts/oauth"
 import {DynamoOAuthStore} from "@grest-ts/oauth/dynamodb"
@@ -70,13 +74,14 @@ oauth.protect(httpServer, mcp, "/mcp", handleMcp)  // /mcp and /mcp/*: 401 + res
 `claims` works like the `resolve` callback of `GGAuthRefreshToken.refresh`: role changes apply on
 the next refresh, and a deleted or deactivated user's OAuth session ends there.
 
-**Grants.** A user's token is issued under a grant: one consent of that user to one client, revocable on
-its own. `claims` gets it as `client.grant`: `{grantId, data}`, where `data` is what the consent page passed
-to `consent(data)` (`{}` for a first-party client). Each consent mints a new grant, so a client added twice
-(e.g. an MCP server added at `/mcp/work` and `/mcp/home`) holds two, each with its own data and tokens.
-`grant(grantId)` reads one (`{grantId, accountId, clientId, clientName, data}`, `undefined` once revoked or
-expired) and `setGrantData(grantId, data)` replaces its data, for the next issuance. A service token has no
-grant.
+**Grants.** A user's token is issued under a grant, revocable on its own. A third-party client's grant is
+the user's grant to that client for one resource URL: authorizing that URL again (e.g. after the refresh
+token expired) reuses it, silently when its scopes cover the request, and a client added at two URLs
+(`/mcp/work` and `/mcp/home`) holds two. `claims` gets it as `client.grant`: `{grantId, data}`, where `data`
+is what the consent page passed to `consent(data)` (`{}` for a first-party client). The data is stored in
+the grant's own row, so it is written and revoked with it. `grant(grantId)` reads one (`{grantId, accountId,
+clientId, clientName, data}`, `undefined` once revoked or expired) and `setGrantData(grantId, data)`
+replaces its data, for the next issuance. A service token has no grant.
 
 A user's access token carries `auth_time` (OIDC: when the user signed in, epoch seconds; a refresh
 and a silent re-authorization keep it), read as `verify(token).auth_time`. To require a recent
@@ -153,12 +158,13 @@ Cached service tokens are dropped before each test, so a token from one test nev
 `protect(server, resource, path, handler)` puts `path` behind the resource's token. It also
 provides the discovery handshake MCP clients run:
 
-- `path/*` is served too, under the same resource: a client can add `/mcp/<label>` more than once, each
-  a separate connection. The label means nothing to the server; keep what a connection is on its grant.
-- A request without a valid token gets `401 WWW-Authenticate: Bearer resource_metadata="…/.well-known/oauth-protected-resource{resource path}", scope="…"`.
-- That metadata (RFC 9728) names this server and the resource's scopes. `mount` publishes it for
-  every resource, protected or not, at the resource URL's path under that prefix, and at any path below
-  it (the innermost resource answers). MCP clients accept a resource above the URL they were given.
+- `path/*` is served too: each URL under it is its own resource, so a client can add `/mcp/<label>` more
+  than once, each a separate grant. A request needs a token issued for exactly its URL. The label means
+  nothing else to the server; keep what a connection is on its grant.
+- A request without a valid token gets `401 WWW-Authenticate: Bearer resource_metadata="…/.well-known/oauth-protected-resource{request path}", scope="…"`.
+- That metadata (RFC 9728) names exactly that URL as the resource, this server and the resource's scopes.
+  `mount` publishes it for every resource, protected or not, at the resource URL's path under that prefix
+  and at every path below it (the innermost resource answers).
 - Your handler receives the verified token payload. For example, run the official MCP SDK's
   `StreamableHTTPServerTransport` on the raw `req`/`res`.
 
@@ -167,9 +173,9 @@ provides the discovery handshake MCP clients run:
 | Client | How it's known | Consent |
 |---|---|---|
 | First-party (`firstPartyClients`) | Pre-registered | None; silent while the login session lives |
-| Client ID Metadata Document under `allowedUrlPrefixes` (https, default port) | `client_id` is its document URL, fetched by the server | Every authorization: each consent is a new grant |
+| Client ID Metadata Document under `allowedUrlPrefixes` (https, default port) | `client_id` is its document URL, fetched by the server | Once per grant (one per resource URL) |
 | Loopback / CLI (no `application_type` declared → native) | Any port on `localhost`/`127.0.0.1` matches | **Every** authorization: any local process could claim the redirect |
-| Dynamic registration (opt-in) | `POST /oauth/register` | Every authorization: each consent is a new grant |
+| Dynamic registration (opt-in) | `POST /oauth/register` | Once per grant (one per resource URL) |
 
 ### Login and consent pages
 
@@ -191,8 +197,9 @@ const renderSignIn = async ({interaction, action, method, form, html, login, con
 
 - `interaction.prompt` is `"login"` (no login session, `prompt=login` or an expired `max_age`) or `"consent"`: a signed-in `accountId` approves a
   third-party client. Show the client's name and redirect hosts, and warn when `loopbackOnly` is set.
-- `consent(data?)` mints a new grant carrying `data` (e.g. the org the user picked on the page), which
-  `claims` and `grant()` read back.
+- `consent(data?)` grants on the user's grant to the client for the requested resource URL (a new one if
+  there is none) and stores `data` on it (e.g. the org the user picked on the page); without `data` the
+  grant keeps what it has. `claims` and `grant()` read it back.
 - A first-party client never gets a consent prompt: it re-authorizes silently while the login
   session lives (single sign-on).
 - The request reaches your code only from the browser that started the flow (it holds the

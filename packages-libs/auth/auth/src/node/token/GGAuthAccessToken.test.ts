@@ -99,6 +99,14 @@ describe("GGAuthAccessToken", () => {
         await expectAuthError(orgAuth.verify(access.token), "TOKEN_INVALID")
     })
 
+    test("a token whose audience list names this audience verifies", async () => {
+        const signer = new HmacSigner("unit-test-secret-which-is-long-enough")
+        const now = Math.floor(Date.now() / 1000)
+        const token = await signer.sign({sub: "user-1", aud: ["app-user", "https://app.example/mcp/work"], iat: now, exp: now + 60, data: {permissions: []}})
+        expect((await accessToken({signer}).verify(token)).sub).toBe("user-1")
+        await expectAuthError(accessToken({signer, audience: "kratt-org"}).verify(token), "TOKEN_INVALID")
+    })
+
     test("an audience is required", () => {
         expect(() => accessToken({audience: ""})).toThrow(/audience is required/)
     })
