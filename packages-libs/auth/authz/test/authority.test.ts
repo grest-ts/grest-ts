@@ -93,8 +93,8 @@ describe("GGAuthzAuthority", () => {
         const explaining = new GGAuthzAuthority({
             partition: "acme", tenantType: Org.types.org, tenant: () => "acme", engine: async () => engine,
             hidden: r => r.id === "cleo-1",
-            explainForbidden: async (action, r) => {
-                asked.push(`${action} ${r.id}`)
+            explainForbidden: async (action, r, decision) => {
+                asked.push(`${action} ${r.id} ${decision.context.reasons.length > 0}`)
                 if (fails) throw new Error("GitHub down")
                 return new FORBIDDEN({displayMessage: `why ${r.id}`})
             },
@@ -104,7 +104,7 @@ describe("GGAuthzAuthority", () => {
         expect(FORBIDDEN.is(err) && err.context?.displayMessage).toBe("why dan-1")
         expect(NOT_FOUND.is(await fail(as(ann, () => explaining.authorize(Vm.StopWorkspace.on("workspaceId"), {workspaceId: "cleo-1"}))))).toBe(true)
         expect(await as(ann, () => explaining.can(Vm.StopWorkspace, {type: Vm.types.workspace, id: "dan-1"}))).toBe(false)
-        expect(asked).toEqual([`${Vm.StopWorkspace.name} dan-1`])
+        expect(asked).toEqual([`${Vm.StopWorkspace.name} dan-1 true`])
         fails = true
         expect(FORBIDDEN.is(await fail(as(ann, () => explaining.authorize(Vm.StopWorkspace.on("workspaceId"), {workspaceId: "dan-1"}))))).toBe(true)
     })
@@ -115,8 +115,8 @@ describe("GGAuthzAuthority", () => {
             partition: "acme", tenantType: Org.types.org, tenant: () => "acme", engine: async () => engine,
             hidden: r => r.id === "cleo-1",
             explainForbidden: async () => new FORBIDDEN({displayMessage: "why"}),
-            denied: (action, r, hidden) => {
-                heard.push(`${action} ${r.id} ${hidden}`)
+            denied: (action, r, hidden, decision) => {
+                heard.push(`${action} ${r.id} ${hidden} ${decision.decision}`)
                 throw new Error("audit down")
             },
         })
@@ -125,7 +125,7 @@ describe("GGAuthzAuthority", () => {
         expect(NOT_FOUND.is(await fail(as(ann, () => auditing.authorize(Vm.StopWorkspace.on("workspaceId"), {workspaceId: "cleo-1"}))))).toBe(true)
         await as(ann, () => auditing.authorize(Vm.StopWorkspace.on("workspaceId"), {workspaceId: "ann-1"}))
         expect(await as(ann, () => auditing.can(Vm.StopWorkspace, {type: Vm.types.workspace, id: "dan-1"}))).toBe(false)
-        expect(heard).toEqual([`${Vm.StopWorkspace.name} dan-1 false`, `${Vm.StopWorkspace.name} cleo-1 true`])
+        expect(heard).toEqual([`${Vm.StopWorkspace.name} dan-1 false false`, `${Vm.StopWorkspace.name} cleo-1 true false`])
     })
 
     test("a row is loaded once per request: every requirement part and the handler's row() share it", async () => {
