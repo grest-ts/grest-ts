@@ -76,7 +76,7 @@ export interface GGAuthzModelSpec {
     roles: readonly GGAuthzDefinedRole[]
     tokenScopes?: readonly GGAuthzDefinedTokenScope[]
     workloadTypes?: readonly string[]
-    approvalFloor?: readonly {actions: readonly GGAuthzActionRef[], level: GGAuthzApprovalLevel}[]
+    approvalFloor?: readonly (Omit<GGAuthzRuleSpec, "resources" | "ref"> & {level: GGAuthzApprovalLevel})[]
     stepUpFacts?: readonly string[]
     grantAction?: GGAuthzActionRef
 }
@@ -140,7 +140,7 @@ export function defineAuthzModel(spec: GGAuthzModelSpec): GGAuthzModel {
         roles: spec.roles.map(r => ({name: r.name, actions: [...r.actions], includes: r.includes && [...r.includes], description: r.description})),
         tokenScopes: spec.tokenScopes?.map(s => ({name: s.name, allow: s.allow, description: s.description})),
         workloadTypes: spec.workloadTypes && [...spec.workloadTypes],
-        approvalFloor: spec.approvalFloor?.map(f => ({actions: f.actions.map(actionName), level: f.level})),
+        approvalFloor: spec.approvalFloor?.map(f => ({...f, actions: f.actions.map(actionName)})),
         stepUpFacts: spec.stepUpFacts && [...spec.stepUpFacts],
         grantAction: spec.grantAction && actionName(spec.grantAction),
     })

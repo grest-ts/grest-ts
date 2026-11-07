@@ -84,9 +84,6 @@ export const IsGGAuthzRule = IsObject({
     when: IsWhen,
     unless: IsUnless,
     conditions: IsConditions,
-    approval: IsLiteral(...GG_AUTHZ_APPROVAL_LEVELS.filter((l): l is Exclude<GGAuthzApprovalLevel, "humans-only"> => l !== "humans-only")).orUndefined.docs({
-        description: "In a ceiling: the approval level a workload passing through this rule needs. A ceiling takes its least strict matching rule; the strictest ceiling counts. Leave an action out to deny it",
-    }),
     ref: IsRef,
 })
 export type GGAuthzRule = typeof IsGGAuthzRule.infer
@@ -97,6 +94,29 @@ export const IsGGAuthzApprovalRule = IsObject({
     locked: IsBoolean.orUndefined.docs({description: "Descendants may raise but not lower this level"}),
 })
 export type GGAuthzApprovalRule = typeof IsGGAuthzApprovalRule.infer
+
+export const IsGGAuthzFloorRule = IsObject({
+    actions: IsActions,
+    when: IsWhen,
+    unless: IsUnless,
+    conditions: IsConditions,
+    level: IsGGAuthzApprovalLevel,
+}).refine(
+    f => f.level !== "humans-only" || (!f.when && !f.unless && !f.conditions),
+    new GGIssueKey("humansOnlyFloor", "A humans-only floor is unconditional"),
+).docs({description: "Applies unless its facts or conditions are known not to hold"})
+export type GGAuthzFloorRule = typeof IsGGAuthzFloorRule.infer
+
+export const IsGGAuthzAsk = IsObject({
+    actions: IsActions,
+    resources: IsResources,
+    when: IsWhen,
+    unless: IsUnless,
+    conditions: IsConditions,
+    level: IsLiteral("ask-once", "ask", "critical", "dangerous"),
+    ref: IsRef,
+}).docs({description: "Raises a workload's approval level; applies unless its facts or conditions are known not to hold. Never permits"})
+export type GGAuthzAsk = typeof IsGGAuthzAsk.infer
 
 export const IsGGAuthzTokenScope = IsObject({
     name: IsString.nonEmpty,
@@ -111,7 +131,7 @@ export const IsGGAuthzModel = IsObject({
     roles: IsArray(IsGGAuthzRole),
     tokenScopes: IsArray(IsGGAuthzTokenScope).orUndefined,
     workloadTypes: IsArray(IsString).orUndefined.docs({description: "Principal types that approvals apply to, e.g. `agent`; none by default"}),
-    approvalFloor: IsArray(IsGGAuthzApprovalRule).orUndefined.docs({description: "Platform minimum approval levels, always locked"}),
+    approvalFloor: IsArray(IsGGAuthzFloorRule).orUndefined.docs({description: "Platform minimum approval levels, always locked"}),
     stepUpFacts: IsArray(IsGGAuthzFactName).orUndefined.docs({description: "Facts a caller can make true by re-authenticating, e.g. `mfa` from the token's `acr`/`amr`"}),
     grantAction: IsGGAuthzActionName.orUndefined.docs({description: "Needed on a scope to create bindings there (`canGrant`)"}),
 })
@@ -193,6 +213,7 @@ export const IsGGAuthzSubject = IsObject({
             sets => new Set(sets.map(s => s.id)).size === sets.length,
             new GGIssueKey("restrictionSetIds", "Restriction set ids must be unique"),
         ).orUndefined.docs({description: "More per-request ceilings, each like `restrictions`, e.g. a workload's own and those of the app it acts via; they intersect. Ids are unique"}),
+        asks: IsArray(IsGGAuthzAsk).orUndefined.docs({description: "Approval levels for this request: the strictest applying one raises the level, never lowers it"}),
         attributes: IsRecord(IsString, IsUnknown).orUndefined.docs({description: "The acting principal's attributes (`actor.*`, and `principal.*` when it acts for itself), as the caller knows them for this request; the resolver isn't asked"}),
     }).orUndefined,
 })
@@ -228,10 +249,10 @@ export const IsGGAuthzReason = IsObject({
     level: IsGGAuthzApprovalLevel.orUndefined,
     locked: IsBoolean.orUndefined.docs({description: "The resolved level is a locked minimum: nothing below may lower it"}),
     lowered: IsObject({on: IsString, level: IsGGAuthzApprovalLevel}).orUndefined.docs({description: "A descendant's attempt to go below a locked minimum, ignored"}),
-    source: IsLiteral("default", "floor", "policy", ...GG_AUTHZ_CEILING_LAYERS).orUndefined.docs({
-        description: "On an approval reason, what set the level: nothing (`default`), `model.approvalFloor` (`floor`), a resource policy's approvals (`policy`, see `on`) or a ceiling rule (its layer, see `id`)",
+    source: IsLiteral("default", "floor", "policy", "ask").orUndefined.docs({
+        description: "On an approval reason, what set the level: nothing (`default`), `model.approvalFloor` (`floor`), a resource policy's approvals (`policy`, see `on`) or one of the subject's `asks` (`ask`, see `ref`)",
     }),
-    ref: IsString.orUndefined.docs({description: "The deciding binding's or rule's `ref`"}),
+    ref: IsString.orUndefined.docs({description: "The deciding binding's, rule's or ask's `ref`"}),
 })
 export type GGAuthzReason = typeof IsGGAuthzReason.infer
 

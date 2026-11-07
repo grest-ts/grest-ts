@@ -26,36 +26,29 @@ const decide = (authz: GGAuthz, subject: GGAuthzSubject, action: string, id = re
     authz.evaluate({subject, action: {name: action}, resource: {type: "git:repo", id}})
 
 describe("reasons carry the deciding id and the author's ref", () => {
-    test("bindings, ceiling rules and the approval level they set", async () => {
-        const authz = engine({boundaries: [{id: "agents", principals: ["agent:*"], allow: [{actions: ["git:Push"], approval: "critical", ref: "boundary-rule"}]}]})
-        const d = await decide(authz, agent(), "git:Push")
+    test("bindings, ceiling rules and the ask that sets the level", async () => {
+        const authz = engine({boundaries: [{id: "agents", principals: ["agent:*"], allow: [{actions: ["git:Push"], ref: "boundary-rule"}]}]})
+        const d = await decide(authz, agent({asks: [{actions: ["git:Push"], level: "critical", ref: "ask-1"}]}), "git:Push")
         expect(d.context.reasons).toEqual([
             expect.objectContaining({layer: "allow", kind: "binding", ref: "binding-1"}),
             expect.objectContaining({layer: "boundary", kind: "ceiling-passed", id: "agents", ref: "boundary-rule"}),
-            expect.objectContaining({layer: "approval", level: "critical", source: "boundary", id: "agents", ref: "boundary-rule"}),
+            expect.objectContaining({layer: "approval", level: "critical", source: "ask", ref: "ask-1"}),
         ])
+        const request = {subject: agent(), action: {name: "git:Push"}, resource: {type: "git:repo", id: repo("site")}}
+        expect(GGAuthz.explain(request, d)).toContain("approval level critical (ask)")
     })
 
-    test("token scope and restriction rules; the strictest ceiling sets the level", async () => {
+    test("token scope and restriction rules", async () => {
         const authz = new GGAuthz({
-            model: {...model, tokenScopes: [{name: "repo:write", allow: [{actions: ["git:Push"], approval: "ask", ref: "scope-rule"}]}]},
+            model: {...model, tokenScopes: [{name: "repo:write", allow: [{actions: ["git:Push"], ref: "scope-rule"}]}]},
             policies: {bindings: [{principal: "user:ann", role: "writer", on: org}]},
             resolver: new GGAuthzMemoryResolver(data),
         })
-        const d = await decide(authz, agent({scopes: ["repo:write"], restrictions: [{actions: ["git:Push"], approval: "critical", ref: "restriction-rule"}]}), "git:Push")
+        const d = await decide(authz, agent({scopes: ["repo:write"], restrictions: [{actions: ["git:Push"], ref: "restriction-rule"}]}), "git:Push")
         expect(d.context.reasons).toEqual(expect.arrayContaining([
             expect.objectContaining({layer: "scope", kind: "ceiling-passed", id: "repo:write", ref: "scope-rule"}),
             expect.objectContaining({layer: "restriction", kind: "ceiling-passed", ref: "restriction-rule"}),
-            expect.objectContaining({layer: "approval", level: "critical", source: "restriction", ref: "restriction-rule"}),
         ]))
-    })
-
-    test("a guardrail ceiling's level carries where it is attached", async () => {
-        const authz = engine({guardrails: [{id: "careful", on: org, principals: ["agent:*"], ceiling: [{actions: ["git:*"], approval: "dangerous", ref: "g-rule"}]}]})
-        const d = await decide(authz, agent(), "git:Push")
-        expect(d.context.reasons.find(r => r.layer === "approval")).toMatchObject({level: "dangerous", source: "guardrail", id: "careful", on: org, ref: "g-rule"})
-        const request = {subject: agent(), action: {name: "git:Push"}, resource: {type: "git:repo", id: repo("site")}}
-        expect(GGAuthz.explain(request, d)).toContain("approval level dangerous (guardrail careful)")
     })
 
     test("a policy below the platform floor leaves the floor as the source", async () => {
