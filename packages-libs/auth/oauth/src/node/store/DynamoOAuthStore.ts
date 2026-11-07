@@ -2,7 +2,7 @@ import {createHash} from "node:crypto"
 import {IsNumber, IsObject, IsString} from "@grest-ts/schema"
 import {type GGDynamoDb, GGDynamoDbTable} from "@grest-ts/db-dynamodb"
 import {errors as oidcErrors} from "oidc-provider"
-import {GRANT_BOUND, type GGOAuthPayload, type GGOAuthStore} from "./GGOAuthStore"
+import type {GGOAuthPayload, GGOAuthStore} from "./GGOAuthStore"
 
 const IsOAuthRow = IsObject({
     pk: IsString.nonEmpty,
@@ -72,7 +72,11 @@ export class DynamoOAuthStore extends GGDynamoDbTable<OAuthRow, "pk"> implements
         await this.delete(keyOf(model, id))
     }
 
-    public revokeByGrantId = (grantId: string): Promise<void> => this.deleteAll("grantId-index", "grantId = :g", {":g": grantId})
+    public revokeByGrantId = (grantId: string, models: ReadonlySet<string>): Promise<void> => {
+        const names = [...models].map((_, i) => `:m${i}`)
+        return this.deleteAll("grantId-index", "grantId = :g", {":g": grantId, ...Object.fromEntries([...models].map((m, i) => [names[i], m]))},
+            {filter: `#m IN (${names.join(", ")})`, names: {"#m": "model"}})
+    }
 
     public listGrantIds = async (accountId: string): Promise<string[]> =>
         (await this.query("accountId-index", "accountId = :a", {":a": accountId, ":model": "Grant"}, {filter: "#m = :model", names: {"#m": "model"}}))
@@ -98,7 +102,7 @@ export class DynamoOAuthStore extends GGDynamoDbTable<OAuthRow, "pk"> implements
             id: model === "Grant" ? id : undefined,
             // An Interaction copies its login session's id as session.cookie; oidc-provider never reads it back.
             payload: JSON.stringify({...payload, jti: undefined, session: payload.session && {...payload.session as object, cookie: undefined}}),
-            grantId: GRANT_BOUND.has(model) ? payload.grantId : undefined,
+            grantId: typeof payload.grantId === "string" ? payload.grantId : undefined,
             uid: payload.uid,
             accountId: BY_ACCOUNT.has(model) ? payload.accountId : undefined,
             expiresAtSec: expiresInSec ? Math.floor(Date.now() / 1000) + expiresInSec : undefined,

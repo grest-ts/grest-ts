@@ -20,25 +20,25 @@ export interface GGOAuthStore {
     // concurrent redemptions one fails cleanly (a 5xx would be retried, and the retry is reuse).
     consume(model: string, id: string): Promise<void>
     destroy(model: string, id: string): Promise<void>
-    // Every GRANT_BOUND row carrying this grantId.
-    revokeByGrantId(grantId: string): Promise<void>
+    // Every row of these models carrying this grantId.
+    revokeByGrantId(grantId: string, models: ReadonlySet<string>): Promise<void>
     listGrantIds(accountId: string): Promise<string[]>
     destroySessions(accountId: string): Promise<void>
 }
 
-// What revoking a grant removes: oidc-provider's codes and tokens, and the server's own GrantUsage and GrantKey. An Interaction carries
-// the grantId it would extend and must outlive it: another account finishing a sign-in first ends the old session
-// (revoking its grants), then resumes the interaction.
+// What revoking a grant removes: oidc-provider's codes and tokens, and the server's own GrantUsage and GrantKey, plus the
+// app's models named in `grantBound`. An Interaction carries the grantId it would extend and must outlive it: another
+// account finishing a sign-in first ends the old session (revoking its grants), then resumes the interaction.
 export const GRANT_BOUND: ReadonlySet<string> = new Set(["AccessToken", "AuthorizationCode", "RefreshToken", "DeviceCode", "BackchannelAuthenticationRequest", "GrantUsage", "GrantKey"])
 
 // oidc-provider's adapter shape: `new Adapter(modelName)` per model.
-export function toOidcAdapter(store: GGOAuthStore): AdapterConstructor {
+export function toOidcAdapter(store: GGOAuthStore, grantBound: ReadonlySet<string>): AdapterConstructor {
     // oidc-provider revokes a grant through each grant-bound model at once; the store removes them all in one pass.
     const revoking = new Map<string, Promise<void>>()
     const revokeByGrantId = (grantId: string): Promise<void> => {
         let pending = revoking.get(grantId)
         if (!pending) {
-            pending = store.revokeByGrantId(grantId).finally(() => revoking.delete(grantId))
+            pending = store.revokeByGrantId(grantId, grantBound).finally(() => revoking.delete(grantId))
             revoking.set(grantId, pending)
         }
         return pending

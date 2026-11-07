@@ -91,11 +91,14 @@ const UPSTREAM = "https://upstream.example"
 // Every bearer value the tests saw: tokens, codes, approval tickets and the login session cookie.
 const bearers = new Set<string>()
 
-// DynamoDB as DynamoOAuthStore uses it: key lookups, the GSIs it queries, and its one put condition.
+// DynamoDB as DynamoOAuthStore uses it: key lookups, the GSIs it queries, its model filters and its one put condition.
 function fakeDynamo() {
     const rows = new Map<string, Record<string, unknown>>()
-    const query = async (_table: string, index: string, _condition: string, {":model": model, ...key}: Record<string, unknown>) =>
-        [...rows.values()].filter(r => r[index.replace("-index", "")] === Object.values(key)[0] && (!model || r.model === model))
+    const query = async (_table: string, index: string, _condition: string, {":model": model, ...values}: Record<string, unknown>) => {
+        const models = Object.entries(values).filter(([k]) => /^:m\d+$/.test(k)).map(([, v]) => v)
+        return [...rows.values()].filter(r => r[index.replace("-index", "")] === Object.values(values)[0]
+            && (!model || r.model === model) && (models.length === 0 || models.includes(r.model)))
+    }
     const db = {
         get: async (_table: string, key: {pk: string}) => {
             const row = rows.get(key.pk)
@@ -189,6 +192,7 @@ class OAuthTestRuntime extends GGRuntime {
                 {clientId: "identity", name: "The App", redirectUris: [IDENTITY_REDIRECT], refreshTokens: false},
             ],
             dynamicRegistration: true,
+            grantBound: ["AppNote"],
             clientIdMetadataDocument: {allowedUrlPrefixes: () => ["https://clients.example/oauth/"]},
             proxy: true,
         })
@@ -539,12 +543,15 @@ describe("GGOAuthServer", () => {
         expect(await grantsOf(clientId)).toHaveLength(1)
     })
 
-    test("claims get the grant id and its consent data; grant() reads it only for its own subject", async () => {
+    test("claims get the grant id and its consent data; grant() reads it only for its own subject, never its client", async () => {
         const clientId = await register()
         const {tokens} = await connect(new Browser(), clientId, MCP, "o1")
         const [{grantId}] = await grantsOf(clientId)
         expect(mcpClient).toEqual({clientId, name: "Claude", grant: {grantId, data: {org: "o1"}}})
-        expect(await oauth.grant("alice", grantId)).toEqual({grantId, accountId: "alice", clientId, clientName: "Claude", data: {org: "o1"}})
+        const clientFind = vi.spyOn((oauth as unknown as {provider(): {Client: {find(id: string): Promise<unknown>}}}).provider().Client, "find")
+        expect(await oauth.grant("alice", grantId)).toEqual({grantId, accountId: "alice", clientId, data: {org: "o1"}, expiresAt: expect.any(Number)})
+        expect(clientFind).not.toHaveBeenCalled()
+        clientFind.mockRestore()
         expect(await oauth.grant("bob", grantId)).toBeUndefined()
 
         mcpClient = undefined
@@ -924,8 +931,13 @@ describe("GGOAuthServer", () => {
         const {tokens} = await signIn(browser, clientId, THIRD_PARTY_REDIRECT)
         const grant = (await oauth.listGrants("alice")).find(g => g.clientId === clientId)!
         expect(await store.find("GrantUsage", grant.grantId)).toBeDefined()
+        await store.upsert("AppNote", grant.grantId, {grantId: grant.grantId}, 60)
+        await store.upsert("Interaction", "kept", {grantId: grant.grantId}, 60)
         await oauth.revokeGrant("alice", grant.grantId)
         expect(await store.find("GrantUsage", grant.grantId)).toBeUndefined()
+        // The app's grant-bound rows go with it; an Interaction outlives it.
+        expect(await store.find("AppNote", grant.grantId)).toBeUndefined()
+        expect(await store.find("Interaction", "kept")).toBeDefined()
         expect(await oauth.grant("alice", grant.grantId)).toBeUndefined()
         // Its GrantKey went with it: authorizing the resource again is a new grant.
         const reconnected = await connect(browser, clientId, MCP)

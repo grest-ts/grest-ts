@@ -9,7 +9,7 @@ import {GG_TRACE} from "@grest-ts/trace"
 import {GG_HTTP_REQUEST, GGHttp, httpRequestContext, type GGHttpServer} from "@grest-ts/http"
 import type {GGAccessPayload, GGAccessTokenData, GGAuthAccessToken, TokenVerifier} from "@grest-ts/auth"
 import {GGOAuthResourceServer, type GGOAuthProtectedResource} from "./GGOAuthResourceServer"
-import {toOidcAdapter, type GGOAuthStore} from "./store/GGOAuthStore"
+import {GRANT_BOUND, toOidcAdapter, type GGOAuthStore} from "./store/GGOAuthStore"
 import {GG_OAUTH_SERVICE_CLIENT, GGOAuthServiceApi, SUBJECT_TOKEN_INVALID} from "./GGOAuthServiceApi"
 import {GGOAuthExternalSignIn, type GGOAuthExternalSignInOptions} from "./GGOAuthExternalSignIn"
 
@@ -62,8 +62,9 @@ export interface GGOAuthGrant {
     grantId: string
     accountId: string
     clientId: string
-    clientName: string
     data: GGOAuthGrantData
+    // ms since epoch: when the grant, and every row bound to it, ends.
+    expiresAt: number
 }
 
 export interface GGOAuthServiceClientRegistration {
@@ -151,6 +152,9 @@ export interface GGOAuthServerOptions {
     // Absolute refresh lifetime: rotation never extends it (OAuth for browser apps, RFC 10017).
     refreshTtlSec?: number
     sessionTtlSec?: number
+    // The app's own store models whose rows carry a `grantId`: revoking the grant removes them too. Write them with
+    // the grant's remaining lifetime (`grant().expiresAt`) to end with it.
+    grantBound?: string[]
     // Trust X-Forwarded-Proto (behind a TLS-terminating load balancer). X-Forwarded-Host is never
     // trusted: clients can send it through a load balancer that doesn't set it.
     proxy?: boolean
@@ -200,6 +204,7 @@ export class GGOAuthServer {
     private _provider: Provider | undefined
     private _callback: ReturnType<Provider["callback"]> | undefined
     private _firstParty: Map<string, GGOAuthFirstPartyClient> | undefined
+    private readonly grantBound: ReadonlySet<string>
     private _service: Map<string, GGOAuthServiceClientRegistration> | undefined
     private readonly options: GGOAuthServerOptions
     private readonly resourceServer: GGOAuthResourceServer<GGOAuthResource<any>>
@@ -212,6 +217,7 @@ export class GGOAuthServer {
             throw new Error("GGOAuthServer: every resource's accessToken needs its own audience")
         }
         this.options = options
+        this.grantBound = new Set([...GRANT_BOUND, ...options.grantBound ?? []])
         this.resourceServer = new GGOAuthResourceServer({authorizationServer: options.issuer, resources: options.resources})
     }
 
@@ -292,9 +298,9 @@ export class GGOAuthServer {
     public externalSignIn = <D = undefined>(options: GGOAuthExternalSignInOptions): GGOAuthExternalSignIn<D> =>
         new GGOAuthExternalSignIn<D>(this, () => hkdf(this.options.secret(), "@grest-ts/oauth external sign-in"), options)
 
-    public listGrants = async (subject: string): Promise<Array<{grantId: string, clientId: string, clientName: string, firstParty: boolean, createdAt: number, lastUsedAt?: number}>> => {
+    public listGrants = async (subject: string): Promise<Array<{grantId: string, clientId: string, clientName: string, firstParty: boolean, data: GGOAuthGrantData, createdAt: number, lastUsedAt?: number}>> => {
         const p = this.provider()
-        const grants = await Promise.all((await this.options.store.listGrantIds(subject)).map(id => p.Grant.find(id)))
+        const grants: (Grant | undefined)[] = await Promise.all((await this.options.store.listGrantIds(subject)).map(id => p.Grant.find(id)))
         return await Promise.all(grants
             .filter(g => g?.clientId && g.accountId === subject)
             .map(async g => {
@@ -308,27 +314,26 @@ export class GGOAuthServer {
                     clientId: g!.clientId!,
                     clientName: String(client?.clientName ?? g!.clientId),
                     firstParty: this.firstParty.has(g!.clientId!),
+                    data: g!.appData ?? {},
                     createdAt: (g!.iat ?? 0) * 1000,
                     lastUsedAt: usage?.lastUsedAt as number | undefined,
                 }
             }))
     }
 
-    // undefined once the grant is revoked or expired.
+    // undefined once the grant is revoked or expired. One store read: never the client (a metadata document fetch).
     public grant = async (subject: string, grantId: string): Promise<GGOAuthGrant | undefined> => {
-        const p = this.provider()
-        const grant: Grant | undefined = await p.Grant.find(grantId)
+        const grant: Grant | undefined = await this.provider().Grant.find(grantId)
         if (grant?.accountId !== subject) return undefined
-        const client = await p.Client.find(grant.clientId!).catch(() => undefined)
-        return {grantId, accountId: subject, clientId: grant.clientId!, clientName: String(client?.clientName ?? grant.clientId), data: grant.appData ?? {}}
+        return {grantId, accountId: subject, clientId: grant.clientId!, data: grant.appData ?? {}, expiresAt: grant.exp! * 1000}
     }
 
     // Kills the grant's refresh tokens and codes now; already-issued access tokens live out their TTL.
     public revokeGrant = async (subject: string, grantId: string): Promise<void> => {
         const grant = await this.provider().Grant.find(grantId)
         if (!grant || grant.accountId !== subject) throw new NOT_FOUND()
-        await this.options.store.revokeByGrantId(grantId)
-        // A grant row isn't GRANT_BOUND, so revokeByGrantId leaves it.
+        await this.options.store.revokeByGrantId(grantId, this.grantBound)
+        // A grant row isn't grant-bound, so revokeByGrantId leaves it.
         await this.options.store.destroy("Grant", grantId)
     }
 
@@ -337,7 +342,7 @@ export class GGOAuthServer {
         const store = this.options.store
         await Promise.all([
             store.destroySessions(subject),
-            store.listGrantIds(subject).then(ids => Promise.all(ids.map(id => Promise.all([store.revokeByGrantId(id), store.destroy("Grant", id)])))),
+            store.listGrantIds(subject).then(ids => Promise.all(ids.map(id => Promise.all([store.revokeByGrantId(id, this.grantBound), store.destroy("Grant", id)])))),
         ])
     }
 
@@ -589,7 +594,7 @@ export class GGOAuthServer {
         const placeholderKey = randomBytes(32)
 
         const config: Configuration = {
-            adapter: toOidcAdapter(o.store),
+            adapter: toOidcAdapter(o.store, this.grantBound),
             jwks: {keys: [deriveEs256Jwk(o.secret())]},
             cookies: {
                 keys: [hkdf(o.secret(), "@grest-ts/oauth cookies").toString("base64url")],
