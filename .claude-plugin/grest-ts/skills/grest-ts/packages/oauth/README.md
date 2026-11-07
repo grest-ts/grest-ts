@@ -50,7 +50,7 @@ const mcp: GGOAuthResource<McpClaims> = {
     resource: () => `${config.issuerUrl.get()}/mcp`,   // exactly the URL users enter
     accessToken: mcpToken,                             // e.g. audience "app-mcp"
     scopes: ["mcp"],
-    claims: async (subject) => ({permissions: []}),
+    claims: async (subject, client) => ({orgId: client.grant!.data.orgId}),  // stored at consent, below
 }
 
 const oauth = new GGOAuthServer({
@@ -64,11 +64,19 @@ const oauth = new GGOAuthServer({
     // dynamicRegistration: true,                  // open RFC 7591 registration — anyone, any name
 })
 oauth.mount(httpServer)                            // /oauth/* + /.well-known/* (incl. every resource's metadata), announced to discovery
-oauth.protect(httpServer, mcp, "/mcp", handleMcp)  // 401 + resource metadata, then your handler
+oauth.protect(httpServer, mcp, "/mcp", handleMcp)  // /mcp and /mcp/*: 401 + resource metadata, then your handler
 ```
 
 `claims` works like the `resolve` callback of `GGAuthRefreshToken.refresh`: role changes apply on
 the next refresh, and a deleted or deactivated user's OAuth session ends there.
+
+**Grants.** A user's token is issued under a grant: one consent of that user to one client, revocable on
+its own. `claims` gets it as `client.grant`: `{grantId, data}`, where `data` is what the consent page passed
+to `consent(data)` (`{}` for a first-party client). Each consent mints a new grant, so a client added twice
+(e.g. an MCP server added at `/mcp/work` and `/mcp/home`) holds two, each with its own data and tokens.
+`grant(grantId)` reads one (`{grantId, accountId, clientId, clientName, data}`, `undefined` once revoked or
+expired) and `setGrantData(grantId, data)` replaces its data, for the next issuance. A service token has no
+grant.
 
 A user's access token carries `auth_time` (OIDC: when the user signed in, epoch seconds; a refresh
 and a silent re-authorization keep it), read as `verify(token).auth_time`. To require a recent
@@ -145,9 +153,12 @@ Cached service tokens are dropped before each test, so a token from one test nev
 `protect(server, resource, path, handler)` puts `path` behind the resource's token. It also
 provides the discovery handshake MCP clients run:
 
+- `path/*` is served too, under the same resource: a client can add `/mcp/<label>` more than once, each
+  a separate connection. The label means nothing to the server; keep what a connection is on its grant.
 - A request without a valid token gets `401 WWW-Authenticate: Bearer resource_metadata="…/.well-known/oauth-protected-resource{resource path}", scope="…"`.
 - That metadata (RFC 9728) names this server and the resource's scopes. `mount` publishes it for
-  every resource, protected or not, at the resource URL's path under that prefix.
+  every resource, protected or not, at the resource URL's path under that prefix, and at any path below
+  it (the innermost resource answers). MCP clients accept a resource above the URL they were given.
 - Your handler receives the verified token payload. For example, run the official MCP SDK's
   `StreamableHTTPServerTransport` on the raw `req`/`res`.
 
@@ -156,9 +167,9 @@ provides the discovery handshake MCP clients run:
 | Client | How it's known | Consent |
 |---|---|---|
 | First-party (`firstPartyClients`) | Pre-registered | None; silent while the login session lives |
-| Client ID Metadata Document under `allowedUrlPrefixes` (https, default port) | `client_id` is its document URL, fetched by the server | Once per grant |
+| Client ID Metadata Document under `allowedUrlPrefixes` (https, default port) | `client_id` is its document URL, fetched by the server | Every authorization: each consent is a new grant |
 | Loopback / CLI (no `application_type` declared → native) | Any port on `localhost`/`127.0.0.1` matches | **Every** authorization: any local process could claim the redirect |
-| Dynamic registration (opt-in) | `POST /oauth/register` | Once per grant |
+| Dynamic registration (opt-in) | `POST /oauth/register` | Every authorization: each consent is a new grant |
 
 ### Login and consent pages
 
@@ -180,6 +191,8 @@ const renderSignIn = async ({interaction, action, method, form, html, login, con
 
 - `interaction.prompt` is `"login"` (no login session, `prompt=login` or an expired `max_age`) or `"consent"`: a signed-in `accountId` approves a
   third-party client. Show the client's name and redirect hosts, and warn when `loopbackOnly` is set.
+- `consent(data?)` mints a new grant carrying `data` (e.g. the org the user picked on the page), which
+  `claims` and `grant()` read back.
 - A first-party client never gets a consent prompt: it re-authorizes silently while the login
   session lives (single sign-on).
 - The request reaches your code only from the browser that started the flow (it holds the
@@ -352,8 +365,8 @@ api.createClient({wires: [{wire: USER_TOKEN_WIRE, value: () => tokens.accessToke
   client-controlled). A flow reached on another origin of the server (e.g. localhost behind a router)
   works only in browsers that send `Sec-Fetch-Site`.
 - The issuer is an origin. Clients bind to it, so changing it disconnects them.
-- Resource metadata is served by the resource URL's path on any host, so give each resource its
-  own path (e.g. the API at `/` and MCP at `/mcp`).
+- Resource metadata is served by the resource URL's path (and the paths below it) on any host, so give
+  each resource its own path (e.g. the API at `/` and MCP at `/mcp`).
 - Endpoints in the metadata follow the request host. Serve the issuer host directly or keep
   `Host` through your proxy, and pass `proxy: true` behind a TLS-terminating load balancer (it trusts
   `X-Forwarded-Proto`; `X-Forwarded-Host` is always ignored — clients can send it).

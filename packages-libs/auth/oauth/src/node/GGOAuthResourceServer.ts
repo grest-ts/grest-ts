@@ -36,6 +36,7 @@ export class GGOAuthResourceServer {
         server.announce(RESOURCE_METADATA, "GGOAuthResourceServer")
     }
 
+    // Serves `path` and everything under it (e.g. /mcp/<label>, so a client can add the resource more than once).
     // Requests without a valid token for `resource` get 401 + `WWW-Authenticate: Bearer
     // resource_metadata=…`, the discovery handshake MCP clients run before signing in.
     public protect<C extends object>(
@@ -66,13 +67,19 @@ export class GGOAuthResourceServer {
             }
             await handle(req, res, token)
         }
-        for (const method of ["GET", "POST", "DELETE"] as const) server.registerRoute(method, path, guarded, "GGOAuthResourceServer")
+        for (const method of ["GET", "POST", "DELETE"] as const) {
+            server.registerRoute(method, path, guarded, "GGOAuthResourceServer")
+            server.registerRoute(method, `${path}/*`, guarded, "GGOAuthResourceServer")
+        }
         server.announce(path, "GGOAuthResourceServer")
     }
 
     private resourceMetadata = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
         const path = new URL(req.url ?? "/", "http://x").pathname
-        const resource = this.options.resources.find(r => resourceMetadataPath(r.resource()) === path)
+        // A path under a resource's answers that resource (the innermost one), which MCP clients accept for a server URL below it.
+        const resource = this.options.resources
+            .filter(r => `${path}/`.startsWith(`${resourceMetadataPath(r.resource())}/`))
+            .sort((a, b) => b.resource().length - a.resource().length)[0]
         if (!resource) {
             res.writeHead(404)
             res.end()

@@ -31,7 +31,7 @@ export interface GGOAuthResource<C extends object> extends GGOAuthProtectedResou
     accessToken: GGAuthAccessToken<C>
     // Re-run at every issuance (code exchange and each refresh), like GGAuthRefreshToken's resolve:
     // permission changes apply on refresh. undefined = subject gone → invalid_grant.
-    claims: (subject: string, client: {clientId: string, name: string}) => Promise<C | undefined>
+    claims: (subject: string, client: GGOAuthTokenClient) => Promise<C | undefined>
     // Who may get tokens for it. "any" (default): every client that signs a user in. "firstParty": only
     // pre-registered first-party clients. "service": only service clients, by GGOAuthServiceApi.token
     // (the subject is the client id); service clients get no other resource.
@@ -44,6 +44,25 @@ export interface GGOAuthResource<C extends object> extends GGOAuthProtectedResou
         params?: string[]
         claims: (subject: string, params: Record<string, string | undefined>) => Promise<C | undefined>
     }
+}
+
+// What the app stores on a grant at consent (e.g. which org the connection acts in).
+export type GGOAuthGrantData = Record<string, string>
+
+// Who a token is issued to, and the grant it is issued under (none for a service client).
+export interface GGOAuthTokenClient {
+    clientId: string
+    name: string
+    grant?: {grantId: string, data: GGOAuthGrantData}
+}
+
+// A user's grant to a client. Each consent mints one, so a client added twice holds two.
+export interface GGOAuthGrant {
+    grantId: string
+    accountId: string
+    clientId: string
+    clientName: string
+    data: GGOAuthGrantData
 }
 
 export interface GGOAuthServiceClientRegistration {
@@ -93,8 +112,8 @@ export interface GGOAuthInteractionRequest {
     redirect: (url: string) => void
     // Each ends the request with a redirect back into the flow.
     login: (result: {accountId: string, amr?: string[]}) => Promise<void>
-    // Grants what the client asked for. Only while prompt is "consent".
-    consent: () => Promise<void>
+    // Grants what the client asked for as a new grant carrying `data`. Only while prompt is "consent".
+    consent: (data?: GGOAuthGrantData) => Promise<void>
     deny: () => Promise<void>
 }
 
@@ -154,6 +173,8 @@ const PAGE_HEADERS = {"content-type": "text/html; charset=utf-8", "referrer-poli
 const TICKET = "GGOAuthTicket"
 // Not an oidc-provider model: when each grant last got tokens, for listGrants. Carries grantId, so revoking the grant removes it.
 const GRANT_USAGE = "GrantUsage"
+// Not an oidc-provider model either: the app's data on a grant. Carries grantId, so revoking the grant removes it.
+const GRANT_DATA = "GrantData"
 // Claims resolved during a refresh before the presented token was consumed (see rotateRefreshToken).
 const prefetchedClaims = new WeakMap<object, {resource: string, claims: object}>()
 // Comparing fixed-length HMAC digests keeps timingSafeEqual from leaking the secret's length.
@@ -290,6 +311,21 @@ export class GGOAuthServer {
             }))
     }
 
+    // undefined once the grant is revoked or expired.
+    public grant = async (grantId: string): Promise<GGOAuthGrant | undefined> => {
+        const p = this.provider()
+        const grant = await p.Grant.find(grantId)
+        if (!grant) return undefined
+        const [client, data] = await Promise.all([p.Client.find(grant.clientId!).catch(() => undefined), this.grantData(grantId)])
+        return {grantId, accountId: grant.accountId!, clientId: grant.clientId!, clientName: String(client?.clientName ?? grant.clientId), data}
+    }
+
+    public setGrantData = async (grantId: string, data: GGOAuthGrantData): Promise<void> => {
+        const grant = await this.provider().Grant.find(grantId)
+        if (!grant) throw new NOT_FOUND()
+        await this.saveGrantData(grant, data)
+    }
+
     // Kills the grant's refresh tokens and codes now; already-issued access tokens live out their TTL.
     public revokeGrant = async (subject: string, grantId: string): Promise<void> => {
         const grant = await this.provider().Grant.find(grantId)
@@ -339,13 +375,14 @@ export class GGOAuthServer {
             },
             interaction: await this.describeInteraction(found),
             login: ({accountId, amr}) => finish({login: {accountId, amr}}),
-            consent: async () => {
+            consent: async (data = {}) => {
                 const accountId = found.session?.accountId
                 if (found.prompt.name !== "consent" || !accountId) return this.fail(res, 400, "Sign in first")
-                const existing = found.grantId ? await p.Grant.find(found.grantId) : undefined
-                const grant = existing?.accountId === accountId ? existing : new p.Grant({accountId, clientId: String(found.params.client_id)})
+                const grant = new p.Grant({accountId, clientId: String(found.params.client_id)})
                 this.grantRequested(grant, found.params)
-                await p.interactionFinished(req, res, {consent: {grantId: await grant.save()}}, {mergeWithLastSubmission: true})
+                await grant.save()
+                await this.saveGrantData(grant, data)
+                await p.interactionFinished(req, res, {consent: {grantId: grant.jti}}, {mergeWithLastSubmission: true})
             },
             deny: () => finish({error: "access_denied", error_description: "The user denied the request"}),
         })
@@ -443,9 +480,18 @@ export class GGOAuthServer {
         return this.options.resources.find(r => r.resource() === indicator)
     }
 
-    private clientOf(ctx: KoaContextWithOIDC): {clientId: string, name: string} {
+    private async clientOf(ctx: KoaContextWithOIDC, grantId: string): Promise<GGOAuthTokenClient> {
         const client = ctx.oidc.client!
-        return {clientId: client.clientId, name: this.firstParty.get(client.clientId)?.name ?? String(client.clientName ?? client.clientId)}
+        const name = this.firstParty.get(client.clientId)?.name ?? String(client.clientName ?? client.clientId)
+        return {clientId: client.clientId, name, grant: {grantId, data: await this.grantData(grantId)}}
+    }
+
+    private saveGrantData(grant: InstanceType<Provider["Grant"]>, data: GGOAuthGrantData): Promise<void> {
+        return this.options.store.upsert(GRANT_DATA, grant.jti, {grantId: grant.jti, data}, grant.remainingTTL)
+    }
+
+    private async grantData(grantId: string): Promise<GGOAuthGrantData> {
+        return (await this.options.store.find(GRANT_DATA, grantId))?.data as GGOAuthGrantData | undefined ?? {}
     }
 
     private usableResource(indicator: string, clientId: string): GGOAuthResource<any> {
@@ -609,13 +655,16 @@ export class GGOAuthServer {
                     },
                 },
             },
-            // First-party clients never see a consent screen: an existing login session is enough.
+            // First-party clients never see a consent screen: an existing login session is enough. A third-party
+            // client gets only the grant its consent just minted, so authorizing it again is a new connection.
             loadExistingGrant: async (ctx) => {
                 const client = ctx.oidc.client!
                 const session = ctx.oidc.session!
-                const grantId = ctx.oidc.result?.consent?.grantId || session.grantIdFor(client.clientId)
-                if (grantId) return ctx.oidc.provider.Grant.find(grantId)
+                const consented = ctx.oidc.result?.consent?.grantId
+                if (consented) return ctx.oidc.provider.Grant.find(consented)
                 if (!firstParty.has(client.clientId) || !session.accountId) return undefined
+                const existing = session.grantIdFor(client.clientId)
+                if (existing) return ctx.oidc.provider.Grant.find(existing)
                 const grant = new ctx.oidc.provider.Grant({accountId: session.accountId, clientId: client.clientId})
                 this.grantRequested(grant, ctx.oidc.params as Record<string, unknown>)
                 await grant.save()
@@ -641,19 +690,18 @@ export class GGOAuthServer {
                 if (typeof requested === "string" && !granted.includes(requested)) throw new oidcErrors.InvalidTarget()
                 const indicator = typeof requested === "string" ? requested : granted.length === 1 ? granted[0] : undefined
                 const resource = indicator ? this.usableResource(indicator, clientId) : this.defaultResource(clientId)
-                const claims = await resource.claims(String(rt.accountId), this.clientOf(ctx))
+                const claims = await resource.claims(String(rt.accountId), await this.clientOf(ctx, String(rt.grantId)))
                 if (!claims) throw new oidcErrors.InvalidGrant("subject is no longer valid")
                 prefetchedClaims.set(ctx, {resource: resource.resource(), claims})
                 return true
             },
             extraTokenClaims: async (_ctx: KoaContextWithOIDC, token) => {
-                if (token.kind !== "AccessToken" && token.kind !== "ClientCredentials") return undefined
+                if (token.kind !== "AccessToken") return undefined
                 const at = token as InstanceType<Provider["AccessToken"]>
                 const resource = this.resource(at.resourceServer?.identifier())
                 if (!resource) return undefined
-                const subject = token.kind === "ClientCredentials" ? String(at.clientId) : String(at.accountId)
                 const prefetched = prefetchedClaims.get(_ctx)
-                const claims = prefetched?.resource === resource.resource() ? prefetched.claims : await resource.claims(subject, this.clientOf(_ctx))
+                const claims = prefetched?.resource === resource.resource() ? prefetched.claims : await resource.claims(String(at.accountId), await this.clientOf(_ctx, String(at.grantId)))
                 if (!claims) throw new oidcErrors.InvalidGrant("subject is no longer valid")
                 // On refresh, the sign-in time the refresh token copied from its code: a refresh never makes a token fresh.
                 const authTime = (_ctx.oidc.entities.AuthorizationCode ?? _ctx.oidc.entities.RefreshToken)?.authTime

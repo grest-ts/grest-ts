@@ -4,9 +4,9 @@ import {createServer} from "node:net"
 import {GGRuntime} from "@grest-ts/runtime"
 import {GG_HTTP_REQUEST, GGHttpServer} from "@grest-ts/http"
 import {GG_TRACE} from "@grest-ts/trace"
-import {FORBIDDEN, IsArray, IsObject, IsString, NOT_AUTHORIZED} from "@grest-ts/schema"
+import {FORBIDDEN, IsArray, IsObject, IsString, NOT_AUTHORIZED, NOT_FOUND} from "@grest-ts/schema"
 import {GGAuthAccessToken, HmacSigner, JwksVerifier, JwsSigningStrategy, type JwsSigner} from "@grest-ts/auth"
-import {ACCESS_TOKEN_JWKS_PATH, deriveEs256Jwk, GGOAuthServer, type GGOAuthInteraction, type GGOAuthResource} from "./GGOAuthServer"
+import {ACCESS_TOKEN_JWKS_PATH, deriveEs256Jwk, GGOAuthServer, type GGOAuthInteraction, type GGOAuthResource, type GGOAuthTokenClient} from "./GGOAuthServer"
 import type {GGDynamoDb} from "@grest-ts/db-dynamodb"
 import {InMemoryOAuthStore} from "./store/InMemoryOAuthStore"
 import {DynamoOAuthStore} from "./store/DynamoOAuthStore"
@@ -14,7 +14,7 @@ import {GGOAuthResourceServer} from "./GGOAuthResourceServer"
 import {GGOAuthServiceClient} from "./GGOAuthServiceClient"
 import {SUBJECT_TOKEN_INVALID} from "./GGOAuthServiceApi"
 import type {GGOAuthExternalSignIn} from "./GGOAuthExternalSignIn"
-import {GGOAuthHeadlessBrowser, type GGOAuthHeadlessStep} from "./GGOAuthHeadlessBrowser"
+import {GGOAuthHeadlessBrowser, type GGOAuthHeadlessStep, type GGOAuthPageAnswer} from "./GGOAuthHeadlessBrowser"
 
 const IsClaims = IsObject({permissions: IsArray(IsString)})
 type Claims = typeof IsClaims.infer
@@ -50,12 +50,17 @@ function sealedSigner(kid: string): JwsSigner {
 // A second resource, as for an MCP server: its own audience, tokens that grant no permissions, and an
 // asymmetric signer the authorization server can't read the key of.
 const MCP = `${ISSUER}/mcp`
+// Whom the MCP resource's claims were last resolved for.
+let mcpClient: GGOAuthTokenClient | undefined
 const mcpToken = new GGAuthAccessToken({signer: new JwsSigningStrategy(sealedSigner("sealed-1")), claimSchema: IsClaims, audience: "app-mcp", issuer: () => ISSUER})
 const mcp: GGOAuthResource<Claims> = {
     resource: () => MCP,
     accessToken: mcpToken,
     scopes: ["mcp"],
-    claims: async (sub) => userPermissions.get(sub) ? {permissions: []} : undefined,
+    claims: async (sub, client) => {
+        mcpClient = client
+        return userPermissions.get(sub) ? {permissions: []} : undefined
+    },
 }
 // The app's backend: a service client with its own resource, and the one that trades a user token
 // for an org-scoped token (token exchange).
@@ -156,7 +161,7 @@ class OAuthTestRuntime extends GGRuntime {
                     return
                 }
                 if (action === "login") return login({accountId: form.sub})
-                if (action === "consent") return consent()
+                if (action === "consent") return consent(form)
                 if (action === "deny") return deny()
                 res.writeHead(404)
                 res.end()
@@ -427,7 +432,7 @@ describe("GGOAuthServer", () => {
         expect((await userToken.verify(tokens.accessToken)).sub).toBe("bob")
     })
 
-    test("third-party client registers, needs consent once, and gets a token only for its resource", async () => {
+    test("third-party client registers, consents, and gets a token only for its resource", async () => {
         const clientId = await register()
         const browser = new Browser()
         const {pages, tokens} = await signIn(browser, clientId, THIRD_PARTY_REDIRECT)
@@ -436,13 +441,35 @@ describe("GGOAuthServer", () => {
         expect((await mcpToken.verify(tokens.accessToken)).data.permissions).toEqual([])
         await expect(userToken.verify(tokens.accessToken)).rejects.toThrow()
 
-        const again = await browser.done(authorizeUrl(clientId, THIRD_PARTY_REDIRECT, pkce().challenge))
-        expect(again.searchParams.get("code")).toEqual(expect.any(String))
-
         expect(await oauth.listGrants("alice")).toEqual(expect.arrayContaining([
             expect.objectContaining({clientId, clientName: "Claude", firstParty: false}),
             expect.objectContaining({clientId: "app", firstParty: true}),
         ]))
+    })
+
+    test("a third-party client authorizing again gets a new grant", async () => {
+        const clientId = await register()
+        const browser = new Browser()
+        const first = await signIn(browser, clientId, THIRD_PARTY_REDIRECT)
+        const second = await signIn(browser, clientId, THIRD_PARTY_REDIRECT)
+        expect(second.pages.map(p => p.prompt)).toEqual(["consent"])
+        expect((await oauth.listGrants("alice")).filter(g => g.clientId === clientId)).toHaveLength(2)
+        for (const {tokens} of [first, second]) {
+            expect((await token({grant_type: "refresh_token", refresh_token: tokens.refreshToken!, client_id: clientId})).access_token).toEqual(expect.any(String))
+        }
+    })
+
+    test("claims get the grant id and its consent data", async () => {
+        const clientId = await register()
+        const tokens = await new Browser().signIn({clientId, redirectUri: THIRD_PARTY_REDIRECT, ...target(clientId)}, (page): GGOAuthPageAnswer =>
+            JSON.parse(page.html).interaction.prompt === "login" ? {action: "login", form: {sub: "alice"}} : {action: "consent", form: {org: "o1"}})
+        const {grantId} = (await oauth.listGrants("alice")).find(g => g.clientId === clientId)!
+        expect(mcpClient).toEqual({clientId, name: "Claude", grant: {grantId, data: {org: "o1"}}})
+        expect(await oauth.grant(grantId)).toEqual({grantId, accountId: "alice", clientId, clientName: "Claude", data: {org: "o1"}})
+
+        await oauth.setGrantData(grantId, {org: "o2"})
+        await token({grant_type: "refresh_token", refresh_token: tokens.refreshToken!, client_id: clientId})
+        expect(mcpClient!.grant).toEqual({grantId, data: {org: "o2"}})
     })
 
     test("a third-party client can't get a token for a first-party-only resource", async () => {
@@ -500,6 +527,18 @@ describe("GGOAuthServer", () => {
         expect(api).toEqual({resource: API, authorization_servers: [ISSUER], scopes_supported: ["api"], bearer_methods_supported: ["header"]})
         expect((await fetch(`${ISSUER}/.well-known/oauth-protected-resource`)).status).toBe(404)
         expect((await fetch(`${ISSUER}/.well-known/oauth-protected-resource/other`)).status).toBe(404)
+    })
+
+    test("metadata under a resource path names that resource, and the path under it takes only that resource's token", async () => {
+        const prm = await (await fetch(`${ISSUER}/.well-known/oauth-protected-resource/mcp/work`)).json()
+        expect(prm).toMatchObject({resource: MCP, scopes_supported: ["mcp"]})
+        expect((await fetch(`${ISSUER}/.well-known/oauth-protected-resource/mcpx`)).status).toBe(404)
+
+        expect((await fetch(`${MCP}/work`, {method: "POST"})).status).toBe(401)
+        const app = await signIn(new Browser(), "app", FIRST_PARTY_REDIRECT)
+        expect((await fetch(`${MCP}/work`, {method: "POST", headers: {authorization: `Bearer ${app.tokens.accessToken}`}})).status).toBe(401)
+        const {tokens} = await signIn(new Browser(), await register(), THIRD_PARTY_REDIRECT)
+        expect(await (await fetch(`${MCP}/work`, {method: "POST", headers: {authorization: `Bearer ${tokens.accessToken}`}})).json()).toEqual({hello: "alice"})
     })
 
     test("a loopback (CLI) client matches on any port and is asked for consent every time", async () => {
@@ -758,14 +797,18 @@ describe("GGOAuthServer", () => {
         expect((await token({grant_type: "refresh_token", refresh_token: tokens.refreshToken!, client_id: "app"})).error).toBe("invalid_grant")
     })
 
-    test("revoking a grant kills its refresh token; revokeAll ends the login session", async () => {
+    test("revoking a grant kills its refresh token and data; revokeAll ends the login session", async () => {
         const clientId = await register()
         const browser = new Browser()
         const {tokens} = await signIn(browser, clientId, THIRD_PARTY_REDIRECT)
         const grant = (await oauth.listGrants("alice")).find(g => g.clientId === clientId)!
         expect(await store.find("GrantUsage", grant.grantId)).toBeDefined()
+        expect(await store.find("GrantData", grant.grantId)).toBeDefined()
         await oauth.revokeGrant("alice", grant.grantId)
         expect(await store.find("GrantUsage", grant.grantId)).toBeUndefined()
+        expect(await store.find("GrantData", grant.grantId)).toBeUndefined()
+        expect(await oauth.grant(grant.grantId)).toBeUndefined()
+        await expect(oauth.setGrantData(grant.grantId, {})).rejects.toBeInstanceOf(NOT_FOUND)
         expect((await token({grant_type: "refresh_token", refresh_token: tokens.refreshToken!, client_id: clientId})).error).toBe("invalid_grant")
         expect((await oauth.listGrants("alice")).map(g => g.grantId)).not.toContain(grant.grantId)
 
