@@ -57,6 +57,7 @@ const mcp: GGOAuthResource<Claims> = {
     resource: () => MCP,
     accessToken: mcpToken,
     scopes: ["mcp"],
+    subPaths: true,
     claims: async (sub, client) => {
         mcpClient = client
         return userPermissions.get(sub) ? {permissions: []} : undefined
@@ -65,6 +66,15 @@ const mcp: GGOAuthResource<Claims> = {
 // The app's backend: a service client with its own resource, and the one that trades a user token
 // for an org-scoped token (token exchange).
 const INTERNAL = `${ISSUER}/internal`
+// A resource served by another process's resource server (as an MCP hub beside the auth service): both define it alike.
+const hubPort = await freePort()
+const HUB = `http://localhost:${hubPort}/hub`
+const hubDefinition = () => ({
+    resource: () => HUB,
+    accessToken: new GGAuthAccessToken({signer: new HmacSigner("hub-secret"), claimSchema: IsClaims, audience: "app-hub"}),
+    scopes: ["hub"] as [string],
+    subPaths: true,
+})
 const internalToken = new GGAuthAccessToken({signer: new HmacSigner("internal-secret"), claimSchema: IsClaims, audience: "app-internal"})
 const ORG = `${ISSUER}/org`
 const orgToken = new GGAuthAccessToken({signer: new JwsSigningStrategy(sealedSigner("sealed-org")), claimSchema: IsClaims, audience: "app-org"})
@@ -153,7 +163,7 @@ class OAuthTestRuntime extends GGRuntime {
                     params: ["org_id"],
                     claims: async (sub, params) => params.org_id === "o1" && userPermissions.get(sub) ? {permissions: ["org:" + sub]} : undefined,
                 },
-            }],
+            }, {...hubDefinition(), claims: async () => ({permissions: []})}],
             serviceClients: () => [{clientId: "backend", secret: () => "backend-secret"}],
             // The app's sign-in pages, reduced to what a test drives: the page as JSON, and a "login" that trusts the posted subject.
             interactionPage: async ({res, method, action, form, interaction, login, consent, deny, html, redirect}) => {
@@ -211,6 +221,38 @@ class OAuthTestRuntime extends GGRuntime {
         new GGOAuthResourceServer({authorizationServer: () => ISSUER, resources: [unreachableKeys]}).protect(server, unreachableKeys, "/mcp-down", async (_req, res) => {
             res.writeHead(200)
             res.end()
+        })
+    }
+}
+
+const rootPort = await freePort()
+const ROOT = `http://localhost:${rootPort}`
+const rootSigner = new HmacSigner("root-secret")
+
+class RootTestRuntime extends GGRuntime {
+    public static readonly NAME = "oauth-root-test"
+
+    protected compose(): void {
+        const server = new GGHttpServer({port: rootPort})
+        const root = {resource: () => ROOT, accessToken: new GGAuthAccessToken({signer: rootSigner, claimSchema: IsClaims, audience: "app-root"}), scopes: ["root"] as [string], subPaths: true}
+        new GGOAuthResourceServer({authorizationServer: () => ISSUER, resources: [root]}).protect(server, root, "/", async (_req, res) => {
+            res.writeHead(200)
+            res.end("ok")
+        })
+    }
+}
+
+class HubTestRuntime extends GGRuntime {
+    public static readonly NAME = "oauth-hub-test"
+
+    protected compose(): void {
+        const server = new GGHttpServer({port: hubPort})
+        const hub = hubDefinition()
+        const resources = new GGOAuthResourceServer({authorizationServer: () => ISSUER, resources: [hub]})
+        resources.mount(server)
+        resources.protect(server, hub, "/hub", async (_req, res, token) => {
+            res.writeHead(200, {"content-type": "application/json"})
+            res.end(JSON.stringify({hub: token.sub}))
         })
     }
 }
@@ -359,7 +401,7 @@ describe("GGOAuthServer", () => {
         })
         expect(meta.token_endpoint_auth_methods_supported).toContain("none")
         expect(meta.response_types_supported).toEqual(["code"])
-        expect(meta.scopes_supported).toEqual(["openid", "offline_access", "api", "mcp", "internal", "org"])
+        expect(meta.scopes_supported).toEqual(["openid", "offline_access", "api", "mcp", "internal", "org", "hub"])
         const jwks = await (await fetch(meta.jwks_uri)).json()
         // The ID-token key and the asymmetric resources' signers; HMAC resources publish nothing.
         expect(jwks.keys).toEqual([expect.objectContaining({kty: "EC", crv: "P-256", alg: "ES256"}), expect.objectContaining({kid: "sealed-1"}), expect.objectContaining({kid: "sealed-org"})])
@@ -455,7 +497,7 @@ describe("GGOAuthServer", () => {
     // Signs `browser` in to `clientId` for `resource`, consenting with `org` as the grant's data when asked.
     const connect = (browser: Browser, clientId: string, resource: string, org?: string, params: Record<string, string> = {}) => {
         const prompts: string[] = []
-        const tokens = browser.signIn({clientId, redirectUri: THIRD_PARTY_REDIRECT, resource, scope: "mcp", params}, (page): GGOAuthPageAnswer => {
+        const tokens = browser.signIn({clientId, redirectUri: THIRD_PARTY_REDIRECT, resource, scope: resource.startsWith(HUB) ? "hub" : "mcp", params}, (page): GGOAuthPageAnswer => {
             const {prompt} = JSON.parse(page.html).interaction as GGOAuthInteraction
             prompts.push(prompt)
             return prompt === "login" ? {action: "login", form: {sub: "alice"}} : {action: "consent", form: org ? {org} : {}}
@@ -510,7 +552,31 @@ describe("GGOAuthServer", () => {
         expect(mcpClient!.grant).toEqual({grantId, data: {org: "o1"}})
     })
 
-    test("a sub-resource indicator must be a plain URL under a protected resource", async () => {
+    test("a resource server in another process serves the sub-resources the authorization server issues for", async () => {
+        const hubRuntime = await new HubTestRuntime().start()
+        onTestFinished(() => hubRuntime.teardown())
+        const clientId = await register()
+        const prm = await (await fetch(`http://localhost:${hubPort}/.well-known/oauth-protected-resource/hub/work`)).json()
+        expect(prm).toMatchObject({resource: `${HUB}/work`, authorization_servers: [ISSUER], scopes_supported: ["hub"]})
+        const {tokens} = await connect(new Browser(), clientId, `${HUB}/work`)
+        const call = (url: string) => fetch(url, {method: "POST", headers: {authorization: `Bearer ${tokens.accessToken}`}})
+        expect(await (await call(`${HUB}/work`)).json()).toEqual({hub: "alice"})
+        expect((await call(`${HUB}/home`)).status).toBe(401)
+    })
+
+    test("a resource served at / with subPaths takes a token only at the URL it was issued for", async () => {
+        const rootRuntime = await new RootTestRuntime().start()
+        onTestFinished(() => rootRuntime.teardown())
+        const now = Math.floor(Date.now() / 1000)
+        const bearer = await rootSigner.sign({sub: "alice", aud: ["app-root", ROOT], iat: now, exp: now + 60, data: {permissions: []}})
+        const call = (path: string) => fetch(`${ROOT}${path}`, {headers: {authorization: `Bearer ${bearer}`}})
+        expect(await (await call("/")).text()).toBe("ok")
+        const other = await call("/x")
+        expect(other.status).toBe(401)
+        expect(other.headers.get("www-authenticate")).toContain(`resource_metadata="${ROOT}/.well-known/oauth-protected-resource/x"`)
+    })
+
+    test("a sub-resource indicator must be a plain URL under a resource with subPaths", async () => {
         const clientId = await register()
         for (const resource of [`${MCP}/work?x=1`, `${MCP}/work#x`, `${MCP}//work`, `${MCP}/a/../work`, `${INTERNAL}/x`]) {
             const res = await new Browser().get(authorizeUrl(clientId, THIRD_PARTY_REDIRECT, pkce().challenge, {resource}))

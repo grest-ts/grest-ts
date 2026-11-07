@@ -12,6 +12,9 @@ export interface GGOAuthProtectedResource<C extends object> {
     // Verifies this resource's tokens (audience, issuer, signature).
     accessToken: GGAuthAccessToken<C, TokenVerifier>
     scopes: [string, ...string[]]
+    // Every plain URL under `resource` is a resource of its own too (e.g. /mcp/<label>, so a client can add it
+    // more than once), with tokens only for exactly that URL. Set it alike wherever the resource is defined.
+    subPaths?: boolean
 }
 
 export interface GGOAuthResourceServerOptions<R extends GGOAuthProtectedResource<any> = GGOAuthProtectedResource<any>> {
@@ -26,7 +29,6 @@ export interface GGOAuthResourceServerOptions<R extends GGOAuthProtectedResource
 export class GGOAuthResourceServer<R extends GGOAuthProtectedResource<any> = GGOAuthProtectedResource<any>> {
 
     private readonly options: GGOAuthResourceServerOptions<R>
-    private readonly served = new Set<GGOAuthProtectedResource<any>>()
 
     constructor(options: GGOAuthResourceServerOptions<R>) {
         this.options = options
@@ -38,8 +40,8 @@ export class GGOAuthResourceServer<R extends GGOAuthProtectedResource<any> = GGO
         server.announce(RESOURCE_METADATA, "GGOAuthResourceServer")
     }
 
-    // Serves `path` (the resource URL's path) and everything under it: each URL is a resource of its own (e.g.
-    // /mcp/<label>, so a client can add it more than once) and takes only tokens issued for exactly that URL.
+    // Serves `path` (the resource URL's path), and with `subPaths` the URLs under it; each takes only tokens
+    // issued for exactly that URL.
     // Requests without a valid token for `resource` get 401 + `WWW-Authenticate: Bearer
     // resource_metadata=…`, the discovery handshake MCP clients run before signing in.
     public protect<C extends object>(
@@ -48,7 +50,6 @@ export class GGOAuthResourceServer<R extends GGOAuthProtectedResource<any> = GGO
         path: string,
         handle: (req: IncomingMessage, res: ServerResponse, token: GGAccessPayload<C>) => Promise<void>,
     ): void {
-        this.served.add(resource)
         const guarded = async (req: IncomingMessage, res: ServerResponse) => {
             const url = new URL(new URL(req.url ?? "/", "http://x").pathname, resource.resource()).href
             const auth = req.headers.authorization
@@ -73,19 +74,17 @@ export class GGOAuthResourceServer<R extends GGOAuthProtectedResource<any> = GGO
             }
             await handle(req, res, token)
         }
-        for (const method of ["GET", "POST", "DELETE"] as const) {
-            server.registerRoute(method, path, guarded, "GGOAuthResourceServer")
-            server.registerRoute(method, `${path.replace(/\/$/, "")}/*`, guarded, "GGOAuthResourceServer")
-        }
+        const paths = resource.subPaths ? [path, `${path.replace(/\/$/, "")}/*`] : [path]
+        for (const method of ["GET", "POST", "DELETE"] as const) for (const p of paths) server.registerRoute(method, p, guarded, "GGOAuthResourceServer")
         server.announce(path, "GGOAuthResourceServer")
     }
 
     // What `url` is a resource of: a resource's own URL, or a plain URL (no query, fragment, `//`, `.` or `..`) under
-    // one served by protect. The innermost one answers.
+    // one with `subPaths`. The innermost one answers.
     public resourceAt(url: string): R | undefined {
         const resources = this.options.resources
         return resources.find(r => r.resource() === url) ?? (isPlainUrl(url)
-            ? resources.filter(r => this.served.has(r) && `${url}/`.startsWith(`${r.resource().replace(/\/$/, "")}/`)).sort((a, b) => b.resource().length - a.resource().length)[0]
+            ? resources.filter(r => r.subPaths && `${url}/`.startsWith(`${r.resource().replace(/\/$/, "")}/`)).sort((a, b) => b.resource().length - a.resource().length)[0]
             : undefined)
     }
 

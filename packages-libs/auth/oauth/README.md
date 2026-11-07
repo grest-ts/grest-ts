@@ -33,8 +33,8 @@ kind: audience, claims and TTL. A token for one resource is therefore rejected b
 Every resource must set its own `audience` (the constructor refuses otherwise): with a shared signer,
 the audience is the only thing that tells the tokens apart.
 
-A token's `aud` is `[kind audience, the exact resource URL it was requested for]`. Under a resource served
-by `protect`, every plain URL (no query, fragment, `//`, `.` or `..`) is a resource of its own too (e.g.
+A token's `aud` is `[kind audience, the exact resource URL it was requested for]`. Under a resource with
+`subPaths: true`, every plain URL (no query, fragment, `//`, `.` or `..`) is a resource of its own too (e.g.
 `/mcp/work` under `/mcp`): same token kind, so the kind's wire accepts the token anywhere, but `protect`
 only at that URL.
 
@@ -55,6 +55,7 @@ const mcp: GGOAuthResource<McpClaims> = {
     resource: () => `${config.issuerUrl.get()}/mcp`,   // exactly the URL users enter
     accessToken: mcpToken,                             // e.g. audience "app-mcp"
     scopes: ["mcp"],
+    subPaths: true,                                    // /mcp/<label>: a client can add it more than once
     // The org the user picked at consent (below); membership is re-checked at every issuance.
     claims: async (subject, client) => {
         const orgId = client.grant?.data.orgId
@@ -139,7 +140,8 @@ const ledger = LedgerApi.createClient({wires: [{wire: SERVICE_TOKEN_WIRE, value:
 
 **Resource server only.** A service that accepts the tokens but doesn't run the authorization server
 uses `GGOAuthResourceServer({authorizationServer, resources})`: `mount` serves each resource's RFC 9728
-metadata and `protect` answers a missing or invalid token with the discovery challenge. Its resources'
+metadata and `protect` answers a missing or invalid token with the discovery challenge. Define each resource
+as the authorization server does (same `resource`, `scopes` and `subPaths`). Its resources'
 `accessToken` only verifies: a `GGAuthAccessToken` on a `JwksVerifier` (from `@grest-ts/auth`) reading
 the issuer's `/oauth/access-token-jwks`. `accessTokenJwksUrl(url?)` gives that URL: on `url`, or on the
 server discovery finds for `GGOAuthServiceApi`, since `mount` serves both (`new JwksVerifier({jwks: accessTokenJwksUrl()})`).
@@ -166,13 +168,13 @@ Cached service tokens are dropped before each test, so a token from one test nev
 `protect(server, resource, path, handler)` puts `path` behind the resource's token. It also
 provides the discovery handshake MCP clients run:
 
-- `path` is the resource URL's path. `path/*` is served too: each plain URL under it is its own resource,
+- `path` is the resource URL's path. With `subPaths`, `path/*` is served too: each plain URL under it is its own resource,
   so a client can add `/mcp/<label>` more than once, each a separate grant. A request needs a token issued
   for exactly its URL. The label means nothing else to the server; keep what a connection is on its grant.
 - A request without a valid token gets `401 WWW-Authenticate: Bearer resource_metadata="…/.well-known/oauth-protected-resource{request path}", scope="…"`.
 - That metadata (RFC 9728) names exactly that URL as the resource, this server and the resource's scopes.
   `mount` publishes it for every resource, protected or not, at the resource URL's path under that prefix,
-  and for a protected one at every plain path below it (the innermost resource answers).
+  and for one with `subPaths` at every plain path below it (the innermost resource answers).
 - Your handler receives the verified token payload. For example, run the official MCP SDK's
   `StreamableHTTPServerTransport` on the raw `req`/`res`.
 
@@ -380,7 +382,7 @@ api.createClient({wires: [{wire: USER_TOKEN_WIRE, value: () => tokens.accessToke
   client-controlled). A flow reached on another origin of the server (e.g. localhost behind a router)
   works only in browsers that send `Sec-Fetch-Site`.
 - The issuer is an origin. Clients bind to it, so changing it disconnects them.
-- Resource metadata is served by the resource URL's path (and, for a protected one, the paths below it) on any host, so give
+- Resource metadata is served by the resource URL's path (and, with `subPaths`, the paths below it) on any host, so give
   each resource its own path (e.g. the API at `/` and MCP at `/mcp`).
 - Endpoints in the metadata follow the request host. Serve the issuer host directly or keep
   `Host` through your proxy, and pass `proxy: true` behind a TLS-terminating load balancer (it trusts
