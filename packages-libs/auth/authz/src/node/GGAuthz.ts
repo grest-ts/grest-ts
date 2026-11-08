@@ -9,6 +9,7 @@ import {GG_AUTHZ_SUBJECT} from "./GG_AUTHZ_SUBJECT"
 import {GGAuthzRn} from "../shared/GGAuthzRn"
 import {
     type GGAuthzApprovalLevel,
+    type GGAuthzAsk,
     GG_AUTHZ_APPROVAL_LEVELS,
     type GGAuthzBinding,
     type GGAuthzCondition,
@@ -200,6 +201,9 @@ export class GGAuthz {
     private readonly roles: Map<string, Set<string>>
     private readonly workloadTypes: Set<string>
     private readonly approvalFloor: Approval[]
+    // A subject's rules and asks compiled once per object: callers keep a connection's subject properties between calls.
+    private readonly requestRules = new WeakMap<GGAuthzRule, Rule>()
+    private readonly asks = new WeakMap<GGAuthzAsk, Approval>()
     private readonly levelKey?: string
     private readonly tokenScopes = new Map<string, Rule[]>()
     private readonly bindingsByScope = new Map<string, Binding[]>()
@@ -450,7 +454,7 @@ export class GGAuthz {
     }
 
     private eval(request: GGAuthzRequest, chain: string[], p: Principals, get: AttributeLookup, facts: Map<string, boolean | undefined>): Eval {
-        const asks = (request.subject.properties?.asks ?? []).map(a => this.approval(a))
+        const asks = (request.subject.properties?.asks ?? []).map(a => this.ask(a))
         return {request, action: request.action.name, rn: request.resource.id, chain, chainSet: new Set(chain), p, get, facts, asks}
     }
 
@@ -711,31 +715,27 @@ export class GGAuthz {
     /** A request's own ceiling rule: its conditions are marked per request (`rootsFor`), and an action the model
      *  doesn't know only narrows it. */
     private requestRule(r: GGAuthzRule): Rule {
-        return this.compile(r, () => true)
+        const rule = this.requestRules.get(r) ?? this.compile(r, () => true)
+        this.requestRules.set(r, rule)
+        return rule
+    }
+
+    private ask(a: GGAuthzAsk): Approval {
+        const ask = this.asks.get(a) ?? this.approval(a)
+        this.asks.set(a, ask)
+        return ask
     }
 
     private compile(r: GGAuthzRule, onUnknown?: OnUnknownAction): Rule {
-        return {
-            actions: expandActions(this.actions, r.actions, onUnknown),
-            resources: matchers(r.resources),
-            when: r.when,
-            unless: r.unless,
-            conditions: r.conditions,
-            source: r,
-        }
+        return {...this.matchable(r, onUnknown), source: r}
     }
 
     private approval(a: Conditional & {actions: string[], resources?: string[], level: GGAuthzApprovalLevel, locked?: boolean, ref?: string}, onUnknown?: OnUnknownAction): Approval {
-        return {
-            actions: expandActions(this.actions, a.actions, onUnknown),
-            resources: matchers(a.resources),
-            when: a.when,
-            unless: a.unless,
-            conditions: a.conditions,
-            level: GG_AUTHZ_APPROVAL_LEVELS.indexOf(a.level),
-            locked: a.locked === true,
-            ref: a.ref,
-        }
+        return {...this.matchable(a, onUnknown), level: GG_AUTHZ_APPROVAL_LEVELS.indexOf(a.level), locked: a.locked === true, ref: a.ref}
+    }
+
+    private matchable(m: Conditional & {actions: string[], resources?: string[]}, onUnknown?: OnUnknownAction): Matchable {
+        return {actions: expandActions(this.actions, m.actions, onUnknown), resources: matchers(m.resources), when: m.when, unless: m.unless, conditions: m.conditions}
     }
 }
 
