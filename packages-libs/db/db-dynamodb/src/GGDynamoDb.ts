@@ -307,7 +307,14 @@ export class GGDynamoDb {
                     if (name) wrapped.name = name
                     throw wrapped
                 }
-                for (const listener of this.succeeded) listener({name: context.commandName ?? "", input: args.input as Record<string, unknown>})
+                for (const listener of this.succeeded) {
+                    try {
+                        listener({name: context.commandName ?? "", input: args.input as Record<string, unknown>})
+                    } catch (err) {
+                        // The command already happened: failing it now would have its caller retry a done write.
+                        GGLog.error(this, "An onSucceeded listener threw", {name: this.config.name, error: err instanceof Error ? err.message : String(err)})
+                    }
+                }
                 return result
             },
             {step: "initialize", name: "ggTableErrorContext", override: true},
