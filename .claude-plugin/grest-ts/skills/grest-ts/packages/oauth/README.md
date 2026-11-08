@@ -33,6 +33,11 @@ kind: audience, claims and TTL. A token for one resource is therefore rejected b
 Every resource must set its own `audience` (the constructor refuses otherwise): with a shared signer,
 the audience is the only thing that tells the tokens apart.
 
+A token's `aud` is `[kind audience, the exact resource URL it was requested for]`. Under a resource with
+`subPaths: true`, every plain URL (no query, fragment, `//`, `.` or `..`) is a resource of its own too (e.g.
+`/mcp/work` under `/mcp`): same token kind, so the kind's wire accepts the token anywhere, but `protect`
+only at that URL.
+
 ```ts
 import {GGOAuthServer, type GGOAuthResource} from "@grest-ts/oauth"
 import {DynamoOAuthStore} from "@grest-ts/oauth/dynamodb"
@@ -50,7 +55,12 @@ const mcp: GGOAuthResource<McpClaims> = {
     resource: () => `${config.issuerUrl.get()}/mcp`,   // exactly the URL users enter
     accessToken: mcpToken,                             // e.g. audience "app-mcp"
     scopes: ["mcp"],
-    claims: async (subject) => ({permissions: []}),
+    subPaths: true,                                    // /mcp/<label>: a client can add it more than once
+    // The org the user picked at consent (below); membership is re-checked at every issuance.
+    claims: async (subject, client) => {
+        const orgId = client.grant?.data.orgId
+        return orgId && await orgs.isMember(orgId, subject) ? {orgId} : undefined
+    },
 }
 
 const oauth = new GGOAuthServer({
@@ -64,11 +74,22 @@ const oauth = new GGOAuthServer({
     // dynamicRegistration: true,                  // open RFC 7591 registration — anyone, any name
 })
 oauth.mount(httpServer)                            // /oauth/* + /.well-known/* (incl. every resource's metadata), announced to discovery
-oauth.protect(httpServer, mcp, "/mcp", handleMcp)  // 401 + resource metadata, then your handler
+oauth.protect(httpServer, mcp, "/mcp", handleMcp)  // /mcp and /mcp/*: 401 + resource metadata, then your handler
 ```
 
 `claims` works like the `resolve` callback of `GGAuthRefreshToken.refresh`: role changes apply on
 the next refresh, and a deleted or deactivated user's OAuth session ends there.
+
+**Grants.** A user's token is issued under a grant, revocable on its own. A third-party client's grant is
+the user's grant to that client for one resource URL: authorizing that URL again (e.g. after the refresh
+token expired) reuses it, silently when its scopes cover the request, and a client added at two URLs
+(`/mcp/work` and `/mcp/home`) holds two. `claims` gets it as `client.grant`: `{grantId, data}`, where `data`
+is what the consent page passed to `consent(data)` when the grant was made, `{}` for a first-party client
+(handle that in `claims`). The data is stored in the grant's own row, written and revoked with it, and never
+changes: to act differently (e.g. in another org), add the client at another URL or revoke the grant.
+`grant(subject, grantId)` reads one of the subject's grants (`{grantId, accountId, clientId, clientName, data}`,
+`undefined` once revoked or expired). A grant lives 365 days from its first consent, however much it is
+used: then the connection ends and the user consents again. A service token has no grant.
 
 A user's access token carries `auth_time` (OIDC: when the user signed in, epoch seconds; a refresh
 and a silent re-authorization keep it), read as `verify(token).auth_time`. To require a recent
@@ -97,6 +118,7 @@ contract, `GGOAuthServiceApi`, which they call with their secret:
 
 A wrong secret is `NOT_AUTHORIZED`; an invalid or expired subject token is `SUBJECT_TOKEN_INVALID`
 (get a fresh one); a resource the client may not have, or no token for the subject, is `FORBIDDEN`. These are not OAuth grants: `/oauth/token` offers neither `client_credentials` nor token exchange.
+Their tokens carry only the kind's audience, never a resource URL, so `protect` refuses them.
 
 ```ts
 const org: GGOAuthResource<OrgClaims> = {
@@ -118,7 +140,8 @@ const ledger = LedgerApi.createClient({wires: [{wire: SERVICE_TOKEN_WIRE, value:
 
 **Resource server only.** A service that accepts the tokens but doesn't run the authorization server
 uses `GGOAuthResourceServer({authorizationServer, resources})`: `mount` serves each resource's RFC 9728
-metadata and `protect` answers a missing or invalid token with the discovery challenge. Its resources'
+metadata and `protect` answers a missing or invalid token with the discovery challenge. Define each resource
+as the authorization server does (same `resource`, `scopes` and `subPaths`). Its resources'
 `accessToken` only verifies: a `GGAuthAccessToken` on a `JwksVerifier` (from `@grest-ts/auth`) reading
 the issuer's `/oauth/access-token-jwks`. `accessTokenJwksUrl(url?)` gives that URL: on `url`, or on the
 server discovery finds for `GGOAuthServiceApi`, since `mount` serves both (`new JwksVerifier({jwks: accessTokenJwksUrl()})`).
@@ -145,9 +168,13 @@ Cached service tokens are dropped before each test, so a token from one test nev
 `protect(server, resource, path, handler)` puts `path` behind the resource's token. It also
 provides the discovery handshake MCP clients run:
 
-- A request without a valid token gets `401 WWW-Authenticate: Bearer resource_metadata="…/.well-known/oauth-protected-resource{resource path}", scope="…"`.
-- That metadata (RFC 9728) names this server and the resource's scopes. `mount` publishes it for
-  every resource, protected or not, at the resource URL's path under that prefix.
+- `path` is the resource URL's path. With `subPaths`, `path/*` is served too: each plain URL under it is its own resource,
+  so a client can add `/mcp/<label>` more than once, each a separate grant. A request needs a token issued
+  for exactly its URL. The label means nothing else to the server; keep what a connection is on its grant.
+- A request without a valid token gets `401 WWW-Authenticate: Bearer resource_metadata="…/.well-known/oauth-protected-resource{request path}", scope="…"`.
+- That metadata (RFC 9728) names exactly that URL as the resource, this server and the resource's scopes.
+  `mount` publishes it for every resource, protected or not, at the resource URL's path under that prefix,
+  and for one with `subPaths` at every plain path below it (the innermost resource answers).
 - Your handler receives the verified token payload. For example, run the official MCP SDK's
   `StreamableHTTPServerTransport` on the raw `req`/`res`.
 
@@ -156,9 +183,9 @@ provides the discovery handshake MCP clients run:
 | Client | How it's known | Consent |
 |---|---|---|
 | First-party (`firstPartyClients`) | Pre-registered | None; silent while the login session lives |
-| Client ID Metadata Document under `allowedUrlPrefixes` (https, default port) | `client_id` is its document URL, fetched by the server | Once per grant |
+| Client ID Metadata Document under `allowedUrlPrefixes` (https, default port) | `client_id` is its document URL, fetched by the server | Once per grant (one per resource URL) |
 | Loopback / CLI (no `application_type` declared → native) | Any port on `localhost`/`127.0.0.1` matches | **Every** authorization: any local process could claim the redirect |
-| Dynamic registration (opt-in) | `POST /oauth/register` | Once per grant |
+| Dynamic registration (opt-in) | `POST /oauth/register` | Once per grant (one per resource URL) |
 
 ### Login and consent pages
 
@@ -180,6 +207,9 @@ const renderSignIn = async ({interaction, action, method, form, html, login, con
 
 - `interaction.prompt` is `"login"` (no login session, `prompt=login` or an expired `max_age`) or `"consent"`: a signed-in `accountId` approves a
   third-party client. Show the client's name and redirect hosts, and warn when `loopbackOnly` is set.
+- `consent(data?)` grants on the user's grant to the client for the requested resource URL. Only a new
+  grant takes `data` (e.g. the org the user picked on the page); an existing one keeps what it has.
+  `claims` and `grant()` read it back.
 - A first-party client never gets a consent prompt: it re-authorizes silently while the login
   session lives (single sign-on).
 - The request reaches your code only from the browser that started the flow (it holds the
@@ -352,8 +382,8 @@ api.createClient({wires: [{wire: USER_TOKEN_WIRE, value: () => tokens.accessToke
   client-controlled). A flow reached on another origin of the server (e.g. localhost behind a router)
   works only in browsers that send `Sec-Fetch-Site`.
 - The issuer is an origin. Clients bind to it, so changing it disconnects them.
-- Resource metadata is served by the resource URL's path on any host, so give each resource its
-  own path (e.g. the API at `/` and MCP at `/mcp`).
+- Resource metadata is served by the resource URL's path (and, with `subPaths`, the paths below it) on any host, so give
+  each resource its own path (e.g. the API at `/` and MCP at `/mcp`).
 - Endpoints in the metadata follow the request host. Serve the issuer host directly or keep
   `Host` through your proxy, and pass `proxy: true` behind a TLS-terminating load balancer (it trusts
   `X-Forwarded-Proto`; `X-Forwarded-Host` is always ignored — clients can send it).
