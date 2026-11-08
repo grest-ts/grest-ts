@@ -32,4 +32,10 @@ describe("onSucceeded", () => {
         await client.send(new PutItemCommand({TableName: "t", Item: {id: {S: "b"}}}))
         expect(heard).toEqual([{name: "PutItemCommand", input: {TableName: "t", Item: {id: {S: "a"}}}}])
     })
+
+    it("a listener that throws doesn't fail the command, which already happened", async () => {
+        const {db, raw} = stubDb()
+        db.onSucceeded(() => { throw new Error("listener broke") })
+        await expect(raw().send(new PutItemCommand({TableName: "t", Item: {id: {S: "a"}}}))).resolves.toBeDefined()
+    })
 })
