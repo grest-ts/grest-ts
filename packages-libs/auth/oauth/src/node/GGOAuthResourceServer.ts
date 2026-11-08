@@ -1,5 +1,4 @@
 import type {IncomingMessage, ServerResponse} from "node:http"
-import {decodeJwt} from "jose"
 import type {GGHttpServer} from "@grest-ts/http"
 import {SERVER_ERROR} from "@grest-ts/schema"
 import type {GGAccessPayload, GGAuthAccessToken, TokenVerifier} from "@grest-ts/auth"
@@ -65,7 +64,7 @@ export class GGOAuthResourceServer<R extends GGOAuthProtectedResource<any> = GGO
                     return
                 }
             }
-            if (!token || ![decodeJwt(bearer!).aud].flat().some(aud => URL.parse(String(aud))?.href === url)) {
+            if (!token?.aud.some(aud => URL.parse(aud)?.href === url)) {
                 res.writeHead(401, {
                     "www-authenticate": `Bearer resource_metadata="${resourceMetadataUrl(url)}", scope="${resource.scopes.join(" ")}"${auth ? `, error="invalid_token"` : ""}`,
                 })

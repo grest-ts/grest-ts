@@ -5,6 +5,8 @@ import {GGAccessTokenData, GGAuthSubject, IsGGAccessTokenData} from "../../share
 export type GGAccessPayload<C extends object> = {
     data: C
     sub: GGAuthSubject
+    /** Every audience the token names, this token's own among them. */
+    aud: readonly string[]
     /** seconds (JWT convention). */
     iat: number
     /** seconds (JWT convention). */
@@ -63,7 +65,8 @@ export class GGAuthAccessToken<C extends object, S extends TokenVerifier = Token
         const sub = payload["sub"]
         if (typeof sub !== "string") throw new NOT_AUTHORIZED({debugMessage: "TOKEN_INVALID: missing sub"})
         if (typeof payload["exp"] !== "number") throw new NOT_AUTHORIZED({debugMessage: "TOKEN_INVALID: missing exp"})
-        if (![payload["aud"]].flat().includes(this.audience)) {
+        const aud = [payload["aud"]].flat().filter(a => typeof a === "string")
+        if (!aud.includes(this.audience)) {
             throw new NOT_AUTHORIZED({debugMessage: "TOKEN_INVALID: wrong audience"})
         }
         if (this.issuer && payload["iss"] !== this.issuer()) {
@@ -73,6 +76,7 @@ export class GGAuthAccessToken<C extends object, S extends TokenVerifier = Token
         return {
             data: Object.freeze(claims),
             sub,
+            aud: Object.freeze(aud),
             iat: Number(payload["iat"]),
             exp: payload["exp"],
             ...(typeof payload["auth_time"] === "number" ? {auth_time: payload["auth_time"]} : {}),
