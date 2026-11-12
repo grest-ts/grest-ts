@@ -4,11 +4,6 @@ Status: **proposal**, for discussion before anything is built. The driver is kra
 retention and grace-period tests seed old timestamps, inject `now`, or wait in real time. The
 problem applies to any grest-ts app whose tests run runtimes with `GGTest.startWorker`.
 
-This document replaces `docs/plans/SPEC-TESTS_CONTROLLING_TIME.md`. That spec moved container
-clocks with `docker exec date -s`. Containers share the host kernel's `CLOCK_REALTIME`: Linux
-time namespaces cover only `MONOTONIC` and `BOOTTIME`. With `SYS_TIME`, that command sets the
-host's clock. Delete the old spec when this one is accepted.
-
 ## Problem
 
 - `vi.useFakeTimers` patches the globals of one isolate. Each `startWorker` runtime has its
@@ -221,7 +216,9 @@ production does after a VM pause: overdue timers fire once.
 ## 3. Databases and external services
 
 **Principle: the fake clock is the app's clock. A server that reads its own clock is outside
-it.** The pattern that makes code testable is the one that's already correct in production: the
+it.** Moving a container's clock isn't an option either: containers share the host kernel's
+`CLOCK_REALTIME` (Linux time namespaces cover only `MONOTONIC` and `BOOTTIME`), so `date -s` in
+a container sets the host's clock. The pattern that makes code testable is the one that's already correct in production: the
 app decides time and passes it in.
 
 | Case | Covered? | Recommended pattern |
