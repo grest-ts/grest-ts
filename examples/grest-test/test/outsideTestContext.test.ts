@@ -15,3 +15,15 @@ describe("a test call outside the testkit's context", () => {
         await client.named({id: "a"}).toEqual("real:a")
     })
 })
+
+describe("a hook or test that returns a test call without awaiting it", () => {
+    GGTest.startWorker(MockableRuntime)
+    const client = callOn(MockableApi)
+
+    describe("nested", () => {
+        beforeAll(() => client.named({id: "a"}).toEqual("real:a"))
+        afterAll(() => client.named({id: "a"}).toEqual("real:a"))
+
+        test("runs it inside the context", () => client.named({id: "a"}).toEqual("real:a"))
+    })
+})
