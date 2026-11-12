@@ -1,4 +1,4 @@
-import {callOn, GGCallInterceptor, GGTest, mockOf} from "@grest-ts/testkit"
+import {callOn, GGCallInterceptor, GGTest, mockOf, spyOn} from "@grest-ts/testkit"
 import {mockable} from "@grest-ts/testkit-runtime"
 import {SERVER_ERROR} from "@grest-ts/schema"
 import {MockableRuntime} from "../src/MockableRuntime"
@@ -11,28 +11,44 @@ describe("mockOf on a @mockable class", () => {
 
     describe("the input matchers and andReturn callbacks see", () => {
 
-        test("a single object argument as itself", async () => {
+        test("an only argument as itself", async () => {
             await client.lookup({id: "a"})
                 .with(mockOf(Upstream).lookup.toEqual({id: "a"}).andReturn(input => "mocked:" + input.id))
                 .toEqual("mocked:a")
         })
 
-        test("a destructured single argument as itself", async () => {
+        test("an only argument as itself, also when destructured or a primitive", async () => {
             await client.tagged({id: "a", tag: "t"})
                 .with(mockOf(Upstream).tagged.toEqual({id: "a", tag: "t"}).andReturn(({id, tag}) => `mocked:${id}:${tag}`))
                 .toEqual("mocked:a:t")
+            await client.named({id: "a"})
+                .with(mockOf(Upstream).named.toEqual("a").andReturn(id => "mocked:" + id))
+                .toEqual("mocked:a")
         })
 
-        test("several arguments keyed by parameter name", async () => {
+        test("several arguments as a tuple", async () => {
             await client.pair({id: "a", count: 2})
-                .with(mockOf(Upstream).pair.toEqual({id: "a", count: 2}).andReturn(({id, count}) => `mocked:${id}x${count}`))
+                .with(mockOf(Upstream).pair.toEqual(["a", 2]).andReturn(([id, count]) => `mocked:${id}x${count}`))
                 .toEqual("mocked:ax2")
         })
+    })
 
-        test("a single primitive argument keyed by parameter name", async () => {
-            await client.named({id: "a"})
-                .with(mockOf(Upstream).named.toEqual({id: "a"}).andReturn(({id}) => "mocked:" + id))
+    describe("an async function field is mocked like a method", () => {
+
+        test("mockOf", async () => {
+            await client.field({id: "a", count: 2})
+                .with(mockOf(Upstream).field.toEqual(["a", 2]).andReturn(([id]) => "mocked:" + id))
                 .toEqual("mocked:a")
+        })
+
+        test("spyOn", async () => {
+            await client.field({id: "a", count: 2})
+                .with(spyOn(Upstream).field.toEqual(["a", 2]).responseToMatchObject("real:ax2"))
+                .toEqual("real:ax2")
+        })
+
+        test("unmocked, it runs for real", async () => {
+            await client.field({id: "a", count: 2}).toEqual("real:ax2")
         })
     })
 
@@ -77,7 +93,7 @@ describe("mockOf on a @mockable class", () => {
 
     test("an async callback's result is awaited", async () => {
         await client.named({id: "a"})
-            .with(mockOf(Upstream).named.andReturn(async ({id}) => {
+            .with(mockOf(Upstream).named.andReturn(async id => {
                 await new Promise(resolve => setTimeout(resolve, 10))
                 return "late:" + id
             }))
@@ -94,7 +110,7 @@ describe("mockOf on a @mockable class", () => {
 
         test("allows several calls", async () => {
             const interceptor = mockOf(Upstream).named.anyTimes().andReturn("mocked").createInterceptor() as GGCallInterceptor
-            for (let i = 0; i < 3; i++) await interceptor.onRequest({id: "a"})
+            for (let i = 0; i < 3; i++) await interceptor.onRequest("a")
             expect(() => interceptor.validate()).not.toThrow()
         })
     })
@@ -123,8 +139,8 @@ describe("mockOf on a @mockable class", () => {
 
 describe("what @mockable can't intercept fails loudly", () => {
 
-    test("a method declared as a class field", () => {
-        expect(() => mockOf(Upstream).field).toThrow(/Upstream\.field is not mockable/)
+    test("a sync method", () => {
+        expect(() => mockOf(Upstream).label).toThrow(/Upstream\.label is not mockable: @mockable intercepts async methods only/)
     })
 
     test("a class without @mockable", () => {
@@ -132,17 +148,32 @@ describe("what @mockable can't intercept fails loudly", () => {
             async run(): Promise<void> {
             }
         }
-        expect(() => mockOf(Plain).run).toThrow(/Plain\.run is not mockable/)
+        expect(() => mockOf(Plain).run).toThrow(/Plain\.run is not mockable: Plain has no @mockable/)
+    })
+})
+
+describe("@mockable in production code", () => {
+
+    test("keeps the class's name, statics and instanceof", () => {
+        @mockable
+        class Service {
+            static readonly KIND = "service"
+        }
+        expect(Service.name).toBe("Service")
+        expect(Service.KIND).toBe("service")
+        expect(new Service()).toBeInstanceOf(Service)
     })
 
-    test("a method with a destructured parameter among several: mocks can't name its arguments", () => {
+    test("constructs a frozen instance, leaving its fields as they are", async () => {
         @mockable
-        class Broken {
-            async run(id: string, {tag}: {tag: string}): Promise<string> {
-                return id + tag
+        class Frozen {
+            run = async () => "real"
+
+            constructor() {
+                Object.freeze(this)
             }
         }
-        expect(() => mockOf(Broken).run).toThrow(/Broken\.run can't be mocked/)
+        expect(await new Frozen().run()).toBe("real")
     })
 })
 
@@ -165,24 +196,30 @@ describe("mockOf's access object", () => {
         expect(mockOf(Deferred).then.createInterceptor()).toBeDefined()
     })
 
-    test("reads parameter names around comments", () => {
+    test("counts parameters around comments, so an only argument stays itself", async () => {
         const Commented = mockable(new Function(`return class Commented {
-            async run(id /* org, not user */, // a, b
-                      count) {
-                return id + count
+            async run(input /* org, not user */ // a, b
+            ) {
+                return input
             }
-        }`)()) as new () => {run(id: string, count: number): Promise<string>}
-        expect(() => mockOf(Commented).run).not.toThrow()
+        }`)()) as new () => {run(input: {id: string}): Promise<unknown>}
+        const interceptor = mockOf(Commented).run.toEqual({id: "a"}).createInterceptor() as GGCallInterceptor
+        await expect(interceptor.onRequest({id: "a"})).resolves.toBeUndefined()
     })
 
-    test("types a single optional object parameter as the object", () => {
+    test("types an optional only argument as itself or undefined, and several as a tuple", () => {
         @mockable
-        class Optional {
-            async run(_opts?: {x: number}): Promise<void> {
+        class Typed {
+            async optional(_opts?: {x: number}): Promise<void> {
+            }
+
+            async several(_id: string, _count: number): Promise<void> {
             }
         }
         // @ts-expect-error not a field of the argument
-        mockOf(Optional).run.toMatchObject({y: 1})
-        expect(() => mockOf(Optional).run.toMatchObject({x: 1})).not.toThrow()
+        mockOf(Typed).optional.toMatchObject({y: 1})
+        // @ts-expect-error the tuple's second item is a number
+        mockOf(Typed).several.toEqual(["a", "b"])
+        expect(() => mockOf(Typed).optional.toMatchObject({x: 1})).not.toThrow()
     })
 })

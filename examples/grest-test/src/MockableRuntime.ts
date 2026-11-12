@@ -33,6 +33,8 @@ class MockableApiImpl {
     public pair = async ({id, count}: {id: string, count: number}) => this.upstream.pair(id, count)
 
     public named = async ({id}: {id: string}) => this.upstream.named(id)
+
+    public field = async ({id, count}: {id: string, count: number}) => this.upstream.field(id, count)
 }
 
 MockableRuntime.cli(import.meta.url).then()

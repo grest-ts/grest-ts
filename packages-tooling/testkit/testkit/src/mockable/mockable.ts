@@ -9,21 +9,21 @@
 import {GGMockableInterceptor} from "./GGMockableInterceptor";
 import {GGMockWith} from "../testers/GGMockWith";
 import {GGSpyWith} from "../testers/GGSpyWith";
-import {mockableMethod} from "@grest-ts/testkit-runtime";
+import {mockableClassName} from "@grest-ts/testkit-runtime";
 import type {ANY_ERROR} from "@grest-ts/schema";
 
 // ============================================================================
 // Type helpers for mockBy/spyOn
 // ============================================================================
 
-/** A single object argument as itself; anything else keyed by parameter name. */
+/** What a mock's matchers and `andReturn` callback get: a method's only argument itself, otherwise its arguments as a tuple. */
 type MockInput<A extends any[]> = A extends []
-    ? Record<string, any>
-    : A extends [(infer Single)?]
-        ? SingleInput<[] extends A ? Single | undefined : Single>
-        : Record<string, any>;
-
-type SingleInput<Single> = Single extends object ? Single : Record<string, Single>;
+    ? []
+    : A extends [infer Only]
+        ? Only
+        : A extends [(infer Only)?]
+            ? Only | undefined
+            : A;
 
 type MockAccess<T> = {
     [K in keyof T]: T[K] extends (...args: infer A) => Promise<infer R>
@@ -37,25 +37,12 @@ type SpyAccess<T> = {
         : never
 };
 
-/** Read by `await` and by inspection (pretty-format, JSON), so not taken for a method when the class has none by that name. */
+/** Read by `await` and by inspection (pretty-format, JSON), so not taken for a mockable field when the class has no such method. */
 const PROBED_KEYS = new Set(["then", "toJSON", "asymmetricMatch", "$$typeof", "nodeType"]);
 
 function interceptorConfig(cls: Function, methodName: string): {className: string, methodName: string} | undefined {
-    const method = mockableMethod(cls, methodName);
-    if (!method && PROBED_KEYS.has(methodName)) return undefined;
-    if (!method) {
-        throw new Error(
-            `${cls.name}.${methodName} is not mockable. @mockable intercepts only async methods declared in the body of a decorated class: ` +
-            `not class fields (\`${methodName} = async () => …\`), sync methods, or methods of a class without @mockable.`
-        );
-    }
-    if (method.unnamedParams) {
-        throw new Error(
-            `${cls.name}.${methodName} can't be mocked: mocks key its arguments by parameter name, and a destructured parameter among several has none. ` +
-            `Take it whole (\`(a, input: {x, y})\`) and destructure it in the body.`
-        );
-    }
-    return {className: method.className, methodName};
+    if (PROBED_KEYS.has(methodName) && typeof cls.prototype?.[methodName] !== "function") return undefined;
+    return {className: mockableClassName(cls, methodName), methodName};
 }
 
 function accessProxy(cls: Function, tester: (config: {className: string, methodName: string}) => unknown): any {

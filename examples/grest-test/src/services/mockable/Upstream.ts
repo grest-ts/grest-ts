@@ -22,5 +22,9 @@ export class Upstream {
         return "real:" + id
     }
 
-    field = async (id: string): Promise<string> => "real:" + id
+    field = async (id: string, count: number): Promise<string> => `real:${id}x${count}`
+
+    label(id: string): string {
+        return "label:" + id
+    }
 }

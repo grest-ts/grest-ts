@@ -358,7 +358,7 @@ import {GGTest, mockOf} from "@grest-ts/testkit";
 test('mock external service', async () => {
     await alice.checklist.add({title: "Visit Times Square", address: "123 Main St"})
         .with(mockOf(AddressResolverService).resolveAddress
-            .toEqual({address: "123 Main St"})              // Validate input
+            .toEqual("123 Main St")              // Validate input
             .andReturn({lat: 40.7589, lng: -73.9851})       // Return fake data
         )
         .toMatchObject({
@@ -377,7 +377,7 @@ import {GGTest, spyOn} from "@grest-ts/testkit";
 test('spy on external service', async () => {
     await alice.checklist.add({title: "Visit Times Square", address: "123 Main St"})
         .with(spyOn(AddressResolverService).resolveAddress
-            .toEqual({address: "123 Main St"})                      // Validate input
+            .toEqual("123 Main St")                      // Validate input
             .responseToMatchObject({lat: 40.7128, lng: -74.0060})   // Validate real response
         );
 });
@@ -417,7 +417,7 @@ test('spy on external service', async () => {
 
 // Spy switching to response validation
 .with(spyOn(Service).method
-    .toMatchObject({input: "data"})     // Validate input
+    .toMatchObject({id: "a"})           // Validate input
     .response.toMatchObject({out: 1})   // Switch to response, then validate
 )
 
@@ -429,19 +429,18 @@ test('spy on external service', async () => {
 
 ### What the input matchers see
 
-`toEqual` / `toMatchObject` and an `andReturn` callback get the method's arguments in one value:
+`toEqual` / `toMatchObject` and an `andReturn` callback get the method's arguments in one value, typed from its
+signature:
 
 | Method | Input |
 |---|---|
-| `run(input: {id: string})`, `run({id}: {id: string})` | the object itself: `{id}` |
-| `get(id: string)` | keyed by parameter name: `{id}` |
-| `pair(id: string, count: number)` | keyed by parameter name: `{id, count}` |
+| `run(input: {id: string})`, `run({id}: {id: string})` | the argument itself: `{id}` |
+| `get(id: string)` | the argument itself: `"a"` |
+| `pair(id: string, count: number)` | the arguments as a tuple: `["a", 2]` |
 
-A method with several parameters can't destructure one of them in its signature (there is no name to key it by), and
-`mockOf(S).x` throws for it. Take it whole and destructure in the body.
-
-`@mockable` wraps only async methods declared in the class body. `mockOf(S).x` throws when `x` isn't one: a class field
-(`x = async () => …`), a sync method, or a class without `@mockable`.
+`@mockable` intercepts async methods and async function fields (`run = async (…) => …`). `mockOf(S).x` throws for a
+sync method or a class without `@mockable`. Fields are wrapped when an instance is constructed; fields declared by a
+subclass of a `@mockable` class need `@mockable` on that subclass too.
 
 ### Schema mock/spy vs @mockable mock/spy
 

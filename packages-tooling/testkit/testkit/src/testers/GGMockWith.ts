@@ -5,7 +5,7 @@ import {Raw} from "@grest-ts/schema";
 import {GG_TEST_RUNNER, GGTestRunner} from "../GGTestRunner";
 import {IGGTestWith} from "./IGGTestWith";
 import {IGGTestInterceptor} from "./IGGTestInterceptor";
-import {GGCallInterceptor, GGCallInterceptorConfig} from "./GGCallInterceptor";
+import {GGCallInterceptor, GGCallInterceptorConfig, GGCallTimes} from "./GGCallInterceptor";
 
 type InterceptorFactory = new (runner: GGTestRunner, config: any) => GGCallInterceptor;
 
@@ -17,7 +17,7 @@ export class GGMockWith<RequestBody = any, ResponseData = any, ErrorsUnion = any
     private readonly interceptorConfig: Record<string, any>;
     private readonly definedInSourceFile: string;
     private _sleep: number = 0;
-    private _times: number = 1;
+    private _times: GGCallTimes = {min: 1, max: 1};
     private _within?: number;
 
     private readonly expectations: GGExpectations<RequestBody> = new GGExpectations();
@@ -59,13 +59,13 @@ export class GGMockWith<RequestBody = any, ResponseData = any, ErrorsUnion = any
     }
 
     public times(amount: number): this {
-        this._times = amount;
+        this._times = {min: amount, max: amount};
         return this;
     }
 
     /** Allow any number of calls, none included. */
     public anyTimes(): this {
-        this._times = Infinity;
+        this._times = {min: 0, max: Infinity};
         return this;
     }
 

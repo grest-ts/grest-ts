@@ -50,30 +50,34 @@ export function runWithMockableContext<T>(ctx: MockableTestContext, fn: () => T)
 // ============================================================================
 
 const MOCKABLE_WRAPPED = Symbol('GGMockableWrapped');
+const MOCKABLE_CLASS = Symbol('GGMockableClass');
 
-interface ParamInfo {
-    /** Undefined for a destructured parameter. */
-    name: string | undefined;
-    rest: boolean;
-}
-
-/** Top-level parameters of a function, read from its source; destructuring, defaults and nesting aware. */
-function parseParams(fn: Function): ParamInfo[] {
+/**
+ * Whether a function declares exactly one parameter, read from its source (comments, strings, defaults and
+ * destructuring aware). Mocks see that argument itself; otherwise the arguments as a tuple.
+ */
+function takesOneArgument(fn: Function): boolean {
     const src = fn.toString();
+    if (/^async\s+[\w$]+\s*=>/.test(src)) return true;
     const open = src.indexOf('(');
-    if (open < 0) return [];
-    const parts: string[] = [];
-    let depth = 0, current = '', quote: string | undefined;
+    if (open < 0) return false;
+    let depth = 0, params = 0, rest = false, current = '', quote: string | undefined;
+    const endParam = () => {
+        if (current.trim()) {
+            params++;
+            rest = current.trim().startsWith('...');
+        }
+        current = '';
+    };
     for (let i = open + 1; i < src.length; i++) {
         const ch = src[i];
         if (quote) {
-            current += ch;
-            if (ch === '\\') current += src[++i];
+            if (ch === '\\') i++;
             else if (ch === quote) quote = undefined;
             continue;
         }
         if (ch === '\\') {
-            current += ch + src[++i];
+            i++;
             continue;
         }
         if (ch === '/' && (src[i + 1] === '*' || src[i + 1] === '/')) {
@@ -87,50 +91,13 @@ function parseParams(fn: Function): ParamInfo[] {
             if (depth === 0) break;
             depth--;
         } else if (ch === ',' && depth === 0) {
-            parts.push(current);
-            current = '';
+            endParam();
             continue;
         }
         current += ch;
     }
-    parts.push(current);
-    return parts
-        .map(p => p.trim())
-        .filter(p => p.length > 0)
-        .map(p => {
-            const rest = p.startsWith('...');
-            const name = p.replace(/^\.\.\./, '').split('=')[0].trim();
-            return {name: /^[A-Za-z_$][\w$]*$/.test(name) ? name : undefined, rest};
-        });
-}
-
-/**
- * What mock matchers and `andReturn` callbacks see, matching `mockOf`'s types:
- * a single object argument as itself, anything else keyed by parameter name.
- */
-function argsToMockInput(args: any[], params: ParamInfo[], sole: boolean): any {
-    const single = args[0];
-    const isObject = (typeof single === 'object' && single !== null) || typeof single === 'function';
-    if (sole && (isObject || params[0].name === undefined)) {
-        return single;
-    }
-    const result: Record<string, any> = {};
-    params.forEach((param, i) => {
-        result[param.name ?? `arg${i}`] = param.rest ? args.slice(i) : args[i];
-    });
-    return result;
-}
-
-export interface MockableMethodInfo {
-    /** The class name the method's calls are intercepted under. */
-    className: string;
-    /** A destructured parameter among several: mocks can't key its arguments by name. */
-    unnamedParams: boolean;
-}
-
-/** How `@mockable` intercepts `cls.prototype[methodName]`, or undefined when it doesn't. */
-export function mockableMethod(cls: Function, methodName: string): MockableMethodInfo | undefined {
-    return cls.prototype?.[methodName]?.[MOCKABLE_WRAPPED];
+    endParam();
+    return params === 1 && !rest;
 }
 
 /**
@@ -145,61 +112,49 @@ function isAsyncFunction(fn: Function): boolean {
 }
 
 /**
- * Wrap a method to intercept calls in test mode.
- * Only wraps async methods - sync methods are not mockable to preserve calling semantics.
+ * Wrap an async method or field to intercept calls in test mode.
+ * Only async ones are wrapped - sync methods are not mockable to preserve calling semantics.
+ * @TODO XXAsyncMethodIssue
+ * @TODO Right now mocks go back to test to see "whats up", but we should actually sync mocks info to the service before the call, so even for sync methods we can resolve the mock data.
+ * @TODO This has a drawback of losing "central brain" control though, as each mock is no instance bound.
  */
-function wrapMethod(cls: any, methodName: string): void {
-    // Skip if already wrapped
-    if (cls.prototype[methodName]?.[MOCKABLE_WRAPPED]) {
-        return;
-    }
-
-    const originalMethod = cls.prototype[methodName];
-
-    // Only wrap async methods - sync helper methods shouldn't be intercepted
-    // because making them async would break calling code that doesn't await them
-    // @TODO XXAsyncMethodIssue
-    // @TODO Having this is literally bad, we need to change how mock logic works.
-    // @TODO Right now mocks go back to test to see "whats up", but we should actually sync mocks info to the service before the call, so even for sync methods we can resolve the mock data.
-    // @TODO This has a drawback of losing "central brain" control though, as each mock is no instance bound.
-    // @TODO This whole idea needs thinking
-    if (!isAsyncFunction(originalMethod)) {
-        return;
-    }
-
-    const params = parseParams(originalMethod);
-    const sole = params.length === 1 && !params[0].rest;
-    const unnamedParams = !sole && params.some(p => p.name === undefined);
-
-    const wrappedMethod = async function (this: any, ...args: any[]) {
+function intercept(className: string, methodName: string, original: Function, oneArgument: boolean): Function {
+    const wrapped = async function (this: any, ...args: any[]) {
         const ctx = mockableContextStorage.getStore();
 
         // Not in test mode - call original method directly (zero overhead path)
         if (!ctx) {
-            return originalMethod.apply(this, args);
+            return original.apply(this, args);
         }
 
-        // In test mode - go through mock/spy system
-        const callArgs = argsToMockInput(args, params, sole);
-        const result = await ctx.sendCall(cls.name, methodName, callArgs);
-
-        if (result === ctx.CALL_THROUGH) {
-            // Spy mode - call the real method
-            const realResult = await originalMethod.apply(this, args);
-
-            // Report result back for validation
-            await ctx.sendSpyResult(cls.name, methodName, realResult);
-
-            return realResult;
-        } else {
-            // Mock mode - return the mock data
+        const result = await ctx.sendCall(className, methodName, oneArgument ? args[0] : args);
+        if (result !== ctx.CALL_THROUGH) {
             return result;
         }
+        // Spy mode - call the real method and report its result
+        const realResult = await original.apply(this, args);
+        await ctx.sendSpyResult(className, methodName, realResult);
+        return realResult;
     };
+    (wrapped as any)[MOCKABLE_WRAPPED] = className;
+    return wrapped;
+}
 
-    // Mark as wrapped and assign to prototype
-    (wrappedMethod as any)[MOCKABLE_WRAPPED] = {className: cls.name, unnamedParams} satisfies MockableMethodInfo;
-    cls.prototype[methodName] = wrappedMethod;
+/**
+ * The class name mocks of `cls`'s `methodName` are keyed under. Throws when `@mockable` can't intercept it.
+ * A name the prototype doesn't have may be a class field, which only an instance shows, so it is accepted.
+ */
+export function mockableClassName(cls: Function, methodName: string): string {
+    const method = cls.prototype?.[methodName];
+    if (method?.[MOCKABLE_WRAPPED]) return method[MOCKABLE_WRAPPED];
+    const className: string | undefined = (cls as any)[MOCKABLE_CLASS];
+    if (!className) {
+        throw new Error(`${cls.name}.${methodName} is not mockable: ${cls.name} has no @mockable.`);
+    }
+    if (typeof method === 'function') {
+        throw new Error(`${cls.name}.${methodName} is not mockable: @mockable intercepts async methods only.`);
+    }
+    return className;
 }
 
 // ============================================================================
@@ -208,36 +163,52 @@ function wrapMethod(cls: any, methodName: string): void {
 
 /**
  * Decorator to mark a class as mockable in tests.
- * All public async methods will be interceptable via mockBy() or spyOn().
+ * Its async methods and async function fields (`foo = async () => …`) are interceptable via mockOf() or spyOn().
+ * Fields are wrapped when an instance is constructed, so the decorated class is a subclass of the declared one;
+ * fields a subclass of it declares are not wrapped unless that subclass is @mockable too.
  *
  * In production (when not running tests), this decorator has minimal overhead -
- * methods are wrapped but the wrapper immediately calls through to the original.
+ * the wrapper immediately calls through to the original.
  *
  * @example
  * ```typescript
- * import {mockable} from "@grest-ts/testkit/mockable";
+ * import {mockable} from "@grest-ts/testkit-runtime";
  *
  * @mockable
  * export class AddressResolverService {
- *     async resolveAddress(address: string): Promise<LatLng> { ... }
+ *     resolveAddress = async (address: string): Promise<LatLng> => { ... }
  * }
  *
  * // In tests:
- * .with(mockBy(AddressResolverService).resolveAddress
- *     .toEqual({address: "123 Main St"})
+ * .with(mockOf(AddressResolverService).resolveAddress
+ *     .toEqual("123 Main St")
  *     .andReturn({lat: 40.7, lng: -74.0}))
  * ```
  */
 export function mockable<T extends { new(...args: any[]): {} }>(target: T): T {
-    // Get all methods from prototype
+    const className = target.name;
     for (const key of Object.getOwnPropertyNames(target.prototype)) {
-        if (key === 'constructor') continue;
-
-        const descriptor = Object.getOwnPropertyDescriptor(target.prototype, key);
-        if (descriptor && typeof descriptor.value === 'function') {
-            wrapMethod(target, key);
-        }
+        const method = Object.getOwnPropertyDescriptor(target.prototype, key)?.value;
+        if (key === 'constructor' || typeof method !== 'function' || method[MOCKABLE_WRAPPED] || !isAsyncFunction(method)) continue;
+        target.prototype[key] = intercept(className, key, method, takesOneArgument(method));
     }
 
-    return target;
+    // Per field: undefined until seen, null when not async, else whether it takes one argument.
+    const fields = new Map<string, boolean | null>();
+    const mocked = class extends target {
+        constructor(...args: any[]) {
+            super(...args);
+            for (const key of Object.keys(this)) {
+                const descriptor = Object.getOwnPropertyDescriptor(this, key)!;
+                const value = descriptor.value;
+                if (typeof value !== 'function' || !descriptor.writable || value[MOCKABLE_WRAPPED]) continue;
+                if (!fields.has(key)) fields.set(key, isAsyncFunction(value) ? takesOneArgument(value) : null);
+                const oneArgument = fields.get(key);
+                if (oneArgument !== null && oneArgument !== undefined) (this as any)[key] = intercept(className, key, value, oneArgument);
+            }
+        }
+    };
+    Object.defineProperty(mocked, 'name', {value: className, configurable: true});
+    Object.defineProperty(mocked, MOCKABLE_CLASS, {value: className});
+    return mocked;
 }

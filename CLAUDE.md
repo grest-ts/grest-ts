@@ -380,7 +380,7 @@ import {mockable} from "@grest-ts/testkit-runtime"
 
 @mockable
 export class GeocoderService {
-    async resolveAddress(address: string): Promise<{lat: number, lng: number}> {
+    public resolveAddress = async (address: string): Promise<{lat: number, lng: number}> => {
         return await this.geocodingApi.lookup(address)
     }
 }
@@ -388,7 +388,7 @@ export class GeocoderService {
 
 **Rules:**
 - Import `mockable` from `@grest-ts/testkit-runtime` (not `@grest-ts/testkit`).
-- Only **async** methods declared in the class body are interceptable. Sync methods and class fields (`foo = async () => …`) are not wrapped, and `mockOf(S).foo` throws for them.
+- **Async** methods and async arrow-function fields (`foo = async () => …`) are interceptable. Sync methods are not wrapped, and `mockOf(S).foo` throws for them.
 - Zero production overhead — the wrapper only activates when a test context is present.
 - The decorator goes on the production class. It is safe to ship to production.
 
@@ -402,7 +402,7 @@ test("mock external geocoder", async () => {
     await ctx.item.create({title: "Visit Times Square", address: "Times Square"})
         .with(
             mockOf(GeocoderService).resolveAddress
-                .toEqual({address: "Times Square"})          // assert input
+                .toEqual("Times Square")          // assert input
                 .andReturn({lat: 40.758, lng: -73.985})      // return fake data
         )
         .toMatchObject({lat: 40.758})
@@ -412,7 +412,7 @@ test("spy — call through but validate", async () => {
     await ctx.item.create({title: "Visit Times Square", address: "Times Square"})
         .with(
             spyOn(GeocoderService).resolveAddress
-                .toEqual({address: "Times Square"})              // assert input
+                .toEqual("Times Square")              // assert input
                 .responseToMatchObject({lat: 40.758})            // assert real response
         )
 })
@@ -420,7 +420,7 @@ test("spy — call through but validate", async () => {
 
 **Rules:**
 - `mockOf(ServiceClass).methodName` — creates a mock interceptor for that method.
-- `.toEqual(...)` / `.toMatchObject(...)` after `mockOf(S).method` — validates the input the mock received. A single object argument is matched as itself (`run(input: {id})` → `{id}`); otherwise arguments are keyed by parameter name (`get(id: string)` → `{id}`, `pair(a, b)` → `{a, b}`).
+- `.toEqual(...)` / `.toMatchObject(...)` after `mockOf(S).method` — validates the input the mock received. A method's only argument is matched as itself (`run(input: {id})` → `{id}`, `get(id: string)` → `"a"`); several arguments as a typed tuple (`pair(id, count)` → `["a", 2]`).
 - `.andReturn(value)` — the mock returns this value instead of calling real code.
 - `.andReturn(input => value)` — answers each call from its input; may be `async` (e.g. run a competing write, then return).
 - `.andReturn(new MY_ERROR())`, or a callback that throws it — the caller gets `MY_ERROR` thrown, class and data intact.
