@@ -8,7 +8,7 @@ describe("a test call outside the testkit's context", () => {
     const client = callOn(MockableApi)
 
     vitestAfterAll(async () => {
-        await expect(client.named({id: "a"})).rejects.toThrow(/outside the testkit's context.*import \{afterEach\} from "vitest"/)
+        await expect(client.named({id: "a"})).rejects.toThrow(/No GGTest runner here.*a hook \(`afterEach`, …\)/)
     })
 
     test("works inside it", async () => {

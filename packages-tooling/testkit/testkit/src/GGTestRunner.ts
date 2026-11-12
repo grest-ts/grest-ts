@@ -14,7 +14,8 @@ class GGTestRunnerKey extends GGLocatorKey<GGTestRunner> {
         if (!runner) {
             throw new Error(
                 "No GGTest runner here. GGTest.start*/with(...) and other testkit calls work only inside describe() or a test, " +
-                "and need the testkit's global describe: a file that imports `describe` from \"vitest\" bypasses it (drop that import), " +
+                "and need the testkit's global describe and hooks: a file that imports `describe` or a hook (`afterEach`, …) " +
+                "from \"vitest\" bypasses them (drop that import, or use a GGTestContext's hooks), " +
                 "and vitest.config needs setupFiles: [\"@grest-ts/testkit-vitest\"] + globalSetup: [\"@grest-ts/testkit-vitest/globalSetup\"]."
             );
         }

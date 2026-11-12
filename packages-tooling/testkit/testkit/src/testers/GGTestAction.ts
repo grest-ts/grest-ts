@@ -189,13 +189,7 @@ export abstract class GGTestAction<T> implements Promise<T> {
     }
 
     protected async execute(): Promise<T> {
-        if (!GG_TEST_RUNNER.has()) {
-            throw new Error(
-                "This test call runs outside the testkit's context, so it can't reach the runtimes. " +
-                "Is it in a hook imported from \"vitest\" (`import {afterEach} from \"vitest\"`)? " +
-                "Use the global hooks or the GGTestContext ones (`ctx.afterEach(...)`)."
-            );
-        }
+        GG_TEST_RUNNER.get();
         return this.ctx.run(async () => {
             GG_TRACE.init();
             GGLog.info(this,
