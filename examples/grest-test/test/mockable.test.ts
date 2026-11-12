@@ -152,6 +152,17 @@ describe("mockOf's access object", () => {
         const access = mockOf(Upstream)
         expect(await Promise.resolve(access)).toBe(access)
         expect(String(access[Symbol.toStringTag as never])).toBe("undefined")
+        expect(JSON.stringify(access)).toBe("{}")
+    })
+
+    test("still mocks a method named like a probed key", () => {
+        @mockable
+        class Deferred {
+            async then(id: string): Promise<string> {
+                return id
+            }
+        }
+        expect(mockOf(Deferred).then.createInterceptor()).toBeDefined()
     })
 
     test("reads parameter names around comments", () => {

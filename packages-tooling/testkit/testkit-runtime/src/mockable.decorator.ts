@@ -72,6 +72,10 @@ function parseParams(fn: Function): ParamInfo[] {
             else if (ch === quote) quote = undefined;
             continue;
         }
+        if (ch === '\\') {
+            current += ch + src[++i];
+            continue;
+        }
         if (ch === '/' && (src[i + 1] === '*' || src[i + 1] === '/')) {
             const end = src[i + 1] === '*' ? src.indexOf('*/', i + 2) + 1 : src.indexOf('\n', i);
             i = end > 0 ? end : src.length;

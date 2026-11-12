@@ -20,8 +20,10 @@ import type {ANY_ERROR} from "@grest-ts/schema";
 type MockInput<A extends any[]> = A extends []
     ? Record<string, any>
     : A extends [(infer Single)?]
-        ? (Single extends object ? Single : Record<string, Single>)
+        ? SingleInput<[] extends A ? Single | undefined : Single>
         : Record<string, any>;
+
+type SingleInput<Single> = Single extends object ? Single : Record<string, Single>;
 
 type MockAccess<T> = {
     [K in keyof T]: T[K] extends (...args: infer A) => Promise<infer R>
@@ -35,8 +37,12 @@ type SpyAccess<T> = {
         : never
 };
 
-function interceptorConfig(cls: Function, methodName: string): {className: string, methodName: string} {
+/** Read by `await` and by inspection (pretty-format, JSON), so not taken for a method when the class has none by that name. */
+const PROBED_KEYS = new Set(["then", "toJSON", "asymmetricMatch", "$$typeof", "nodeType"]);
+
+function interceptorConfig(cls: Function, methodName: string): {className: string, methodName: string} | undefined {
     const method = mockableMethod(cls, methodName);
+    if (!method && PROBED_KEYS.has(methodName)) return undefined;
     if (!method) {
         throw new Error(
             `${cls.name}.${methodName} is not mockable. @mockable intercepts only async methods declared in the body of a decorated class: ` +
@@ -54,8 +60,10 @@ function interceptorConfig(cls: Function, methodName: string): {className: strin
 
 function accessProxy(cls: Function, tester: (config: {className: string, methodName: string}) => unknown): any {
     return new Proxy({}, {
-        // Not methods: `then`, so the object isn't taken for a promise, and symbols, read by inspection.
-        get: (_, key) => typeof key === "string" && key !== "then" ? tester(interceptorConfig(cls, key)) : undefined
+        get: (_, key) => {
+            const config = typeof key === "string" ? interceptorConfig(cls, key) : undefined;
+            return config && tester(config);
+        }
     });
 }
 
