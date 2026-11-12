@@ -439,8 +439,9 @@ export class GGDynamoDb {
     }
 
     /**
-     * All-or-nothing write of up to 100 items (`GGDynamoDbTypedTable.tx` builds them). Not `ok` when a condition in it
-     * fails; any other cancellation is rethrown.
+     * All-or-nothing write of up to 100 items (`GGDynamoDbTypedTable.tx` builds them). Not `ok` when it was cancelled
+     * only by failed conditions (`conditionFailed` lists those items); any other cancellation reason, alone or beside a
+     * failed condition (a conflicting transaction, throttling), rethrows the TransactionCanceledException.
      */
     async transactWrite(items: GGDynamoDbTransactItem[]): Promise<GGDynamoDbTransactResult> {
         try {
@@ -449,7 +450,8 @@ export class GGDynamoDb {
         } catch (err) {
             const reasons = (err as {CancellationReasons?: {Code?: string}[]}).CancellationReasons ?? []
             const conditionFailed = reasons.flatMap((r, i) => r.Code === "ConditionalCheckFailed" ? [i] : [])
-            if ((err as {name?: string}).name === "TransactionCanceledException" && conditionFailed.length > 0) return {ok: false, conditionFailed}
+            const onlyConditions = reasons.every(r => r.Code === "ConditionalCheckFailed" || r.Code === "None")
+            if ((err as {name?: string}).name === "TransactionCanceledException" && conditionFailed.length > 0 && onlyConditions) return {ok: false, conditionFailed}
             throw err
         }
     }

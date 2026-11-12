@@ -172,9 +172,12 @@ export interface GGDynamoDbIndexDef<A extends string = string, F extends string 
     name?: string
     pk: A
     sk?: A
-    /** A list is DynamoDB's INCLUDE. Default `"ALL"`. With KEYS_ONLY / INCLUDE the table key's inputs are projected too,
-     *  so a row can be addressed. */
+    /** A list is DynamoDB's INCLUDE, kept as named (a table key included). Default `"ALL"`. With KEYS_ONLY / INCLUDE the
+     *  table key's inputs are projected too, so a row can be addressed. */
     projection?: GGDynamoDbProjection<F>
+    /** Stored attributes outside the schema that the live index also projects (a field since retired), so the
+     *  declared index matches the deployed one. Never read back. */
+    retiredAttributes?: readonly string[]
     /** A local secondary index: same `pk` as the table, its own `sk`. Supports `consistentRead`; created with the table
      *  only, and caps each partition (table rows plus index entries) at 10 GB. */
     local?: true
@@ -353,6 +356,9 @@ export class GGDynamoDbTableSpec<
             const indexName = def.name ?? (def.sk ? `${def.pk}-${def.sk}-index` : `${def.pk}-index`)
             if (Object.values(indexes).some(i => i.indexName === indexName)) fail(`two indexes are named "${indexName}"`)
             for (const f of Array.isArray(def.projection) ? def.projection : []) if (!(f in this.fieldSchemas)) fail(`index "${key}" projects unknown field "${f}"`)
+            for (const f of def.retiredAttributes ?? []) {
+                if (f in this.fieldSchemas || this.derivedKey(f)) fail(`index "${key}" lists "${f}" as retired, but the spec has it`)
+            }
             if (def.local && (def.pk !== this.pk || !def.sk || !this.sk)) fail(`local index "${key}" needs a table with a sort key, the table's pk ("${this.pk}") and its own sk`)
             indexes[key] = {key, indexName, pk: def.pk, sk: def.sk, projection: this.projection(def), ...(def.local && {local: true as const})}
         }
@@ -501,13 +507,15 @@ export class GGDynamoDbTableSpec<
         return schema && typeOf(schema)
     }
 
-    // A KEYS_ONLY / INCLUDE index carries the table's and its own key attributes, which DynamoDB won't take as
-    // NonKeyAttributes; when the table key is derived, a row read back is only addressable through its inputs.
+    // A KEYS_ONLY / INCLUDE index carries the table's and its own key attributes, so they are never added on their own;
+    // a named table key stays (deployed definitions list one). When the table key is derived, a row read back is only
+    // addressable through its inputs.
     private projection(def: GGDynamoDbIndexDef): GGDynamoDbProjection<string> {
         const projection = def.projection ?? "ALL"
         if (projection === "ALL") return projection
-        const carried = new Set<string | undefined>([...this.keyAttributes, def.pk, def.sk])
-        const listed = [...new Set([...(projection === "KEYS_ONLY" ? [] : projection), ...this.keyFields])].filter(f => !carried.has(f))
+        const named = [...(projection === "KEYS_ONLY" ? [] : projection), ...def.retiredAttributes ?? []].filter(f => f !== def.pk && f !== def.sk)
+        const carried = new Set<string | undefined>([...this.keyAttributes, def.pk, def.sk, ...named])
+        const listed = [...new Set([...named, ...this.keyFields.filter(f => !carried.has(f))])]
         return listed.length === 0 ? "KEYS_ONLY" : listed
     }
 
