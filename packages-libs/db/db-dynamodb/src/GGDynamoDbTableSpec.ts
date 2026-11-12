@@ -50,7 +50,7 @@ export class GGDynamoDbDerivedKey<V, Q> {
 
     /** Also return this attribute on reads, as the stored value, so readers don't recompute it. */
     readable(): this & {readonly isReadable: true} {
-        return Object.assign(Object.create(Object.getPrototypeOf(this)), this, {isReadable: true})
+        return copyWith(this, {isReadable: true as const})
     }
 }
 
@@ -68,15 +68,20 @@ export class GGDynamoDbJoinKey<T, P extends Fields<T>, V> extends GGDynamoDbDeri
     }
 
     /** The row is in the index only while `test` holds; `test` sees just `deps`. Not for a table key. */
-    when<const W extends Fields<T>>(deps: readonly W[], test: (row: Pick<T, W>) => boolean): GGDynamoDbJoinKey<T, P, V> {
+    when<const W extends Fields<T>>(deps: readonly W[], test: (row: Pick<T, W>) => boolean): this {
         const outer = this.test
-        return new GGDynamoDbJoinKey<T, P, V>(this.parts, row => (!outer || outer(row)) && test(row as Pick<T, W>), [...this.deps, ...deps], this.sep)
+        return this.rebuilt(row => (!outer || outer(row)) && test(row as Pick<T, W>), [...this.deps, ...deps], this.sep)
     }
 
     /** Join with `sep` instead of `#`. */
-    separator(sep: string): GGDynamoDbJoinKey<T, P, V> {
+    separator(sep: string): this {
         if (!sep) throw new Error("GGDynamoDb: a join separator can't be empty")
-        return new GGDynamoDbJoinKey<T, P, V>(this.parts, this.test, this.deps, sep)
+        return this.rebuilt(this.test, this.deps, sep)
+    }
+
+    private rebuilt(test: ((row: Source) => boolean) | undefined, deps: readonly string[], sep: string): this {
+        const key = new GGDynamoDbJoinKey<T, P, V>(this.parts, test, deps, sep)
+        return (this.isReadable ? key.readable() : key) as this
     }
 
     /** Leading `parts` as a sort-key condition: all of them match the value, fewer match `"<a><sep>..."`. */
@@ -92,6 +97,10 @@ export class GGDynamoDbJoinKey<T, P extends Fields<T>, V> extends GGDynamoDbDeri
         if (String(input[last]).includes(this.sep)) throw new Error(`GGDynamoDb: join part "${last}" contains "${this.sep}": ${JSON.stringify(input[last])}`)
         return {beginsWith: value + this.sep}
     }
+}
+
+function copyWith<O extends object, C extends object>(o: O, changes: C): O & C {
+    return Object.assign(Object.create(Object.getPrototypeOf(o)), o, changes)
 }
 
 const NUMBER_TYPES = ["number", "int", "uint", "posInt", "int8", "int16", "int32", "uint8", "uint16", "uint32"]
@@ -386,10 +395,10 @@ export class GGDynamoDbTableSpec<
             .map(dep => [dep, input[dep]]))
     }
 
-    /** @internal Whether `item`'s stored key is the one this spec derives from it: false for another spec's row on a
-     *  shared table. */
+    /** @internal Whether `item` has this spec's required fields and the key it derives from them: false for another
+     *  spec's row on a shared table. */
     keysItself(item: Source): boolean {
-        return this.keyAttributes.every(a => {
+        return this.requiredFields.every(f => item[f] !== undefined) && this.keyAttributes.every(a => {
             const derived = this.derivedKey(a)
             try {
                 return !derived || derived.compute(item) === item[a]
@@ -435,7 +444,7 @@ export class GGDynamoDbTableSpec<
 
     /** This spec on another table name, e.g. one per environment or test run. */
     withName(name: string): this {
-        return Object.assign(Object.create(Object.getPrototypeOf(this)), this, {name})
+        return copyWith(this, {name})
     }
 
     /** `key` as an object: a table keyed on one plain field also takes that field's bare value. */
@@ -533,7 +542,8 @@ function fieldSchemasOf(schema: GGSchema<unknown>, table: string): Record<string
         const defs = variants.map(v => v.toCompilerDef() as {type: string, values?: LiteralValue[]})
         const merged = variants.length === 1 ? variants[0]
             : (defs.every(d => d.type === "literal") ? IsLiteral(...defs.flatMap(d => d.values!)) : IsUnion(...variants))
-        return [name, present.length === shapes.length ? merged : merged.orUndefined]
+        const optional = present.length < shapes.length || (variants.length > 1 && present.some(p => p.def.optional))
+        return [name, optional ? merged.orUndefined : merged]
     }))
 }
 
@@ -555,10 +565,8 @@ function variantShapes(schema: GGSchema<unknown>, table: string): Record<string,
     if (def.type === "union" && def.variants) return def.variants.flatMap(v => variantShapes(v, table))
     if (def.type === "discriminated" && def.variantMap && def.discriminator) {
         const field = def.discriminator
-        return [...def.variantMap].map(([value, variant]) => {
-            const shape = variantShapes(variant, table)[0]
-            return shape[field] ? shape : {...shape, [field]: IsLiteral(value as LiteralValue)}
-        })
+        return [...def.variantMap].flatMap(([value, variant]) => variantShapes(variant, table).map(shape =>
+            shape[field] ? shape : {...shape, [field]: IsLiteral(value as LiteralValue)}))
     }
     throw new Error(`GGDynamoDbTableSpec '${table}': the row schema must be an object or a union of objects, not ${def.type}`)
 }

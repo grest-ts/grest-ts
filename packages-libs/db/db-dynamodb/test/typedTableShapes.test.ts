@@ -75,7 +75,30 @@ describe("a union row schema", () => {
     })
 })
 
+describe("union field merging", () => {
+    it("keeps a field optional when any variant declares it so, and reads into a union nested in a variant", () => {
+        const IsA = IsObject({id: IsString, kind: IsLiteral("a"), note: IsString.orUndefined})
+        const IsB = IsObject({id: IsString, kind: IsLiteral("b"), note: IsString.nonEmpty})
+        const Notes = GGDynamoDbTableSpec.define({name: "t", schema: IsUnion(IsA, IsB), pk: "id"})
+        expect(Notes.requiredFields).toEqual(["id", "kind"])
+        const Nested = GGDynamoDbTableSpec.define({
+            name: "t", pk: "id",
+            schema: IsDiscriminated("kind", {a: IsUnion(IsObject({id: IsString, x: IsString}), IsObject({id: IsString, y: IsNumber})), b: IsObject({id: IsString})}),
+            indexes: {byY: {pk: "y"}},
+        })
+        expect(Nested.createTableInput().AttributeDefinitions).toContainEqual({AttributeName: "y", AttributeType: "N"})
+    })
+})
+
 describe("readable derived attributes", () => {
+    it("stay readable through when and separator", () => {
+        const Spec = GGDynamoDbTableSpec.define({
+            name: "t", schema: IsQueued, pk: "buildId",
+            derived: d => ({k: d.join("buildId", "status").readable().separator(":").when(["queuedAt"], r => r.queuedAt > 0)}),
+        })
+        expect(Spec.toRow({...queued, k: "b1:queued"})).toEqual({...queued, k: "b1:queued"})
+    })
+
     it("come back on reads, typed with their value", async () => {
         const {db} = stubDb({Item: {...queued, pending: "queued"}})
         await expect(new GGDynamoDbTypedTable(db, BuildsTable).get("b1")).resolves.toEqual({...queued, pending: "queued"})
@@ -182,6 +205,16 @@ describe("specs sharing a table", () => {
         const Listed = GGDynamoDbTableSpec.define({name: "items", schema: IsItem, pk: "scopeKey", sk: "itemKey", derived: d => ({scopeKey: d.join("scope"), itemKey: d.join("kind", "itemId")}), indexes: {byOrg: {pk: "orgId", projection: ["scope", "kind"]}}})
         await expect(GGDynamoDbDevTables.ensure(noClient, [Reordered, Listed])).rejects.toThrow(/no client/)
         await expect(GGDynamoDbDevTables.ensure(noClient, [Items, Pointers])).rejects.toThrow(/no client/)
+    })
+
+    it("backfill leaves the rows of a spec keyed on the same plain fields that lack its required ones", async () => {
+        const IsNote = IsObject({pk: IsString, sk: IsString, text: IsString})
+        const IsMark = IsObject({pk: IsString, sk: IsString, at: IsNumber})
+        const Notes = GGDynamoDbTableSpec.define({name: "shared", schema: IsNote, pk: "pk", sk: "sk", derived: d => ({len: d.number(["text"], r => r.text.length)}), indexes: {byLen: {pk: "len"}}})
+        const {db, inputs} = stubDb({Items: [{pk: "p", sk: "m", at: 1}]})
+        GGDynamoDbTableSpec.define({name: "shared", schema: IsMark, pk: "pk", sk: "sk"})
+        await expect(new GGDynamoDbTypedTable(db, Notes).backfillPage()).resolves.toMatchObject({scanned: 1, skipped: 1, rewritten: 0})
+        expect(inputs()).toHaveLength(1)
     })
 
     it("backfill leaves the other spec's rows", async () => {
