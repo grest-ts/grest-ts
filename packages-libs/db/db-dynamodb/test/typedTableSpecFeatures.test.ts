@@ -1,7 +1,7 @@
-import {describe, it, expect, expectTypeOf, vi} from "vitest"
+import {describe, it, expect, expectTypeOf} from "vitest"
 import {IsArray, IsNumber, IsObject, IsRecord, IsString} from "@grest-ts/schema"
-import {GGDynamoDb} from "../src/GGDynamoDb"
 import {GGDynamoDbTableSpec} from "../src/GGDynamoDbTableSpec"
+import {readable, stubDb, typeOnly} from "./typedTableTestUtils"
 import {GGDynamoDbTypedTable} from "../src/GGDynamoDbTypedTable"
 
 const IsUsage = IsObject({
@@ -37,21 +37,10 @@ const UsageTable = GGDynamoDbTableSpec.define({
 
 const usage: Usage = {userId: "u1", orgId: "o1", provider: "p1", day: "2026-11-12", seconds: 3}
 
-function stubTable(...responses: Record<string, unknown>[]) {
-    const send = vi.fn(async (_command: {input: Record<string, any>}) => responses.shift() ?? {Items: []})
-    const db = Object.create(GGDynamoDb.prototype) as GGDynamoDb
-    Object.assign(db, {client: {send}, config: {name: "test"}})
-    const inputs = () => send.mock.calls.map(c => c[0].input)
+function stubTable(...responses: (Record<string, unknown> | Error)[]) {
+    const {db, inputs} = stubDb(...responses)
     return {table: new GGDynamoDbTypedTable(db, UsageTable), inputs}
 }
-
-function readable(input: Record<string, any>, expression: string): string {
-    return expression
-        .replace(/#n\d+/g, n => input.ExpressionAttributeNames[n])
-        .replace(/:v\d+/g, v => JSON.stringify(input.ExpressionAttributeValues[v]))
-}
-
-function typeOnly(_fn: () => void) {}
 
 describe("a table key derived from its parts", () => {
     it("addresses rows by the parts", async () => {
@@ -135,8 +124,9 @@ describe("table definition", () => {
     it("rejects a local index on another pk, a non-number ttl, and an unknown table key", () => {
         expect(() => GGDynamoDbTableSpec.define({name: "t", schema: IsUsage, pk: "userId", indexes: {x: {pk: "orgId", sk: "day", local: true}}}))
             .toThrow(/local index "x" needs a table with a sort key, the table's pk/)
-        // @ts-expect-error ttl is a number field
-        expect(() => GGDynamoDbTableSpec.define({name: "t", schema: IsUsage, pk: "userId", ttl: "day"})).toThrow(/ttl "day" is not a number field/)
+        const stringTtl = () => GGDynamoDbTableSpec.define({name: "t", schema: IsUsage, pk: "userId", ttl: "day"})
+        expectTypeOf(stringTtl).returns.toEqualTypeOf<`ttl "day" is not a number field or a d.number attribute`>()
+        expect(stringTtl).toThrow(/ttl "day" is not a number field or a d.number attribute/)
         const unknownKey = () => GGDynamoDbTableSpec.define({name: "t", schema: IsUsage, pk: "nope"})
         expectTypeOf(unknownKey).returns.toEqualTypeOf<`the table key "nope" is neither a field nor derived`>()
         expect(unknownKey).toThrow(/key "nope" is neither a schema field nor derived/)

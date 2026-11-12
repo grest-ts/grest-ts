@@ -183,6 +183,19 @@ export class GGDynamoDb {
     private client: DynamoDBDocumentClient | undefined
     private unwatchHost: (() => void) | undefined
     private unwatchUser: (() => void) | undefined
+    private fixedClient: DynamoDBClient | undefined
+
+    /**
+     * A GGDynamoDb over an SDK client you already hold, for tests, fixtures and seed scripts: not registered with the
+     * runtime and not reconfigured from config. It uses that client itself (`getRawClient` returns it, and its errors gain
+     * this db's name); the caller keeps owning it and destroys it.
+     */
+    static forClient(client: DynamoDBClient, name = "forClient"): GGDynamoDb {
+        const db = Object.create(GGDynamoDb.prototype) as GGDynamoDb
+        Object.assign(db, {config: {name}, started: true, fixedClient: client})
+        db.client = db.documentClient(client)
+        return db
+    }
 
     constructor(config: GGDynamoDbConfig) {
         this.config = config
@@ -270,9 +283,11 @@ export class GGDynamoDb {
             }),
         })
 
-        return this.withErrorContext(DynamoDBDocumentClient.from(raw, {
-            marshallOptions: {removeUndefinedValues: true},
-        }))
+        return this.documentClient(raw)
+    }
+
+    private documentClient(raw: DynamoDBClient): DynamoDBDocumentClient {
+        return this.withErrorContext(DynamoDBDocumentClient.from(raw, {marshallOptions: {removeUndefinedValues: true}}))
     }
 
     /** The managed document client, for commands this class doesn't wrap. Valid from `start()` until teardown;
@@ -521,12 +536,14 @@ export class GGDynamoDb {
 
     /**
      * Escape hatch — exposes a fresh raw low-level client (no
-     * DocumentClient marshalling). Used for table-create / admin
-     * operations that the document layer doesn't cover. Reads config at
-     * call time, so it works before `start()` has run — useful for seed
-     * scripts that create tables before any data exists.
+     * DocumentClient marshalling), or for `forClient` the client it was
+     * given. Used for table-create / admin operations that the document
+     * layer doesn't cover. Reads config at call time, so it works before
+     * `start()` has run — useful for seed scripts that create tables
+     * before any data exists.
      */
     getRawClient(): DynamoDBClient {
+        if (this.fixedClient) return this.fixedClient
         const host = this.config.host.get()
         const user = this.config.user.reveal()
         const endpoint = host?.endpoint

@@ -1,7 +1,7 @@
-import {describe, it, expect, vi} from "vitest"
+import {describe, it, expect} from "vitest"
 import {IsArray, IsLiteral, IsNumber, IsObject, IsString} from "@grest-ts/schema"
-import {GGDynamoDb} from "../src/GGDynamoDb"
 import {GGDynamoDbTableSpec} from "../src/GGDynamoDbTableSpec"
+import {readable, stubDb, typeOnly} from "./typedTableTestUtils"
 import {GGDynamoDbTypedTable} from "../src/GGDynamoDbTypedTable"
 
 const IsEvent = IsObject({
@@ -36,24 +36,9 @@ const EventsTable = GGDynamoDbTableSpec.define({
 const event = {userId: "u1", at: 1500, kind: "k", orgId: "o1"}
 
 function stubTable(...responses: (Record<string, unknown> | Error)[]) {
-    const send = vi.fn(async (_command: {input: Record<string, any>}) => {
-        const response = responses.shift() ?? {Items: []}
-        if (response instanceof Error) throw response
-        return response
-    })
-    const db = Object.create(GGDynamoDb.prototype) as GGDynamoDb
-    Object.assign(db, {client: {send}, config: {name: "test"}})
-    const inputs = () => send.mock.calls.map(c => c[0].input)
+    const {db, inputs} = stubDb(...responses)
     return {table: new GGDynamoDbTypedTable(db, EventsTable), inputs}
 }
-
-function readable(input: Record<string, any>, expression: string): string {
-    return expression
-        .replace(/#n\d+/g, n => input.ExpressionAttributeNames[n])
-        .replace(/:v\d+/g, v => JSON.stringify(input.ExpressionAttributeValues[v], (_k, x) => x instanceof Set ? {set: [...x]} : x))
-}
-
-function typeOnly(_fn: () => void) {}
 
 describe("conditions", () => {
     it("take exactly one operator per field", async () => {
@@ -229,14 +214,14 @@ describe("edge cases", () => {
     it("an upsert's merge doesn't count as making a required field", async () => {
         const IsPrefs = IsObject({id: IsString, prefs: IsObject({theme: IsString.orUndefined})})
         const Prefs = GGDynamoDbTableSpec.define({name: "prefs", schema: IsPrefs, pk: "id"})
-        const db = Object.assign(Object.create(GGDynamoDb.prototype), {client: {send: vi.fn()}, config: {name: "test"}})
+        const {db} = stubDb()
         await expect(new GGDynamoDbTypedTable(db, Prefs).update({id: "a"}, {}, {upsert: true, merge: {prefs: {theme: "dark"}}}))
             .rejects.toThrow(/which then needs prefs/)
     })
 
     it("refuses add on a number-literal field: the sum may not be one of its values", async () => {
         const Tiers = GGDynamoDbTableSpec.define({name: "tiers", schema: IsObject({id: IsString, tier: IsLiteral(1, 2, 3)}), pk: "id"})
-        const db = Object.assign(Object.create(GGDynamoDb.prototype), {client: {send: vi.fn()}, config: {name: "test"}})
+        const {db} = stubDb()
         await expect(new GGDynamoDbTypedTable(db, Tiers).update({id: "a"}, {}, {add: {tier: 1} as never})).rejects.toThrow(/add "tier" needs a number field/)
     })
 
@@ -263,10 +248,9 @@ describe("edge cases", () => {
 
     it("stops sending batches after one fails", async () => {
         const throttled = Object.assign(new Error("boom"), {name: "InternalServerError"})
-        const send = vi.fn(async () => { throw throttled })
-        const db = Object.assign(Object.create(GGDynamoDb.prototype), {client: {send}, config: {name: "test"}})
+        const {db, inputs} = stubDb(...Array(10).fill(throttled))
         const rows = Array.from({length: 25 * 10}, (_, i) => ({...event, at: i * 1000}))
         await expect(new GGDynamoDbTypedTable(db, EventsTable).putMany(rows)).rejects.toThrow(/boom/)
-        expect(send.mock.calls.length).toBeLessThanOrEqual(4)
+        expect(inputs().length).toBeLessThanOrEqual(4)
     })
 })

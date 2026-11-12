@@ -1,4 +1,4 @@
-import {BatchGetCommand, BatchWriteCommand, UpdateCommand, type BatchGetCommandOutput, type BatchWriteCommandOutput} from "@aws-sdk/lib-dynamodb"
+import {BatchGetCommand, BatchWriteCommand, DeleteCommand, UpdateCommand, type BatchGetCommandOutput, type BatchWriteCommandOutput} from "@aws-sdk/lib-dynamodb"
 import type {GGSchema} from "@grest-ts/schema"
 import type {GGDynamoDb, GGDynamoDbPage, GGDynamoDbTransactItem} from "./GGDynamoDb"
 import {GGDynamoDbExpr, conditionFields, conditionPins, type GGDynamoDbCondition} from "./GGDynamoDbExpression"
@@ -56,6 +56,8 @@ export interface GGDynamoDbUpdateOptions<T, KF extends keyof T = never, S extend
     /** Set keys inside a map field, leaving its other keys; a key given as `undefined` is removed. Throws when the row
      *  has no such map. */
     merge?: Only<T, Exclude<GGDynamoDbMapFields<T>, KF>, true>
+    /** On a table with a spec `version`: write only while the stored version is this (0 also matches a row without one). */
+    expectVersion?: number
     /** Create the row when it doesn't exist, instead of returning undefined: with its key, the key's inputs and what
      *  this update writes, which must cover every required field. Writes every derived attribute, so all their inputs
      *  must be known as for a touched one. Can't take `current`. */
@@ -89,7 +91,8 @@ export type GGDynamoDbTableOf<Spec> = Spec extends GGDynamoDbTableSpec<infer T, 
 
 type QueryArgs<K, O> = {} extends K ? [key?: K, opts?: O] : [key: K, opts?: O]
 
-type Key<T, D, PK, SK> = GGDynamoDbTableKey<T, D, PK, SK>
+/** A row's address: the key object, or for a table keyed on one plain field, that field's bare value. */
+type Key<T, D, PK, SK> = GGDynamoDbTableKey<T, D, PK, SK> | ([SK] extends [undefined] ? PK extends keyof D ? never : PK extends keyof T ? NonNullable<T[PK]> : never : never)
 type KeyFields<T, D, PK, SK> = GGDynamoDbKeyFields<T, D, PK, SK>
 type Writable<T, D, PK, SK> = Partial<Omit<T, KeyFields<T, D, PK, SK>>>
 
@@ -100,8 +103,9 @@ const BATCH_MAX_ATTEMPTS = 8
 const BATCH_FIRST_RETRY_MS = 50
 
 /**
- * A `GGDynamoDbTableSpec` bound to a connection. Every write computes the spec's derived attributes; every read strips
- * them. Queries go through `index.<name>` with key parts and sort-key conditions typed from the spec.
+ * A `GGDynamoDbTableSpec` bound to a connection. Every write computes the spec's derived attributes; every read returns
+ * the schema's shape (`spec.toRow`). Queries go through `index.<name>` with key parts and sort-key conditions typed
+ * from the spec. Extend `GGDynamoDbTypedTable.of(spec)` to add a store's own methods.
  */
 export class GGDynamoDbTypedTable<
     T extends object,
@@ -126,19 +130,37 @@ export class GGDynamoDbTypedTable<
         this.tx = new GGDynamoDbTransactBuilder(this)
     }
 
+    /**
+     * A base class bound to `spec`, for a store that adds its own methods and inherits the rest:
+     *
+     *     class ProjectStore extends GGDynamoDbTypedTable.of(ProjectsTable) {
+     *         listByOrg(orgId: string) { return this.index.byOrg.query({orgId}) }
+     *     }
+     *     new ProjectStore(db)
+     */
+    static of<Spec extends GGDynamoDbTableSpec<any, any, any, any, any, any>>(spec: Spec): new (db: GGDynamoDb) => GGDynamoDbTableOf<Spec> {
+        return class extends GGDynamoDbTypedTable<any, any, any, any, any, any> {
+            constructor(db: GGDynamoDb) {
+                super(db, spec)
+            }
+        } as any
+    }
+
     get tableName(): string {
         return this.spec.name
     }
 
     /** Strongly consistent by default, as `GGDynamoDb.get`. */
     async get(key: Key<T, D, PK, SK>, opts?: GGDynamoDbConsistentReadOption): Promise<T | undefined> {
-        const row = this.fromStored<T>(await this.db.get<Source>(this.tableName, this.spec.storedKey(key), opts))
-        return row && this.holdsKey(row, key) ? row : undefined
+        const k = this.spec.keyObject(key)
+        const row = this.fromStored<T>(await this.db.get<Source>(this.tableName, this.spec.storedKey(k), opts))
+        return row && this.holdsKey(row, k) ? row : undefined
     }
 
     /** The rows for `keys`, in their order, missing ones skipped and repeated keys read once. Eventually consistent by
      *  default. */
-    async getMany(keys: Key<T, D, PK, SK>[], opts?: GGDynamoDbConsistentReadOption): Promise<T[]> {
+    async getMany(keyArgs: Key<T, D, PK, SK>[], opts?: GGDynamoDbConsistentReadOption): Promise<T[]> {
+        const keys = keyArgs.map(k => this.spec.keyObject(k))
         const wanted = uniqueBy(keys.map(k => this.spec.storedKey(k)), k => this.keyId(k))
         const found = new Map<string, T>()
         await this.batch("getMany", wanted, BATCH_GET_MAX_KEYS, async pending => {
@@ -162,26 +184,53 @@ export class GGDynamoDbTypedTable<
         return this.base.queryPage(...args as [any, any])
     }
 
-    /** Validates, derives, writes the whole row. False when `opts.if` fails. */
+    /** Validates, derives, writes the whole row. False when `opts.if` fails. Not on a versioned table, whose writes
+     *  are `save`, `create` and `update`. */
     async put(row: T, opts?: GGDynamoDbWriteOptions<T>): Promise<boolean> {
-        const p = this.putParams(row, opts)
-        if (!p.ConditionExpression) {
-            await this.db.put(this.tableName, p.Item)
-            return true
+        this.unversioned("put")
+        return this.sendPut(this.putParams(row, opts))
+    }
+
+    /** `put` only when no row has the key yet (on a versioned table, as version 1). False when one has. */
+    async create(row: T): Promise<boolean> {
+        return this.sendPut(this.createParams(row))
+    }
+
+    /**
+     * Optimistic locking on the spec's `version`: writes `row` while the stored version is still `row.version`, storing
+     * the version plus one. A row without a version counts as 0, which a missing row or one stored before the table had
+     * a version also is: so `save` of a row without one may create the row or replace an unversioned one (use `create`
+     * for a write that must be new). Returns the row as written, or undefined when another write got there first: re-read
+     * and retry.
+     */
+    async save(row: T): Promise<T | undefined> {
+        const p = this.saveParams(row)
+        return await this.sendPut(p) ? this.spec.toRow(p.Item) : undefined
+    }
+
+    /** Deletes the row and returns it as it was, atomically: for a one-time token or claim. Undefined when there was no
+     *  row or `opts.if` failed. */
+    async take(key: Key<T, D, PK, SK>, opts?: GGDynamoDbWriteOptions<T>): Promise<T | undefined> {
+        try {
+            const res = await this.db.getDocumentClient().send(new DeleteCommand({...this.keyParams(key, opts?.if), ReturnValues: "ALL_OLD"}))
+            return this.fromStored<T>(res.Attributes)
+        } catch (err) {
+            if (isConditionFailed(err)) return undefined
+            throw err
         }
-        return this.db.putConditional(this.tableName, p.Item, p.ConditionExpression, p.ExpressionAttributeValues, p.ExpressionAttributeNames)
     }
 
     /** `put` for many rows, 25 per request, unconditionally (DynamoDB's batch write takes no conditions) and not
      *  atomically: on an error some rows may be written. Of rows with the same key the last is written. */
     async putMany(rows: T[]): Promise<void> {
+        this.unversioned("putMany")
         const items = uniqueBy(rows.map(r => this.putParams(r, undefined).Item).reverse(), item => this.keyId(item)).reverse()
         await this.batchWrite("putMany", items.map(Item => ({PutRequest: {Item}})))
     }
 
     /** `delete` for many keys, 25 per request, unconditionally and not atomically. */
     async deleteMany(keys: Key<T, D, PK, SK>[]): Promise<void> {
-        const unique = uniqueBy(keys.map(k => this.spec.storedKey(k)), k => this.keyId(k))
+        const unique = uniqueBy(keys.map(k => this.spec.storedKey(this.spec.keyObject(k))), k => this.keyId(k))
         await this.batchWrite("deleteMany", unique.map(Key => ({DeleteRequest: {Key}})))
     }
 
@@ -264,6 +313,7 @@ export class GGDynamoDbTypedTable<
                     UpdateExpression: e.updateExpression({
                         set: set.map(d => `${e.name(d.name)} = ${e.value(d.value)}`),
                         remove: remove.map(d => e.name(d.name)),
+                        add: this.spec.version ? [`${e.name(this.spec.version)} ${e.value(1)}`] : [],
                     }),
                     ConditionExpression: [`attribute_exists(${e.name(this.spec.pk)})`, ...deps.map(dep => e.unchanged(dep, item[dep]))].join(" AND "),
                     ExpressionAttributeNames: e.names,
@@ -289,15 +339,57 @@ export class GGDynamoDbTypedTable<
         return {TableName: this.tableName, Item: this.spec.withDerived(this.validate(row)) as Source, ...(opts?.if && this.expr().conditionInput(opts.if))}
     }
 
+    /** @internal */
+    createParams(row: T) {
+        const v = this.spec.version
+        return this.putParams(v ? {...row, [v]: 1} : row, {if: this.absent()})
+    }
+
+    /** @internal */
+    saveParams(row: T) {
+        const field = this.versionField("save")
+        const expected = ((row as Source)[field] as number | undefined) ?? 0
+        return this.putParams({...row, [field]: expected + 1}, {if: this.versionIs(field, expected)})
+    }
+
+    /** @internal A whole-row write can't count from the stored version, so a versioned table takes none. */
+    unversioned(op: string): void {
+        if (this.spec.version) throw new Error(`${this.tableName}.${op}: the table is versioned; write with save, create or update`)
+    }
+
+    private async sendPut(p: ReturnType<GGDynamoDbTypedTable<T, PK, SK, D, I, S>["putParams"]>): Promise<boolean> {
+        if (!p.ConditionExpression) {
+            await this.db.put(this.tableName, p.Item)
+            return true
+        }
+        return this.db.putConditional(this.tableName, p.Item, p.ConditionExpression, p.ExpressionAttributeValues, p.ExpressionAttributeNames)
+    }
+
     /** @internal A request on one row, with an optional condition; on the key's own inputs too when its value doesn't
      *  name exactly one set of them. */
-    keyParams(key: Key<T, D, PK, SK>, condition: GGDynamoDbCondition<T> | undefined) {
+    keyParams(keyArg: Key<T, D, PK, SK>, condition: GGDynamoDbCondition<T> | undefined) {
+        const key = this.spec.keyObject(keyArg)
         const pins = Object.entries(this.spec.unpinnedKeyInputs(key)).map(([f, v]) => ({[f]: v === undefined ? {exists: false} : {eq: v}}))
         const all = [...pins, ...(condition ? [condition] : [])] as GGDynamoDbCondition<T>[]
         return {TableName: this.tableName, Key: this.spec.storedKey(key), ...this.expr().conditionInput(all.length > 0 ? {allOf: all} as GGDynamoDbCondition<T> : undefined)}
     }
 
-    private holdsKey(row: T, key: Key<T, D, PK, SK>): boolean {
+    /** @internal No row has this row's key yet. */
+    absent(): GGDynamoDbCondition<T> {
+        return {[this.spec.pk]: {exists: false}} as GGDynamoDbCondition<T>
+    }
+
+    private versionField(op: string): string {
+        if (!this.spec.version) throw new Error(`${this.tableName}.${op}: the spec has no version field`)
+        return this.spec.version
+    }
+
+    // Rows written before the table had a version carry none, which counts as 0.
+    private versionIs(field: string, expected: number): GGDynamoDbCondition<T> {
+        return (expected === 0 ? {anyOf: [{[field]: {exists: false}}, {[field]: {eq: 0}}]} : {[field]: {eq: expected}}) as GGDynamoDbCondition<T>
+    }
+
+    private holdsKey(row: T, key: Source): boolean {
         return Object.entries(this.spec.unpinnedKeyInputs(key)).every(([f, v]) => (row as Source)[f] === v)
     }
 
@@ -307,15 +399,19 @@ export class GGDynamoDbTypedTable<
     }
 
     /** @internal */
-    updateParams(key: Key<T, D, PK, SK>, fields: Source, opts: GGDynamoDbUpdateOptions<T, any, any> | undefined) {
+    updateParams(keyArg: Key<T, D, PK, SK>, fields: Source, opts: GGDynamoDbUpdateOptions<T, any, any> | undefined) {
         const fail = (msg: string): never => { throw new Error(`${this.tableName}.update: ${msg}`) }
         const {spec} = this
+        const key = spec.keyObject(keyArg)
         const keys = Object.keys(fields)
         for (const k of keys) {
             if (spec.keyFields.includes(k)) fail(`"${k}" is part of the table key`)
             if (spec.derivedKey(k)) fail(`"${k}" is derived; write its inputs instead`)
+            if (k === spec.version) fail(`"${k}" is the version; every write bumps it (give expectVersion to check it)`)
         }
         if (opts?.upsert && opts.current) fail("an upsert can't take current: a row it creates holds none of it")
+        if (opts?.expectVersion !== undefined && opts.upsert) fail("an upsert can't take expectVersion")
+        const checkedVersion = opts?.expectVersion !== undefined ? this.versionField("update") : undefined
         const valid = this.validFields(fields, fail)
         const e = this.expr()
         const storedKey = spec.storedKey(key)
@@ -326,6 +422,7 @@ export class GGDynamoDbTypedTable<
             ? keyChecks.length > 0 ? [`(attribute_not_exists(${e.name(spec.pk)}) OR (${keyChecks.join(" AND ")}))`] : []
             : [`attribute_exists(${e.name(spec.pk)})`, ...keyChecks]
         if (opts?.if) conditions.push(e.condition(opts.if))
+        if (checkedVersion) conditions.push(e.condition(this.versionIs(checkedVersion, opts!.expectVersion!)))
         const known: Source = {...conditionPins(opts?.if), ...keyInputs}
 
         const set: string[] = []
@@ -342,6 +439,7 @@ export class GGDynamoDbTypedTable<
         const touched = new Set(keys)
         const claim = (field: string, op: string) => {
             if (spec.keyFields.includes(field)) fail(`${op} "${field}": it is part of the table key`)
+            if (field === spec.version) fail(`${op} "${field}": it is the version, which every write bumps`)
             if (touched.has(field)) fail(`"${field}" is written twice (${op})`)
             touched.add(field)
         }
@@ -373,7 +471,7 @@ export class GGDynamoDbTypedTable<
 
         if (opts?.upsert) {
             // `merge` sets keys in a map that must exist, and `delete` removes: neither can make a missing row's field.
-            const created = [...add.map(o => o.field), ...definedEntries(opts.setIfMissing).map(([f]) => f), ...definedEntries(opts.append).map(([f]) => f)]
+            const created = [...add.map(o => o.field), ...definedEntries(opts.setIfMissing).map(([f]) => f), ...definedEntries(opts.append).map(([f]) => f), ...(spec.version ? [spec.version] : [])]
             const covered = new Set([...keys.filter(k => fields[k] !== undefined), ...Object.keys(keyInputs), ...created])
             const missing = spec.requiredFields.filter(f => !covered.has(f))
             if (missing.length > 0) fail(`an upsert may create the row, which then needs ${missing.join(", ")}: give them in fields, setIfMissing or add`)
@@ -402,6 +500,8 @@ export class GGDynamoDbTypedTable<
             else set.push(`${e.name(name)} = ${e.value(value)}`)
         }
         if (set.length + remove.length + add.length + del.length === 0) fail("nothing to write")
+        // Every write bumps the version: `ADD` counts from 0 on a row without one.
+        if (spec.version) add.push({field: spec.version, value: 1})
         return {
             TableName: this.tableName,
             Key: storedKey,
@@ -419,7 +519,7 @@ export class GGDynamoDbTypedTable<
 
     /** @internal */
     fromStored<R>(item: Source | undefined): R | undefined {
-        return item && this.spec.withoutDerived(item) as unknown as R
+        return item && this.spec.toRow(item) as unknown as R
     }
 
     private keyId(item: Source): string {
@@ -582,7 +682,18 @@ export class GGDynamoDbTransactBuilder<T extends object, D extends GGDynamoDbDer
     }
 
     put(row: T, opts?: GGDynamoDbWriteOptions<T>): GGDynamoDbTransactItem {
+        this.table.unversioned("tx.put")
         return {Put: this.table.putParams(row, opts)}
+    }
+
+    /** `put` only when no row has the key yet. */
+    create(row: T): GGDynamoDbTransactItem {
+        return {Put: this.table.createParams(row)}
+    }
+
+    /** `save`'s versioned write. */
+    save(row: T): GGDynamoDbTransactItem {
+        return {Put: this.table.saveParams(row)}
     }
 
     update(key: Key<T, D, PK, SK>, fields: Writable<T, D, PK, SK>, opts?: GGDynamoDbUpdateOptions<T, KeyFields<T, D, PK, SK>, S>): GGDynamoDbTransactItem {

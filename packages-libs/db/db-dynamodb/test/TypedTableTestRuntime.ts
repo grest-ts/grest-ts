@@ -69,6 +69,29 @@ export const UsageTable = GGDynamoDbTableSpec.define({
     indexes: {byStatus: {pk: "userId", sk: "status", local: true}},
 })
 
+export const IsDoc = IsObject({
+    docId: IsString,
+    title: IsString,
+    expiresAt: IsNumber,
+    version: IsNumber.orUndefined,
+})
+export type Doc = typeof IsDoc.infer
+
+export const DocsTable = GGDynamoDbTableSpec.define({
+    name: "docs",
+    schema: IsDoc,
+    pk: "docId",
+    version: "version",
+    ttl: "purgeAtSec",
+    derived: d => ({purgeAtSec: d.number(["expiresAt"], r => Math.floor(r.expiresAt / 1000))}),
+})
+
+export class DocStore extends GGDynamoDbTypedTable.of(DocsTable) {
+    rename(docId: string, title: string, version: number) {
+        return this.update(docId, {title}, {expectVersion: version})
+    }
+}
+
 export const TypedTableTestConfig = GGConfig.define("/db_dynamodb_typed_test/", () => ({
     db: new GGDynamoDbConfig("db"),
 }))
@@ -77,6 +100,7 @@ export let db: GGDynamoDb
 export let workspaces: GGDynamoDbTableOf<typeof WorkspacesTable>
 export let events: GGDynamoDbTableOf<typeof EventsTable>
 export let usage: GGDynamoDbTableOf<typeof UsageTable>
+export let docs: DocStore
 
 export class TypedTableTestRuntime extends GGRuntime {
     public static readonly NAME = "db-dynamodb-typed-test"
@@ -90,6 +114,7 @@ export class TypedTableTestRuntime extends GGRuntime {
         workspaces = new GGDynamoDbTypedTable(db, WorkspacesTable)
         events = new GGDynamoDbTypedTable(db, EventsTable)
         usage = new GGDynamoDbTypedTable(db, UsageTable)
+        docs = new DocStore(db)
     }
 }
 

@@ -1,7 +1,7 @@
-import {describe, it, expect, expectTypeOf, vi} from "vitest"
+import {describe, it, expect, expectTypeOf} from "vitest"
 import {IsArray, IsLiteral, IsNumber, IsObject, IsString} from "@grest-ts/schema"
-import {GGDynamoDb} from "../src/GGDynamoDb"
 import {GGDynamoDbTableSpec} from "../src/GGDynamoDbTableSpec"
+import {readable, stubDb, typeOnly} from "./typedTableTestUtils"
 import {GGDynamoDbTypedTable} from "../src/GGDynamoDbTypedTable"
 
 const IsWorkspace = IsObject({
@@ -42,24 +42,8 @@ const WorkspacesTable = GGDynamoDbTableSpec.define({
 const row: Workspace = {workspaceId: "w1", orgId: "o1", userId: "u1", projectId: "p1", status: "running", createdAt: 5, version: 1}
 
 function stubTable(...responses: (Record<string, unknown> | Error)[]) {
-    const send = vi.fn(async (_command: {input: Record<string, any>}) => {
-        const response = responses.shift() ?? {Items: []}
-        if (response instanceof Error) throw response
-        return response
-    })
-    const db = Object.create(GGDynamoDb.prototype) as GGDynamoDb
-    Object.assign(db, {client: {send}, config: {name: "test"}})
-    const inputs = () => send.mock.calls.map(c => c[0].input)
+    const {db, inputs} = stubDb(...responses)
     return {table: new GGDynamoDbTypedTable(db, WorkspacesTable), inputs}
-}
-
-function typeOnly(_fn: () => void) {}
-
-/** Resolves the placeholders, so assertions read like the expression a person would write. */
-function readable(input: Record<string, any>, expression: string): string {
-    return expression
-        .replace(/#n\d+/g, n => input.ExpressionAttributeNames[n])
-        .replace(/:v\d+/g, v => JSON.stringify(input.ExpressionAttributeValues[v]))
 }
 
 describe("GGDynamoDbTableSpec", () => {
@@ -249,12 +233,12 @@ describe("GGDynamoDbTypedTable atomic ops and sets", () => {
         await table.update({workspaceId}, {...rest, pendingOp: undefined, endedAt: undefined}, {add: {opCount: 1, tags: ["a"]}, upsert: true})
         expect(readable(inputs()[0], inputs()[0].UpdateExpression)).toBe(
             `SET orgId = "o1", userId = "u1", projectId = "p1", status = "running", createdAt = 5, version = 1, ` +
-            `orgUser = "o1#u1", liveOrg = "o1", activeUntil = ${Number.MAX_SAFE_INTEGER} REMOVE pendingOp, endedAt, flowPending ADD opCount 1, tags {}`)
+            `orgUser = "o1#u1", liveOrg = "o1", activeUntil = ${Number.MAX_SAFE_INTEGER} REMOVE pendingOp, endedAt, flowPending ADD opCount 1, tags {"set":["a"]}`)
         expect(Object.values(inputs()[0].ExpressionAttributeValues)).toContainEqual(new Set(["a"]))
         expect(inputs()[0]).not.toHaveProperty("ConditionExpression")
         const {table: t2, inputs: i2} = stubTable({})
         await t2.update({workspaceId: "w1"}, {}, {delete: {tags: ["a"]}})
-        expect(readable(i2()[0], i2()[0].UpdateExpression)).toBe("DELETE tags {}")
+        expect(readable(i2()[0], i2()[0].UpdateExpression)).toBe(`DELETE tags {"set":["a"]}`)
         expect(readable(i2()[0], i2()[0].ConditionExpression)).toBe("attribute_exists(workspaceId)")
     })
 
