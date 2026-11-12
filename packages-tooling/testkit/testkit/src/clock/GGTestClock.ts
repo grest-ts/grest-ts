@@ -14,7 +14,7 @@ export class GGTestClock {
     /** Jump to `time`; the clock keeps running from there (or stays stopped at it). */
     public set(time: Date | number): Promise<void> {
         const target = time instanceof Date ? time.getTime() : time;
-        if (!Number.isInteger(target)) throw new Error(`GGTest.clock.set(${String(time)}): not a valid time`);
+        if (!Number.isInteger(target)) throw new Error(`GGTest.clock.set(${String(time)}): not a valid time, expected whole epoch milliseconds`);
         return this.change(state => state.stoppedAt === undefined
             ? {offsetMs: target - GGDateShim.realNow()}
             : {offsetMs: state.offsetMs, stoppedAt: target});
