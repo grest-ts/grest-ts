@@ -184,7 +184,7 @@ describe("GGDynamoDbTypedTable writes", () => {
     it("update refuses to derive a key from an input it can't prove", async () => {
         const {table, inputs} = stubTable()
         await expect(table.update({workspaceId: "w1"}, {status: "deleted"}))
-            .rejects.toThrow(/derived "liveOrg" reads "orgId", which neither fields, an eq condition nor opts.current provides/)
+            .rejects.toThrow(/derived "liveOrg" reads "orgId", which neither fields, an eq condition, the key nor opts.current provides/)
         expect(inputs()).toHaveLength(0)
     })
 
@@ -257,8 +257,8 @@ describe("GGDynamoDbTypedTable atomic ops and sets", () => {
 
     it("update refuses atomic ops it can't apply", async () => {
         const {table} = stubTable()
-        await expect(table.update({workspaceId: "w1"}, {}, {add: {endedAt: 5}})).rejects.toThrow(/derived "activeUntil" reads "endedAt", which an atomic add\/delete changes/)
-        await expect(table.update({workspaceId: "w1"}, {opCount: 1}, {add: {opCount: 1}})).rejects.toThrow(/"opCount" is both written and in add/)
+        await expect(table.update({workspaceId: "w1"}, {}, {add: {endedAt: 5}})).rejects.toThrow(/derived "activeUntil" reads "endedAt", which this update changes to a value it can't know/)
+        await expect(table.update({workspaceId: "w1"}, {opCount: 1}, {add: {opCount: 1}})).rejects.toThrow(/"opCount" is written twice \(add\/delete\)/)
         await expect(table.update({workspaceId: "w1"}, {}, {add: {tags: []}})).rejects.toThrow(/add "tags" needs a non-empty array/)
         await expect(table.update({workspaceId: "w1"}, {}, {add: {version: Number.NaN}})).rejects.toThrow(/add "version" needs a number field and a number/)
         await expect(table.update({workspaceId: "w1"}, {}, {delete: {opCount: 1} as object})).rejects.toThrow(/delete "opCount" needs a field declared in the spec's sets/)

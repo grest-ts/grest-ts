@@ -218,9 +218,26 @@ A derived attribute is computed from the row on **every** write path — `put`, 
 | `d.join("a", "b")` | `"<a>#<b>"` (absent while a part is undefined) | `{a, b}` |
 | `.when(fields, test)` on a join | absent while `test` is false | as the join |
 | `d.flag(fields, test)` | `"1"` while `test` holds | nothing: `index.x.query()` |
-| `d.string(fields, fn)` / `d.number(fields, fn)` | `fn`'s result | `{<name>: value}` |
+| `d.string(fields, fn)` / `d.number(fields, fn)` | `fn`'s result | its `fields` |
+
+A `join` sorts as a string: `"10"` before `"9"`. When order matters, build the value with `d.string` (e.g. pad numbers).
 
 Reads strip derived attributes, so rows come back in the schema's shape. A derived name may not also be a schema field. For a write or read that can't go through the table (a seed script, a raw command), `spec.withDerived(row)` adds the derived attributes and `spec.withoutDerived(item)` strips them.
+
+### Table keys from parts
+
+The table's own `pk` / `sk` may be derived too, so a composite key is never assembled by hand. Rows are then addressed by the key's inputs, which are fixed once a row exists: `update` refuses them, and treats them as known inputs of other derived attributes.
+
+```typescript
+const UsageTable = GGDynamoDbTableSpec.define({
+    name: "usage", schema: IsUsage, pk: "userId", sk: "providerDay",
+    derived: d => ({ providerDay: d.join("orgId", "provider", "day") }),
+})
+await usage.get({ userId, orgId, provider, day })
+await usage.query({ userId }, { sk: { prefix: { orgId } } })    // begins_with "<orgId>#": the leading parts
+```
+
+An index with a KEYS_ONLY / INCLUDE projection also projects the table key's inputs, so a row it returns can be addressed. `backfillPage` never rewrites a key: a different value would be a different row.
 
 ### Queries
 
@@ -233,7 +250,7 @@ await table.index.pendingFlows.queryOne()
 await table.query({ streamId }, { sk: { between: [10, 20] } })   // the table's own key, for a table with a sort key
 ```
 
-Sort-key conditions: `eq`, `lt`, `lte`, `gt`, `gte`, `between: [a, b]`, and `beginsWith` on string keys. `consistentRead` is offered on the table's own key only: a GSI is always eventually consistent. `query` drains every page (capped, as in [Paging](#paging)) and accepts a `filter`; `queryPage` does not, because DynamoDB's `Limit` counts rows before the filter and a filtered page could come back short or empty while matches remain.
+Sort-key conditions: `eq`, `lt`, `lte`, `gt`, `gte`, `between: [a, b]`, `beginsWith` on string keys, and `prefix` (leading parts) on a `join` key. `consistentRead` is offered on the table's own key and local indexes only: a GSI is always eventually consistent. `query` drains every page (capped, as in [Paging](#paging)) and accepts a `filter`; `queryPage` does not, because DynamoDB's `Limit` counts rows before the filter and a filtered page could come back short or empty while matches remain.
 
 Rows are typed by the index's projection: `"ALL"` (default) returns the row; `"KEYS_ONLY"` the table and index key fields; a list (DynamoDB's INCLUDE) those plus the listed fields. Share a projection list `as const` to keep its literal types.
 
@@ -248,7 +265,7 @@ await table.getMany([{ workspaceId: a }, { workspaceId: b }])
 await table.scan({ filter: { status: { eq: "running" } } })
 ```
 
-Conditions are typed by field: `{ field: { eq } | { ne } | { exists: boolean } }`, several fields AND-ed, `anyOf: [...]` to OR whole conditions and `allOf: [...]` to AND them (for two conditions on one field). As in DynamoDB, `ne` holds on a row without the field; `allOf: [{ f: { exists: true } }, { f: { ne: v } }]` requires it.
+Conditions are typed by field: `eq`, `ne`, `exists`, `in: [...]`, `lt` / `lte` / `gt` / `gte` / `between` (strings and numbers), `beginsWith` and `contains` (a substring, or a list's or set's element), and `size: { ... }` (a string's length, or an element count). Several fields are AND-ed, `anyOf: [...]` to OR whole conditions and `allOf: [...]` to AND them (for two conditions on one field). As in DynamoDB, `ne` holds on a row without the field; `allOf: [{ f: { exists: true } }, { f: { ne: v } }]` requires it.
 
 ### Partial updates
 
@@ -267,7 +284,7 @@ await table.update({ workspaceId }, { status: "deleted" }, { current: row, if: {
 await users.update({ userId }, { deactivationHandledFor: at }, { if: { deactivatedAt: { eq: at } } })
 ```
 
-### Counters, sets and upserts
+### Counters, sets, upserts and partial writes
 
 `opts.add` adds atomically to a number field (from 0 when absent); `opts.delete` removes elements from a set. Array fields listed in the spec's `sets` are stored as DynamoDB sets — unique elements, atomic `add` / `delete`, no attribute when empty — and read back as arrays. `opts.upsert` creates the row when it is missing instead of returning `undefined`; because it may create the row, it writes every derived attribute and needs all their inputs.
 
@@ -279,7 +296,14 @@ const Workspaces = GGDynamoDbTableSpec.define({ ..., sets: ["lockedOutBy"] })
 await workspaces.update({ workspaceId }, {}, { add: { lockedOutBy: [key] }, if: { status: { ne: "deleted" } } })
 ```
 
-A derived attribute can't read a field changed by `add` / `delete`: the write doesn't know the result, so `update` throws.
+More partial writes, each atomic in the one `UpdateItem`:
+
+- `setIfMissing: { createdAt: now }` sets a field only where the row has none (`if_not_exists`), e.g. on an upsert.
+- `append: { history: [entry] }` appends to a list field (`list_append`), creating it when absent.
+- `merge: { limits: { daily: 5, monthly: undefined } }` sets keys inside a map field and removes the `undefined` ones, leaving its other keys. The map must exist.
+- Arithmetic is `add`, with a negative number to subtract.
+
+A derived attribute can't read a field changed by `add`, `delete`, `setIfMissing`, `append` or `merge`: the write doesn't know the result, so `update` throws.
 
 ### Transactions
 
@@ -291,11 +315,15 @@ await db.transactWrite([orders.tx.put(order), stock.tx.update({ sku }, { reserve
 
 ### Creating tables
 
-`spec.createTableInput()` returns the `CreateTableCommandInput` (keys, attribute types, GSIs with their projections). Attribute types come from the schema (string fields → `S`, number fields → `N`) or the builder. It sets no billing mode:
+`spec.createTableInput()` returns the `CreateTableCommandInput` (keys, attribute types, GSIs and LSIs with their projections). Attribute types come from the schema (string fields → `S`, number fields → `N`) or the builder. It sets no billing mode:
 
 ```typescript
 await raw.send(new CreateTableCommand({ ...WorkspacesTable.createTableInput(), BillingMode: "PAY_PER_REQUEST" }))
 ```
+
+An index with `local: true` is a local secondary index: the table's `pk`, its own `sk`, `consistentRead` allowed. DynamoDB creates LSIs with the table only, and caps each partition (rows plus index entries) at 10 GB.
+
+`ttl: "purgeAt"` names a number field holding a Unix time in seconds after which DynamoDB may delete the row, usually within days; reads still see it until then. DynamoDB enables TTL with a separate call: `spec.timeToLiveInput()` returns its `UpdateTimeToLiveCommandInput`.
 
 ### Backfilling derived attributes
 

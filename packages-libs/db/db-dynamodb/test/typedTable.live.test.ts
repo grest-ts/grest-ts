@@ -1,9 +1,9 @@
-import {CreateTableCommand} from "@aws-sdk/client-dynamodb"
+import {CreateTableCommand, DescribeTimeToLiveCommand, UpdateTimeToLiveCommand} from "@aws-sdk/client-dynamodb"
 import {GetCommand, PutCommand} from "@aws-sdk/lib-dynamodb"
 import {GGTest} from "@grest-ts/testkit"
 import type {} from "@grest-ts/db-dynamodb/testkit"
 import {
-    ENDPOINT, EventsTable, TypedTableTestConfig, TypedTableTestRuntime, WorkspacesTable, db, events, workspaces, type Workspace,
+    ENDPOINT, EventsTable, TypedTableTestConfig, TypedTableTestRuntime, UsageTable, WorkspacesTable, db, events, usage, workspaces, type Workspace,
 } from "./TypedTableTestRuntime"
 
 describe("GGDynamoDbTypedTable against dynamodb-local", () => {
@@ -11,9 +11,10 @@ describe("GGDynamoDbTypedTable against dynamodb-local", () => {
     GGTest.with(TypedTableTestConfig.db).clone({
         host: {endpoint: ENDPOINT, region: "eu-west-1"},
         setup: async ({client}) => {
-            for (const spec of [WorkspacesTable, EventsTable]) {
+            for (const spec of [WorkspacesTable, EventsTable, UsageTable]) {
                 await client.send(new CreateTableCommand({...spec.createTableInput(), BillingMode: "PAY_PER_REQUEST"}))
             }
+            await client.send(new UpdateTimeToLiveCommand(UsageTable.timeToLiveInput()!))
         },
     })
 
@@ -109,6 +110,29 @@ describe("GGDynamoDbTypedTable against dynamodb-local", () => {
         expect((await workspaces.update({workspaceId: row.workspaceId}, {}, {add: {tags: ["b", "a"]}}))?.tags?.sort()).toEqual(["a", "b"])
         expect(await workspaces.update({workspaceId: row.workspaceId}, {}, {delete: {tags: ["a", "b"]}})).not.toHaveProperty("tags")
         expect(await workspaces.update({workspaceId: row.workspaceId}, {}, {add: {tags: ["c"]}, if: {tags: {exists: false}}})).toMatchObject({tags: ["c"]})
+    })
+
+    test("a table key derived from its parts: upsert counters, get and a prefix query", async () => {
+        const key = (day: string) => ({userId: "u-usage", orgId: "o1", provider: "speech", day})
+        await usage.update(key("2026-11-12"), {}, {upsert: true, add: {seconds: 5}, setIfMissing: {firstAt: 100}})
+        await usage.update(key("2026-11-12"), {}, {upsert: true, add: {seconds: 7}, setIfMissing: {firstAt: 200}})
+        await usage.update({...key("2026-11-13"), orgId: "o2"}, {status: "open"}, {upsert: true, add: {seconds: 1}})
+        expect(await usage.get(key("2026-11-12"))).toEqual({...key("2026-11-12"), seconds: 12, firstAt: 100})
+        expect((await usage.query({userId: "u-usage"}, {sk: {prefix: {orgId: "o1"}}})).map(r => r.day)).toEqual(["2026-11-12"])
+        expect(await usage.index.byStatus.query({userId: "u-usage"}, {sk: {eq: "open"}, consistentRead: true})).toMatchObject([{orgId: "o2", seconds: 1}])
+        const ttl = await db.getDocumentClient().send(new DescribeTimeToLiveCommand({TableName: UsageTable.name}))
+        expect(ttl.TimeToLiveDescription?.AttributeName).toBe("purgeAt")
+    })
+
+    test("append to a list, merge into a map, and the richer conditions", async () => {
+        const key = {userId: "u-ops", orgId: "o1", provider: "p", day: "d"}
+        await usage.put({...key, notes: ["a"], limits: {daily: 1, monthly: 30}, seconds: 4})
+        expect(await usage.update(key, {}, {append: {notes: ["b"]}, merge: {limits: {daily: 2, monthly: undefined}}}))
+            .toEqual({...key, notes: ["a", "b"], limits: {daily: 2}, seconds: 4})
+        const noChange = {if: {notes: {size: {gt: 5}}}} as const
+        expect(await usage.update(key, {status: "x"}, noChange)).toBeUndefined()
+        expect(await usage.update(key, {status: "x"}, {if: {notes: {contains: "b"}, seconds: {between: [1, 5]}, provider: {in: ["p", "q"]}}}))
+            .toMatchObject({status: "x"})
     })
 
     test("update on a missing row returns undefined and creates nothing", async () => {

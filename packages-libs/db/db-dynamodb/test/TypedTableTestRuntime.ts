@@ -46,6 +46,29 @@ export const IsEvent = IsObject({streamId: IsString, seq: IsNumber, kind: IsStri
 
 export const EventsTable = GGDynamoDbTableSpec.define({name: "events", schema: IsEvent, pk: "streamId", sk: "seq"})
 
+export const IsUsage = IsObject({
+    userId: IsString,
+    orgId: IsString,
+    provider: IsString,
+    day: IsString,
+    seconds: IsNumber.orUndefined,
+    firstAt: IsNumber.orUndefined,
+    purgeAt: IsNumber.orUndefined,
+    status: IsString.orUndefined,
+    notes: IsArray(IsString).orUndefined,
+    limits: IsObject({daily: IsNumber.orUndefined, monthly: IsNumber.orUndefined}).orUndefined,
+})
+
+export const UsageTable = GGDynamoDbTableSpec.define({
+    name: "usage",
+    schema: IsUsage,
+    pk: "userId",
+    sk: "providerDay",
+    ttl: "purgeAt",
+    derived: d => ({providerDay: d.join("orgId", "provider", "day")}),
+    indexes: {byStatus: {pk: "userId", sk: "status", local: true}},
+})
+
 export const TypedTableTestConfig = GGConfig.define("/db_dynamodb_typed_test/", () => ({
     db: new GGDynamoDbConfig("db"),
 }))
@@ -53,6 +76,7 @@ export const TypedTableTestConfig = GGConfig.define("/db_dynamodb_typed_test/", 
 export let db: GGDynamoDb
 export let workspaces: GGDynamoDbTableOf<typeof WorkspacesTable>
 export let events: GGDynamoDbTableOf<typeof EventsTable>
+export let usage: GGDynamoDbTableOf<typeof UsageTable>
 
 export class TypedTableTestRuntime extends GGRuntime {
     public static readonly NAME = "db-dynamodb-typed-test"
@@ -65,6 +89,7 @@ export class TypedTableTestRuntime extends GGRuntime {
         db = TypedTableTestConfig.db.newDynamoDb()
         workspaces = new GGDynamoDbTypedTable(db, WorkspacesTable)
         events = new GGDynamoDbTypedTable(db, EventsTable)
+        usage = new GGDynamoDbTypedTable(db, UsageTable)
     }
 }
 
