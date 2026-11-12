@@ -450,8 +450,9 @@ export class GGDynamoDb {
         } catch (err) {
             const reasons = (err as {CancellationReasons?: {Code?: string}[]}).CancellationReasons ?? []
             const conditionFailed = reasons.flatMap((r, i) => r.Code === "ConditionalCheckFailed" ? [i] : [])
-            const onlyConditions = reasons.every(r => r.Code === "ConditionalCheckFailed" || r.Code === "None")
-            if ((err as {name?: string}).name === "TransactionCanceledException" && conditionFailed.length > 0 && onlyConditions) return {ok: false, conditionFailed}
+            // An item DynamoDB didn't get to reports "None" (or no code).
+            const onlyConditions = conditionFailed.length > 0 && reasons.every(r => r.Code === "ConditionalCheckFailed" || r.Code === "None" || r.Code === undefined)
+            if ((err as {name?: string}).name === "TransactionCanceledException" && onlyConditions) return {ok: false, conditionFailed}
             throw err
         }
     }

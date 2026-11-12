@@ -175,8 +175,8 @@ export interface GGDynamoDbIndexDef<A extends string = string, F extends string 
     /** A list is DynamoDB's INCLUDE, kept as named (a table key included). Default `"ALL"`. With KEYS_ONLY / INCLUDE the
      *  table key's inputs are projected too, so a row can be addressed. */
     projection?: GGDynamoDbProjection<F>
-    /** Stored attributes outside the schema that the live index also projects (a field since retired), so the
-     *  declared index matches the deployed one. Never read back. */
+    /** With an INCLUDE `projection` list: stored attributes outside the schema that the live index also projects (a
+     *  field since retired), so the declared index matches the deployed one. Never read back. */
     retiredAttributes?: readonly string[]
     /** A local secondary index: same `pk` as the table, its own `sk`. Supports `consistentRead`; created with the table
      *  only, and caps each partition (table rows plus index entries) at 10 GB. */
@@ -356,7 +356,10 @@ export class GGDynamoDbTableSpec<
             const indexName = def.name ?? (def.sk ? `${def.pk}-${def.sk}-index` : `${def.pk}-index`)
             if (Object.values(indexes).some(i => i.indexName === indexName)) fail(`two indexes are named "${indexName}"`)
             for (const f of Array.isArray(def.projection) ? def.projection : []) if (!(f in this.fieldSchemas)) fail(`index "${key}" projects unknown field "${f}"`)
-            for (const f of def.retiredAttributes ?? []) {
+            const retired = def.retiredAttributes ?? []
+            if (retired.length > 0 && !Array.isArray(def.projection)) fail(`index "${key}" has retiredAttributes, which need an INCLUDE projection list`)
+            for (const [i, f] of retired.entries()) {
+                if (!f || retired.indexOf(f) !== i) fail(`index "${key}" lists retired attribute ${JSON.stringify(f)} empty or twice`)
                 if (f in this.fieldSchemas || this.derivedKey(f)) fail(`index "${key}" lists "${f}" as retired, but the spec has it`)
             }
             if (def.local && (def.pk !== this.pk || !def.sk || !this.sk)) fail(`local index "${key}" needs a table with a sort key, the table's pk ("${this.pk}") and its own sk`)

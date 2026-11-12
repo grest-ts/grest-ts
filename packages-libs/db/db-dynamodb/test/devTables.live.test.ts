@@ -52,6 +52,20 @@ describe("GGDynamoDbDevTables and GGDynamoDb.forClient against dynamodb-local", 
         expect(results.flatMap(r => r.created)).toEqual(["races"])
     })
 
+    test("an INCLUDE list naming a table key and a retired attribute is created as declared, and stays without drift", async () => {
+        const IsNode = IsObject({runKey: IsString, nodeId: IsString, runId: IsString, workKey: IsString.orUndefined, wakeAt: IsNumber})
+        const Nodes = GGDynamoDbTableSpec.define({
+            name: "nodes", schema: IsNode, pk: "runKey", sk: "nodeId",
+            indexes: {work: {name: "work-index", pk: "workKey", sk: "wakeAt", projection: ["runId", "nodeId"], retiredAttributes: ["status"]}},
+        })
+        const log: string[] = []
+        await GGDynamoDbDevTables.ensure(client, [Nodes], {log: m => log.push(m)})
+        await GGDynamoDbDevTables.ensure(client, [Nodes], {log: m => log.push(m)})
+        const live = (await client.send(new DescribeTableCommand({TableName: "nodes"}))).Table!
+        expect([...live.GlobalSecondaryIndexes![0].Projection!.NonKeyAttributes!].sort()).toEqual(["nodeId", "runId", "status"])
+        expect(log).toEqual(["created table nodes"])
+    })
+
     test("merges the specs sharing a table", async () => {
         const IsTicketUse = IsObject({ticketId: IsString, usedBy: IsString, at: IsNumber})
         const Uses = GGDynamoDbTableSpec.define({name: "shared", schema: IsTicketUse, pk: "ticketId", indexes: {byUser: {pk: "usedBy"}}})
