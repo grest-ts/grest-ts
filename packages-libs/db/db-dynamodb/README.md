@@ -284,6 +284,8 @@ Sort-key conditions: `eq`, `lt`, `lte`, `gt`, `gte`, `between: [a, b]`, `beginsW
 
 Rows are typed by the index's projection: `"ALL"` (default) returns the row; `"KEYS_ONLY"` the table and index key fields; a list (DynamoDB's INCLUDE) those plus the listed fields. Share a projection list `as const` to keep its literal types.
 
+An INCLUDE list is created as named, a table key attribute included, so a spec can match an index already deployed. When the deployed index also projects an attribute the schema no longer has, name it in `retiredAttributes: ["status"]`: it is created with the index and never read back.
+
 ### Writes and conditions
 
 ```typescript
@@ -363,6 +365,10 @@ const saved = await projects.save({ ...project, name })   // undefined: someone 
 const result = await db.transactWrite([orders.tx.put(order), stock.tx.update({ sku }, { reserved }, { if: { version: { eq: v } } })])
 if (!result.ok) result.conditionFailed   // [1]: the stock update's condition
 ```
+
+The result is not `ok` only when failed conditions alone cancelled the transaction. Any other cancellation reason — a
+conflicting transaction, throttling — rethrows DynamoDB's `TransactionCanceledException`, also when it comes beside a
+failed condition: `ok: false` always means "a condition you wrote doesn't hold", never "try again".
 
 ### Tables for development and tests
 
