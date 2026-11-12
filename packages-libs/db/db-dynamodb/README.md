@@ -210,7 +210,7 @@ class WorkspaceStore {
 
 ### Derived attributes
 
-A derived attribute is computed from the row on **every** write path — `put`, `update`, `tx.*` — so application code never computes an index key. Each builder names the fields it reads, and its function sees only those. Returning `undefined` leaves the attribute off the row, which keeps the row out of every index keyed on it (a sparse index).
+A derived attribute is computed from the row on **every** write path — `put`, `putMany`, `update`, `tx.*` — so application code never computes an index key. Each builder names the fields it reads, and its function sees only those. Returning `undefined` (or `""`, which DynamoDB can't index) leaves the attribute off the row, which keeps the row out of every index keyed on it (a sparse index).
 
 | Builder | Stored | Queried by |
 |---|---|---|
@@ -220,13 +220,13 @@ A derived attribute is computed from the row on **every** write path — `put`, 
 | `d.flag(fields, test)` | `"1"` while `test` holds | nothing: `index.x.query()` |
 | `d.string(fields, fn)` / `d.number(fields, fn)` | `fn`'s result | its `fields` |
 
-A `join` sorts as a string: `"10"` before `"9"`. When order matters, build the value with `d.string` (e.g. pad numbers).
+A `join` sorts as a string: `"10"` before `"9"`. When order matters, build the value with `d.string` (e.g. pad numbers). A part containing `#` is refused, as it would let two rows share one value.
 
-Reads strip derived attributes, so rows come back in the schema's shape. A derived name may not also be a schema field. For a write or read that can't go through the table (a seed script, a raw command), `spec.withDerived(row)` adds the derived attributes and `spec.withoutDerived(item)` strips them.
+Reads strip derived attributes, so rows come back in the schema's shape. A derived name may not also be a schema field, nor read a `sets` field. For a write or read that can't go through the table (a seed script, a raw command), `spec.withDerived(row)` adds the derived attributes and `spec.withoutDerived(item)` strips them.
 
 ### Table keys from parts
 
-The table's own `pk` / `sk` may be derived too, so a composite key is never assembled by hand. Rows are then addressed by the key's inputs, which are fixed once a row exists: `update` refuses them, and treats them as known inputs of other derived attributes.
+The table's own `pk` / `sk` may be derived too, so a composite key is never assembled by hand. Rows are then addressed by the key's inputs, which are fixed once a row exists: `update` refuses them, and treats them as known inputs of other derived attributes. A table key can't be sparse: no `flag`, no `.when`, no optional `join` part.
 
 ```typescript
 const UsageTable = GGDynamoDbTableSpec.define({
@@ -236,6 +236,8 @@ const UsageTable = GGDynamoDbTableSpec.define({
 await usage.get({ userId, orgId, provider, day })
 await usage.query({ userId }, { sk: { prefix: { orgId } } })    // begins_with "<orgId>#": the leading parts
 ```
+
+A `join` key maps back to exactly one set of parts. A `d.string` / `d.number` key may not (`second: d.number(["at"], r => Math.floor(r.at / 1000))` puts many `at`s on one key), so `update` also conditions on the key's inputs holding the given values.
 
 An index with a KEYS_ONLY / INCLUDE projection also projects the table key's inputs, so a row it returns can be addressed. `backfillPage` never rewrites a key: a different value would be a different row.
 
@@ -250,7 +252,9 @@ await table.index.pendingFlows.queryOne()
 await table.query({ streamId }, { sk: { between: [10, 20] } })   // the table's own key, for a table with a sort key
 ```
 
-Sort-key conditions: `eq`, `lt`, `lte`, `gt`, `gte`, `between: [a, b]`, `beginsWith` on string keys, and `prefix` (leading parts) on a `join` key. `consistentRead` is offered on the table's own key and local indexes only: a GSI is always eventually consistent. `query` drains every page (capped, as in [Paging](#paging)) and accepts a `filter`; `queryPage` does not, because DynamoDB's `Limit` counts rows before the filter and a filtered page could come back short or empty while matches remain.
+Sort-key conditions: `eq`, `lt`, `lte`, `gt`, `gte`, `between: [a, b]`, `beginsWith` on string keys, and `prefix` (leading parts) on a `join` key of several parts. On a derived sort key the operands may be its inputs: `{ between: [{ at: from }, { at: to }] }`. `consistentRead` is offered on the table's own key and local indexes only: a GSI is always eventually consistent.
+
+`query` drains every page (capped, as in [Paging](#paging)) and accepts a `filter`, on anything but the queried key (DynamoDB refuses that: use `sk`). `queryPage` takes no filter, because DynamoDB's `Limit` counts rows before the filter and a filtered page could come back short or empty while matches remain. A cursor handed back to another query throws `GGDynamoDbCursorError`, as a malformed one does.
 
 Rows are typed by the index's projection: `"ALL"` (default) returns the row; `"KEYS_ONLY"` the table and index key fields; a list (DynamoDB's INCLUDE) those plus the listed fields. Share a projection list `as const` to keep its literal types.
 
@@ -261,11 +265,13 @@ await table.put(row)                                              // validates, 
 await table.put(row, { if: { workspaceId: { exists: false } } })  // false when the condition fails
 await table.update({ workspaceId }, { name: "x" })                // the updated row, or undefined
 await table.delete({ workspaceId }, { if: { version: { eq: 3 } } })
-await table.getMany([{ workspaceId: a }, { workspaceId: b }])
+await table.getMany([{ workspaceId: a }, { workspaceId: b }])   // in the keys' order; missing rows skipped
+await table.putMany(rows)                                         // 25 per request; no conditions, not atomic
+await table.deleteMany(keys)
 await table.scan({ filter: { status: { eq: "running" } } })
 ```
 
-Conditions are typed by field: `eq`, `ne`, `exists`, `in: [...]`, `lt` / `lte` / `gt` / `gte` / `between` (strings and numbers), `beginsWith` and `contains` (a substring, or a list's or set's element), and `size: { ... }` (a string's length, or an element count). Several fields are AND-ed, `anyOf: [...]` to OR whole conditions and `allOf: [...]` to AND them (for two conditions on one field). As in DynamoDB, `ne` holds on a row without the field; `allOf: [{ f: { exists: true } }, { f: { ne: v } }]` requires it.
+Conditions are typed by field, one operator each: `eq`, `ne`, `exists`, `in: [...]`, `lt` / `lte` / `gt` / `gte` / `between` (strings and numbers), `beginsWith` and `contains` (a substring, or a list's or set's element), and `size: { ... }` (a string's length, or an element count). Several fields are AND-ed, `anyOf: [...]` to OR whole conditions and `allOf: [...]` to AND them (for two conditions on one field). As in DynamoDB, `ne` holds on a row without the field; `allOf: [{ f: { exists: true } }, { f: { ne: v } }]` requires it.
 
 ### Partial updates
 
@@ -275,7 +281,7 @@ Conditions are typed by field: `eq`, `ne`, `exists`, `in: [...]`, `lt` / `lte` /
 - inputs pinned by a top-level `eq` (or `exists: false`) in `opts.if`,
 - inputs read from `opts.current`, the row the caller read — the update then lands only while those inputs are unchanged.
 
-If an input is none of these, `update` throws before writing. So a concurrent change to an input fails the update (`undefined`) instead of leaving a stale key behind.
+If an input is none of these, `update` throws before writing. So a concurrent change to an input fails the update instead of leaving a stale key behind. `update` returns `undefined` when the row is missing, `opts.if` fails, or an input taken from `opts.current` changed: re-read and retry.
 
 ```typescript
 // liveOrg reads orgId and status; current supplies orgId and pins it
@@ -286,7 +292,7 @@ await users.update({ userId }, { deactivationHandledFor: at }, { if: { deactivat
 
 ### Counters, sets, upserts and partial writes
 
-`opts.add` adds atomically to a number field (from 0 when absent); `opts.delete` removes elements from a set. Array fields listed in the spec's `sets` are stored as DynamoDB sets — unique elements, atomic `add` / `delete`, no attribute when empty — and read back as arrays. `opts.upsert` creates the row when it is missing instead of returning `undefined`; because it may create the row, it writes every derived attribute and needs all their inputs.
+`opts.add` adds atomically to a number field (from 0 when absent); `opts.delete` removes elements from a set. Array fields listed in the spec's `sets` are stored as DynamoDB sets — unique elements, atomic `add` / `delete`, no attribute when empty — and read back as arrays. `opts.upsert` creates the row when it is missing instead of returning `undefined`. Because it may create the row, `fields`, `setIfMissing`, `add` and the key must cover every required field; it writes every derived attribute, so their inputs must be known — including optional ones, given as `undefined` when the row has none; and it can't take `opts.current`.
 
 ```typescript
 const Usage = GGDynamoDbTableSpec.define({ name: "usage", schema: IsUsage, pk: "userId", sk: "day" })
@@ -300,17 +306,18 @@ More partial writes, each atomic in the one `UpdateItem`:
 
 - `setIfMissing: { createdAt: now }` sets a field only where the row has none (`if_not_exists`), e.g. on an upsert.
 - `append: { history: [entry] }` appends to a list field (`list_append`), creating it when absent.
-- `merge: { limits: { daily: 5, monthly: undefined } }` sets keys inside a map field and removes the `undefined` ones, leaving its other keys. The map must exist.
+- `merge: { limits: { daily: 5, monthly: undefined } }` sets keys inside a map field and removes the `undefined` ones, leaving its other keys. The map must exist; `update` throws when it doesn't.
 - Arithmetic is `add`, with a negative number to subtract.
 
 A derived attribute can't read a field changed by `add`, `delete`, `setIfMissing`, `append` or `merge`: the write doesn't know the result, so `update` throws.
 
 ### Transactions
 
-`table.tx.put / update / delete / check` build items with the same validation, derivation and conditions; `db.transactWrite(items)` writes them all or none, and returns false when a condition cancels it.
+`table.tx.put / update / delete / check` build items with the same validation, derivation and conditions; `db.transactWrite(items)` writes them all or none. When a condition cancels it, the result names the items whose condition failed:
 
 ```typescript
-await db.transactWrite([orders.tx.put(order), stock.tx.update({ sku }, { reserved }, { if: { version: { eq: v } } })])
+const result = await db.transactWrite([orders.tx.put(order), stock.tx.update({ sku }, { reserved }, { if: { version: { eq: v } } })])
+if (!result.ok) result.conditionFailed   // [1]: the stock update's condition
 ```
 
 ### Creating tables
@@ -321,23 +328,23 @@ await db.transactWrite([orders.tx.put(order), stock.tx.update({ sku }, { reserve
 await raw.send(new CreateTableCommand({ ...WorkspacesTable.createTableInput(), BillingMode: "PAY_PER_REQUEST" }))
 ```
 
-An index with `local: true` is a local secondary index: the table's `pk`, its own `sk`, `consistentRead` allowed. DynamoDB creates LSIs with the table only, and caps each partition (rows plus index entries) at 10 GB.
+An index with `local: true` is a local secondary index, on a table with a sort key: the table's `pk`, its own `sk`, `consistentRead` allowed. DynamoDB creates LSIs with the table only, and caps each partition (rows plus index entries) at 10 GB.
 
 `ttl: "purgeAt"` names a number field holding a Unix time in seconds after which DynamoDB may delete the row, usually within days; reads still see it until then. DynamoDB enables TTL with a separate call: `spec.timeToLiveInput()` returns its `UpdateTimeToLiveCommandInput`.
 
 ### Backfilling derived attributes
 
-After adding an index or changing a key function, rewrite existing rows with `backfillPage`. It reads one page, recomputes every derived attribute, and rewrites only the rows that differ, each conditioned on the inputs it read being unchanged — a row another writer changed meanwhile is counted as a conflict and left to that writer, which derived its keys itself. It is resumable from any returned cursor and tied to no job framework:
+After adding an index or changing a key function, rewrite existing rows with `backfillPage`. It reads one page, recomputes every derived attribute, and rewrites only the rows that differ (`concurrency` at a time, default 10), each conditioned on the inputs it read being unchanged — a row another writer changed meanwhile is counted as a conflict and left to that writer, which derived its keys itself. A row whose key function throws is reported in `failed` and left alone. It is resumable from any returned cursor and tied to no job framework:
 
 ```typescript
 let cursor: string | undefined
 do {
-    const page = await table.backfillPage({ cursor, limit: 200 })   // { scanned, rewritten, conflicts, cursor }
+    const page = await table.backfillPage({ cursor, limit: 200 })   // { scanned, rewritten, conflicts, failed, cursor }
     cursor = page.cursor
 } while (cursor)
 ```
 
-Run it once every writer derives with the new spec. Attributes no longer in the spec are not removed.
+For a large table, run `totalSegments` workers, each with its own `segment` (0-based) and cursor. Run a backfill once every writer derives with the new spec. Attributes no longer in the spec are not removed; a DynamoDB error fails the page, which is safe to run again.
 
 ### Migrating from `GGDynamoDbTable`
 

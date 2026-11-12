@@ -49,7 +49,13 @@ export interface GGDynamoDbScanOptions extends Omit<GGDynamoDbQueryOptions, "des
 
 export interface GGDynamoDbScanPageOptions extends GGDynamoDbScanOptions {
     cursor?: string
+    /** A parallel scan: this worker reads segment `segment` of `totalSegments`, each with its own cursor. */
+    segment?: number
+    totalSegments?: number
 }
+
+/** A transaction's outcome; `conditionFailed` lists the positions of the items whose condition stopped it. */
+export type GGDynamoDbTransactResult = {ok: true} | {ok: false, conditionFailed: number[]}
 
 // DynamoDB caps a single Query/Scan response at 1MB however many rows match,
 // handing back LastEvaluatedKey instead — so one command is never proof of a
@@ -84,6 +90,18 @@ export class GGDynamoDbCursorError extends Error {
     constructor() {
         super("GGDynamoDb: malformed cursor")
         this.name = "GGDynamoDbCursorError"
+    }
+}
+
+// A well-formed cursor from another table, index or segment fails only at DynamoDB.
+async function withCursor<R>(cursor: string | undefined, send: () => Promise<R>): Promise<R> {
+    try {
+        return await send()
+    } catch (err) {
+        if (cursor && (err as {name?: string}).name === "ValidationException" && /start(ing)? key/i.test(String((err as Error).message))) {
+            throw new GGDynamoDbCursorError()
+        }
+        throw err
     }
 }
 
@@ -406,16 +424,17 @@ export class GGDynamoDb {
     }
 
     /**
-     * All-or-nothing write of up to 100 items (`GGDynamoDbTypedTable.tx` builds them). False when a condition in it
+     * All-or-nothing write of up to 100 items (`GGDynamoDbTypedTable.tx` builds them). Not `ok` when a condition in it
      * fails; any other cancellation is rethrown.
      */
-    async transactWrite(items: GGDynamoDbTransactItem[]): Promise<boolean> {
+    async transactWrite(items: GGDynamoDbTransactItem[]): Promise<GGDynamoDbTransactResult> {
         try {
             await this.getDocumentClient().send(new TransactWriteCommand({TransactItems: items}))
-            return true
+            return {ok: true}
         } catch (err) {
-            const reasons = (err as {CancellationReasons?: {Code?: string}[]}).CancellationReasons
-            if ((err as {name?: string}).name === "TransactionCanceledException" && reasons?.some(r => r.Code === "ConditionalCheckFailed")) return false
+            const reasons = (err as {CancellationReasons?: {Code?: string}[]}).CancellationReasons ?? []
+            const conditionFailed = reasons.flatMap((r, i) => r.Code === "ConditionalCheckFailed" ? [i] : [])
+            if ((err as {name?: string}).name === "TransactionCanceledException" && conditionFailed.length > 0) return {ok: false, conditionFailed}
             throw err
         }
     }
@@ -435,14 +454,14 @@ export class GGDynamoDb {
         values: Record<string, unknown>,
         opts?: GGDynamoDbQueryPageOptions,
     ): Promise<GGDynamoDbPage<T>> {
-        const result = await this.getDocumentClient().send(new QueryCommand({
+        const result = await withCursor(opts?.cursor, () => this.getDocumentClient().send(new QueryCommand({
             TableName: table,
             IndexName: indexName,
             KeyConditionExpression: keyCondition,
             Limit: opts?.limit,
             ...(opts?.descending && {ScanIndexForward: false}),
             ...readInput(opts, values),
-        }))
+        })))
         return {
             items: (result.Items ?? []) as T[],
             cursor: result.LastEvaluatedKey ? encodeCursor(result.LastEvaluatedKey) : undefined,
@@ -478,11 +497,12 @@ export class GGDynamoDb {
 
     /** One page of a full-table scan. See `queryPage`. */
     async scanPage<T>(table: string, opts?: GGDynamoDbScanPageOptions): Promise<GGDynamoDbPage<T>> {
-        const result = await this.getDocumentClient().send(new ScanCommand({
+        const result = await withCursor(opts?.cursor, () => this.getDocumentClient().send(new ScanCommand({
             TableName: table,
             Limit: opts?.limit,
+            ...(opts?.totalSegments !== undefined && {Segment: opts.segment, TotalSegments: opts.totalSegments}),
             ...readInput(opts, opts?.values),
-        }))
+        })))
         return {
             items: (result.Items ?? []) as T[],
             cursor: result.LastEvaluatedKey ? encodeCursor(result.LastEvaluatedKey) : undefined,

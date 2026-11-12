@@ -1,6 +1,7 @@
 import {CreateTableCommand, DescribeTimeToLiveCommand, UpdateTimeToLiveCommand} from "@aws-sdk/client-dynamodb"
 import {GetCommand, PutCommand} from "@aws-sdk/lib-dynamodb"
 import {GGTest} from "@grest-ts/testkit"
+import {GGDynamoDbCursorError} from "../src/GGDynamoDb"
 import type {} from "@grest-ts/db-dynamodb/testkit"
 import {
     ENDPOINT, EventsTable, TypedTableTestConfig, TypedTableTestRuntime, UsageTable, WorkspacesTable, db, events, usage, workspaces, type Workspace,
@@ -100,7 +101,9 @@ describe("GGDynamoDbTypedTable against dynamodb-local", () => {
     })
 
     test("an upsert needs every derived attribute's inputs: it may create the row", async () => {
-        await expect(workspaces.update({workspaceId: "w-upsert"}, {name: "x"}, {upsert: true})).rejects.toThrow(/derived "orgUser" reads "orgId"/)
+        await expect(workspaces.update({workspaceId: "w-upsert"}, {name: "x"}, {upsert: true})).rejects.toThrow(/an upsert may create the row, which then needs orgId, status, createdAt, version/)
+        await expect(workspaces.update({workspaceId: "w-upsert"}, {status: "running"}, {upsert: true, setIfMissing: {orgId: "o", createdAt: 1, version: 1}}))
+            .rejects.toThrow(/derived "orgUser" reads "orgId", which this update changes to a value it can't know/)
     })
 
     test("a set field: put, atomic add and delete, read back as an array, gone once empty", async () => {
@@ -135,6 +138,45 @@ describe("GGDynamoDbTypedTable against dynamodb-local", () => {
             .toMatchObject({status: "x"})
     })
 
+    test("putMany and deleteMany write past one batch, deriving keys; getMany keeps order and reads repeats once", async () => {
+        const rows = Array.from({length: 30}, (_, i) => ws({orgId: "org-batch", createdAt: 10_000 + i}))
+        await workspaces.putMany(rows)
+        expect(await workspaces.index.liveByOrg.query({orgId: "org-batch"})).toHaveLength(30)
+        const keys = [rows[2], rows[0], rows[2]].map(r => ({workspaceId: r.workspaceId}))
+        expect((await workspaces.getMany([...keys, {workspaceId: "nope"}])).map(r => r.workspaceId)).toEqual([rows[2].workspaceId, rows[0].workspaceId])
+        await workspaces.deleteMany(rows.map(r => ({workspaceId: r.workspaceId})))
+        expect(await workspaces.index.liveByOrg.query({orgId: "org-batch"})).toEqual([])
+    })
+
+    test("a cursor from another query is a cursor error", async () => {
+        for (const n of [1, 2]) await workspaces.put(ws({orgId: "org-cursor", createdAt: n}))
+        const {cursor} = await workspaces.index.liveByOrg.queryPage({orgId: "org-cursor"}, {limit: 1})
+        await expect(workspaces.index.byOrgUser.queryPage({orgId: "org-cursor", userId: "u1"}, {cursor})).rejects.toBeInstanceOf(GGDynamoDbCursorError)
+    })
+
+    test("merge into a map the row doesn't have is a clear error", async () => {
+        const key = {userId: "u-merge", orgId: "o1", provider: "p", day: "d"}
+        await usage.put(key)
+        await expect(usage.update(key, {}, {merge: {limits: {daily: 1}}})).rejects.toThrow(/merge into limits, which the row doesn't have/)
+    })
+
+    test("a parallel backfill covers the table across segments", async () => {
+        const raw = (item: Record<string, unknown>) => db.getDocumentClient().send(new PutCommand({TableName: "workspaces", Item: item}))
+        const rows = Array.from({length: 8}, () => ws({orgId: "org-segments"}))
+        for (const r of rows) await raw(r)
+        let rewritten = 0
+        await Promise.all([0, 1, 2].map(async segment => {
+            let cursor: string | undefined
+            do {
+                const page = await workspaces.backfillPage({segment, totalSegments: 3, cursor, limit: 5})
+                rewritten += page.rewritten
+                cursor = page.cursor
+            } while (cursor)
+        }))
+        expect(rewritten).toBeGreaterThanOrEqual(8)
+        expect(await workspaces.index.liveByOrg.query({orgId: "org-segments"})).toHaveLength(8)
+    })
+
     test("update on a missing row returns undefined and creates nothing", async () => {
         expect(await workspaces.update({workspaceId: "nope"}, {name: "x"})).toBeUndefined()
         expect(await stored("nope")).toBeUndefined()
@@ -143,9 +185,10 @@ describe("GGDynamoDbTypedTable against dynamodb-local", () => {
     test("a transaction writes all or nothing, deriving keys", async () => {
         const a = ws(), b = ws()
         await workspaces.put(b)
-        expect(await db.transactWrite([workspaces.tx.put(a), workspaces.tx.update({workspaceId: b.workspaceId}, {pendingOp: "x"}, {if: {version: {eq: 9}}})])).toBe(false)
+        expect(await db.transactWrite([workspaces.tx.put(a), workspaces.tx.update({workspaceId: b.workspaceId}, {pendingOp: "x"}, {if: {version: {eq: 9}}})]))
+            .toEqual({ok: false, conditionFailed: [1]})
         expect(await stored(a.workspaceId)).toBeUndefined()
-        expect(await db.transactWrite([workspaces.tx.put(a), workspaces.tx.update({workspaceId: b.workspaceId}, {pendingOp: "x"}, {if: {version: {eq: 1}}})])).toBe(true)
+        expect(await db.transactWrite([workspaces.tx.put(a), workspaces.tx.update({workspaceId: b.workspaceId}, {pendingOp: "x"}, {if: {version: {eq: 1}}})])).toEqual({ok: true})
         expect(await stored(a.workspaceId)).toMatchObject({liveOrg: a.orgId})
         expect(await stored(b.workspaceId)).toMatchObject({pendingOp: "x", flowPending: "1"})
     })

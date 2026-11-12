@@ -150,7 +150,7 @@ describe("GGDynamoDbTypedTable writes", () => {
 
     it("put rejects a row that fails the schema", async () => {
         const {table} = stubTable()
-        await expect(table.put({...row, status: "nope" as "running"})).rejects.toThrow(/workspaces.put: schema validation failed for w1/)
+        await expect(table.put({...row, status: "nope" as "running"})).rejects.toThrow(/workspaces.put: schema validation failed for {"workspaceId":"w1"}/)
     })
 
     it("conditional put compiles the typed condition", async () => {
@@ -244,11 +244,14 @@ describe("GGDynamoDbTypedTable atomic ops and sets", () => {
 
     it("update adds to counters and sets, deletes from sets, and upserts", async () => {
         const {table, inputs} = stubTable({})
-        await table.update({workspaceId: "w1"}, {name: "x"}, {add: {opCount: 1, tags: ["a"]}, upsert: true, current: row})
-        expect(readable(inputs()[0], inputs()[0].UpdateExpression))
-            .toBe(`SET name = "x", orgUser = "o1#u1", liveOrg = "o1", activeUntil = ${Number.MAX_SAFE_INTEGER} REMOVE flowPending ADD opCount 1, tags {}`)
+        const {workspaceId, ...rest} = row
+        // An upsert may meet an existing row, so the optional inputs of derived keys are stated too.
+        await table.update({workspaceId}, {...rest, pendingOp: undefined, endedAt: undefined}, {add: {opCount: 1, tags: ["a"]}, upsert: true})
+        expect(readable(inputs()[0], inputs()[0].UpdateExpression)).toBe(
+            `SET orgId = "o1", userId = "u1", projectId = "p1", status = "running", createdAt = 5, version = 1, ` +
+            `orgUser = "o1#u1", liveOrg = "o1", activeUntil = ${Number.MAX_SAFE_INTEGER} REMOVE pendingOp, endedAt, flowPending ADD opCount 1, tags {}`)
         expect(Object.values(inputs()[0].ExpressionAttributeValues)).toContainEqual(new Set(["a"]))
-        expect(readable(inputs()[0], inputs()[0].ConditionExpression)).not.toContain("attribute_exists(workspaceId)")
+        expect(inputs()[0]).not.toHaveProperty("ConditionExpression")
         const {table: t2, inputs: i2} = stubTable({})
         await t2.update({workspaceId: "w1"}, {}, {delete: {tags: ["a"]}})
         expect(readable(i2()[0], i2()[0].UpdateExpression)).toBe("DELETE tags {}")
@@ -258,7 +261,7 @@ describe("GGDynamoDbTypedTable atomic ops and sets", () => {
     it("update refuses atomic ops it can't apply", async () => {
         const {table} = stubTable()
         await expect(table.update({workspaceId: "w1"}, {}, {add: {endedAt: 5}})).rejects.toThrow(/derived "activeUntil" reads "endedAt", which this update changes to a value it can't know/)
-        await expect(table.update({workspaceId: "w1"}, {opCount: 1}, {add: {opCount: 1}})).rejects.toThrow(/"opCount" is written twice \(add\/delete\)/)
+        await expect(table.update({workspaceId: "w1"}, {opCount: 1}, {add: {opCount: 1}})).rejects.toThrow(/"opCount" is written twice \(add\)/)
         await expect(table.update({workspaceId: "w1"}, {}, {add: {tags: []}})).rejects.toThrow(/add "tags" needs a non-empty array/)
         await expect(table.update({workspaceId: "w1"}, {}, {add: {version: Number.NaN}})).rejects.toThrow(/add "version" needs a number field and a number/)
         await expect(table.update({workspaceId: "w1"}, {}, {delete: {opCount: 1} as object})).rejects.toThrow(/delete "opCount" needs a field declared in the spec's sets/)
@@ -275,7 +278,7 @@ describe("GGDynamoDbTypedTable backfill", () => {
             {},
             conflict,
         )
-        await expect(table.backfillPage({limit: 3})).resolves.toEqual({scanned: 3, rewritten: 1, conflicts: 1, cursor: expect.any(String)})
+        await expect(table.backfillPage({limit: 3})).resolves.toEqual({scanned: 3, rewritten: 1, conflicts: 1, failed: [], cursor: expect.any(String)})
         expect(inputs()[0]).toMatchObject({Limit: 3})
         expect(inputs()).toHaveLength(3)
         expect(inputs()[1].Key).toEqual({workspaceId: "w2"})
@@ -316,6 +319,6 @@ describe("GGDynamoDbTypedTable reads", () => {
 
     it("refuses a query without the key parts", async () => {
         const {table} = stubTable()
-        await expect(table.index.byOrgUser.query({orgId: "o1"} as {orgId: string, userId: string})).rejects.toThrow(/needs orgId, userId/)
+        await expect(table.index.byOrgUser.query({orgId: "o1"} as {orgId: string, userId: string})).rejects.toThrow(/"orgUser" needs orgId, userId/)
     })
 })
