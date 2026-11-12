@@ -233,7 +233,7 @@ await table.index.pendingFlows.queryOne()
 await table.query({ streamId }, { sk: { between: [10, 20] } })   // the table's own key, for a table with a sort key
 ```
 
-Sort-key conditions: `eq`, `lt`, `lte`, `gt`, `gte`, `between: [a, b]`, and `beginsWith` on string keys. `query` drains every page (capped, as in [Paging](#paging)) and accepts a `filter`; `queryPage` does not, because DynamoDB's `Limit` counts rows before the filter and a filtered page could come back short or empty while matches remain.
+Sort-key conditions: `eq`, `lt`, `lte`, `gt`, `gte`, `between: [a, b]`, and `beginsWith` on string keys. `consistentRead` is offered on the table's own key only: a GSI is always eventually consistent. `query` drains every page (capped, as in [Paging](#paging)) and accepts a `filter`; `queryPage` does not, because DynamoDB's `Limit` counts rows before the filter and a filtered page could come back short or empty while matches remain.
 
 Rows are typed by the index's projection: `"ALL"` (default) returns the row; `"KEYS_ONLY"` the table and index key fields; a list (DynamoDB's INCLUDE) those plus the listed fields. Share a projection list `as const` to keep its literal types.
 
@@ -267,6 +267,20 @@ await table.update({ workspaceId }, { status: "deleted" }, { current: row, if: {
 await users.update({ userId }, { deactivationHandledFor: at }, { if: { deactivatedAt: { eq: at } } })
 ```
 
+### Counters, sets and upserts
+
+`opts.add` adds atomically to a number field (from 0 when absent); `opts.delete` removes elements from a set. Array fields listed in the spec's `sets` are stored as DynamoDB sets — unique elements, atomic `add` / `delete`, no attribute when empty — and read back as arrays. `opts.upsert` creates the row when it is missing instead of returning `undefined`; because it may create the row, it writes every derived attribute and needs all their inputs.
+
+```typescript
+const Usage = GGDynamoDbTableSpec.define({ name: "usage", schema: IsUsage, pk: "userId", sk: "day" })
+await usage.update({ userId, day }, { lastAt: Date.now() }, { upsert: true, add: { requests: 1, seconds } })
+
+const Workspaces = GGDynamoDbTableSpec.define({ ..., sets: ["lockedOutBy"] })
+await workspaces.update({ workspaceId }, {}, { add: { lockedOutBy: [key] }, if: { status: { ne: "deleted" } } })
+```
+
+A derived attribute can't read a field changed by `add` / `delete`: the write doesn't know the result, so `update` throws.
+
 ### Transactions
 
 `table.tx.put / update / delete / check` build items with the same validation, derivation and conditions; `db.transactWrite(items)` writes them all or none, and returns false when a condition cancels it.
@@ -299,7 +313,7 @@ Run it once every writer derives with the new spec. Attributes no longer in the 
 
 ### Migrating from `GGDynamoDbTable`
 
-Both classes share a `GGDynamoDb`, so tables move one at a time. Give derived attributes and indexes the names already on disk (`name` on the index) and the stored rows need no migration. Move every writer of a table at once: a writer left on `GGDynamoDbTable` would not derive the keys. For a command the typed table doesn't cover (e.g. a string-set `ADD`), `db.getDocumentClient()` returns the managed document client — keep such writes off derived attributes' inputs.
+Both classes share a `GGDynamoDb`, so tables move one at a time. Give derived attributes and indexes the names already on disk (`name` on the index) and the stored rows need no migration. Move every writer of a table at once: a writer left on `GGDynamoDbTable` would not derive the keys. For a command the typed table doesn't cover, `db.getDocumentClient()` returns the managed document client — keep such writes off derived attributes' inputs.
 
 ## Schema-Bound Tables
 

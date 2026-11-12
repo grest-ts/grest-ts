@@ -93,6 +93,24 @@ describe("GGDynamoDbTypedTable against dynamodb-local", () => {
         expect(await workspaces.update({workspaceId: row.workspaceId}, {version: 2}, {if: {name: {ne: "x"}}})).toMatchObject({version: 2})
     })
 
+    test("an upsert counter creates the row, then adds to it", async () => {
+        await events.update({streamId: "counter", seq: 1}, {kind: "c"}, {upsert: true, add: {count: 2}})
+        expect(await events.update({streamId: "counter", seq: 1}, {}, {upsert: true, add: {count: 3}})).toEqual({streamId: "counter", seq: 1, kind: "c", count: 5})
+    })
+
+    test("an upsert needs every derived attribute's inputs: it may create the row", async () => {
+        await expect(workspaces.update({workspaceId: "w-upsert"}, {name: "x"}, {upsert: true})).rejects.toThrow(/derived "orgUser" reads "orgId"/)
+    })
+
+    test("a set field: put, atomic add and delete, read back as an array, gone once empty", async () => {
+        const row = ws({tags: ["a"]})
+        await workspaces.put(row)
+        expect(await stored(row.workspaceId)).toMatchObject({tags: new Set(["a"])})
+        expect((await workspaces.update({workspaceId: row.workspaceId}, {}, {add: {tags: ["b", "a"]}}))?.tags?.sort()).toEqual(["a", "b"])
+        expect(await workspaces.update({workspaceId: row.workspaceId}, {}, {delete: {tags: ["a", "b"]}})).not.toHaveProperty("tags")
+        expect(await workspaces.update({workspaceId: row.workspaceId}, {}, {add: {tags: ["c"]}, if: {tags: {exists: false}}})).toMatchObject({tags: ["c"]})
+    })
+
     test("update on a missing row returns undefined and creates nothing", async () => {
         expect(await workspaces.update({workspaceId: "nope"}, {name: "x"})).toBeUndefined()
         expect(await stored("nope")).toBeUndefined()

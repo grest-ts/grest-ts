@@ -1,6 +1,6 @@
 import {GGRuntime} from "@grest-ts/runtime"
 import {GGConfig, GGConfigLocator, GGConfigStoreLocal, GGResource, GGSecret} from "@grest-ts/config"
-import {IsLiteral, IsNumber, IsObject, IsString} from "@grest-ts/schema"
+import {IsArray, IsLiteral, IsNumber, IsObject, IsString} from "@grest-ts/schema"
 import {GGDynamoDbConfig} from "../src/GGDynamoDbConfig"
 import type {GGDynamoDb} from "../src/GGDynamoDb"
 import {GGDynamoDbTableSpec} from "../src/GGDynamoDbTableSpec"
@@ -17,6 +17,8 @@ export const IsWorkspace = IsObject({
     name: IsString.orUndefined,
     pendingOp: IsString.orUndefined,
     endedAt: IsNumber.orUndefined,
+    tags: IsArray(IsString).orUndefined,
+    opCount: IsNumber.orUndefined,
     version: IsNumber,
 })
 export type Workspace = typeof IsWorkspace.infer
@@ -25,6 +27,7 @@ export const WorkspacesTable = GGDynamoDbTableSpec.define({
     name: "workspaces",
     schema: IsWorkspace,
     pk: "workspaceId",
+    sets: ["tags"],
     derived: d => ({
         orgUser: d.join("orgId", "userId"),
         liveOrg: d.join("orgId").when(["status"], r => r.status !== "deleted"),
@@ -39,7 +42,7 @@ export const WorkspacesTable = GGDynamoDbTableSpec.define({
     },
 })
 
-export const IsEvent = IsObject({streamId: IsString, seq: IsNumber, kind: IsString})
+export const IsEvent = IsObject({streamId: IsString, seq: IsNumber, kind: IsString.orUndefined, count: IsNumber.orUndefined})
 
 export const EventsTable = GGDynamoDbTableSpec.define({name: "events", schema: IsEvent, pk: "streamId", sk: "seq"})
 

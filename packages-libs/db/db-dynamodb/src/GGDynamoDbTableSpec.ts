@@ -60,6 +60,8 @@ export class GGDynamoDbJoinKey<T, P extends Fields<T>, V> extends GGDynamoDbDeri
     }
 }
 
+const NUMBER_TYPES = ["number", "int", "uint", "posInt", "int8", "int16", "int32", "uint8", "uint16", "uint32"]
+
 function joinParts(parts: readonly string[], row: Source): any {
     const values = parts.map(p => row[p])
     if (values.some(v => v === undefined || v === null)) return undefined
@@ -114,7 +116,14 @@ export interface GGDynamoDbTableSpecInput<T extends object, PK, SK, D, I> {
     sk?: SK
     derived?: (d: GGDynamoDbDerivedBuilder<T>) => D
     indexes?: I
+    /** Array fields stored as DynamoDB sets (unique elements, atomic `add` / `delete` in `update`); read back as arrays.
+     *  An empty one is stored as no attribute: DynamoDB has no empty set. */
+    sets?: readonly GGDynamoDbArrayFields<T>[]
 }
+
+export type GGDynamoDbArrayFields<T> = {[K in keyof T & string]-?: NonNullable<T[K]> extends readonly (string | number)[] ? K : never}[keyof T & string]
+
+export type GGDynamoDbNumberFields<T> = {[K in keyof T & string]-?: NonNullable<T[K]> extends number ? K : never}[keyof T & string]
 
 /** What a query passes for the key attribute `A`: a derived key's parts, or the attribute's value. */
 export type GGDynamoDbKeyInput<T, D, A> =
@@ -176,6 +185,7 @@ export class GGDynamoDbTableSpec<
     public readonly pk: PK
     public readonly sk: SK
     public readonly derived: ReadonlyArray<{name: string, key: GGDynamoDbDerivedKey<unknown, unknown>}>
+    public readonly sets: ReadonlySet<string>
     public readonly indexes: Readonly<Record<keyof I & string, GGDynamoDbResolvedIndex & {projection: GGDynamoDbProjection<string>}>>
     private readonly fieldSchemas: Record<string, GGSchema<unknown>>
 
@@ -187,12 +197,14 @@ export class GGDynamoDbTableSpec<
         this.fieldSchemas = input.schema.toCompilerDef().shape as Record<string, GGSchema<unknown>>
         const derived = input.derived?.(new GGDynamoDbDerivedBuilder<T>()) ?? {}
         this.derived = Object.entries(derived as GGDynamoDbDerivedMap).map(([name, key]) => ({name, key}))
+        this.sets = new Set(input.sets ?? [])
 
         const fail = (msg: string) => { throw new Error(`GGDynamoDbTableSpec '${this.name}': ${msg}`) }
         for (const {name, key} of this.derived) {
             if (name in this.fieldSchemas) fail(`derived "${name}" is also a schema field`)
             for (const dep of key.deps) if (!(dep in this.fieldSchemas)) fail(`derived "${name}" reads unknown field "${dep}"`)
         }
+        for (const f of this.sets) if (this.fieldType(f) !== "array") fail(`set "${f}" is not an array field`)
         const indexes: Record<string, GGDynamoDbResolvedIndex & {projection: GGDynamoDbProjection<string>}> = {}
         for (const [key, def] of Object.entries(input.indexes ?? {}) as [string, GGDynamoDbIndexDef][]) {
             const indexName = def.name ?? (def.sk ? `${def.pk}-${def.sk}-index` : `${def.pk}-index`)
@@ -218,10 +230,15 @@ export class GGDynamoDbTableSpec<
         return {key: "table", indexName: undefined, pk: this.pk, sk: this.sk}
     }
 
-    /** `row` with its derived attributes, for a write that can't go through `GGDynamoDbTypedTable` (a seed script,
+    /** `row` with its derived attributes and set fields as sets, for a write that can't go through `GGDynamoDbTypedTable` (a seed script,
      *  a test fixture). Not validated. */
     withDerived(row: T): T {
         const item = {...row} as Record<string, unknown>
+        for (const f of this.sets) {
+            const value = item[f] as unknown[] | undefined
+            if (value?.length) item[f] = new Set(value)
+            else delete item[f]
+        }
         for (const {name, key} of this.derived) {
             const value = key.compute(Object.fromEntries(key.deps.map(dep => [dep, item[dep]])))
             if (value === undefined) delete item[name]
@@ -230,10 +247,11 @@ export class GGDynamoDbTableSpec<
         return item as T
     }
 
-    /** A stored item without its derived attributes, for an item read outside `GGDynamoDbTypedTable`. */
+    /** A stored item without its derived attributes and with set fields as arrays, for an item read outside `GGDynamoDbTypedTable`. */
     withoutDerived(item: Record<string, unknown>): T {
         const row = {...item}
         for (const {name} of this.derived) delete row[name]
+        for (const f of this.sets) if (row[f] instanceof Set) row[f] = [...row[f]]
         return row as T
     }
 
@@ -264,6 +282,12 @@ export class GGDynamoDbTableSpec<
         return [...new Set([this.pk, this.sk, ...Object.values(this.indexes).flatMap(i => [i.pk, i.sk])].filter((a): a is string => !!a))]
     }
 
+    /** @internal */
+    fieldType(field: string): string | undefined {
+        const type = this.fieldSchemas[field]?.toCompilerDef().type
+        return type && NUMBER_TYPES.includes(type) ? "number" : type
+    }
+
     private attributeType(attr: string): ScalarAttributeType {
         const derived = this.derived.find(d => d.name === attr)?.key
         if (derived) return derived.attributeType ?? this.attributeType(derived.deps[0])
@@ -271,7 +295,7 @@ export class GGDynamoDbTableSpec<
         if (!schema) throw new Error(`GGDynamoDbTableSpec '${this.name}': key "${attr}" is neither a schema field nor derived`)
         const def = schema.toCompilerDef() as {type: string, values?: readonly unknown[]}
         if (def.type === "string") return "S"
-        if (["number", "int", "uint", "posInt", "int8", "int16", "int32", "uint8", "uint16", "uint32"].includes(def.type)) return "N"
+        if (NUMBER_TYPES.includes(def.type)) return "N"
         if (def.type === "literal" && def.values?.every(v => typeof v === "string")) return "S"
         if (def.type === "literal" && def.values?.every(v => typeof v === "number")) return "N"
         throw new Error(`GGDynamoDbTableSpec '${this.name}': key "${attr}" must be a string or number field, not ${def.type}`)

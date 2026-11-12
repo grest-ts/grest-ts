@@ -1,5 +1,5 @@
 import {describe, it, expect, expectTypeOf, vi} from "vitest"
-import {IsLiteral, IsNumber, IsObject, IsString} from "@grest-ts/schema"
+import {IsArray, IsLiteral, IsNumber, IsObject, IsString} from "@grest-ts/schema"
 import {GGDynamoDb} from "../src/GGDynamoDb"
 import {GGDynamoDbTableSpec} from "../src/GGDynamoDbTableSpec"
 import {GGDynamoDbTypedTable} from "../src/GGDynamoDbTypedTable"
@@ -14,6 +14,8 @@ const IsWorkspace = IsObject({
     name: IsString.orUndefined,
     pendingOp: IsString.orUndefined,
     endedAt: IsNumber.orUndefined,
+    tags: IsArray(IsString).orUndefined,
+    opCount: IsNumber.orUndefined,
     version: IsNumber,
 })
 type Workspace = typeof IsWorkspace.infer
@@ -22,6 +24,7 @@ const WorkspacesTable = GGDynamoDbTableSpec.define({
     name: "workspaces",
     schema: IsWorkspace,
     pk: "workspaceId",
+    sets: ["tags"],
     derived: d => ({
         orgUser: d.join("orgId", "userId"),
         liveOrg: d.join("orgId").when(["status"], r => r.status !== "deleted"),
@@ -125,6 +128,12 @@ describe("GGDynamoDbTypedTable types", () => {
         void table.update({workspaceId: "w"}, {liveOrg: "o"})
         // @ts-expect-error condition values are typed by field
         void table.put(row, {if: {version: {eq: "1"}}})
+        // @ts-expect-error a GSI is always eventually consistent
+        void table.index.byOrgUser.query({orgId: "o", userId: "u"}, {consistentRead: true})
+        // @ts-expect-error add takes number and array fields
+        void table.update({workspaceId: "w"}, {}, {add: {name: "x"}})
+        // @ts-expect-error sets are array fields
+        void GGDynamoDbTableSpec.define({name: "t", schema: IsWorkspace, pk: "workspaceId", sets: ["name"]})
         })
     })
 })
@@ -216,6 +225,44 @@ describe("GGDynamoDbTypedTable writes", () => {
         const update = table.tx.update({workspaceId: "w1"}, {pendingOp: "stop"})
         expect(readable(update.Update!, update.Update!.UpdateExpression!)).toBe(`SET pendingOp = "stop", flowPending = "1"`)
         expect(() => table.tx.update({workspaceId: "w1"}, {userId: "u2"})).toThrow(/derived "orgUser" reads "orgId"/)
+    })
+})
+
+describe("GGDynamoDbTypedTable atomic ops and sets", () => {
+    it("put stores a set field as a set, and omits an empty one", async () => {
+        const {table, inputs} = stubTable({}, {})
+        await table.put({...row, tags: ["a", "b"]})
+        await table.put({...row, tags: []})
+        expect(inputs()[0].Item.tags).toEqual(new Set(["a", "b"]))
+        expect(inputs()[1].Item).not.toHaveProperty("tags")
+    })
+
+    it("reads a set back as an array", async () => {
+        const {table} = stubTable({Item: {...row, tags: new Set(["a"])}})
+        await expect(table.get({workspaceId: "w1"})).resolves.toEqual({...row, tags: ["a"]})
+    })
+
+    it("update adds to counters and sets, deletes from sets, and upserts", async () => {
+        const {table, inputs} = stubTable({})
+        await table.update({workspaceId: "w1"}, {name: "x"}, {add: {opCount: 1, tags: ["a"]}, upsert: true, current: row})
+        expect(readable(inputs()[0], inputs()[0].UpdateExpression))
+            .toBe(`SET name = "x", orgUser = "o1#u1", liveOrg = "o1", activeUntil = ${Number.MAX_SAFE_INTEGER} REMOVE flowPending ADD opCount 1, tags {}`)
+        expect(Object.values(inputs()[0].ExpressionAttributeValues)).toContainEqual(new Set(["a"]))
+        expect(readable(inputs()[0], inputs()[0].ConditionExpression)).not.toContain("attribute_exists(workspaceId)")
+        const {table: t2, inputs: i2} = stubTable({})
+        await t2.update({workspaceId: "w1"}, {}, {delete: {tags: ["a"]}})
+        expect(readable(i2()[0], i2()[0].UpdateExpression)).toBe("DELETE tags {}")
+        expect(readable(i2()[0], i2()[0].ConditionExpression)).toBe("attribute_exists(workspaceId)")
+    })
+
+    it("update refuses atomic ops it can't apply", async () => {
+        const {table} = stubTable()
+        await expect(table.update({workspaceId: "w1"}, {}, {add: {endedAt: 5}})).rejects.toThrow(/derived "activeUntil" reads "endedAt", which an atomic add\/delete changes/)
+        await expect(table.update({workspaceId: "w1"}, {opCount: 1}, {add: {opCount: 1}})).rejects.toThrow(/"opCount" is both written and in add/)
+        await expect(table.update({workspaceId: "w1"}, {}, {add: {tags: []}})).rejects.toThrow(/add "tags" needs a non-empty array/)
+        await expect(table.update({workspaceId: "w1"}, {}, {add: {version: Number.NaN}})).rejects.toThrow(/add "version" needs a number field and a number/)
+        await expect(table.update({workspaceId: "w1"}, {}, {delete: {opCount: 1} as object})).rejects.toThrow(/delete "opCount" needs a field declared in the spec's sets/)
+        await expect(table.update({workspaceId: "w1"}, {}, {})).rejects.toThrow(/nothing to write/)
     })
 })
 
