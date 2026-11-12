@@ -171,17 +171,18 @@ export class GGTestRuntime {
                     'Service ' + this.className + ' failed to start within ' + startupTimeout + 'ms'
                 );
                 this._state = GGTestRuntimeState.STARTED;
-                // The clock may have changed while it booted; applyClock only reaches started runtimes.
-                const current = GGDateShim.getState()
-                if (this.mode !== GGTestMode.INLINE && !GGDateShim.same(clock, current)) {
-                    await this.sendCommand(GGClockIPC.worker.set, current)
-                    await fireDueOn(this, Date.now(), 30_000)
-                }
                 GGLog.debug(this, this.className + ' started successfully')
             } catch (error) {
                 // Mark as failed but keep runner alive for diagnostics (e.g., log retrieval)
                 this._state = GGTestRuntimeState.FAILED;
                 throw error;
+            }
+            // The clock may have changed while it booted; applyClock only reaches started runtimes. A timer callback
+            // failing here fails start() but leaves the runtime STARTED, as it is.
+            const current = GGDateShim.getState()
+            if (this.mode !== GGTestMode.INLINE && !GGDateShim.same(clock, current)) {
+                await this.sendCommand(GGClockIPC.worker.set, current)
+                await fireDueOn(this, Date.now(), 30_000)
             }
         });
         return this

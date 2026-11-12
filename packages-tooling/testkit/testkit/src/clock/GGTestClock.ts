@@ -173,7 +173,12 @@ export class GGClockTestComponent implements GGTestComponent {
 
     async teardown(): Promise<void> {
         GGTimerShim.resetWarnings();
-        await applyLocalClock(GGDateShim.DEFAULT_STATE);
+        // A failing onChange hook mustn't keep the runner's later teardown steps from running.
+        try {
+            await applyLocalClock(GGDateShim.DEFAULT_STATE);
+        } catch (err) {
+            GGLog.warn(this, "GGTest.clock: resetting the clock failed", err as Error);
+        }
     }
 
     // Never throws: a runtime that died mustn't keep later components' afterEach from running.

@@ -3,7 +3,6 @@ import {GGRuntime} from "@grest-ts/runtime"
 import {GGContractClass, IsArray, IsNumber, SERVER_ERROR} from "@grest-ts/schema"
 import {GGTestClock} from "@grest-ts/testkit"
 
-// Test-only: a runtime module that registers a clock hook, as a package's testkit/index-testkit.ts would.
 const offsets: number[] = []
 GGTestClock.onChange(state => { offsets.push(state.offsetMs) })
 

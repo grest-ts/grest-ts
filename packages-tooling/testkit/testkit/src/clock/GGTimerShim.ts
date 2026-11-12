@@ -1,3 +1,4 @@
+import {AsyncLocalStorage} from "node:async_hooks";
 import {existsSync, readFileSync} from "node:fs";
 import {dirname, join} from "node:path";
 import {fileURLToPath} from "node:url";
@@ -123,8 +124,11 @@ function wrapSet(shim: TimerShim, nativeSet: (...args: any[]) => NodeJS.Timeout,
             }
             return cb.apply(this, cbArgs);
         }, ms, ...args);
-        const close = Object.getPrototypeOf(handle).close;
-        Object.defineProperty(handle, "close", {configurable: true, value: () => { dropRaw(shim, handle); return close.call(handle); }});
+        const {close, [Symbol.dispose]: dispose} = Object.getPrototypeOf(handle);
+        Object.defineProperties(handle, {
+            close: {configurable: true, value: () => { dropRaw(shim, handle); return close.call(handle); }},
+            [Symbol.dispose]: {configurable: true, value: () => { dropRaw(shim, handle); dispose.call(handle); }},
+        });
         trackId(shim, handle, raw);
         shim.rawTimers.set(handle, raw);
         return handle;
@@ -180,7 +184,9 @@ function addScopeTimer(shim: TimerShim, fn: () => unknown, ms: number | undefine
     // A real Timeout that never fires; the firing timer underneath is re-armed whenever the clock changes.
     const handle = shim.native.setTimeout(noop, 0);
     shim.native.clearTimeout(handle);
-    const timer: ScopeTimer = {handle, fn, ms: delay, interval, dueAt: Date.now() + delay, ref: true, created: new Error()};
+    // fireDue and re-arming call it from the clock change's async context; run it in its creator's, as Node would.
+    const inCreatorContext = AsyncLocalStorage.snapshot();
+    const timer: ScopeTimer = {handle, fn: () => inCreatorContext(fn), ms: delay, interval, dueAt: Date.now() + delay, ref: true, created: captureStack()};
     Object.defineProperties(handle, {
         ref: {configurable: true, value: () => { timer.ref = true; timer.armed?.ref(); return handle; }},
         unref: {configurable: true, value: () => { timer.ref = false; timer.armed?.unref(); return handle; }},

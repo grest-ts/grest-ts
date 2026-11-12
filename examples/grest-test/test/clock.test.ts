@@ -1,3 +1,4 @@
+import {AsyncLocalStorage} from "node:async_hooks"
 import {callOn, GGDateShim, GGTest} from "@grest-ts/testkit"
 import {GGLocator} from "@grest-ts/locator"
 import {GGRuntime} from "@grest-ts/runtime"
@@ -440,6 +441,16 @@ describe("GGTest.clock onChange hooks in a runtime started later", () => {
         const offsets = await callOn(ClockHookApi).offsets()
         expect(offsets).toHaveLength(1)
         expect(Math.abs(offsets[0] - (T - realNow()))).toBeLessThan(SLACK)
+    })
+})
+
+describe("GGTest.clock and async context", () => {
+    test("a scope timer fired by advance runs in the async context it was set in", async () => {
+        const store = new AsyncLocalStorage<string>()
+        let seen: string | undefined
+        store.run("created", () => GGLocator.setTimeout(() => { seen = store.getStore() }, 1_000))
+        await store.run("advancing", () => GGTest.clock.advance(1_000))
+        expect(seen).toBe("created")
     })
 })
 
