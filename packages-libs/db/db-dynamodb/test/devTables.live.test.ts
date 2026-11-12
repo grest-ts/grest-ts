@@ -52,8 +52,13 @@ describe("GGDynamoDbDevTables and GGDynamoDb.forClient against dynamodb-local", 
         expect(results.flatMap(r => r.created)).toEqual(["races"])
     })
 
-    test("refuses two specs naming one table", async () => {
-        await expect(GGDynamoDbDevTables.ensure(client, [Tickets, TicketsWithIndex])).rejects.toThrow(/two specs name the table "tickets"/)
+    test("merges the specs sharing a table", async () => {
+        const IsTicketUse = IsObject({ticketId: IsString, usedBy: IsString, at: IsNumber})
+        const Uses = GGDynamoDbTableSpec.define({name: "shared", schema: IsTicketUse, pk: "ticketId", indexes: {byUser: {pk: "usedBy"}}})
+        const Shared = TicketsWithIndex.withName("shared")
+        expect(await GGDynamoDbDevTables.ensure(client, [Shared, Uses])).toEqual({created: ["shared"], indexesAdded: []})
+        const live = (await client.send(new DescribeTableCommand({TableName: "shared"}))).Table!
+        expect(live.GlobalSecondaryIndexes?.map(i => i.IndexName).sort()).toEqual(["usedBy-index", "userId-index"])
     })
 
     test("forClient serves a typed table over a client the caller holds", async () => {

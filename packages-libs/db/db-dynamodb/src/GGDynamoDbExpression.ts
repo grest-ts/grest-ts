@@ -15,9 +15,14 @@ export type GGDynamoDbFieldCondition<V> = Exclusive<
     | {size: Exclusive<{eq: number} | {ne: number} | Range<number>>}
 >
 
-/** Fields AND-ed; `anyOf` OR-s whole conditions, `allOf` AND-s them (two conditions on one field). As in DynamoDB,
- *  `ne` holds on a row without the field: add `exists: true` through `allOf` to require it. */
-export type GGDynamoDbCondition<T> = {[K in keyof T]?: GGDynamoDbFieldCondition<NonNullable<T[K]>>} & {
+type MapFields<T> = {[K in keyof T & string]-?: NonNullable<T[K]> extends readonly unknown[] | ReadonlySet<unknown> ? never : NonNullable<T[K]> extends object ? K : never}[keyof T & string]
+type Paths<T> = {[K in MapFields<T>]: `${K}.${keyof NonNullable<T[K]> & string}`}[MapFields<T>]
+type PathValue<T, P> = P extends `${infer K extends keyof T & string}.${infer R}` ? R extends keyof NonNullable<T[K]> ? NonNullable<T[K]>[R] : never : never
+
+/** Fields AND-ed; `anyOf` OR-s whole conditions, `allOf` AND-s them (two conditions on one field). A key with a dot
+ *  reads inside a map field: `{"lease.owner": {eq: id}}`. As in DynamoDB, `ne` holds on a row without the field: add
+ *  `exists: true` through `allOf` to require it. */
+export type GGDynamoDbCondition<T> = {[K in keyof T]?: GGDynamoDbFieldCondition<NonNullable<T[K]>>} & {[P in Paths<T>]?: GGDynamoDbFieldCondition<NonNullable<PathValue<T, P>>>} & {
     anyOf?: GGDynamoDbCondition<T>[]
     allOf?: GGDynamoDbCondition<T>[]
 }
@@ -63,7 +68,8 @@ export class GGDynamoDbExpr {
             if (field === "anyOf" || field === "allOf") {
                 const nested = (op as GGDynamoDbCondition<any>[]).map(a => this.condition(a))
                 if (nested.length === 0) throw new Error(`GGDynamoDb: ${field} needs at least one condition`)
-                parts.push(`(${nested.join(field === "anyOf" ? " OR " : " AND ")})`)
+                // DynamoDB refuses redundant parentheses: `((a AND b))`.
+                parts.push(nested.length === 1 ? nested[0] : `(${nested.join(field === "anyOf" ? " OR " : " AND ")})`)
             } else {
                 parts.push(this.fieldCondition(field, op as Source))
             }
@@ -107,7 +113,7 @@ export class GGDynamoDbExpr {
     }
 
     private fieldCondition(field: string, op: Source): string {
-        const n = this.name(field)
+        const n = field.split(".").map(segment => this.name(segment)).join(".")
         const [kind, v] = onlyOperator(field, op)
         switch (kind) {
             case "exists": return `${v ? "attribute_exists" : "attribute_not_exists"}(${n})`
@@ -142,11 +148,11 @@ function onlyOperator(field: string, op: Source): [string, unknown] {
     return set[0]
 }
 
-/** Values a condition proves the row holds: top-level (and `allOf`) `eq`, and `exists: false` as undefined. */
+/** Values a condition proves the row's fields hold: top-level (and `allOf`) `eq`, and `exists: false` as undefined. */
 export function conditionPins(c: GGDynamoDbCondition<any> | undefined): Source {
     const out: Source = {}
     for (const [field, op] of Object.entries(c ?? {})) {
-        if (op === undefined || field === "anyOf") continue
+        if (op === undefined || field === "anyOf" || field.includes(".")) continue
         if (field === "allOf") Object.assign(out, ...(op as GGDynamoDbCondition<any>[]).map(conditionPins))
         else if ((op as {eq?: unknown}).eq !== undefined) out[field] = (op as {eq: unknown}).eq
         else if ("exists" in op && op.exists === false) out[field] = undefined
@@ -154,8 +160,8 @@ export function conditionPins(c: GGDynamoDbCondition<any> | undefined): Source {
     return out
 }
 
-/** Every field a condition reads. */
+/** Every field a condition reads; for a path, its map field. */
 export function conditionFields(c: GGDynamoDbCondition<any>): string[] {
     return Object.entries(c).flatMap(([field, op]) =>
-        field === "anyOf" || field === "allOf" ? (op as GGDynamoDbCondition<any>[]).flatMap(conditionFields) : [field])
+        field === "anyOf" || field === "allOf" ? (op as GGDynamoDbCondition<any>[]).flatMap(conditionFields) : [field.split(".")[0]])
 }

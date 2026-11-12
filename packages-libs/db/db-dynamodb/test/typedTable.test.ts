@@ -262,7 +262,7 @@ describe("GGDynamoDbTypedTable backfill", () => {
             {},
             conflict,
         )
-        await expect(table.backfillPage({limit: 3})).resolves.toEqual({scanned: 3, rewritten: 1, conflicts: 1, failed: [], cursor: expect.any(String)})
+        await expect(table.backfillPage({limit: 3})).resolves.toEqual({scanned: 3, rewritten: 1, conflicts: 1, skipped: 0, failed: [], cursor: expect.any(String)})
         expect(inputs()[0]).toMatchObject({Limit: 3})
         expect(inputs()).toHaveLength(3)
         expect(inputs()[1].Key).toEqual({workspaceId: "w2"})

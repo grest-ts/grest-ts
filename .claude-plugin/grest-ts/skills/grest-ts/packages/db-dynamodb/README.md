@@ -185,7 +185,7 @@ import { GGDynamoDbTableSpec, GGDynamoDbTypedTable, type GGDynamoDbTableOf } fro
 
 export const WorkspacesTable = GGDynamoDbTableSpec.define({
     name: "workspaces",
-    schema: IsWorkspace,                       // an IsObject schema; derived attributes are not in it
+    schema: IsWorkspace,                       // IsObject, or a union of them; derived attributes are not in it
     pk: "workspaceId",
     derived: d => ({
         orgUser: d.join("orgId", "userId"),                                          // "org#user"
@@ -210,7 +210,7 @@ const workspaces = new WorkspaceStore(db)
 await workspaces.get("w-1")              // a table keyed on one plain field also takes the bare value
 ```
 
-`new GGDynamoDbTypedTable(db, spec)` works too, for a table used as is; `GGDynamoDbTableOf<typeof Spec>` names its type.
+`new GGDynamoDbTypedTable(db, spec)` works too, for a table used as is; `GGDynamoDbTableOf<typeof Spec>` names its type. `new WorkspaceStore(db, { name: "workspaces-ci-42" })` (or `spec.withName(name)`) points one instance at another table, e.g. per environment; `createTableInput()` and `GGDynamoDbDevTables.ensure` follow it.
 
 ### Derived attributes
 
@@ -220,17 +220,22 @@ A derived attribute is computed from the row on **every** write path — `put`, 
 |---|---|---|
 | `d.join("a")` | `a`'s value | `{a}` |
 | `d.join("a", "b")` | `"<a>#<b>"` (absent while a part is undefined) | `{a, b}` |
+| `.separator(":")` on a join | `"<a>:<b>"` | as the join |
 | `.when(fields, test)` on a join | absent while `test` is false | as the join |
-| `d.flag(fields, test)` | `"1"` while `test` holds | nothing: `index.x.query()` |
+| `d.flag(fields, test)` | `"1"` (or `{ value: "live" }`'s) while `test` holds | nothing: `index.x.query()` |
 | `d.string(fields, fn)` / `d.number(fields, fn)` | `fn`'s result | its `fields` |
 
-A `join` sorts as a string: `"10"` before `"9"`. When order matters, build the value with `d.string` (e.g. pad numbers). A part containing `#` is refused, as it would let two rows share one value.
+A `join` sorts as a string: `"10"` before `"9"`. When order matters, build the value with `d.string` (e.g. pad numbers). The separator inside a part is refused, as it would let two rows share one value — except in the last part, which takes the rest of the value (a path, a free-form id).
+
+`.readable()` on any builder returns the attribute on reads too, typed as optional (`T & { lastActivityAt?: number }`), so a value the app would otherwise recompute is read back. The others stay on the stored item only.
+
+A `d.string` / `d.number` may read a map field: `d.string(["orgId", "principal"], r => r.orgId + "/" + r.principal.kind)`. Such a key's inputs are compared by value, as DynamoDB compares maps.
 
 A derived name may not also be a schema field, nor read a `sets` field.
 
 ### Rows come back in the schema's shape
 
-Reads return the schema's fields and nothing else: derived attributes, and attributes the schema no longer has (a field you removed), stay on the stored item out of the app's sight. That decides what writes keep:
+Reads return the schema's fields and nothing else (plus `.readable()` derived ones): other derived attributes, and attributes the schema no longer has (a field you removed), stay on the stored item out of the app's sight. That decides what writes keep:
 
 - `update` writes only the fields it is given, so everything else on the item, retired attributes included, stays. It refuses a field the schema doesn't have.
 - `put` / `save` replace the whole item, so an item written from a read sheds its retired attributes.
@@ -238,6 +243,12 @@ Reads return the schema's fields and nothing else: derived attributes, and attri
 **Before converting a table, make its schema the full stored shape** — every attribute a row carries that must survive, encrypted blobs and bookkeeping fields included. A `put` of a row read through a narrower schema erases the rest.
 
 For a write or read that can't go through the table (a seed script, a raw command), `spec.withDerived(row)` adds the derived attributes and `spec.toRow(item)` gives the schema's shape.
+
+### Several row shapes
+
+The schema may be a union of objects — `IsDiscriminated("status", { queued: IsQueued, running: IsRunning })` or `IsUnion(A, B)` — for a table holding rows of several shapes. Reads return the union, to narrow on the discriminator. Everything addressed field by field (keys, derived inputs, indexes, conditions, `update` fields) sees the union's fields one by one: a field some variants lack is optional, so an index keyed on it holds only the rows that have it. `put` validates the whole row against its variant; `update` validates each field against the variants that have it, and can't know the stored row's variant — switching a row to another variant through `update` must write that variant's required fields (or use `put` / `save`). A discriminated variant needn't declare the discriminator itself.
+
+When the kinds are keyed differently — an item and a pointer to it — declare one spec per kind with the same `name` instead. `GGDynamoDbDevTables.ensure` merges them into one table and refuses them when they disagree on its key, an attribute's type, a same-named index or TTL. Each spec's table reads and writes its own rows; `db.transactWrite` spans both. `scan` returns every row on the table, so filter by kind; `backfillPage` leaves (and counts as `skipped`) the rows lacking its spec's required fields or holding a key it doesn't derive: the other kinds'. `get` and queries go by the key, so a kind with its own key shape (as the pointer above) only meets its own rows; kinds sharing a key shape must be told apart by their fields.
 
 ### Table keys from parts
 
@@ -288,11 +299,11 @@ await table.deleteMany(keys)
 await table.scan({ filter: { status: { eq: "running" } } })
 ```
 
-Conditions are typed by field, one operator each: `eq`, `ne`, `exists`, `in: [...]`, `lt` / `lte` / `gt` / `gte` / `between` (strings and numbers), `beginsWith` and `contains` (a substring, or a list's or set's element), and `size: { ... }` (a string's length, or an element count). Several fields are AND-ed, `anyOf: [...]` to OR whole conditions and `allOf: [...]` to AND them (for two conditions on one field). As in DynamoDB, `ne` holds on a row without the field; `allOf: [{ f: { exists: true } }, { f: { ne: v } }]` requires it.
+Conditions are typed by field, one operator each: `eq`, `ne`, `exists`, `in: [...]`, `lt` / `lte` / `gt` / `gte` / `between` (strings and numbers), `beginsWith` and `contains` (a substring, or a list's or set's element), and `size: { ... }` (a string's length, or an element count). Several fields are AND-ed, `anyOf: [...]` to OR whole conditions and `allOf: [...]` to AND them (for two conditions on one field). A dotted key reads one level into a map field, typed from the schema: `{ "lease.owner": { eq: workerId } }`; every dot is a path step, so a map key containing one can't be addressed. As in DynamoDB, `ne` holds on a row without the field; `allOf: [{ f: { exists: true } }, { f: { ne: v } }]` requires it.
 
 ### Partial updates
 
-`update(key, fields, opts)` sets `fields` on an existing row; a field given as `undefined` is removed. A derived attribute none of whose inputs are in `fields` is left alone. One whose inputs are touched is rewritten in the same write, but only from values the write proves are on the row:
+`update(key, fields, opts)` sets `fields` on an existing row; a field given as `undefined` is removed (with `skipUndefined: true`, left as it is). A derived attribute none of whose inputs are in `fields` is left alone. One whose inputs are touched is rewritten in the same write, but only from values the write proves are on the row:
 
 - inputs in `fields`,
 - inputs pinned by a top-level `eq` (or `exists: false`) in `opts.if`,
@@ -380,7 +391,7 @@ After adding an index or changing a key function, rewrite existing rows with `ba
 ```typescript
 let cursor: string | undefined
 do {
-    const page = await table.backfillPage({ cursor, limit: 200 })   // { scanned, rewritten, conflicts, failed, cursor }
+    const page = await table.backfillPage({ cursor, limit: 200 })   // { scanned, rewritten, conflicts, skipped, failed, cursor }
     cursor = page.cursor
 } while (cursor)
 ```
