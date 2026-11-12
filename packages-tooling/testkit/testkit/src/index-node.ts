@@ -35,7 +35,6 @@ export * from './GGTestRuntimeWorker'
 
 // Test clock (fake Date across the test and its runtimes)
 export * from './clock/GGDateShim'
-export * from './clock/GGClockIPC'
 export * from './clock/GGTestClock'
 import './clock/GGClockCommands'
 

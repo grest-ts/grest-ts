@@ -3,7 +3,7 @@ import {TestRunner} from "vitest";
 import {GG_TEST_RUNNER, GGTestRunner} from "../GGTestRunner";
 import {GGTestMode, GGTestRuntimeState} from "../GGTestRuntime";
 import {GGTestComponent} from "../testers/GGTestComponent";
-import {GGClockIPC, sendClock} from "./GGClockIPC";
+import {GGClockIPC} from "./GGClockIPC";
 import {GGClockState, GGDateShim, installDateShim} from "./GGDateShim";
 import {GGTimerShim, installTimerShim} from "./GGTimerShim";
 
@@ -47,7 +47,7 @@ export class GGTestClock {
     /** Jump to `time`; the clock keeps running from there (or stays stopped at it). Forward, it fires due timers as `advance` does. */
     public set(time: Date | number): Promise<void> {
         const target = time instanceof Date ? time.getTime() : time;
-        if (!Number.isFinite(target)) throw new Error(`GGTest.clock.set(${String(time)}): not a valid time`);
+        if (!Number.isInteger(target)) throw new Error(`GGTest.clock.set(${String(time)}): not a valid time, expected whole epoch milliseconds`);
         return this.change(state => state.stoppedAt === undefined
             ? {offsetMs: target - GGDateShim.realNow()}
             : {offsetMs: state.offsetMs, stoppedAt: target});
@@ -60,7 +60,7 @@ export class GGTestClock {
      * after every runtime has fired its timers.
      */
     public advance(ms: number, options: GGTestClockAdvanceOptions = {}): Promise<void> {
-        if (!(Number.isFinite(ms) && ms >= 0)) throw new Error(`GGTest.clock.advance(${ms}): ms must be a finite non-negative number`);
+        if (!(Number.isInteger(ms) && ms >= 0)) throw new Error(`GGTest.clock.advance(${ms}): ms must be a non-negative integer`);
         return this.change(state => state.stoppedAt === undefined
             ? {offsetMs: state.offsetMs + ms}
             : {offsetMs: state.offsetMs, stoppedAt: state.stoppedAt + ms}, options.timeoutMs);
@@ -92,7 +92,9 @@ export class GGTestClock {
             beforeAll(() => this.change(next, timeoutMs));
             return Promise.resolve();
         }
-        return applyClock(runner, next(GGDateShim.getState()), timeoutMs);
+        const current = GGDateShim.getState();
+        const state = next(current);
+        return GGDateShim.same(state, current) ? Promise.resolve() : applyClock(runner, state, timeoutMs);
     }
 }
 
@@ -125,7 +127,7 @@ async function applyClock(runner: GGTestRunner, state: GGClockState, timeoutMs =
     // Inline runtimes share this isolate: its own apply and fireDue cover them.
     const runtimes = runner.getAllRuntimes().filter(r => r.state === GGTestRuntimeState.STARTED && r.mode !== GGTestMode.INLINE);
     await collect(applyLocalClock(state));
-    await Promise.all(runtimes.map(r => collect(sendClock(r, state))));
+    await Promise.all(runtimes.map(r => collect(r.sendCommand(GGClockIPC.worker.set, state))));
     // Every isolate is on the new time before any timer fires, so a timer that calls another runtime finds it there.
     const target = Date.now();
     await collect(GGTimerShim.fireDue(target, remaining()));

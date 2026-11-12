@@ -3,6 +3,8 @@ import {GGContractClass, IsArray, IsBoolean, IsLiteral, IsNumber, IsObject, IsSt
 
 export const IsClockReading = IsObject({
     now: IsNumber,
+    /** Date.now() when the module loaded. */
+    boot: IsNumber,
     newDate: IsNumber,
     fixed: IsNumber,
     isDate: IsBoolean,

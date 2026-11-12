@@ -2,12 +2,15 @@ import {sleep} from "@grest-ts/common"
 import {GGLocator} from "@grest-ts/locator"
 import type {ClockReading, ScheduleTimer} from "../api/ClockApi"
 
+const BOOT = Date.now()
+
 export class ClockApiImpl {
     private firedIds: string[] = []
     private readonly timers = new Map<string, NodeJS.Timeout>()
 
     public read = async (): Promise<ClockReading> => ({
         now: Date.now(),
+        boot: BOOT,
         newDate: new Date().getTime(),
         fixed: new Date("2020-01-02T03:04:05Z").getTime(),
         isDate: new Date() instanceof Date && new Date().constructor === Date,
