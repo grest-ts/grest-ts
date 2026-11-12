@@ -86,9 +86,10 @@ websocket as idle.
 | `GGDynamoDbLock`, `GGInstanceLock`, `withLock`'s `holdUntil` | `GGSocket` / `GGRawSocket` `lastActivity` / `idleMs` |
 | `GGJobRunner`'s `holdUntil` | `nodeConnectionTransport` agent idle TTL |
 | oauth `signedState`, `DynamoOAuthStore`, `GGOAuthServer` | `GGHistogram.startTimer`, Event publisher/subscriber durations, job durations |
-| `GGError`/`ERROR` timestamps, `GGLog` timestamps, metrics export timestamps | `GG_TRACE` / `GGTracingMiddleware` durations |
-| `EventSubscriberClient` `messageAge` (compares with a sent wall time) | `GGConfigLocator` startup deadline, `GGDynamoDbDevTables` wait deadline |
-| | testkit: `waitForInterceptors`, `GGTestSharedRef`; `JwksVerifier`'s key-cache age (`uat`, `failedAt`) |
+| `GGError`/`ERROR` timestamps, `GGLog` timestamps, metrics export timestamps | `GGConfigLocator` startup deadline, `GGDynamoDbDevTables` wait deadline |
+| `EventSubscriberClient` `messageAge` (compares with a sent wall time) | testkit: `waitForInterceptors`, `GGTestSharedRef` |
+| `GG_TRACE` / `GGTracingMiddleware` start timestamps (wall time sent between processes) | |
+| `JwksVerifier` `uat`/`failedAt` (jose writes `uat` with `Date.now()`) | |
 
 `withLock`'s heartbeat (`sentAt - renewedAt >= ttl * 2/3 → lose`) stays on `Date` on purpose.
 The lease in the DB is stored in wall time. After an `advance` past the TTL another instance
@@ -123,10 +124,9 @@ cooldown is `holdUntil` in wall time. Under `GGTest`, schedules stay off until
 `t.x.jobs.start()`, as today. `jobs.run(name)` stays the default way to run a job. The clock
 adds:
 
-- **Run, advance past the interval, run again:** a deterministic test of the `oneInstance`
-  cooldown. Today the second run is `BUSY` until a real 5 min pass.
 - **`jobs.start()` then `advance()`:** scheduling tests with no `vi.waitFor` on real ticks
-  (kratt's `hubCronMultiInstance`).
+  (kratt's `hubCronMultiInstance`), including the `oneInstance` cooldown. `jobs.run()` releases
+  its lock when done, so the cooldown only applies to scheduled ticks.
 
 ### 1d. What stays on real time, and why
 
@@ -136,7 +136,9 @@ adds:
 | `sleep()`, `withTimeout()` (`@grest-ts/common`) | Backoff and IO guards |
 | `performance.now()` | Elapsed-time measurement |
 | Testkit internals, IPC, discovery, vitest test/hook timeouts | Raw timers plus `performance.now()` once phase 1 has moved them |
-| TLS certificate validity | OpenSSL reads the OS clock |
+| TLS certificate validity | OpenSSL reads the OS clock. A certificate the app mints at fake time (`notBefore = new Date()`) fails CA-verified checks after a forward `set` |
+| File mtimes (`fs.stat`), child processes (`git`, CLIs), `vm` contexts | The OS clock, or a separate global. A cleanup that compares `mtimeMs` with `Date.now()` sees every file as old after an advance |
+| `Temporal.Now`, `Intl.DateTimeFormat().format()` with no date | Phase 1 fixes shim `Temporal.Now`. Intl's implicit now is not shimmed: pass a date |
 
 ### 1e. Keeping the line visible: lint, not a runtime throw
 
@@ -233,6 +235,23 @@ app decides time and passes it in.
 | JWT `iat`/`exp` between runtimes and the test (`GGAuthAccessToken`, jose) | **Yes.** Every isolate shares the offset | Tokens minted *before* an advance expire *after* it, which is correct. The test handles it (log in after advancing); the testkit doesn't paper over it |
 | Tokens from a real external IdP, and fakes that run outside `GGTest` | **No** | Fakes started as GGTest runtimes (kratt's fakegit, if it is one) share the clock automatically |
 
+### Undoing a test's clock is a backwards jump
+
+The per-test undo moves time back to where the test started. Runtimes started at describe level
+keep running across tests, so state written at fake time stays in the future:
+- a scheduled job tick that held its lock until T+40d leaves later `jobs.run` calls `BUSY`;
+- rows stamped at T+40d win "latest" queries;
+- caches keyed on wall time (jose's JWKS cooldown) stay cold for the jump's length.
+
+Production never steps 40 days back. Tests that advance far, and especially those that start
+schedules, should start their runtimes in the test or get their own `describe`. A SigV4 client
+pays one retried request for the advance and another for the undo.
+
+### Concurrent tests
+
+There is one clock per isolate. `test.concurrent` / `describe.concurrent` share it, and their
+undo frames interleave. Don't use the clock in concurrent tests.
+
 ### 3a. Clock hooks for clocks the framework doesn't own
 
 Some third-party code has to follow the clock and can't be shimmed, for example an SDK's own
@@ -255,7 +274,7 @@ kratt's `libs/aws`, the first time a presign test needs it.
 ```ts
 import {GGTest} from "@grest-ts/testkit"
 
-GGTest.clock.set(new Date("2026-03-01T09:00:00Z"))   // every isolate; time keeps flowing from T
+GGTest.clock.set(new Date("2026-03-01T09:00:00Z"))   // every isolate; flowing from T (a stopped clock stays stopped at T)
 GGTest.clock.set(Date.now() + 40 * DAY)              // number = epoch ms
 GGTest.clock.stop()                                   // really stops: Date.now() stays put until advance/set
 GGTest.clock.start()                                  // flowing again from where it stopped
@@ -342,13 +361,9 @@ await GGTest.clock.advance(60_000)
 expect(handshakes).toBe(2)      // close fired during advance; the reconnect may still need .waitFor (it's IO)
 ```
 
-**Job cooldown and scheduling** (phase 2):
+**Job scheduling** (phase 2):
 
 ```ts
-await t.cron.jobs.run("approvals.pending-expiry").toMatchObject({result: "DONE"})
-await GGTest.clock.advance(5 * 60_000)
-await t.cron.jobs.run("approvals.pending-expiry").toMatchObject({result: "DONE"})   // today: BUSY for 5 real minutes
-
 await t[0].jobs.start()
 await GGTest.clock.advance(5_000)   // replaces hubCronMultiInstance's 15 s vi.waitFor on real ticks
 ```
@@ -410,7 +425,7 @@ These were found by survey on 2026-11-12 and need re-checking at adoption time.
 - `hubCronMultiInstance.test.ts`: the 15 s wait on real ticks.
 - `hubCronBoot.test.ts:28`: the 2 s sleep, if the pipeline workers' first claim is a scope timer.
   Today it's `WorkspaceFlowWorker`'s raw loop; that is a kratt decision.
-- Job cooldown behaviour (`BUSY` until the interval passes) becomes testable at all.
+- The scheduled `oneInstance` cooldown becomes testable at all.
 
 **Stays as is:**
 - `ServiceControllerReady` and the other in-process `vi.useFakeTimers` tests.
