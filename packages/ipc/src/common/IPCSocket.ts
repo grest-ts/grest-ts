@@ -161,12 +161,8 @@ export class IPCSocket {
             const result = await handler(msg.data);
             sendResponse(true, result);
         } catch (error: any) {
-            if (error instanceof ERROR) {
-                sendResponse(false, undefined, error.message, error.toJSON());
-                return;
-            }
             GGLog.error(this, `Request handler error for ${msg.path}`, error);
-            sendResponse(false, undefined, error.message || String(error));
+            sendResponse(false, undefined, error.message || String(error), error instanceof ERROR ? error.toJSON() : undefined);
         }
     }
 

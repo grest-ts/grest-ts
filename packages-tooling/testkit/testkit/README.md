@@ -439,8 +439,9 @@ signature:
 | `pair(id: string, count: number)` | the arguments as a tuple: `["a", 2]` |
 
 `@mockable` intercepts async methods and async function fields (`run = async (…) => …`). `mockOf(S).x` throws for a
-sync method or a class without `@mockable`. Fields are wrapped when an instance is constructed; fields declared by a
-subclass of a `@mockable` class need `@mockable` on that subclass too.
+sync method or a class without `@mockable`. Fields only exist on instances, so `mockOf` can't check them; a mock of a
+sync field never gets a call, which the default `times(1)` reports. Fields are wrapped when an instance is constructed
+in a test; fields declared by a subclass of a `@mockable` class need `@mockable` on that subclass too.
 
 ### Schema mock/spy vs @mockable mock/spy
 

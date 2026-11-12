@@ -56,16 +56,16 @@ const MOCKABLE_CLASS = Symbol('GGMockableClass');
  * Whether a function declares exactly one parameter, read from its source (comments, strings, defaults and
  * destructuring aware). Mocks see that argument itself; otherwise the arguments as a tuple.
  */
-function takesOneArgument(fn: Function): boolean {
-    const src = fn.toString();
-    if (/^async\s+[\w$]+\s*=>/.test(src)) return true;
+function takesOneArgument(src: string): boolean {
+    if (/^(async\s+)?[\w$]+\s*=>/.test(src)) return true;
     const open = src.indexOf('(');
     if (open < 0) return false;
     let depth = 0, params = 0, rest = false, current = '', quote: string | undefined;
     const endParam = () => {
-        if (current.trim()) {
+        const param = current.trim();
+        if (param) {
             params++;
-            rest = current.trim().startsWith('...');
+            rest = param.startsWith('...');
         }
         current = '';
     };
@@ -105,10 +105,16 @@ function takesOneArgument(fn: Function): boolean {
  * @deprected - having this is bad, we should not check it like this!
  * @TODO Existance of this is bad!
  */
-function isAsyncFunction(fn: Function): boolean {
+function isAsyncFunction(fn: Function, src: string): boolean {
     return fn.constructor.name === 'AsyncFunction' ||
-        fn.toString().includes('__awaiter') || // Compiled TypeScript async
-        fn.toString().trimStart().startsWith('async ');
+        src.includes('__awaiter') || // Compiled TypeScript async
+        src.trimStart().startsWith('async ');
+}
+
+/** Undefined when `fn` isn't intercepted (not async), else whether it takes one argument. */
+function interception(fn: Function): boolean | undefined {
+    const src = fn.toString();
+    return isAsyncFunction(fn, src) ? takesOneArgument(src) : undefined;
 }
 
 /**
@@ -164,11 +170,11 @@ export function mockableClassName(cls: Function, methodName: string): string {
 /**
  * Decorator to mark a class as mockable in tests.
  * Its async methods and async function fields (`foo = async () => …`) are interceptable via mockOf() or spyOn().
- * Fields are wrapped when an instance is constructed, so the decorated class is a subclass of the declared one;
- * fields a subclass of it declares are not wrapped unless that subclass is @mockable too.
+ * Fields are wrapped when an instance is constructed in a test, so the decorated class is a subclass of the declared
+ * one; fields a subclass of it declares are not wrapped unless that subclass is @mockable too.
  *
- * In production (when not running tests), this decorator has minimal overhead -
- * the wrapper immediately calls through to the original.
+ * In production (when not running tests), this decorator has minimal overhead - a method wrapper immediately calls
+ * through to the original, and fields are left as they are.
  *
  * @example
  * ```typescript
@@ -189,22 +195,22 @@ export function mockable<T extends { new(...args: any[]): {} }>(target: T): T {
     const className = target.name;
     for (const key of Object.getOwnPropertyNames(target.prototype)) {
         const method = Object.getOwnPropertyDescriptor(target.prototype, key)?.value;
-        if (key === 'constructor' || typeof method !== 'function' || method[MOCKABLE_WRAPPED] || !isAsyncFunction(method)) continue;
-        target.prototype[key] = intercept(className, key, method, takesOneArgument(method));
+        const oneArgument = key === 'constructor' || typeof method !== 'function' || method[MOCKABLE_WRAPPED] ? undefined : interception(method);
+        if (oneArgument !== undefined) target.prototype[key] = intercept(className, key, method, oneArgument);
     }
 
-    // Per field: undefined until seen, null when not async, else whether it takes one argument.
-    const fields = new Map<string, boolean | null>();
     const mocked = class extends target {
         constructor(...args: any[]) {
             super(...args);
+            // Fields are wrapped only for an instance made in a test, and by the most-derived @mockable class, so
+            // they are keyed under the class mockOf() is given.
+            if (!mockableContextStorage.getStore() || (new.target as any)[MOCKABLE_CLASS] !== className) return;
             for (const key of Object.keys(this)) {
                 const descriptor = Object.getOwnPropertyDescriptor(this, key)!;
                 const value = descriptor.value;
                 if (typeof value !== 'function' || !descriptor.writable || value[MOCKABLE_WRAPPED]) continue;
-                if (!fields.has(key)) fields.set(key, isAsyncFunction(value) ? takesOneArgument(value) : null);
-                const oneArgument = fields.get(key);
-                if (oneArgument !== null && oneArgument !== undefined) (this as any)[key] = intercept(className, key, value, oneArgument);
+                const oneArgument = interception(value);
+                if (oneArgument !== undefined) (this as any)[key] = intercept(className, key, value, oneArgument);
             }
         }
     };

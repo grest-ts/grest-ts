@@ -1,5 +1,5 @@
 import {callOn, GGCallInterceptor, GGTest, mockOf, spyOn} from "@grest-ts/testkit"
-import {mockable} from "@grest-ts/testkit-runtime"
+import {mockable, runWithMockableContext, type MockableTestContext} from "@grest-ts/testkit-runtime"
 import {SERVER_ERROR} from "@grest-ts/schema"
 import {MockableRuntime} from "../src/MockableRuntime"
 import {MockableApi} from "../src/api/MockableApi"
@@ -174,6 +174,61 @@ describe("@mockable in production code", () => {
             }
         }
         expect(await new Frozen().run()).toBe("real")
+    })
+})
+
+describe("@mockable fields", () => {
+    const calls: [className: string, methodName: string, input: unknown][] = []
+    const context: MockableTestContext = {
+        CALL_THROUGH: "call-through",
+        sendCall: async (className, methodName, input) => {
+            calls.push([className, methodName, input])
+            return "mocked"
+        },
+        sendSpyResult: async () => {
+        },
+    }
+    beforeEach(() => {
+        calls.length = 0
+    })
+
+    test("are keyed under the most-derived @mockable class, the one mockOf is given", async () => {
+        @mockable
+        class Base {
+            run = async (id: string) => "real:" + id
+        }
+        @mockable
+        class Sub extends Base {
+            more = async (id: string, count: number) => `real:${id}x${count}`
+        }
+        const sub = runWithMockableContext(context, () => new Sub())
+        await runWithMockableContext(context, async () => {
+            await sub.run("a")
+            await sub.more("a", 2)
+        })
+        expect(calls).toEqual([["Sub", "run", "a"], ["Sub", "more", ["a", 2]]])
+        expect((mockOf(Sub).run.createInterceptor() as GGCallInterceptor).getKey()).toBe("Sub.run")
+    })
+
+    test("are left as they are on an instance made outside a test", async () => {
+        @mockable
+        class Service {
+            run = async () => "real"
+        }
+        const service = new Service()
+        expect(await runWithMockableContext(context, () => service.run())).toBe("real")
+        expect(calls).toEqual([])
+    })
+
+    test("compiled to __awaiter with one unparenthesized parameter take one argument", async () => {
+        const Compiled = mockable(new Function(`return class Compiled {
+            constructor() {
+                this.run = id => __awaiter(this, void 0, void 0, function* () { return id })
+            }
+        }`)()) as new () => {run(id: string): Promise<unknown>}
+        const compiled = runWithMockableContext(context, () => new Compiled())
+        await runWithMockableContext(context, () => compiled.run("a"))
+        expect(calls).toEqual([["Compiled", "run", "a"]])
     })
 })
 

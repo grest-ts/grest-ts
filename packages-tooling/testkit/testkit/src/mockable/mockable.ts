@@ -37,12 +37,17 @@ type SpyAccess<T> = {
         : never
 };
 
-/** Read by `await` and by inspection (pretty-format, JSON), so not taken for a mockable field when the class has no such method. */
+/** Read by `await` and by inspection (pretty-format, JSON): a tester only for an async method of that name, else undefined. */
 const PROBED_KEYS = new Set(["then", "toJSON", "asymmetricMatch", "$$typeof", "nodeType"]);
 
 function interceptorConfig(cls: Function, methodName: string): {className: string, methodName: string} | undefined {
-    if (PROBED_KEYS.has(methodName) && typeof cls.prototype?.[methodName] !== "function") return undefined;
-    return {className: mockableClassName(cls, methodName), methodName};
+    if (!PROBED_KEYS.has(methodName)) return {className: mockableClassName(cls, methodName), methodName};
+    if (typeof cls.prototype?.[methodName] !== "function") return undefined;
+    try {
+        return {className: mockableClassName(cls, methodName), methodName};
+    } catch {
+        return undefined;
+    }
 }
 
 function accessProxy(cls: Function, tester: (config: {className: string, methodName: string}) => unknown): any {
