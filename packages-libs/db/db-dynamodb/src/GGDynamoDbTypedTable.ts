@@ -1,4 +1,5 @@
 import {BatchGetCommand, BatchWriteCommand, DeleteCommand, UpdateCommand, type BatchGetCommandOutput, type BatchWriteCommandOutput} from "@aws-sdk/lib-dynamodb"
+import {isDeepStrictEqual} from "node:util"
 import type {GGSchema} from "@grest-ts/schema"
 import type {GGDynamoDb, GGDynamoDbPage, GGDynamoDbTransactItem} from "./GGDynamoDb"
 import {GGDynamoDbExpr, conditionFields, conditionPins, type GGDynamoDbCondition} from "./GGDynamoDbExpression"
@@ -82,7 +83,7 @@ export interface GGDynamoDbBackfillResult {
     rewritten: number
     /** Rows changed by another writer between the read and the rewrite; that writer derived their keys. */
     conflicts: number
-    /** Rows the schema doesn't accept, such as another spec's on a shared table: left as they are. */
+    /** Rows whose key the spec doesn't derive from them: another spec's, on a shared table. Left as they are. */
     skipped: number
     /** Rows whose derived attributes couldn't be computed (a key function threw): left as they are. */
     failed: {key: Source, error: string}[]
@@ -303,7 +304,7 @@ export class GGDynamoDbTypedTable<
         })
         const failed: GGDynamoDbBackfillResult["failed"] = []
         const results = await mapLimit(page.items, opts?.concurrency ?? 10, async item => {
-            if (!this.spec.schema.safeParse(this.spec.toRow(item)).success) return "skipped"
+            if (!this.spec.keysItself(item)) return "skipped"
             const key = pick(item, this.spec.keyAttributes)
             let computed: {name: string, deps: readonly string[], value: unknown}[]
             try {
@@ -403,7 +404,7 @@ export class GGDynamoDbTypedTable<
     }
 
     private holdsKey(row: object, key: Source): boolean {
-        return Object.entries(this.spec.unpinnedKeyInputs(key)).every(([f, v]) => deepEqual((row as Source)[f], v))
+        return Object.entries(this.spec.unpinnedKeyInputs(key)).every(([f, v]) => isDeepStrictEqual((row as Source)[f], v))
     }
 
     /** @internal */
@@ -415,7 +416,7 @@ export class GGDynamoDbTypedTable<
     updateParams(keyArg: Key<Flat<T>, D, PK, SK>, given: object, opts: GGDynamoDbUpdateOptions<Flat<T>, any, any> | undefined) {
         const fail = (msg: string): never => { throw new Error(`${this.tableName}.update: ${msg}`) }
         const {spec} = this
-        const fields: Source = opts?.skipUndefined ? Object.fromEntries(definedEntries(given)) : {...given}
+        const fields: Source = opts?.skipUndefined ? Object.fromEntries(definedEntries(given)) : given as Source
         const key = spec.keyObject(keyArg)
         const keys = Object.keys(fields)
         for (const k of keys) {
@@ -761,14 +762,6 @@ function definedEntries(o: object | undefined): [string, unknown][] {
 
 function pick(row: Source, fields: readonly string[]): Source {
     return Object.fromEntries(fields.map(f => [f, row[f]]))
-}
-
-// As DynamoDB compares: a map's keys in any order, a list's elements in order.
-function deepEqual(a: unknown, b: unknown): boolean {
-    if (a === b) return true
-    if (typeof a !== "object" || typeof b !== "object" || a === null || b === null || Array.isArray(a) !== Array.isArray(b)) return false
-    const ka = Object.keys(a)
-    return ka.length === Object.keys(b).length && ka.every(k => Object.hasOwn(b, k) && deepEqual((a as Source)[k], (b as Source)[k]))
 }
 
 function isConditionFailed(err: unknown): boolean {

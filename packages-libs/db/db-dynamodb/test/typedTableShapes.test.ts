@@ -178,6 +178,9 @@ describe("specs sharing a table", () => {
         await expect(GGDynamoDbDevTables.ensure(noClient, [Items, OtherKey])).rejects.toThrow(/the specs for "items" have different keys/)
         const OtherIndex = GGDynamoDbTableSpec.define({...{name: "items", schema: IsItem, pk: "scopeKey", sk: "itemKey"}, derived: d => ({scopeKey: d.join("scope"), itemKey: d.join("kind", "itemId")}), indexes: {byOrg: {pk: "orgId", projection: "KEYS_ONLY"}}})
         await expect(GGDynamoDbDevTables.ensure(noClient, [Items, OtherIndex])).rejects.toThrow(/declare index orgId-index differently/)
+        const Reordered = GGDynamoDbTableSpec.define({name: "items", schema: IsItem, pk: "scopeKey", sk: "itemKey", derived: d => ({scopeKey: d.join("scope"), itemKey: d.join("kind", "itemId")}), indexes: {byOrg: {pk: "orgId", projection: ["kind", "scope"]}}})
+        const Listed = GGDynamoDbTableSpec.define({name: "items", schema: IsItem, pk: "scopeKey", sk: "itemKey", derived: d => ({scopeKey: d.join("scope"), itemKey: d.join("kind", "itemId")}), indexes: {byOrg: {pk: "orgId", projection: ["scope", "kind"]}}})
+        await expect(GGDynamoDbDevTables.ensure(noClient, [Reordered, Listed])).rejects.toThrow(/no client/)
         await expect(GGDynamoDbDevTables.ensure(noClient, [Items, Pointers])).rejects.toThrow(/no client/)
     })
 

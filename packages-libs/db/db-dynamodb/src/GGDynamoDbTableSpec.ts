@@ -1,5 +1,5 @@
 import type {CreateTableCommandInput, ScalarAttributeType, UpdateTimeToLiveCommandInput} from "@aws-sdk/client-dynamodb"
-import type {GGSchema} from "@grest-ts/schema"
+import {IsLiteral, IsUnion, type GGSchema} from "@grest-ts/schema"
 
 type Fields<T> = keyof T & string
 type Prettify<T> = {[K in keyof T]: T[K]} & {}
@@ -49,14 +49,9 @@ export class GGDynamoDbDerivedKey<V, Q> {
     }
 
     /** Also return this attribute on reads, as the stored value, so readers don't recompute it. */
-    readable(): this & GGDynamoDbReadable {
+    readable(): this & {readonly isReadable: true} {
         return Object.assign(Object.create(Object.getPrototypeOf(this)), this, {isReadable: true})
     }
-}
-
-/** Marks a derived attribute returned on reads. */
-export interface GGDynamoDbReadable {
-    readonly __readable: true
 }
 
 export class GGDynamoDbJoinKey<T, P extends Fields<T>, V> extends GGDynamoDbDerivedKey<V, Required<T, P>> {
@@ -154,7 +149,7 @@ export type GGDynamoDbFlat<T> = true extends IsUnion<T> ? FlatUnion<T> : T
 
 /** Derived attributes returned on reads, with their stored value types; absent where not computed (a flag that
  *  doesn't hold, a part that is undefined). */
-export type GGDynamoDbReadableOf<D> = {[K in keyof D as D[K] extends GGDynamoDbReadable ? K : never]?: D[K] extends GGDynamoDbDerivedKey<infer V, any> ? V : never}
+export type GGDynamoDbReadableOf<D> = {[K in keyof D as D[K] extends {isReadable: true} ? K : never]?: D[K] extends GGDynamoDbDerivedKey<infer V, any> ? V : never}
 
 /** A row as reads return it: the schema's shape plus the `.readable()` derived attributes. */
 export type GGDynamoDbRow<T, D> = [keyof GGDynamoDbReadableOf<D>] extends [never] ? T : T & GGDynamoDbReadableOf<D>
@@ -391,6 +386,19 @@ export class GGDynamoDbTableSpec<
             .map(dep => [dep, input[dep]]))
     }
 
+    /** @internal Whether `item`'s stored key is the one this spec derives from it: false for another spec's row on a
+     *  shared table. */
+    keysItself(item: Source): boolean {
+        return this.keyAttributes.every(a => {
+            const derived = this.derivedKey(a)
+            try {
+                return !derived || derived.compute(item) === item[a]
+            } catch {
+                return false
+            }
+        })
+    }
+
     /** UpdateTimeToLive input enabling the spec's `ttl`, or undefined without one. */
     timeToLiveInput(): UpdateTimeToLiveCommandInput | undefined {
         return this.ttl ? {TableName: this.name, TimeToLiveSpecification: {AttributeName: this.ttl, Enabled: true}} : undefined
@@ -480,8 +488,8 @@ export class GGDynamoDbTableSpec<
 
     /** @internal The field's schema type, with the number kinds as "number". */
     fieldType(field: string): string | undefined {
-        const type = this.fieldSchema(field)?.toCompilerDef().type
-        return type && NUMBER_TYPES.includes(type) ? "number" : type
+        const schema = this.fieldSchema(field)
+        return schema && typeOf(schema)
     }
 
     // A KEYS_ONLY / INCLUDE index carries the table's and its own key attributes, which DynamoDB won't take as
@@ -510,7 +518,7 @@ export class GGDynamoDbTableSpec<
     }
 }
 
-type FieldSchema = GGSchema<unknown>
+type FieldSchema = GGSchema<any>
 
 /**
  * Each field's schema, from an object row or a union of object rows. A field some variants lack is optional; one whose
@@ -521,10 +529,24 @@ function fieldSchemasOf(schema: GGSchema<unknown>, table: string): Record<string
     const names = [...new Set(shapes.flatMap(s => Object.keys(s)))]
     return Object.fromEntries(names.map(name => {
         const present = shapes.map(s => s[name]).filter((f): f is FieldSchema => !!f)
-        const everywhere = present.length === shapes.length
-        if (present.length === 1 && everywhere) return [name, present[0]]
-        return [name, anyOf(present, !everywhere)]
+        const variants = [...new Set(present)]
+        const defs = variants.map(v => v.toCompilerDef() as {type: string, values?: LiteralValue[]})
+        const merged = variants.length === 1 ? variants[0]
+            : (defs.every(d => d.type === "literal") ? IsLiteral(...defs.flatMap(d => d.values!)) : IsUnion(...variants))
+        return [name, present.length === shapes.length ? merged : merged.orUndefined]
     }))
+}
+
+type LiteralValue = Parameters<typeof IsLiteral>[number]
+
+// A union's variants all of one type count as that type.
+function typeOf(schema: FieldSchema): string {
+    const def = schema.toCompilerDef() as {type: string, variants?: FieldSchema[]}
+    if (def.type === "union") {
+        const types = new Set(def.variants!.map(typeOf))
+        return types.size === 1 ? [...types][0] : "union"
+    }
+    return NUMBER_TYPES.includes(def.type) ? "number" : def.type
 }
 
 function variantShapes(schema: GGSchema<unknown>, table: string): Record<string, FieldSchema>[] {
@@ -535,36 +557,8 @@ function variantShapes(schema: GGSchema<unknown>, table: string): Record<string,
         const field = def.discriminator
         return [...def.variantMap].map(([value, variant]) => {
             const shape = variantShapes(variant, table)[0]
-            return shape[field] ? shape : {...shape, [field]: literal(value)}
+            return shape[field] ? shape : {...shape, [field]: IsLiteral(value as LiteralValue)}
         })
     }
     throw new Error(`GGDynamoDbTableSpec '${table}': the row schema must be an object or a union of objects, not ${def.type}`)
-}
-
-// The field a discriminated union keys on, where a variant doesn't declare it itself.
-function literal(value: unknown): FieldSchema {
-    return {
-        def: {type: "literal", optional: false},
-        toCompilerDef: () => ({type: "literal", values: [value]}),
-        safeParse: (v: unknown) => v === value ? {success: true, value: v} : {success: false, issues: [{message: `must be ${JSON.stringify(value)}`}]},
-    } as unknown as FieldSchema
-}
-
-function anyOf(schemas: FieldSchema[], optional: boolean): FieldSchema {
-    const defs = schemas.map(s => s.toCompilerDef() as {type: string, values?: readonly unknown[]})
-    const type = defs.every(d => d.type === defs[0].type) ? defs[0].type : "union"
-    const compiled = {type, values: defs.flatMap(d => d.values ?? []), ...(schemas.length === 1 && schemas[0].toCompilerDef())}
-    return {
-        def: {type, optional: optional || schemas.some(s => s.def.optional)},
-        toCompilerDef: () => compiled,
-        safeParse: (v: unknown) => {
-            if (v === undefined && optional) return {success: true, value: v}
-            let last
-            for (const s of schemas) {
-                last = s.safeParse(v)
-                if (last.success) return last
-            }
-            return last
-        },
-    } as unknown as FieldSchema
 }
