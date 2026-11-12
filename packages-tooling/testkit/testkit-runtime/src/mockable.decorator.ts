@@ -51,6 +51,7 @@ export function runWithMockableContext<T>(ctx: MockableTestContext, fn: () => T)
 
 const MOCKABLE_WRAPPED = Symbol('GGMockableWrapped');
 const MOCKABLE_CLASS = Symbol('GGMockableClass');
+const MOCKABLE_CONSTRUCTOR = Symbol('GGMockableConstructor');
 
 /**
  * Whether a function declares exactly one parameter, read from its source (comments, strings, defaults and
@@ -107,14 +108,17 @@ function takesOneArgument(src: string): boolean {
  */
 function isAsyncFunction(fn: Function, src: string): boolean {
     return fn.constructor.name === 'AsyncFunction' ||
-        src.includes('__awaiter') || // Compiled TypeScript async
+        /(=>|\{\s*return)\s*__awaiter\(/.test(src) || // Compiled TypeScript async
         src.trimStart().startsWith('async ');
 }
+
+const interceptions = new Map<string, boolean | undefined>();
 
 /** Undefined when `fn` isn't intercepted (not async), else whether it takes one argument. */
 function interception(fn: Function): boolean | undefined {
     const src = fn.toString();
-    return isAsyncFunction(fn, src) ? takesOneArgument(src) : undefined;
+    if (!interceptions.has(src)) interceptions.set(src, isAsyncFunction(fn, src) ? takesOneArgument(src) : undefined);
+    return interceptions.get(src);
 }
 
 /**
@@ -204,7 +208,7 @@ export function mockable<T extends { new(...args: any[]): {} }>(target: T): T {
             super(...args);
             // Fields are wrapped only for an instance made in a test, and by the most-derived @mockable class, so
             // they are keyed under the class mockOf() is given.
-            if (!mockableContextStorage.getStore() || (new.target as any)[MOCKABLE_CLASS] !== className) return;
+            if (!mockableContextStorage.getStore() || (new.target as any)[MOCKABLE_CONSTRUCTOR] !== mocked) return;
             for (const key of Object.keys(this)) {
                 const descriptor = Object.getOwnPropertyDescriptor(this, key)!;
                 const value = descriptor.value;
@@ -216,5 +220,6 @@ export function mockable<T extends { new(...args: any[]): {} }>(target: T): T {
     };
     Object.defineProperty(mocked, 'name', {value: className, configurable: true});
     Object.defineProperty(mocked, MOCKABLE_CLASS, {value: className});
+    Object.defineProperty(mocked, MOCKABLE_CONSTRUCTOR, {value: mocked});
     return mocked;
 }

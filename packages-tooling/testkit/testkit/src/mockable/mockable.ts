@@ -41,12 +41,12 @@ type SpyAccess<T> = {
 const PROBED_KEYS = new Set(["then", "toJSON", "asymmetricMatch", "$$typeof", "nodeType"]);
 
 function interceptorConfig(cls: Function, methodName: string): {className: string, methodName: string} | undefined {
-    if (!PROBED_KEYS.has(methodName)) return {className: mockableClassName(cls, methodName), methodName};
-    if (typeof cls.prototype?.[methodName] !== "function") return undefined;
+    if (PROBED_KEYS.has(methodName) && typeof cls.prototype?.[methodName] !== "function") return undefined;
     try {
         return {className: mockableClassName(cls, methodName), methodName};
-    } catch {
-        return undefined;
+    } catch (error) {
+        if (PROBED_KEYS.has(methodName)) return undefined;
+        throw error;
     }
 }
 
