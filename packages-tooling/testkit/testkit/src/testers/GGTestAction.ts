@@ -9,6 +9,7 @@ import {Raw} from "@grest-ts/schema";
 import {DeepPartial} from "@grest-ts/common";
 import {GGExpectations} from "../utils/GGExpectations";
 import {DEFAULT_WAIT_FOR_MS, GGPendingWait, waitForInterceptors} from "./waitForInterceptors";
+import {GG_TEST_RUNNER} from "../GGTestRunner";
 
 /**
  * Configuration for a test action's logging behavior.
@@ -188,6 +189,7 @@ export abstract class GGTestAction<T> implements Promise<T> {
     }
 
     protected async execute(): Promise<T> {
+        GG_TEST_RUNNER.get(); // Throws outside the testkit, before anything runs.
         return this.ctx.run(async () => {
             GG_TRACE.init();
             GGLog.info(this,

@@ -5,7 +5,7 @@
  * lifecycle (interceptors, expectations, logging).
  */
 
-import {ERROR, VALIDATION_ERROR, ValidationIssueJson} from "@grest-ts/schema";
+import {ERROR, GGErrorData, VALIDATION_ERROR, ValidationIssueJson} from "@grest-ts/schema";
 import {GGTestAction, GGTestActionConfig, tActionRawData} from "@grest-ts/testkit";
 import {ConstructorOf} from "@grest-ts/common";
 import {parseContractResponse} from "@grest-ts/http/testkit";
@@ -20,6 +20,7 @@ export class GGSocketCall<InputData, SuccessData, ErrorsUnion extends ERROR<any,
     private readonly hasResponse: boolean;
 
     private _validatingError?: ConstructorOf<ERROR<any, any>>;
+    private _validatingContext?: Partial<GGErrorData>;
 
     constructor(socket: GGSocket, path: string, request: any, hasResponse: boolean = true) {
         const config: GGTestActionConfig = {
@@ -39,8 +40,10 @@ export class GGSocketCall<InputData, SuccessData, ErrorsUnion extends ERROR<any,
         this.hasResponse = hasResponse;
     }
 
-    public toBeError<Type extends ConstructorOf<ErrorsUnion>>(type: Type): GGSocketCall<InputData, ExtractSocketErrorData<Type, ErrorsUnion, InputData>, never> {
+    /** `context` is matched like `toMatchObject` against the error's context, e.g. `{displayMessage: expect.stringContaining("…")}`. */
+    public toBeError<Type extends ConstructorOf<ErrorsUnion>>(type: Type, context?: Partial<GGErrorData>): GGSocketCall<InputData, ExtractSocketErrorData<Type, ErrorsUnion, InputData>, never> {
         this._validatingError = type;
+        this._validatingContext = context;
         this.responseExpectations.flush();
         return this as any;
     }
@@ -50,7 +53,7 @@ export class GGSocketCall<InputData, SuccessData, ErrorsUnion extends ERROR<any,
     }
 
     protected processRawResponse(result: tActionRawData): Promise<SuccessData> {
-        return parseContractResponse(result, this._validatingError);
+        return parseContractResponse(result, this._validatingError, this._validatingContext);
     }
 }
 

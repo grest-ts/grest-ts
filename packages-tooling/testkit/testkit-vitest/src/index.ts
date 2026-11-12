@@ -146,7 +146,8 @@ function wrapTestFunction(target: any): any {
             if (GGLocator.hasScope()) {
                 const testCtx = GGLocator.getScope().branch("Test: " + name);
                 // Preserve fn args (used by .each() to pass test data)
-                return target.call(thisArg, name, (...fnArgs: any[]) => testCtx.run(() => fn(...fnArgs)), timeout);
+                // Awaited inside the scope: a returned GGTestAction only runs when then() is called on it.
+                return target.call(thisArg, name, (...fnArgs: any[]) => testCtx.run(async () => await fn(...fnArgs)), timeout);
             } else {
                 return target(fn, timeout);
             }
@@ -178,7 +179,7 @@ function wrapLifecycleHook(original: any) {
             const [fn, timeout] = args;
             if (GGLocator.hasScope()) {
                 const describeCtx = GGLocator.getScope();
-                return target(() => describeCtx.run(fn), timeout);
+                return target(() => describeCtx.run(async () => await fn()), timeout);
             } else {
                 return target(fn, timeout);
             }

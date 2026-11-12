@@ -158,6 +158,9 @@ const alice = new GGTestContext("Alice")
     .afterAll(async () => { /* cleanup */ });    // Runs once after all tests
 ```
 
+Test calls work only inside the testkit's context. A hook imported from `"vitest"` (`import {afterEach} from "vitest"`)
+runs outside it, and a call there throws; use the global hooks or these.
+
 ### Context state management
 
 `GGTestContext` extends `GGContext`, so you can set/get/delete context values (typically auth headers):
@@ -248,6 +251,10 @@ await alice.user.get({id: 999}).toBeError(NOT_FOUND);
 // Custom error types
 await alice.user.login({username: "alice", password: "wrong"})
     .toBeError(InvalidCredentialsError);
+
+// The error's context: what the client sees as displayMessage
+await alice.user.create({name: "taken"})
+    .toBeError(SERVER_ERROR, {displayMessage: expect.stringContaining("Validation Failed")});
 ```
 
 ### Chaining with interceptors
@@ -351,7 +358,7 @@ import {GGTest, mockOf} from "@grest-ts/testkit";
 test('mock external service', async () => {
     await alice.checklist.add({title: "Visit Times Square", address: "123 Main St"})
         .with(mockOf(AddressResolverService).resolveAddress
-            .toEqual({address: "123 Main St"})              // Validate input
+            .toEqual("123 Main St")              // Validate input
             .andReturn({lat: 40.7589, lng: -73.9851})       // Return fake data
         )
         .toMatchObject({
@@ -370,7 +377,7 @@ import {GGTest, spyOn} from "@grest-ts/testkit";
 test('spy on external service', async () => {
     await alice.checklist.add({title: "Visit Times Square", address: "123 Main St"})
         .with(spyOn(AddressResolverService).resolveAddress
-            .toEqual({address: "123 Main St"})                      // Validate input
+            .toEqual("123 Main St")                      // Validate input
             .responseToMatchObject({lat: 40.7128, lng: -74.0060})   // Validate real response
         );
 });
@@ -384,18 +391,33 @@ test('spy on external service', async () => {
     .andReturn(result)
     .times(2))                  // Expect exactly 2 calls
 
+// Any number of calls, none included
+.with(mockOf(Service).method
+    .andReturn(result)
+    .anyTimes())
+
+// Answer each call from its input; the callback may be async
+.with(mockOf(Service).method
+    .andReturn(async ({id}) => {
+        await competingWrite(id)    // e.g. race the code under test
+        return result
+    }))
+
 // Mock with delay
 .with(mockOf(Service).method
     .andReturn(result)
     .sleep(100))                // Wait 100ms before returning
 
-// Mock returning an error
+// Mock throwing an error: the caller gets it typed, with its data
+// (its type must be defined in code the runtime loads; an unknown type arrives as SERVER_ERROR)
 .with(mockOf(Service).method
     .andReturn(new NOT_AUTHORIZED()))
+.with(mockOf(Service).method
+    .andReturn(() => { throw new QUOTA_EXCEEDED({left: 0}) }))
 
 // Spy switching to response validation
 .with(spyOn(Service).method
-    .toMatchObject({input: "data"})     // Validate input
+    .toMatchObject({id: "a"})           // Validate input
     .response.toMatchObject({out: 1})   // Switch to response, then validate
 )
 
@@ -404,6 +426,22 @@ test('spy on external service', async () => {
     .toBeError(NOT_FOUND)
 )
 ```
+
+### What the input matchers see
+
+`toEqual` / `toMatchObject` and an `andReturn` callback get the method's arguments in one value, typed from its
+signature:
+
+| Method | Input |
+|---|---|
+| `run(input: {id: string})`, `run({id}: {id: string})` | the argument itself: `{id}` |
+| `get(id: string)` | the argument itself: `"a"` |
+| `pair(id: string, count: number)` | the arguments as a tuple: `["a", 2]` |
+
+`@mockable` intercepts async methods and async function fields (`run = async (…) => …`). `mockOf(S).x` throws for a
+sync method or a class without `@mockable`. Fields only exist on instances, so `mockOf` can't check them; a mock of a
+sync field never gets a call, which the default `times(1)` reports. Fields are wrapped when an instance is constructed
+in a test; fields declared by a subclass of a `@mockable` class need `@mockable` on that subclass too.
 
 ### Schema mock/spy vs @mockable mock/spy
 

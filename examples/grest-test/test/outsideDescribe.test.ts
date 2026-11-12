@@ -4,6 +4,6 @@ import {SubRuntime} from "../src/sub"
 
 vitestDescribe("GGTest under vitest's own describe", () => {
     vitestTest("says why there is no runner", () => {
-        expect(() => GGTest.startInline(SubRuntime)).toThrow(/imports `describe` from "vitest"/)
+        expect(() => GGTest.startInline(SubRuntime)).toThrow(/imports `describe` or a hook .* from "vitest"/)
     })
 })

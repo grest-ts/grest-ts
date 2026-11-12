@@ -138,6 +138,7 @@ of the pure function rather than mocking the world around a class.
 
 `times(n)` fails the test when the mock is called more *or fewer* than `n` times. The default
 is 1. `times(0)` asserts the method is never called.
+`anyTimes()` drops the count, for a mock that only stands in for a dependency.
 
 ### Unmocked `@mockable` calls go through
 
