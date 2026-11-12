@@ -9,7 +9,7 @@ import {WorkerRunner} from "./runner/WorkerRunner";
 import {IsolatedRunner} from "./runner/IsolatedRunner";
 import type {GGTestRunner} from "./GGTestRunner";
 import {GGDateShim} from "./clock/GGDateShim";
-import {GGClockIPC} from "./clock/GGClockIPC";
+import {GGClockIPC, sendClock} from "./clock/GGClockIPC";
 
 /**
  * Lifecycle state of a runtime instance.
@@ -165,6 +165,12 @@ export class GGTestRuntime {
                     'Service ' + this.className + ' failed to start within ' + startupTimeout + 'ms'
                 );
                 this._state = GGTestRuntimeState.STARTED;
+                // The clock may have changed while it booted; applyClock only reaches started runtimes.
+                const current = GGDateShim.getState()
+                if (!GGDateShim.same(clock, current)) {
+                    await sendClock(this, current)
+                    await this.sendCommand(GGClockIPC.worker.fireDue, {timeoutMs: 30_000}, 35_000)
+                }
                 GGLog.debug(this, this.className + ' started successfully')
             } catch (error) {
                 // Mark as failed but keep runner alive for diagnostics (e.g., log retrieval)

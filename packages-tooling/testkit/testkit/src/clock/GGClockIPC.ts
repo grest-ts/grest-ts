@@ -1,5 +1,6 @@
 import {IPCClient} from "@grest-ts/ipc";
-import type {GGClockState} from "./GGDateShim";
+import type {GGTestRuntime} from "../GGTestRuntime";
+import {GGClockState, GGDateShim} from "./GGDateShim";
 
 export const GGClockIPC = {
     worker: {
@@ -7,4 +8,10 @@ export const GGClockIPC = {
         reset: IPCClient.defineRequest<void, void>("clock.reset"),
         fireDue: IPCClient.defineRequest<{timeoutMs: number}, void>("clock.fireDue"),
     }
+}
+
+export function sendClock(runtime: GGTestRuntime, state: GGClockState): Promise<void> {
+    return GGDateShim.isDefault(state)
+        ? runtime.sendCommand(GGClockIPC.worker.reset, undefined)
+        : runtime.sendCommand(GGClockIPC.worker.set, state);
 }

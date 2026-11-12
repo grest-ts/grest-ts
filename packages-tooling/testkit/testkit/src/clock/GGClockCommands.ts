@@ -8,7 +8,8 @@ GGTestRuntimeWorker.onBeforeRuntimeStart(() => {
     const worker = GG_TEST_RUNTIME_WORKER.get();
 
     const initial = worker.getInitialCommandsFor(GGClockIPC.worker.set).at(-1);
-    if (initial) GGDateShim.setState(initial.payload);
+    // Inline runtimes share the test isolate, whose clock is already current; the snapshot may be stale.
+    if (initial && !worker.config.inline) GGDateShim.setState(initial.payload);
 
     worker.onIpcRequest(GGClockIPC.worker.set, state => applyLocalClock(state));
     worker.onIpcRequest(GGClockIPC.worker.reset, () => applyLocalClock(GGDateShim.DEFAULT_STATE));

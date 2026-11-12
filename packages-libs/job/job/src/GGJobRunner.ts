@@ -196,7 +196,7 @@ class JobLoop {
             try {
                 totals = await this.runBatches(config, s)
             } finally {
-                const durationMs = performance.now() - runStart
+                const durationMs = Math.round(performance.now() - runStart)
                 metric(() => GGJobMetrics.runDuration.inc(durationMs, {job: name}))
                 if (durationMs > config.intervalMs * WARN_RATIO) GGLog.warn(this.job, "Job run took most of its interval", {job: name, durationMs, intervalMs: config.intervalMs})
             }
@@ -242,7 +242,7 @@ class JobLoop {
             totals.rows += next
             totals.failed += failed
             totals.batches++
-            const report = {rows: next, failed, durationMs: performance.now() - startedAt}
+            const report = {rows: next, failed, durationMs: Math.round(performance.now() - startedAt)}
             if (rows.length > 0) GGLog.info(this.job, "Job batch done", {job: name, ...report})
             await this.job.dataSetFinished?.(report)
                 .catch(err => GGLog.warn(this.job, "Job dataSetFinished failed", {job: name, err: (err as Error).message}))

@@ -46,7 +46,7 @@ export class GGHistogram<
     public startTimer(...args: LabelsArgs<TLabels>): () => void {
         const start = performance.now();
         const labels = args[0] as TLabels;
-        return () => this.observe(performance.now() - start, ...([labels] as LabelsArgs<TLabels>));
+        return () => this.observe(Math.round(performance.now() - start), ...([labels] as LabelsArgs<TLabels>));
     }
 }
 
