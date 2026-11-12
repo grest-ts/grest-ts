@@ -14,7 +14,7 @@ import "./_dedupCheck";
 import {GGLog} from "@grest-ts/logger";
 import {GGLoggerConsole} from "@grest-ts/logger-console";
 import {IPCServer} from "@grest-ts/ipc";
-import {GG_TEST_RUNNER, GGTestRunner} from "@grest-ts/testkit";
+import {GG_TEST_RUNNER, GGTestRunner, WorkerRunner} from "@grest-ts/testkit";
 import {GGLocator, GGLocatorScope} from "@grest-ts/locator";
 // -------------------------------------------------
 // Global test mode marker
@@ -30,6 +30,10 @@ const scope = new GGLocatorScope("GGTestRoot").enter()
 
 // GGTestRunner.reusableId: unique among concurrent workers, 1..maxWorkers.
 process.env.GG_TEST_WORKER ??= process.env.VITEST_POOL_ID;
+
+// Files that share a test process may share runtime workers too: each file still gets fresh runtime instances.
+// `__vitest_worker__` is vitest's internal per-worker state; without it, workers aren't reused.
+WorkerRunner.setReuse((globalThis as any).__vitest_worker__?.config?.isolate === false);
 
 GGLog.init();
 GGLog.add(new GGLoggerConsole());
