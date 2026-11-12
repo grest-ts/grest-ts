@@ -161,15 +161,11 @@ export class IPCSocket {
             const result = await handler(msg.data);
             sendResponse(true, result);
         } catch (error: any) {
-            if (error instanceof ERROR) {
-                // Reaches the requester typed, with its data; a 4xx one is usually expected (e.g. a mocked refusal).
-                if (error.statusCode >= 500) GGLog.error(this, `Request handler error for ${msg.path}`, error);
-                else GGLog.debug(this, `Request handler for ${msg.path} threw ${error.type}`, error);
-                sendResponse(false, undefined, error.message, error.toJSON());
-                return;
-            }
-            GGLog.error(this, `Request handler error for ${msg.path}`, error);
-            sendResponse(false, undefined, error.message || String(error));
+            // A typed error reaches the requester as itself, with its data, and is often expected (a mocked refusal).
+            const typed = error instanceof ERROR;
+            if (typed) GGLog.debug(this, `Request handler error for ${msg.path}`, error);
+            else GGLog.error(this, `Request handler error for ${msg.path}`, error);
+            sendResponse(false, undefined, error.message || String(error), typed ? error.toJSON() : undefined);
         }
     }
 

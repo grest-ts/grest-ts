@@ -239,7 +239,7 @@ describe("@mockable fields", () => {
                 // compiled
                 return __awaiter(this, void 0, void 0, function* () { return id })
             }
-            helper(id) { setTimeout(() => __awaiter(this, void 0, void 0, function* () {})); return id }
+            helper(id) { const later = () => __awaiter(this, void 0, void 0, function* () {}); return id }
         }`)()) as new () => Record<"viaTslib" | "viaCall" | "afterComment" | "helper", (id: string) => unknown>
         const compiled = new Compiled()
         await runWithMockableContext(context, async () => {
