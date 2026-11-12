@@ -8,7 +8,21 @@ import {GGTestComponent, GGTestComponentType} from "./testers/GGTestComponent";
 import {IGGLocalDiscoveryServer} from "./IGGLocalDiscoveryServer";
 import {TestableIPC} from "./callOn/TestableIPC";
 
-export const GG_TEST_RUNNER = new GGLocatorKey<GGTestRunner>("GGTestRunner");
+class GGTestRunnerKey extends GGLocatorKey<GGTestRunner> {
+    public get(): GGTestRunner {
+        const runner = this.tryGet();
+        if (!runner) {
+            throw new Error(
+                "No GGTest runner here. GGTest.start*/with(...) and other testkit calls work only inside describe() or a test, " +
+                "and need the testkit's global describe: a file that imports `describe` from \"vitest\" bypasses it (drop that import), " +
+                "and vitest.config needs setupFiles: [\"@grest-ts/testkit-vitest\"] + globalSetup: [\"@grest-ts/testkit-vitest/globalSetup\"]."
+            );
+        }
+        return runner;
+    }
+}
+
+export const GG_TEST_RUNNER: GGLocatorKey<GGTestRunner> = new GGTestRunnerKey("GGTestRunner");
 
 /**
  * Interface for test lifecycle hooks.

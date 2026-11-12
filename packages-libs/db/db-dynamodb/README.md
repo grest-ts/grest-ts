@@ -284,6 +284,8 @@ Sort-key conditions: `eq`, `lt`, `lte`, `gt`, `gte`, `between: [a, b]`, `beginsW
 
 Rows are typed by the index's projection: `"ALL"` (default) returns the row; `"KEYS_ONLY"` the table and index key fields; a list (DynamoDB's INCLUDE) those plus the listed fields. Share a projection list `as const` to keep its literal types.
 
+An INCLUDE list is created as named, a table key attribute included, so a spec can match an index already deployed. When the deployed index also projects an attribute the schema no longer has, name it in `retiredAttributes: ["status"]`: it is created with the index and never read back.
+
 ### Writes and conditions
 
 ```typescript
@@ -363,6 +365,10 @@ const saved = await projects.save({ ...project, name })   // undefined: someone 
 const result = await db.transactWrite([orders.tx.put(order), stock.tx.update({ sku }, { reserved }, { if: { version: { eq: v } } })])
 if (!result.ok) result.conditionFailed   // [1]: the stock update's condition
 ```
+
+The result is not `ok` only when failed conditions alone cancelled the transaction. Any other cancellation reason — a
+conflicting transaction, throttling — rethrows DynamoDB's `TransactionCanceledException`, also when it comes beside a
+failed condition: `ok: false` always means "a condition you wrote doesn't hold", never "try again".
 
 ### Tables for development and tests
 
@@ -476,9 +482,38 @@ const user = await users.queryOne(
 )
 ```
 
+## Testing Code Without an API in Front
+
+A service, store or job that tests construct directly (because each test hands it different fakes) still gets its database from a runtime: a small test runtime builds the `GGDynamoDb` and whatever needs it, `GGTest.startInline` runs it in the test's process, and `clone` gives the suite its isolated database. The test then uses the instances the runtime built.
+
+```typescript
+export let orders: OrderStore
+
+export class OrdersTestRuntime extends GGRuntime {
+    public static readonly NAME = "orders-test"
+
+    protected compose(): void {
+        new GGConfigLocator(TestConfig).add([GGResource, GGSecret], new GGConfigStoreLocal(TestConfig, {
+            db: {host: {endpoint: ENDPOINT, region: "eu-west-1"}, user: {accessKeyId: undefined, secretAccessKey: undefined}},
+        }))
+        orders = new OrderStore(TestConfig.db.newDynamoDb())
+    }
+}
+OrdersTestRuntime.cli(import.meta.url).then()
+
+describe("OrderStore", () => {
+    GGTest.startInline(OrdersTestRuntime)
+    GGTest.with(TestConfig.db).clone({host: {endpoint: ENDPOINT, region: "eu-west-1"}, tables: [OrdersTable]})
+
+    test("...", async () => { await orders.place(...) })
+})
+```
+
+The test body runs outside the runtime's scope. A `GGSetting`/`GGResource` read at call time (as it should be) resolves only inside it, so code under test that reads config needs the scope: keep `GGLocator.getScope()` from `compose` and wrap each test, `aroundEach(run => scope.run(run))`.
+
 ## Admin / Table Creation
 
-`GGDynamoDb.getRawClient()` returns a fresh low-level `DynamoDBClient` (no DocumentClient marshalling), or for `GGDynamoDb.forClient(client)` that client. Use it for `DescribeTable` and other operations the document layer doesn't cover. It reads config at call time, so it works before `start()` has run, which is what a seed script needs to create its tables with `GGDynamoDbDevTables.ensure` before any data exists.
+`GGDynamoDb.getRawClient()` returns a fresh low-level `DynamoDBClient` (no DocumentClient marshalling), or for `GGDynamoDb.forClient(client)` that client. Use it for `DescribeTable` and other operations the document layer doesn't cover. It reads config at call time, so it works before `start()` has run, which is what a seed script needs to create its tables with `GGDynamoDbDevTables.ensure` before any data exists. Don't keep a client built from it for data access: it doesn't follow config changes, while `getDocumentClient()` does.
 
 ## Reads Are Not Validated
 

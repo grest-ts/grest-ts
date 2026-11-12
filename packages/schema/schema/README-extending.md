@@ -11,10 +11,10 @@ interface GGValidator<T> {
     // Type guard
     is(value: unknown): value is T;
 
-    // Throws on validation failure
+    // Throws GGParseError on validation failure
     assert(value: unknown): asserts value is T;
 
-    // Parse with coercion (throws on failure)
+    // Parse with coercion (throws GGParseError on failure)
     parse(value: unknown, coerce?: boolean): T;
 
     // Safe parse with error collection
