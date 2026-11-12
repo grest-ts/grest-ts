@@ -5,6 +5,8 @@ import {enumOf, type Values} from "@grest-ts/common";
 
 type ConstructorOf<T> = new (...args: any[]) => T;
 
+const forgetTimer = new FinalizationRegistry<() => void>(forget => forget())
+
 /**
  * service-locator pattern for async context cases.
  */
@@ -16,6 +18,7 @@ export class GGLocatorScope {
     private readonly values: Map<string, any>
     private readonly registrationStacks: Map<string, string[]>
     private readonly creationStack: string[]
+    private timers?: Set<WeakRef<NodeJS.Timeout>>
 
     constructor(name: string, parent?: GGLocatorScope, serviceName?: string) {
         this.name = name
@@ -100,11 +103,38 @@ export class GGLocatorScope {
     }
 
     public setTimeout<R>(fn: () => R, timeout: number): NodeJS.Timeout {
-        return setTimeout(() => this.run(fn), timeout)
+        return this.trackTimer(setTimeout(() => this.run(fn), timeout))
     }
 
     public setInterval<R>(fn: () => R, timeout: number): NodeJS.Timeout {
-        return setInterval(() => this.run(fn), timeout)
+        return this.trackTimer(setInterval(() => this.run(fn), timeout))
+    }
+
+    /** From now on, clearTimers() clears the timers set through this scope or any branch of it. */
+    public ownTimers(): void {
+        this.timers ??= new Set()
+    }
+
+    public clearTimers(): void {
+        if (!this.timers) return
+        for (const ref of this.timers) {
+            const timer = ref.deref()
+            if (timer) clearTimeout(timer)
+        }
+        this.timers.clear()
+    }
+
+    private trackTimer(timer: NodeJS.Timeout): NodeJS.Timeout {
+        let owner: GGLocatorScope | undefined = this
+        while (owner && !owner.timers) owner = owner.parent
+        const timers = owner?.timers
+        if (timers) {
+            // Weak: a timer that fired or was cleared elsewhere must not stay in the set for the scope's lifetime.
+            const ref = new WeakRef(timer)
+            timers.add(ref)
+            forgetTimer.register(timer, () => timers.delete(ref))
+        }
+        return timer
     }
 
     /**

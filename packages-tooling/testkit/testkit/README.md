@@ -455,22 +455,63 @@ Time keeps flowing from the time you set, unless you stop it.
 
 ```typescript
 await GGTest.clock.set(new Date("2026-03-01T09:00:00Z"))   // number = epoch ms
-await GGTest.clock.advance(30 * 60_000)                    // jump forward
-await GGTest.clock.stop()                                  // Date.now() stays put until set/advance/start
+await GGTest.clock.advance(30 * 60_000)                    // jump forward, fire due scope timers
+await GGTest.clock.stop()                                  // Date.now() and scope timers wait until set/advance/start
 await GGTest.clock.start()                                 // flows again from the current fake now
 GGTest.clock.now()                                         // same as Date.now() in the test
 ```
 
-- `set`, `advance`, `stop` and `start` resolve once every runtime is on the new time. A runtime started later
-  starts on it.
 - Set in a test, it's undone after the test. Set in a `describe` or `beforeAll`, it holds for that block. The
-  default is real time.
-- Only `Date` is faked. Timers (`setTimeout`, `sleep()`), `performance.now()` and anything measuring elapsed time
-  stay real, so `advance` doesn't fire timers. Code that measures durations should use `performance.now()`.
+  default is real time. A runtime started later starts on the clock's time.
 - Clocks outside the app aren't faked: DynamoDB TTL, SQL `NOW()`, Redis `EXPIRE`, S3 `LastModified`. Pass the
   app's time to them instead; see [Databases and external services](../../../docs/design/test-clock.md#3-databases-and-external-services).
 - Don't fake `Date` with `vi.useFakeTimers` too. `GGTest.clock` throws while it's active; leave `Date` out of
   `toFake`.
+
+### Timers that follow the clock
+
+A timer follows the clock when it is set with `GGLocator.setTimeout` / `GGLocator.setInterval` (a *scope
+timer*): the API for business timers that tests must control, such as a session's expiry. It runs its callback in
+the caller's scope and is cleared when its runtime stops. Cancel it with the usual `clearTimeout`/`clearInterval`.
+
+```typescript
+this.expiry = GGLocator.setTimeout(() => socket.close(), expiresAt - Date.now())
+```
+
+`advance(ms)` is a jump, like a machine waking from sleep. When it resolves:
+
+1. Every runtime is on the new time, before any timer fires.
+2. Every scope timer pending before the advance and due by the new time has fired **once**, in due order within
+   each runtime; runtimes go one after another in start order. An interval fires once, not once per missed
+   period, and continues from the new time. Timers that the callbacks set start from the new time; to see N runs,
+   advance N times.
+3. The promises the callbacks returned have settled. A rejection fails the `advance`; so does one still pending after
+   `advance(ms, {timeoutMs})` (default 30 s) of real time, with where its timer was set. A callback that
+   awaits something the test does after the `advance` deadlocks until then.
+
+It doesn't wait for work a callback started without returning it (use `.waitFor(...)`), and requests in flight
+during the advance may see either time. A `set()` to a later time fires timers as `advance` does; a `set()` back
+fires nothing. With the clock stopped, scope timers wait for `advance` or `start()`. `GGJobRunner` schedules and the
+`withLock` heartbeat are scope timers: `advance` past a lock's TTL loses the lock, as a stalled run would.
+
+Everything else stays on real time: raw `setTimeout`/`setInterval`, `sleep()`, `withTimeout()`, sockets, IPC and
+`performance.now()`. When an `advance` moves past a raw timer that app code set (not node_modules or `@grest-ts/*`)
+with a delay of 1 s or more, the runtime logs a warning with where it was set: use `GGLocator.setTimeout` if it should
+follow the clock. `GG_TEST_CLOCK_RAW_TIMER_MS` changes that 1 s threshold (`0` checks every raw timer, at the cost
+of a stack trace each).
+
+### Clocks the framework doesn't own
+
+Some third-party clocks can't be faked, such as an SDK's clock-skew correction. `GGTestClock.onChange` runs a hook in
+each isolate whenever the clock changes, before that isolate acknowledges the change and before any timer fires.
+Register it from test-only code, such as your package's `testkit/index-testkit.ts`, which the testkit loads into
+every runtime and the test:
+
+```typescript
+import {GGTestClock} from "@grest-ts/testkit"
+
+GGTestClock.onChange(({offsetMs, stoppedAt}) => { /* resync the SDK's clients */ })
+```
 
 ---
 

@@ -1,4 +1,6 @@
 import {callOn, GGTest} from "@grest-ts/testkit"
+import {GGLocator} from "@grest-ts/locator"
+import {GGRuntime} from "@grest-ts/runtime"
 import {GGSocket} from "@grest-ts/websocket"
 import type {SocketAdapter} from "@grest-ts/websocket/internal"
 import {ClockInlineRuntime, ClockLateRuntime, ClockWorkerRuntime} from "../src/ClockRuntime"
@@ -184,5 +186,130 @@ describe("GGTest.clock and an open websocket", () => {
         expect(closed).toBe(false)
 
         client.close(); server.close()
+    })
+})
+
+describe("GGTest.clock and scope timers", () => {
+    GGTest.startInline(ClockInlineRuntime)
+    const t = GGTest.startWorker(ClockWorkerRuntime)
+    GGTest.startIsolated(ClockIsolatedRuntime)
+    const worker = runtimes.worker
+
+    beforeEach(async () => {
+        for (const api of Object.values(runtimes)) await api.reset()
+    })
+
+    test("a scope timer fires on advance and not before, in every kind of runtime", async () => {
+        for (const api of Object.values(runtimes)) await api.schedule({id: "a", ms: 60_000})
+        await GGTest.clock.advance(30_000)
+        for (const api of Object.values(runtimes)) await api.fired().toEqual([])
+
+        await GGTest.clock.advance(30_000)
+        for (const api of Object.values(runtimes)) await api.fired().toEqual(["a"])
+    })
+
+    test("due timers fire once, in due order", async () => {
+        await worker.schedule({id: "late", ms: 2_000})
+        await worker.schedule({id: "early", ms: 1_000})
+        await worker.schedule({id: "outside", ms: 60_000})
+        await GGTest.clock.advance(5_000)
+        await worker.fired().toEqual(["early", "late"])
+    })
+
+    test("an interval fires once per advance and continues from the new time", async () => {
+        await worker.schedule({id: "tick", ms: 1_000, interval: true})
+        await GGTest.clock.advance(10_000)
+        await worker.fired().toEqual(["tick"])
+        await GGTest.clock.advance(10_000)
+        await worker.fired().toEqual(["tick", "tick"])
+    })
+
+    test("a timer cleared before the advance doesn't fire", async () => {
+        await worker.schedule({id: "a", ms: 1_000})
+        await worker.cancel({id: "a"})
+        await GGTest.clock.advance(5_000)
+        await worker.fired().toEqual([])
+    })
+
+    test("advance waits for the promise a callback returns", async () => {
+        await worker.schedule({id: "a", ms: 1_000, asyncMs: 200})
+        await GGTest.clock.advance(1_000)
+        await worker.fired().toEqual(["a", "a:done"])
+    })
+
+    test("a rejected callback promise fails the advance", async () => {
+        await worker.schedule({id: "a", ms: 1_000, fail: true})
+        await expect(GGTest.clock.advance(1_000)).rejects.toThrow(/timer a failed/)
+    })
+
+    test("a callback still pending after the timeout fails the advance with where the timer was set", async () => {
+        await worker.schedule({id: "a", ms: 1_000, asyncMs: 2_000})
+        await expect(GGTest.clock.advance(1_000, {timeoutMs: 200})).rejects.toThrow(/hasn't settled after 200ms[\s\S]*ClockApiImpl/)
+    })
+
+    test("a timer set by a callback starts from the new time and doesn't fire in the same advance", async () => {
+        await worker.schedule({id: "a", ms: 1_000, nested: true})
+        await GGTest.clock.advance(10_000)
+        await worker.fired().toEqual(["a"])
+        await GGTest.clock.advance(1_000)
+        await worker.fired().toEqual(["a", "a:nested"])
+    })
+
+    test("a stopped clock fires nothing until advance; start re-arms", async () => {
+        await GGTest.clock.stop()
+        await worker.schedule({id: "a", ms: 50})
+        await sleep(150)
+        await worker.fired().toEqual([])
+        await GGTest.clock.advance(50)
+        await worker.fired().toEqual(["a"])
+
+        await worker.schedule({id: "b", ms: 50})
+        await sleep(150)
+        await worker.fired().toEqual(["a"])
+        await GGTest.clock.start()
+        await vi.waitFor(() => worker.fired().toEqual(["a", "b"]))
+    })
+
+    test("with a flowing clock, a scope timer still fires on its own", async () => {
+        await worker.schedule({id: "a", ms: 50})
+        await vi.waitFor(() => worker.fired().toEqual(["a"]))
+        await GGTest.clock.advance(1_000)
+        await worker.fired().toEqual(["a"])
+    })
+
+    test("moving past a long raw timer in app code warns where it was set", async () => {
+        await worker.rawTimer({id: "raw", ms: 60_000})
+        const cursor = await t.logs.cursor()
+        await GGTest.clock.advance(120_000)
+        const warning = await cursor.find(/raw setTimeout\(…, 60000\)[\s\S]*GGLocator\.setTimeout/)
+        expect(warning?.message).toMatch(/ClockApiImpl/)
+    })
+
+    test("onChange hooks run in the runtime before the change resolves", async () => {
+        await GGTest.clock.set(T)
+        const changes = await worker.clockChanges()
+        expect(Math.abs(changes.at(-1)! - (T - realNow()))).toBeLessThan(SLACK)
+    })
+})
+
+describe("GGTest.clock and a stopped runtime", () => {
+    const fired: string[] = []
+
+    class TimerRuntime extends GGRuntime {
+        public static readonly NAME = "clock-timers"
+
+        protected compose(): void {
+            GGLocator.setTimeout(() => { fired.push(this.name) }, 60_000)
+        }
+    }
+
+    test("a runtime's teardown clears its scope timers", async () => {
+        const running = await new TimerRuntime().start()
+        const stopped = await new TimerRuntime().start()
+        await stopped.teardown()
+
+        await GGTest.clock.advance(60_000)
+        expect(fired).toEqual(["clock-timers"])
+        await running.teardown()
     })
 })

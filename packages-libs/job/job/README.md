@@ -117,8 +117,18 @@ await t.jobs.run("expired-sessions")
 
 - `result` is `DONE`, `BUSY` (another instance holds the lock), `LOST` or `DISABLED`. A run that fails fails the action.
 - With several instances, pick one: `t[1].jobs.run(...)`.
-- `await t.jobs.start()` starts the schedules, for a test about scheduling itself.
+- `await t.jobs.start()` starts the schedules, for a test about scheduling itself. Drive them with `GGTest.clock`
+  instead of waiting for real ticks: `advance` fires a due run once and waits for it.
+- A scheduled run of a `oneInstance` job holds a cooldown until its interval ends, and `run` is `BUSY` until then.
+  `GGTest.clock.advance(intervalMs)` ends it.
 - Change a job's setting with `t.config.update(MyConfig.jobs.expiredSessions, {...})`.
+
+```typescript
+await t.jobs.start()
+await GGTest.clock.advance(startupDelayMs)                       // the first scheduled run, once
+await t.jobs.run("expired-sessions").toMatchObject({result: "BUSY"})   // its cooldown
+await GGTest.clock.advance(intervalMs)                            // the next scheduled run
+```
 
 `runJobOnce` runs one batch of a job's own logic in a unit test, with no runtime, runner or lock. Row errors are returned, not thrown:
 

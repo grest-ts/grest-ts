@@ -14,7 +14,7 @@ import "./_dedupCheck";
 import {GGLog} from "@grest-ts/logger";
 import {GGLoggerConsole} from "@grest-ts/logger-console";
 import {IPCServer} from "@grest-ts/ipc";
-import {GG_TEST_RUNNER, GGTestRunner, installDateShim} from "@grest-ts/testkit";
+import {GG_TEST_RUNNER, GGTestRunner, installTestClock} from "@grest-ts/testkit";
 import {GGLocator, GGLocatorScope} from "@grest-ts/locator";
 // -------------------------------------------------
 // Global test mode marker
@@ -26,7 +26,7 @@ import {GGLocalDiscoveryServer} from "@grest-ts/discovery-local";
 import {GGTestDiscoveryClient} from "./GGTestDiscoveryClient";
 import {GGExtensionDiscovery} from "@grest-ts/common";
 
-installDateShim();
+installTestClock();
 
 const scope = new GGLocatorScope("GGTestRoot").enter()
 

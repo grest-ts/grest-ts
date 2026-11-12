@@ -233,7 +233,7 @@ export class GGTestRuntime {
         });
     }
 
-    public async sendCommand<Payload, Result>(type: IPCClientRequest<Payload, Result>, payload: Payload): Promise<Result> {
+    public async sendCommand<Payload, Result>(type: IPCClientRequest<Payload, Result>, payload: Payload, timeoutMs?: number): Promise<Result> {
         switch (this._state) {
             case GGTestRuntimeState.CREATED:
                 this.initialCommands.push({method: type, payload: payload});
@@ -242,7 +242,7 @@ export class GGTestRuntime {
             case GGTestRuntimeState.FAILED:
             case GGTestRuntimeState.STOPPED:
                 // IPC still available in these states
-                return await this.runner.ipcServer.sendFrameworkMessage(this.runtimeId, type, payload);
+                return await this.runner.ipcServer.sendFrameworkMessage(this.runtimeId, type, payload, timeoutMs);
             case GGTestRuntimeState.SHUTDOWN:
                 throw new Error(`Cannot send command to shut down runtime ${this.className}`);
         }

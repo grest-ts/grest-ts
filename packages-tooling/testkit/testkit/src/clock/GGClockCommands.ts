@@ -1,6 +1,8 @@
 import {GG_TEST_RUNTIME_WORKER, GGTestRuntimeWorker} from "../GGTestRuntimeWorker";
 import {GGClockIPC} from "./GGClockIPC";
 import {GGDateShim} from "./GGDateShim";
+import {GGTimerShim} from "./GGTimerShim";
+import {applyLocalClock} from "./GGTestClock";
 
 GGTestRuntimeWorker.onBeforeRuntimeStart(() => {
     const worker = GG_TEST_RUNTIME_WORKER.get();
@@ -8,10 +10,7 @@ GGTestRuntimeWorker.onBeforeRuntimeStart(() => {
     const initial = worker.getInitialCommandsFor(GGClockIPC.worker.set).at(-1);
     if (initial) GGDateShim.setState(initial.payload);
 
-    worker.ipcClient.onFrameworkRequest(GGClockIPC.worker.set, async (state) => {
-        GGDateShim.setState(state);
-    });
-    worker.ipcClient.onFrameworkRequest(GGClockIPC.worker.reset, async () => {
-        GGDateShim.setState(GGDateShim.DEFAULT_STATE);
-    });
+    worker.onIpcRequest(GGClockIPC.worker.set, state => applyLocalClock(state));
+    worker.onIpcRequest(GGClockIPC.worker.reset, () => applyLocalClock(GGDateShim.DEFAULT_STATE));
+    worker.onIpcRequest(GGClockIPC.worker.fireDue, ({timeoutMs}) => GGTimerShim.fireDue(timeoutMs));
 });

@@ -52,6 +52,7 @@ export abstract class GGRuntime {
             this.scope = new GGLocatorScope(scopeName, undefined, this.name);
             GGLog.init(this.scope)
         }
+        this.scope.ownTimers();
     }
 
     /**
@@ -216,5 +217,6 @@ export abstract class GGRuntime {
             });
             await Promise.allSettled(teardownPromises);
         }
+        this.scope.clearTimers();
     }
 }
