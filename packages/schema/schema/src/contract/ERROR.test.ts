@@ -4,6 +4,7 @@ import {VALIDATION_ERROR} from './standardErrors';
 import {IsString} from '../schemas/IsString';
 import {IsNumber} from '../schemas/IsNumber';
 import {IsObject} from '../schemas/IsObject';
+import {GGParseError} from '../issue/GGParseError';
 
 const MY_ERROR = ERROR.define('MY_ERROR', 418);
 
@@ -286,6 +287,17 @@ describe('ERROR', () => {
             expect(ERROR.anyToText(new Error('boom'))).toContain('Error: boom');
             expect(ERROR.anyToText('just text')).toBe('just text');
             expect(ERROR.anyToText(42)).toBe('42');
+        });
+
+        it('should render a handler parse failure as SERVER_ERROR with the GGParseError stack', async () => {
+            const handler = async () => IsNumber.parse('not-a-number');
+            const error = await handler().then(() => expect.unreachable(), ERROR.fromUnknown);
+            expect(error).toBeInstanceOf(SERVER_ERROR);
+            expect(error.getDebugContext()?.originalError).toBeInstanceOf(GGParseError);
+            const text = error.toText();
+            expect(text).toContain('Original error: GGParseError: Validation failed');
+            expect(text).toContain('ERROR.test.ts');
+            expect(text).not.toContain('not-a-number');
         });
 
         it('should truncate validation issues beyond 10', () => {

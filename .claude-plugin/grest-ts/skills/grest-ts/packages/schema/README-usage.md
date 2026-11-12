@@ -14,10 +14,10 @@ if (IsString.is(value)) {
     // value is string
 }
 
-// Assertions (throws on failure)
+// Assertions (throws GGParseError on failure)
 IsNumber.assert(value);
 
-// Parse with coercion (throws on failure)
+// Parse with coercion (throws GGParseError on failure)
 const num = IsNumber.parse(value, true);
 
 // Safe parse with error collection
@@ -39,7 +39,7 @@ if (IsEmail.is(value)) {
     // value is tEmail
 }
 
-// Parse with validation (throws on failure)
+// Parse with validation (throws GGParseError on failure)
 const email = IsEmail.parse(input);
 const userId = IsInt.parse(input, true); // with coercion
 
@@ -221,7 +221,7 @@ try {
     IsUser.assert(data);
     // data is valid User
 } catch (error) {
-    // GGIssuesList with validation issues
+    // GGParseError; error.issues is the GGIssuesList
 }
 ```
 
