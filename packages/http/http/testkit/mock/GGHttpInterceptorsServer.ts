@@ -6,6 +6,7 @@ import {GGLocalDiscoveryServer, ROUTING_STRATEGIES} from "@grest-ts/discovery-lo
 import type {HttpMethod} from "@grest-ts/common";
 import type {GGHttpSchema} from "../../src/schema/GGHttpSchema";
 import {GGHttpInterceptor} from "./GGHttpSchema.mock";
+import {GGHttpTestRouteIPC} from "./GGHttpTestRoute";
 
 interface GGHttpDefaultAnswer {
     apiName: string
@@ -31,6 +32,10 @@ export class GGHttpInterceptorsServer implements GGTestComponent {
         }
         this.server = runner.ipcServer;
         this.discoveryServer = runner.discoveryServer;
+        this.server.onFrameworkMessage(GGHttpTestRouteIPC.mockedRoute, async (key) => {
+            const interceptor = this.interceptors.get(key);
+            return interceptor && !interceptor.passThrough ? this.server.getUrl() : undefined;
+        });
     }
 
     public async start(): Promise<void> {

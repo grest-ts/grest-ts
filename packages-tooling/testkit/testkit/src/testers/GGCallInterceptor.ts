@@ -2,6 +2,7 @@ import type {GGTestRunner} from "../GGTestRunner";
 import {GGExpectations} from "../utils/GGExpectations";
 import {GGTestError} from "../utils/GGTestError";
 import {GGLog} from "@grest-ts/logger";
+import {GGLocator, GGLocatorScope} from "@grest-ts/locator";
 
 import {IGGTestInterceptor} from "./IGGTestInterceptor";
 
@@ -41,6 +42,7 @@ export abstract class GGCallInterceptor implements IGGTestInterceptor {
 
     private noOfTimesCalled = 0;
     private isRegistered = false;
+    private scope: GGLocatorScope | undefined;
     private validationError: Error | undefined;
 
     protected constructor(test: GGTestRunner, config: GGCallInterceptorConfig) {
@@ -96,6 +98,7 @@ export abstract class GGCallInterceptor implements IGGTestInterceptor {
             throw new Error("Should not register interceptor multiple times. Something is wrong...");
         }
         this.isRegistered = true;
+        this.scope = GGLocator.tryGetScope();
 
         const mode = this.passThrough ? "spy" : "mock";
         GGLog.debug(this, `Add ${mode} interceptor [${this.getKey()}]`);
@@ -139,7 +142,8 @@ export abstract class GGCallInterceptor implements IGGTestInterceptor {
 
         if (!this.passThrough) {
             await this.sleepIfNeeded();
-            return typeof this.returnData === "function" ? this.returnData(transformed) : this.returnData;
+            if (typeof this.returnData !== "function") return this.returnData;
+            return this.scope ? this.scope.run(() => this.returnData(transformed)) : this.returnData(transformed);
         }
 
         return undefined;

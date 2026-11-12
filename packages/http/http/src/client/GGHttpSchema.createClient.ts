@@ -100,6 +100,12 @@ export function _registerNodeDefaultTransport(transport: GGHttpTransport): void 
     nodeDefaultTransport = transport
 }
 
+let testRouteResolver: ((key: string) => Promise<string | undefined>) | undefined
+
+export function _registerTestRouteResolver(resolver: (key: string) => Promise<string | undefined>): void {
+    testRouteResolver = resolver
+}
+
 GGHttpSchema.prototype.createClient = function <TContract extends GGContractApiDefinition>(
     this: GGHttpSchema<TContract>,
     config?: GGHttpClientConfig
@@ -173,7 +179,11 @@ export function createClient<TContract extends GGContractApiDefinition>(
                     ? await withWireValues(config.wires, () => wireFormat.createRequest(validatedInput))
                     : await wireFormat.createRequest(validatedInput);
 
-                const connectionSettings = config.connectionSettings || fetchRequest.connectionSettings
+                const testRoute = config.url !== undefined && testRouteResolver
+                    ? await testRouteResolver(`${codec.method} ${pathPrefix}${codec.path}`)
+                    : undefined;
+                if (testRoute) baseUrl = testRoute;
+                const connectionSettings = testRoute ? undefined : config.connectionSettings || fetchRequest.connectionSettings
                     ? {...config.connectionSettings, ...fetchRequest.connectionSettings}
                     : undefined;
                 if (connectionSettings && isBrowser() && Object.keys(connectionSettings).length > 0) {
@@ -182,7 +192,7 @@ export function createClient<TContract extends GGContractApiDefinition>(
 
                 const controller = new AbortController();
                 const timeoutId = setTimeout(() => controller.abort(), config.timeout);
-                const wireResponse = await transport(baseUrl + fetchRequest.url, {
+                const wireResponse = await (testRoute ? defaultFetchTransport : transport)(baseUrl + fetchRequest.url, {
                     method: fetchRequest.method,
                     signal: controller.signal,
                     headers: fetchRequest.headers,
