@@ -111,7 +111,7 @@ describe("reads and deletes by a string/number table key", () => {
     it("delete and tx.check condition on the key's inputs", async () => {
         const {table, inputs} = stubTable({})
         await table.delete({userId: "u1", at: 1500})
-        expect(readable(inputs()[0], inputs()[0].ConditionExpression)).toBe(`(at = 1500)`)
+        expect(readable(inputs()[0], inputs()[0].ConditionExpression)).toBe(`at = 1500`)
         const check = table.tx.check({userId: "u1", at: 1500}, {kind: {eq: "k"}})
         expect(readable(check.ConditionCheck!, check.ConditionCheck!.ConditionExpression!)).toBe(`(at = 1500 AND kind = "k")`)
     })

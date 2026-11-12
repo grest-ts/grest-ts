@@ -1,6 +1,6 @@
 import {
     CreateTableCommand, DescribeTableCommand, DescribeTimeToLiveCommand, UpdateTableCommand, UpdateTimeToLiveCommand, waitUntilTableExists,
-    type DynamoDBClient, type TableDescription,
+    type CreateTableCommandInput, type DynamoDBClient, type TableDescription,
 } from "@aws-sdk/client-dynamodb"
 import type {GGDynamoDbTableSpec} from "./GGDynamoDbTableSpec"
 
@@ -26,7 +26,8 @@ export class GGDynamoDbDevTables {
      * Creates each spec's table when it is missing (on-demand billing), adds the GSIs a live table lacks, waiting for each
      * to turn ACTIVE, and turns on the spec's TTL. Add-only: what it can't fix is reported through `log` and left as is
      * — an index the spec no longer declares or declares differently, an LSI on an existing table, TTL on another
-     * attribute.
+     * attribute. Specs naming one table (row kinds sharing it) are merged: they must agree on its key, on the types of
+     * the attributes they both index, on same-named indexes and on TTL.
      */
     static async ensure(
         client: DynamoDBClient,
@@ -35,11 +36,8 @@ export class GGDynamoDbDevTables {
     ): Promise<GGDynamoDbDevTablesResult> {
         const log = opts?.log ?? (() => {})
         const result: GGDynamoDbDevTablesResult = {created: [], indexesAdded: []}
-        const names = new Set<string>()
-        for (const spec of specs) {
-            if (names.has(spec.name)) throw new Error(`GGDynamoDbDevTables: two specs name the table "${spec.name}"`)
-            names.add(spec.name)
-            const input = spec.createTableInput()
+        for (const spec of merge(specs)) {
+            const {input} = spec
             if (!await describe(client, spec.name)) {
                 try {
                     await client.send(new CreateTableCommand({...input, BillingMode: "PAY_PER_REQUEST"}))
@@ -89,8 +87,7 @@ export class GGDynamoDbDevTables {
                 await waitForIndex(client, spec.name, index.IndexName!, opts?.indexTimeoutMs ?? 15 * 60_000)
             }
 
-            const ttl = spec.timeToLiveInput()
-            if (ttl) {
+            if (spec.ttl) {
                 const current = (await client.send(new DescribeTimeToLiveCommand({TableName: spec.name}))).TimeToLiveDescription
                 const status = current?.TimeToLiveStatus
                 if (status === "ENABLED" || status === "ENABLING") {
@@ -99,7 +96,7 @@ export class GGDynamoDbDevTables {
                     log(`${spec.name}: TTL is still being turned off; run again later to turn it on for ${spec.ttl}`)
                 } else {
                     try {
-                        await client.send(new UpdateTimeToLiveCommand(ttl))
+                        await client.send(new UpdateTimeToLiveCommand({TableName: spec.name, TimeToLiveSpecification: {AttributeName: spec.ttl, Enabled: true}}))
                         log(`${spec.name}: TTL on ${spec.ttl}`)
                     } catch (err) {
                         // Another caller turned it on first.
@@ -111,6 +108,38 @@ export class GGDynamoDbDevTables {
         }
         return result
     }
+}
+
+type AnySpec = GGDynamoDbTableSpec<any, any, any, any, any, any>
+
+function merge(specs: ReadonlyArray<AnySpec>): {name: string, input: CreateTableCommandInput, ttl: string | undefined}[] {
+    const tables = new Map<string, {name: string, input: CreateTableCommandInput, ttl: string | undefined}>()
+    for (const spec of specs) {
+        const input = spec.createTableInput()
+        const table = tables.get(spec.name)
+        if (!table) {
+            tables.set(spec.name, {name: spec.name, input, ttl: spec.ttl})
+            continue
+        }
+        const fail = (msg: string): never => { throw new Error(`GGDynamoDbDevTables: the specs for "${spec.name}" ${msg}`) }
+        const merged = table.input
+        if (JSON.stringify(merged.KeySchema) !== JSON.stringify(input.KeySchema)) fail("have different keys")
+        for (const a of input.AttributeDefinitions ?? []) {
+            const known = merged.AttributeDefinitions!.find(m => m.AttributeName === a.AttributeName)
+            if (!known) merged.AttributeDefinitions!.push(a)
+            else if (known.AttributeType !== a.AttributeType) fail(`type "${a.AttributeName}" as both ${known.AttributeType} and ${a.AttributeType}`)
+        }
+        for (const kind of ["GlobalSecondaryIndexes", "LocalSecondaryIndexes"] as const) {
+            for (const index of input[kind] ?? []) {
+                const known = merged[kind]?.find(m => m.IndexName === index.IndexName)
+                if (!known) (merged[kind] ??= []).push(index as any)
+                else if (JSON.stringify(known) !== JSON.stringify(index)) fail(`declare index ${index.IndexName} differently`)
+            }
+        }
+        if (spec.ttl && table.ttl && spec.ttl !== table.ttl) fail(`put TTL on both ${table.ttl} and ${spec.ttl}`)
+        table.ttl ??= spec.ttl
+    }
+    return [...tables.values()]
 }
 
 type IndexLike = {KeySchema?: {AttributeName?: string, KeyType?: string}[], Projection?: {ProjectionType?: string, NonKeyAttributes?: string[]}}
