@@ -23,15 +23,15 @@ export type GGDynamoDbCondition<T> = {[K in keyof T]?: GGDynamoDbFieldCondition<
 }
 
 /** Placeholders for one expression set. Every attribute goes through a name placeholder, so reserved words just work.
- *  Operands on a `sets` field are sent as sets, as the field is stored. */
+ *  Operands are stored the way their field is (`encode`): a `sets` field's as a set. */
 export class GGDynamoDbExpr {
     readonly names: Record<string, string> = {}
     readonly values: Record<string, unknown> = {}
     private readonly byName = new Map<string, string>()
-    private readonly sets: ReadonlySet<string>
+    private readonly encode: (field: string, value: unknown) => unknown
 
-    constructor(sets: ReadonlySet<string> = new Set()) {
-        this.sets = sets
+    constructor(encode: (field: string, value: unknown) => unknown = (_f, v) => v) {
+        this.encode = encode
     }
 
     name(attr: string): string {
@@ -52,7 +52,8 @@ export class GGDynamoDbExpr {
 
     /** `attr` holds `v`, or is absent when `v` is undefined. */
     unchanged(attr: string, v: unknown): string {
-        return v === undefined ? `attribute_not_exists(${this.name(attr)})` : `${this.name(attr)} = ${this.value(this.operand(attr, v))}`
+        const stored = this.encode(attr, v)
+        return stored === undefined ? `attribute_not_exists(${this.name(attr)})` : `${this.name(attr)} = ${this.value(stored)}`
     }
 
     condition(c: GGDynamoDbCondition<any>): string {
@@ -64,7 +65,7 @@ export class GGDynamoDbExpr {
                 if (nested.length === 0) throw new Error(`GGDynamoDb: ${field} needs at least one condition`)
                 parts.push(`(${nested.join(field === "anyOf" ? " OR " : " AND ")})`)
             } else {
-                parts.push(this.fieldCondition(field, this.name(field), op as Source))
+                parts.push(this.fieldCondition(field, op as Source))
             }
         }
         if (parts.length === 0) throw new Error("GGDynamoDb: empty condition")
@@ -91,23 +92,47 @@ export class GGDynamoDbExpr {
         return Object.keys(this.values).length > 0 ? {ExpressionAttributeValues: this.values} : {}
     }
 
-    private fieldCondition(field: string, n: string, op: Source): string {
+    /** A request's ConditionExpression with this set's names and values, or nothing without a condition. */
+    conditionInput(c: GGDynamoDbCondition<any> | undefined): {ConditionExpression?: string, ExpressionAttributeNames?: Record<string, string>, ExpressionAttributeValues?: Record<string, unknown>} {
+        if (!c) return {}
+        const ConditionExpression = this.condition(c)
+        return {ConditionExpression, ExpressionAttributeNames: this.names, ...this.valuesInput()}
+    }
+
+    updateExpression(clauses: {set?: string[], remove?: string[], add?: string[], delete?: string[]}): string {
+        return (["set", "remove", "add", "delete"] as const)
+            .filter(k => clauses[k]?.length)
+            .map(k => `${k.toUpperCase()} ${clauses[k]!.join(", ")}`)
+            .join(" ")
+    }
+
+    private fieldCondition(field: string, op: Source): string {
+        const n = this.name(field)
         const [kind, v] = onlyOperator(field, op)
         switch (kind) {
             case "exists": return `${v ? "attribute_exists" : "attribute_not_exists"}(${n})`
-            case "ne": return `${n} <> ${this.value(this.operand(field, v))}`
+            case "ne": return `${n} <> ${this.operand(field, v)}`
             case "in": {
                 if ((v as unknown[]).length === 0) throw new Error(`GGDynamoDb: in on "${field}" needs at least one value`)
-                return `${n} IN (${(v as unknown[]).map(x => this.value(this.operand(field, x))).join(", ")})`
+                return `${n} IN (${(v as unknown[]).map(x => this.operand(field, x)).join(", ")})`
             }
             case "contains": return `contains(${n}, ${this.value(v)})`
             case "size": return this.range(`size(${n})`, v as Source)
         }
-        return this.range(n, op, x => this.operand(field, x))
+        return this.range(n, op, x => this.encodeOperand(field, x))
     }
 
-    private operand(field: string, v: unknown): unknown {
-        return this.sets.has(field) && Array.isArray(v) ? new Set(v) : v
+    private operand(field: string, v: unknown): string {
+        return this.value(this.encodeOperand(field, v))
+    }
+
+    // An empty set isn't stored, so it can't be compared against: `exists` says whether a set has elements.
+    private encodeOperand(field: string, v: unknown): unknown {
+        const encoded = this.encode(field, v)
+        if (encoded !== undefined) return encoded
+        throw new Error(Array.isArray(v)
+            ? `GGDynamoDb: "${field}" can't be compared with an empty set; use exists`
+            : `GGDynamoDb: the condition on "${field}" needs a value; use exists for absence`)
     }
 }
 
@@ -123,7 +148,7 @@ export function conditionPins(c: GGDynamoDbCondition<any> | undefined): Source {
     for (const [field, op] of Object.entries(c ?? {})) {
         if (op === undefined || field === "anyOf") continue
         if (field === "allOf") Object.assign(out, ...(op as GGDynamoDbCondition<any>[]).map(conditionPins))
-        else if ("eq" in op) out[field] = op.eq
+        else if ((op as {eq?: unknown}).eq !== undefined) out[field] = (op as {eq: unknown}).eq
         else if ("exists" in op && op.exists === false) out[field] = undefined
     }
     return out

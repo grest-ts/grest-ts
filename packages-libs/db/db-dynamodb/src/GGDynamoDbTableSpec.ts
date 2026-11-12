@@ -17,13 +17,16 @@ export class GGDynamoDbDerivedKey<V, Q> {
     public readonly deps: readonly string[]
     /** `undefined` when the type is that of the one schema field it stores. */
     public readonly attributeType: ScalarAttributeType | undefined
+    /** Absent on some rows by design (`flag`, `.when`); never a table key. */
+    public readonly sparse: boolean
     private readonly fn: (row: Source) => V | undefined
 
-    constructor(kind: "join" | "flag" | "value", deps: readonly string[], fn: (row: Source) => V | undefined, attributeType: ScalarAttributeType | undefined) {
+    constructor(kind: "join" | "flag" | "value", deps: readonly string[], fn: (row: Source) => V | undefined, attributeType: ScalarAttributeType | undefined, sparse = false) {
         this.kind = kind
         this.deps = deps
         this.fn = fn
         this.attributeType = attributeType
+        this.sparse = sparse
     }
 
     compute(row: Source): V | undefined {
@@ -43,18 +46,18 @@ export class GGDynamoDbDerivedKey<V, Q> {
 export class GGDynamoDbJoinKey<T, P extends Fields<T>, V> extends GGDynamoDbDerivedKey<V, Required<T, P>> {
 
     public readonly parts: readonly P[]
-    public readonly sparse: boolean
+    private readonly test: ((row: Source) => boolean) | undefined
 
     constructor(parts: readonly P[], test?: (row: Source) => boolean, extraDeps: readonly string[] = []) {
-        super("join", [...new Set([...parts, ...extraDeps])], row => test && !test(row) ? undefined : joinParts(parts, row), parts.length === 1 ? undefined : "S")
+        super("join", [...new Set([...parts, ...extraDeps])], row => test && !test(row) ? undefined : joinParts(parts, row), parts.length === 1 ? undefined : "S", !!test)
         this.parts = parts
-        this.sparse = !!test
+        this.test = test
     }
 
     /** The row is in the index only while `test` holds; `test` sees just `deps`. Not for a table key. */
     when<const W extends Fields<T>>(deps: readonly W[], test: (row: Pick<T, W>) => boolean): GGDynamoDbJoinKey<T, P, V> {
-        const outer = this
-        return new GGDynamoDbJoinKey<T, P, V>(this.parts, row => (!outer.sparse || outer.compute(row) !== undefined) && test(row as Pick<T, W>), [...this.deps, ...deps])
+        const outer = this.test
+        return new GGDynamoDbJoinKey<T, P, V>(this.parts, row => (!outer || outer(row)) && test(row as Pick<T, W>), [...this.deps, ...deps])
     }
 
     /** Leading `parts` as a sort-key condition: all of them match the value, fewer match `"<a>#..."`. */
@@ -63,22 +66,26 @@ export class GGDynamoDbJoinKey<T, P extends Fields<T>, V> extends GGDynamoDbDeri
         if (this.parts.length < 2 || given.length === 0 || given.some((p, i) => p !== this.parts[i])) {
             throw new Error(`GGDynamoDb: a prefix of join(${this.parts.join(", ")}) takes its leading parts, got ${given.join(", ") || "none"}`)
         }
-        const value = String(joinParts(given, input))
+        const value = joinString(given, input)
         return given.length === this.parts.length ? {eq: value} : {beginsWith: value + "#"}
     }
 }
 
 const NUMBER_TYPES = ["number", "int", "uint", "posInt", "int8", "int16", "int32", "uint8", "uint16", "uint32"]
 
+// One part is stored as itself, keeping its type; several as a string.
 function joinParts(parts: readonly string[], row: Source): any {
-    const values = parts.map(p => row[p])
-    if (values.some(v => v === undefined || v === null)) return undefined
-    if (values.length === 1) return values[0]
-    for (const [i, v] of values.entries()) {
+    if (parts.some(p => row[p] === undefined || row[p] === null)) return undefined
+    return parts.length === 1 ? row[parts[0]] : joinString(parts, row)
+}
+
+function joinString(parts: readonly string[], row: Source): string {
+    return parts.map(p => {
+        const v = String(row[p])
         // The separator inside a part would let two rows share one key.
-        if (String(v).includes("#")) throw new Error(`GGDynamoDb: join part "${parts[i]}" contains "#": ${JSON.stringify(v)}`)
-    }
-    return values.map(String).join("#")
+        if (v.includes("#")) throw new Error(`GGDynamoDb: join part "${p}" contains "#": ${JSON.stringify(v)}`)
+        return v
+    }).join("#")
 }
 
 type IsUnion<U, A = U> = U extends unknown ? ([A] extends [U] ? false : true) : never
@@ -94,7 +101,7 @@ export class GGDynamoDbDerivedBuilder<T> {
 
     /** `"1"` while `test` holds, absent otherwise: the sparse-marker pattern. Queried with no key input. */
     flag<const W extends Fields<T>>(deps: readonly W[], test: (row: Pick<T, W>) => boolean): GGDynamoDbDerivedKey<"1", {}> {
-        return new GGDynamoDbDerivedKey<"1", {}>("flag", deps, row => test(row as Pick<T, W>) ? "1" : undefined, "S")
+        return new GGDynamoDbDerivedKey<"1", {}>("flag", deps, row => test(row as Pick<T, W>) ? "1" : undefined, "S", true)
     }
 
     /** `fn`'s result; queried by `deps`, from which it is computed. */
@@ -208,6 +215,8 @@ export interface GGDynamoDbResolvedIndex {
     local?: true
 }
 
+type IndexWithProjection = GGDynamoDbResolvedIndex & {projection: GGDynamoDbProjection<string>}
+
 /**
  * One table's declaration: row schema, keys, derived attributes and indexes. Has no runtime dependencies, so a seed
  * script or test can build `createTableInput()` without a connection. Bind it with `new GGDynamoDbTypedTable(db, spec)`.
@@ -226,15 +235,19 @@ export class GGDynamoDbTableSpec<
     public readonly pk: PK
     public readonly sk: SK
     public readonly derived: ReadonlyArray<{name: string, key: GGDynamoDbDerivedKey<unknown, unknown>}>
+    /** `derived` less the table's own key attributes: what a write may rewrite. */
+    public readonly indexDerived: ReadonlyArray<{name: string, key: GGDynamoDbDerivedKey<unknown, unknown>}>
     public readonly sets: ReadonlySet<string>
     public readonly ttl: string | undefined
     /** The stored key attributes: `pk`, and `sk` when there is one. */
     public readonly keyAttributes: readonly string[]
     /** The fields that make up the table key: plain key fields, or a derived key's inputs. Fixed once a row exists. */
     public readonly keyFields: readonly string[]
-    public readonly indexes: Readonly<Record<keyof I & string, GGDynamoDbResolvedIndex & {projection: GGDynamoDbProjection<string>}>>
+    public readonly indexes: Readonly<Record<keyof I & string, IndexWithProjection>>
+    public readonly requiredFields: readonly string[]
     declare readonly _sets?: S
     private readonly fieldSchemas: Record<string, GGSchema<unknown>>
+    private readonly derivedByName: ReadonlyMap<string, GGDynamoDbDerivedKey<unknown, unknown>>
 
     private constructor(input: GGDynamoDbTableSpecInput<T, PK, SK, D, I, S>) {
         this.name = input.name
@@ -244,9 +257,12 @@ export class GGDynamoDbTableSpec<
         this.fieldSchemas = input.schema.toCompilerDef().shape as Record<string, GGSchema<unknown>>
         const derived = input.derived?.(new GGDynamoDbDerivedBuilder<T>()) ?? {}
         this.derived = Object.entries(derived as GGDynamoDbDerivedMap).map(([name, key]) => ({name, key}))
+        this.derivedByName = new Map(this.derived.map(d => [d.name, d.key]))
         this.sets = new Set(input.sets ?? [])
         this.ttl = input.ttl
         this.keyAttributes = this.sk ? [this.pk, this.sk] : [this.pk]
+        this.indexDerived = this.derived.filter(d => !this.keyAttributes.includes(d.name))
+        this.requiredFields = Object.entries(this.fieldSchemas).filter(([, f]) => !f.def.optional).map(([f]) => f)
         this.keyFields = [...new Set(this.keyAttributes.flatMap(a => this.derivedKey(a)?.deps ?? [a]))]
 
         const fail = (msg: string): never => { throw new Error(`GGDynamoDbTableSpec '${this.name}': ${msg}`) }
@@ -260,19 +276,23 @@ export class GGDynamoDbTableSpec<
         for (const attr of this.keyAttributes) {
             const key = this.derivedKey(attr)
             if (!key) continue
-            if (key.kind === "flag" || (key instanceof GGDynamoDbJoinKey && key.sparse)) fail(`the table key "${attr}" can't be sparse (flag / when)`)
+            if (key.sparse) fail(`the table key "${attr}" can't be sparse (flag / when)`)
             if (key instanceof GGDynamoDbJoinKey) for (const p of key.parts) if (this.fieldSchemas[p].def.optional) fail(`the table key "${attr}" joins the optional field "${p}"`)
         }
-        for (const f of this.sets) if (this.fieldType(f) !== "array") fail(`set "${f}" is not an array field`)
+        for (const f of this.sets) {
+            if (this.fieldType(f) !== "array") fail(`set "${f}" is not an array field`)
+            // An empty set is stored as no attribute, so a required one couldn't be read back.
+            if (!this.fieldSchemas[f].def.optional) fail(`set "${f}" must be optional`)
+        }
         if (this.ttl && this.fieldType(this.ttl) !== "number") fail(`ttl "${this.ttl}" is not a number field`)
         for (const f of this.keyFields) if (this.sets.has(f)) fail(`set "${f}" is part of the table key`)
-        const indexes: Record<string, GGDynamoDbResolvedIndex & {projection: GGDynamoDbProjection<string>}> = {}
+        const indexes: Record<string, IndexWithProjection> = {}
         for (const [key, def] of Object.entries(input.indexes ?? {}) as [string, GGDynamoDbIndexDef][]) {
             const indexName = def.name ?? (def.sk ? `${def.pk}-${def.sk}-index` : `${def.pk}-index`)
             if (Object.values(indexes).some(i => i.indexName === indexName)) fail(`two indexes are named "${indexName}"`)
             for (const f of Array.isArray(def.projection) ? def.projection : []) if (!(f in this.fieldSchemas)) fail(`index "${key}" projects unknown field "${f}"`)
             if (def.local && (def.pk !== this.pk || !def.sk || !this.sk)) fail(`local index "${key}" needs a table with a sort key, the table's pk ("${this.pk}") and its own sk`)
-            indexes[key] = {key, indexName, pk: def.pk, sk: def.sk, projection: this.projectKeyFields(def.projection ?? "ALL"), ...(def.local && {local: true as const})}
+            indexes[key] = {key, indexName, pk: def.pk, sk: def.sk, projection: this.projection(def), ...(def.local && {local: true as const})}
         }
         this.indexes = indexes as any
         for (const attr of this.allKeyAttributes()) this.attributeType(attr)
@@ -303,24 +323,32 @@ export class GGDynamoDbTableSpec<
         }))
     }
 
+    /** The inputs of a `string` / `number` table key, which may map several inputs to one value: a row read or
+     *  written by `input` must hold them. Empty for plain and `join` keys, whose value names exactly one set of inputs. */
+    unpinnedKeyInputs(input: Source): Source {
+        return Object.fromEntries(this.keyAttributes
+            .filter(a => this.derivedKey(a)?.kind === "value")
+            .flatMap(a => this.derivedKey(a)!.deps)
+            .map(dep => [dep, input[dep]]))
+    }
+
     /** UpdateTimeToLive input enabling the spec's `ttl`, or undefined without one. */
     timeToLiveInput(): UpdateTimeToLiveCommandInput | undefined {
         return this.ttl ? {TableName: this.name, TimeToLiveSpecification: {AttributeName: this.ttl, Enabled: true}} : undefined
     }
 
-    /** `row` with its derived attributes and set fields as sets, for a write that can't go through `GGDynamoDbTypedTable`
-     *  (a seed script, a test fixture). Not validated; throws when the row has no key. */
+    /** `row` with its derived attributes and fields stored as they are (`encodeField`), for a write that can't go
+     *  through `GGDynamoDbTypedTable` (a seed script, a test fixture). Not validated; throws when the row has no key. */
     withDerived(row: T): T {
-        const item = {...row} as Source
-        for (const {name, key} of this.derived) {
-            const value = key.compute(item)
-            if (value === undefined) delete item[name]
-            else item[name] = value
+        const item: Source = {}
+        for (const [field, value] of Object.entries(row)) {
+            if (this.derivedByName.has(field)) continue
+            const stored = this.encodeField(field, value)
+            if (stored !== undefined) item[field] = stored
         }
-        for (const f of this.sets) {
-            const value = item[f] as unknown[] | undefined
-            if (value?.length) item[f] = new Set(value)
-            else delete item[f]
+        for (const {name, key} of this.derived) {
+            const value = key.compute(row as Source)
+            if (value !== undefined) item[name] = value
         }
         for (const a of this.keyAttributes) if (item[a] === undefined || item[a] === "") throw new Error(`${this.name}: the row has no key "${a}"`)
         return item as T
@@ -328,10 +356,19 @@ export class GGDynamoDbTableSpec<
 
     /** A stored item without its derived attributes and with set fields as arrays, for an item read outside `GGDynamoDbTypedTable`. */
     withoutDerived(item: Source): T {
-        const row = {...item}
-        for (const {name} of this.derived) delete row[name]
-        for (const f of this.sets) if (row[f] instanceof Set) row[f] = [...row[f]]
+        const row: Source = {}
+        for (const [field, value] of Object.entries(item)) {
+            if (this.derivedByName.has(field)) continue
+            row[field] = value instanceof Set && this.sets.has(field) ? [...value] : value
+        }
         return row as T
+    }
+
+    /** `value` as `field` is stored: a `sets` field's array as a set, and an empty one as no attribute (DynamoDB has
+     *  no empty set). */
+    encodeField(field: string, value: unknown): unknown {
+        if (!this.sets.has(field) || !Array.isArray(value)) return value
+        return value.length > 0 ? new Set(value) : undefined
     }
 
     /** CreateTable input for local and test tables. No BillingMode: spread it in. */
@@ -340,7 +377,7 @@ export class GGDynamoDbTableSpec<
             {AttributeName: pk, KeyType: "HASH" as const},
             ...(sk ? [{AttributeName: sk, KeyType: "RANGE" as const}] : []),
         ]
-        const toIndex = (i: GGDynamoDbResolvedIndex & {projection: GGDynamoDbProjection<string>}) => ({
+        const toIndex = (i: IndexWithProjection) => ({
             IndexName: i.indexName,
             KeySchema: keySchema(i.pk, i.sk),
             Projection: Array.isArray(i.projection)
@@ -358,33 +395,30 @@ export class GGDynamoDbTableSpec<
         }
     }
 
-    /** @internal Schema fields a row can't do without. */
-    requiredFields(): string[] {
-        return Object.entries(this.fieldSchemas).filter(([, s]) => !s.def.optional).map(([f]) => f)
-    }
-
     /** @internal */
     fieldSchema(field: string): GGSchema<unknown> | undefined {
-        return this.fieldSchemas[field]
+        return Object.hasOwn(this.fieldSchemas, field) ? this.fieldSchemas[field] : undefined
     }
 
     /** @internal */
     derivedKey(attr: string): GGDynamoDbDerivedKey<unknown, unknown> | undefined {
-        return this.derived.find(d => d.name === attr)?.key
+        return this.derivedByName.get(attr)
     }
 
-    /** @internal */
+    /** @internal The field's schema type, with the number kinds as "number". */
     fieldType(field: string): string | undefined {
-        const type = this.fieldSchemas[field]?.toCompilerDef().type
+        const type = this.fieldSchema(field)?.toCompilerDef().type
         return type && NUMBER_TYPES.includes(type) ? "number" : type
     }
 
-    // A KEYS_ONLY / INCLUDE index carries the table's key attributes; when those are derived, a row read back is only
-    // addressable through their inputs.
-    private projectKeyFields(projection: GGDynamoDbProjection<string>): GGDynamoDbProjection<string> {
-        const inputs = this.keyFields.filter(f => !this.keyAttributes.includes(f))
-        if (projection === "ALL" || inputs.length === 0) return projection
-        return [...new Set([...(projection === "KEYS_ONLY" ? [] : projection), ...inputs])]
+    // A KEYS_ONLY / INCLUDE index carries the table's and its own key attributes, which DynamoDB won't take as
+    // NonKeyAttributes; when the table key is derived, a row read back is only addressable through its inputs.
+    private projection(def: GGDynamoDbIndexDef): GGDynamoDbProjection<string> {
+        const projection = def.projection ?? "ALL"
+        if (projection === "ALL") return projection
+        const carried = new Set<string | undefined>([...this.keyAttributes, def.pk, def.sk])
+        const listed = [...new Set([...(projection === "KEYS_ONLY" ? [] : projection), ...this.keyFields])].filter(f => !carried.has(f))
+        return listed.length === 0 ? "KEYS_ONLY" : listed
     }
 
     private allKeyAttributes(): string[] {
@@ -394,13 +428,11 @@ export class GGDynamoDbTableSpec<
     private attributeType(attr: string): ScalarAttributeType {
         const derived = this.derivedKey(attr)
         if (derived) return derived.attributeType ?? this.attributeType(derived.deps[0])
-        const schema = this.fieldSchemas[attr]
-        if (!schema) throw new Error(`GGDynamoDbTableSpec '${this.name}': key "${attr}" is neither a schema field nor derived`)
-        const def = schema.toCompilerDef() as {type: string, values?: readonly unknown[]}
-        if (def.type === "string") return "S"
-        if (NUMBER_TYPES.includes(def.type)) return "N"
-        if (def.type === "literal" && def.values?.every(v => typeof v === "string")) return "S"
-        if (def.type === "literal" && def.values?.every(v => typeof v === "number")) return "N"
-        throw new Error(`GGDynamoDbTableSpec '${this.name}': key "${attr}" must be a string or number field, not ${def.type}`)
+        const type = this.fieldType(attr)
+        if (!type) throw new Error(`GGDynamoDbTableSpec '${this.name}': key "${attr}" is neither a schema field nor derived`)
+        const values = (this.fieldSchemas[attr].toCompilerDef() as {values?: readonly unknown[]}).values
+        if (type === "string" || (type === "literal" && values?.every(v => typeof v === "string"))) return "S"
+        if (type === "number" || (type === "literal" && values?.every(v => typeof v === "number"))) return "N"
+        throw new Error(`GGDynamoDbTableSpec '${this.name}': key "${attr}" must be a string or number field, not ${type}`)
     }
 }

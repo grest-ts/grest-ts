@@ -1,5 +1,5 @@
 import {describe, it, expect, vi} from "vitest"
-import {IsArray, IsNumber, IsObject, IsString} from "@grest-ts/schema"
+import {IsArray, IsLiteral, IsNumber, IsObject, IsString} from "@grest-ts/schema"
 import {GGDynamoDb} from "../src/GGDynamoDb"
 import {GGDynamoDbTableSpec} from "../src/GGDynamoDbTableSpec"
 import {GGDynamoDbTypedTable} from "../src/GGDynamoDbTypedTable"
@@ -116,6 +116,22 @@ describe("a table key computed by string/number", () => {
     })
 })
 
+describe("reads and deletes by a string/number table key", () => {
+    it("get returns the row only when it holds the inputs it was addressed by", async () => {
+        const {table} = stubTable({Item: {...event, at: 1999, second: 1}}, {Item: {...event, second: 1}})
+        await expect(table.get({userId: "u1", at: 1000})).resolves.toBeUndefined()
+        await expect(table.get({userId: "u1", at: 1500})).resolves.toEqual(event)
+    })
+
+    it("delete and tx.check condition on the key's inputs", async () => {
+        const {table, inputs} = stubTable({})
+        await table.delete({userId: "u1", at: 1500})
+        expect(readable(inputs()[0], inputs()[0].ConditionExpression)).toBe(`(at = 1500)`)
+        const check = table.tx.check({userId: "u1", at: 1500}, {kind: {eq: "k"}})
+        expect(readable(check.ConditionCheck!, check.ConditionCheck!.ConditionExpression!)).toBe(`(at = 1500 AND kind = "k")`)
+    })
+})
+
 describe("update", () => {
     it("stores setIfMissing on a set field as a set", async () => {
         const {table, inputs} = stubTable({})
@@ -190,5 +206,67 @@ describe("backfill", () => {
         const result = await table.backfillPage({concurrency: 1, segment: 1, totalSegments: 4})
         expect(result).toMatchObject({scanned: 2, rewritten: 1, failed: [{key: {userId: "u1", second: 1}, error: expect.stringMatching(/contains "#"/)}]})
         expect(inputs()[0]).toMatchObject({Segment: 1, TotalSegments: 4})
+    })
+})
+
+describe("edge cases", () => {
+    it("withDerived recomputes derived attributes the input still carries", () => {
+        const item = EventsTable.withDerived({...event, note: undefined, byNote: "stale"} as typeof event)
+        expect(item).not.toHaveProperty("byNote")
+        expect(item).toMatchObject({orgKind: "o1#k", second: 1})
+    })
+
+    it("refuses an empty set as a comparison operand", async () => {
+        const {table} = stubTable()
+        await expect(table.put(event, {if: {tags: {ne: []}}})).rejects.toThrow(/"tags" can't be compared with an empty set; use exists/)
+    })
+
+    it("refuses a one-part prefix containing the separator", async () => {
+        const {table} = stubTable()
+        await expect(table.index.byOrg.query({orgId: "o1"}, {sk: {prefix: {orgId: "o1#k"}}})).rejects.toThrow(/join part "orgId" contains "#"/)
+    })
+
+    it("an upsert's merge doesn't count as making a required field", async () => {
+        const IsPrefs = IsObject({id: IsString, prefs: IsObject({theme: IsString.orUndefined})})
+        const Prefs = GGDynamoDbTableSpec.define({name: "prefs", schema: IsPrefs, pk: "id"})
+        const db = Object.assign(Object.create(GGDynamoDb.prototype), {client: {send: vi.fn()}, config: {name: "test"}})
+        await expect(new GGDynamoDbTypedTable(db, Prefs).update({id: "a"}, {}, {upsert: true, merge: {prefs: {theme: "dark"}}}))
+            .rejects.toThrow(/which then needs prefs/)
+    })
+
+    it("refuses add on a number-literal field: the sum may not be one of its values", async () => {
+        const Tiers = GGDynamoDbTableSpec.define({name: "tiers", schema: IsObject({id: IsString, tier: IsLiteral(1, 2, 3)}), pk: "id"})
+        const db = Object.assign(Object.create(GGDynamoDb.prototype), {client: {send: vi.fn()}, config: {name: "test"}})
+        await expect(new GGDynamoDbTypedTable(db, Tiers).update({id: "a"}, {}, {add: {tier: 1} as never})).rejects.toThrow(/add "tier" needs a number field/)
+    })
+
+    it("refuses a required set: an empty one is stored as no attribute", () => {
+        expect(() => GGDynamoDbTableSpec.define({name: "t", schema: IsObject({id: IsString, tags: IsArray(IsString)}), pk: "id", sets: ["tags"]}))
+            .toThrow(/set "tags" must be optional/)
+    })
+
+    it("refuses an undefined operand and a prototype key as a field", async () => {
+        const {table} = stubTable()
+        await expect(table.put(event, {if: {at: {between: [1, undefined as unknown as number]}}})).rejects.toThrow(/the condition on "at" needs a value/)
+        await expect(table.update({userId: "u1", at: 1}, {constructor: 1} as object)).rejects.toThrow(/"constructor" is not a schema field/)
+    })
+
+    it("keeps an index's own key out of its projected attributes", () => {
+        const Spec = GGDynamoDbTableSpec.define({
+            name: "t", schema: IsEvent, pk: "k", derived: d => ({k: d.join("orgId", "userId")}),
+            indexes: {byOrg: {pk: "orgId", projection: "KEYS_ONLY"}, byKind: {pk: "kind", projection: ["kind", "note"]}},
+        })
+        const [byOrg, byKind] = Spec.createTableInput().GlobalSecondaryIndexes!
+        expect(byOrg.Projection).toEqual({ProjectionType: "INCLUDE", NonKeyAttributes: ["userId"]})
+        expect(byKind.Projection).toEqual({ProjectionType: "INCLUDE", NonKeyAttributes: ["note", "orgId", "userId"]})
+    })
+
+    it("stops sending batches after one fails", async () => {
+        const throttled = Object.assign(new Error("boom"), {name: "InternalServerError"})
+        const send = vi.fn(async () => { throw throttled })
+        const db = Object.assign(Object.create(GGDynamoDb.prototype), {client: {send}, config: {name: "test"}})
+        const rows = Array.from({length: 25 * 10}, (_, i) => ({...event, at: i * 1000}))
+        await expect(new GGDynamoDbTypedTable(db, EventsTable).putMany(rows)).rejects.toThrow(/boom/)
+        expect(send.mock.calls.length).toBeLessThanOrEqual(4)
     })
 })

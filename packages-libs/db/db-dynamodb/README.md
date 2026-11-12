@@ -237,7 +237,7 @@ await usage.get({ userId, orgId, provider, day })
 await usage.query({ userId }, { sk: { prefix: { orgId } } })    // begins_with "<orgId>#": the leading parts
 ```
 
-A `join` key maps back to exactly one set of parts. A `d.string` / `d.number` key may not (`second: d.number(["at"], r => Math.floor(r.at / 1000))` puts many `at`s on one key), so `update` also conditions on the key's inputs holding the given values.
+A `join` key maps back to exactly one set of parts. A `d.string` / `d.number` key may not (`second: d.number(["at"], r => Math.floor(r.at / 1000))` puts many `at`s on one key), so `get` / `getMany` only return a row holding the key's inputs, and `update`, `delete` and `tx` items condition on them.
 
 An index with a KEYS_ONLY / INCLUDE projection also projects the table key's inputs, so a row it returns can be addressed. `backfillPage` never rewrites a key: a different value would be a different row.
 
@@ -292,7 +292,7 @@ await users.update({ userId }, { deactivationHandledFor: at }, { if: { deactivat
 
 ### Counters, sets, upserts and partial writes
 
-`opts.add` adds atomically to a number field (from 0 when absent); `opts.delete` removes elements from a set. Array fields listed in the spec's `sets` are stored as DynamoDB sets — unique elements, atomic `add` / `delete`, no attribute when empty — and read back as arrays. `opts.upsert` creates the row when it is missing instead of returning `undefined`. Because it may create the row, `fields`, `setIfMissing`, `add` and the key must cover every required field; it writes every derived attribute, so their inputs must be known — including optional ones, given as `undefined` when the row has none; and it can't take `opts.current`.
+`opts.add` adds atomically to a number field (from 0 when absent); `opts.delete` removes elements from a set. Array fields listed in the spec's `sets` (optional ones) are stored as DynamoDB sets — unique elements, atomic `add` / `delete`, no attribute when empty — and read back as arrays. `opts.upsert` creates the row when it is missing instead of returning `undefined`. Because it may create the row, `fields`, `setIfMissing`, `add` and the key must cover every required field; it writes every derived attribute, so their inputs must be known — including optional ones, given as `undefined` when the row has none; and it can't take `opts.current`.
 
 ```typescript
 const Usage = GGDynamoDbTableSpec.define({ name: "usage", schema: IsUsage, pk: "userId", sk: "day" })

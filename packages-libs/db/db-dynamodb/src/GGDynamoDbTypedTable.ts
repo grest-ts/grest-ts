@@ -95,6 +95,7 @@ type Writable<T, D, PK, SK> = Partial<Omit<T, KeyFields<T, D, PK, SK>>>
 
 const BATCH_GET_MAX_KEYS = 100
 const BATCH_WRITE_MAX_ITEMS = 25
+const BATCH_CONCURRENCY = 4
 const BATCH_MAX_ATTEMPTS = 8
 const BATCH_FIRST_RETRY_MS = 50
 
@@ -131,24 +132,26 @@ export class GGDynamoDbTypedTable<
 
     /** Strongly consistent by default, as `GGDynamoDb.get`. */
     async get(key: Key<T, D, PK, SK>, opts?: GGDynamoDbConsistentReadOption): Promise<T | undefined> {
-        return this.fromStored(await this.db.get<Source>(this.tableName, this.tableKey(key), opts))
+        const row = this.fromStored<T>(await this.db.get<Source>(this.tableName, this.spec.storedKey(key), opts))
+        return row && this.holdsKey(row, key) ? row : undefined
     }
 
     /** The rows for `keys`, in their order, missing ones skipped and repeated keys read once. Eventually consistent by
      *  default. */
     async getMany(keys: Key<T, D, PK, SK>[], opts?: GGDynamoDbConsistentReadOption): Promise<T[]> {
-        const wanted = uniqueBy(keys.map(k => this.tableKey(k)), k => this.keyId(k))
+        const wanted = uniqueBy(keys.map(k => this.spec.storedKey(k)), k => this.keyId(k))
         const found = new Map<string, T>()
-        for (let i = 0; i < wanted.length; i += BATCH_GET_MAX_KEYS) {
-            await this.batch("getMany", wanted.slice(i, i + BATCH_GET_MAX_KEYS), async pending => {
-                const res: BatchGetCommandOutput = await this.db.getDocumentClient().send(new BatchGetCommand({
-                    RequestItems: {[this.tableName]: {Keys: pending, ...(opts?.consistentRead && {ConsistentRead: true})}},
-                }))
-                for (const item of res.Responses?.[this.tableName] ?? []) found.set(this.keyId(item), this.fromStored<T>(item)!)
-                return res.UnprocessedKeys?.[this.tableName]?.Keys
-            })
-        }
-        return wanted.flatMap(k => found.get(this.keyId(k)) ?? [])
+        await this.batch("getMany", wanted, BATCH_GET_MAX_KEYS, async pending => {
+            const res: BatchGetCommandOutput = await this.db.getDocumentClient().send(new BatchGetCommand({
+                RequestItems: {[this.tableName]: {Keys: pending, ...(opts?.consistentRead && {ConsistentRead: true})}},
+            }))
+            for (const item of res.Responses?.[this.tableName] ?? []) found.set(this.keyId(item), this.fromStored<T>(item)!)
+            return res.UnprocessedKeys?.[this.tableName]?.Keys
+        })
+        return keys.flatMap(k => {
+            const row = found.get(this.keyId(this.spec.storedKey(k)))
+            return row && this.holdsKey(row, k) ? [row] : []
+        }).filter((row, i, rows) => rows.indexOf(row) === i)
     }
 
     query(...args: QueryArgs<GGDynamoDbKeyInput<T, D, PK>, GGDynamoDbTypedQueryOptions<T, D, SK extends string ? SK : never, PK> & GGDynamoDbConsistentReadOption>): Promise<T[]> {
@@ -173,13 +176,13 @@ export class GGDynamoDbTypedTable<
      *  atomically: on an error some rows may be written. Of rows with the same key the last is written. */
     async putMany(rows: T[]): Promise<void> {
         const items = uniqueBy(rows.map(r => this.putParams(r, undefined).Item).reverse(), item => this.keyId(item)).reverse()
-        await this.batchWrite(items.map(Item => ({PutRequest: {Item}})))
+        await this.batchWrite("putMany", items.map(Item => ({PutRequest: {Item}})))
     }
 
     /** `delete` for many keys, 25 per request, unconditionally and not atomically. */
     async deleteMany(keys: Key<T, D, PK, SK>[]): Promise<void> {
-        const unique = uniqueBy(keys.map(k => this.tableKey(k)), k => this.keyId(k))
-        await this.batchWrite(unique.map(Key => ({DeleteRequest: {Key}})))
+        const unique = uniqueBy(keys.map(k => this.spec.storedKey(k)), k => this.keyId(k))
+        await this.batchWrite("deleteMany", unique.map(Key => ({DeleteRequest: {Key}})))
     }
 
     /**
@@ -206,19 +209,17 @@ export class GGDynamoDbTypedTable<
 
     /** False when `opts.if` fails. */
     async delete(key: Key<T, D, PK, SK>, opts?: GGDynamoDbWriteOptions<T>): Promise<boolean> {
-        const k = this.tableKey(key)
-        if (!opts?.if) {
-            await this.db.delete(this.tableName, k)
+        const p = this.keyParams(key, opts?.if)
+        if (!p.ConditionExpression) {
+            await this.db.delete(this.tableName, p.Key)
             return true
         }
-        const e = new GGDynamoDbExpr(this.spec.sets)
-        const condition = e.condition(opts.if)
-        return this.db.deleteConditional(this.tableName, k, condition, e.valuesInput().ExpressionAttributeValues, e.names)
+        return this.db.deleteConditional(this.tableName, p.Key, p.ConditionExpression, p.ExpressionAttributeValues, p.ExpressionAttributeNames)
     }
 
     /** Every row (capped like `GGDynamoDb.scan`). `filter` trims what comes back, not what is read. */
     async scan(opts?: {filter?: GGDynamoDbCondition<T>, limit?: number, consistentRead?: boolean}): Promise<T[]> {
-        const e = new GGDynamoDbExpr(this.spec.sets)
+        const e = this.expr()
         const filter = opts?.filter && e.condition(opts.filter)
         const rows = await this.db.scan<Source>(this.tableName, {limit: opts?.limit, consistentRead: opts?.consistentRead, filter, names: e.names, values: e.values})
         return rows.map(r => this.fromStored<T>(r)!)
@@ -242,30 +243,28 @@ export class GGDynamoDbTypedTable<
         })
         const failed: GGDynamoDbBackfillResult["failed"] = []
         const results = await mapLimit(page.items, opts?.concurrency ?? 10, async item => {
+            const key = pick(item, this.spec.keyAttributes)
             let computed: {name: string, deps: readonly string[], value: unknown}[]
             try {
-                // A key attribute is the row's address: a different value would be another row.
-                computed = this.spec.derived
-                    .filter(d => !this.spec.keyAttributes.includes(d.name))
-                    .map(({name, key}) => ({name, deps: key.deps, value: key.compute(item)}))
+                computed = this.spec.indexDerived.map(({name, key}) => ({name, deps: key.deps, value: key.compute(item)}))
             } catch (err) {
-                failed.push({key: pick(item, this.spec.keyAttributes), error: err instanceof Error ? err.message : String(err)})
+                failed.push({key, error: err instanceof Error ? err.message : String(err)})
                 return "failed"
             }
             const stale = computed.filter(d => d.value !== item[d.name])
             if (stale.length === 0) return "same"
-            const e = new GGDynamoDbExpr(this.spec.sets)
+            const e = this.expr()
             const set = stale.filter(d => d.value !== undefined)
             const remove = stale.filter(d => d.value === undefined)
             const deps = [...new Set(stale.flatMap(d => d.deps))]
             try {
                 await this.db.getDocumentClient().send(new UpdateCommand({
                     TableName: this.tableName,
-                    Key: pick(item, this.spec.keyAttributes),
-                    UpdateExpression: [
-                        set.length > 0 && `SET ${set.map(d => `${e.name(d.name)} = ${e.value(d.value)}`).join(", ")}`,
-                        remove.length > 0 && `REMOVE ${remove.map(d => e.name(d.name)).join(", ")}`,
-                    ].filter(Boolean).join(" "),
+                    Key: key,
+                    UpdateExpression: e.updateExpression({
+                        set: set.map(d => `${e.name(d.name)} = ${e.value(d.value)}`),
+                        remove: remove.map(d => e.name(d.name)),
+                    }),
                     ConditionExpression: [`attribute_exists(${e.name(this.spec.pk)})`, ...deps.map(dep => e.unchanged(dep, item[dep]))].join(" AND "),
                     ExpressionAttributeNames: e.names,
                     ...e.valuesInput(),
@@ -287,14 +286,24 @@ export class GGDynamoDbTypedTable<
 
     /** @internal */
     putParams(row: T, opts: GGDynamoDbWriteOptions<T> | undefined) {
-        const item = this.spec.withDerived(this.validate(row, "put")) as Source
-        const e = new GGDynamoDbExpr(this.spec.sets)
-        const condition = opts?.if && e.condition(opts.if)
-        return {
-            TableName: this.tableName,
-            Item: item,
-            ...(condition && {ConditionExpression: condition, ExpressionAttributeNames: e.names, ...e.valuesInput()}),
-        }
+        return {TableName: this.tableName, Item: this.spec.withDerived(this.validate(row)) as Source, ...(opts?.if && this.expr().conditionInput(opts.if))}
+    }
+
+    /** @internal A request on one row, with an optional condition; on the key's own inputs too when its value doesn't
+     *  name exactly one set of them. */
+    keyParams(key: Key<T, D, PK, SK>, condition: GGDynamoDbCondition<T> | undefined) {
+        const pins = Object.entries(this.spec.unpinnedKeyInputs(key)).map(([f, v]) => ({[f]: v === undefined ? {exists: false} : {eq: v}}))
+        const all = [...pins, ...(condition ? [condition] : [])] as GGDynamoDbCondition<T>[]
+        return {TableName: this.tableName, Key: this.spec.storedKey(key), ...this.expr().conditionInput(all.length > 0 ? {allOf: all} as GGDynamoDbCondition<T> : undefined)}
+    }
+
+    private holdsKey(row: T, key: Key<T, D, PK, SK>): boolean {
+        return Object.entries(this.spec.unpinnedKeyInputs(key)).every(([f, v]) => (row as Source)[f] === v)
+    }
+
+    /** @internal */
+    expr(): GGDynamoDbExpr {
+        return new GGDynamoDbExpr((field, value) => this.spec.encodeField(field, value))
     }
 
     /** @internal */
@@ -304,19 +313,15 @@ export class GGDynamoDbTypedTable<
         const keys = Object.keys(fields)
         for (const k of keys) {
             if (spec.keyFields.includes(k)) fail(`"${k}" is part of the table key`)
-            if (spec.derived.some(d => d.name === k)) fail(`"${k}" is derived; write its inputs instead`)
+            if (spec.derivedKey(k)) fail(`"${k}" is derived; write its inputs instead`)
         }
         if (opts?.upsert && opts.current) fail("an upsert can't take current: a row it creates holds none of it")
         const valid = this.validFields(fields, fail)
-        const e = new GGDynamoDbExpr(spec.sets)
-        const storedKey = spec.storedKey(key as Source)
+        const e = this.expr()
+        const storedKey = spec.storedKey(key)
         const keyInputs = pick(key as Source, spec.keyFields)
 
-        // A `string` / `number` table key may map several inputs to one value, so the inputs it was given are checked.
-        const keyChecks = spec.keyAttributes
-            .filter(a => spec.derivedKey(a)?.kind === "value")
-            .flatMap(a => spec.derivedKey(a)!.deps)
-            .map(dep => e.unchanged(dep, keyInputs[dep]))
+        const keyChecks = Object.entries(spec.unpinnedKeyInputs(keyInputs)).map(([dep, v]) => e.unchanged(dep, v))
         const conditions: string[] = opts?.upsert
             ? keyChecks.length > 0 ? [`(attribute_not_exists(${e.name(spec.pk)}) OR (${keyChecks.join(" AND ")}))`] : []
             : [`attribute_exists(${e.name(spec.pk)})`, ...keyChecks]
@@ -326,7 +331,7 @@ export class GGDynamoDbTypedTable<
         const set: string[] = []
         const remove: string[] = []
         for (const k of keys) {
-            const value = this.asStored(k, valid[k])
+            const value = spec.encodeField(k, valid[k])
             if (value === undefined) remove.push(e.name(k))
             else set.push(`${e.name(k)} = ${e.value(value)}`)
         }
@@ -342,10 +347,11 @@ export class GGDynamoDbTypedTable<
         }
         const add = this.atomicOps(opts?.add, "add", fail)
         const del = this.atomicOps(opts?.delete, "delete", fail)
-        for (const o of [...add, ...del]) claim(o.field, o.op)
+        for (const o of add) claim(o.field, "add")
+        for (const o of del) claim(o.field, "delete")
         for (const [field, value] of definedEntries(opts?.setIfMissing)) {
             claim(field, "setIfMissing")
-            const stored = this.asStored(field, this.validFields({[field]: value}, fail)[field])
+            const stored = spec.encodeField(field, this.validFields({[field]: value}, fail)[field])
             if (stored === undefined) fail(`setIfMissing "${field}" needs a value`)
             set.push(`${e.name(field)} = if_not_exists(${e.name(field)}, ${e.value(stored)})`)
         }
@@ -366,14 +372,15 @@ export class GGDynamoDbTypedTable<
         const opaque = [...touched].filter(f => !keys.includes(f))
 
         if (opts?.upsert) {
-            const covered = new Set([...keys.filter(k => fields[k] !== undefined), ...Object.keys(keyInputs), ...opaque.filter(f => !del.some(o => o.field === f))])
-            const missing = spec.requiredFields().filter(f => !covered.has(f))
+            // `merge` sets keys in a map that must exist, and `delete` removes: neither can make a missing row's field.
+            const created = [...add.map(o => o.field), ...definedEntries(opts.setIfMissing).map(([f]) => f), ...definedEntries(opts.append).map(([f]) => f)]
+            const covered = new Set([...keys.filter(k => fields[k] !== undefined), ...Object.keys(keyInputs), ...created])
+            const missing = spec.requiredFields.filter(f => !covered.has(f))
             if (missing.length > 0) fail(`an upsert may create the row, which then needs ${missing.join(", ")}: give them in fields, setIfMissing or add`)
         }
 
         const conditionedOnCurrent = new Set<string>()
-        for (const {name, key: derived} of spec.derived) {
-            if (spec.keyAttributes.includes(name)) continue
+        for (const {name, key: derived} of spec.indexDerived) {
             const changed = derived.deps.find(dep => opaque.includes(dep))
             if (changed) fail(`derived "${name}" reads "${changed}", which this update changes to a value it can't know`)
             // An upsert may create the row, which then needs every derived attribute.
@@ -398,12 +405,12 @@ export class GGDynamoDbTypedTable<
         return {
             TableName: this.tableName,
             Key: storedKey,
-            UpdateExpression: [
-                set.length > 0 && `SET ${set.join(", ")}`,
-                remove.length > 0 && `REMOVE ${remove.join(", ")}`,
-                add.length > 0 && `ADD ${add.map(o => `${e.name(o.field)} ${e.value(o.value)}`).join(", ")}`,
-                del.length > 0 && `DELETE ${del.map(o => `${e.name(o.field)} ${e.value(o.value)}`).join(", ")}`,
-            ].filter(Boolean).join(" "),
+            UpdateExpression: e.updateExpression({
+                set,
+                remove,
+                add: add.map(o => `${e.name(o.field)} ${e.value(o.value)}`),
+                delete: del.map(o => `${e.name(o.field)} ${e.value(o.value)}`),
+            }),
             ...(conditions.length > 0 && {ConditionExpression: conditions.join(" AND ")}),
             ExpressionAttributeNames: e.names,
             ...e.valuesInput(),
@@ -411,58 +418,60 @@ export class GGDynamoDbTypedTable<
     }
 
     /** @internal */
-    tableKey(key: object): Source {
-        return this.spec.storedKey(key as Source)
-    }
-
-    /** @internal */
     fromStored<R>(item: Source | undefined): R | undefined {
         return item && this.spec.withoutDerived(item) as unknown as R
-    }
-
-    // A `sets` field is stored as a set, and as no attribute when empty.
-    private asStored(field: string, value: unknown): unknown {
-        if (!this.spec.sets.has(field) || value === undefined) return value
-        return (value as unknown[]).length > 0 ? new Set(value as unknown[]) : undefined
     }
 
     private keyId(item: Source): string {
         return JSON.stringify(this.spec.keyAttributes.map(a => item[a]))
     }
 
-    private async batchWrite(requests: object[]): Promise<void> {
-        for (let i = 0; i < requests.length; i += BATCH_WRITE_MAX_ITEMS) {
-            await this.batch("batch write", requests.slice(i, i + BATCH_WRITE_MAX_ITEMS), async pending => {
-                const res: BatchWriteCommandOutput = await this.db.getDocumentClient().send(new BatchWriteCommand({RequestItems: {[this.tableName]: pending as any}}))
-                return res.UnprocessedItems?.[this.tableName]
-            })
-        }
+    private async batchWrite(op: string, requests: object[]): Promise<void> {
+        await this.batch(op, requests, BATCH_WRITE_MAX_ITEMS, async pending => {
+            const res: BatchWriteCommandOutput = await this.db.getDocumentClient().send(new BatchWriteCommand({RequestItems: {[this.tableName]: pending}}))
+            return res.UnprocessedItems?.[this.tableName]
+        })
     }
 
-    // DynamoDB hands back what it throttled as unprocessed, to be resent after a backoff.
-    private async batch<R>(op: string, requests: R[], send: (pending: R[]) => Promise<R[] | undefined>): Promise<void> {
-        let pending: R[] | undefined = requests
-        for (let attempt = 0; pending && pending.length > 0; attempt++) {
-            if (attempt === BATCH_MAX_ATTEMPTS) throw new Error(`${this.tableName}.${op}: ${pending.length} item(s) still unprocessed after ${attempt} attempts`)
-            if (attempt > 0) await new Promise(r => setTimeout(r, Math.random() * BATCH_FIRST_RETRY_MS * 2 ** (attempt - 1)))
-            pending = await send(pending)
-        }
+    // In chunks of `size`, a few at once; DynamoDB hands back what it throttled as unprocessed, to be resent after a
+    // backoff. Once a chunk fails the others stop resending, so nothing is written after the caller has the error.
+    private async batch<R>(op: string, requests: R[], size: number, send: (pending: R[]) => Promise<R[] | undefined>): Promise<void> {
+        const chunks = Array.from({length: Math.ceil(requests.length / size)}, (_, i) => requests.slice(i * size, (i + 1) * size))
+        let failed = false
+        await mapLimit(chunks, BATCH_CONCURRENCY, async chunk => {
+            let pending: R[] | undefined = chunk
+            for (let attempt = 0; pending && pending.length > 0 && !failed; attempt++) {
+                if (attempt === BATCH_MAX_ATTEMPTS) throw new Error(`${this.tableName}.${op}: ${pending.length} item(s) still unprocessed after ${attempt} attempts`)
+                if (attempt > 0) await new Promise(r => setTimeout(r, Math.random() * BATCH_FIRST_RETRY_MS * 2 ** (attempt - 1)))
+                if (failed) return
+                try {
+                    pending = await send(pending)
+                } catch (err) {
+                    failed = true
+                    throw err
+                }
+            }
+        })
     }
 
-    private validate(row: T, op: string): T {
+    private validate(row: T): T {
         const result = this.spec.schema.safeParse(row)
         if (!result.success) {
-            throw new Error(`${this.tableName}.${op}: schema validation failed for ${JSON.stringify(pick(row as Source, this.spec.keyFields))}: ${JSON.stringify(result.issues)}`)
+            throw new Error(`${this.tableName}.put: schema validation failed for ${JSON.stringify(pick(row as Source, this.spec.keyFields))}: ${JSON.stringify(result.issues)}`)
         }
         return result.value
     }
 
+    // Field by field against the spec's own field schemas, which compile once.
     private validFields(fields: Source, fail: (msg: string) => never): Source {
-        const keys = Object.keys(fields)
-        const parsed = this.spec.schema.pick(...keys as (keyof T)[]).safeParse(fields)
-        if (!parsed.success) fail(`schema validation failed: ${JSON.stringify(parsed.issues)}`)
-        const valid = (parsed as {value: Source}).value
-        for (const k of keys) if (fields[k] !== undefined && !(k in valid)) fail(`"${k}" is not a schema field`)
+        const valid: Source = {}
+        for (const [k, v] of Object.entries(fields)) {
+            const schema = this.spec.fieldSchema(k)
+            if (!schema) return fail(`"${k}" is not a schema field`)
+            const parsed = schema.safeParse(v)
+            if (!parsed.success) return fail(`schema validation failed for "${k}": ${JSON.stringify(parsed.issues)}`)
+            if (parsed.value !== undefined) valid[k] = parsed.value
+        }
         return valid
     }
 
@@ -480,17 +489,17 @@ export class GGDynamoDbTypedTable<
         }))
     }
 
-    private atomicOps(ops: object | undefined, op: "add" | "delete", fail: (msg: string) => never): {field: string, op: string, value: unknown}[] {
+    private atomicOps(ops: object | undefined, op: "add" | "delete", fail: (msg: string) => never): {field: string, value: unknown}[] {
         return definedEntries(ops).map(([field, value]) => {
             if (this.spec.sets.has(field)) {
-                const parsed = this.spec.schema.pick(field as keyof T).safeParse({[field]: value})
-                if (!parsed.success || (value as unknown[]).length === 0) fail(`${op} "${field}" needs a non-empty array of its elements`)
-                return {field, op, value: new Set(value as unknown[])}
+                const stored = this.spec.encodeField(field, this.validFields({[field]: value}, fail)[field])
+                if (stored === undefined) fail(`${op} "${field}" needs a non-empty array of its elements`)
+                return {field, value: stored}
             }
             if (op === "delete") fail(`delete "${field}" needs a field declared in the spec's sets`)
             if (this.spec.fieldType(field) === "array") fail(`add "${field}" needs the field declared in the spec's sets`)
             if (this.spec.fieldType(field) !== "number" || !Number.isFinite(value)) fail(`add "${field}" needs a number field and a number`)
-            return {field, op, value}
+            return {field, value}
         })
     }
 }
@@ -509,7 +518,7 @@ export class GGDynamoDbIndexQuery<T extends object, D, Row, PKA, SKA, Local = fa
 
     /** Every match, following DynamoDB's paging (capped like `GGDynamoDb.query`; `limit` bounds it). */
     async query(...[key, opts]: QueryArgs<GGDynamoDbKeyInput<T, D, PKA>, GGDynamoDbTypedQueryOptions<T, D, SKA, PKA> & ConsistentRead<Local>>): Promise<Row[]> {
-        const e = new GGDynamoDbExpr(this.table.spec.sets)
+        const e = this.table.expr()
         const keyCondition = this.keyCondition(e, (key ?? {}) as Source, opts?.sk)
         if (opts?.filter) {
             const keyRead = conditionFields(opts.filter).find(f => f === this.def.pk || f === this.def.sk)
@@ -525,7 +534,7 @@ export class GGDynamoDbIndexQuery<T extends object, D, Row, PKA, SKA, Local = fa
     /** One page plus the cursor to continue it; `cursor` is absent on the last page. A cursor from another query
      *  throws `GGDynamoDbCursorError`. */
     async queryPage(...[key, opts]: QueryArgs<GGDynamoDbKeyInput<T, D, PKA>, GGDynamoDbTypedQueryPageOptions<T, D, SKA> & ConsistentRead<Local>>): Promise<GGDynamoDbPage<Row>> {
-        const e = new GGDynamoDbExpr(this.table.spec.sets)
+        const e = this.table.expr()
         const keyCondition = this.keyCondition(e, (key ?? {}) as Source, opts?.sk)
         const page = await this.db.queryPage<Source>(this.table.tableName, this.def.indexName, keyCondition, e.values, {
             limit: opts?.limit, descending: opts?.descending, consistentRead: (opts as GGDynamoDbConsistentReadOption)?.consistentRead, cursor: opts?.cursor, names: e.names,
@@ -581,34 +590,29 @@ export class GGDynamoDbTransactBuilder<T extends object, D extends GGDynamoDbDer
     }
 
     delete(key: Key<T, D, PK, SK>, opts?: GGDynamoDbWriteOptions<T>): GGDynamoDbTransactItem {
-        const e = new GGDynamoDbExpr(this.table.spec.sets)
-        const condition = opts?.if && e.condition(opts.if)
-        return {Delete: {
-            TableName: this.table.tableName,
-            Key: this.table.tableKey(key),
-            ...(condition && {ConditionExpression: condition, ExpressionAttributeNames: e.names, ...e.valuesInput()}),
-        }}
+        return {Delete: this.table.keyParams(key, opts?.if)}
     }
 
     check(key: Key<T, D, PK, SK>, condition: GGDynamoDbCondition<T>): GGDynamoDbTransactItem {
-        const e = new GGDynamoDbExpr(this.table.spec.sets)
-        return {ConditionCheck: {
-            TableName: this.table.tableName,
-            Key: this.table.tableKey(key),
-            ConditionExpression: e.condition(condition),
-            ExpressionAttributeNames: e.names,
-            ...e.valuesInput(),
-        }}
+        const params = this.table.keyParams(key, condition)
+        return {ConditionCheck: {...params, ConditionExpression: params.ConditionExpression!}}
     }
 }
 
+// Stops starting items once one has failed; items already running finish.
 async function mapLimit<A, R>(items: A[], limit: number, fn: (item: A) => Promise<R>): Promise<R[]> {
     const results: R[] = new Array(items.length)
     let next = 0
+    let failed = false
     await Promise.all(Array.from({length: Math.min(Math.max(limit, 1), items.length)}, async () => {
-        while (next < items.length) {
+        while (next < items.length && !failed) {
             const i = next++
-            results[i] = await fn(items[i])
+            try {
+                results[i] = await fn(items[i])
+            } catch (err) {
+                failed = true
+                throw err
+            }
         }
     }))
     return results
@@ -616,7 +620,10 @@ async function mapLimit<A, R>(items: A[], limit: number, fn: (item: A) => Promis
 
 function uniqueBy<A>(items: A[], id: (item: A) => string): A[] {
     const seen = new Set<string>()
-    return items.filter(item => !seen.has(id(item)) && !!seen.add(id(item)))
+    return items.filter(item => {
+        const key = id(item)
+        return !seen.has(key) && !!seen.add(key)
+    })
 }
 
 function isPlainObject(v: unknown): v is Source {
