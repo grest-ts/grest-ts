@@ -418,6 +418,34 @@ A call that carries a service token from `@grest-ts/oauth` needs nothing extra: 
 server runs in the test, the token is a placeholder, and a schema mock never checks it. See
 [Service tokens in tests](../../../packages-libs/auth/oauth/README.md#service-tokens-in-tests).
 
+### Third-party services
+
+Put each third party behind one thin `@mockable` adapter. It's the only class that knows the vendor's HTTP or SDK:
+it sends the request, parses the response with a schema and returns only the fields you use.
+
+```typescript
+const IsGhToken = IsObject({token: IsString, expires_at: IsString})
+
+@mockable
+export class GitHubApi {
+    async mintRepoToken(repo: RepoRef): Promise<RepoToken> {
+        const res = await this.http.post(`/app/installations/${repo.installationId}/access_tokens`, {repositories: [repo.name]})
+        const parsed = IsGhToken.parse(res)          // structure checked at the edge; a bad response is a SERVER_ERROR
+        return {token: parsed.token, expiresAt: Date.parse(parsed.expires_at)}
+    }
+}
+```
+
+- **Everything above the adapter** is tested through the contract, with `mockOf(GitHubApi)` returning small,
+  domain-shaped answers. That includes the failure decisions (retry, re-auth, telling the user):
+  `.andReturn(new SSO_REQUIRED())`.
+- **Keep the adapter itself thin** and don't unit-test it. A test against a hand-written response only restates
+  the implementation; only a real call proves it. Check it against the real service when you change it.
+- **A fake** (a stand-in that holds state and speaks the vendor's protocol) is worth building only for traffic
+  that doesn't start in your code: the vendor calling you (webhooks, OAuth redirects), non-Node clients (a `git`
+  binary), or a local dev environment without the real service. Build it as an ordinary `GGRuntime`: a custom
+  `GGHttpCodec` speaks the vendor's wire format, and an admin contract seeds and resets it.
+
 ---
 
 ## Usage

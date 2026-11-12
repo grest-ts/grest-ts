@@ -468,6 +468,13 @@ test("call with mock on dependency", async () => {
 - `callOn(ServiceClass).method(...)` returns a `GGTestAction` — same assertion chain as API calls.
 - Combine `@testable` + `@mockable` for full testing control at any depth.
 
+### Third-party services
+
+- Put each third party behind one thin `@mockable` adapter that sends the request, parses the response with a schema
+  and returns only the fields you use. Mock the adapter (`mockOf(GitHubApi)`) everywhere above it, failures included.
+- Don't unit-test the adapter: only a real call proves it. Build a fake service only for inbound or non-Node traffic
+  or a local dev environment. See the testkit README, "Third-party services".
+
 ---
 
 ## 7. GGSchemaDocs — `.docs()`
