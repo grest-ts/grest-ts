@@ -409,6 +409,7 @@ test('spy on external service', async () => {
     .sleep(100))                // Wait 100ms before returning
 
 // Mock throwing an error: the caller gets it typed, with its data
+// (its type must be defined in code the runtime loads; an unknown type arrives as SERVER_ERROR)
 .with(mockOf(Service).method
     .andReturn(new NOT_AUTHORIZED()))
 .with(mockOf(Service).method
@@ -436,8 +437,8 @@ test('spy on external service', async () => {
 | `get(id: string)` | keyed by parameter name: `{id}` |
 | `pair(id: string, count: number)` | keyed by parameter name: `{id, count}` |
 
-A method with several parameters can't destructure one of them in its signature (there is no name to key it by);
-`@mockable` throws at class definition. Take it whole and destructure in the body.
+A method with several parameters can't destructure one of them in its signature (there is no name to key it by), and
+`mockOf(S).x` throws for it. Take it whole and destructure in the body.
 
 `@mockable` wraps only async methods declared in the class body. `mockOf(S).x` throws when `x` isn't one: a class field
 (`x = async () => …`), a sync method, or a class without `@mockable`.

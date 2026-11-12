@@ -135,11 +135,43 @@ describe("what @mockable can't intercept fails loudly", () => {
         expect(() => mockOf(Plain).run).toThrow(/Plain\.run is not mockable/)
     })
 
-    test("a destructured parameter among several", () => {
-        expect(() => mockable(class Broken {
+    test("a method with a destructured parameter among several: mocks can't name its arguments", () => {
+        @mockable
+        class Broken {
             async run(id: string, {tag}: {tag: string}): Promise<string> {
                 return id + tag
             }
-        })).toThrow(/Broken\.run: can't name its parameters/)
+        }
+        expect(() => mockOf(Broken).run).toThrow(/Broken\.run can't be mocked/)
+    })
+})
+
+describe("mockOf's access object", () => {
+
+    test("is not taken for a promise or broken by inspection", async () => {
+        const access = mockOf(Upstream)
+        expect(await Promise.resolve(access)).toBe(access)
+        expect(String(access[Symbol.toStringTag as never])).toBe("undefined")
+    })
+
+    test("reads parameter names around comments", () => {
+        const Commented = mockable(new Function(`return class Commented {
+            async run(id /* org, not user */, // a, b
+                      count) {
+                return id + count
+            }
+        }`)()) as new () => {run(id: string, count: number): Promise<string>}
+        expect(() => mockOf(Commented).run).not.toThrow()
+    })
+
+    test("types a single optional object parameter as the object", () => {
+        @mockable
+        class Optional {
+            async run(_opts?: {x: number}): Promise<void> {
+            }
+        }
+        // @ts-expect-error not a field of the argument
+        mockOf(Optional).run.toMatchObject({y: 1})
+        expect(() => mockOf(Optional).run.toMatchObject({x: 1})).not.toThrow()
     })
 })

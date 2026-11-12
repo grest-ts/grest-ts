@@ -9,7 +9,7 @@
 import {GGMockableInterceptor} from "./GGMockableInterceptor";
 import {GGMockWith} from "../testers/GGMockWith";
 import {GGSpyWith} from "../testers/GGSpyWith";
-import {mockableClassName} from "@grest-ts/testkit-runtime";
+import {mockableMethod} from "@grest-ts/testkit-runtime";
 import type {ANY_ERROR} from "@grest-ts/schema";
 
 // ============================================================================
@@ -17,9 +17,11 @@ import type {ANY_ERROR} from "@grest-ts/schema";
 // ============================================================================
 
 /** A single object argument as itself; anything else keyed by parameter name. */
-type MockInput<A extends any[]> = A extends [infer Single]
-    ? (Single extends object ? Single : Record<string, Single>)
-    : Record<string, any>;
+type MockInput<A extends any[]> = A extends []
+    ? Record<string, any>
+    : A extends [(infer Single)?]
+        ? (Single extends object ? Single : Record<string, Single>)
+        : Record<string, any>;
 
 type MockAccess<T> = {
     [K in keyof T]: T[K] extends (...args: infer A) => Promise<infer R>
@@ -33,15 +35,26 @@ type SpyAccess<T> = {
         : never
 };
 
-function interceptorConfig(cls: Function, methodName: string | symbol): {className: string, methodName: string} {
-    const className = typeof methodName === "string" ? mockableClassName(cls, methodName) : undefined;
-    if (!className) {
+function interceptorConfig(cls: Function, methodName: string): {className: string, methodName: string} {
+    const method = mockableMethod(cls, methodName);
+    if (!method) {
         throw new Error(
-            `${cls.name}.${String(methodName)} is not mockable. @mockable intercepts only async methods declared in the body of a decorated class: ` +
-            `not class fields (\`${String(methodName)} = async () => …\`), sync methods, or methods of a class without @mockable.`
+            `${cls.name}.${methodName} is not mockable. @mockable intercepts only async methods declared in the body of a decorated class: ` +
+            `not class fields (\`${methodName} = async () => …\`), sync methods, or methods of a class without @mockable.`
         );
     }
-    return {className, methodName: methodName as string};
+    if (method.unnamedParams) {
+        throw new Error(
+            `${cls.name}.${methodName} can't be mocked: mocks key its arguments by parameter name, and a destructured parameter among several has none. ` +
+            `Take it whole (\`(a, input: {x, y})\`) and destructure it in the body.`
+        );
+    }
+    return {className: method.className, methodName};
+}
+
+/** Not a method: `then` (so the access object isn't taken for a promise) and symbols (inspection). */
+function isMethodName(key: string | symbol): key is string {
+    return typeof key === "string" && key !== "then";
 }
 
 /**
@@ -58,6 +71,7 @@ function interceptorConfig(cls: Function, methodName: string | symbol): {classNa
 export function mockOf<T>(cls: new (...args: any[]) => T): MockAccess<T> {
     return new Proxy({} as any, {
         get(_, methodName) {
+            if (!isMethodName(methodName)) return undefined;
             return new GGMockWith(GGMockableInterceptor, interceptorConfig(cls, methodName))
         }
     });
@@ -77,6 +91,7 @@ export function mockOf<T>(cls: new (...args: any[]) => T): MockAccess<T> {
 export function spyOn<T>(cls: new (...args: any[]) => T): SpyAccess<T> {
     return new Proxy({} as any, {
         get(_, methodName) {
+            if (!isMethodName(methodName)) return undefined;
             return new GGSpyWith(GGMockableInterceptor, interceptorConfig(cls, methodName))
         }
     });

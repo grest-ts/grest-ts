@@ -72,6 +72,11 @@ function parseParams(fn: Function): ParamInfo[] {
             else if (ch === quote) quote = undefined;
             continue;
         }
+        if (ch === '/' && (src[i + 1] === '*' || src[i + 1] === '/')) {
+            const end = src[i + 1] === '*' ? src.indexOf('*/', i + 2) + 1 : src.indexOf('\n', i);
+            i = end > 0 ? end : src.length;
+            continue;
+        }
         if (ch === '"' || ch === "'" || ch === '`') quote = ch;
         else if (ch === '(' || ch === '{' || ch === '[') depth++;
         else if (ch === ')' || ch === '}' || ch === ']') {
@@ -86,7 +91,7 @@ function parseParams(fn: Function): ParamInfo[] {
     }
     parts.push(current);
     return parts
-        .map(p => p.replace(/\/\*[\s\S]*?\*\//g, '').trim())
+        .map(p => p.trim())
         .filter(p => p.length > 0)
         .map(p => {
             const rest = p.startsWith('...');
@@ -107,13 +112,20 @@ function argsToMockInput(args: any[], params: ParamInfo[]): any {
     }
     const result: Record<string, any> = {};
     params.forEach((param, i) => {
-        result[param.name!] = param.rest ? args.slice(i) : args[i];
+        result[param.name ?? `arg${i}`] = param.rest ? args.slice(i) : args[i];
     });
     return result;
 }
 
-/** The class name that `@mockable` intercepts `cls.prototype[methodName]` under, or undefined when it doesn't. */
-export function mockableClassName(cls: Function, methodName: string): string | undefined {
+export interface MockableMethodInfo {
+    /** The class name the method's calls are intercepted under. */
+    className: string;
+    /** A destructured parameter among several: mocks can't key its arguments by name. */
+    unnamedParams: boolean;
+}
+
+/** How `@mockable` intercepts `cls.prototype[methodName]`, or undefined when it doesn't. */
+export function mockableMethod(cls: Function, methodName: string): MockableMethodInfo | undefined {
     return cls.prototype?.[methodName]?.[MOCKABLE_WRAPPED];
 }
 
@@ -152,12 +164,7 @@ function wrapMethod(cls: any, methodName: string): void {
     }
 
     const params = parseParams(originalMethod);
-    if (params.length > 1 && params.some(p => p.name === undefined)) {
-        throw new Error(
-            `@mockable ${cls.name}.${methodName}: can't name its parameters for mocks. ` +
-            `Take a destructured parameter whole (\`(a, input: {x, y})\`) and destructure it in the body, or make it the only parameter.`
-        );
-    }
+    const unnamedParams = params.some(p => p.name === undefined) && !(params.length === 1 && !params[0].rest);
 
     const wrappedMethod = async function (this: any, ...args: any[]) {
         const ctx = mockableContextStorage.getStore();
@@ -186,7 +193,7 @@ function wrapMethod(cls: any, methodName: string): void {
     };
 
     // Mark as wrapped and assign to prototype
-    (wrappedMethod as any)[MOCKABLE_WRAPPED] = cls.name;
+    (wrappedMethod as any)[MOCKABLE_WRAPPED] = {className: cls.name, unnamedParams} satisfies MockableMethodInfo;
     cls.prototype[methodName] = wrappedMethod;
 }
 

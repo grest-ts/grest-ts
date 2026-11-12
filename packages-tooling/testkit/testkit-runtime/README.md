@@ -27,8 +27,8 @@ export class WeatherService {
 In production, calls pass through unchanged. During tests, `@grest-ts/testkit` can intercept calls via `mockOf()` and `spyOn()`.
 
 Only async methods declared in the class body are wrapped; a class field (`getWeather = async () => …`) is not, and
-`mockOf()` throws for it. A method with several parameters can't destructure one of them in its signature: mocks key
-its arguments by parameter name, so `@mockable` throws at class definition.
+`mockOf()` throws for it. Neither can a method that destructures one of several parameters in its signature: mocks key
+its arguments by parameter name.
 
 ## `@testable`
 
