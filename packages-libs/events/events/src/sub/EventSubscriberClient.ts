@@ -155,7 +155,7 @@ export class EventSubscriberClient<TEventMap> {
         }
 
         const finalize = (eventType: string | "unknown", result: 'ERROR' | "OK" | "SKIPPED") => {
-            const processingDuration = performance.now() - startTime
+            const processingDuration = Math.round(performance.now() - startTime)
             GGEventsMetrics.subscriber.processed.inc(1, {queue, provider: this.provider, eventType, result})
             GGEventsMetrics.subscriber.inFlight.dec(1, mData)
             GGEventsMetrics.subscriber.processingDurationSum.inc(processingDuration, mData)

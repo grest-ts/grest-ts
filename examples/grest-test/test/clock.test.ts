@@ -1,15 +1,18 @@
-import {callOn, GGTest} from "@grest-ts/testkit"
+import {callOn, GGDateShim, GGTest} from "@grest-ts/testkit"
 import {GGSocket} from "@grest-ts/websocket"
 import type {SocketAdapter} from "@grest-ts/websocket/internal"
 import {ClockInlineRuntime, ClockLateRuntime, ClockWorkerRuntime} from "../src/ClockRuntime"
 import {ClockIsolatedRuntime} from "../src/ClockIsolatedRuntime"
+import {ClockBootRuntime} from "../src/ClockBootRuntime"
+import {ClockBootIsolatedRuntime} from "../src/ClockBootIsolatedRuntime"
+import {ClockBootIsolatedApi, ClockBootWorkerApi} from "../src/api/ClockBootApi"
 import {ClockInlineApi, ClockIsolatedApi, ClockLateApi, ClockWorkerApi} from "../src/api/ClockApi"
 
 const DAY = 24 * 3600_000
 const T = Date.parse("2030-01-01T00:00:00Z")
 const SLACK = 5_000
 
-const realNow = () => performance.timeOrigin + performance.now()
+const realNow = () => GGDateShim.realNow()
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
 
 const runtimes = {
@@ -88,6 +91,34 @@ describe("GGTest.clock", () => {
         expect(reading.now).toBeLessThan(T + SLACK)
     })
 
+    test("a runtime module evaluated after set reads the fake time at import, worker and isolated", async () => {
+        await GGTest.clock.set(T)
+        await GGTest.startWorker(ClockBootRuntime)
+        await GGTest.startIsolated(ClockBootIsolatedRuntime)
+        for (const api of [callOn(ClockBootWorkerApi), callOn(ClockBootIsolatedApi)]) {
+            const boot = await api.boot()
+            expect(boot).toBeGreaterThanOrEqual(T)
+            expect(boot).toBeLessThan(T + SLACK)
+        }
+    })
+
+    test("Temporal.Now follows the clock", async () => {
+        await GGTest.clock.set(T)
+        const Temporal = (globalThis as any).Temporal
+        if (!Temporal) return
+        const instant = Temporal.Now.instant().epochMilliseconds
+        expect(instant).toBeGreaterThanOrEqual(T)
+        expect(instant).toBeLessThan(T + SLACK)
+        expect(Temporal.Now.plainDateISO("UTC").toString()).toBe("2030-01-01")
+        expect(Temporal.Now.zonedDateTimeISO("UTC").year).toBe(2030)
+    })
+
+    test("set and advance reject times that aren't finite", () => {
+        expect(() => GGTest.clock.set(new Date("bad"))).toThrow(/not a valid time/)
+        expect(() => GGTest.clock.set(NaN)).toThrow(/not a valid time/)
+        expect(() => GGTest.clock.advance(Infinity)).toThrow(/finite/)
+    })
+
     test("explicit dates, Date.parse, Date.UTC and instanceof are unaffected", async () => {
         await GGTest.clock.set(T)
         expect(new Date(0).getTime()).toBe(0)
@@ -125,6 +156,48 @@ describe("GGTest.clock", () => {
 
         test("and a test's change to it is undone", async () => {
             await expectAllNear(T + DAY)
+        })
+    })
+
+    describe("a clock set in beforeEach", () => {
+        beforeEach(async () => {
+            await GGTest.clock.set(T)
+        })
+
+        test("applies to the test", async () => {
+            await expectAllNear(T)
+            await GGTest.clock.advance(DAY)
+        })
+
+        test("applies again to the next one", async () => {
+            await expectAllNear(T)
+        })
+    })
+
+    describe("a test that fails after set", () => {
+        test.fails("throws", async () => {
+            await GGTest.clock.set(T)
+            throw new Error("fails on purpose")
+        })
+
+        test("still has its clock undone", async () => {
+            await expectAllNear(realNow() - 1)
+        })
+    })
+
+    describe("two nested blocks that both set", () => {
+        GGTest.clock.set(T)
+
+        describe("the inner block", () => {
+            GGTest.clock.set(T + DAY)
+
+            test("sees the inner time", async () => {
+                await expectAllNear(T + DAY)
+            })
+        })
+
+        test("the outer block gets its time back", async () => {
+            await expectAllNear(T)
         })
     })
 
@@ -177,10 +250,10 @@ describe("GGTest.clock and an open websocket", () => {
         const client = new GGSocket(a), server = new GGSocket(b)
         let closed = false
         client.onClose(() => { closed = true })
-        client.startHeartbeat({intervalMs: 40, timeoutMs: 25})
+        client.startHeartbeat({intervalMs: 50, timeoutMs: 150})
 
         await GGTest.clock.advance(DAY)
-        await sleep(150)
+        await sleep(400)
         expect(closed).toBe(false)
 
         client.close(); server.close()

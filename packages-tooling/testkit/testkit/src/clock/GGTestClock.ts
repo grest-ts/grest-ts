@@ -1,7 +1,8 @@
+import {GGLog} from "@grest-ts/logger";
 import {GG_TEST_RUNNER, GGTestRunner} from "../GGTestRunner";
 import {GGTestRuntimeState} from "../GGTestRuntime";
 import {GGTestComponent} from "../testers/GGTestComponent";
-import {GGClockIPC} from "./GGClockIPC";
+import {sendClock} from "./GGClockIPC";
 import {GGClockState, GGDateShim} from "./GGDateShim";
 
 /**
@@ -13,6 +14,7 @@ export class GGTestClock {
     /** Jump to `time`; the clock keeps running from there (or stays stopped at it). */
     public set(time: Date | number): Promise<void> {
         const target = time instanceof Date ? time.getTime() : time;
+        if (!Number.isFinite(target)) throw new Error(`GGTest.clock.set(${String(time)}): not a valid time`);
         return this.change(state => state.stoppedAt === undefined
             ? {offsetMs: target - GGDateShim.realNow()}
             : {offsetMs: state.offsetMs, stoppedAt: target});
@@ -20,7 +22,7 @@ export class GGTestClock {
 
     /** Jump forward by `ms`. Only moves `Date`; timers are not fired. */
     public advance(ms: number): Promise<void> {
-        if (!(ms >= 0)) throw new Error(`GGTest.clock.advance(${ms}): ms must be a non-negative number`);
+        if (!(Number.isFinite(ms) && ms >= 0)) throw new Error(`GGTest.clock.advance(${ms}): ms must be a finite non-negative number`);
         return this.change(state => state.stoppedAt === undefined
             ? {offsetMs: state.offsetMs + ms}
             : {offsetMs: state.offsetMs, stoppedAt: state.stoppedAt + ms});
@@ -59,15 +61,17 @@ export class GGTestClock {
 async function applyClock(runner: GGTestRunner, state: GGClockState): Promise<void> {
     GGDateShim.setState(state);
     const runtimes = runner.getAllRuntimes().filter(r => r.state === GGTestRuntimeState.STARTED);
-    await Promise.all(runtimes.map(r => GGDateShim.isDefault(state)
-        ? r.sendCommand(GGClockIPC.worker.reset, undefined)
-        : r.sendCommand(GGClockIPC.worker.set, state)));
+    const results = await Promise.allSettled(runtimes.map(r => sendClock(r, state)));
+    const failed = results.filter((r): r is PromiseRejectedResult => r.status === "rejected");
+    if (failed.length > 0) throw new AggregateError(failed.map(f => f.reason), `GGTest.clock: ${failed.length} runtime(s) didn't take the new time: ${failed.map(f => f.reason?.message).join("; ")}`);
 }
 
 export class GGClockTestComponent implements GGTestComponent {
 
     private readonly runner: GGTestRunner;
     private readonly frames: GGClockState[] = [];
+    // Separate from the block frames: if another component's beforeEach threw, ours didn't run, but afterEach still does.
+    private testFrame?: GGClockState;
 
     constructor(runner: GGTestRunner) {
         this.runner = runner;
@@ -78,25 +82,30 @@ export class GGClockTestComponent implements GGTestComponent {
     }
 
     async afterAll(): Promise<void> {
-        await this.restore();
+        await this.restore(this.frames.pop());
     }
 
     async beforeEach(): Promise<void> {
-        this.frames.push(GGDateShim.getState());
+        this.testFrame = GGDateShim.getState();
     }
 
     async afterEach(): Promise<void> {
-        await this.restore();
+        const frame = this.testFrame;
+        this.testFrame = undefined;
+        await this.restore(frame);
     }
 
     async teardown(): Promise<void> {
         if (!GGDateShim.isDefault(GGDateShim.getState())) GGDateShim.setState(GGDateShim.DEFAULT_STATE);
     }
 
-    private async restore(): Promise<void> {
-        const previous = this.frames.pop();
-        if (previous && !GGDateShim.same(previous, GGDateShim.getState())) {
+    // Never throws: a runtime that died mustn't keep later components' afterEach from running.
+    private async restore(previous: GGClockState | undefined): Promise<void> {
+        if (!previous || GGDateShim.same(previous, GGDateShim.getState())) return;
+        try {
             await applyClock(this.runner, previous);
+        } catch (err) {
+            GGLog.warn(this, "GGTest.clock: restoring the clock failed", err as Error);
         }
     }
 }

@@ -465,10 +465,18 @@ GGTest.clock.now()                                         // same as Date.now()
   starts on it.
 - Set in a test, it's undone after the test. Set in a `describe` or `beforeAll`, it holds for that block. The
   default is real time.
-- Only `Date` is faked. Timers (`setTimeout`, `sleep()`), `performance.now()` and anything measuring elapsed time
+- Only `Date` and `Temporal.Now` are faked. Timers (`setTimeout`, `sleep()`), `performance.now()` and anything measuring elapsed time
   stay real, so `advance` doesn't fire timers. Code that measures durations should use `performance.now()`.
 - Clocks outside the app aren't faked: DynamoDB TTL, SQL `NOW()`, Redis `EXPIRE`, S3 `LastModified`. Pass the
   app's time to them instead; see [Databases and external services](../../../docs/design/test-clock.md#3-databases-and-external-services).
+- `set` on a stopped clock moves it and keeps it stopped there.
+- Undoing a test's clock is a jump back. Runtimes started at describe level keep what they wrote at the fake time:
+  job locks held by scheduled runs, rows, wall-time caches. A test that advances far or starts schedules should
+  start its runtimes in the test, or have its own `describe`.
+- The clock is shared by the whole file: don't use it in `test.concurrent` tests. It needs a `describe` (the
+  test runner lives there).
+- `Date` and `Temporal.Now` are faked; `Intl`'s implicit "now" (e.g. `Intl.DateTimeFormat().format()` with no
+  date) isn't. Pass it a date.
 - Don't fake `Date` with `vi.useFakeTimers` too. `GGTest.clock` throws while it's active; leave `Date` out of
   `toFake`.
 

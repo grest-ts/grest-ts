@@ -33,6 +33,21 @@ export function installDateShim(): void {
     shim.date = Date as unknown as DateConstructor
     slot[KEY] = shim
     globalThis.Date = shim.date
+    shimTemporalNow(now)
+}
+
+function shimTemporalNow(now: () => number): void {
+    const Temporal = (globalThis as any).Temporal
+    if (!Temporal?.Now) return
+    const Now = Temporal.Now
+    const zoned = (timeZone?: string) => Temporal.Instant.fromEpochMilliseconds(now()).toZonedDateTimeISO(timeZone ?? Now.timeZoneId())
+    Object.assign(Now, {
+        instant: () => Temporal.Instant.fromEpochMilliseconds(now()),
+        zonedDateTimeISO: zoned,
+        plainDateTimeISO: (timeZone?: string) => zoned(timeZone).toPlainDateTime(),
+        plainDateISO: (timeZone?: string) => zoned(timeZone).toPlainDate(),
+        plainTimeISO: (timeZone?: string) => zoned(timeZone).toPlainTime(),
+    })
 }
 
 const DEFAULT_STATE: GGClockState = {offsetMs: 0}
