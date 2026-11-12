@@ -9,7 +9,7 @@ import {WorkerRunner} from "./runner/WorkerRunner";
 import {IsolatedRunner} from "./runner/IsolatedRunner";
 import type {GGTestRunner} from "./GGTestRunner";
 import {GGClockState, GGDateShim} from "./clock/GGDateShim";
-import {fireDueOn, GGClockIPC} from "./clock/GGClockIPC";
+import {DEFAULT_TIMEOUT_MS, fireDueOn, GGClockIPC} from "./clock/GGClockIPC";
 
 /**
  * Lifecycle state of a runtime instance.
@@ -182,7 +182,7 @@ export class GGTestRuntime {
             const current = GGDateShim.getState()
             if (this.mode !== GGTestMode.INLINE && !GGDateShim.same(clock, current)) {
                 await this.sendCommand(GGClockIPC.worker.set, current)
-                await fireDueOn(this, Date.now(), 30_000)
+                await fireDueOn(this, Date.now(), DEFAULT_TIMEOUT_MS)
             }
         });
         return this

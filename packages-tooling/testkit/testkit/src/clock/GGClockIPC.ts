@@ -9,6 +9,8 @@ export const GGClockIPC = {
     }
 }
 
+export const DEFAULT_TIMEOUT_MS = 30_000;
+
 /** The IPC timeout outlasts the runtime's own guard, so the runtime reports which timer is stuck. */
 export function fireDueOn(runtime: GGTestRuntime, target: number, timeoutMs: number): Promise<void> {
     return runtime.sendCommand(GGClockIPC.worker.fireDue, {target, timeoutMs}, timeoutMs + 5_000);

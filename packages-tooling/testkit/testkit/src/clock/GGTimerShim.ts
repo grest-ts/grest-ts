@@ -321,9 +321,13 @@ export function rejections(results: PromiseSettledResult<unknown>[]): unknown[] 
     return results.filter((r): r is PromiseRejectedResult => r.status === "rejected").map(r => r.reason);
 }
 
+class GGClockErrors extends AggregateError {}
+
+/** Throws the one error as is, or several as one AggregateError; nested ones from other isolates' fireDue are flattened. */
 export function throwAll(errors: unknown[]): void {
-    if (errors.length === 1) throw errors[0];
-    if (errors.length > 1) throw new AggregateError(errors, `GGTest.clock: ${errors.map(e => (e as Error)?.message ?? String(e)).join("; ")}`);
+    const flat = errors.flatMap(e => e instanceof GGClockErrors ? e.errors : [e]);
+    if (flat.length === 1) throw flat[0];
+    if (flat.length > 1) throw new GGClockErrors(flat, `GGTest.clock: ${flat.map(e => String((e as Error)?.message ?? e).replace(/^GGTest\.clock: /, "")).join("; ")}`);
 }
 
 function warnRawTimers(shim: TimerShim, target: number): void {
@@ -331,8 +335,11 @@ function warnRawTimers(shim: TimerShim, target: number): void {
     for (const raw of shim.rawTimers.values()) {
         if (!raw.created || raw.dueAt > target || raw.realDueAt <= realNow) continue;
         const site = appSite(raw.created.stack);
-        raw.created = undefined;
-        if (!site || shim.warnedSites.has(site)) continue;
+        if (!site) {
+            raw.created = undefined;
+            continue;
+        }
+        if (shim.warnedSites.has(site)) continue;
         shim.warnedSites.add(site);
         const fn = raw.interval ? "setInterval" : "setTimeout";
         GGLog.warn(LOG_CONTEXT, `GGTest.clock moved past a raw ${fn}(…, ${raw.ms}) that still runs on real time. If it should follow the clock, use GGLocator.${fn}. Set at: ${site}`);

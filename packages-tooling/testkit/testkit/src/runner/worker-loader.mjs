@@ -22,9 +22,9 @@ process.on('unhandledRejection', (reason) => {
 const config = workerData;
 
 // Import control client from @grest-ts/testkit; the test clock goes in before any app module loads
-const {GGTestRuntimeWorker, installTestClock, GGDateShim} = await import('@grest-ts/testkit');
+const {GGTestRuntimeWorker, installTestClock, bootClock} = await import('@grest-ts/testkit');
 installTestClock();
-if (config.clock) GGDateShim.setState(config.clock);
+bootClock(config.clock);
 
 // Create control client
 const controlClient = new GGTestRuntimeWorker(config);

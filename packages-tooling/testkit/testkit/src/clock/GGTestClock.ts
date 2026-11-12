@@ -3,14 +3,29 @@ import {TestRunner} from "vitest";
 import {GG_TEST_RUNNER, GGTestRunner} from "../GGTestRunner";
 import {GGTestMode, GGTestRuntimeState} from "../GGTestRuntime";
 import {GGTestComponent} from "../testers/GGTestComponent";
-import {fireDueOn, GGClockIPC} from "./GGClockIPC";
+import {DEFAULT_TIMEOUT_MS, fireDueOn, GGClockIPC} from "./GGClockIPC";
 import {GGClockState, GGDateShim, installDateShim} from "./GGDateShim";
 import {GGTimerShim, installTimerShim, rejections, throwAll} from "./GGTimerShim";
 
-const DEFAULT_TIMEOUT_MS = 30_000;
 const HOOKS = Symbol.for("@grest-ts/testkit:GGTestClock.hooks");
-const hookSlot = globalThis as unknown as Record<symbol, ((state: GGClockState) => unknown)[] | undefined>;
-const hooks = () => hookSlot[HOOKS] ??= [];
+const hookSlot = globalThis as unknown as Record<symbol, {list: ((state: GGClockState) => unknown)[], bootPending: boolean} | undefined>;
+const hookState = () => hookSlot[HOOKS] ??= {list: [], bootPending: false};
+const hooks = () => hookState().list;
+
+/** A worker or isolated runtime's boot clock, set by its loader before any module loads; runBootHooks() runs the hooks for it. */
+export function bootClock(state: GGClockState | undefined): void {
+    if (!state) return;
+    GGDateShim.setState(state);
+    hookState().bootPending = true;
+}
+
+/** Once extensions have loaded: their hooks for the boot clock, awaited, and a failure fails the runtime's start. */
+export async function runBootHooks(): Promise<void> {
+    const slot = hookState();
+    if (!slot.bootPending) return;
+    slot.bootPending = false;
+    throwAll(await runClockHooks(GGDateShim.getState()));
+}
 
 /** Fake Date, and scope timers that follow it. Install before any app module loads. */
 export function installTestClock(): void {
@@ -35,13 +50,18 @@ export class GGTestClock {
     /**
      * Runs `hook` in this isolate whenever the clock changes, before the change is acknowledged and before any timer
      * fires. For clocks the framework doesn't own, such as an SDK's clock offset. Register it from test-only code,
-     * e.g. a package's `testkit/index-testkit.ts`. Registered while the clock is off real time, it runs once right away.
+     * e.g. a package's `testkit/index-testkit.ts`. Registered later, while the clock is off real time, it runs once
+     * right away.
      */
     public static onChange(hook: (state: GGClockState) => unknown): void {
         hooks().push(hook);
         const state = GGDateShim.getState();
-        if (GGDateShim.isDefault(state)) return;
-        Promise.resolve().then(() => hook({...state})).catch(err => GGLog.warn(GGTestClock, "GGTest.clock: onChange hook failed", err as Error));
+        if (hookState().bootPending || GGDateShim.isDefault(state)) return;
+        try {
+            Promise.resolve(hook({...state})).catch(err => GGLog.warn(GGTestClock, "GGTest.clock: onChange hook failed", err as Error));
+        } catch (err) {
+            GGLog.warn(GGTestClock, "GGTest.clock: onChange hook failed", err as Error);
+        }
     }
 
     /** Jump to `time`; the clock keeps running from there (or stays stopped at it). Forward, it fires due timers as `advance` does. */
