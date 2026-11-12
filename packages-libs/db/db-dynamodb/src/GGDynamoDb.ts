@@ -1,5 +1,5 @@
 import {DynamoDBClient, ListTablesCommand} from "@aws-sdk/client-dynamodb"
-import {DynamoDBDocumentClient, GetCommand, PutCommand, QueryCommand, DeleteCommand, ScanCommand, UpdateCommand} from "@aws-sdk/lib-dynamodb"
+import {DynamoDBDocumentClient, GetCommand, PutCommand, QueryCommand, DeleteCommand, ScanCommand, TransactWriteCommand, UpdateCommand, type TransactWriteCommandInput} from "@aws-sdk/lib-dynamodb"
 import {GGLocator, GGLocatorKey, GGLocatorServiceType} from "@grest-ts/locator"
 import {GGLog} from "@grest-ts/logger"
 import type {GGDynamoDbConfig, GGDynamoDbHostData, GGDynamoDbUserData} from "./GGDynamoDbConfig"
@@ -10,6 +10,8 @@ export interface GGDynamoDbPage<T> {
     items: T[]
     cursor: string | undefined
 }
+
+export type GGDynamoDbTransactItem = NonNullable<TransactWriteCommandInput["TransactItems"]>[number]
 
 export interface GGDynamoDbGetOptions {
     /** Strongly consistent read — sees every write acknowledged before it, at 2× the read
@@ -255,7 +257,9 @@ export class GGDynamoDb {
         }))
     }
 
-    private getClient(): DynamoDBDocumentClient {
+    /** The managed document client, for commands this class doesn't wrap. Valid from `start()` until teardown;
+     *  don't cache it, a config change replaces it. */
+    getDocumentClient(): DynamoDBDocumentClient {
         if (!this.client) {
             throw new Error(
                 `GGDynamoDb '${this.config.name}' not connected. ` +
@@ -296,7 +300,7 @@ export class GGDynamoDb {
     }
 
     async get<T>(table: string, key: Record<string, unknown>, opts?: GGDynamoDbGetOptions): Promise<T | undefined> {
-        const result = await this.getClient().send(new GetCommand({
+        const result = await this.getDocumentClient().send(new GetCommand({
             TableName: table,
             Key: key,
             ConsistentRead: opts?.consistentRead ?? true,
@@ -305,7 +309,7 @@ export class GGDynamoDb {
     }
 
     async put(table: string, item: object): Promise<void> {
-        await this.getClient().send(new PutCommand({
+        await this.getDocumentClient().send(new PutCommand({
             TableName: table,
             Item: item as Record<string, unknown>,
         }))
@@ -327,7 +331,7 @@ export class GGDynamoDb {
         attributeNames?: Record<string, string>,
     ): Promise<boolean> {
         try {
-            await this.getClient().send(new PutCommand({
+            await this.getDocumentClient().send(new PutCommand({
                 TableName: table,
                 Item: item as Record<string, unknown>,
                 ConditionExpression: conditionExpression,
@@ -352,7 +356,7 @@ export class GGDynamoDb {
         const names = Object.keys(fields)
         const keyNames = Object.keys(key)
         try {
-            const result = await this.getClient().send(new UpdateCommand({
+            const result = await this.getDocumentClient().send(new UpdateCommand({
                 TableName: table,
                 Key: key,
                 UpdateExpression: "SET " + names.map((_, i) => `#f${i} = :f${i}`).join(", "),
@@ -372,7 +376,7 @@ export class GGDynamoDb {
     }
 
     async delete(table: string, key: Record<string, unknown>): Promise<void> {
-        await this.getClient().send(new DeleteCommand({TableName: table, Key: key}))
+        await this.getDocumentClient().send(new DeleteCommand({TableName: table, Key: key}))
     }
 
     /**
@@ -387,7 +391,7 @@ export class GGDynamoDb {
         attributeNames?: Record<string, string>,
     ): Promise<boolean> {
         try {
-            await this.getClient().send(new DeleteCommand({
+            await this.getDocumentClient().send(new DeleteCommand({
                 TableName: table,
                 Key: key,
                 ConditionExpression: conditionExpression,
@@ -397,6 +401,21 @@ export class GGDynamoDb {
             return true
         } catch (err) {
             if (isConditionFailed(err)) return false
+            throw err
+        }
+    }
+
+    /**
+     * All-or-nothing write of up to 100 items (`GGDynamoDbTypedTable.tx` builds them). False when a condition in it
+     * fails; any other cancellation is rethrown.
+     */
+    async transactWrite(items: GGDynamoDbTransactItem[]): Promise<boolean> {
+        try {
+            await this.getDocumentClient().send(new TransactWriteCommand({TransactItems: items}))
+            return true
+        } catch (err) {
+            const reasons = (err as {CancellationReasons?: {Code?: string}[]}).CancellationReasons
+            if ((err as {name?: string}).name === "TransactionCanceledException" && reasons?.some(r => r.Code === "ConditionalCheckFailed")) return false
             throw err
         }
     }
@@ -416,7 +435,7 @@ export class GGDynamoDb {
         values: Record<string, unknown>,
         opts?: GGDynamoDbQueryPageOptions,
     ): Promise<GGDynamoDbPage<T>> {
-        const result = await this.getClient().send(new QueryCommand({
+        const result = await this.getDocumentClient().send(new QueryCommand({
             TableName: table,
             IndexName: indexName,
             KeyConditionExpression: keyCondition,
@@ -459,7 +478,7 @@ export class GGDynamoDb {
 
     /** One page of a full-table scan. See `queryPage`. */
     async scanPage<T>(table: string, opts?: GGDynamoDbScanPageOptions): Promise<GGDynamoDbPage<T>> {
-        const result = await this.getClient().send(new ScanCommand({
+        const result = await this.getDocumentClient().send(new ScanCommand({
             TableName: table,
             Limit: opts?.limit,
             ...readInput(opts, opts?.values),
