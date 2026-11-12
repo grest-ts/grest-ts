@@ -202,7 +202,7 @@ describe("GGDynamoDbTypedTable against dynamodb-local", () => {
         expect(await docs.get("old")).toEqual({docId: "old", title: "t", expiresAt: 1})
         expect(await docs.update("old", {title: "u"})).toEqual({docId: "old", title: "u", expiresAt: 1, version: 1})
         expect((await db.getDocumentClient().send(new GetCommand({TableName: "docs", Key: {docId: "old"}}))).Item).toMatchObject({retired: "x"})
-        await docs.put((await docs.get("old"))!)
+        await docs.save((await docs.get("old"))!)
         expect((await db.getDocumentClient().send(new GetCommand({TableName: "docs", Key: {docId: "old"}}))).Item).not.toHaveProperty("retired")
     })
 

@@ -40,8 +40,7 @@ export class GGDynamoDbDevTables {
             if (names.has(spec.name)) throw new Error(`GGDynamoDbDevTables: two specs name the table "${spec.name}"`)
             names.add(spec.name)
             const input = spec.createTableInput()
-            const live = await describe(client, spec.name)
-            if (!live) {
+            if (!await describe(client, spec.name)) {
                 try {
                     await client.send(new CreateTableCommand({...input, BillingMode: "PAY_PER_REQUEST"}))
                     result.created.push(spec.name)
@@ -50,32 +49,46 @@ export class GGDynamoDbDevTables {
                     // Another caller sharing the database created it first.
                     if ((err as {name?: string}).name !== "ResourceInUseException") throw err
                 }
-                await waitUntilTableExists({client, maxWaitTime: 60}, {TableName: spec.name})
-            } else {
-                const liveIndexes = new Set((live.GlobalSecondaryIndexes ?? []).map(i => i.IndexName))
-                for (const name of liveIndexes) {
-                    if (!input.GlobalSecondaryIndexes?.some(i => i.IndexName === name)) log(`${spec.name}: index ${name} is live but not declared; drop it by hand once nothing queries it`)
+            }
+            // Whoever created it, it is only changed once ACTIVE, and with what is live now.
+            await waitUntilTableExists({client, maxWaitTime: 60}, {TableName: spec.name})
+            const live = (await describe(client, spec.name))!
+            const declaredTypes = attributeTypes(input.AttributeDefinitions)
+            const liveTypes = attributeTypes(live.AttributeDefinitions)
+            const differs = (liveIndex: IndexLike, declared: IndexLike) => JSON.stringify(shape(liveIndex, liveTypes)) !== JSON.stringify(shape(declared, declaredTypes))
+
+            const liveGlobal = new Map((live.GlobalSecondaryIndexes ?? []).map(i => [i.IndexName!, i]))
+            for (const name of liveGlobal.keys()) {
+                if (!input.GlobalSecondaryIndexes?.some(i => i.IndexName === name)) log(`${spec.name}: index ${name} is live but not declared; drop it by hand once nothing queries it`)
+            }
+            for (const index of input.LocalSecondaryIndexes ?? []) {
+                const liveIndex = live.LocalSecondaryIndexes?.find(i => i.IndexName === index.IndexName)
+                if (!liveIndex) log(`${spec.name}: local index ${index.IndexName} is declared but an LSI can only be created with its table`)
+                else if (differs(liveIndex, index)) log(`${spec.name}: local index ${index.IndexName} is live with other keys or projection than declared; recreate the table by hand`)
+            }
+            for (const index of input.GlobalSecondaryIndexes ?? []) {
+                const liveIndex = liveGlobal.get(index.IndexName!)
+                if (liveIndex) {
+                    if (differs(liveIndex, index)) log(`${spec.name}: index ${index.IndexName} is live with other keys or projection than declared; recreate it by hand`)
+                    continue
                 }
-                for (const index of input.LocalSecondaryIndexes ?? []) {
-                    if (!(live.LocalSecondaryIndexes ?? []).some(i => i.IndexName === index.IndexName)) log(`${spec.name}: local index ${index.IndexName} is declared but an LSI can only be created with its table`)
-                }
-                for (const index of input.GlobalSecondaryIndexes ?? []) {
-                    const liveIndex = live.GlobalSecondaryIndexes?.find(i => i.IndexName === index.IndexName)
-                    if (liveIndex) {
-                        if (JSON.stringify(shape(liveIndex)) !== JSON.stringify(shape(index))) log(`${spec.name}: index ${index.IndexName} is live with other keys or projection than declared; recreate it by hand`)
-                        continue
-                    }
-                    log(`${spec.name}: adding index ${index.IndexName}`)
+                log(`${spec.name}: adding index ${index.IndexName}`)
+                try {
                     await client.send(new UpdateTableCommand({
                         TableName: spec.name,
                         // DynamoDB refuses the update unless the new index's key attributes are declared with it.
                         AttributeDefinitions: input.AttributeDefinitions,
                         GlobalSecondaryIndexUpdates: [{Create: {IndexName: index.IndexName!, KeySchema: index.KeySchema!, Projection: index.Projection!}}],
                     }))
-                    await waitForIndex(client, spec.name, index.IndexName!, opts?.indexTimeoutMs ?? 15 * 60_000)
                     result.indexesAdded.push(`${spec.name}/${index.IndexName}`)
+                } catch (err) {
+                    // Another caller is adding it: wait for theirs.
+                    const now = await describe(client, spec.name)
+                    if (!now?.GlobalSecondaryIndexes?.some(i => i.IndexName === index.IndexName)) throw err
                 }
+                await waitForIndex(client, spec.name, index.IndexName!, opts?.indexTimeoutMs ?? 15 * 60_000)
             }
+
             const ttl = spec.timeToLiveInput()
             if (ttl) {
                 const current = (await client.send(new DescribeTimeToLiveCommand({TableName: spec.name}))).TimeToLiveDescription
@@ -85,8 +98,14 @@ export class GGDynamoDbDevTables {
                 } else if (status === "DISABLING") {
                     log(`${spec.name}: TTL is still being turned off; run again later to turn it on for ${spec.ttl}`)
                 } else {
-                    await client.send(new UpdateTimeToLiveCommand(ttl))
-                    log(`${spec.name}: TTL on ${spec.ttl}`)
+                    try {
+                        await client.send(new UpdateTimeToLiveCommand(ttl))
+                        log(`${spec.name}: TTL on ${spec.ttl}`)
+                    } catch (err) {
+                        // Another caller turned it on first.
+                        const now = (await client.send(new DescribeTimeToLiveCommand({TableName: spec.name}))).TimeToLiveDescription
+                        if (now?.AttributeName !== spec.ttl) throw err
+                    }
                 }
             }
         }
@@ -94,12 +113,18 @@ export class GGDynamoDbDevTables {
     }
 }
 
-function shape(index: {KeySchema?: {AttributeName?: string, KeyType?: string}[], Projection?: {ProjectionType?: string, NonKeyAttributes?: string[]}}) {
+type IndexLike = {KeySchema?: {AttributeName?: string, KeyType?: string}[], Projection?: {ProjectionType?: string, NonKeyAttributes?: string[]}}
+
+function shape(index: IndexLike, types: Map<string | undefined, string | undefined>) {
     return {
-        keys: index.KeySchema?.map(k => `${k.AttributeName}:${k.KeyType}`),
+        keys: index.KeySchema?.map(k => `${k.AttributeName}:${k.KeyType}:${types.get(k.AttributeName)}`),
         projection: index.Projection?.ProjectionType,
         attributes: [...index.Projection?.NonKeyAttributes ?? []].sort(),
     }
+}
+
+function attributeTypes(definitions: {AttributeName?: string, AttributeType?: string}[] | undefined): Map<string | undefined, string | undefined> {
+    return new Map((definitions ?? []).map(d => [d.AttributeName, d.AttributeType]))
 }
 
 async function describe(client: DynamoDBClient, name: string): Promise<TableDescription | undefined> {

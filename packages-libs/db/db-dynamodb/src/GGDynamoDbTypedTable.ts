@@ -184,31 +184,28 @@ export class GGDynamoDbTypedTable<
         return this.base.queryPage(...args as [any, any])
     }
 
-    /** Validates, derives, writes the whole row. False when `opts.if` fails. */
+    /** Validates, derives, writes the whole row. False when `opts.if` fails. Not on a versioned table, whose writes
+     *  are `save`, `create` and `update`. */
     async put(row: T, opts?: GGDynamoDbWriteOptions<T>): Promise<boolean> {
-        const p = this.putParams(row, opts)
-        if (!p.ConditionExpression) {
-            await this.db.put(this.tableName, p.Item)
-            return true
-        }
-        return this.db.putConditional(this.tableName, p.Item, p.ConditionExpression, p.ExpressionAttributeValues, p.ExpressionAttributeNames)
+        this.unversioned("put")
+        return this.sendPut(this.putParams(row, opts))
     }
 
-    /** `put` only when no row has the key yet. False when one has. */
-    create(row: T): Promise<boolean> {
-        return this.put(row, {if: this.absent()})
+    /** `put` only when no row has the key yet (on a versioned table, as version 1). False when one has. */
+    async create(row: T): Promise<boolean> {
+        return this.sendPut(this.createParams(row))
     }
 
     /**
-     * Optimistic locking on the spec's `version`: writes `row` while the stored version is still `row.version` (a row
-     * without one: while the stored row has none, or there is no row), storing the version plus one. Returns the row as
-     * written, or undefined when another write got there first: re-read and retry.
+     * Optimistic locking on the spec's `version`: writes `row` while the stored version is still `row.version`, storing
+     * the version plus one. A row without a version counts as 0, which a missing row or one stored before the table had
+     * a version also is: so `save` of a row without one may create the row or replace an unversioned one (use `create`
+     * for a write that must be new). Returns the row as written, or undefined when another write got there first: re-read
+     * and retry.
      */
     async save(row: T): Promise<T | undefined> {
-        const field = this.versionField("save")
-        const expected = ((row as Source)[field] as number | undefined) ?? 0
-        const written = await this.put(row, {if: this.versionIs(field, expected)})
-        return written ? this.spec.toRow({...row, [field]: expected + 1}) : undefined
+        const p = this.saveParams(row)
+        return await this.sendPut(p) ? this.spec.toRow(p.Item) : undefined
     }
 
     /** Deletes the row and returns it as it was, atomically: for a one-time token or claim. Undefined when there was no
@@ -226,6 +223,7 @@ export class GGDynamoDbTypedTable<
     /** `put` for many rows, 25 per request, unconditionally (DynamoDB's batch write takes no conditions) and not
      *  atomically: on an error some rows may be written. Of rows with the same key the last is written. */
     async putMany(rows: T[]): Promise<void> {
+        this.unversioned("putMany")
         const items = uniqueBy(rows.map(r => this.putParams(r, undefined).Item).reverse(), item => this.keyId(item)).reverse()
         await this.batchWrite("putMany", items.map(Item => ({PutRequest: {Item}})))
     }
@@ -315,6 +313,7 @@ export class GGDynamoDbTypedTable<
                     UpdateExpression: e.updateExpression({
                         set: set.map(d => `${e.name(d.name)} = ${e.value(d.value)}`),
                         remove: remove.map(d => e.name(d.name)),
+                        add: this.spec.version ? [`${e.name(this.spec.version)} ${e.value(1)}`] : [],
                     }),
                     ConditionExpression: [`attribute_exists(${e.name(this.spec.pk)})`, ...deps.map(dep => e.unchanged(dep, item[dep]))].join(" AND "),
                     ExpressionAttributeNames: e.names,
@@ -335,12 +334,35 @@ export class GGDynamoDbTypedTable<
         }
     }
 
-    /** @internal On a versioned table the item carries the next version. */
+    /** @internal */
     putParams(row: T, opts: GGDynamoDbWriteOptions<T> | undefined) {
-        const valid = this.validate(row) as Source
+        return {TableName: this.tableName, Item: this.spec.withDerived(this.validate(row)) as Source, ...(opts?.if && this.expr().conditionInput(opts.if))}
+    }
+
+    /** @internal */
+    createParams(row: T) {
         const v = this.spec.version
-        const item = v ? {...valid, [v]: ((valid[v] as number | undefined) ?? 0) + 1} : valid
-        return {TableName: this.tableName, Item: this.spec.withDerived(item as T) as Source, ...(opts?.if && this.expr().conditionInput(opts.if))}
+        return this.putParams(v ? {...row, [v]: 1} : row, {if: this.absent()})
+    }
+
+    /** @internal */
+    saveParams(row: T) {
+        const field = this.versionField("save")
+        const expected = ((row as Source)[field] as number | undefined) ?? 0
+        return this.putParams({...row, [field]: expected + 1}, {if: this.versionIs(field, expected)})
+    }
+
+    /** @internal A whole-row write can't count from the stored version, so a versioned table takes none. */
+    unversioned(op: string): void {
+        if (this.spec.version) throw new Error(`${this.tableName}.${op}: the table is versioned; write with save, create or update`)
+    }
+
+    private async sendPut(p: ReturnType<GGDynamoDbTypedTable<T, PK, SK, D, I, S>["putParams"]>): Promise<boolean> {
+        if (!p.ConditionExpression) {
+            await this.db.put(this.tableName, p.Item)
+            return true
+        }
+        return this.db.putConditional(this.tableName, p.Item, p.ConditionExpression, p.ExpressionAttributeValues, p.ExpressionAttributeNames)
     }
 
     /** @internal A request on one row, with an optional condition; on the key's own inputs too when its value doesn't
@@ -389,7 +411,7 @@ export class GGDynamoDbTypedTable<
         }
         if (opts?.upsert && opts.current) fail("an upsert can't take current: a row it creates holds none of it")
         if (opts?.expectVersion !== undefined && opts.upsert) fail("an upsert can't take expectVersion")
-        if (opts?.expectVersion !== undefined) this.versionField("update")
+        const checkedVersion = opts?.expectVersion !== undefined ? this.versionField("update") : undefined
         const valid = this.validFields(fields, fail)
         const e = this.expr()
         const storedKey = spec.storedKey(key)
@@ -400,7 +422,7 @@ export class GGDynamoDbTypedTable<
             ? keyChecks.length > 0 ? [`(attribute_not_exists(${e.name(spec.pk)}) OR (${keyChecks.join(" AND ")}))`] : []
             : [`attribute_exists(${e.name(spec.pk)})`, ...keyChecks]
         if (opts?.if) conditions.push(e.condition(opts.if))
-        if (opts?.expectVersion !== undefined) conditions.push(e.condition(this.versionIs(spec.version!, opts.expectVersion)))
+        if (checkedVersion) conditions.push(e.condition(this.versionIs(checkedVersion, opts!.expectVersion!)))
         const known: Source = {...conditionPins(opts?.if), ...keyInputs}
 
         const set: string[] = []
@@ -660,12 +682,18 @@ export class GGDynamoDbTransactBuilder<T extends object, D extends GGDynamoDbDer
     }
 
     put(row: T, opts?: GGDynamoDbWriteOptions<T>): GGDynamoDbTransactItem {
+        this.table.unversioned("tx.put")
         return {Put: this.table.putParams(row, opts)}
     }
 
     /** `put` only when no row has the key yet. */
     create(row: T): GGDynamoDbTransactItem {
-        return {Put: this.table.putParams(row, {if: this.table.absent()})}
+        return {Put: this.table.createParams(row)}
+    }
+
+    /** `save`'s versioned write. */
+    save(row: T): GGDynamoDbTransactItem {
+        return {Put: this.table.saveParams(row)}
     }
 
     update(key: Key<T, D, PK, SK>, fields: Writable<T, D, PK, SK>, opts?: GGDynamoDbUpdateOptions<T, KeyFields<T, D, PK, SK>, S>): GGDynamoDbTransactItem {

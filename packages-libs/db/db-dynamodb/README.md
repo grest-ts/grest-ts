@@ -330,7 +330,14 @@ A derived attribute can't read a field changed by `add`, `delete`, `setIfMissing
 
 ### Optimistic locking
 
-With `version: "version"` in the spec, the field counts the row's writes: every write — `put`, `create`, `update`, `putMany`, `tx.*` — stores it plus one, and nothing writes it directly. `save(row)` writes while the stored version is still `row.version` and returns the row as written, or `undefined` when another write got there first: re-read and retry. `update(key, fields, { expectVersion: n })` does the same for a partial write. A row stored before the table had a version counts as version 0.
+With `version: "version"` in the spec, the field counts the row's writes, and nothing writes it directly:
+
+- `save(row)` writes the whole row while the stored version is still `row.version`, storing it plus one, and returns the row as written — or `undefined` when another write got there first: re-read and retry.
+- `create(row)` writes a new row as version 1.
+- `update` adds one to the stored version; `{ expectVersion: n }` writes only while it is still `n`.
+- `put`, `putMany` and `tx.put` are refused: a whole-row write can't count from the stored version. `tx.save` / `tx.create` / `tx.update` are the transactional ones.
+
+A row without a version — a missing row, or one stored before the table had a version — counts as version 0, so `save` of a row without one may create the row or replace an unversioned one; use `create` for a write that must be new.
 
 ```typescript
 const project = await projects.get(id)
@@ -339,7 +346,7 @@ const saved = await projects.save({ ...project, name })   // undefined: someone 
 
 ### Transactions
 
-`table.tx.put / create / update / delete / check` build items with the same validation, derivation and conditions; `db.transactWrite(items)` writes them all or none. When a condition cancels it, the result names the items whose condition failed:
+`table.tx.put / create / save / update / delete / check` build items with the same validation, derivation and conditions; `db.transactWrite(items)` writes them all or none. When a condition cancels it, the result names the items whose condition failed:
 
 ```typescript
 const result = await db.transactWrite([orders.tx.put(order), stock.tx.update({ sku }, { reserved }, { if: { version: { eq: v } } })])
@@ -460,7 +467,7 @@ const user = await users.queryOne(
 
 ## Admin / Table Creation
 
-`GGDynamoDb.getRawClient()` returns a fresh low-level `DynamoDBClient` (no DocumentClient marshalling). Use it for `DescribeTable` and other operations the document layer doesn't cover. It reads config at call time, so it works before `start()` has run, which is what a seed script needs to create its tables with `GGDynamoDbDevTables.ensure` before any data exists.
+`GGDynamoDb.getRawClient()` returns a fresh low-level `DynamoDBClient` (no DocumentClient marshalling), or for `GGDynamoDb.forClient(client)` that client. Use it for `DescribeTable` and other operations the document layer doesn't cover. It reads config at call time, so it works before `start()` has run, which is what a seed script needs to create its tables with `GGDynamoDbDevTables.ensure` before any data exists.
 
 ## Reads Are Not Validated
 

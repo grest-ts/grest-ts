@@ -65,15 +65,16 @@ describe("create, save, take and expectVersion", () => {
         expect(inputs()[1].Item).toMatchObject({version: 5})
     })
 
-    it("every write bumps the version, and nothing writes it directly", async () => {
-        const {db, inputs} = stubDb({}, {}, {})
+    it("every write counts from the stored version, and nothing writes it directly", async () => {
+        const {db, inputs} = stubDb({}, {})
         const store = new ProjectStore(db)
-        await store.put({...project, version: 7})
-        await store.create(project)
+        await store.create({...project, version: 7})
         await store.update("p1", {name: "m"})
-        expect(inputs()[0].Item).toMatchObject({version: 8})
-        expect(inputs()[1].Item).toMatchObject({version: 1})
-        expect(readable(inputs()[2], inputs()[2].UpdateExpression)).toBe(`SET name = "m" ADD version 1`)
+        expect(inputs()[0].Item).toMatchObject({version: 1})
+        expect(readable(inputs()[1], inputs()[1].UpdateExpression)).toBe(`SET name = "m" ADD version 1`)
+        await expect(store.put(project)).rejects.toThrow(/projects.put: the table is versioned; write with save, create or update/)
+        await expect(store.putMany([project])).rejects.toThrow(/projects.putMany: the table is versioned/)
+        expect(() => store.tx.put(project)).toThrow(/projects.tx.put: the table is versioned/)
         await expect(store.update("p1", {version: 2})).rejects.toThrow(/"version" is the version; every write bumps it/)
         await expect(store.update("p1", {}, {setIfMissing: {version: 1}})).rejects.toThrow(/setIfMissing "version": it is the version/)
         expect(() => GGDynamoDbTableSpec.define({name: "t", schema: IsProject, pk: "projectId", version: "version", derived: d => ({v: d.number(["version"], r => r.version)})}))
@@ -105,6 +106,9 @@ describe("create, save, take and expectVersion", () => {
         const item = new ProjectStore(db).tx.create(project)
         expect(readable(item.Put!, item.Put!.ConditionExpression!)).toBe("attribute_not_exists(projectId)")
         expect(item.Put!.Item).toMatchObject({version: 1})
+        const saved = new ProjectStore(db).tx.save({...project, version: 3})
+        expect(readable(saved.Put!, saved.Put!.ConditionExpression!)).toBe("version = 3")
+        expect(saved.Put!.Item).toMatchObject({version: 4})
     })
 })
 

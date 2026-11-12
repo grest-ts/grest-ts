@@ -46,8 +46,8 @@ describe("GGDynamoDbDevTables and GGDynamoDb.forClient against dynamodb-local", 
         ])
     })
 
-    test("two callers creating one table at once both succeed", async () => {
-        const Races = GGDynamoDbTableSpec.define({name: "races", schema: IsTicket, pk: "ticketId"})
+    test("two callers creating one table (with an index and TTL) at once both succeed", async () => {
+        const Races = GGDynamoDbTableSpec.define({name: "races", schema: IsTicket, pk: "ticketId", ttl: "expiresAt", indexes: {byUser: {pk: "userId"}}})
         const results = await Promise.all([GGDynamoDbDevTables.ensure(client, [Races]), GGDynamoDbDevTables.ensure(client, [Races])])
         expect(results.flatMap(r => r.created)).toEqual(["races"])
     })
