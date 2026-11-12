@@ -15,7 +15,6 @@ export * from './IGGLocalDiscoveryServer'
 export * from './GGTestRuntime'
 export * from './testers/GGTestComponent'
 export * from './mockable/GGMockable'
-export * from './mockable/GGMockableCall'
 export * from './mockable/mockable'
 export * from './GGTestContext'
 

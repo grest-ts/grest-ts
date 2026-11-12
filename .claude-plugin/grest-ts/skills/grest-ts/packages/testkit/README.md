@@ -158,6 +158,9 @@ const alice = new GGTestContext("Alice")
     .afterAll(async () => { /* cleanup */ });    // Runs once after all tests
 ```
 
+Test calls work only inside the testkit's context. A hook imported from `"vitest"` (`import {afterEach} from "vitest"`)
+runs outside it, and a call there throws; use the global hooks or these.
+
 ### Context state management
 
 `GGTestContext` extends `GGContext`, so you can set/get/delete context values (typically auth headers):
@@ -248,6 +251,10 @@ await alice.user.get({id: 999}).toBeError(NOT_FOUND);
 // Custom error types
 await alice.user.login({username: "alice", password: "wrong"})
     .toBeError(InvalidCredentialsError);
+
+// The error's context: what the client sees as displayMessage
+await alice.user.create({name: "taken"})
+    .toBeError(SERVER_ERROR, {displayMessage: expect.stringContaining("Validation Failed")});
 ```
 
 ### Chaining with interceptors
@@ -384,14 +391,28 @@ test('spy on external service', async () => {
     .andReturn(result)
     .times(2))                  // Expect exactly 2 calls
 
+// Any number of calls, none included
+.with(mockOf(Service).method
+    .andReturn(result)
+    .anyTimes())
+
+// Answer each call from its input; the callback may be async
+.with(mockOf(Service).method
+    .andReturn(async ({id}) => {
+        await competingWrite(id)    // e.g. race the code under test
+        return result
+    }))
+
 // Mock with delay
 .with(mockOf(Service).method
     .andReturn(result)
     .sleep(100))                // Wait 100ms before returning
 
-// Mock returning an error
+// Mock throwing an error: the caller gets it typed, with its data
 .with(mockOf(Service).method
     .andReturn(new NOT_AUTHORIZED()))
+.with(mockOf(Service).method
+    .andReturn(() => { throw new QUOTA_EXCEEDED({left: 0}) }))
 
 // Spy switching to response validation
 .with(spyOn(Service).method
@@ -404,6 +425,22 @@ test('spy on external service', async () => {
     .toBeError(NOT_FOUND)
 )
 ```
+
+### What the input matchers see
+
+`toEqual` / `toMatchObject` and an `andReturn` callback get the method's arguments in one value:
+
+| Method | Input |
+|---|---|
+| `run(input: {id: string})`, `run({id}: {id: string})` | the object itself: `{id}` |
+| `get(id: string)` | keyed by parameter name: `{id}` |
+| `pair(id: string, count: number)` | keyed by parameter name: `{id, count}` |
+
+A method with several parameters can't destructure one of them in its signature (there is no name to key it by);
+`@mockable` throws at class definition. Take it whole and destructure in the body.
+
+`@mockable` wraps only async methods declared in the class body. `mockOf(S).x` throws when `x` isn't one: a class field
+(`x = async () => …`), a sync method, or a class without `@mockable`.
 
 ### Schema mock/spy vs @mockable mock/spy
 

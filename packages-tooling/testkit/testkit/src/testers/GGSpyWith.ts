@@ -73,6 +73,12 @@ export class GGSpyWith<RequestBody = any, ResponseData = any, ErrorsUnion = any>
         return this;
     }
 
+    /** Allow any number of calls, none included. */
+    public anyTimes(): this {
+        this._times = Infinity;
+        return this;
+    }
+
     public get response(): GGSpyWith<ResponseData, never, never> {
         this.activeExpect = this._expectOutput;
         this._expectOutput.flush();

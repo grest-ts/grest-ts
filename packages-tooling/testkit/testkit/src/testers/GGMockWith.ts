@@ -9,6 +9,8 @@ import {GGCallInterceptor, GGCallInterceptorConfig} from "./GGCallInterceptor";
 
 type InterceptorFactory = new (runner: GGTestRunner, config: any) => GGCallInterceptor;
 
+type MockReply<RequestBody, Reply> = (input: Raw<RequestBody>) => Raw<Reply> | Promise<Raw<Reply>>;
+
 export class GGMockWith<RequestBody = any, ResponseData = any, ErrorsUnion = any> implements IGGTestWith {
 
     private readonly interceptorFactory: InterceptorFactory;
@@ -19,7 +21,7 @@ export class GGMockWith<RequestBody = any, ResponseData = any, ErrorsUnion = any
     private _within?: number;
 
     private readonly expectations: GGExpectations<RequestBody> = new GGExpectations();
-    private returnData?: ResponseData | ErrorsUnion | ((input: Raw<RequestBody>) => Raw<ResponseData | ErrorsUnion>);
+    private returnData?: Raw<ResponseData | ErrorsUnion> | MockReply<RequestBody, ResponseData | ErrorsUnion>;
 
     constructor(interceptorFactory: InterceptorFactory, config: Record<string, any>) {
         this.interceptorFactory = interceptorFactory;
@@ -61,6 +63,12 @@ export class GGMockWith<RequestBody = any, ResponseData = any, ErrorsUnion = any
         return this;
     }
 
+    /** Allow any number of calls, none included. */
+    public anyTimes(): this {
+        this._times = Infinity;
+        return this;
+    }
+
     public toEqual(expectedData: Raw<RequestBody>): this {
         this.expectations.toEqual(expectedData as RequestBody)
         return this;
@@ -91,8 +99,11 @@ export class GGMockWith<RequestBody = any, ResponseData = any, ErrorsUnion = any
         return this;
     }
 
-    /** A function is called per call with that call's input, so one mock can answer each call differently. */
-    public andReturn(data: Raw<ResponseData | ErrorsUnion> | ((input: Raw<RequestBody>) => Raw<ResponseData | ErrorsUnion>)): this {
+    /**
+     * A function is called per call with that call's input, so one mock can answer each call differently; it may be async.
+     * An error, returned or thrown by the function, is thrown at the caller.
+     */
+    public andReturn(data: Raw<ResponseData | ErrorsUnion> | MockReply<RequestBody, ResponseData | ErrorsUnion>): this {
         this.returnData = data as any;
         return this;
     }

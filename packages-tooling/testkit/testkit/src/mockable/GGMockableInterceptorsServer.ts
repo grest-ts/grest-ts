@@ -2,8 +2,11 @@ import type {GGMockableInterceptor} from "./GGMockableInterceptor";
 import {GGTestComponent} from "../testers/GGTestComponent";
 import {GGTestRunner} from "../GGTestRunner";
 import {GGMockableIPC} from "./GGMockableIPC";
+import {ERROR} from "@grest-ts/schema";
 
 export const CALL_THROUGH = "__spyCallThrough|migo0am5g0htea";
+/** Key of the reply that carries a mocked typed error, which the worker rebuilds and throws. */
+export const THROW_ERROR = "__mockThrow|migo0am5g0htea";
 
 export class GGMockableInterceptorsServer implements GGTestComponent {
 
@@ -31,8 +34,11 @@ export class GGMockableInterceptorsServer implements GGTestComponent {
             if (handler.passThrough) {
                 // Spy mode - signal worker to call through
                 return CALL_THROUGH;
+            } else if (result instanceof ERROR) {
+                return {[THROW_ERROR]: result.toJSON()};
+            } else if (result instanceof Error) {
+                throw result;
             } else {
-                // Mock mode - return the mock data
                 return result;
             }
         });

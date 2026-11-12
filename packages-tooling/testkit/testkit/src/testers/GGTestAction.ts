@@ -9,6 +9,7 @@ import {Raw} from "@grest-ts/schema";
 import {DeepPartial} from "@grest-ts/common";
 import {GGExpectations} from "../utils/GGExpectations";
 import {DEFAULT_WAIT_FOR_MS, GGPendingWait, waitForInterceptors} from "./waitForInterceptors";
+import {GG_TEST_RUNNER} from "../GGTestRunner";
 
 /**
  * Configuration for a test action's logging behavior.
@@ -188,6 +189,13 @@ export abstract class GGTestAction<T> implements Promise<T> {
     }
 
     protected async execute(): Promise<T> {
+        if (!GG_TEST_RUNNER.has()) {
+            throw new Error(
+                "This test call runs outside the testkit's context, so it can't reach the runtimes. " +
+                "Is it in a hook imported from \"vitest\" (`import {afterEach} from \"vitest\"`)? " +
+                "Use the global hooks or the GGTestContext ones (`ctx.afterEach(...)`)."
+            );
+        }
         return this.ctx.run(async () => {
             GG_TRACE.init();
             GGLog.info(this,

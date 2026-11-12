@@ -81,7 +81,7 @@ export interface ERR_CLASS_DATA<Type extends string, Data> extends ERROR_CLASS<T
 
 export type ANY_ERROR_CLS = ERR_CLASS<any> | ERR_CLASS_DATA<any, any>
 
-const ERRORS_REGISTRY: Map<string, ERROR<string, unknown>> = new Map();
+const ERRORS_REGISTRY: Map<string, ANY_ERROR_CLS> = new Map();
 
 export abstract class ERROR<Type extends string, Data> extends Error {
 
@@ -252,6 +252,18 @@ export abstract class ERROR<Type extends string, Data> extends Error {
             && value.success === false
             && "type" in value
             && typeof value.type === "string"
+    }
+
+    /**
+     * Rebuild a typed error from its JSON, as the class defined for its type in this process.
+     * A type not defined here becomes SERVER_ERROR.
+     */
+    public static fromJson(json: ERROR_JSON): ERROR<string, unknown> {
+        const cls = ERRORS_REGISTRY.get(json.type)
+        if (!cls) {
+            return new SERVER_ERROR({debugMessage: "Unknown error type: " + json.type, debugData: json})
+        }
+        return cls.schema ? new cls(json.data, json.context) : new (cls as ERR_CLASS<string>)(json.context)
     }
 
     public static fromUnknown<E extends ERROR<string, unknown>>(error: E): 0 extends (1 & E) ? ERROR<string, unknown> : E;

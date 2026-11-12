@@ -7,7 +7,8 @@ import {pathToFileURL} from "url";
 import {GGTestCommand, GGTestEnvConfig} from "./GGTestRuntime";
 import {GGExtensionDiscovery} from "@grest-ts/common";
 import {type MockableTestContext, runWithMockableContext} from "@grest-ts/testkit-runtime";
-import {CALL_THROUGH} from "./mockable/GGMockableInterceptorsServer";
+import {CALL_THROUGH, THROW_ERROR} from "./mockable/GGMockableInterceptorsServer";
+import {ERROR} from "@grest-ts/schema";
 import {GGMockableIPC} from "./mockable/GGMockableIPC";
 import {registerOnCallHandler} from "./callOn/registerOnCallHandler";
 import {TestableIPC} from "./callOn/TestableIPC";
@@ -56,11 +57,13 @@ export class GGTestRuntimeWorker {
         const mockableContext: MockableTestContext = {
             CALL_THROUGH,
             sendCall: async (className, methodName, callArgs) => {
-                return this.ipcClient.sendFrameworkRequest(GGMockableIPC.testServer.call, {
+                const result = await this.ipcClient.sendFrameworkRequest(GGMockableIPC.testServer.call, {
                     className,
                     methodName,
                     callArgs
                 });
+                if (result?.[THROW_ERROR]) throw ERROR.fromJson(result[THROW_ERROR]);
+                return result;
             },
             sendSpyResult: async (className, methodName, callResult) => {
                 await this.ipcClient.sendFrameworkRequest(GGMockableIPC.testServer.spyResult, {

@@ -9,28 +9,40 @@
 import {GGMockableInterceptor} from "./GGMockableInterceptor";
 import {GGMockWith} from "../testers/GGMockWith";
 import {GGSpyWith} from "../testers/GGSpyWith";
+import {mockableClassName} from "@grest-ts/testkit-runtime";
+import type {ANY_ERROR} from "@grest-ts/schema";
 
 // ============================================================================
 // Type helpers for mockBy/spyOn
 // ============================================================================
 
-/**
- * Type for mock access - maps class methods to GGMockWith
- */
+/** A single object argument as itself; anything else keyed by parameter name. */
+type MockInput<A extends any[]> = A extends [infer Single]
+    ? (Single extends object ? Single : Record<string, Single>)
+    : Record<string, any>;
+
 type MockAccess<T> = {
     [K in keyof T]: T[K] extends (...args: infer A) => Promise<infer R>
-        ? GGMockWith<A extends [infer Single] ? (Single extends object ? Single : Record<string, Single>) : Record<string, any>, Awaited<R>, never>
+        ? GGMockWith<MockInput<A>, Awaited<R>, ANY_ERROR>
         : never
 };
 
-/**
- * Type for spy access - maps class methods to GGSpyWith
- */
 type SpyAccess<T> = {
     [K in keyof T]: T[K] extends (...args: infer A) => Promise<infer R>
-        ? GGSpyWith<A extends [infer Single] ? (Single extends object ? Single : Record<string, Single>) : Record<string, any>, Awaited<R>, never>
+        ? GGSpyWith<MockInput<A>, Awaited<R>, never>
         : never
 };
+
+function interceptorConfig(cls: Function, methodName: string | symbol): {className: string, methodName: string} {
+    const className = typeof methodName === "string" ? mockableClassName(cls, methodName) : undefined;
+    if (!className) {
+        throw new Error(
+            `${cls.name}.${String(methodName)} is not mockable. @mockable intercepts only async methods declared in the body of a decorated class: ` +
+            `not class fields (\`${String(methodName)} = async () => …\`), sync methods, or methods of a class without @mockable.`
+        );
+    }
+    return {className, methodName: methodName as string};
+}
 
 /**
  * Get mock access for a @mockable class.
@@ -45,8 +57,8 @@ type SpyAccess<T> = {
  */
 export function mockOf<T>(cls: new (...args: any[]) => T): MockAccess<T> {
     return new Proxy({} as any, {
-        get(_, methodName: string) {
-            return new GGMockWith(GGMockableInterceptor, {className: cls.name, methodName})
+        get(_, methodName) {
+            return new GGMockWith(GGMockableInterceptor, interceptorConfig(cls, methodName))
         }
     });
 }
@@ -64,8 +76,8 @@ export function mockOf<T>(cls: new (...args: any[]) => T): MockAccess<T> {
  */
 export function spyOn<T>(cls: new (...args: any[]) => T): SpyAccess<T> {
     return new Proxy({} as any, {
-        get(_, methodName: string) {
-            return new GGSpyWith(GGMockableInterceptor, {className: cls.name, methodName})
+        get(_, methodName) {
+            return new GGSpyWith(GGMockableInterceptor, interceptorConfig(cls, methodName))
         }
     });
 }

@@ -324,6 +324,27 @@ describe('ERROR', () => {
         });
     });
 
+    describe('fromJson()', () => {
+
+        it('rebuilds the defined class with its data and context', () => {
+            const QUOTA = ERROR.badRequest('FROM_JSON_QUOTA', IsObject({left: IsNumber}));
+            const json = new QUOTA({left: 2}, {displayMessage: 'over quota', ref: 'r1'}).toJSON();
+            const error = ERROR.fromJson(json);
+            expect(QUOTA.is(error)).toBe(true);
+            expect(error.data).toEqual({left: 2});
+            expect(error.context).toMatchObject({displayMessage: 'over quota', ref: 'r1'});
+        });
+
+        it('rebuilds an error without data', () => {
+            expect(MY_ERROR.is(ERROR.fromJson(new MY_ERROR().toJSON()))).toBe(true);
+        });
+
+        it('turns a type not defined here into SERVER_ERROR', () => {
+            const error = ERROR.fromJson({success: false, type: 'NEVER_DEFINED', data: undefined});
+            expect(SERVER_ERROR.is(error)).toBe(true);
+        });
+    });
+
     describe('fromUnknown()', () => {
 
         it('should return ERROR instance as-is', () => {

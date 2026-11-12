@@ -2,6 +2,7 @@ import type {GGTestRunner} from "../GGTestRunner";
 import {GGExpectations} from "../utils/GGExpectations";
 import {GGTestError} from "../utils/GGTestError";
 import {GGLog} from "@grest-ts/logger";
+import {ERROR} from "@grest-ts/schema";
 
 import {IGGTestInterceptor} from "./IGGTestInterceptor";
 
@@ -139,7 +140,13 @@ export abstract class GGCallInterceptor implements IGGTestInterceptor {
 
         if (!this.passThrough) {
             await this.sleepIfNeeded();
-            return typeof this.returnData === "function" ? this.returnData(transformed) : this.returnData;
+            if (typeof this.returnData !== "function") return this.returnData;
+            try {
+                return await this.returnData(transformed);
+            } catch (error) {
+                if (error instanceof ERROR) return error;
+                throw error;
+            }
         }
 
         return undefined;
@@ -169,7 +176,7 @@ export abstract class GGCallInterceptor implements IGGTestInterceptor {
     // -------------------------------------------
 
     public validate(): void {
-        if (this.noOfTimesCalled < this.times) {
+        if (this.noOfTimesCalled < this.minTimes()) {
             throw new GGTestError({
                 context: `[${this.getKey()}]`,
                 test: this.noOfTimesCalled ? "Interceptor called too few times!" : "Interceptor was never called!",
@@ -186,12 +193,17 @@ export abstract class GGCallInterceptor implements IGGTestInterceptor {
 
     /** Done: called as often as expected, or a call failed its expectations. */
     public isCalled(): boolean {
-        return this.noOfTimesCalled >= this.times || this.validationError !== undefined;
+        return this.noOfTimesCalled >= this.minTimes() || this.validationError !== undefined;
     }
 
     // -------------------------------------------
     // Helpers
     // -------------------------------------------
+
+    /** `times` is Infinity for `anyTimes()`: no lower bound. */
+    private minTimes(): number {
+        return this.times === Infinity ? 0 : this.times;
+    }
 
     protected async sleepIfNeeded(): Promise<void> {
         if (this._sleep) {

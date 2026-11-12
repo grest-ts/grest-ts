@@ -17,7 +17,7 @@ export interface MockableTestContext {
      * Send a mockable call to the test runner.
      * Returns mock data, or CALL_THROUGH symbol for spy mode.
      */
-    sendCall(className: string, methodName: string, callArgs: Record<string, any>): Promise<any>;
+    sendCall(className: string, methodName: string, callArgs: any): Promise<any>;
 
     /**
      * Report the result of a spy call back to the test runner.
@@ -51,38 +51,72 @@ export function runWithMockableContext<T>(ctx: MockableTestContext, fn: () => T)
 
 const MOCKABLE_WRAPPED = Symbol('GGMockableWrapped');
 
-/**
- * Extract parameter names from a function.
- * Falls back to arg0, arg1, etc. if parsing fails.
- */
-function getParamNames(fn: Function): string[] {
-    const fnStr = fn.toString();
-    // Match function parameters: function(a, b, c) or (a, b, c) =>
-    const match = fnStr.match(/(?:function\s*\w*\s*\(|\()\s*([^)]*)\)/);
-    if (!match || !match[1]) return [];
+interface ParamInfo {
+    /** Undefined for a destructured parameter. */
+    name: string | undefined;
+    rest: boolean;
+}
 
-    return match[1]
-        .split(',')
-        .map(p => p.trim())
+/** Top-level parameters of a function, read from its source; destructuring, defaults and nesting aware. */
+function parseParams(fn: Function): ParamInfo[] {
+    const src = fn.toString();
+    const open = src.indexOf('(');
+    if (open < 0) return [];
+    const parts: string[] = [];
+    let depth = 0, current = '', quote: string | undefined;
+    for (let i = open + 1; i < src.length; i++) {
+        const ch = src[i];
+        if (quote) {
+            current += ch;
+            if (ch === '\\') current += src[++i];
+            else if (ch === quote) quote = undefined;
+            continue;
+        }
+        if (ch === '"' || ch === "'" || ch === '`') quote = ch;
+        else if (ch === '(' || ch === '{' || ch === '[') depth++;
+        else if (ch === ')' || ch === '}' || ch === ']') {
+            if (depth === 0) break;
+            depth--;
+        } else if (ch === ',' && depth === 0) {
+            parts.push(current);
+            current = '';
+            continue;
+        }
+        current += ch;
+    }
+    parts.push(current);
+    return parts
+        .map(p => p.replace(/\/\*[\s\S]*?\*\//g, '').trim())
         .filter(p => p.length > 0)
         .map(p => {
-            // Handle destructuring, default values, type annotations
-            // Take just the parameter name before : or =
-            const name = p.split(/[=:]/)[0].trim();
-            // Remove ... for rest params
-            return name.replace(/^\.\.\./, '');
+            const rest = p.startsWith('...');
+            const name = p.replace(/^\.\.\./, '').split('=')[0].trim();
+            return {name: /^[A-Za-z_$][\w$]*$/.test(name) ? name : undefined, rest};
         });
 }
 
+function isObjectArg(value: unknown): boolean {
+    return (typeof value === 'object' && value !== null) || typeof value === 'function';
+}
+
 /**
- * Convert positional arguments to a named object.
+ * What mock matchers and `andReturn` callbacks see, matching `mockOf`'s types:
+ * a single object argument as itself, anything else keyed by parameter name.
  */
-function argsToObject(args: any[], paramNames: string[]): Record<string, any> {
-    const result: Record<string, any> = {};
-    for (let i = 0; i < args.length; i++) {
-        result[paramNames[i] || `arg${i}`] = args[i];
+function argsToMockInput(args: any[], params: ParamInfo[]): any {
+    if (params.length === 1 && !params[0].rest && (isObjectArg(args[0]) || params[0].name === undefined)) {
+        return args[0];
     }
+    const result: Record<string, any> = {};
+    params.forEach((param, i) => {
+        result[param.name!] = param.rest ? args.slice(i) : args[i];
+    });
     return result;
+}
+
+/** The class name that `@mockable` intercepts `cls.prototype[methodName]` under, or undefined when it doesn't. */
+export function mockableClassName(cls: Function, methodName: string): string | undefined {
+    return cls.prototype?.[methodName]?.[MOCKABLE_WRAPPED];
 }
 
 /**
@@ -119,7 +153,13 @@ function wrapMethod(cls: any, methodName: string): void {
         return;
     }
 
-    const paramNames = getParamNames(originalMethod);
+    const params = parseParams(originalMethod);
+    if (params.length > 1 && params.some(p => p.name === undefined)) {
+        throw new Error(
+            `@mockable ${cls.name}.${methodName}: can't name its parameters for mocks. ` +
+            `Take a destructured parameter whole (\`(a, input: {x, y})\`) and destructure it in the body, or make it the only parameter.`
+        );
+    }
 
     const wrappedMethod = async function (this: any, ...args: any[]) {
         const ctx = mockableContextStorage.getStore();
@@ -130,7 +170,7 @@ function wrapMethod(cls: any, methodName: string): void {
         }
 
         // In test mode - go through mock/spy system
-        const callArgs = argsToObject(args, paramNames);
+        const callArgs = argsToMockInput(args, params);
         const result = await ctx.sendCall(cls.name, methodName, callArgs);
 
         if (result === ctx.CALL_THROUGH) {
@@ -148,7 +188,7 @@ function wrapMethod(cls: any, methodName: string): void {
     };
 
     // Mark as wrapped and assign to prototype
-    (wrappedMethod as any)[MOCKABLE_WRAPPED] = true;
+    (wrappedMethod as any)[MOCKABLE_WRAPPED] = cls.name;
     cls.prototype[methodName] = wrappedMethod;
 }
 
