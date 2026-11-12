@@ -431,19 +431,17 @@ the seeds that only exist to fake elapsed time, especially those that duplicate 
 |---|---|---|
 | 1 | Default | Flowing. `GGTest.clock.stop()` really stops it; `start()` resumes |
 | 2 | Per-runtime skew | Not built. All runtimes stay in sync; the per-runtime offset payload leaves room to add it later |
-| 3 | Order in `advance` | Barrier first (every runtime on the new time), then timers fire runtime by runtime in start order. No global due-time stepping |
+| 3 | Order in `advance` | Barrier first (every runtime on the new time), then timers fire runtime by runtime in start order. No global due-time stepping: code that depends on which runtime's timer fires first is racy in production too |
 | 4 | Cancelled timers | The testkit wraps global `clearTimeout`/`clearInterval` as a pass-through. No Node internals, no new API |
 | 5 | Third-party clocks (SDK SigV4, presign) | Generic `GGTestClock.onChange` hook, registered from a package's `testkit/index-testkit.ts`. The framework ships none |
 | 6 | MySQL/Postgres `NOW()` | Out of scope for now |
 | 7 | Tokens expiring after an advance | Correct behaviour, and the test's job (log in after advancing). Not a testkit concern. If "stay signed in across a jump" is ever wanted, it belongs in the auth library, not the clock |
-| 8 | `JwksVerifier` key-cache age | Elapsed time, so `performance.now()`. It measures "how long since I fetched the auth server's public keys", not a wall-clock deadline |
+| 8 | Library time semantics (`JwksVerifier` key-cache age and similar) | Each library's own call, not a testkit concern. Rule of thumb for grest-ts libraries: elapsed time uses `performance.now()`, wall-clock deadlines use `Date` |
 | 9 | kratt's raw business timers | Move all of them to `GGLocator.setTimeout` in phase 3, and enforce with an ESLint rule, not a runtime throw (§1e) |
+
+| 10 | A `realTimeout()` helper | No, unless eslint-disable lines for raw timers become common |
+| 11 | `GGLocator.setTimeout` in production code | Fine. It already exists and the job runner and `withLock` use it. It runs the callback inside the runtime's scope. It throws outside a scope; tests have the testkit's root scope. Possible follow-up: the scope tracks its timers and clears them on teardown, so a stopped runtime leaves none behind |
 
 ## 9. Open questions
 
-1. **A named real-time helper.** The lint message sends IO waits to `sleep()`/`withTimeout()`.
-   Should `@grest-ts/common` also export an explicit `realTimeout(fn, ms)` for raw IO timers
-   that are neither, so they don't need an eslint-disable line? Proposed: no; a disable line
-   with a reason is rarer and says more.
-2. **`GGLocator.setTimeout` in production code** is a scope-bound timer, not service location,
-   so it doesn't break the "no locator in production code" rule. Agreed?
+1. **Taking over the global `setTimeout`/`setInterval` entirely** (vs faking only scope timers). Under discussion.
