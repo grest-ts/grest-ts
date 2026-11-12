@@ -218,6 +218,25 @@ export class GGDynamoDbTableSpec<
         return {key: "table", indexName: undefined, pk: this.pk, sk: this.sk}
     }
 
+    /** `row` with its derived attributes, for a write that can't go through `GGDynamoDbTypedTable` (a seed script,
+     *  a test fixture). Not validated. */
+    withDerived(row: T): T {
+        const item = {...row} as Record<string, unknown>
+        for (const {name, key} of this.derived) {
+            const value = key.compute(Object.fromEntries(key.deps.map(dep => [dep, item[dep]])))
+            if (value === undefined) delete item[name]
+            else item[name] = value
+        }
+        return item as T
+    }
+
+    /** A stored item without its derived attributes, for an item read outside `GGDynamoDbTypedTable`. */
+    withoutDerived(item: Record<string, unknown>): T {
+        const row = {...item}
+        for (const {name} of this.derived) delete row[name]
+        return row as T
+    }
+
     /** CreateTable input for local and test tables. No BillingMode: spread it in. */
     createTableInput(): CreateTableCommandInput {
         const keySchema = (pk: string, sk: string | undefined) => [

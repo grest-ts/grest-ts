@@ -9,8 +9,12 @@ type Source = Record<string, unknown>
 
 type FieldCondition<V> = {eq: V} | {ne: V} | {exists: boolean}
 
-/** Fields AND-ed; `anyOf` OR-s whole conditions. `ne` is false on a row without the field, as in DynamoDB. */
-export type GGDynamoDbCondition<T> = {[K in keyof T]?: FieldCondition<NonNullable<T[K]>>} & {anyOf?: GGDynamoDbCondition<T>[]}
+/** Fields AND-ed; `anyOf` OR-s whole conditions, `allOf` AND-s them (two conditions on one field). As in DynamoDB,
+ *  `ne` holds on a row without the field: add `exists: true` through `allOf` to require it. */
+export type GGDynamoDbCondition<T> = {[K in keyof T]?: FieldCondition<NonNullable<T[K]>>} & {
+    anyOf?: GGDynamoDbCondition<T>[]
+    allOf?: GGDynamoDbCondition<T>[]
+}
 
 export type GGDynamoDbSkCondition<V> =
     | {eq: V} | {lt: V} | {lte: V} | {gt: V} | {gte: V} | {between: [V, V]}
@@ -212,12 +216,7 @@ export class GGDynamoDbTypedTable<
 
     /** @internal */
     putParams(row: T, opts: GGDynamoDbWriteOptions<T> | undefined) {
-        const valid = this.validate(row, "put") as Source
-        const item: Source = {...valid}
-        for (const {name, key} of this.spec.derived) {
-            const value = key.compute(pick(valid, key.deps))
-            if (value !== undefined) item[name] = value
-        }
+        const item = this.spec.withDerived(this.validate(row, "put")) as Source
         const e = new Expr()
         const condition = opts?.if && e.condition(opts.if)
         return {
@@ -238,6 +237,7 @@ export class GGDynamoDbTypedTable<
         const parsed = this.spec.schema.pick(...keys as (keyof T)[]).safeParse(fields)
         if (!parsed.success) fail(`schema validation failed: ${JSON.stringify(parsed.issues)}`)
         const valid = (parsed as {value: Source}).value
+        for (const k of keys) if (fields[k] !== undefined && !(k in valid)) fail(`"${k}" is not a schema field`)
 
         const e = new Expr()
         const conditions = [`attribute_exists(${e.name(this.spec.pk)})`]
@@ -286,10 +286,7 @@ export class GGDynamoDbTypedTable<
 
     /** @internal */
     fromStored<R>(item: Source | undefined): R | undefined {
-        if (!item) return undefined
-        const row = {...item}
-        for (const {name} of this.spec.derived) delete row[name]
-        return row as R
+        return item && this.spec.withoutDerived(item) as unknown as R
     }
 
     private keyFields(): string[] {
@@ -431,10 +428,10 @@ class Expr {
         const parts: string[] = []
         for (const [field, op] of Object.entries(c)) {
             if (op === undefined) continue
-            if (field === "anyOf") {
-                const alternatives = (op as GGDynamoDbCondition<any>[]).map(a => this.condition(a))
-                if (alternatives.length === 0) throw new Error("GGDynamoDb: anyOf needs at least one condition")
-                parts.push(`(${alternatives.join(" OR ")})`)
+            if (field === "anyOf" || field === "allOf") {
+                const nested = (op as GGDynamoDbCondition<any>[]).map(a => this.condition(a))
+                if (nested.length === 0) throw new Error(`GGDynamoDb: ${field} needs at least one condition`)
+                parts.push(`(${nested.join(field === "anyOf" ? " OR " : " AND ")})`)
             } else if ("eq" in op) parts.push(`${this.name(field)} = ${this.value(op.eq)}`)
             else if ("ne" in op) parts.push(`${this.name(field)} <> ${this.value(op.ne)}`)
             else parts.push(`${(op as {exists: boolean}).exists ? "attribute_exists" : "attribute_not_exists"}(${this.name(field)})`)
@@ -467,7 +464,8 @@ function skExpression(e: Expr, attr: string, c: Record<string, any>): string {
 function pins(c: GGDynamoDbCondition<any> | undefined): Source {
     const out: Source = {}
     for (const [field, op] of Object.entries(c ?? {})) {
-        if (field === "anyOf" || !op) continue
+        if (field === "allOf") Object.assign(out, ...(op as GGDynamoDbCondition<any>[]).map(pins))
+        if (field === "anyOf" || field === "allOf" || !op) continue
         if ("eq" in op) out[field] = op.eq
         else if ("exists" in op && op.exists === false) out[field] = undefined
     }

@@ -220,7 +220,7 @@ A derived attribute is computed from the row on **every** write path — `put`, 
 | `d.flag(fields, test)` | `"1"` while `test` holds | nothing: `index.x.query()` |
 | `d.string(fields, fn)` / `d.number(fields, fn)` | `fn`'s result | `{<name>: value}` |
 
-Reads strip derived attributes, so rows come back in the schema's shape. A derived name may not also be a schema field.
+Reads strip derived attributes, so rows come back in the schema's shape. A derived name may not also be a schema field. For a write or read that can't go through the table (a seed script, a raw command), `spec.withDerived(row)` adds the derived attributes and `spec.withoutDerived(item)` strips them.
 
 ### Queries
 
@@ -248,7 +248,7 @@ await table.getMany([{ workspaceId: a }, { workspaceId: b }])
 await table.scan({ filter: { status: { eq: "running" } } })
 ```
 
-Conditions are typed by field: `{ field: { eq } | { ne } | { exists: boolean } }`, several fields AND-ed, `anyOf: [...]` to OR whole conditions. As in DynamoDB, `ne` is false on a row without the field.
+Conditions are typed by field: `{ field: { eq } | { ne } | { exists: boolean } }`, several fields AND-ed, `anyOf: [...]` to OR whole conditions and `allOf: [...]` to AND them (for two conditions on one field). As in DynamoDB, `ne` holds on a row without the field; `allOf: [{ f: { exists: true } }, { f: { ne: v } }]` requires it.
 
 ### Partial updates
 

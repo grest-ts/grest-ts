@@ -86,6 +86,13 @@ describe("GGDynamoDbTypedTable against dynamodb-local", () => {
         expect(await stored(row.workspaceId)).toMatchObject({status: "running", orgId: "org-moved", liveOrg: "org-moved", orgUser: "org-moved#u1"})
     })
 
+    test("ne holds on a row without the field unless allOf requires it", async () => {
+        const row = ws()
+        await workspaces.put(row)
+        expect(await workspaces.update({workspaceId: row.workspaceId}, {version: 2}, {if: {allOf: [{name: {exists: true}}, {name: {ne: "x"}}]}})).toBeUndefined()
+        expect(await workspaces.update({workspaceId: row.workspaceId}, {version: 2}, {if: {name: {ne: "x"}}})).toMatchObject({version: 2})
+    })
+
     test("update on a missing row returns undefined and creates nothing", async () => {
         expect(await workspaces.update({workspaceId: "nope"}, {name: "x"})).toBeUndefined()
         expect(await stored("nope")).toBeUndefined()

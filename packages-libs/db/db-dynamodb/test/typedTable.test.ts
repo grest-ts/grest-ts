@@ -83,6 +83,11 @@ describe("GGDynamoDbTableSpec", () => {
         })
     })
 
+    it("withDerived adds the derived attributes for writers outside the table", () => {
+        expect(WorkspacesTable.withDerived({...row, userId: undefined, status: "deleted"}))
+            .toEqual({...row, userId: undefined, status: "deleted", activeUntil: Number.MAX_SAFE_INTEGER})
+    })
+
     it("rejects a derived attribute that shadows a field, and keys of no storable type", () => {
         const shadowing = () => GGDynamoDbTableSpec.define({name: "t", schema: IsWorkspace, pk: "workspaceId", derived: d => ({orgId: d.join("orgId")})})
         expectTypeOf(shadowing).returns.toEqualTypeOf<`derived "orgId" is also a schema field`>()
@@ -146,6 +151,14 @@ describe("GGDynamoDbTypedTable writes", () => {
             .toBe(`(attribute_not_exists(workspaceId) OR (version = 0 AND status <> "deleted"))`)
     })
 
+    it("allOf ANDs conditions on one field, and its eq pins a key input", async () => {
+        const {table, inputs} = stubTable({})
+        await table.update({workspaceId: "w1"}, {userId: "u2"}, {if: {allOf: [{orgId: {exists: true}}, {orgId: {eq: "o1"}}, {status: {ne: "deleted"}}]}})
+        expect(readable(inputs()[0], inputs()[0].UpdateExpression)).toBe(`SET userId = "u2", orgUser = "o1#u2"`)
+        expect(readable(inputs()[0], inputs()[0].ConditionExpression))
+            .toBe(`attribute_exists(workspaceId) AND (attribute_exists(orgId) AND orgId = "o1" AND status <> "deleted")`)
+    })
+
     it("update leaves keys alone when no input of theirs is written", async () => {
         const {table, inputs} = stubTable({Attributes: {...row, name: "x", orgUser: "o1#u1"}})
         await expect(table.update({workspaceId: "w1"}, {name: "x"})).resolves.toEqual({...row, name: "x"})
@@ -193,6 +206,7 @@ describe("GGDynamoDbTypedTable writes", () => {
         await expect(table.update({workspaceId: "w1"}, {createdAt: "x" as unknown as number})).rejects.toThrow(/schema validation failed/)
         await expect(table.update({workspaceId: "w1"}, {version: undefined as unknown as number})).rejects.toThrow(/schema validation failed/)
         await expect(table.update({workspaceId: "w1"}, {workspaceId: "w2"} as object)).rejects.toThrow(/"workspaceId" is part of the table key/)
+        await expect(table.update({workspaceId: "w1"}, {nope: 1} as object)).rejects.toThrow(/"nope" is not a schema field/)
     })
 
     it("tx builds the same writes", () => {
