@@ -52,9 +52,11 @@ function interceptorConfig(cls: Function, methodName: string): {className: strin
     return {className: method.className, methodName};
 }
 
-/** Not a method: `then` (so the access object isn't taken for a promise) and symbols (inspection). */
-function isMethodName(key: string | symbol): key is string {
-    return typeof key === "string" && key !== "then";
+function accessProxy(cls: Function, tester: (config: {className: string, methodName: string}) => unknown): any {
+    return new Proxy({}, {
+        // Not methods: `then`, so the object isn't taken for a promise, and symbols, read by inspection.
+        get: (_, key) => typeof key === "string" && key !== "then" ? tester(interceptorConfig(cls, key)) : undefined
+    });
 }
 
 /**
@@ -69,12 +71,7 @@ function isMethodName(key: string | symbol): key is string {
  * ```
  */
 export function mockOf<T>(cls: new (...args: any[]) => T): MockAccess<T> {
-    return new Proxy({} as any, {
-        get(_, methodName) {
-            if (!isMethodName(methodName)) return undefined;
-            return new GGMockWith(GGMockableInterceptor, interceptorConfig(cls, methodName))
-        }
-    });
+    return accessProxy(cls, config => new GGMockWith(GGMockableInterceptor, config));
 }
 
 /**
@@ -89,10 +86,5 @@ export function mockOf<T>(cls: new (...args: any[]) => T): MockAccess<T> {
  * ```
  */
 export function spyOn<T>(cls: new (...args: any[]) => T): SpyAccess<T> {
-    return new Proxy({} as any, {
-        get(_, methodName) {
-            if (!isMethodName(methodName)) return undefined;
-            return new GGSpyWith(GGMockableInterceptor, interceptorConfig(cls, methodName))
-        }
-    });
+    return accessProxy(cls, config => new GGSpyWith(GGMockableInterceptor, config));
 }

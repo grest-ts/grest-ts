@@ -104,10 +104,10 @@ function parseParams(fn: Function): ParamInfo[] {
  * What mock matchers and `andReturn` callbacks see, matching `mockOf`'s types:
  * a single object argument as itself, anything else keyed by parameter name.
  */
-function argsToMockInput(args: any[], params: ParamInfo[]): any {
+function argsToMockInput(args: any[], params: ParamInfo[], sole: boolean): any {
     const single = args[0];
     const isObject = (typeof single === 'object' && single !== null) || typeof single === 'function';
-    if (params.length === 1 && !params[0].rest && (isObject || params[0].name === undefined)) {
+    if (sole && (isObject || params[0].name === undefined)) {
         return single;
     }
     const result: Record<string, any> = {};
@@ -164,7 +164,8 @@ function wrapMethod(cls: any, methodName: string): void {
     }
 
     const params = parseParams(originalMethod);
-    const unnamedParams = params.some(p => p.name === undefined) && !(params.length === 1 && !params[0].rest);
+    const sole = params.length === 1 && !params[0].rest;
+    const unnamedParams = !sole && params.some(p => p.name === undefined);
 
     const wrappedMethod = async function (this: any, ...args: any[]) {
         const ctx = mockableContextStorage.getStore();
@@ -175,7 +176,7 @@ function wrapMethod(cls: any, methodName: string): void {
         }
 
         // In test mode - go through mock/spy system
-        const callArgs = argsToMockInput(args, params);
+        const callArgs = argsToMockInput(args, params, sole);
         const result = await ctx.sendCall(cls.name, methodName, callArgs);
 
         if (result === ctx.CALL_THROUGH) {
