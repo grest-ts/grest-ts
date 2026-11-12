@@ -1,22 +1,17 @@
-import {CreateTableCommand, DescribeTimeToLiveCommand, UpdateTimeToLiveCommand} from "@aws-sdk/client-dynamodb"
+import {DescribeTimeToLiveCommand} from "@aws-sdk/client-dynamodb"
 import {GetCommand, PutCommand} from "@aws-sdk/lib-dynamodb"
 import {GGTest} from "@grest-ts/testkit"
 import {GGDynamoDbCursorError} from "../src/GGDynamoDb"
 import type {} from "@grest-ts/db-dynamodb/testkit"
 import {
-    ENDPOINT, EventsTable, TypedTableTestConfig, TypedTableTestRuntime, UsageTable, WorkspacesTable, db, events, usage, workspaces, type Workspace,
+    DocsTable, ENDPOINT, EventsTable, TypedTableTestConfig, TypedTableTestRuntime, UsageTable, WorkspacesTable, db, docs, events, usage, workspaces, type Workspace,
 } from "./TypedTableTestRuntime"
 
 describe("GGDynamoDbTypedTable against dynamodb-local", () => {
     GGTest.startInline(TypedTableTestRuntime)
     GGTest.with(TypedTableTestConfig.db).clone({
         host: {endpoint: ENDPOINT, region: "eu-west-1"},
-        setup: async ({client}) => {
-            for (const spec of [WorkspacesTable, EventsTable, UsageTable]) {
-                await client.send(new CreateTableCommand({...spec.createTableInput(), BillingMode: "PAY_PER_REQUEST"}))
-            }
-            await client.send(new UpdateTimeToLiveCommand(UsageTable.timeToLiveInput()!))
-        },
+        tables: [WorkspacesTable, EventsTable, UsageTable, DocsTable],
     })
 
     let n = 0
@@ -175,6 +170,40 @@ describe("GGDynamoDbTypedTable against dynamodb-local", () => {
         }))
         expect(rewritten).toBeGreaterThanOrEqual(8)
         expect(await workspaces.index.liveByOrg.query({orgId: "org-segments"})).toHaveLength(8)
+    })
+
+    test("a store extending the table: create, save with versions, expectVersion, take, and the TTL on a derived attribute", async () => {
+        const doc = {docId: "d1", title: "a", expiresAt: 5_000_000}
+        expect(await docs.create(doc)).toBe(true)
+        expect(await docs.create(doc)).toBe(false)
+        expect(await docs.get("d1")).toEqual(doc)
+
+        const saved = (await docs.save({docId: "d2", title: "b", expiresAt: 1}))!
+        expect(saved.version).toBe(1)
+        expect(await docs.save({docId: "d2", title: "lost", expiresAt: 1})).toBeUndefined()
+        const resaved = (await docs.save({...saved, title: "c"}))!
+        expect(resaved).toEqual({...saved, title: "c", version: 2})
+        expect(await docs.save(saved)).toBeUndefined()
+
+        expect(await docs.rename("d2", "d", 1)).toBeUndefined()
+        expect(await docs.rename("d2", "d", 2)).toMatchObject({title: "d", version: 3})
+
+        expect(await docs.take("d1", {if: {title: {eq: "other"}}})).toBeUndefined()
+        expect(await docs.take("d1")).toEqual(doc)
+        expect(await docs.take("d1")).toBeUndefined()
+
+        const ttl = await db.getDocumentClient().send(new DescribeTimeToLiveCommand({TableName: DocsTable.name}))
+        expect(ttl.TimeToLiveDescription?.AttributeName).toBe("purgeAtSec")
+        expect((await db.getDocumentClient().send(new GetCommand({TableName: "docs", Key: {docId: "d2"}}))).Item).toMatchObject({purgeAtSec: 0})
+    })
+
+    test("reads return the schema's shape: an attribute it no longer has stays stored until a put replaces the row", async () => {
+        await db.getDocumentClient().send(new PutCommand({TableName: "docs", Item: {docId: "old", title: "t", expiresAt: 1, retired: "x"}}))
+        expect(await docs.get("old")).toEqual({docId: "old", title: "t", expiresAt: 1})
+        expect(await docs.update("old", {title: "u"})).toEqual({docId: "old", title: "u", expiresAt: 1})
+        expect((await db.getDocumentClient().send(new GetCommand({TableName: "docs", Key: {docId: "old"}}))).Item).toMatchObject({retired: "x"})
+        await docs.put((await docs.get("old"))!)
+        expect((await db.getDocumentClient().send(new GetCommand({TableName: "docs", Key: {docId: "old"}}))).Item).not.toHaveProperty("retired")
     })
 
     test("update on a missing row returns undefined and creates nothing", async () => {

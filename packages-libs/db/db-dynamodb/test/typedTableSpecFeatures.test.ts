@@ -135,8 +135,9 @@ describe("table definition", () => {
     it("rejects a local index on another pk, a non-number ttl, and an unknown table key", () => {
         expect(() => GGDynamoDbTableSpec.define({name: "t", schema: IsUsage, pk: "userId", indexes: {x: {pk: "orgId", sk: "day", local: true}}}))
             .toThrow(/local index "x" needs a table with a sort key, the table's pk/)
-        // @ts-expect-error ttl is a number field
-        expect(() => GGDynamoDbTableSpec.define({name: "t", schema: IsUsage, pk: "userId", ttl: "day"})).toThrow(/ttl "day" is not a number field/)
+        const stringTtl = () => GGDynamoDbTableSpec.define({name: "t", schema: IsUsage, pk: "userId", ttl: "day"})
+        expectTypeOf(stringTtl).returns.toEqualTypeOf<`ttl "day" is not a number field or a d.number attribute`>()
+        expect(stringTtl).toThrow(/ttl "day" is not a number field or a d.number attribute/)
         const unknownKey = () => GGDynamoDbTableSpec.define({name: "t", schema: IsUsage, pk: "nope"})
         expectTypeOf(unknownKey).returns.toEqualTypeOf<`the table key "nope" is neither a field nor derived`>()
         expect(unknownKey).toThrow(/key "nope" is neither a schema field nor derived/)

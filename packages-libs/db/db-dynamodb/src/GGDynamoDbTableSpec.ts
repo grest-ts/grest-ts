@@ -132,7 +132,7 @@ export interface GGDynamoDbIndexDef<A extends string = string, F extends string 
     local?: true
 }
 
-export interface GGDynamoDbTableSpecInput<T extends object, PK, SK, D, I, S> {
+export interface GGDynamoDbTableSpecInput<T extends object, PK, SK, D, I, S, TTL = string> {
     name: string
     schema: ObjectSchema<T>
     pk: PK
@@ -142,9 +142,12 @@ export interface GGDynamoDbTableSpecInput<T extends object, PK, SK, D, I, S> {
     /** Array fields stored as DynamoDB sets (unique elements, atomic `add` / `delete` in `update`); read back as arrays.
      *  An empty one is stored as no attribute: DynamoDB has no empty set. */
     sets?: readonly S[]
-    /** A number field holding the Unix time, in seconds, after which DynamoDB may delete the row (TTL; usually within
-     *  a few days, and reads see it until then). Enabled by `timeToLiveInput()`, not by `createTableInput()`. */
-    ttl?: GGDynamoDbNumberFields<T>
+    /** A number attribute (a field, or a `d.number` derived one) holding the Unix time, in seconds, after which DynamoDB
+     *  may delete the row (TTL; usually within a few days, and reads see it until then). Enabled by `timeToLiveInput()`
+     *  or `GGDynamoDbDevTables.ensure`, not by `createTableInput()`. */
+    ttl?: TTL
+    /** A number field counting the row's writes, for optimistic locking with `save` and `update`'s `expectVersion`. */
+    version?: GGDynamoDbNumberFields<T>
 }
 
 export type GGDynamoDbArrayFields<T> = {[K in keyof T & string]-?: NonNullable<T[K]> extends readonly (string | number)[] ? K : never}[keyof T & string]
@@ -193,12 +196,16 @@ export type GGDynamoDbIndexRow<T, D, PK, SK, I> =
         : I extends {projection: "KEYS_ONLY"} ? Prettify<Pick<T, (GGDynamoDbKeyFields<T, D, PK, SK> | IndexKeyFields<I>) & keyof T>> : T
 
 // On the result, not the input: any use of `D` in the input fixes it before the `derived` callback is inferred.
-type CheckSpec<T, D, PK, SK, I, Ok> =
+type CheckSpec<T, D, PK, SK, I, TTL, Ok> =
     [keyof D & keyof T] extends [never]
         ? [PK | Exclude<SK, undefined>] extends [Fields<T> | keyof D]
-            ? [BadIndexes<T, D, I>] extends [never] ? Ok : `index "${BadIndexes<T, D, I>}" is keyed on an attribute that is neither a field nor derived`
+            ? [BadIndexes<T, D, I>] extends [never]
+                ? [Exclude<TTL, undefined>] extends [GGDynamoDbNumberFields<T> | NumberDerived<D>] ? Ok : `ttl "${Exclude<TTL, undefined> & string}" is not a number field or a d.number attribute`
+                : `index "${BadIndexes<T, D, I>}" is keyed on an attribute that is neither a field nor derived`
             : `the table key "${Exclude<PK | SK, Fields<T> | keyof D | undefined> & string}" is neither a field nor derived`
         : `derived "${keyof D & keyof T & string}" is also a schema field`
+
+type NumberDerived<D> = {[K in keyof D & string]: D[K] extends GGDynamoDbDerivedKey<infer V, any> ? [V] extends [number] ? K : never : never}[keyof D & string]
 
 type BadIndexes<T, D, I> = {
     [K in keyof I & string]: I[K] extends {pk: infer P} ? P extends Fields<T> | keyof D
@@ -239,6 +246,7 @@ export class GGDynamoDbTableSpec<
     public readonly indexDerived: ReadonlyArray<{name: string, key: GGDynamoDbDerivedKey<unknown, unknown>}>
     public readonly sets: ReadonlySet<string>
     public readonly ttl: string | undefined
+    public readonly version: string | undefined
     /** The stored key attributes: `pk`, and `sk` when there is one. */
     public readonly keyAttributes: readonly string[]
     /** The fields that make up the table key: plain key fields, or a derived key's inputs. Fixed once a row exists. */
@@ -260,6 +268,7 @@ export class GGDynamoDbTableSpec<
         this.derivedByName = new Map(this.derived.map(d => [d.name, d.key]))
         this.sets = new Set(input.sets ?? [])
         this.ttl = input.ttl
+        this.version = input.version
         this.keyAttributes = this.sk ? [this.pk, this.sk] : [this.pk]
         this.indexDerived = this.derived.filter(d => !this.keyAttributes.includes(d.name))
         this.requiredFields = Object.entries(this.fieldSchemas).filter(([, f]) => !f.def.optional).map(([f]) => f)
@@ -284,7 +293,9 @@ export class GGDynamoDbTableSpec<
             // An empty set is stored as no attribute, so a required one couldn't be read back.
             if (!this.fieldSchemas[f].def.optional) fail(`set "${f}" must be optional`)
         }
-        if (this.ttl && this.fieldType(this.ttl) !== "number") fail(`ttl "${this.ttl}" is not a number field`)
+        if (this.ttl && this.fieldType(this.ttl) !== "number" && this.derivedKey(this.ttl)?.attributeType !== "N") fail(`ttl "${this.ttl}" is not a number field or a d.number attribute`)
+        if (this.version && this.fieldType(this.version) !== "number") fail(`version "${this.version}" is not a number field`)
+        if (this.version && this.keyFields.includes(this.version)) fail(`version "${this.version}" is part of the table key`)
         for (const f of this.keyFields) if (this.sets.has(f)) fail(`set "${f}" is part of the table key`)
         const indexes: Record<string, IndexWithProjection> = {}
         for (const [key, def] of Object.entries(input.indexes ?? {}) as [string, GGDynamoDbIndexDef][]) {
@@ -305,8 +316,9 @@ export class GGDynamoDbTableSpec<
         const I extends Record<string, GGDynamoDbIndexDef<string, Fields<T>>> = {},
         const SK extends string | undefined = undefined,
         const S extends GGDynamoDbArrayFields<T> = never,
-    >(input: GGDynamoDbTableSpecInput<T, PK, SK, D, I, S>): CheckSpec<T, D, PK, SK, I, GGDynamoDbTableSpec<T, PK, SK, D, I, S>> {
-        return new GGDynamoDbTableSpec(input) as any
+        const TTL extends string | undefined = undefined,
+    >(input: GGDynamoDbTableSpecInput<T, PK, SK, D, I, S, TTL>): CheckSpec<T, D, PK, SK, I, TTL, GGDynamoDbTableSpec<T, PK, SK, D, I, S>> {
+        return new GGDynamoDbTableSpec(input as GGDynamoDbTableSpecInput<T, PK, SK, D, I, S>) as any
     }
 
     get tableIndex(): GGDynamoDbResolvedIndex {
@@ -354,14 +366,23 @@ export class GGDynamoDbTableSpec<
         return item as T
     }
 
-    /** A stored item without its derived attributes and with set fields as arrays, for an item read outside `GGDynamoDbTypedTable`. */
-    withoutDerived(item: Source): T {
+    /** A stored item as a row: the schema's fields only, `sets` fields as arrays. Derived attributes and attributes the
+     *  schema no longer has stay on the stored item, out of the app's sight; an `update` leaves them there, a `put` of
+     *  the row replaces the item and drops them. */
+    toRow(item: Source): T {
         const row: Source = {}
         for (const [field, value] of Object.entries(item)) {
-            if (this.derivedByName.has(field)) continue
+            if (!this.fieldSchema(field)) continue
             row[field] = value instanceof Set && this.sets.has(field) ? [...value] : value
         }
         return row as T
+    }
+
+    /** `key` as an object: a table keyed on one plain field also takes that field's bare value. */
+    keyObject(key: unknown): Source {
+        if (typeof key === "object" && key !== null) return key as Source
+        if (this.sk || this.derivedKey(this.pk)) throw new Error(`${this.name}: the key needs ${this.keyFields.join(", ")}`)
+        return {[this.pk]: key}
     }
 
     /** `value` as `field` is stored: a `sets` field's array as a set, and an empty one as no attribute (DynamoDB has

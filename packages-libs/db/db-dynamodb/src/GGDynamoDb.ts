@@ -183,6 +183,18 @@ export class GGDynamoDb {
     private client: DynamoDBDocumentClient | undefined
     private unwatchHost: (() => void) | undefined
     private unwatchUser: (() => void) | undefined
+    private fixedClient: DynamoDBClient | undefined
+
+    /**
+     * A GGDynamoDb over an SDK client you already hold, for tests, fixtures and seed scripts: not registered with the
+     * runtime, not reconfigured from config, and the caller owns (and destroys) the client.
+     */
+    static forClient(client: DynamoDBClient, name = "forClient"): GGDynamoDb {
+        const db = Object.create(GGDynamoDb.prototype) as GGDynamoDb
+        Object.assign(db, {config: {name}, started: true, fixedClient: client})
+        db.client = db.withErrorContext(DynamoDBDocumentClient.from(client, {marshallOptions: {removeUndefinedValues: true}}))
+        return db
+    }
 
     constructor(config: GGDynamoDbConfig) {
         this.config = config
@@ -527,6 +539,7 @@ export class GGDynamoDb {
      * scripts that create tables before any data exists.
      */
     getRawClient(): DynamoDBClient {
+        if (this.fixedClient) return this.fixedClient
         const host = this.config.host.get()
         const user = this.config.user.reveal()
         const endpoint = host?.endpoint

@@ -1,14 +1,18 @@
 import {GG_TEST_RESOURCE, GG_TEST_RUNNER, GGTestSharedRef, callOn, LocatorLookupAccess} from "@grest-ts/testkit"
 import {GGConfigIPC} from "@grest-ts/config/testkit"
-import {GGDynamoDbConfig, GGDynamoDbHostData} from "@grest-ts/db-dynamodb"
+import {GGDynamoDbConfig, type GGDynamoDbHostData, type GGDynamoDbTableSpec} from "@grest-ts/db-dynamodb"
 import {GGDynamoDb} from "@grest-ts/db-dynamodb"
 import {GGDynamoDbProvisionOptions, GGDynamoDbSchemaCloner, GGDynamoDbSetupFn} from "./GGDynamoDbSchemaCloner"
 
 export interface GGDynamoDbCloneTestOptions {
+    /** Tables to create from their specs (with their indexes and TTL), before `setup`. */
+    tables?: ReadonlyArray<GGDynamoDbTableSpec<any, any, any, any, any, any>>
+
     /** Schema + baseline-rows setup. Receives a `DynamoDBDocumentClient`
-     *  bound to this group's per-test accessKey; expected to create tables
-     *  and seed any rows shared across all tests in the group. */
-    setup: GGDynamoDbSetupFn
+     *  bound to this group's per-test accessKey; expected to create the
+     *  tables `tables` doesn't and seed any rows shared across all tests in
+     *  the group. */
+    setup?: GGDynamoDbSetupFn
 
     /** dynamodb-local endpoint to use. The instance MUST be running without
      *  -sharedDb — schema-equivalent isolation is achieved by per-test
@@ -45,9 +49,9 @@ export class GGDynamoDbTestMethods {
      * @example
      * GGTest.with(MyConfig.dynamo).clone({
      *     host: {endpoint: "http://localhost:8002", region: "eu-west-1"},
-     *     setup: async client => {
-     *         await client.send(new CreateTableCommand({...}))
-     *         await client.send(new PutCommand({...}))
+     *     tables: [UsersTable, OrdersTable],
+     *     setup: async ({doc}) => {
+     *         await doc.send(new PutCommand({...}))
      *     },
      * })
      */
@@ -70,7 +74,7 @@ export class GGDynamoDbTestMethods {
             ? `gg-test-${test.reusableId}`
             : `gg-test-${process.env.GG_TEST_SLOT ?? runId}-${options.group}`)
 
-        const provisionOpts: GGDynamoDbProvisionOptions = {setup: options.setup}
+        const provisionOpts: GGDynamoDbProvisionOptions = {tables: options.tables, setup: options.setup}
 
         let provisionedHost: GGDynamoDbHostData = host
         let provisionedAccessKey: string = accessKeyId

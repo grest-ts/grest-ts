@@ -200,13 +200,17 @@ export const WorkspacesTable = GGDynamoDbTableSpec.define({
     },
 })
 
-class WorkspaceStore {
-    private readonly table: GGDynamoDbTableOf<typeof WorkspacesTable>
-    constructor(db: GGDynamoDb) {
-        this.table = new GGDynamoDbTypedTable(db, WorkspacesTable)
+// A store extends the table: get / put / update / delete / query / index / tx are inherited, the store adds its own.
+export class WorkspaceStore extends GGDynamoDbTypedTable.of(WorkspacesTable) {
+    listForMember(orgId: string, userId: string) {
+        return this.index.byOrgUser.query({ orgId, userId }, { sk: { lt: "deleted" } })
     }
 }
+const workspaces = new WorkspaceStore(db)
+await workspaces.get("w-1")              // a table keyed on one plain field also takes the bare value
 ```
+
+`new GGDynamoDbTypedTable(db, spec)` works too, for a table used as is; `GGDynamoDbTableOf<typeof Spec>` names its type.
 
 ### Derived attributes
 
@@ -222,7 +226,18 @@ A derived attribute is computed from the row on **every** write path — `put`, 
 
 A `join` sorts as a string: `"10"` before `"9"`. When order matters, build the value with `d.string` (e.g. pad numbers). A part containing `#` is refused, as it would let two rows share one value.
 
-Reads strip derived attributes, so rows come back in the schema's shape. A derived name may not also be a schema field, nor read a `sets` field. For a write or read that can't go through the table (a seed script, a raw command), `spec.withDerived(row)` adds the derived attributes and `spec.withoutDerived(item)` strips them.
+A derived name may not also be a schema field, nor read a `sets` field.
+
+### Rows come back in the schema's shape
+
+Reads return the schema's fields and nothing else: derived attributes, and attributes the schema no longer has (a field you removed), stay on the stored item out of the app's sight. That decides what writes keep:
+
+- `update` writes only the fields it is given, so everything else on the item, retired attributes included, stays.
+- `put` / `save` replace the whole item, so an item written from a read sheds its retired attributes, and `update` refuses a field the schema doesn't have.
+
+**Before converting a table, make its schema the full stored shape** — every attribute a row carries that must survive, encrypted blobs and bookkeeping fields included. A `put` of a row read through a narrower schema erases the rest.
+
+For a write or read that can't go through the table (a seed script, a raw command), `spec.withDerived(row)` adds the derived attributes and `spec.toRow(item)` gives the schema's shape.
 
 ### Table keys from parts
 
@@ -262,7 +277,9 @@ Rows are typed by the index's projection: `"ALL"` (default) returns the row; `"K
 
 ```typescript
 await table.put(row)                                              // validates, derives, writes the whole row
-await table.put(row, { if: { workspaceId: { exists: false } } })  // false when the condition fails
+await table.put(row, { if: { status: { eq: "running" } } })      // false when the condition fails
+await table.create(row)                                           // only when no row has the key yet; false if one has
+await table.take(key)                                             // deletes and returns the old row, atomically; undefined if none
 await table.update({ workspaceId }, { name: "x" })                // the updated row, or undefined
 await table.delete({ workspaceId }, { if: { version: { eq: 3 } } })
 await table.getMany([{ workspaceId: a }, { workspaceId: b }])   // in the keys' order; missing rows skipped
@@ -311,26 +328,39 @@ More partial writes, each atomic in the one `UpdateItem`:
 
 A derived attribute can't read a field changed by `add`, `delete`, `setIfMissing`, `append` or `merge`: the write doesn't know the result, so `update` throws.
 
+### Optimistic locking
+
+With `version: "version"` in the spec, `save(row)` writes while the stored version is still `row.version` (or, for a row without one, while no row has its key) and stores the version plus one. It returns the row as written, or `undefined` when another write got there first: re-read and retry. `update(key, fields, { expectVersion: n })` does the same for a partial write.
+
+```typescript
+const project = await projects.get(id)
+const saved = await projects.save({ ...project, name })   // undefined: someone else saved first
+```
+
 ### Transactions
 
-`table.tx.put / update / delete / check` build items with the same validation, derivation and conditions; `db.transactWrite(items)` writes them all or none. When a condition cancels it, the result names the items whose condition failed:
+`table.tx.put / create / update / delete / check` build items with the same validation, derivation and conditions; `db.transactWrite(items)` writes them all or none. When a condition cancels it, the result names the items whose condition failed:
 
 ```typescript
 const result = await db.transactWrite([orders.tx.put(order), stock.tx.update({ sku }, { reserved }, { if: { version: { eq: v } } })])
 if (!result.ok) result.conditionFailed   // [1]: the stock update's condition
 ```
 
-### Creating tables
+### Tables for development and tests
 
-`spec.createTableInput()` returns the `CreateTableCommandInput` (keys, attribute types, GSIs and LSIs with their projections). Attribute types come from the schema (string fields → `S`, number fields → `N`) or the builder. It sets no billing mode:
+Production tables belong to your infrastructure code (Terraform or similar), not to the service. For local development, tests and seed scripts, `GGDynamoDbDevTables.ensure` creates the tables a set of specs describes: a missing table with on-demand billing, a GSI a live table lacks (waiting for it to turn ACTIVE), and the spec's TTL. It only adds; an index the spec no longer declares is reported, never dropped. Nothing calls it on its own, and a service must not call it at startup.
 
 ```typescript
-await raw.send(new CreateTableCommand({ ...WorkspacesTable.createTableInput(), BillingMode: "PAY_PER_REQUEST" }))
+await GGDynamoDbDevTables.ensure(rawClient, [WorkspacesTable, UsersTable], { log: console.log })
 ```
+
+In a test, `GGTest.with(cfg.db).clone({ host, tables: [WorkspacesTable, UsersTable] })` creates them in the suite's isolated database. A test, fixture or script holding an SDK client gets a `GGDynamoDb` over it with `GGDynamoDb.forClient(rawClient)`, so it writes through the typed table (derived keys included) instead of raw commands.
+
+`spec.createTableInput()` returns the `CreateTableCommandInput` itself (keys, attribute types, GSIs and LSIs with their projections; no billing mode), to compare against the infrastructure code's definition. Attribute types come from the schema (string fields → `S`, number fields → `N`) or the builder.
 
 An index with `local: true` is a local secondary index, on a table with a sort key: the table's `pk`, its own `sk`, `consistentRead` allowed. DynamoDB creates LSIs with the table only, and caps each partition (rows plus index entries) at 10 GB.
 
-`ttl: "purgeAt"` names a number field holding a Unix time in seconds after which DynamoDB may delete the row, usually within days; reads still see it until then. DynamoDB enables TTL with a separate call: `spec.timeToLiveInput()` returns its `UpdateTimeToLiveCommandInput`.
+`ttl: "purgeAt"` names a number attribute holding a Unix time in seconds after which DynamoDB may delete the row, usually within days; reads still see it until then. It may be a field or a `d.number` derived attribute, so callers never compute it: `ttl: "purgeAt", derived: d => ({ purgeAt: d.number(["expiresAt"], r => Math.floor(r.expiresAt / 1000) + 30 * DAY_SEC) })`. DynamoDB enables TTL with a separate call: `GGDynamoDbDevTables.ensure` makes it, and `spec.timeToLiveInput()` returns its `UpdateTimeToLiveCommandInput`.
 
 ### Backfilling derived attributes
 
@@ -348,9 +378,11 @@ For a large table, run `totalSegments` workers, each with its own `segment` (0-b
 
 ### Migrating from `GGDynamoDbTable`
 
-Both classes share a `GGDynamoDb`, so tables move one at a time. Give derived attributes and indexes the names already on disk (`name` on the index) and the stored rows need no migration. Move every writer of a table at once: a writer left on `GGDynamoDbTable` would not derive the keys. For a command the typed table doesn't cover, `db.getDocumentClient()` returns the managed document client — keep such writes off derived attributes' inputs.
+Both classes share a `GGDynamoDb`, so tables move one at a time. A store that extended `GGDynamoDbTable` extends `GGDynamoDbTypedTable.of(spec)` instead and keeps its domain methods. Give derived attributes and indexes the names already on disk (`name` on an index, only where it differs from the default `<pk>[-<sk>]-index`) and the stored rows need no migration; check that the schema is the full stored shape (see [Rows come back in the schema's shape](#rows-come-back-in-the-schemas-shape)). Move every writer of a table at once: a writer left on `GGDynamoDbTable` would not derive the keys. For a command the typed table doesn't cover, `db.getDocumentClient()` returns the managed document client — keep such writes off derived attributes' inputs.
 
 ## Schema-Bound Tables
+
+> Deprecated: declare the table with `GGDynamoDbTableSpec` and use `GGDynamoDbTypedTable` (see [Typed Tables](#typed-tables)).
 
 For application code, prefer `GGDynamoDbTable`. It binds a table to a schema and validates every write — shape mistakes throw at the boundary instead of becoming silent DynamoDB corruption.
 
@@ -424,14 +456,7 @@ const user = await users.queryOne(
 
 ## Admin / Table Creation
 
-`GGDynamoDb.getRawClient()` returns a fresh low-level `DynamoDBClient` (no DocumentClient marshalling). Use it for `CreateTable` / `DescribeTable` / etc. — operations the document layer doesn't cover. It reads config at call time, so it works before `start()` has run, which is what seed scripts need to create tables before any data exists.
-
-```typescript
-import { CreateTableCommand } from "@aws-sdk/client-dynamodb"
-
-const raw = db.getRawClient()
-await raw.send(new CreateTableCommand({ /* ... */ }))
-```
+`GGDynamoDb.getRawClient()` returns a fresh low-level `DynamoDBClient` (no DocumentClient marshalling). Use it for `DescribeTable` and other operations the document layer doesn't cover. It reads config at call time, so it works before `start()` has run, which is what a seed script needs to create its tables with `GGDynamoDbDevTables.ensure` before any data exists.
 
 ## Reads Are Not Validated
 

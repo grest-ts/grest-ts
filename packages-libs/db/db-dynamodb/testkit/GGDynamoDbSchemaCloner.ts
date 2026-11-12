@@ -1,6 +1,6 @@
 import {DynamoDBClient} from "@aws-sdk/client-dynamodb"
 import {DynamoDBDocumentClient} from "@aws-sdk/lib-dynamodb"
-import {GGDynamoDbHostData, GGDynamoDbUserData} from "@grest-ts/db-dynamodb"
+import {GGDynamoDbDevTables, type GGDynamoDbHostData, type GGDynamoDbTableSpec, type GGDynamoDbUserData} from "@grest-ts/db-dynamodb"
 import {GGDynamoDbConnection, GGDynamoDbTableOperations} from "./GGDynamoDbTableOperations"
 
 export interface GGDynamoDbSetupClients {
@@ -27,8 +27,10 @@ export interface GGDynamoDbSetupClients {
 export type GGDynamoDbSetupFn = (clients: GGDynamoDbSetupClients) => Promise<void>
 
 export interface GGDynamoDbProvisionOptions {
+    /** Tables to create from their specs, before `setup`. */
+    tables?: ReadonlyArray<GGDynamoDbTableSpec<any, any, any, any, any, any>>
     /** Schema + baseline-rows setup. Called once per group. */
-    setup: GGDynamoDbSetupFn
+    setup?: GGDynamoDbSetupFn
 }
 
 const cleared = new Map<string, Promise<void>>()
@@ -74,7 +76,8 @@ export class GGDynamoDbSchemaCloner {
                 clearing.catch(() => cleared.delete(db))
             }
             await clearing
-            await opts.setup({client: ops.client, doc: ops.docClient})
+            if (opts.tables) await GGDynamoDbDevTables.ensure(ops.client, opts.tables)
+            await opts.setup?.({client: ops.client, doc: ops.docClient})
         } finally {
             ops.destroy()
         }
