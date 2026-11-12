@@ -3,6 +3,11 @@ import type {} from "@grest-ts/config/testkit"
 import type {} from "@grest-ts/job/testkit"
 import {COOLDOWN, ClockJobRuntime, runs} from "./ClockJobRuntime"
 
+beforeEach(() => {
+    runs.cooldown = 0
+    runs.blocking = 0
+})
+
 describe("GGJobRunner and GGTest.clock", () => {
     const t = GGTest.startInline(ClockJobRuntime)
 

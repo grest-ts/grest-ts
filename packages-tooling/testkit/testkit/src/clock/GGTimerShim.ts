@@ -14,6 +14,8 @@ interface ScopeTimer {
     ref: boolean
     armed?: NodeJS.Timeout
     created: Error
+    cleared?: boolean
+    id?: unknown
 }
 
 interface RawTimer {
@@ -22,7 +24,7 @@ interface RawTimer {
     interval: boolean
     dueAt: number
     realDueAt: number
-    warned?: boolean
+    id?: unknown
 }
 
 interface NativeTimers {
@@ -35,7 +37,14 @@ interface NativeTimers {
 interface TimerShim {
     native: NativeTimers
     scopeTimers: Map<unknown, ScopeTimer>
+    /** Every scope timer by handle, fired ones included: clearing one that fired stops refresh() reviving it. */
+    allScopeTimers: WeakMap<object, ScopeTimer>
     rawTimers: Map<unknown, RawTimer>
+    /** Numeric ids handed out by a tracked handle's Symbol.toPrimitive, to its handle. */
+    ids: Map<unknown, unknown>
+    /** The scope timers pending at the last clock change; only these can fire in the fireDue that follows it. */
+    barrier?: Set<ScopeTimer>
+    warnedSites: Set<string>
     creatingScopeTimer: boolean
 }
 
@@ -45,6 +54,7 @@ const slot = globalThis as unknown as Record<symbol, TimerShim | undefined>;
 
 const TIMEOUT_MAX = 2 ** 31 - 1;
 const RAW_TIMER_MS = Number(process.env.GG_TEST_CLOCK_RAW_TIMER_MS ?? 1000);
+const STACK_FRAMES = 30;
 const LOG_CONTEXT = {name: "GGTestClock"};
 const noop = () => {};
 
@@ -61,7 +71,7 @@ export function installTimerShim(): void {
             clearTimeout: globalThis.clearTimeout,
             clearInterval: globalThis.clearInterval,
         };
-        shim = slot[KEY] = {native, scopeTimers: new Map(), rawTimers: new Map(), creatingScopeTimer: false};
+        shim = slot[KEY] = {native, scopeTimers: new Map(), allScopeTimers: new WeakMap(), rawTimers: new Map(), ids: new Map(), warnedSites: new Set(), creatingScopeTimer: false};
         globalThis.setTimeout = wrapSet(shim, native.setTimeout, false) as typeof globalThis.setTimeout;
         globalThis.setInterval = wrapSet(shim, native.setInterval, true) as typeof globalThis.setInterval;
         globalThis.clearTimeout = wrapClear(shim, native.clearTimeout);
@@ -100,20 +110,23 @@ function wrapSet(shim: TimerShim, nativeSet: (...args: any[]) => NodeJS.Timeout,
             shim.creatingScopeTimer = false;
             return addScopeTimer(shim, cb, ms, interval);
         }
-        if (typeof cb !== "function" || !(Number(ms) >= RAW_TIMER_MS)) return nativeSet(cb, ms, ...args);
-        const site = appSite(new Error().stack);
+        const delay = Number(ms) || 0;
+        if (typeof cb !== "function" || delay < RAW_TIMER_MS) return nativeSet(cb, ms, ...args);
+        const site = appSite(captureStack());
         if (!site) return nativeSet(cb, ms, ...args);
-        const delay = Number(ms);
         const raw: RawTimer = {site, ms: delay, interval, dueAt: Date.now() + delay, realDueAt: performance.now() + delay};
         const handle = nativeSet(function (this: unknown, ...cbArgs: unknown[]) {
             if (interval) {
                 raw.dueAt = Date.now() + delay;
                 raw.realDueAt = performance.now() + delay;
             } else {
-                shim.rawTimers.delete(handle);
+                dropRaw(shim, handle);
             }
             return cb.apply(this, cbArgs);
         }, ms, ...args);
+        const close = Object.getPrototypeOf(handle).close;
+        Object.defineProperty(handle, "close", {configurable: true, value: () => { dropRaw(shim, handle); return close.call(handle); }});
+        trackId(shim, handle, raw);
         shim.rawTimers.set(handle, raw);
         return handle;
     };
@@ -126,12 +139,44 @@ function wrapSet(shim: TimerShim, nativeSet: (...args: any[]) => NodeJS.Timeout,
 function wrapClear(shim: TimerShim, nativeClear: (handle?: any) => void) {
     return function (handle?: any): void {
         if (handle !== undefined && handle !== null) {
-            const timer = shim.scopeTimers.get(handle);
-            if (timer) cancel(shim, timer);
-            shim.rawTimers.delete(handle);
+            const key = typeof handle === "object" ? handle : shim.ids.get(handle) ?? handle;
+            const timer = typeof key === "object" ? shim.allScopeTimers.get(key) : undefined;
+            if (timer) {
+                timer.cleared = true;
+                cancel(shim, timer);
+            }
+            dropRaw(shim, key);
         }
         nativeClear(handle);
     };
+}
+
+/** `clearTimeout(+handle)` must find the timer: remember the id the handle's Symbol.toPrimitive gives out. */
+function trackId(shim: TimerShim, handle: NodeJS.Timeout, entry: {id?: unknown}): void {
+    const toPrimitive = (handle as any)[Symbol.toPrimitive];
+    Object.defineProperty(handle, Symbol.toPrimitive, {configurable: true, value: () => {
+        const id = toPrimitive.call(handle);
+        entry.id = id;
+        shim.ids.set(id, handle);
+        return id;
+    }});
+}
+
+function dropRaw(shim: TimerShim, handle: unknown): void {
+    const raw = shim.rawTimers.get(handle);
+    if (!raw) return;
+    shim.rawTimers.delete(handle);
+    if (raw.id !== undefined) shim.ids.delete(raw.id);
+}
+
+function captureStack(): string | undefined {
+    const limit = Error.stackTraceLimit;
+    Error.stackTraceLimit = STACK_FRAMES;
+    try {
+        return new Error().stack;
+    } finally {
+        Error.stackTraceLimit = limit;
+    }
 }
 
 function addScopeTimer(shim: TimerShim, fn: () => unknown, ms: number | undefined, interval: boolean): NodeJS.Timeout {
@@ -144,32 +189,37 @@ function addScopeTimer(shim: TimerShim, fn: () => unknown, ms: number | undefine
         ref: {configurable: true, value: () => { timer.ref = true; timer.armed?.ref(); return handle; }},
         unref: {configurable: true, value: () => { timer.ref = false; timer.armed?.unref(); return handle; }},
         hasRef: {configurable: true, value: () => timer.ref},
+        // Like Node: restarts a pending timer, and re-activates a timeout that already fired, but not a cleared one.
         refresh: {configurable: true, value: () => {
-            if (shim.scopeTimers.get(handle) === timer) {
-                timer.dueAt = Date.now() + timer.ms;
-                arm(shim, timer);
-            }
+            if (timer.cleared) return handle;
+            timer.dueAt = Date.now() + timer.ms;
+            shim.scopeTimers.set(handle, timer);
+            arm(shim, timer);
             return handle;
         }},
-        close: {configurable: true, value: () => { cancel(shim, timer); return handle; }},
-        [Symbol.dispose]: {configurable: true, value: () => cancel(shim, timer)},
+        close: {configurable: true, value: () => { timer.cleared = true; cancel(shim, timer); return handle; }},
+        [Symbol.dispose]: {configurable: true, value: () => { timer.cleared = true; cancel(shim, timer); }},
     });
+    trackId(shim, handle, timer);
+    shim.allScopeTimers.set(handle, timer);
     shim.scopeTimers.set(handle, timer);
     arm(shim, timer);
     return handle;
 }
 
-function arm(shim: TimerShim, timer: ScopeTimer): void {
+/** `due`: also arm a timer that is already due, to fire right away. Otherwise it waits for fireDue. */
+function arm(shim: TimerShim, timer: ScopeTimer, due = false): void {
     disarm(shim, timer);
     if (GGDateShim.getState().stoppedAt !== undefined) return;
     const ms = timer.dueAt - Date.now();
-    // Due already: the clock jumped, and fireDue runs it so the jump can wait for it.
-    if (ms <= 0) return;
+    if (ms <= 0 && !due) return;
     timer.armed = shim.native.setTimeout(() => {
         timer.armed = undefined;
+        // Past TIMEOUT_MAX the timer is armed for the max and wakes early.
+        if (Date.now() < timer.dueAt) return arm(shim, timer, true);
         settle(shim, timer);
         timer.fn();
-    }, ms);
+    }, Math.min(Math.max(ms, 0), TIMEOUT_MAX));
     if (!timer.ref) timer.armed.unref();
 }
 
@@ -181,6 +231,7 @@ function disarm(shim: TimerShim, timer: ScopeTimer): void {
 function cancel(shim: TimerShim, timer: ScopeTimer): void {
     disarm(shim, timer);
     if (shim.scopeTimers.get(timer.handle) === timer) shim.scopeTimers.delete(timer.handle);
+    if (timer.cleared && timer.id !== undefined) shim.ids.delete(timer.id);
 }
 
 /** Before its callback runs: a timeout is done, an interval continues from now. */
@@ -207,18 +258,31 @@ export const GGTimerShim = {
         for (const timer of shim.scopeTimers.values()) arm(shim, timer);
     },
 
-    /**
-     * Fires, once and in due order, every scope timer pending now and due by now, then waits for the promises they
-     * return. Warns about app raw timers the clock has moved past.
-     */
-    async fireDue(timeoutMs: number): Promise<void> {
+    /** Marks the barrier of a clock change: the timers pending now are the ones the following fireDue may fire. */
+    snapshot(): void {
         const shim = getShim();
-        const now = Date.now();
-        warnRawTimers(shim, now);
-        const due = [...shim.scopeTimers.values()].filter(t => t.dueAt <= now).sort((a, b) => a.dueAt - b.dueAt);
+        shim.barrier = new Set(shim.scopeTimers.values());
+    },
+
+    /** Raw-timer warnings are once per creation site; call per test file. */
+    resetWarnings(): void {
+        slot[KEY]?.warnedSites.clear();
+    },
+
+    /**
+     * Starts, in due order, every scope timer of the last barrier that is due by `target`, then waits for all the
+     * promises they return. Rejects with their errors, or when one is still pending after `timeoutMs`. Warns about app
+     * raw timers the clock has moved past.
+     */
+    async fireDue(target: number, timeoutMs: number): Promise<void> {
+        const shim = getShim();
+        const pending = shim.barrier ?? new Set(shim.scopeTimers.values());
+        shim.barrier = undefined;
+        warnRawTimers(shim, target);
+        const due = [...pending].filter(t => t.dueAt <= target).sort((a, b) => a.dueAt - b.dueAt);
         const runs: {timer: ScopeTimer, settled: boolean, done: Promise<unknown>}[] = [];
         for (const timer of due) {
-            if (shim.scopeTimers.get(timer.handle) !== timer) continue;
+            if (shim.scopeTimers.get(timer.handle) !== timer || timer.dueAt > target) continue;
             settle(shim, timer);
             const run = {timer, settled: false, done: undefined as unknown as Promise<unknown>};
             try {
@@ -229,27 +293,35 @@ export const GGTimerShim = {
             run.done = run.done.finally(() => { run.settled = true; });
             runs.push(run);
         }
+        // Due after the target but before this isolate re-armed at the barrier: not armed yet.
+        for (const timer of shim.scopeTimers.values()) {
+            if (!timer.armed) arm(shim, timer, true);
+        }
         if (runs.length === 0) return;
         let guard: NodeJS.Timeout | undefined;
         const stuck = new Promise<never>((_, reject) => {
             guard = shim.native.setTimeout(() => {
-                const pending = runs.find(r => !r.settled)!;
-                reject(new Error(`GGTest.clock: a timer callback's promise hasn't settled after ${timeoutMs}ms. The timer was set at:\n${creationSite(pending.timer.created)}`));
+                const pendingRun = runs.find(r => !r.settled)!;
+                reject(new Error(`GGTest.clock: a timer callback's promise hasn't settled after ${Math.round(timeoutMs)}ms. The timer was set at:\n${creationSite(pendingRun.timer.created)}`));
             }, timeoutMs);
         });
+        let results: PromiseSettledResult<unknown>[];
         try {
-            await Promise.race([Promise.all(runs.map(r => r.done)), stuck]);
+            results = await Promise.race([Promise.allSettled(runs.map(r => r.done)), stuck]);
         } finally {
             shim.native.clearTimeout(guard);
         }
+        const errors = results.filter((r): r is PromiseRejectedResult => r.status === "rejected").map(r => r.reason);
+        if (errors.length === 1) throw errors[0];
+        if (errors.length > 1) throw new AggregateError(errors, errors.map(e => (e as Error)?.message ?? String(e)).join("; "));
     },
 };
 
-function warnRawTimers(shim: TimerShim, now: number): void {
+function warnRawTimers(shim: TimerShim, target: number): void {
     const realNow = performance.now();
     for (const raw of shim.rawTimers.values()) {
-        if (raw.warned || raw.dueAt > now || raw.realDueAt <= realNow) continue;
-        raw.warned = true;
+        if (raw.dueAt > target || raw.realDueAt <= realNow || shim.warnedSites.has(raw.site)) continue;
+        shim.warnedSites.add(raw.site);
         const fn = raw.interval ? "setInterval" : "setTimeout";
         GGLog.warn(LOG_CONTEXT, `GGTest.clock moved past a raw ${fn}(…, ${raw.ms}) that still runs on real time. If it should follow the clock, use GGLocator.${fn}. Set at: ${raw.site}`);
     }

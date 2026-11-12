@@ -9,6 +9,7 @@ import {ClockBootRuntime} from "../src/ClockBootRuntime"
 import {ClockBootIsolatedRuntime} from "../src/ClockBootIsolatedRuntime"
 import {ClockBootIsolatedApi, ClockBootWorkerApi} from "../src/api/ClockBootApi"
 import {ClockInlineApi, ClockIsolatedApi, ClockLateApi, ClockWorkerApi} from "../src/api/ClockApi"
+import {ClockHookApi, ClockHookRuntime} from "./ClockHookRuntime"
 
 const DAY = 24 * 3600_000
 const T = Date.parse("2030-01-01T00:00:00Z")
@@ -317,7 +318,7 @@ describe("GGTest.clock and scope timers", () => {
 
     test("a callback still pending after the timeout fails the advance with where the timer was set", async () => {
         await worker.schedule({id: "a", ms: 1_000, asyncMs: 2_000})
-        await expect(GGTest.clock.advance(1_000, {timeoutMs: 200})).rejects.toThrow(/hasn't settled after 200ms[\s\S]*ClockApiImpl/)
+        await expect(GGTest.clock.advance(1_000, {timeoutMs: 200})).rejects.toThrow(/hasn't settled after \d+ms[\s\S]*ClockApiImpl/)
     })
 
     test("a timer set by a callback starts from the new time and doesn't fire in the same advance", async () => {
@@ -350,18 +351,95 @@ describe("GGTest.clock and scope timers", () => {
         await worker.fired().toEqual(["a"])
     })
 
-    test("moving past a long raw timer in app code warns where it was set", async () => {
+    test("a timer further out than setTimeout's 24.8-day limit doesn't fire early after a jump back", async () => {
+        await worker.schedule({id: "far", ms: 20 * DAY})
+        await GGTest.clock.set(Date.now() - 10 * DAY)
+        await sleep(100)
+        await worker.fired().toEqual([])
+    })
+
+    test("a rejected callback in one runtime doesn't keep the others from firing", async () => {
+        await worker.schedule({id: "a", ms: 1_000, fail: true})
+        await runtimes.isolated.schedule({id: "b", ms: 1_000})
+        await expect(GGTest.clock.advance(1_000)).rejects.toThrow(/timer a failed/)
+        await runtimes.isolated.fired().toEqual(["b"])
+    })
+
+    test("a retry set by a slow inline callback doesn't fire in the same advance", async () => {
+        await GGTest.clock.stop()
+        await runtimes.inline.schedule({id: "a", ms: 1_000, asyncMs: 300, nested: true, nestedMs: 50})
+        await GGTest.clock.advance(1_000)
+        await runtimes.inline.fired().toEqual(["a", "a:done"])
+        await GGTest.clock.advance(50)
+        await runtimes.inline.fired().toEqual(["a", "a:done", "a:nested"])
+    })
+
+    test("refresh re-activates a timeout that fired, not one that was cleared", async () => {
+        await worker.schedule({id: "a", ms: 1_000})
+        await worker.schedule({id: "b", ms: 1_000})
+        await GGTest.clock.advance(1_000)
+        await worker.cancel({id: "b"})
+        await worker.refresh({id: "a"})
+        await worker.refresh({id: "b"})
+        await GGTest.clock.advance(1_000)
+        await worker.fired().toEqual(["a", "b", "a"])
+    })
+
+    test("a timer refreshed by an earlier callback in the same advance waits for its new due time", async () => {
+        await worker.schedule({id: "b", ms: 2_000})
+        await worker.schedule({id: "a", ms: 1_000, refreshes: "b"})
+        await GGTest.clock.advance(5_000)
+        await worker.fired().toEqual(["a"])
+        await GGTest.clock.advance(2_000)
+        await worker.fired().toEqual(["a", "b"])
+    })
+
+    test("clearTimeout by numeric id cancels a scope timer", async () => {
+        await worker.schedule({id: "a", ms: 1_000})
+        await worker.cancel({id: "a", by: "id"})
+        await GGTest.clock.advance(5_000)
+        await worker.fired().toEqual([])
+    })
+
+    test("a raw timer closed with close() isn't warned about", async () => {
+        await worker.rawTimer({id: "raw", ms: 60_000})
+        await worker.cancel({id: "raw", by: "close"})
+        const cursor = await t.logs.cursor()
+        await GGTest.clock.advance(120_000)
+        expect((await cursor.retrieve()).filter(l => l.message?.includes("raw setTimeout"))).toEqual([])
+    })
+
+    test("moving past a long raw timer in app code warns where it was set, once per site", async () => {
         await worker.rawTimer({id: "raw", ms: 60_000})
         const cursor = await t.logs.cursor()
         await GGTest.clock.advance(120_000)
         const warning = await cursor.find(/raw setTimeout\(…, 60000\)[\s\S]*GGLocator\.setTimeout/)
         expect(warning?.message).toMatch(/ClockApiImpl/)
-    })
 
-    test("onChange hooks run in the runtime before the change resolves", async () => {
+        await worker.rawTimer({id: "raw2", ms: 60_000})
+        const again = await t.logs.cursor()
+        await GGTest.clock.advance(120_000)
+        expect((await again.retrieve()).filter(l => l.message?.includes("raw setTimeout"))).toEqual([])
+    })
+})
+
+describe("GGTest.clock onChange hooks", () => {
+    GGTest.startWorker(ClockHookRuntime)
+
+    test("run in the runtime before the change resolves", async () => {
         await GGTest.clock.set(T)
-        const changes = await worker.clockChanges()
-        expect(Math.abs(changes.at(-1)! - (T - realNow()))).toBeLessThan(SLACK)
+        const offsets = await callOn(ClockHookApi).offsets()
+        expect(Math.abs(offsets.at(-1)! - (T - realNow()))).toBeLessThan(SLACK)
+    })
+})
+
+describe("GGTest.clock onChange hooks in a runtime started later", () => {
+    test("run for the clock it boots on", async () => {
+        await GGTest.clock.set(T)
+        await GGTest.startWorker(ClockHookRuntime)
+        const offsets = await callOn(ClockHookApi).offsets()
+        expect(offsets).toHaveLength(1)
+        expect(Math.abs(offsets[0] - (T - realNow()))).toBeLessThan(SLACK)
     })
 })
 

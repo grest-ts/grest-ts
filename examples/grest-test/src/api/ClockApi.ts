@@ -1,5 +1,5 @@
 import {GGHttpSchema, GGRpc} from "@grest-ts/http"
-import {GGContractClass, IsArray, IsBoolean, IsNumber, IsObject, IsString, IsUint, SERVER_ERROR} from "@grest-ts/schema"
+import {GGContractClass, IsArray, IsBoolean, IsLiteral, IsNumber, IsObject, IsString, IsUint, SERVER_ERROR} from "@grest-ts/schema"
 
 export const IsClockReading = IsObject({
     now: IsNumber,
@@ -16,8 +16,11 @@ export const IsScheduleTimer = IsObject({
     /** The callback returns a promise that settles this much real time later. */
     asyncMs: IsUint.orUndefined,
     fail: IsBoolean.orUndefined,
-    /** The callback schedules `<id>:nested` with the same delay. */
+    /** The callback schedules `<id>:nested` with the same delay, or `nestedMs`. */
     nested: IsBoolean.orUndefined,
+    nestedMs: IsUint.orUndefined,
+    /** The callback refreshes this other timer. */
+    refreshes: IsString.orUndefined,
 })
 export type ScheduleTimer = typeof IsScheduleTimer.infer
 
@@ -37,15 +40,15 @@ function clockApi(name: string) {
                 errors: [SERVER_ERROR],
             },
             cancel: {
+                input: IsObject({id: IsString, by: IsLiteral("handle", "id", "close").orUndefined}),
+                errors: [SERVER_ERROR],
+            },
+            refresh: {
                 input: IsObject({id: IsString}),
                 errors: [SERVER_ERROR],
             },
             fired: {
                 success: IsArray(IsString),
-                errors: [SERVER_ERROR],
-            },
-            clockChanges: {
-                success: IsArray(IsNumber),
                 errors: [SERVER_ERROR],
             },
             reset: {
@@ -58,8 +61,8 @@ function clockApi(name: string) {
             schedule: GGRpc.POST("schedule"),
             rawTimer: GGRpc.POST("raw-timer"),
             cancel: GGRpc.POST("cancel"),
+            refresh: GGRpc.POST("refresh"),
             fired: GGRpc.GET("fired"),
-            clockChanges: GGRpc.GET("clock-changes"),
             reset: GGRpc.POST("reset"),
         },
     })

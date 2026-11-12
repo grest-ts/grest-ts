@@ -5,7 +5,7 @@ import {enumOf, type Values} from "@grest-ts/common";
 
 type ConstructorOf<T> = new (...args: any[]) => T;
 
-const forgetTimer = new FinalizationRegistry<() => void>(forget => forget())
+let forgetTimer: FinalizationRegistry<() => void> | undefined
 
 /**
  * service-locator pattern for async context cases.
@@ -110,7 +110,10 @@ export class GGLocatorScope {
         return this.trackTimer(setInterval(() => this.run(fn), timeout))
     }
 
-    /** From now on, clearTimers() clears the timers set through this scope or any branch of it. */
+    /**
+     * From now on, clearTimers() clears the timers set through this scope or any branch of it that has no owner of its
+     * own. GGRuntime owns its scope and clears them when it stops, so a stopped runtime leaves no scope timers.
+     */
     public ownTimers(): void {
         this.timers ??= new Set()
     }
@@ -132,6 +135,7 @@ export class GGLocatorScope {
             // Weak: a timer that fired or was cleared elsewhere must not stay in the set for the scope's lifetime.
             const ref = new WeakRef(timer)
             timers.add(ref)
+            forgetTimer ??= new FinalizationRegistry(forget => forget())
             forgetTimer.register(timer, () => timers.delete(ref))
         }
         return timer

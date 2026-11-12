@@ -1,10 +1,6 @@
 import {sleep} from "@grest-ts/common"
 import {GGLocator} from "@grest-ts/locator"
-import {GGTestClock} from "@grest-ts/testkit"
 import type {ClockReading, ScheduleTimer} from "../api/ClockApi"
-
-const clockChanges: number[] = []
-GGTestClock.onChange(state => { clockChanges.push(state.offsetMs) })
 
 export class ClockApiImpl {
     private firedIds: string[] = []
@@ -17,10 +13,11 @@ export class ClockApiImpl {
         isDate: new Date() instanceof Date && new Date().constructor === Date,
     })
 
-    public schedule = async ({id, ms, interval, asyncMs, fail, nested}: ScheduleTimer): Promise<void> => {
+    public schedule = async ({id, ms, interval, asyncMs, fail, nested, nestedMs, refreshes}: ScheduleTimer): Promise<void> => {
         const fire = () => {
             this.firedIds.push(id)
-            if (nested) void this.schedule({id: id + ":nested", ms})
+            if (refreshes) this.timers.get(refreshes)!.refresh()
+            if (nested) void this.schedule({id: id + ":nested", ms: nestedMs ?? ms})
             if (fail) return Promise.reject(new Error(`timer ${id} failed`))
             if (asyncMs) return sleep(asyncMs).then(() => { this.firedIds.push(id + ":done") })
         }
@@ -31,18 +28,21 @@ export class ClockApiImpl {
         this.timers.set(id, setTimeout(() => {}, ms).unref())
     }
 
-    public cancel = async ({id}: {id: string}): Promise<void> => {
-        clearTimeout(this.timers.get(id))
+    public cancel = async ({id, by}: {id: string, by?: "handle" | "id" | "close"}): Promise<void> => {
+        const timer = this.timers.get(id)!
+        if (by === "close") timer.close()
+        else clearTimeout(by === "id" ? +timer : timer)
+    }
+
+    public refresh = async ({id}: {id: string}): Promise<void> => {
+        this.timers.get(id)!.refresh()
     }
 
     public fired = async (): Promise<string[]> => this.firedIds
-
-    public clockChanges = async (): Promise<number[]> => clockChanges
 
     public reset = async (): Promise<void> => {
         for (const timer of this.timers.values()) clearTimeout(timer)
         this.timers.clear()
         this.firedIds = []
-        clockChanges.length = 0
     }
 }

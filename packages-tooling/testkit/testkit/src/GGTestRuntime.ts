@@ -86,6 +86,10 @@ export class GGTestRuntime {
         return this._state;
     }
 
+    public get mode(): GGTestMode {
+        return this.config.mode!;
+    }
+
     /**
      * Locator keys registered by this runtime.
      * Populated via IPC after compose completes.
@@ -167,9 +171,9 @@ export class GGTestRuntime {
                 this._state = GGTestRuntimeState.STARTED;
                 // The clock may have changed while it booted; applyClock only reaches started runtimes.
                 const current = GGDateShim.getState()
-                if (!GGDateShim.same(clock, current)) {
+                if (this.config.mode !== GGTestMode.INLINE && !GGDateShim.same(clock, current)) {
                     await sendClock(this, current)
-                    await this.sendCommand(GGClockIPC.worker.fireDue, {timeoutMs: 30_000}, 35_000)
+                    await this.sendCommand(GGClockIPC.worker.fireDue, {target: Date.now(), timeoutMs: 30_000}, 35_000)
                 }
                 GGLog.debug(this, this.className + ' started successfully')
             } catch (error) {

@@ -465,6 +465,14 @@ GGTest.clock.now()                                         // same as Date.now()
   default is real time. A runtime started later starts on the clock's time.
 - Clocks outside the app aren't faked: DynamoDB TTL, SQL `NOW()`, Redis `EXPIRE`, S3 `LastModified`. Pass the
   app's time to them instead; see [Databases and external services](../../../docs/design/test-clock.md#3-databases-and-external-services).
+- `set` on a stopped clock moves it and keeps it stopped there.
+- Undoing a test's clock is a jump back. Runtimes started at describe level keep what they wrote at the fake time:
+  job locks held by scheduled runs, rows, wall-time caches. A test that advances far or starts schedules should
+  start its runtimes in the test, or have its own `describe`.
+- The clock is shared by the whole file: don't use it in `test.concurrent` tests. It needs a `describe` (the
+  test runner lives there).
+- `Date` and `Temporal.Now` are faked; `Intl`'s implicit "now" (e.g. `Intl.DateTimeFormat().format()` with no
+  date) isn't. Pass it a date.
 - Don't fake `Date` with `vi.useFakeTimers` too. `GGTest.clock` throws while it's active; leave `Date` out of
   `toFake`.
 
@@ -481,24 +489,30 @@ this.expiry = GGLocator.setTimeout(() => socket.close(), expiresAt - Date.now())
 `advance(ms)` is a jump, like a machine waking from sleep. When it resolves:
 
 1. Every runtime is on the new time, before any timer fires.
-2. Every scope timer pending before the advance and due by the new time has fired **once**, in due order within
-   each runtime; runtimes go one after another in start order. An interval fires once, not once per missed
-   period, and continues from the new time. Timers that the callbacks set start from the new time; to see N runs,
-   advance N times.
-3. The promises the callbacks returned have settled. A rejection fails the `advance`; so does one still pending after
-   `advance(ms, {timeoutMs})` (default 30 s) of real time, with where its timer was set. A callback that
-   awaits something the test does after the `advance` deadlocks until then.
+2. Every scope timer pending before the advance and due by the new time has fired **once**. Within a runtime they
+   are started in due order and run concurrently, as overdue timers do after a pause; runtimes go one after another
+   in start order. An interval fires once, not once per missed period, and continues from the new time. Timers that
+   the callbacks set start from the new time; to see N runs, advance N times.
+3. The promises the callbacks returned have settled, awaited together. A rejection fails the `advance`, once every
+   runtime has fired its timers; so does a promise still pending after `advance(ms, {timeoutMs})` of real time, with
+   where its timer was set. The default is the current test's timeout less a margin (30 s outside a test), shared by
+   all runtimes. A callback that awaits something the test does after the `advance` deadlocks until then.
 
 It doesn't wait for work a callback started without returning it (use `.waitFor(...)`), and requests in flight
 during the advance may see either time. A `set()` to a later time fires timers as `advance` does; a `set()` back
 fires nothing. With the clock stopped, scope timers wait for `advance` or `start()`. `GGJobRunner` schedules and the
-`withLock` heartbeat are scope timers: `advance` past a lock's TTL loses the lock, as a stalled run would.
+`withLock` heartbeat are scope timers: `advance` past a lock's TTL loses the lock, as a stalled run would. A
+scheduled job run that fails doesn't fail the `advance`: the runner catches and logs it, so check its logs.
 
 Everything else stays on real time: raw `setTimeout`/`setInterval`, `sleep()`, `withTimeout()`, sockets, IPC and
 `performance.now()`. When an `advance` moves past a raw timer that app code set (not node_modules or `@grest-ts/*`)
-with a delay of 1 s or more, the runtime logs a warning with where it was set: use `GGLocator.setTimeout` if it should
-follow the clock. `GG_TEST_CLOCK_RAW_TIMER_MS` changes that 1 s threshold (`0` checks every raw timer, at the cost
-of a stack trace each).
+with a delay of 1 s or more, the runtime logs a warning with where it was set, once per place per test file: use
+`GGLocator.setTimeout` if it should follow the clock. An `eslint-disable` on the line doesn't silence it.
+`GG_TEST_CLOCK_RAW_TIMER_MS` changes that 1 s threshold (`0` checks every raw timer, including `setTimeout(fn)`
+with no delay, at the cost of a stack trace each).
+
+Mixed with `vi.useFakeTimers`: a scope timer set while vitest fakes `setTimeout` is a vitest timer, and one set while
+vitest fakes `Date` gets its due time in vitest's time. Scope timers set before `vi.useFakeTimers` stay on the clock.
 
 ### Clocks the framework doesn't own
 
