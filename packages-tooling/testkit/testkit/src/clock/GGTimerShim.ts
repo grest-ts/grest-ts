@@ -19,7 +19,8 @@ interface ScopeTimer {
 }
 
 interface RawTimer {
-    site: string
+    /** Formatted only when the clock moves past it; undefined once known not to be app code. */
+    created?: Error
     ms: number
     interval: boolean
     dueAt: number
@@ -112,9 +113,7 @@ function wrapSet(shim: TimerShim, nativeSet: (...args: any[]) => NodeJS.Timeout,
         }
         const delay = Number(ms) || 0;
         if (typeof cb !== "function" || delay < RAW_TIMER_MS) return nativeSet(cb, ms, ...args);
-        const site = appSite(captureStack());
-        if (!site) return nativeSet(cb, ms, ...args);
-        const raw: RawTimer = {site, ms: delay, interval, dueAt: Date.now() + delay, realDueAt: performance.now() + delay};
+        const raw: RawTimer = {created: captureStack(), ms: delay, interval, dueAt: Date.now() + delay, realDueAt: performance.now() + delay};
         const handle = nativeSet(function (this: unknown, ...cbArgs: unknown[]) {
             if (interval) {
                 raw.dueAt = Date.now() + delay;
@@ -141,10 +140,7 @@ function wrapClear(shim: TimerShim, nativeClear: (handle?: any) => void) {
         if (handle !== undefined && handle !== null) {
             const key = typeof handle === "object" ? handle : shim.ids.get(handle) ?? handle;
             const timer = typeof key === "object" ? shim.allScopeTimers.get(key) : undefined;
-            if (timer) {
-                timer.cleared = true;
-                cancel(shim, timer);
-            }
+            if (timer) clear(shim, timer);
             dropRaw(shim, key);
         }
         nativeClear(handle);
@@ -169,11 +165,11 @@ function dropRaw(shim: TimerShim, handle: unknown): void {
     if (raw.id !== undefined) shim.ids.delete(raw.id);
 }
 
-function captureStack(): string | undefined {
+function captureStack(): Error {
     const limit = Error.stackTraceLimit;
     Error.stackTraceLimit = STACK_FRAMES;
     try {
-        return new Error().stack;
+        return new Error();
     } finally {
         Error.stackTraceLimit = limit;
     }
@@ -197,8 +193,8 @@ function addScopeTimer(shim: TimerShim, fn: () => unknown, ms: number | undefine
             arm(shim, timer);
             return handle;
         }},
-        close: {configurable: true, value: () => { timer.cleared = true; cancel(shim, timer); return handle; }},
-        [Symbol.dispose]: {configurable: true, value: () => { timer.cleared = true; cancel(shim, timer); }},
+        close: {configurable: true, value: () => { clear(shim, timer); return handle; }},
+        [Symbol.dispose]: {configurable: true, value: () => clear(shim, timer)},
     });
     trackId(shim, handle, timer);
     shim.allScopeTimers.set(handle, timer);
@@ -226,6 +222,11 @@ function arm(shim: TimerShim, timer: ScopeTimer, due = false): void {
 function disarm(shim: TimerShim, timer: ScopeTimer): void {
     if (timer.armed) shim.native.clearTimeout(timer.armed);
     timer.armed = undefined;
+}
+
+function clear(shim: TimerShim, timer: ScopeTimer): void {
+    timer.cleared = true;
+    cancel(shim, timer);
 }
 
 function cancel(shim: TimerShim, timer: ScopeTimer): void {
@@ -284,12 +285,7 @@ export const GGTimerShim = {
         for (const timer of due) {
             if (shim.scopeTimers.get(timer.handle) !== timer || timer.dueAt > target) continue;
             settle(shim, timer);
-            const run = {timer, settled: false, done: undefined as unknown as Promise<unknown>};
-            try {
-                run.done = Promise.resolve(timer.fn());
-            } catch (err) {
-                run.done = Promise.reject(err);
-            }
+            const run = {timer, settled: false, done: new Promise(resolve => resolve(timer.fn()))};
             run.done = run.done.finally(() => { run.settled = true; });
             runs.push(run);
         }
@@ -311,19 +307,29 @@ export const GGTimerShim = {
         } finally {
             shim.native.clearTimeout(guard);
         }
-        const errors = results.filter((r): r is PromiseRejectedResult => r.status === "rejected").map(r => r.reason);
-        if (errors.length === 1) throw errors[0];
-        if (errors.length > 1) throw new AggregateError(errors, errors.map(e => (e as Error)?.message ?? String(e)).join("; "));
+        throwAll(rejections(results));
     },
 };
+
+export function rejections(results: PromiseSettledResult<unknown>[]): unknown[] {
+    return results.filter((r): r is PromiseRejectedResult => r.status === "rejected").map(r => r.reason);
+}
+
+export function throwAll(errors: unknown[]): void {
+    if (errors.length === 1) throw errors[0];
+    if (errors.length > 1) throw new AggregateError(errors, `GGTest.clock: ${errors.map(e => (e as Error)?.message ?? String(e)).join("; ")}`);
+}
 
 function warnRawTimers(shim: TimerShim, target: number): void {
     const realNow = performance.now();
     for (const raw of shim.rawTimers.values()) {
-        if (raw.dueAt > target || raw.realDueAt <= realNow || shim.warnedSites.has(raw.site)) continue;
-        shim.warnedSites.add(raw.site);
+        if (!raw.created || raw.dueAt > target || raw.realDueAt <= realNow) continue;
+        const site = appSite(raw.created.stack);
+        raw.created = undefined;
+        if (!site || shim.warnedSites.has(site)) continue;
+        shim.warnedSites.add(site);
         const fn = raw.interval ? "setInterval" : "setTimeout";
-        GGLog.warn(LOG_CONTEXT, `GGTest.clock moved past a raw ${fn}(…, ${raw.ms}) that still runs on real time. If it should follow the clock, use GGLocator.${fn}. Set at: ${raw.site}`);
+        GGLog.warn(LOG_CONTEXT, `GGTest.clock moved past a raw ${fn}(…, ${raw.ms}) that still runs on real time. If it should follow the clock, use GGLocator.${fn}. Set at: ${site}`);
     }
 }
 

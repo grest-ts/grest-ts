@@ -16,7 +16,7 @@ export const GG_TEST_RUNTIME_WORKER = new GGLocatorKey<GGTestRuntimeWorker>("GGT
 
 export class GGTestRuntimeWorker {
 
-    private static beforeRuntimeStartHandlers: (() => void | Promise<void>)[] = [];
+    private static beforeRuntimeStartHandlers: (() => void)[] = [];
     private static beforeRuntimeStartExecuted = false;
 
     public readonly ipcClient: IPCClient;
@@ -40,7 +40,7 @@ export class GGTestRuntimeWorker {
      * Safe to call at module load time - just adds to array.
      * Handlers are executed during start() after extensions are loaded but before runtime creation.
      */
-    public static onBeforeRuntimeStart(handler: () => void | Promise<void>): void {
+    public static onBeforeRuntimeStart(handler: () => void): void {
         if (this.beforeRuntimeStartExecuted) {
             throw new Error("Cannot register beforeRuntimeStart handler after worker has started");
         }
@@ -80,7 +80,7 @@ export class GGTestRuntimeWorker {
             registerOnCallHandler(this);
 
             GGTestRuntimeWorker.beforeRuntimeStartExecuted = true;
-            for (const handler of GGTestRuntimeWorker.beforeRuntimeStartHandlers) await handler();
+            GGTestRuntimeWorker.beforeRuntimeStartHandlers.forEach(handler => handler());
 
             if (createRuntime) {
                 this.runtime = createRuntime();

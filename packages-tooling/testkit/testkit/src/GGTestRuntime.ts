@@ -9,7 +9,7 @@ import {WorkerRunner} from "./runner/WorkerRunner";
 import {IsolatedRunner} from "./runner/IsolatedRunner";
 import type {GGTestRunner} from "./GGTestRunner";
 import {GGClockState, GGDateShim} from "./clock/GGDateShim";
-import {GGClockIPC} from "./clock/GGClockIPC";
+import {fireDueOn, GGClockIPC} from "./clock/GGClockIPC";
 
 /**
  * Lifecycle state of a runtime instance.
@@ -173,9 +173,9 @@ export class GGTestRuntime {
                 this._state = GGTestRuntimeState.STARTED;
                 // The clock may have changed while it booted; applyClock only reaches started runtimes.
                 const current = GGDateShim.getState()
-                if (this.config.mode !== GGTestMode.INLINE && !GGDateShim.same(clock, current)) {
+                if (this.mode !== GGTestMode.INLINE && !GGDateShim.same(clock, current)) {
                     await this.sendCommand(GGClockIPC.worker.set, current)
-                    await this.sendCommand(GGClockIPC.worker.fireDue, {target: Date.now(), timeoutMs: 30_000}, 35_000)
+                    await fireDueOn(this, Date.now(), 30_000)
                 }
                 GGLog.debug(this, this.className + ' started successfully')
             } catch (error) {

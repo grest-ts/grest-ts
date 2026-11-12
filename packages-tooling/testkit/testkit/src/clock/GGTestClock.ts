@@ -3,9 +3,9 @@ import {TestRunner} from "vitest";
 import {GG_TEST_RUNNER, GGTestRunner} from "../GGTestRunner";
 import {GGTestMode, GGTestRuntimeState} from "../GGTestRuntime";
 import {GGTestComponent} from "../testers/GGTestComponent";
-import {GGClockIPC} from "./GGClockIPC";
+import {fireDueOn, GGClockIPC} from "./GGClockIPC";
 import {GGClockState, GGDateShim, installDateShim} from "./GGDateShim";
-import {GGTimerShim, installTimerShim} from "./GGTimerShim";
+import {GGTimerShim, installTimerShim, rejections, throwAll} from "./GGTimerShim";
 
 const DEFAULT_TIMEOUT_MS = 30_000;
 const HOOKS = Symbol.for("@grest-ts/testkit:GGTestClock.hooks");
@@ -113,9 +113,8 @@ export async function applyLocalClock(state: GGClockState): Promise<void> {
     throwAll(errors);
 }
 
-export async function runClockHooks(state: GGClockState): Promise<unknown[]> {
-    const results = await Promise.allSettled(hooks().map(async hook => hook({...state})));
-    return results.filter((r): r is PromiseRejectedResult => r.status === "rejected").map(r => r.reason);
+async function runClockHooks(state: GGClockState): Promise<unknown[]> {
+    return rejections(await Promise.allSettled(hooks().map(async hook => hook({...state}))));
 }
 
 async function applyClock(runner: GGTestRunner, state: GGClockState, timeoutMs = defaultTimeoutMs()): Promise<void> {
@@ -132,15 +131,9 @@ async function applyClock(runner: GGTestRunner, state: GGClockState, timeoutMs =
     const target = Date.now();
     await collect(GGTimerShim.fireDue(target, remaining()));
     for (const runtime of runtimes) {
-        const ms = remaining();
-        await collect(runtime.sendCommand(GGClockIPC.worker.fireDue, {target, timeoutMs: ms}, ms + 5_000));
+        await collect(fireDueOn(runtime, target, remaining()));
     }
     throwAll(errors);
-}
-
-function throwAll(errors: unknown[]): void {
-    if (errors.length === 1) throw errors[0];
-    if (errors.length > 1) throw new AggregateError(errors, `GGTest.clock: ${errors.map(e => (e as Error)?.message ?? String(e)).join("; ")}`);
 }
 
 /** Inside a test: its timeout less a margin, so the guard reports the stuck timer before vitest times the test out. */
