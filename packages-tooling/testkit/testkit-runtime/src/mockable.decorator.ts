@@ -95,17 +95,15 @@ function parseParams(fn: Function): ParamInfo[] {
         });
 }
 
-function isObjectArg(value: unknown): boolean {
-    return (typeof value === 'object' && value !== null) || typeof value === 'function';
-}
-
 /**
  * What mock matchers and `andReturn` callbacks see, matching `mockOf`'s types:
  * a single object argument as itself, anything else keyed by parameter name.
  */
 function argsToMockInput(args: any[], params: ParamInfo[]): any {
-    if (params.length === 1 && !params[0].rest && (isObjectArg(args[0]) || params[0].name === undefined)) {
-        return args[0];
+    const single = args[0];
+    const isObject = (typeof single === 'object' && single !== null) || typeof single === 'function';
+    if (params.length === 1 && !params[0].rest && (isObject || params[0].name === undefined)) {
+        return single;
     }
     const result: Record<string, any> = {};
     params.forEach((param, i) => {
