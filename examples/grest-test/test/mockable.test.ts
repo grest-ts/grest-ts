@@ -230,6 +230,26 @@ describe("@mockable fields", () => {
         await runWithMockableContext(context, () => compiled.run("a"))
         expect(calls).toEqual([["Compiled", "run", "a"]])
     })
+
+    test("methods compiled to __awaiter through tslib or after a comment are intercepted", async () => {
+        const Compiled = mockable(new Function(`return class Compiled {
+            viaTslib(id) { return tslib_1.__awaiter(this, void 0, void 0, function* () { return id }) }
+            viaCall(id) { return (0, tslib_1.__awaiter)(this, void 0, void 0, function* () { return id }) }
+            afterComment(id) {
+                // compiled
+                return __awaiter(this, void 0, void 0, function* () { return id })
+            }
+            helper(id) { setTimeout(() => __awaiter(this, void 0, void 0, function* () {})); return id }
+        }`)()) as new () => Record<"viaTslib" | "viaCall" | "afterComment" | "helper", (id: string) => unknown>
+        const compiled = new Compiled()
+        await runWithMockableContext(context, async () => {
+            await compiled.viaTslib("a")
+            await compiled.viaCall("a")
+            await compiled.afterComment("a")
+            expect(compiled.helper("a")).toBe("a")
+        })
+        expect(calls).toEqual([["Compiled", "viaTslib", "a"], ["Compiled", "viaCall", "a"], ["Compiled", "afterComment", "a"]])
+    })
 })
 
 describe("mockOf's access object", () => {

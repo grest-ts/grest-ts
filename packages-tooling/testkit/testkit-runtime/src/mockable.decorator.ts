@@ -50,18 +50,19 @@ export function runWithMockableContext<T>(ctx: MockableTestContext, fn: () => T)
 // ============================================================================
 
 const MOCKABLE_WRAPPED = Symbol('GGMockableWrapped');
+/** On a @mockable class: the decorated constructor, named like the declared class. */
 const MOCKABLE_CLASS = Symbol('GGMockableClass');
-const MOCKABLE_CONSTRUCTOR = Symbol('GGMockableConstructor');
 
 /**
- * Whether a function declares exactly one parameter, read from its source (comments, strings, defaults and
- * destructuring aware). Mocks see that argument itself; otherwise the arguments as a tuple.
+ * A function's parameter count (one, or not) and the source after its parameter list, read from its source
+ * (comments, strings, defaults and destructuring aware). Mocks see an only argument itself; otherwise the tuple.
  */
-function takesOneArgument(src: string): boolean {
-    if (/^(async\s+)?[\w$]+\s*=>/.test(src)) return true;
+function signature(src: string): {oneArgument: boolean, body: string} {
+    const bare = /^(async\s+)?[\w$]+\s*=>/.exec(src);
+    if (bare) return {oneArgument: true, body: src.slice(bare[0].length - 2)};
     const open = src.indexOf('(');
-    if (open < 0) return false;
-    let depth = 0, params = 0, rest = false, current = '', quote: string | undefined;
+    if (open < 0) return {oneArgument: false, body: ''};
+    let depth = 0, params = 0, rest = false, current = '', quote: string | undefined, i = open + 1;
     const endParam = () => {
         const param = current.trim();
         if (param) {
@@ -70,7 +71,7 @@ function takesOneArgument(src: string): boolean {
         }
         current = '';
     };
-    for (let i = open + 1; i < src.length; i++) {
+    for (; i < src.length; i++) {
         const ch = src[i];
         if (quote) {
             if (ch === '\\') i++;
@@ -98,27 +99,21 @@ function takesOneArgument(src: string): boolean {
         current += ch;
     }
     endParam();
-    return params === 1 && !rest;
+    return {oneArgument: params === 1 && !rest, body: src.slice(i + 1)};
 }
+
+/** A body that is only an `__awaiter` call: TypeScript's compiled async, also through tslib and after comments. */
+const COMPILED_ASYNC_BODY = /^\s*(?:=>\s*)?\{?\s*(?:(?:\/\/[^\n]*\n|\/\*[\s\S]*?\*\/)\s*)*(?:return\s+)?(?:\(0,\s*)?(?:[\w$]+\.)?__awaiter\b/;
 
 /**
- * Check if a function is async (returns a Promise).
- * @deprected - having this is bad, we should not check it like this!
- * @TODO Existance of this is bad!
+ * Undefined when `fn` isn't intercepted, else whether it takes one argument.
+ * Only async functions are intercepted, so sync methods keep their calling semantics.
  */
-function isAsyncFunction(fn: Function, src: string): boolean {
-    return fn.constructor.name === 'AsyncFunction' ||
-        /(=>|\{\s*return)\s*__awaiter\(/.test(src) || // Compiled TypeScript async
-        src.trimStart().startsWith('async ');
-}
-
-const interceptions = new Map<string, boolean | undefined>();
-
-/** Undefined when `fn` isn't intercepted (not async), else whether it takes one argument. */
 function interception(fn: Function): boolean | undefined {
     const src = fn.toString();
-    if (!interceptions.has(src)) interceptions.set(src, isAsyncFunction(fn, src) ? takesOneArgument(src) : undefined);
-    return interceptions.get(src);
+    const {oneArgument, body} = signature(src);
+    const isAsync = fn.constructor.name === 'AsyncFunction' || src.trimStart().startsWith('async ') || COMPILED_ASYNC_BODY.test(body);
+    return isAsync ? oneArgument : undefined;
 }
 
 /**
@@ -157,7 +152,7 @@ function intercept(className: string, methodName: string, original: Function, on
 export function mockableClassName(cls: Function, methodName: string): string {
     const method = cls.prototype?.[methodName];
     if (method?.[MOCKABLE_WRAPPED]) return method[MOCKABLE_WRAPPED];
-    const className: string | undefined = (cls as any)[MOCKABLE_CLASS];
+    const className: string | undefined = (cls as any)[MOCKABLE_CLASS]?.name;
     if (!className) {
         throw new Error(`${cls.name}.${methodName} is not mockable: ${cls.name} has no @mockable.`);
     }
@@ -208,7 +203,7 @@ export function mockable<T extends { new(...args: any[]): {} }>(target: T): T {
             super(...args);
             // Fields are wrapped only for an instance made in a test, and by the most-derived @mockable class, so
             // they are keyed under the class mockOf() is given.
-            if (!mockableContextStorage.getStore() || (new.target as any)[MOCKABLE_CONSTRUCTOR] !== mocked) return;
+            if (!mockableContextStorage.getStore() || (new.target as any)[MOCKABLE_CLASS] !== mocked) return;
             for (const key of Object.keys(this)) {
                 const descriptor = Object.getOwnPropertyDescriptor(this, key)!;
                 const value = descriptor.value;
@@ -219,7 +214,6 @@ export function mockable<T extends { new(...args: any[]): {} }>(target: T): T {
         }
     };
     Object.defineProperty(mocked, 'name', {value: className, configurable: true});
-    Object.defineProperty(mocked, MOCKABLE_CLASS, {value: className});
-    Object.defineProperty(mocked, MOCKABLE_CONSTRUCTOR, {value: mocked});
+    Object.defineProperty(mocked, MOCKABLE_CLASS, {value: mocked});
     return mocked;
 }

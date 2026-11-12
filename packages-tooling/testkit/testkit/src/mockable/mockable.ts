@@ -66,7 +66,7 @@ function accessProxy(cls: Function, tester: (config: {className: string, methodN
  * @example
  * ```typescript
  * .with(mockOf(AddressResolverService).resolveAddress
- *     .toEqual({address: "123 Main St"})
+ *     .toEqual("123 Main St")
  *     .andReturn({lat: 40.7, lng: -74.0}))
  * ```
  */
@@ -81,7 +81,7 @@ export function mockOf<T>(cls: new (...args: any[]) => T): MockAccess<T> {
  * @example
  * ```typescript
  * .with(spyOn(AddressResolverService).resolveAddress
- *     .toEqual({address: "123 Main St"})
+ *     .toEqual("123 Main St")
  *     .responseToMatchObject({lat: 40.7}))
  * ```
  */

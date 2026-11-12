@@ -162,8 +162,9 @@ export class IPCSocket {
             sendResponse(true, result);
         } catch (error: any) {
             if (error instanceof ERROR) {
-                // Reaches the requester typed, with its data; often expected (a mocked failure).
-                GGLog.debug(this, `Request handler for ${msg.path} threw ${error.type}`, error);
+                // Reaches the requester typed, with its data; a 4xx one is usually expected (e.g. a mocked refusal).
+                if (error.statusCode >= 500) GGLog.error(this, `Request handler error for ${msg.path}`, error);
+                else GGLog.debug(this, `Request handler for ${msg.path} threw ${error.type}`, error);
                 sendResponse(false, undefined, error.message, error.toJSON());
                 return;
             }

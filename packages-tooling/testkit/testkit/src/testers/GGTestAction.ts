@@ -189,7 +189,7 @@ export abstract class GGTestAction<T> implements Promise<T> {
     }
 
     protected async execute(): Promise<T> {
-        GG_TEST_RUNNER.get();
+        GG_TEST_RUNNER.get(); // Throws the clear "No GGTest runner here" error before anything runs outside the testkit.
         return this.ctx.run(async () => {
             GG_TRACE.init();
             GGLog.info(this,
