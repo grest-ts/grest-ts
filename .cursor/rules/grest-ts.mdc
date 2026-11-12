@@ -371,6 +371,10 @@ await t.jobs.run("expired-sessions")
 
 `t[1].jobs.run(...)` picks an instance; `await t.jobs.start()` starts the schedules for a test about scheduling. Never sleep waiting for a timed run.
 
+### Time
+
+`await GGTest.clock.set(date)` / `.advance(ms)` moves `Date` in the test and every runtime; it's undone after the test. Use it instead of `now` parameters or backdated rows. Don't also fake `Date` with `vi.useFakeTimers`.
+
 ---
 
 ## 6. @mockable and mockOf

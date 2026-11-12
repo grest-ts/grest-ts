@@ -448,6 +448,32 @@ export class GitHubApi {
 
 ---
 
+## Controlling time
+
+`GGTest.clock` moves `Date` in the test and in every runtime it started (inline, worker, isolated) at once.
+Time keeps flowing from the time you set, unless you stop it.
+
+```typescript
+await GGTest.clock.set(new Date("2026-03-01T09:00:00Z"))   // number = epoch ms
+await GGTest.clock.advance(30 * 60_000)                    // jump forward
+await GGTest.clock.stop()                                  // Date.now() stays put until set/advance/start
+await GGTest.clock.start()                                 // flows again from the current fake now
+GGTest.clock.now()                                         // same as Date.now() in the test
+```
+
+- `set`, `advance`, `stop` and `start` resolve once every runtime is on the new time. A runtime started later
+  starts on it.
+- Set in a test, it's undone after the test. Set in a `describe` or `beforeAll`, it holds for that block. The
+  default is real time.
+- Only `Date` is faked. Timers (`setTimeout`, `sleep()`), `performance.now()` and anything measuring elapsed time
+  stay real, so `advance` doesn't fire timers. Code that measures durations should use `performance.now()`.
+- Clocks outside the app aren't faked: DynamoDB TTL, SQL `NOW()`, Redis `EXPIRE`, S3 `LastModified`. Pass the
+  app's time to them instead; see [Databases and external services](../../../docs/design/test-clock.md#3-databases-and-external-services).
+- Don't fake `Date` with `vi.useFakeTimers` too. `GGTest.clock` throws while it's active; leave `Date` out of
+  `toFake`.
+
+---
+
 ## Usage
 
 Check README-testkit.md files within packages you are interested in. Common ones being:

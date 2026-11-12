@@ -73,7 +73,7 @@ export class GGRawSocket {
 
     private isActive = true;
     private isClosed = false;
-    private lastActivity = Date.now();
+    private lastActivity = performance.now();
 
     private readonly onCloseCallbacks: Array<() => void> = [];
     private readonly messageHandlers: Array<(data: Buffer, isBinary: boolean) => void> = [];
@@ -96,7 +96,7 @@ export class GGRawSocket {
         // (auto-pong a PING, swallow a PONG) so the application never sees them — the raw
         // counterpart of GGSocket's control-frame PING/PONG.
         this.adapter.onRawMessage!((d, isBinary) => {
-            this.lastActivity = Date.now();
+            this.lastActivity = performance.now();
             if (this.appKeepalive) {
                 const kind = rawKeepaliveKind(d, isBinary);
                 if (kind === "ping") { this.send(RAW_PONG); return; }
@@ -182,8 +182,8 @@ export class GGRawSocket {
         return startSocketHeartbeat(this.adapter, {
             config,
             isActive: () => this.isActive,
-            stampActivity: () => { this.lastActivity = Date.now(); },
-            idleMs: () => Date.now() - this.lastActivity,
+            stampActivity: () => { this.lastActivity = performance.now(); },
+            idleMs: () => performance.now() - this.lastActivity,
             apiName: this.apiName,
             socketPath: this.socketPath,
             metrics: this.metrics,

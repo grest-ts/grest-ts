@@ -114,14 +114,14 @@ class TlsAgentCache {
         const key = agentKey(settings)
         const existing = this.agents.get(key)
         if (existing) {
-            existing.lastUsed = Date.now()
+            existing.lastUsed = performance.now()
             this.agents.delete(key)
             this.agents.set(key, existing)
             return existing.agent
         }
         const agent = buildAgent(settings)
         const fingerprint = settings.tlsPin ? normalizeFingerprint(settings.tlsPin.fingerprint256) : undefined
-        this.agents.set(key, {agent, fingerprint, lastUsed: Date.now()})
+        this.agents.set(key, {agent, fingerprint, lastUsed: performance.now()})
         while (this.agents.size > DEFAULT_MAX_AGENTS) {
             const lru = this.agents.keys().next().value
             if (lru === undefined) break
@@ -138,7 +138,7 @@ class TlsAgentCache {
     }
 
     private sweepIdle(): void {
-        const cutoff = Date.now() - DEFAULT_IDLE_TTL_MS
+        const cutoff = performance.now() - DEFAULT_IDLE_TTL_MS
         for (const [key, entry] of this.agents) {
             if (entry.lastUsed < cutoff) this.drop(key)
         }

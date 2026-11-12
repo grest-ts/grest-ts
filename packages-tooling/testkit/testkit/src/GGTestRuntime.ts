@@ -8,6 +8,8 @@ import {InlineRunner} from "./runner/InlineRunner";
 import {WorkerRunner} from "./runner/WorkerRunner";
 import {IsolatedRunner} from "./runner/IsolatedRunner";
 import type {GGTestRunner} from "./GGTestRunner";
+import {GGDateShim} from "./clock/GGDateShim";
+import {GGClockIPC} from "./clock/GGClockIPC";
 
 /**
  * Lifecycle state of a runtime instance.
@@ -130,6 +132,8 @@ export class GGTestRuntime {
             GG_TRACE.init();
             GGLog.debug(this, 'Launching ' + this.className + ' in ' + this.config.mode + ' mode...')
 
+            const clock = GGDateShim.getState()
+            if (!GGDateShim.isDefault(clock)) this.initialCommands.push({method: GGClockIPC.worker.set, payload: clock})
             const config: GGTestEnvConfig = {
                 executablePath: this.executablePath,
                 className: this.className,

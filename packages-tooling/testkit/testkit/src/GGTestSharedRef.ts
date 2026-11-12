@@ -35,13 +35,13 @@ export class GGTestSharedRef {
     private static async acquireLock(key: string): Promise<void> {
         const lockPath = this.getLockPath(key);
         const timeout = 60000;
-        const start = Date.now();
+        const start = performance.now();
         while (true) {
             try {
                 fs.mkdirSync(lockPath);
                 return;
             } catch {
-                if (Date.now() - start > timeout) {
+                if (performance.now() - start > timeout) {
                     throw new Error(`[GGTestSharedRef] Failed to acquire lock for '${key}' after ${timeout}ms`);
                 }
                 await new Promise(resolve => setTimeout(resolve, 50 + Math.random() * 50));
