@@ -16,3 +16,12 @@ You don't use this package directly. It is set up by `@grest-ts/testkit` and wor
 - Handles `beforeAll`/`afterEach`/`afterAll` cleanup automatically
 - Supports nested `describe` blocks with proper scope branching
 - Exports a `./globalSetup` entry point for Vitest configuration
+
+## Runtime start and `isolate: false`
+
+- Every runtime of a `GGTest.startWorker({...})` starts at the same time: each spends its boot loading its own module
+  graph. A runtime must not call a peer from its own `start()`; call it lazily, when a request needs it.
+- Vitest's `isolate: false` works: the setup file re-runs for every test file in a worker without stacking wrappers.
+  Runtimes still boot fresh per file in their own worker threads, so only the test process's own module state (fixtures,
+  module-level singletons, anything a test file sets globally) is shared between the files of a worker. A test file that
+  replaces something global (`GGSocketPool.setAdapter`, a module-level registry) must restore it in `afterAll`.

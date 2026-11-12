@@ -1,4 +1,4 @@
-import {describe, it, expect, vi, beforeEach} from 'vitest'
+import {describe, it, expect, vi, beforeEach, afterAll} from 'vitest'
 import {GGContext} from '@grest-ts/context'
 import {GGHeader} from '@grest-ts/http'
 import {GGSocketPool} from '@grest-ts/websocket/internal'
@@ -65,6 +65,9 @@ beforeEach(() => {
         constructor() { return fakeAdapter as any }
     } as any)
 })
+
+// The fake adapter is pool-global: without this, a file run after this one in the same worker (`isolate: false`) gets it.
+afterAll(() => GGSocketPool.__clearForTesting())
 
 async function connectAndGetHandshakeHeaders(
     config: Parameters<typeof GGSocketPool.connect>[0]
