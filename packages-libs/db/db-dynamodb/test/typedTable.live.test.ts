@@ -176,7 +176,7 @@ describe("GGDynamoDbTypedTable against dynamodb-local", () => {
         const doc = {docId: "d1", title: "a", expiresAt: 5_000_000}
         expect(await docs.create(doc)).toBe(true)
         expect(await docs.create(doc)).toBe(false)
-        expect(await docs.get("d1")).toEqual(doc)
+        expect(await docs.get("d1")).toEqual({...doc, version: 1})
 
         const saved = (await docs.save({docId: "d2", title: "b", expiresAt: 1}))!
         expect(saved.version).toBe(1)
@@ -189,7 +189,7 @@ describe("GGDynamoDbTypedTable against dynamodb-local", () => {
         expect(await docs.rename("d2", "d", 2)).toMatchObject({title: "d", version: 3})
 
         expect(await docs.take("d1", {if: {title: {eq: "other"}}})).toBeUndefined()
-        expect(await docs.take("d1")).toEqual(doc)
+        expect(await docs.take("d1")).toEqual({...doc, version: 1})
         expect(await docs.take("d1")).toBeUndefined()
 
         const ttl = await db.getDocumentClient().send(new DescribeTimeToLiveCommand({TableName: DocsTable.name}))
@@ -200,7 +200,7 @@ describe("GGDynamoDbTypedTable against dynamodb-local", () => {
     test("reads return the schema's shape: an attribute it no longer has stays stored until a put replaces the row", async () => {
         await db.getDocumentClient().send(new PutCommand({TableName: "docs", Item: {docId: "old", title: "t", expiresAt: 1, retired: "x"}}))
         expect(await docs.get("old")).toEqual({docId: "old", title: "t", expiresAt: 1})
-        expect(await docs.update("old", {title: "u"})).toEqual({docId: "old", title: "u", expiresAt: 1})
+        expect(await docs.update("old", {title: "u"})).toEqual({docId: "old", title: "u", expiresAt: 1, version: 1})
         expect((await db.getDocumentClient().send(new GetCommand({TableName: "docs", Key: {docId: "old"}}))).Item).toMatchObject({retired: "x"})
         await docs.put((await docs.get("old"))!)
         expect((await db.getDocumentClient().send(new GetCommand({TableName: "docs", Key: {docId: "old"}}))).Item).not.toHaveProperty("retired")

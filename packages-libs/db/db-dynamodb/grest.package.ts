@@ -7,6 +7,9 @@ definePackage({
     targets: { node: true },
     hasTests: true,
     extendsTestKit: true,
+    customExports: {
+        "./dev-tables": "./src/GGDynamoDbDevTables.ts",
+    },
     publishToNpm: true,
     dependencies: {
         "@aws-sdk/client-dynamodb": "^3.750.0",

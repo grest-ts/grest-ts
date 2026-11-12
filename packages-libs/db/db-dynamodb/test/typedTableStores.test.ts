@@ -1,7 +1,7 @@
-import {describe, it, expect, expectTypeOf, vi} from "vitest"
+import {describe, it, expect, expectTypeOf} from "vitest"
 import {IsNumber, IsObject, IsString} from "@grest-ts/schema"
-import {GGDynamoDb} from "../src/GGDynamoDb"
 import {GGDynamoDbTableSpec} from "../src/GGDynamoDbTableSpec"
+import {readable, stubDb, typeOnly} from "./typedTableTestUtils"
 import {GGDynamoDbTypedTable} from "../src/GGDynamoDbTypedTable"
 
 const IsProject = IsObject({projectId: IsString, orgId: IsString, name: IsString, version: IsNumber.orUndefined})
@@ -25,21 +25,6 @@ const IsEntry = IsObject({streamId: IsString, seq: IsNumber, note: IsString})
 const EntriesTable = GGDynamoDbTableSpec.define({name: "entries", schema: IsEntry, pk: "streamId", sk: "seq"})
 
 const project: Project = {projectId: "p1", orgId: "o1", name: "n"}
-
-function stubDb(...responses: Record<string, unknown>[]) {
-    const send = vi.fn(async (_command: {input: Record<string, any>}) => responses.shift() ?? {Items: []})
-    const db = Object.create(GGDynamoDb.prototype) as GGDynamoDb
-    Object.assign(db, {client: {send}, config: {name: "test"}})
-    return {db, inputs: () => send.mock.calls.map(c => c[0].input)}
-}
-
-function readable(input: Record<string, any>, expression: string): string {
-    return expression
-        .replace(/#n\d+/g, n => input.ExpressionAttributeNames[n])
-        .replace(/:v\d+/g, v => JSON.stringify(input.ExpressionAttributeValues[v]))
-}
-
-function typeOnly(_fn: () => void) {}
 
 describe("a store extending GGDynamoDbTypedTable.of(spec)", () => {
     it("inherits the table's methods and takes a bare key on a one-field key", async () => {
@@ -69,15 +54,30 @@ describe("create, save, take and expectVersion", () => {
         expect(readable(inputs()[0], inputs()[0].ConditionExpression)).toBe("attribute_not_exists(projectId)")
     })
 
-    it("save writes the next version, conditioned on the one read", async () => {
+    it("save writes the next version, conditioned on the one read; a row without one counts as 0", async () => {
         const {db, inputs} = stubDb({}, {})
         const store = new ProjectStore(db)
         await expect(store.save(project)).resolves.toEqual({...project, version: 1})
         await expect(store.save({...project, version: 4})).resolves.toEqual({...project, version: 5})
-        expect(readable(inputs()[0], inputs()[0].ConditionExpression)).toBe("attribute_not_exists(projectId)")
+        expect(readable(inputs()[0], inputs()[0].ConditionExpression)).toBe("(attribute_not_exists(version) OR version = 0)")
         expect(inputs()[0].Item).toMatchObject({version: 1})
         expect(readable(inputs()[1], inputs()[1].ConditionExpression)).toBe("version = 4")
         expect(inputs()[1].Item).toMatchObject({version: 5})
+    })
+
+    it("every write bumps the version, and nothing writes it directly", async () => {
+        const {db, inputs} = stubDb({}, {}, {})
+        const store = new ProjectStore(db)
+        await store.put({...project, version: 7})
+        await store.create(project)
+        await store.update("p1", {name: "m"})
+        expect(inputs()[0].Item).toMatchObject({version: 8})
+        expect(inputs()[1].Item).toMatchObject({version: 1})
+        expect(readable(inputs()[2], inputs()[2].UpdateExpression)).toBe(`SET name = "m" ADD version 1`)
+        await expect(store.update("p1", {version: 2})).rejects.toThrow(/"version" is the version; every write bumps it/)
+        await expect(store.update("p1", {}, {setIfMissing: {version: 1}})).rejects.toThrow(/setIfMissing "version": it is the version/)
+        expect(() => GGDynamoDbTableSpec.define({name: "t", schema: IsProject, pk: "projectId", version: "version", derived: d => ({v: d.number(["version"], r => r.version)})}))
+            .toThrow(/derived "v" reads the version "version"/)
     })
 
     it("save and expectVersion need a spec version", async () => {
@@ -87,12 +87,11 @@ describe("create, save, take and expectVersion", () => {
         await expect(entries.update({streamId: "s", seq: 1}, {note: "x"}, {expectVersion: 1})).rejects.toThrow(/the spec has no version field/)
     })
 
-    it("update with expectVersion conditions on it and stores the next one", async () => {
+    it("update with expectVersion conditions on it", async () => {
         const {db, inputs} = stubDb({})
         await new ProjectStore(db).update("p1", {name: "m"}, {expectVersion: 2})
-        expect(readable(inputs()[0], inputs()[0].UpdateExpression)).toBe(`SET name = "m", version = 3`)
+        expect(readable(inputs()[0], inputs()[0].UpdateExpression)).toBe(`SET name = "m" ADD version 1`)
         expect(readable(inputs()[0], inputs()[0].ConditionExpression)).toBe("attribute_exists(projectId) AND version = 2")
-        await expect(new ProjectStore(db).update("p1", {version: 9}, {expectVersion: 2})).rejects.toThrow(/"version" is the version; give expectVersion instead/)
     })
 
     it("take deletes and returns the old row in the schema's shape", async () => {
@@ -105,6 +104,7 @@ describe("create, save, take and expectVersion", () => {
         const {db} = stubDb()
         const item = new ProjectStore(db).tx.create(project)
         expect(readable(item.Put!, item.Put!.ConditionExpression!)).toBe("attribute_not_exists(projectId)")
+        expect(item.Put!.Item).toMatchObject({version: 1})
     })
 })
 

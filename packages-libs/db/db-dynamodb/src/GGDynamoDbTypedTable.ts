@@ -56,7 +56,7 @@ export interface GGDynamoDbUpdateOptions<T, KF extends keyof T = never, S extend
     /** Set keys inside a map field, leaving its other keys; a key given as `undefined` is removed. Throws when the row
      *  has no such map. */
     merge?: Only<T, Exclude<GGDynamoDbMapFields<T>, KF>, true>
-    /** On a table with a spec `version`: write only while the stored version is this, and store it plus one. */
+    /** On a table with a spec `version`: write only while the stored version is this (0 also matches a row without one). */
     expectVersion?: number
     /** Create the row when it doesn't exist, instead of returning undefined: with its key, the key's inputs and what
      *  this update writes, which must cover every required field. Writes every derived attribute, so all their inputs
@@ -200,16 +200,15 @@ export class GGDynamoDbTypedTable<
     }
 
     /**
-     * Optimistic locking on the spec's `version`: writes `row` while the stored version is still `row.version` (or, for a
-     * row without one, while no row has its key), storing the version plus one. Returns the row as written, or undefined
-     * when another write got there first: re-read and retry.
+     * Optimistic locking on the spec's `version`: writes `row` while the stored version is still `row.version` (a row
+     * without one: while the stored row has none, or there is no row), storing the version plus one. Returns the row as
+     * written, or undefined when another write got there first: re-read and retry.
      */
     async save(row: T): Promise<T | undefined> {
         const field = this.versionField("save")
         const expected = ((row as Source)[field] as number | undefined) ?? 0
-        const next = {...row, [field]: expected + 1} as T
-        const written = await this.put(next, {if: expected === 0 ? this.absent() : {[field]: {eq: expected}} as GGDynamoDbCondition<T>})
-        return written ? this.spec.toRow(next as Source) : undefined
+        const written = await this.put(row, {if: this.versionIs(field, expected)})
+        return written ? this.spec.toRow({...row, [field]: expected + 1}) : undefined
     }
 
     /** Deletes the row and returns it as it was, atomically: for a one-time token or claim. Undefined when there was no
@@ -336,9 +335,12 @@ export class GGDynamoDbTypedTable<
         }
     }
 
-    /** @internal */
+    /** @internal On a versioned table the item carries the next version. */
     putParams(row: T, opts: GGDynamoDbWriteOptions<T> | undefined) {
-        return {TableName: this.tableName, Item: this.spec.withDerived(this.validate(row)) as Source, ...(opts?.if && this.expr().conditionInput(opts.if))}
+        const valid = this.validate(row) as Source
+        const v = this.spec.version
+        const item = v ? {...valid, [v]: ((valid[v] as number | undefined) ?? 0) + 1} : valid
+        return {TableName: this.tableName, Item: this.spec.withDerived(item as T) as Source, ...(opts?.if && this.expr().conditionInput(opts.if))}
     }
 
     /** @internal A request on one row, with an optional condition; on the key's own inputs too when its value doesn't
@@ -360,6 +362,11 @@ export class GGDynamoDbTypedTable<
         return this.spec.version
     }
 
+    // Rows written before the table had a version carry none, which counts as 0.
+    private versionIs(field: string, expected: number): GGDynamoDbCondition<T> {
+        return (expected === 0 ? {anyOf: [{[field]: {exists: false}}, {[field]: {eq: 0}}]} : {[field]: {eq: expected}}) as GGDynamoDbCondition<T>
+    }
+
     private holdsKey(row: T, key: Source): boolean {
         return Object.entries(this.spec.unpinnedKeyInputs(key)).every(([f, v]) => (row as Source)[f] === v)
     }
@@ -378,9 +385,11 @@ export class GGDynamoDbTypedTable<
         for (const k of keys) {
             if (spec.keyFields.includes(k)) fail(`"${k}" is part of the table key`)
             if (spec.derivedKey(k)) fail(`"${k}" is derived; write its inputs instead`)
+            if (k === spec.version) fail(`"${k}" is the version; every write bumps it (give expectVersion to check it)`)
         }
         if (opts?.upsert && opts.current) fail("an upsert can't take current: a row it creates holds none of it")
         if (opts?.expectVersion !== undefined && opts.upsert) fail("an upsert can't take expectVersion")
+        if (opts?.expectVersion !== undefined) this.versionField("update")
         const valid = this.validFields(fields, fail)
         const e = this.expr()
         const storedKey = spec.storedKey(key)
@@ -391,12 +400,8 @@ export class GGDynamoDbTypedTable<
             ? keyChecks.length > 0 ? [`(attribute_not_exists(${e.name(spec.pk)}) OR (${keyChecks.join(" AND ")}))`] : []
             : [`attribute_exists(${e.name(spec.pk)})`, ...keyChecks]
         if (opts?.if) conditions.push(e.condition(opts.if))
+        if (opts?.expectVersion !== undefined) conditions.push(e.condition(this.versionIs(spec.version!, opts.expectVersion)))
         const known: Source = {...conditionPins(opts?.if), ...keyInputs}
-        if (opts?.expectVersion !== undefined) {
-            const field = this.versionField("update")
-            if (keys.includes(field)) fail(`"${field}" is the version; give expectVersion instead`)
-            conditions.push(`${e.name(field)} = ${e.value(opts.expectVersion)}`)
-        }
 
         const set: string[] = []
         const remove: string[] = []
@@ -409,11 +414,10 @@ export class GGDynamoDbTypedTable<
             for (const [k, v] of Object.entries(keyInputs)) if (!spec.keyAttributes.includes(k)) set.push(`${e.name(k)} = ${e.value(v)}`)
         }
 
-        if (opts?.expectVersion !== undefined) set.push(`${e.name(spec.version!)} = ${e.value(opts.expectVersion + 1)}`)
-
         const touched = new Set(keys)
         const claim = (field: string, op: string) => {
             if (spec.keyFields.includes(field)) fail(`${op} "${field}": it is part of the table key`)
+            if (field === spec.version) fail(`${op} "${field}": it is the version, which every write bumps`)
             if (touched.has(field)) fail(`"${field}" is written twice (${op})`)
             touched.add(field)
         }
@@ -445,7 +449,7 @@ export class GGDynamoDbTypedTable<
 
         if (opts?.upsert) {
             // `merge` sets keys in a map that must exist, and `delete` removes: neither can make a missing row's field.
-            const created = [...add.map(o => o.field), ...definedEntries(opts.setIfMissing).map(([f]) => f), ...definedEntries(opts.append).map(([f]) => f)]
+            const created = [...add.map(o => o.field), ...definedEntries(opts.setIfMissing).map(([f]) => f), ...definedEntries(opts.append).map(([f]) => f), ...(spec.version ? [spec.version] : [])]
             const covered = new Set([...keys.filter(k => fields[k] !== undefined), ...Object.keys(keyInputs), ...created])
             const missing = spec.requiredFields.filter(f => !covered.has(f))
             if (missing.length > 0) fail(`an upsert may create the row, which then needs ${missing.join(", ")}: give them in fields, setIfMissing or add`)
@@ -474,6 +478,8 @@ export class GGDynamoDbTypedTable<
             else set.push(`${e.name(name)} = ${e.value(value)}`)
         }
         if (set.length + remove.length + add.length + del.length === 0) fail("nothing to write")
+        // Every write bumps the version: `ADD` counts from 0 on a row without one.
+        if (spec.version) add.push({field: spec.version, value: 1})
         return {
             TableName: this.tableName,
             Key: storedKey,

@@ -1,7 +1,7 @@
-import {describe, it, expect, expectTypeOf, vi} from "vitest"
+import {describe, it, expect, expectTypeOf} from "vitest"
 import {IsArray, IsNumber, IsObject, IsRecord, IsString} from "@grest-ts/schema"
-import {GGDynamoDb} from "../src/GGDynamoDb"
 import {GGDynamoDbTableSpec} from "../src/GGDynamoDbTableSpec"
+import {readable, stubDb, typeOnly} from "./typedTableTestUtils"
 import {GGDynamoDbTypedTable} from "../src/GGDynamoDbTypedTable"
 
 const IsUsage = IsObject({
@@ -37,21 +37,10 @@ const UsageTable = GGDynamoDbTableSpec.define({
 
 const usage: Usage = {userId: "u1", orgId: "o1", provider: "p1", day: "2026-11-12", seconds: 3}
 
-function stubTable(...responses: Record<string, unknown>[]) {
-    const send = vi.fn(async (_command: {input: Record<string, any>}) => responses.shift() ?? {Items: []})
-    const db = Object.create(GGDynamoDb.prototype) as GGDynamoDb
-    Object.assign(db, {client: {send}, config: {name: "test"}})
-    const inputs = () => send.mock.calls.map(c => c[0].input)
+function stubTable(...responses: (Record<string, unknown> | Error)[]) {
+    const {db, inputs} = stubDb(...responses)
     return {table: new GGDynamoDbTypedTable(db, UsageTable), inputs}
 }
-
-function readable(input: Record<string, any>, expression: string): string {
-    return expression
-        .replace(/#n\d+/g, n => input.ExpressionAttributeNames[n])
-        .replace(/:v\d+/g, v => JSON.stringify(input.ExpressionAttributeValues[v]))
-}
-
-function typeOnly(_fn: () => void) {}
 
 describe("a table key derived from its parts", () => {
     it("addresses rows by the parts", async () => {

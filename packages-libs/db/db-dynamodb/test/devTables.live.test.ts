@@ -31,6 +31,27 @@ describe("GGDynamoDbDevTables and GGDynamoDb.forClient against dynamodb-local", 
         expect((await client.send(new DescribeTimeToLiveCommand({TableName: "tickets"}))).TimeToLiveDescription?.AttributeName).toBe("expiresAt")
     })
 
+    test("reports what it can't fix: an index declared differently, TTL on another attribute", async () => {
+        const Drifted = GGDynamoDbTableSpec.define({...base, ttl: "expiresAt", indexes: {byUser: {pk: "userId", projection: "KEYS_ONLY"}}})
+        const OtherTtl = GGDynamoDbTableSpec.define({
+            ...base, ttl: "purgeAt", indexes: {byUser: {pk: "userId"}},
+            derived: d => ({purgeAt: d.number(["expiresAt"], r => r.expiresAt)}),
+        })
+        const log: string[] = []
+        await GGDynamoDbDevTables.ensure(client, [Drifted], {log: m => log.push(m)})
+        await GGDynamoDbDevTables.ensure(client, [OtherTtl], {log: m => log.push(m)})
+        expect(log).toEqual([
+            "tickets: index userId-index is live with other keys or projection than declared; recreate it by hand",
+            "tickets: TTL is on expiresAt, the spec says purgeAt; switch it by hand",
+        ])
+    })
+
+    test("two callers creating one table at once both succeed", async () => {
+        const Races = GGDynamoDbTableSpec.define({name: "races", schema: IsTicket, pk: "ticketId"})
+        const results = await Promise.all([GGDynamoDbDevTables.ensure(client, [Races]), GGDynamoDbDevTables.ensure(client, [Races])])
+        expect(results.flatMap(r => r.created)).toEqual(["races"])
+    })
+
     test("refuses two specs naming one table", async () => {
         await expect(GGDynamoDbDevTables.ensure(client, [Tickets, TicketsWithIndex])).rejects.toThrow(/two specs name the table "tickets"/)
     })

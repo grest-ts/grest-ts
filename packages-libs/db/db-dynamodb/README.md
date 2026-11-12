@@ -232,8 +232,8 @@ A derived name may not also be a schema field, nor read a `sets` field.
 
 Reads return the schema's fields and nothing else: derived attributes, and attributes the schema no longer has (a field you removed), stay on the stored item out of the app's sight. That decides what writes keep:
 
-- `update` writes only the fields it is given, so everything else on the item, retired attributes included, stays.
-- `put` / `save` replace the whole item, so an item written from a read sheds its retired attributes, and `update` refuses a field the schema doesn't have.
+- `update` writes only the fields it is given, so everything else on the item, retired attributes included, stays. It refuses a field the schema doesn't have.
+- `put` / `save` replace the whole item, so an item written from a read sheds its retired attributes.
 
 **Before converting a table, make its schema the full stored shape** — every attribute a row carries that must survive, encrypted blobs and bookkeeping fields included. A `put` of a row read through a narrower schema erases the rest.
 
@@ -330,7 +330,7 @@ A derived attribute can't read a field changed by `add`, `delete`, `setIfMissing
 
 ### Optimistic locking
 
-With `version: "version"` in the spec, `save(row)` writes while the stored version is still `row.version` (or, for a row without one, while no row has its key) and stores the version plus one. It returns the row as written, or `undefined` when another write got there first: re-read and retry. `update(key, fields, { expectVersion: n })` does the same for a partial write.
+With `version: "version"` in the spec, the field counts the row's writes: every write — `put`, `create`, `update`, `putMany`, `tx.*` — stores it plus one, and nothing writes it directly. `save(row)` writes while the stored version is still `row.version` and returns the row as written, or `undefined` when another write got there first: re-read and retry. `update(key, fields, { expectVersion: n })` does the same for a partial write. A row stored before the table had a version counts as version 0.
 
 ```typescript
 const project = await projects.get(id)
@@ -351,8 +351,12 @@ if (!result.ok) result.conditionFailed   // [1]: the stock update's condition
 Production tables belong to your infrastructure code (Terraform or similar), not to the service. For local development, tests and seed scripts, `GGDynamoDbDevTables.ensure` creates the tables a set of specs describes: a missing table with on-demand billing, a GSI a live table lacks (waiting for it to turn ACTIVE), and the spec's TTL. It only adds; an index the spec no longer declares is reported, never dropped. Nothing calls it on its own, and a service must not call it at startup.
 
 ```typescript
+import { GGDynamoDbDevTables } from "@grest-ts/db-dynamodb/dev-tables"
+
 await GGDynamoDbDevTables.ensure(rawClient, [WorkspacesTable, UsersTable], { log: console.log })
 ```
+
+It lives on its own `dev-tables` entry, off the package's main one. What it can't fix — an index declared differently than the live one, TTL on another attribute, an LSI on an existing table — it reports through `log` and leaves as is.
 
 In a test, `GGTest.with(cfg.db).clone({ host, tables: [WorkspacesTable, UsersTable] })` creates them in the suite's isolated database. A test, fixture or script holding an SDK client gets a `GGDynamoDb` over it with `GGDynamoDb.forClient(rawClient)`, so it writes through the typed table (derived keys included) instead of raw commands.
 
@@ -384,7 +388,7 @@ Both classes share a `GGDynamoDb`, so tables move one at a time. A store that ex
 
 > Deprecated: declare the table with `GGDynamoDbTableSpec` and use `GGDynamoDbTypedTable` (see [Typed Tables](#typed-tables)).
 
-For application code, prefer `GGDynamoDbTable`. It binds a table to a schema and validates every write — shape mistakes throw at the boundary instead of becoming silent DynamoDB corruption.
+`GGDynamoDbTable` binds a table to a schema and validates every write — shape mistakes throw at the boundary instead of becoming silent DynamoDB corruption.
 
 ```typescript
 import { GGDynamoDbTable } from "@grest-ts/db-dynamodb"

@@ -146,7 +146,8 @@ export interface GGDynamoDbTableSpecInput<T extends object, PK, SK, D, I, S, TTL
      *  may delete the row (TTL; usually within a few days, and reads see it until then). Enabled by `timeToLiveInput()`
      *  or `GGDynamoDbDevTables.ensure`, not by `createTableInput()`. */
     ttl?: TTL
-    /** A number field counting the row's writes, for optimistic locking with `save` and `update`'s `expectVersion`. */
+    /** A number field counting the row's writes: every write stores it plus one, and `save` / `update`'s `expectVersion`
+     *  write only while it still holds what was read (optimistic locking). */
     version?: GGDynamoDbNumberFields<T>
 }
 
@@ -293,9 +294,10 @@ export class GGDynamoDbTableSpec<
             // An empty set is stored as no attribute, so a required one couldn't be read back.
             if (!this.fieldSchemas[f].def.optional) fail(`set "${f}" must be optional`)
         }
-        if (this.ttl && this.fieldType(this.ttl) !== "number" && this.derivedKey(this.ttl)?.attributeType !== "N") fail(`ttl "${this.ttl}" is not a number field or a d.number attribute`)
+        if (this.ttl && !(this.fieldType(this.ttl) === "number" || (this.derivedKey(this.ttl) && this.attributeType(this.ttl) === "N"))) fail(`ttl "${this.ttl}" is not a number field or a d.number attribute`)
         if (this.version && this.fieldType(this.version) !== "number") fail(`version "${this.version}" is not a number field`)
         if (this.version && this.keyFields.includes(this.version)) fail(`version "${this.version}" is part of the table key`)
+        for (const {name, key} of this.derived) if (this.version && key.deps.includes(this.version)) fail(`derived "${name}" reads the version "${this.version}"`)
         for (const f of this.keyFields) if (this.sets.has(f)) fail(`set "${f}" is part of the table key`)
         const indexes: Record<string, IndexWithProjection> = {}
         for (const [key, def] of Object.entries(input.indexes ?? {}) as [string, GGDynamoDbIndexDef][]) {
