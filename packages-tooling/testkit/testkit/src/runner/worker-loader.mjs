@@ -22,8 +22,9 @@ process.on('unhandledRejection', (reason) => {
 const config = workerData;
 
 // Import control client from @grest-ts/testkit; the Date shim goes in before any app module loads
-const {GGTestRuntimeWorker, installDateShim} = await import('@grest-ts/testkit');
+const {GGTestRuntimeWorker, installDateShim, GGDateShim} = await import('@grest-ts/testkit');
 installDateShim();
+if (config.clock) GGDateShim.setState(config.clock);
 
 // Create control client
 const controlClient = new GGTestRuntimeWorker(config);

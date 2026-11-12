@@ -111,10 +111,12 @@ describe("GGTest.clock", () => {
         expect(Temporal.Now.zonedDateTimeISO("UTC").year).toBe(2030)
     })
 
-    test("set and advance reject times that aren't finite", () => {
+    test("set and advance reject times that aren't whole milliseconds", () => {
         expect(() => GGTest.clock.set(new Date("bad"))).toThrow(/not a valid time/)
         expect(() => GGTest.clock.set(NaN)).toThrow(/not a valid time/)
-        expect(() => GGTest.clock.advance(Infinity)).toThrow(/finite/)
+        expect(() => GGTest.clock.set(T + 0.5)).toThrow(/not a valid time/)
+        expect(() => GGTest.clock.advance(Infinity)).toThrow(/integer/)
+        expect(() => GGTest.clock.advance(0.5)).toThrow(/integer/)
     })
 
     test("explicit dates, Date.parse, Date.UTC and instanceof are unaffected", async () => {

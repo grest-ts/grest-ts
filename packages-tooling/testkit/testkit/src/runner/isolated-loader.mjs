@@ -40,8 +40,6 @@ const {GGRuntime} = await import('@grest-ts/runtime');
 const {GGLog} = await import('@grest-ts/logger');
 
 const config = JSON.parse(configJson);
-
-// The runtime module is imported below, before GGTestRuntimeWorker.start() runs, so the clock goes in here.
 if (config.clock) GGDateShim.setState(config.clock);
 
 // Override cli() to intercept runtime startup in isolated mode

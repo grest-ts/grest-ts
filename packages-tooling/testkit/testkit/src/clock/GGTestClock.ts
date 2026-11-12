@@ -14,7 +14,7 @@ export class GGTestClock {
     /** Jump to `time`; the clock keeps running from there (or stays stopped at it). */
     public set(time: Date | number): Promise<void> {
         const target = time instanceof Date ? time.getTime() : time;
-        if (!Number.isFinite(target)) throw new Error(`GGTest.clock.set(${String(time)}): not a valid time`);
+        if (!Number.isInteger(target)) throw new Error(`GGTest.clock.set(${String(time)}): not a valid time`);
         return this.change(state => state.stoppedAt === undefined
             ? {offsetMs: target - GGDateShim.realNow()}
             : {offsetMs: state.offsetMs, stoppedAt: target});
@@ -22,7 +22,7 @@ export class GGTestClock {
 
     /** Jump forward by `ms`. Only moves `Date`; timers are not fired. */
     public advance(ms: number): Promise<void> {
-        if (!(Number.isFinite(ms) && ms >= 0)) throw new Error(`GGTest.clock.advance(${ms}): ms must be a finite non-negative number`);
+        if (!(Number.isInteger(ms) && ms >= 0)) throw new Error(`GGTest.clock.advance(${ms}): ms must be a non-negative integer`);
         return this.change(state => state.stoppedAt === undefined
             ? {offsetMs: state.offsetMs + ms}
             : {offsetMs: state.offsetMs, stoppedAt: state.stoppedAt + ms});
@@ -54,7 +54,9 @@ export class GGTestClock {
             beforeAll(() => this.change(next));
             return Promise.resolve();
         }
-        return applyClock(runner, next(GGDateShim.getState()));
+        const current = GGDateShim.getState();
+        const state = next(current);
+        return GGDateShim.same(state, current) ? Promise.resolve() : applyClock(runner, state);
     }
 }
 
