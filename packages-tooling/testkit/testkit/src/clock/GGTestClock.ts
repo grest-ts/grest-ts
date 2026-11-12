@@ -2,7 +2,7 @@ import {GGLog} from "@grest-ts/logger";
 import {GG_TEST_RUNNER, GGTestRunner} from "../GGTestRunner";
 import {GGTestRuntimeState} from "../GGTestRuntime";
 import {GGTestComponent} from "../testers/GGTestComponent";
-import {sendClock} from "./GGClockIPC";
+import {GGClockIPC} from "./GGClockIPC";
 import {GGClockState, GGDateShim} from "./GGDateShim";
 
 /**
@@ -61,7 +61,7 @@ export class GGTestClock {
 async function applyClock(runner: GGTestRunner, state: GGClockState): Promise<void> {
     GGDateShim.setState(state);
     const runtimes = runner.getAllRuntimes().filter(r => r.state === GGTestRuntimeState.STARTED);
-    const results = await Promise.allSettled(runtimes.map(r => sendClock(r, state)));
+    const results = await Promise.allSettled(runtimes.map(r => r.sendCommand(GGClockIPC.worker.set, state)));
     const failed = results.filter((r): r is PromiseRejectedResult => r.status === "rejected");
     if (failed.length > 0) throw new AggregateError(failed.map(f => f.reason), `GGTest.clock: ${failed.length} runtime(s) didn't take the new time: ${failed.map(f => f.reason?.message).join("; ")}`);
 }

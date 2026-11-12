@@ -8,8 +8,8 @@ import {InlineRunner} from "./runner/InlineRunner";
 import {WorkerRunner} from "./runner/WorkerRunner";
 import {IsolatedRunner} from "./runner/IsolatedRunner";
 import type {GGTestRunner} from "./GGTestRunner";
-import {GGDateShim} from "./clock/GGDateShim";
-import {GGClockIPC, sendClock} from "./clock/GGClockIPC";
+import {GGClockState, GGDateShim} from "./clock/GGDateShim";
+import {GGClockIPC} from "./clock/GGClockIPC";
 
 /**
  * Lifecycle state of a runtime instance.
@@ -35,6 +35,8 @@ export interface GGTestEnvConfig {
     testId: string;
     runtimeId: string;
     initialCommands: GGTestCommand[];
+    /** The test clock the runtime boots on, when it isn't real time. */
+    clock?: GGClockState;
     /** When true, the runtime runs inline (same process). Affects module loading strategy. */
     inline?: boolean;
 }
@@ -133,14 +135,14 @@ export class GGTestRuntime {
             GGLog.debug(this, 'Launching ' + this.className + ' in ' + this.config.mode + ' mode...')
 
             const clock = GGDateShim.getState()
-            if (!GGDateShim.isDefault(clock)) this.initialCommands.push({method: GGClockIPC.worker.set, payload: clock})
             const config: GGTestEnvConfig = {
                 executablePath: this.executablePath,
                 className: this.className,
                 testRouterPort: this.runner.ipcServer.getPort(),
                 testId: this.runner.testId,
                 runtimeId: this.runtimeId,
-                initialCommands: this.initialCommands
+                initialCommands: this.initialCommands,
+                clock: GGDateShim.isDefault(clock) ? undefined : clock,
             }
             switch (this.config.mode) {
                 case GGTestMode.INLINE:
@@ -167,7 +169,7 @@ export class GGTestRuntime {
                 this._state = GGTestRuntimeState.STARTED;
                 // The clock may have changed while it booted; applyClock only reaches started runtimes.
                 const current = GGDateShim.getState()
-                if (!GGDateShim.same(clock, current)) await sendClock(this, current)
+                if (!GGDateShim.same(clock, current)) await this.sendCommand(GGClockIPC.worker.set, current)
                 GGLog.debug(this, this.className + ' started successfully')
             } catch (error) {
                 // Mark as failed but keep runner alive for diagnostics (e.g., log retrieval)

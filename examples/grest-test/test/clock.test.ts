@@ -3,16 +3,14 @@ import {GGSocket} from "@grest-ts/websocket"
 import type {SocketAdapter} from "@grest-ts/websocket/internal"
 import {ClockInlineRuntime, ClockLateRuntime, ClockWorkerRuntime} from "../src/ClockRuntime"
 import {ClockIsolatedRuntime} from "../src/ClockIsolatedRuntime"
-import {ClockBootRuntime} from "../src/ClockBootRuntime"
-import {ClockBootIsolatedRuntime} from "../src/ClockBootIsolatedRuntime"
-import {ClockBootIsolatedApi, ClockBootWorkerApi} from "../src/api/ClockBootApi"
+import {ClockLateIsolatedRuntime} from "../src/ClockLateIsolatedRuntime"
 import {ClockInlineApi, ClockIsolatedApi, ClockLateApi, ClockWorkerApi} from "../src/api/ClockApi"
 
 const DAY = 24 * 3600_000
 const T = Date.parse("2030-01-01T00:00:00Z")
 const SLACK = 5_000
 
-const realNow = () => GGDateShim.realNow()
+const realNow = GGDateShim.realNow
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
 
 const runtimes = {
@@ -91,15 +89,15 @@ describe("GGTest.clock", () => {
         expect(reading.now).toBeLessThan(T + SLACK)
     })
 
-    test("a runtime module evaluated after set reads the fake time at import, worker and isolated", async () => {
+    test.each([
+        ["worker", () => GGTest.startWorker(ClockLateRuntime)],
+        ["isolated", () => GGTest.startIsolated(ClockLateIsolatedRuntime)],
+    ])("a %s runtime module evaluated after set reads the fake time at import", async (_, start) => {
         await GGTest.clock.set(T)
-        await GGTest.startWorker(ClockBootRuntime)
-        await GGTest.startIsolated(ClockBootIsolatedRuntime)
-        for (const api of [callOn(ClockBootWorkerApi), callOn(ClockBootIsolatedApi)]) {
-            const boot = await api.boot()
-            expect(boot).toBeGreaterThanOrEqual(T)
-            expect(boot).toBeLessThan(T + SLACK)
-        }
+        await start()
+        const {boot} = await callOn(ClockLateApi).read()
+        expect(boot).toBeGreaterThanOrEqual(T)
+        expect(boot).toBeLessThan(T + SLACK)
     })
 
     test("Temporal.Now follows the clock", async () => {

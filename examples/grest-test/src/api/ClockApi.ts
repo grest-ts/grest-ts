@@ -3,6 +3,8 @@ import {GGContractClass, IsBoolean, IsNumber, IsObject, SERVER_ERROR} from "@gre
 
 export const IsClockReading = IsObject({
     now: IsNumber,
+    /** Date.now() when the module loaded. */
+    boot: IsNumber,
     newDate: IsNumber,
     fixed: IsNumber,
     isDate: IsBoolean,

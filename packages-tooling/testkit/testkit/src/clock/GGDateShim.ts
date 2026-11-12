@@ -21,6 +21,7 @@ export function installDateShim(): void {
 
     function Date(this: unknown, ...args: unknown[]) {
         if (!new.target) return new RealDate(now()).toString()
+        if (args.length === 0 && new.target === Date) return new RealDate(now())
         return Reflect.construct(RealDate, args.length ? args : [now()], new.target)
     }
     Object.setPrototypeOf(Date, RealDate)

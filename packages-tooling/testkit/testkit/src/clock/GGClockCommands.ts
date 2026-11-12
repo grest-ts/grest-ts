@@ -5,14 +5,10 @@ import {GGDateShim} from "./GGDateShim";
 GGTestRuntimeWorker.onBeforeRuntimeStart(() => {
     const worker = GG_TEST_RUNTIME_WORKER.get();
 
-    const initial = worker.getInitialCommandsFor(GGClockIPC.worker.set).at(-1);
     // Inline runtimes share the test isolate, whose clock is already current; the snapshot may be stale.
-    if (initial && !worker.config.inline) GGDateShim.setState(initial.payload);
+    if (worker.config.clock && !worker.config.inline) GGDateShim.setState(worker.config.clock);
 
     worker.ipcClient.onFrameworkRequest(GGClockIPC.worker.set, async (state) => {
         GGDateShim.setState(state);
-    });
-    worker.ipcClient.onFrameworkRequest(GGClockIPC.worker.reset, async () => {
-        GGDateShim.setState(GGDateShim.DEFAULT_STATE);
     });
 });
