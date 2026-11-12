@@ -182,16 +182,18 @@ resolves:
 1. Every isolate (the test, inline, worker and isolated runtimes) reads the new time. This is a
    barrier: every runtime acknowledged the new offset before any timer fired. A timer in A that
    calls B therefore always finds B on the new time.
-2. Every scope timer pending before the advance and due by the target has fired **once**, in
-   due order within its runtime. Runtimes fire one after another, in start order. If A has a
+2. Every scope timer pending before the advance and due by the target has fired **once**. Within
+   a runtime they are started in due order and run concurrently, as overdue timers do after a
+   pause. "Due" means due by the advance target, decided at the barrier. Runtimes fire one after another, in start order. If A has a
    timer due at +2 min and B one at +1 min, `advance(5 min)` fires A's first. Global due order
    would need a round-trip per due instant, and it only matters when one runtime's timer depends
    on another runtime's timer having already run. Revisit if a real test needs it.
 3. Intervals fire once, not once per missed period, and continue from the new time. Timers
    that fired callbacks create are scheduled from the new time. To see N runs, advance N times.
-4. Every promise returned by a fired callback has settled. A rejection fails the `advance`. A
-   callback still pending after a real-time guard (default 30 s) fails the `advance` with the
-   timer's stack.
+4. Every promise returned by a fired callback has settled. A rejection fails the `advance`, but
+   only after every runtime has fired its timers, so one failure can't strand another runtime's
+   timers. A callback still pending after a real-time guard fails the `advance` with the place its
+   timer was set. The guard defaults to the current test's timeout less a margin.
 
 It does **not** guarantee:
 
