@@ -22,6 +22,11 @@ You don't use this package directly. It is set up by `@grest-ts/testkit` and wor
 - Every runtime of a `GGTest.startWorker({...})` starts at the same time: each spends its boot loading its own module
   graph. A runtime must not call a peer from its own `start()`; call it lazily, when a request needs it.
 - Vitest's `isolate: false` works: the setup file re-runs for every test file in a worker without stacking wrappers.
-  Runtimes still boot fresh per file in their own worker threads, so only the test process's own module state (fixtures,
-  module-level singletons, anything a test file sets globally) is shared between the files of a worker. A test file that
-  replaces something global (`GGSocketPool.setAdapter`, a module-level registry) must restore it in `afterAll`.
+  The test process's module state (fixtures, module-level singletons, anything a test file sets globally) is then
+  shared between the files of a worker. A test file that replaces something global (`GGSocketPool.setAdapter`, a
+  module-level registry) must restore it in `afterAll`.
+- Under `isolate: false` runtime worker threads are reused too: when a file's runtime stops, its worker keeps its loaded
+  modules and the next file's start of the same runtime constructs and starts a fresh instance in it, skipping the
+  module loading that is most of a runtime's boot. Instance state is fresh per file; module-level state in the runtime's
+  code (a module-level cache, a `.define()` run in `compose()`) is shared between files, so keep state on the instances
+  `compose()` creates. A worker no runtime of the next file uses is ended.

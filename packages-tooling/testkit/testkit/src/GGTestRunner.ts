@@ -1,5 +1,6 @@
 import {GGTestRuntime} from "./GGTestRuntime"
 import {startRuntimes} from "./startRuntimes"
+import {WorkerRunner} from "./runner/WorkerRunner"
 import {GGLog} from "@grest-ts/logger"
 import {IPCClientRequest, IPCServer} from "@grest-ts/ipc";
 import {GGContext} from "@grest-ts/context";
@@ -276,6 +277,7 @@ export class GGTestRunner {
 
             // 4. Start runtimes (they will receive commands via env)
             await startRuntimes(this.globalRuntimes)
+            WorkerRunner.terminateUnused()
             this._started = true;
         });
     }
