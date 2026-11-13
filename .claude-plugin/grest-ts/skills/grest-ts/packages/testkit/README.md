@@ -465,6 +465,9 @@ in a test; fields declared by a subclass of a `@mockable` class need `@mockable`
 `MyApi.mock.x` / `MyApi.spy.x` act in the test router, so they reach the calls that go through it: calls from a
 client that finds its target through discovery (`MyApi.createClient()` with no `url`).
 
+A client with a fixed `url` or with connection settings (a host, port or TLS pin set per client or per call) is not
+reached yet; that comes with the follow-up to this change ([#174](https://github.com/grest-ts/grest-ts/issues/174)).
+
 > **A client with a custom `transport` is never mocked or spied on.** The router can't run a client's own transport,
 > so such a call always goes out for real. Put the dependency behind a `@mockable` class, or let the client use
 > discovery.

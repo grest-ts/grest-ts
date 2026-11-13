@@ -1,4 +1,5 @@
-import {GGTest, GGTestContext, mockOf, spyOn} from "@grest-ts/testkit"
+import {GG_TEST_RUNNER, GGTest, GGTestContext, mockOf, spyOn} from "@grest-ts/testkit"
+import {GGHttpInterceptorsServer} from "@grest-ts/http/testkit"
 import {SERVER_ERROR} from "@grest-ts/schema"
 import {TargetingGatewayRuntime} from "../src/TargetingGatewayRuntime"
 import {TargetingStoreRuntime} from "../src/TargetingStoreRuntime"
@@ -136,6 +137,21 @@ const schemaSuite = (start: StartMode) => describe(`targeting schema mocks and s
         await alice.gateway.acks().arrayToContainEqual("from-callback")
     })
 
+    test("a call whose target is ambiguous fails the action with the reason", async () => {
+        const addresses: Map<string, unknown> = (GG_TEST_RUNNER.get().getExtensionInstance(GGHttpInterceptorsServer) as any).addresses
+        const storeB = t.storeB.runtimes[0].runtimeId
+        const real = addresses.get(storeB)
+        addresses.set(storeB, addresses.get(t.storeA.runtimes[0].runtimeId))
+        try {
+            await failure(
+                alice.gateway.save({text: "a", times: 2})
+                    .with(TargetingStoreApi.mock.save.on(t.storeA).anyTimes().andReturn({text: "a", by: "mock"}))
+            ).toThrow(/ROUTING_FAILED[^]*served by several runtimes/)
+        } finally {
+            addresses.set(storeB, real)
+        }
+    })
+
     test(".on() takes exactly one runtime", () => {
         expect(() => TargetingStoreApi.mock.save.on(t as any)).toThrow(/takes a runtime selector/)
     })
@@ -199,6 +215,18 @@ const replicaSuite = (start: StartMode) => describe(`targeting replicas with moc
 replicaSuite("startWorker")
 replicaSuite("startInline")
 replicaSuite("startIsolated")
+
+describe("stopping one of two replicas", () => {
+    const t = GGTest.startWorker({gateway: TargetingGatewayRuntime, storeA: TargetingStoreRuntime, storeB: TargetingStoreRuntime})
+    const alice = new GGTestContext("Alice").apis({gateway: TargetingGatewayApi})
+
+    test("the other still serves and can be targeted", async () => {
+        await t.storeA.stop()
+        await alice.gateway.save({text: "a", times: 2})
+            .with(TargetingStoreApi.spy.save.on(t.storeB).times(2))
+            .toEqual(["real", "real"])
+    })
+})
 
 describe("schema interceptors with no instance of the API", () => {
     GGTest.startWorker({gateway: TargetingGatewayRuntime})

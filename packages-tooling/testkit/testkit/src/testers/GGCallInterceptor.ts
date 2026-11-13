@@ -222,6 +222,11 @@ export abstract class GGCallInterceptor implements IGGTestInterceptor {
         return this.noOfTimesCalled >= this.times.min || this.validationError !== undefined;
     }
 
+    /** A call to this method could not be routed at all; the action fails with the reason. */
+    public routingFailed(error: Error): void {
+        this.setMockValidationError(new Error(error.message), "ROUTING_FAILED");
+    }
+
     /** A call to this method was handled elsewhere (another runtime, another interceptor) while this one was active. */
     public wentElsewhere(where: string): void {
         this.elsewhere.set(where, (this.elsewhere.get(where) ?? 0) + 1);

@@ -3,13 +3,13 @@ import * as net from 'net';
 import {GGLog} from "@grest-ts/logger";
 import {Duplex} from "stream";
 import {HttpHandler, HttpResolver} from "./HttpHandler";
-
-export type {HttpRoute, HttpResolver} from "./HttpHandler";
 import {ClientDisconnectListener, SocketHandler, SocketMessage} from "./SocketHandler";
 import {IPCClientRequest, IPCServerRequest} from "../common/IPCTypes";
 import {GGLocator, GGLocatorScope} from "@grest-ts/locator";
 import {GGContext} from "@grest-ts/context";
 import {GG_TRACE} from "@grest-ts/trace";
+
+export type {HttpRoute, HttpResolver} from "./HttpHandler";
 
 export class IPCServer {
 

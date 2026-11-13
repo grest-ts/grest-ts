@@ -16,8 +16,9 @@ interface GGHttpDefaultAnswer {
 }
 
 const WILDCARD_OR_LOOPBACK = new Set(["0.0.0.0", "::", "localhost", "127.0.0.1", "::1"]);
-// fetch has already decoded the body and re-frames it, so the original framing headers would be wrong.
-const NOT_FORWARDED = new Set(["host", "connection", "content-length", "content-encoding", "transfer-encoding", "set-cookie"]);
+const REQUEST_HEADERS_NOT_FORWARDED = new Set(["host", "connection", "content-length", "transfer-encoding"]);
+// fetch has already decoded the response body and re-frames it, so its original framing headers would be wrong.
+const RESPONSE_HEADERS_NOT_FORWARDED = new Set(["connection", "content-length", "content-encoding", "transfer-encoding", "set-cookie"]);
 
 /**
  * Decides every HTTP call that reaches the test router, before its body is read: one matching interceptor answers
@@ -113,7 +114,14 @@ export class GGHttpInterceptorsServer implements GGTestComponent {
         // An untargeted mock alone answers wherever the call would go, so no instance is picked and round robin doesn't advance.
         const untargetedMockOnly = candidates.length === 1 && !candidates[0].target && !candidates[0].passThrough;
         const instance = untargetedMockOnly ? undefined : this.discoveryServer.selectInstance(path);
-        const runtime = instance && this.runtimeAt(instance.baseUrl);
+        let runtime: GGTestRuntime | undefined;
+        try {
+            runtime = instance && this.runtimeAt(instance.baseUrl);
+        } catch (error: any) {
+            // The caller only sees a failed call, which code under test may swallow.
+            candidates.forEach(candidate => candidate.routingFailed(error));
+            throw error;
+        }
         const where = untargetedMockOnly ? undefined : runtime?.label ?? instance?.baseUrl ?? "no running instance";
         const interceptor = this.interceptors.match(key, runtime, where);
 
@@ -167,7 +175,7 @@ export class GGHttpInterceptorsServer implements GGTestComponent {
             res.on("close", () => abort.abort());
             const headers: Record<string, string> = {};
             for (const [name, value] of Object.entries(req.headers)) {
-                if (value !== undefined && !NOT_FORWARDED.has(name)) headers[name] = Array.isArray(value) ? value.join(", ") : value;
+                if (value !== undefined && !REQUEST_HEADERS_NOT_FORWARDED.has(name)) headers[name] = Array.isArray(value) ? value.join(", ") : value;
             }
             response = await fetch(baseUrl + req.url, {method: req.method, headers, body: body.length ? new Uint8Array(body) : undefined, redirect: "manual", signal: abort.signal});
         } catch (error: any) {
@@ -181,7 +189,7 @@ export class GGHttpInterceptorsServer implements GGTestComponent {
 
         const headers: Record<string, string | string[]> = {};
         response.headers.forEach((value, name) => {
-            if (!NOT_FORWARDED.has(name)) headers[name] = value;
+            if (!RESPONSE_HEADERS_NOT_FORWARDED.has(name)) headers[name] = value;
         });
         const cookies = response.headers.getSetCookie();
         if (cookies.length) headers["set-cookie"] = cookies;

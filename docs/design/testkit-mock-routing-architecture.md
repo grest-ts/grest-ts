@@ -156,6 +156,8 @@ Where PR 1 differs from §2 and §4:
   `content-length`, `content-encoding` and `transfer-encoding`. A dial failure reaches the caller as `SERVER_ERROR`.
 - **Addresses** are kept per runtimeId in the http testkit server, count only while the runtime is `STARTED`, and
   are dropped on IPC disconnect. PR 1 matches wildcard and loopback binds by port; two matches throw.
+- **Calls a runtime receives during its own startup** (before it is `STARTED`) aren't attributed to it, so a targeted
+  interceptor doesn't match them.
 - **The router still listens on `0.0.0.0`.** kratt's VM integration tests reach the test router from the VM over
   the bridge (`WorkspaceFlowTestRuntime.localHubCallbackPort`), and the dev gateway is reached at `host-ip:9000`.
 - **The deprecated `createRuntimeSelector` / `RuntimeResult`** are deleted (unused; they grouped by `NAME` too).

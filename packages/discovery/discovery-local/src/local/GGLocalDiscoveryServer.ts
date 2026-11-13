@@ -51,8 +51,9 @@ export class GGLocalDiscoveryServer {
             }
         });
 
-        this.server.onFrameworkMessage(GGDiscoveryIPC.discoveryServer.unregister, async (routes) => {
-            routes.forEach(route => this.removeRoute(route.api));
+        // Only the sender's own routes: other replicas of the same API keep serving.
+        this.server.onFrameworkMessage(GGDiscoveryIPC.discoveryServer.unregister, async (_routes, msg) => {
+            this.removeRoutesByClient(msg.clientId);
         });
 
         this.server.onFrameworkMessage(GGDiscoveryIPC.discoveryServer.discoverApi, async (apiName) => {
@@ -148,7 +149,7 @@ export class GGLocalDiscoveryServer {
             }
         }
         if (removed > 0) {
-            GGLog.info(this, `Cleaned up ${removed} routes from disconnected client ${clientId}`);
+            GGLog.info(this, `Removed ${removed} routes of client ${clientId}`);
         }
     }
 
