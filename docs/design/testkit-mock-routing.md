@@ -7,6 +7,13 @@ runtime with `.on(t.x)`.
 The spike on branch `kratt/spike-relay-mock-routing` proves the core routing (untargeted mocks for pinned clients)
 and the #172 fix. `.on()` and spies reported by the client are not spiked yet.
 
+**Decided:**
+- the name is `.on()`;
+- an active mock bypasses a client's custom `transport` (spies still go through it);
+- everything ships as one PR.
+
+WebSocket schemas are still open, see §7.
+
 ## 1. What a test looks like
 
 ### The new API in one table
@@ -84,7 +91,7 @@ before it is dialled.
 ```ts
 describe("peer messages", () => {
     const t = GGTest.startWorker({hub: HubRuntime, relayA: RelayRuntime, relayB: RelayRuntime})
-    const wsA = relayWorkspace(t.relayA)        // kratt helper, see §4: seeds a row pointing at this relay
+    const wsA = relayWorkspace(t.relayA)        // kratt helper, see §5: seeds a row pointing at this relay
     const wsB = relayWorkspace(t.relayB)
 
     test("A's message reaches only A", async () => {
@@ -195,69 +202,107 @@ Today the inner call fails with `Service "GGDiscovery" not found in async contex
 1. A targeted interceptor matches only calls at its runtime. An untargeted one matches calls at any runtime.
 2. If both match, the targeted one wins. Two interceptors with the same method and target is a setup error, as it
    is today.
-3. Nothing matches: the call proceeds exactly as in production. It goes to discovery's choice or to the given
-   address, and when a test runtime listens there, that's a real call.
+3. Nothing matches: the call goes where it would in production. If a test runtime listens at that address, it's a
+   real call.
 
 **"At a runtime" means:**
-- **schema interceptors:** the call's destination is the runtime's server address, whether discovery picked it or
-  the call was addressed explicitly. Comparing addresses (not a new instance id) means production needs nothing
-  new: the caller already holds the address and the testkit already knows every test runtime's address.
-- **`@mockable` interceptors:** the call runs in that runtime. Every runtime's IPC connection already carries its
-  `runtimeId`.
+- **schema interceptors:** the call goes to that runtime's HTTP server, whether discovery picked it or the client
+  addressed it itself. The match is on the address, because production callers already hold it and the testkit
+  already knows each test runtime's address. No new instance id is needed.
+- **`@mockable` interceptors:** the method runs in that runtime. Each runtime's IPC message already carries its
+  `runtimeId` (`SocketMessage.runtimeId`).
 
-**Spies** are reported by the client, for every client in a test runtime: the client reports the request, makes
-the real call, then reports the response. It's the same as `@mockable` spies (`mockable/call` +
-`mockable/spy-result`). The test process no longer proxies spied calls. That means a spy works for pinned TLS
-targets and doesn't need the service to be registered in discovery.
+**Failure messages** list where the method's calls actually went during the action ("went to: relayB (1)"). That
+makes a misrouted call obvious (case 4).
 
-**Failure messages** list where the method's calls in this action actually went. That's what makes a misrouted
-call obvious (case 4).
+## 3. How it works (after reviewing the current code)
 
-## 3. How it works
+The key finding: **under the testkit, every discovery-routed call already goes through the test router.**
+`GGLocalDiscoveryServer`'s `discoverApi` handler returns the router's own URL for every registered API. The router
+then either answers from an interceptor (`interceptHttp`), or proxies to the instance that the API's routing
+strategy picks (`setRouteProxyResolver` → `matchRoute(path)`). Spies on these calls are proxied by the router.
+
+So there is one interception point already, the router, and the change is two narrow additions to it:
 
 ```
-runtime: client.method(data)
-  → resolve the address as today (discovery, url, or connection settings)
-  → ask the test process (IPC "http/route", the same pattern as "mockable/call"):
-        {key: "POST /api/agent/deliver-peer-message", target: "https://127.0.0.2:41234"}
-  ← "mock"  → send to the test router (plain HTTP, no pin) → interceptor.onRequest → returnData
-  ← "spy"   → real call; report the request before it and the response after it
-  ← nothing → real call
+discovery-routed call (unchanged path)
+  runtime → router → interceptor for (method, the instance the strategy picked)?  → answer   (mock)
+                                                                                   → forward  (spy, as today)
+                   → no interceptor                                                → forward  (as today)
+
+call addressed by the client (url / transport / connection settings): new
+  runtime: ask the router "intercepting (method, target address)?"   (one IPC round trip, like mockable/call)
+     ← mock    → send to the router (plain HTTP, no pin) → interceptor answers
+     ← spy     → real call to the target; report the request before it and the response after it
+     ← nothing → real call, exactly as in production
 ```
 
-- **grest-ts `http/src`:** one hook in `createClient`, registered only by `@grest-ts/http/testkit` inside test
-  runtimes. Production pays one `undefined` check per call.
-- **grest-ts `http/testkit`:**
-  - the IPC handler that answers the hook;
-  - interceptors keyed by method + target instead of method only;
-  - target → runtime matching, using each runtime's registered server address. Registrations need the bound host,
-    not only the port, so two runtimes on `127.0.0.2:P` and `127.0.0.3:P` stay apart;
-  - spies reported by the client.
+The two additions:
+- **Targeted matching in the router:** for discovery calls, the router picks the instance once per call, checks
+  the interceptor against it, and forwards to that same instance if nothing matches.
+- **The "ask" for client-addressed calls:** a spy on a pinned target can't be proxied, because the router would
+  have to hold the pin and the client's certificates. So the client makes the real call itself and reports it.
+  That is the same two-step protocol `@mockable` spies already use (`mockable/call` + `mockable/spy-result`).
 
-  Mocks stop adding a route to discovery: the hook covers every client in a runtime. Calls the test makes itself
-  (`GGTestContext`) aren't mocked, because they are the action.
-- **grest-ts `testkit`:**
-  - `.on()` on `GGMockWith`/`GGSpyWith`;
-  - `mockable/call` matched against the calling runtime's `runtimeId`;
-  - the "went to" lines in failure messages;
-  - the #172 fix (§5).
-- **Cost:** one IPC round trip per outbound call from a runtime under test. Clients that use discovery pay the
-  same today (one per `discoverApi`). So do `@mockable` methods.
+### Changes per file
 
-Effort: about 3 days with tests and READMEs. It can ship in two PRs:
-1. Untargeted interception for every client, plus #172. This is what the spike proved; about a day. kratt's relay
-   tests can be written with it right away (case 3).
-2. `.on()`, client-reported spies, and "went to" messages.
+| Package / file | Change | Size |
+|---|---|---|
+| `http/src/client/GGHttpSchema.createClient.ts` | A test hook for client-addressed calls (`config.url !== undefined`): ask; on mock, send to the router with plain fetch and no connection settings; on spy, report the request and the response around the real call. `undefined` outside tests. | ~40 |
+| `http/testkit/mock/GGHttpTestRoute.ts` (new) | Registers the hook. In a runtime it asks over the worker's IPC; in the test process (`GGTestContext` clients) it looks up the interceptors directly. | ~30 |
+| `http/testkit/mock/GGHttpInterceptorsServer.ts` | Interceptors keyed by method + target, not method only. The router picks the instance once per call and matches against it. Answers the ask. Handles spy reports. Records "went to". | ~+90 / −20 |
+| `http/testkit/mock/GGHttpSchema.mock.ts` | Interceptor config carries the target. | ~10 |
+| `discovery/*` `GGServiceRegistration` + `GGLocalDiscoveryClient` | Registrations carry the bound host as well as the port (today every route is `localhost:<port>`), and the runtime's `runtimeId` under the testkit. That lets the router map an address to a runtime, and keeps two runtimes on `127.0.0.2:P` and `127.0.0.3:P` apart. | ~25 |
+| `http/src/server/GGHttpServer.ts`, `GGHttpSchema.startServer.ts` | Pass the bound host into the registration. | ~5 |
+| `testkit/src/testers/GGMockWith.ts`, `GGSpyWith.ts` | `.on(selector)` → `target: runtimeId`. | ~20 |
+| `testkit/src/testers/GGCallInterceptor.ts` | Stores the target. Includes "went to" in the "never called" error. #172: runs `andReturn` callbacks in the scope captured at `register()`. | ~30 |
+| `testkit/src/mockable/GGMockableInterceptorsServer.ts` | Keyed by class.method + target, matched against `msg.runtimeId`. | ~25 |
+| tests | The nine cases of §1 as example tests in `examples/grest-test` (worker + inline), plus the existing suites as the regression net. | ~400 |
+| docs | testkit README (targeting section), http README (one line), the grest-ts skill. | ~60 |
 
-## 4. What kratt needs
+**Total:** about 300 lines of framework code across ~10 files, each change small, plus ~400 lines of tests. About
+3 days. Your read that it's "quite a few changes, but the same flow" is right: nothing new runs in production,
+the router stays the single place mocks answer, and the only new protocol is the ask, which copies `@mockable`'s.
 
-Production code needs no change for case 3. Cases 4 to 9 need real relays in tests:
+### Details the build must get right
+
+1. **Order for a mocked API with no running service.** The client asks discovery first, and discovery fails when
+   the API isn't registered. Today a mock avoids this by adding a discovery route. Keep that route for an
+   untargeted mock. A targeted mock always has a running runtime behind it, so it doesn't need one.
+2. **Round robin.** The router must call `matchRoute` once per call. Calling it once to check the target and again
+   to forward would advance the strategy twice.
+3. **Spy payload shape.** The router's spies see the raw response JSON; client-reported spies must send the same
+   shape (`{success, type, data}`), so `responseToMatchObject` behaves identically.
+4. **Unreachable fake targets.** A row seeded with an address nobody listens on should fail fast. kratt's helper
+   should seed loopback addresses (connection refused), not `10.x` ones (hangs until timeout).
+5. **Inline mode.** The hook looks up the worker per call (`GG_TEST_RUNTIME_WORKER.tryGet()`), as in the spike, so
+   several inline runtimes and describe blocks don't share one global.
+
+## 4. Does it solve kratt's problems and make tests easier?
+
+| Blocked today (kratt `TEST_QUALITY.md`) | With this |
+|---|---|
+| ai-spawn forwarding (`AiSpawnHubService.test`: `vi.mock` of the schema module and `setRelayTargetFor`, hand-made `vm`/`projects` fakes, 650 LOC) | A flow test through the real hub: `RelayAgentApi.mock.deliverPeerMessage.andReturn(...)` (case 3). No module mocks, no fakes for hub internals. |
+| user-ssh-keys push | `RelaySshKeysApi.mock.setAuthorizedKeys` (case 3), or a spy on a real relay (case 5). |
+| git webhook dispatch to relays (left as a unit test in kratt#1696) | Fan-out with one targeted mock per relay (case 6), and partial failure (case 7). |
+| A relay mock that calls back into the hub (#172 workaround: write to the DB directly) | A test client inside `andReturn` (case 9). |
+
+All four need only the untargeted part plus #172, and no kratt production change. Targeting and real relays
+(cases 4–7) need kratt's relay host and port as config (§5). They are what makes misrouting and fan-out testable
+at all.
+
+The remaining gap: to target a relay **without** running one, `.on()` needs something to point at. See open
+question 1.
+
+## 5. What kratt needs
+
+Cases 3 and 9 need nothing. Cases 4 to 7 need real relays in tests:
 - **The relay's listen host and port become config,** with production defaults `0.0.0.0` and `9600`. The hub
   dials the same port setting. Today both are the constant `RELAY_PORT`. It's normal config, per the grest-ts rule
   "never hardcode ports", not a test seam.
-- **A test helper in kratt's bag** that runs each relay on its own loopback IP with a free port and seeds a row
-  pointing at it. Config updates made in the describe body become the runtime's start config, so it can set the
-  address before the relay starts:
+- **A test helper in kratt's bag** that runs each relay on its own loopback IP and a free port, then seeds a row
+  pointing at it. Config updates made in the describe body become the runtime's start config
+  (`GGTestRuntime.sendCommand` queues them while the runtime is `CREATED`):
 
 ```ts
 export function relayWorkspace(relay: RuntimeSelector<RelayRuntime>) {
@@ -272,7 +317,7 @@ The dev VM's own relay holds `0.0.0.0:9600`, so test relays can't use 9600 on an
 free port avoids that. Linux routes all of `127.0.0.0/8` to loopback; macOS needs an alias per address, so
 grest-ts docs should present per-host loopback as a Linux convenience, not a requirement.
 
-## 5. #172: test clients inside mock callbacks
+## 6. #172: test clients inside mock callbacks
 
 **Cause:** `IPCServer` captures the locator scope it is constructed in and re-enters it for every request. The
 testkit's vitest setup constructs it in the root scope (`GGTestRoot`), while `GG_DISCOVERY` is set one level down,
@@ -282,21 +327,40 @@ on the describe block. So every mock callback runs where discovery can't be foun
 and run the `andReturn` callback in it. That scope is the test's own branch, with discovery, the runner and
 anything the test set. It's about 10 lines and was verified in the spike.
 
-## 6. Alternatives considered
+## 7. WebSocket schemas (still open)
+
+The same model fits, but it is a separate feature, not part of this change:
+- **No runtime-to-runtime WebSocket call can be mocked today, by any route.** `@grest-ts/websocket/testkit` only
+  mocks server → client messages on the test's own socket (`GGWebSocketSchema.callOn`). There is nothing to
+  extend; mocking calls a runtime makes over a socket is new work.
+- **A socket is a long-lived connection,** not a call per message. Interception has to decide at connect time
+  whether to route the connection through the router, then match per message. That means different code from HTTP,
+  with its own semantics, e.g. a mock that answers some messages while others pass through.
+- **kratt doesn't need it for this.** No hub → relay call uses a WebSocket with `GG_RELAY_CONN`. kratt's relay
+  sockets are browser → relay through the gateway, or relay → hub.
+
+Recommendation: a follow-up issue that applies this doc's model (`.mock`/`.spy`/`.on()`) to socket messages, built
+when a case needs it.
+
+## 8. Alternatives considered
 
 | Option | Why not |
 |---|---|
 | A testkit hook per connection key (`GGTest.with(GG_RELAY_CONN)...`) | It's the same routing plus an opt-in step, it covers less (fixed-URL clients aren't included), and it makes a src class aware of tests. |
 | kratt-only: configurable port + a stand-in relay | The relay clients never ask discovery, so mocks still wouldn't fire, and tests would fall back to hand-built fakes. |
 | A new instance id on every runtime | Callers don't have it without a new report-in flow that production doesn't need, and it changes on restart. The address is the identity callers already hold. |
-| Selector-first API (`t.relayA.mock(Api).m`) | A mock belongs to its contract or class; the runtime only narrows it. Selectors suit what only exists per runtime (logs, config, jobs). It would also add four more ways in that do the same as `Api.mock` and `mockOf`. |
+| Selector-first API (`t.relayA.mock(Api).m`) | A mock belongs to its contract or class; the runtime only narrows it. Selectors suit what only exists per runtime (logs, config, jobs). |
+| Route client-addressed calls through the router too (one path for everything) | The router would have to hold the client's TLS pin and certificates, and the hub's real pinned dial would no longer be exercised. Asking first keeps unmatched calls real. |
+| Intercept at the receiving runtime's server | It can't mock targets that have no runtime (third parties, fake rows), so a client-side path is needed anyway. |
 | Per-instance routes in discovery | A production change in two repos for a test need. |
-| Pushing the active interceptors to runtimes instead of asking per call | Kept as an optimization if the round trip shows in timings. It doesn't change the API. |
 
-## 7. Open questions
+## 9. Open questions
 
-1. **Name:** `.on(t.relayA)` or `.at(t.relayA)`?
-2. **Custom `transport` clients:** should an active mock bypass the transport? The proposal says yes, because the
-   mock is on the contract. Only spies would still go through the transport.
-3. **WebSocket schemas:** the same model fits `GGWebSocketSchema` clients. Should that wait until a case appears?
-4. **Ship order:** part 1 (untargeted + #172) first, so kratt can start, then part 2?
+1. **Targeting without a runtime.** In a fan-out test with fake rows and no real relays, there's no `t.relayA` to
+   point `.on()` at. Options:
+   - require real relay runtimes for targeted tests (they're cheap once §5 exists);
+   - or let `.on()` also take an address target, e.g. `GGTest.target("127.0.0.2:41234")`, which an app helper
+     returns so tests never see the string: `.on(wsA.relay)`.
+
+   I'd add the address target: it's small and it keeps mock-only fan-out tests light.
+2. **WebSocket schemas:** a follow-up issue (my recommendation, §7), or in this change?
