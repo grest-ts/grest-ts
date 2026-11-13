@@ -108,6 +108,20 @@ describe("GGTestLogger", () => {
         expect(found?.message).toBe("Warning message");
     });
 
+    test("object matcher matches data partially and deeply, message as substring", () => {
+        const cursor = store.getCursor();
+
+        GGLog.info("TestContext", "Webhook: dispatched syncBranch", {count: 3, repo: {name: "kratt", owner: "x"}, ids: [1, 2]});
+
+        const match = (value: Record<string, unknown>) => store.findFrom(cursor, {type: 'object', value});
+        expect(match({message: "dispatched", data: {count: 3, repo: {name: "kratt"}}})).not.toBeNull();
+        expect(match({data: {ids: [1, 2]}})).not.toBeNull();
+        expect(match({data: {count: 4}})).toBeNull();
+        expect(match({data: {repo: {name: "other"}}})).toBeNull();
+        expect(match({data: {ids: [1]}})).toBeNull();
+        expect(match({data: {missing: undefined, count: 3}})).toBeNull();
+    });
+
     test("findFrom returns null when no match", () => {
         const cursor = store.getCursor();
 

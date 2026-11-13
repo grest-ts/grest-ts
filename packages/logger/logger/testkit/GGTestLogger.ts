@@ -109,7 +109,10 @@ export class GGTestLogger implements GGLogger {
                     if (value instanceof RegExp) {
                         return value.test(String(entryValue));
                     }
-                    return entryValue === value;
+                    if (key === 'message' && typeof value === 'string') {
+                        return typeof entryValue === 'string' && entryValue.includes(value);
+                    }
+                    return matchesPartially(entryValue, value);
                 });
         }
     }
@@ -122,4 +125,18 @@ export class GGTestLogger implements GGLogger {
             return String(data);
         }
     }
+}
+
+function matchesPartially(actual: unknown, expected: unknown): boolean {
+    if (Array.isArray(expected)) {
+        return Array.isArray(actual)
+            && actual.length === expected.length
+            && expected.every((item, i) => matchesPartially(actual[i], item));
+    }
+    if (expected !== null && typeof expected === 'object') {
+        if (actual === null || typeof actual !== 'object') return false;
+        return Object.entries(expected).every(([key, value]) =>
+            key in actual && matchesPartially((actual as Record<string, unknown>)[key], value));
+    }
+    return actual === expected;
 }
