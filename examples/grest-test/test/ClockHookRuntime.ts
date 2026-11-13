@@ -20,7 +20,7 @@ export const ClockHookApi = new GGHttpSchema({
 })
 
 export class ClockHookRuntime extends GGRuntime {
-    public static readonly NAME = "clock-hook"
+    public static readonly NAME: string = "clock-hook"
 
     protected compose(): void {
         new GGHttp(new GGHttpServer()).http(ClockHookApi, {offsets: async () => offsets})
@@ -28,3 +28,8 @@ export class ClockHookRuntime extends GGRuntime {
 }
 
 ClockHookRuntime.cli(import.meta.url).then()
+
+// `offsets` is module state, so a runtime counting its boot hooks needs a worker no earlier ClockHookRuntime ran in.
+export class ClockHookLateRuntime extends ClockHookRuntime {
+    public static readonly NAME = "clock-hook-late"
+}

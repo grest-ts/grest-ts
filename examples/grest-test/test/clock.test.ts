@@ -8,7 +8,7 @@ import {ClockInlineRuntime, ClockLateRuntime, ClockWorkerRuntime} from "../src/C
 import {ClockIsolatedRuntime} from "../src/ClockIsolatedRuntime"
 import {ClockLateIsolatedRuntime} from "../src/ClockLateIsolatedRuntime"
 import {ClockInlineApi, ClockIsolatedApi, ClockLateApi, ClockWorkerApi} from "../src/api/ClockApi"
-import {ClockHookApi, ClockHookRuntime} from "./ClockHookRuntime"
+import {ClockHookApi, ClockHookLateRuntime, ClockHookRuntime} from "./ClockHookRuntime"
 
 const DAY = 24 * 3600_000
 const T = Date.parse("2030-01-01T00:00:00Z")
@@ -437,7 +437,7 @@ describe("GGTest.clock onChange hooks", () => {
 describe("GGTest.clock onChange hooks in a runtime started later", () => {
     test("run for the clock it boots on", async () => {
         await GGTest.clock.set(T)
-        await GGTest.startWorker(ClockHookRuntime)
+        await GGTest.startWorker(ClockHookLateRuntime)
         const offsets = await callOn(ClockHookApi).offsets()
         expect(offsets).toHaveLength(1)
         expect(Math.abs(offsets[0] - (T - realNow()))).toBeLessThan(SLACK)
