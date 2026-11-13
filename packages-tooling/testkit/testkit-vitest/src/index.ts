@@ -25,6 +25,7 @@ import {GG_DISCOVERY} from "@grest-ts/discovery";
 import {GGLocalDiscoveryServer} from "@grest-ts/discovery-local";
 import {GGTestDiscoveryClient} from "./GGTestDiscoveryClient";
 import {GGExtensionDiscovery} from "@grest-ts/common";
+import {inject} from "vitest";
 
 installTestClock();
 
@@ -34,8 +35,8 @@ const scope = new GGLocatorScope("GGTestRoot").enter()
 process.env.GG_TEST_WORKER ??= process.env.VITEST_POOL_ID;
 
 // Files that share a test process may share runtime workers too: each file still gets fresh runtime instances.
-// `__vitest_worker__` is vitest's internal per-worker state; without it, workers aren't reused.
-WorkerRunner.setReuse((globalThis as any).__vitest_worker__?.config?.isolate === false);
+// Provided by ./globalSetup; without it, workers aren't reused.
+WorkerRunner.setReuse(inject("grest-ts:isolate") === false);
 
 GGLog.init();
 GGLog.add(new GGLoggerConsole());

@@ -97,6 +97,7 @@ export class GGTestRunner {
     private readonly hooks: Map<string, GGTestRunnerHook> = new Map()
 
     private workerSeat: number | undefined
+    private parkedMark = 0
 
     constructor(ipcServer: IPCServer, discoveryServer: IGGLocalDiscoveryServer, userConfig?: Partial<GGTestConfig>) {
         this.testId = "t" + Math.random().toString(36).substring(2, 8);
@@ -234,6 +235,7 @@ export class GGTestRunner {
             if (this._started) {
                 throw new Error("Already started!");
             }
+            this.parkedMark = WorkerRunner.parkedMark();
 
             // 0. Initialize extension (testkits already loaded by vitest setup)
             for (const type of GGTestRunner.extensionFactories) {
@@ -278,7 +280,6 @@ export class GGTestRunner {
 
             // 4. Start runtimes (they will receive commands via env)
             await startRuntimes(this.globalRuntimes)
-            WorkerRunner.terminateUnused()
             this._started = true;
         });
     }
@@ -328,6 +329,8 @@ export class GGTestRunner {
             for (const runtime of this.globalRuntimes) {
                 await runtime.shutdown()
             }
+            // Workers parked by this runner (in-test runtimes included) stay for the next files.
+            WorkerRunner.terminateUnused(this.parkedMark);
 
             GGLog.debug(this, 'Tearing down router...');
             await this.discoveryServer.teardown();

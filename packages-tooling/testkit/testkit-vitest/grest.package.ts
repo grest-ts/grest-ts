@@ -7,6 +7,9 @@ definePackage({
     targets: {node: true},
     hasTests: true,
     publishToNpm: true,
+    peerDependencies: {
+        "vitest": ">=3.0.0"
+    },
     customExports: {
         "./globalSetup": "./src/globalSetup.ts",
         // Supplement of private (unpublished) packages' augmentations for the
