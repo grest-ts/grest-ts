@@ -45,8 +45,9 @@ export interface GGTestClockAdvanceOptions {
 
 /**
  * One fake wall clock (`Date`) shared by the test and every runtime it started.
- * Time keeps flowing unless frozen. Set in a test: undone after it. Set in describe or beforeAll: holds for that block;
- * set in the top describe, its runtimes boot on it.
+ * Time keeps flowing unless frozen, and only moves back when a test sets it back. After a test or block, time stays
+ * where it was left; only frozen or flowing is restored. Set in the top describe, its runtimes boot on it; the next
+ * top describe starts on real time.
  */
 export class GGTestClock {
 
@@ -236,9 +237,16 @@ export class GGClockTestComponent implements GGTestComponent {
 
     // Never throws: a runtime that died mustn't keep later components' afterEach from running.
     private async restore(previous: GGClockState | undefined): Promise<void> {
-        if (!previous || GGDateShim.same(previous, GGDateShim.getState())) return;
+        if (!previous) return;
+        const current = GGDateShim.getState();
+        // Time stays where the test or block left it, as it would in production: what the runtimes wrote at that time
+        // stays consistent with it. Only frozen or flowing goes back to how it was.
+        const next = previous.stoppedAt === undefined
+            ? current.stoppedAt === undefined ? current : {offsetMs: current.stoppedAt - GGDateShim.realNow()}
+            : current.stoppedAt === undefined ? {offsetMs: current.offsetMs, stoppedAt: Date.now()} : current;
+        if (GGDateShim.same(next, current)) return;
         try {
-            await applyClock(this.runner, previous);
+            await applyClock(this.runner, next);
         } catch (err) {
             GGLog.warn(this, "GGTest.clock: restoring the clock failed", err as Error);
         }

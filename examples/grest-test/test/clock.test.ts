@@ -1,7 +1,8 @@
-import {AsyncLocalStorage} from "node:async_hooks"
+import {AsyncLocalStorage, AsyncResource} from "node:async_hooks"
 import {callOn, GGTest} from "@grest-ts/testkit"
 import {GGDateShim} from "@grest-ts/testkit/internal"
 import {GGLocator} from "@grest-ts/locator"
+import {GGLog} from "@grest-ts/logger"
 import {GGRuntime} from "@grest-ts/runtime"
 import {GGSocket} from "@grest-ts/websocket"
 import type {SocketAdapter} from "@grest-ts/websocket/internal"
@@ -16,6 +17,8 @@ const T = Date.parse("2030-01-01T00:00:00Z")
 const SLACK = 5_000
 
 const realNow = GGDateShim.realNow
+// Bound at module load, where no GGLocatorScope is entered: runs a function outside any scope.
+const outsideScope = AsyncResource.bind(<T>(fn: () => T): T => fn())
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
 
 const runtimes = {
@@ -56,8 +59,8 @@ describe("GGTest.clock", () => {
         expect((await runtimes.worker.read()).now).toBeGreaterThan(before)
     })
 
-    test("a clock set in a test is undone after it", async () => {
-        await expectAllNear(realNow() - 1)
+    test("time a test moved stays moved: the next test goes on from there", async () => {
+        await expectAllNear(T)
     })
 
     test("advance jumps every isolate forward", async () => {
@@ -180,8 +183,8 @@ describe("GGTest.clock", () => {
             await GGTest.clock.advance(DAY)
         })
 
-        test("and a test's change to it is undone", async () => {
-            await expectAllNear(T + DAY)
+        test("and a test's advance stays: time only moves forward", async () => {
+            await expectAllNear(T + 2 * DAY)
         })
     })
 
@@ -206,8 +209,8 @@ describe("GGTest.clock", () => {
             throw new Error("fails on purpose")
         })
 
-        test("still has its clock undone", async () => {
-            await expectAllNear(realNow() - 1)
+        test("still leaves the time it set", async () => {
+            await expectAllNear(T)
         })
     })
 
@@ -222,13 +225,28 @@ describe("GGTest.clock", () => {
             })
         })
 
-        test("the outer block gets its time back", async () => {
-            await expectAllNear(T)
+        test("the outer block goes on from the inner block's time", async () => {
+            await expectAllNear(T + DAY)
         })
     })
 
-    test("is undone after its block", async () => {
-        await expectAllNear(realNow() - 1)
+    test("a test that froze it leaves it flowing again, from where it stopped", async () => {
+        await GGTest.clock.freeze(T + 5 * DAY)
+    })
+
+    test("…so the next test sees time flowing on from there", async () => {
+        const before = Date.now()
+        expect(before).toBeGreaterThanOrEqual(T + 5 * DAY)
+        await sleep(30)
+        expect(Date.now()).toBeGreaterThan(before)
+    })
+})
+
+describe("GGTest.clock in the next top describe", () => {
+    GGTest.startWorker(ClockWorkerRuntime)
+
+    test("starts on real time again", async () => {
+        expect((await runtimes.worker.read()).now).toBeLessThan(realNow() + SLACK)
     })
 })
 
@@ -255,9 +273,9 @@ describe("GGTest.clock frozen in the top describe", () => {
         expect((await runtimes.worker.read()).now).toBe(T + 60_000)
     })
 
-    test("a test's change is undone back to the frozen time", async () => {
-        expect(Date.now()).toBe(T)
-        expect((await runtimes.worker.read()).now).toBe(T)
+    test("stays frozen where the previous test left it", async () => {
+        expect(Date.now()).toBe(T + 60_000)
+        expect((await runtimes.worker.read()).now).toBe(T + 60_000)
     })
 })
 
@@ -403,6 +421,16 @@ describe("GGTest.clock and scope timers", () => {
         await worker.fired().toEqual(["a"])
     })
 
+    test("moved back, a timer waits at most its own delay, not until its old due time", async () => {
+        await GGTest.clock.freeze()
+        await worker.schedule({id: "tick", ms: 1_000, interval: true})
+        await GGTest.clock.advance(30 * DAY)
+        await worker.fired().toEqual(["tick"])
+        await GGTest.clock.set(Date.now() - 30 * DAY)
+        await GGTest.clock.advance(1_000)
+        await worker.fired().toEqual(["tick", "tick"])
+    })
+
     test("a timer further out than setTimeout's 24.8-day limit doesn't fire early after a jump back", async () => {
         await worker.schedule({id: "far", ms: 20 * DAY})
         await GGTest.clock.set(Date.now() - 10 * DAY)
@@ -492,6 +520,22 @@ describe("GGTest.clock onChange hooks in a runtime started later", () => {
         const offsets = await callOn(ClockHookApi).offsets()
         expect(offsets).toHaveLength(1)
         expect(Math.abs(offsets[0] - (T - realNow()))).toBeLessThan(SLACK)
+    })
+})
+
+describe("GGLocator timers outside a scope", () => {
+    test("are plain timers, warned about once per place they are set", async () => {
+        const warn = vi.spyOn(GGLog, "warn")
+        try {
+            const set = () => outsideScope(() => GGLocator.setTimeout(() => {}, 1))
+            set()
+            set()
+            const warnings = warn.mock.calls.filter(c => String(c[1]).includes("outside a GGLocatorScope"))
+            expect(warnings).toHaveLength(1)
+            expect(String(warnings[0][1])).toMatch(/GGLocator\.setTimeout[\s\S]*clock\.test\.ts/)
+        } finally {
+            warn.mockRestore()
+        }
     })
 })
 

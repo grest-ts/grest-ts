@@ -373,7 +373,7 @@ await t.jobs.run("expired-sessions")
 
 ### Time
 
-`await GGTest.clock.set(date)` / `.advance(ms)` moves `Date` in the test and every runtime; it's undone after the test. Use it instead of `now` parameters or backdated rows. Don't also fake `Date` with `vi.useFakeTimers`.
+`await GGTest.clock.set(date)` / `.advance(ms)` / `.freeze(date?)` moves `Date` in the test and every runtime. Time only moves forward: the next test in the `describe` goes on from where the last one left it; each top `describe` starts on real time. Freeze it when asserting on timers or exact times. Use it instead of `now` parameters or backdated deadlines. Don't also fake `Date` with `vi.useFakeTimers`.
 
 `advance` also fires, once, the due timers set with `GGLocator.setTimeout/setInterval` (job schedules included) and waits for the promises they return. Business timers that tests must control use `GGLocator.setTimeout`, not raw `setTimeout`; raw timers stay on real time. Never sleep waiting for a timer: `await t.jobs.start()` then `await GGTest.clock.advance(ms)`.
 

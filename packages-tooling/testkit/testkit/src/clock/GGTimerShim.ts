@@ -2,7 +2,7 @@ import {AsyncLocalStorage} from "node:async_hooks";
 import {existsSync, readFileSync} from "node:fs";
 import {dirname, join} from "node:path";
 import {fileURLToPath} from "node:url";
-import {GGLocatorScope} from "@grest-ts/locator";
+import {GGLocator, GGLocatorScope} from "@grest-ts/locator";
 import {GGLog} from "@grest-ts/logger";
 import {GGDateShim} from "./GGDateShim";
 
@@ -80,6 +80,30 @@ export function installTimerShim(): void {
         globalThis.clearInterval = wrapClear(shim, native.clearInterval);
     }
     patchScope(shim);
+    patchLocator(shim);
+}
+
+// Outside a scope GGLocator falls back to a plain timer, for CLIs; in a test that is a timer gone astray.
+function patchLocator(shim: TimerShim): void {
+    const locator = GGLocator as typeof GGLocator & {[PATCHED]?: boolean};
+    if (locator[PATCHED]) return;
+    locator[PATCHED] = true;
+    const {setTimeout, setInterval} = GGLocator;
+    const warnOutsideScope = (fn: string) => {
+        if (GGLocator.tryGetScope()) return;
+        const site = appSite(captureStack().stack);
+        if (!site || shim.warnedSites.has(site)) return;
+        shim.warnedSites.add(site);
+        GGLog.warn(LOG_CONTEXT, `GGLocator.${fn} was called outside a GGLocatorScope: it's a plain timer that its runtime won't clear when it stops and GGTest.clock won't move. Call it from code that runs in the runtime's scope. Set at: ${site}`);
+    };
+    locator.setTimeout = function (fn, ms) {
+        warnOutsideScope("setTimeout");
+        return setTimeout.call(this, fn, ms);
+    };
+    locator.setInterval = function (fn, ms) {
+        warnOutsideScope("setInterval");
+        return setInterval.call(this, fn, ms);
+    };
 }
 
 // Per class, not per slot: a module re-evaluated by another vitest project brings its own GGLocatorScope.
@@ -259,10 +283,17 @@ function getShim(): TimerShim {
 
 export const GGTimerShim = {
 
-    /** Re-arms every pending scope timer for the current clock state. */
+    /**
+     * Re-arms every pending scope timer for the current clock state. Moved back, a timer waits at most its own delay
+     * from now, not until its old due time.
+     */
     rearm(): void {
         const shim = getShim();
-        for (const timer of shim.scopeTimers.values()) arm(shim, timer);
+        const now = Date.now();
+        for (const timer of shim.scopeTimers.values()) {
+            timer.dueAt = Math.min(timer.dueAt, now + timer.ms);
+            arm(shim, timer);
+        }
     },
 
     /** Marks the barrier of a clock change: the timers pending now are the ones the following fireDue may fire. */

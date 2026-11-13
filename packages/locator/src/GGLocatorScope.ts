@@ -6,12 +6,6 @@ import {enumOf, type Values} from "@grest-ts/common";
 type ConstructorOf<T> = new (...args: any[]) => T;
 
 let forgetTimer: FinalizationRegistry<() => void> | undefined
-let liveTimerOwners = 0
-
-/** Whether a scope owns timers and hasn't cleared them yet: a runtime runs in this process. */
-export function hasLiveTimerOwner(): boolean {
-    return liveTimerOwners > 0
-}
 
 /**
  * service-locator pattern for async context cases.
@@ -25,7 +19,6 @@ export class GGLocatorScope {
     private readonly registrationStacks: Map<string, string[]>
     private readonly creationStack: string[]
     private timers?: Set<WeakRef<NodeJS.Timeout>>
-    private liveTimerOwner = false
 
     constructor(name: string, parent?: GGLocatorScope, serviceName?: string) {
         this.name = name
@@ -122,18 +115,11 @@ export class GGLocatorScope {
      * own. GGRuntime owns its scope and clears them when it stops, so a stopped runtime leaves no scope timers.
      */
     public ownTimers(): void {
-        if (this.timers) return
-        this.timers = new Set()
-        this.liveTimerOwner = true
-        liveTimerOwners++
+        this.timers ??= new Set()
     }
 
     public clearTimers(): void {
         if (!this.timers) return
-        if (this.liveTimerOwner) {
-            this.liveTimerOwner = false
-            liveTimerOwners--
-        }
         for (const ref of this.timers) {
             const timer = ref.deref()
             if (timer) clearTimeout(timer)

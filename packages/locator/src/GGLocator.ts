@@ -1,4 +1,4 @@
-import {GGLocatorScope, hasLiveTimerOwner} from "./GGLocatorScope";
+import {GGLocatorScope} from "./GGLocatorScope";
 import {GG_ASYNC_STORAGE} from "./GGLocatorStorage";
 
 export class GGLocator {
@@ -35,35 +35,14 @@ export class GGLocator {
         return this.getScope().setImmediate(fn);
     }
 
-    /**
-     * Outside a scope (a CLI, a plain unit test) this is a plain `setTimeout`. Outside a scope while a runtime runs in
-     * the process, it warns: such a timer is neither cleared with the runtime nor moved by the test clock.
-     */
+    /** Outside a scope (a CLI, a plain unit test) this is a plain `setTimeout`. */
     public static setTimeout<R>(fn: () => R, timeout: number): NodeJS.Timeout {
-        const scope = this.tryGetScope();
-        if (scope) return scope.setTimeout(fn, timeout);
-        warnOutsideScope("setTimeout");
-        return setTimeout(fn, timeout);
+        return this.tryGetScope()?.setTimeout(fn, timeout) ?? setTimeout(fn, timeout);
     }
 
-    /** As `setTimeout`, for `setInterval`. */
+    /** Outside a scope (a CLI, a plain unit test) this is a plain `setInterval`. */
     public static setInterval<R>(fn: () => R, timeout: number): NodeJS.Timeout {
-        const scope = this.tryGetScope();
-        if (scope) return scope.setInterval(fn, timeout);
-        warnOutsideScope("setInterval");
-        return setInterval(fn, timeout);
+        return this.tryGetScope()?.setInterval(fn, timeout) ?? setInterval(fn, timeout);
     }
 
-}
-const warnedSites = new Set<string>();
-
-function warnOutsideScope(fn: string): void {
-    if (!hasLiveTimerOwner()) return;
-    const limit = Error.stackTraceLimit;
-    Error.stackTraceLimit = 3;
-    const site = new Error().stack?.split("\n")[3]?.trim() ?? "";
-    Error.stackTraceLimit = limit;
-    if (warnedSites.has(site)) return;
-    warnedSites.add(site);
-    console.warn(`GGLocator.${fn} was called outside a GGLocatorScope while a runtime runs. It's a plain timer: the runtime won't clear it when it stops, and GGTest.clock won't move it. Call it from code that runs in the runtime's scope. Set at: ${site}`);
 }
