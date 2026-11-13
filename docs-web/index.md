@@ -22,7 +22,7 @@ features:
   - title: AI-Era Ready
     details: Clean, explicit service code with no magic to misunderstand and no hidden wiring to hallucinate about.
   - title: Testing That Survives Refactors
-    details: Integration tests at the contract level with per-request mocks and spies. Each test gets its own isolated runtime.
+    details: Integration tests at the contract level with per-request mocks and spies. Each test suite gets its own isolated runtime.
   - title: No Magic
     details: No DI containers, no decorators-as-wiring. Your Runtime's compose() is your bootstrap — all wiring visible in one place.
   - title: Performance
@@ -265,7 +265,7 @@ export class ItemApiImpl implements IItemApi {
     }
 }
 
-@mockable // This enables mocking/syping in tests for internal classes.
+@mockable // This enables mocking/spying in tests for internal classes.
 export class GeocodingService {
     async resolve(address: string): Promise<LatLng> {
         return await this.client.geocode(address)
@@ -282,7 +282,7 @@ tsx src/AppRuntime.ts    # That's it. Service is running.
     <span class="step-badge">3</span>
     <div class="step-text">
         <h3>Test Everything</h3>
-        <p class="step-desc">Real workers, real ports, per-request mocks. Each test gets its own isolated runtime.</p>
+        <p class="step-desc">Real workers, real ports, per-request mocks. Each test suite gets its own isolated runtime.</p>
     </div>
 </div>
 
@@ -295,7 +295,7 @@ describe("Item API", () => {
     // You can mock outbound service calls. If outbound service exists, calls go through.
     // No DI - your Runtime is the bootstrap! No more duplicating whole wiring in tests.
 
-    const myApis = new TestContext("Items")
+    const myApis = new GGTestContext("Items")
         .apis({
             item: ItemApi
             // Add API-s you are going to call in the tests. 
@@ -316,7 +316,7 @@ describe("Item API", () => {
         await myApis.item.create({title: "Visit Times Square"})
             .with(
                 mockOf(GeocodingService).resolve // Mock applies only during this request, nicely scoped!
-                    .toEqual({address: "Times Square, NYC"})
+                    .toEqual("Times Square, NYC")
                     .andReturn({lat: 40.758, lng: -73.985})
             )
             .toMatchObject({title: "Visit Times Square", lat: 40.758})

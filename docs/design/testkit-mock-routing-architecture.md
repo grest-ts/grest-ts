@@ -1,6 +1,6 @@
 # Testkit targeting: architecture note (gate 1)
 
-Status: **approved; PR 1 merged, PR 2 built.** Intent: `testkit-mock-routing.md` §1–§2 on
+Status: **implemented** (PR 1 #199, PR 2 #201). Intent: `testkit-mock-routing.md` §1–§2 on
 `kratt/design-relay-mock-routing`. §7 records the owner's decisions and where PR 1 differs from this note; §8 is PR 2
 as built.
 

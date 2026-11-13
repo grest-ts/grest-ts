@@ -511,7 +511,7 @@ describe("OrderStore", () => {
 
 The test body runs outside the runtime's scope. A `GGSetting`/`GGResource` read at call time (as it should be) resolves only inside it, so code under test that reads config needs the scope: keep `GGLocator.getScope()` from `compose` and wrap each test, `aroundEach(run => scope.run(run))`.
 
-Calls the test body makes on those instances run in the test process, so `mockOf`/`spyOn` don't reach their `@mockable` dependencies. To mock one, mark the instance `@testable` and call it with `callOn(OrderStore).place(...).with(mockOf(...))`: see the testkit README, "Calling a service directly".
+Calls the test body makes on those instances, even inside `scope.run`, are not calls inside the runtime, so `mockOf`/`spyOn` don't reach their `@mockable` dependencies. To mock one, mark the class `@testable` and call it with `callOn(OrderStore).place(...).with(mockOf(...))`: see the testkit README, "Calling a service directly".
 
 ## Admin / Table Creation
 

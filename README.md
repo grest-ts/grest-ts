@@ -177,14 +177,14 @@ tsx src/AppRuntime.ts    # That's it. Service is running.
 
 ```typescript
 // server/test/integration/item.test.ts
-import {GGTest} from "@grest-ts/testkit"
+import {GGTest, GGTestContext} from "@grest-ts/testkit"
 import {AppRuntime} from "../../src/AppRuntime"
 import {ItemApi} from "@myapp/api/api/ItemApi"
 
 describe("Item API", () => {
     GGTest.startWorker(AppRuntime)
 
-    const ctx = new TestContext("Items")
+    const ctx = new GGTestContext("Items")
         .apis({item: ItemApi})
 
     test("create and list items", async () => {
@@ -255,7 +255,7 @@ In tests, `mockOf()` controls what that class returns — scoped to a single req
 test("resolves address when adding item", async () => {
     await ctx.checklist.add({title: "Visit Times Square"})
         .with(mockOf(AddressResolverService).resolveAddress
-            .toEqual({address: "Times Square, NYC"})
+            .toEqual("Times Square, NYC")
             .andReturn({lat: 40.7580, lng: -73.9855})
         )
         .toMatchObject({title: "Visit Times Square", lat: 40.7580})
@@ -317,7 +317,7 @@ Verify that services were called correctly without changing their behavior:
 test("notifies on item creation", async () => {
     await ctx.item.create({title: "New item"})
         .with(spyOn(NotificationService).notify
-            .toHaveBeenCalledWith({userId: ctx.user.id})
+            .toMatchObject({title: "New item"})
         )
 })
 ```
@@ -338,13 +338,13 @@ describe("Checklist with Blocker service", () => {
 ### Controlling Time
 
 `GGTest.clock` moves `Date` in the test and in every runtime it started, so expiry, retention and scheduling are
-tested without `now` parameters, backdated rows or sleeps. Timers set with `GGLocator.setTimeout` and scheduled jobs
-fire on `advance`:
+tested without `now` parameters, backdated rows or sleeps. Timers set with `GGLocator.setTimeout` and started job
+schedules fire on `advance`:
 
 ```typescript
 describe("orders", () => {
     const t = GGTest.startWorker(OrderRuntime)
-    const ctx = new TestContext("Buyer").apis({order: OrderApi})
+    const ctx = new GGTestContext("Buyer").apis({order: OrderApi})
 
     test("an unpaid order expires after 30 minutes", async () => {
         const order = await ctx.order.create({item: "book"})
@@ -355,7 +355,7 @@ describe("orders", () => {
 })
 ```
 
-The clock is undone after each test. See [Controlling time](./packages-tooling/testkit/testkit/README.md#controlling-time)
+After each test, time stays where it was left; only frozen or flowing is restored. See [Controlling time](./packages-tooling/testkit/testkit/README.md#controlling-time)
 for what is and isn't faked.
 
 ---

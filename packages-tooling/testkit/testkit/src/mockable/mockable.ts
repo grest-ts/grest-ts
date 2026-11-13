@@ -1,8 +1,5 @@
 /**
- * Mockable decorator and test helpers.
- *
- * The @mockable decorator is re-exported from mockable-runtime.ts for production use.
- * mockBy() and spyOn() are test-only utilities that require the full testkit.
+ * mockOf() and spyOn(): test-only helpers for classes marked with @mockable (from @grest-ts/testkit-runtime).
  */
 
 // Test-only imports - these pull in testkit infrastructure
@@ -13,7 +10,7 @@ import {mockableClassName} from "@grest-ts/testkit-runtime";
 import type {ANY_ERROR} from "@grest-ts/schema";
 
 // ============================================================================
-// Type helpers for mockBy/spyOn
+// Type helpers for mockOf/spyOn
 // ============================================================================
 
 /** What a mock's matchers and `andReturn` callback get: a method's only argument itself, otherwise its arguments as a tuple. */

@@ -24,7 +24,7 @@ export class GGTestContext extends GGContext {
      *
      * @example
      * const alice = new GGTestContext("alice")
-     *     .apisV2({
+     *     .apis({
      *         chain: ChainApi,           // HTTP API → test client
      *         services: {
      *             weather: WeatherService // Service class → testable access

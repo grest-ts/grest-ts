@@ -9,7 +9,7 @@
 
 | API | Acts on | For how long |
 |---|---|---|
-| `GGTest.*` (`startWorker`, `with(cfg)`, `clock`) | the test file and every runtime it starts | the `describe` it is in, or the test when called inside one |
+| `GGTest.*` (`startWorker`, `with(cfg)`, `clock`) | the test file and every runtime it starts | the `describe` it is in, or the test when called inside one (except the clock's time: see [Controlling time](#controlling-time)) |
 | `t.x.*` (`t.main.config`, `t.main.logs`, `t.main.jobs`) | one runtime (`t.all()` for all of them) | the test (config changes are undone after it) |
 | Interceptors (`mockOf(S).m`, `spyOn(S).m`, `Api.mock.m`) and their modifiers (`.times(n)`, `.andReturn(...)`) | the calls made while their action runs | one test action: the `.with(...)` / `.waitFor(...)` it is passed to |
 
@@ -644,7 +644,7 @@ A sequential flow in one `describe`, each test going on from the time the last o
 ```typescript
 describe("trial expiry", () => {
     const t = GGTest.startWorker(AppRuntime)
-    const admin = new TestContext("Admin").apis({account: AccountApi}).beforeAll(() => admin.login())
+    const admin = new GGTestContext("Admin").apis({account: AccountApi}).beforeAll(() => admin.login())
 
     test("a new trial is active", async () => {
         await admin.account.startTrial({accountId}).toMatchObject({status: "trial"})
@@ -738,8 +738,8 @@ GGTestClock.onChange(({offsetMs, stoppedAt}) => { /* resync the SDK's clients */
 
 Check README-testkit.md files within packages you are interested in. Common ones being:
 
-- [Logger](../../packages/logger/logger/README-testkit.md) - Accessing logs during the test flow.
-- [Metrics](../../packages/metrics/README-testkit.md) - Accessing metrics during the test flow.
+- [Logger](../../../packages/logger/logger/README-testkit.md) - Accessing logs during the test flow.
+- [Metrics](../../../packages/metrics/README-testkit.md) - Accessing metrics during the test flow.
 
 ## Extending framework with custom packages and adding testkit capabilities.
 
