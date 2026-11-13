@@ -430,7 +430,7 @@ test("spy — call through but validate", async () => {
 - `.andReturn(value)` — the mock returns this value instead of calling real code.
 - `.andReturn(input => value)` — answers each call from its input; may be `async` (e.g. run a competing write, then return).
 - `.andReturn(new MY_ERROR())`, or a callback that throws it — the caller gets `MY_ERROR` thrown, class and data intact.
-- `.times(n)` — expect exactly n calls (fewer or more fails); `.times(0)` = never called; `.anyTimes()` = any number, none included (it gives up the "never called" check, and `.waitFor()` rejects it).
+- `.times(n)` — expect exactly n calls (fewer or more fails); `.times(0)` = never called; `.atLeastOnce()` = one or more.
 - `.sleep(ms)` — add delay before returning.
 - `spyOn(S).method` — calls real method but validates input/output.
 - `.responseToMatchObject(...)` — on a spyOn interceptor, validates the real return value.

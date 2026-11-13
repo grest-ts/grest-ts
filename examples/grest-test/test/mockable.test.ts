@@ -102,22 +102,22 @@ describe("mockOf on a @mockable class", () => {
             .toEqual("late:a")
     })
 
-    describe("anyTimes()", () => {
+    describe("atLeastOnce()", () => {
 
-        test("has nothing for .waitFor() to wait for", async () => {
+        test("fails when never called", async () => {
             await expect(client.named({id: "a"})
-                .waitFor(mockOf(Upstream).named.anyTimes().andReturn("mocked"))
-            ).rejects.toThrow(/\.waitFor\(\) has nothing to wait for/)
+                .with(mockOf(Upstream).lookup.atLeastOnce().andReturn("unused"))
+            ).rejects.toThrow(/Interceptor was never called!/)
         })
 
-        test("allows no calls", async () => {
+        test("is waited for until the first call", async () => {
             await client.named({id: "a"})
-                .with(mockOf(Upstream).lookup.anyTimes().andReturn("unused"))
-                .toEqual("real:a")
+                .waitFor(mockOf(Upstream).named.atLeastOnce().andReturn("mocked"))
+                .toEqual("mocked")
         })
 
         test("allows several calls", async () => {
-            const interceptor = mockOf(Upstream).named.anyTimes().andReturn("mocked").createInterceptor() as GGCallInterceptor
+            const interceptor = mockOf(Upstream).named.atLeastOnce().andReturn("mocked").createInterceptor() as GGCallInterceptor
             for (let i = 0; i < 3; i++) await interceptor.onRequest("a")
             expect(() => interceptor.validate()).not.toThrow()
         })

@@ -75,9 +75,9 @@ export class GGSpyWith<RequestBody = any, ResponseData = any, ErrorsUnion = any>
         return this;
     }
 
-    /** Allow any number of calls, none included. */
-    public anyTimes(): this {
-        this._times = {min: 0, max: Infinity};
+    /** One call or more. */
+    public atLeastOnce(): this {
+        this._times = {min: 1, max: Infinity};
         return this;
     }
 

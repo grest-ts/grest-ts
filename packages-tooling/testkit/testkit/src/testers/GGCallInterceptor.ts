@@ -212,15 +212,6 @@ export abstract class GGCallInterceptor implements IGGTestInterceptor {
 
     /** Done: called (a spy that gets responses: responded) as often as expected, or a call failed its expectations. */
     public isCalled(): boolean {
-        if (this.times.min === 0) {
-            throw new GGTestError({
-                context: `[${this.getKey()}]`,
-                test: ".waitFor() has nothing to wait for: .anyTimes() is met by no call at all.",
-                expected: "Use .times(n) to wait for n calls, or .with() to allow any number while the action runs",
-                received: ".anyTimes()",
-                sourceFile: this.definedInSourceFile
-            });
-        }
         const done = this.passThrough && this.spyGetsResponses() ? this.noOfResponses : this.noOfTimesCalled;
         return done >= this.times.min || this.validationError !== undefined;
     }

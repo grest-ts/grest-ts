@@ -393,11 +393,10 @@ test('spy on external service', async () => {
     .andReturn(result)
     .times(2))                  // Expect exactly 2 calls
 
-// Any number of calls, none included. This gives up the "never called" check, so a mock the code stopped using
-// passes silently; prefer .times(n) when the count is known. `.waitFor()` rejects it: no call at all already meets it.
+// One call or more, when the count doesn't matter (a retry, a poll); .waitFor() waits for the first
 .with(mockOf(Service).method
     .andReturn(result)
-    .anyTimes())
+    .atLeastOnce())
 
 // Answer each call from its input; the callback may be async
 .with(mockOf(Service).method
