@@ -12,7 +12,7 @@ and the #172 fix. `.on()` and spies reported by the client are not spiked yet.
 - an active mock bypasses a client's custom `transport` (spies still go through it);
 - everything ships as one PR.
 
-WebSocket schemas are still open, see §7.
+WebSocket schemas are out of scope (§7). The full decision list is in §9.
 
 ## 1. What a test looks like
 
@@ -29,7 +29,8 @@ WebSocket schemas are still open, see §7.
 - for a schema mock or spy, the call is going to that runtime;
 - for `mockOf` or `spyOn`, the method runs inside that runtime.
 
-It takes one runtime selector: `t`, `t.relayA`, `t[1]`, `t.hub[1]`. Without `.on()`, an interceptor matches
+It takes one runtime selector (`t`, `t.relayA`, `t[1]`, `t.hub[1]`) or, for schema interceptors, an address target
+(`GGTest.target("127.0.0.2:41234")`, §9). Without `.on()`, an interceptor matches
 everywhere, exactly as today.
 
 Two other changes make interceptors behave the same however a call is addressed:
@@ -291,8 +292,7 @@ All four need only the untargeted part plus #172, and no kratt production change
 (cases 4–7) need kratt's relay host and port as config (§5). They are what makes misrouting and fan-out testable
 at all.
 
-The remaining gap: to target a relay **without** running one, `.on()` needs something to point at. See open
-question 1.
+To target a relay **without** running one (mock-only fan-out), `.on()` takes an address target (§9, decision 5).
 
 ## 5. What kratt needs
 
@@ -327,20 +327,26 @@ on the describe block. So every mock callback runs where discovery can't be foun
 and run the `andReturn` callback in it. That scope is the test's own branch, with discovery, the runner and
 anything the test set. It's about 10 lines and was verified in the spike.
 
-## 7. WebSocket schemas (still open)
+## 7. WebSocket schemas (out of scope)
 
-The same model fits, but it is a separate feature, not part of this change:
-- **No runtime-to-runtime WebSocket call can be mocked today, by any route.** `@grest-ts/websocket/testkit` only
-  mocks server → client messages on the test's own socket (`GGWebSocketSchema.callOn`). There is nothing to
-  extend; mocking calls a runtime makes over a socket is new work.
-- **A socket is a long-lived connection,** not a call per message. Interception has to decide at connect time
-  whether to route the connection through the router, then match per message. That means different code from HTTP,
-  with its own semantics, e.g. a mock that answers some messages while others pass through.
-- **kratt doesn't need it for this.** No hub → relay call uses a WebSocket with `GG_RELAY_CONN`. kratt's relay
-  sockets are browser → relay through the gateway, or relay → hub.
+Decided: WebSockets are not part of this change. The reasons:
+- No runtime-to-runtime WebSocket call can be mocked today. `@grest-ts/websocket/testkit` only mocks server →
+  client messages on the test's own socket (`GGWebSocketSchema.callOn` → `ws.mock.someEvent`). Mocking a runtime's
+  socket calls would be new work.
+- A socket is a long-lived connection, so it needs its own rules (route the connection at connect time, then match
+  per message).
+- kratt has no hub → relay WebSocket call that uses `GG_RELAY_CONN`.
 
-Recommendation: a follow-up issue that applies this doc's model (`.mock`/`.spy`/`.on()`) to socket messages, built
-when a case needs it.
+**It must fail loudly, not silently.** Socket message mocks are built with the same `GGMockWith` as HTTP mocks, so
+`.on()` will show up on them. `GGSocketServerToClientInterceptor` throws when a target is set:
+
+```ts
+ws.mock.chatMessage.on(t.hub[1])
+// Error: .on() is not supported for WebSocket messages yet. A socket mock already applies only to this test socket.
+```
+
+`GGWebSocketSchema` has no schema-level `.mock`/`.spy` (`WsApi.mock.x`), so that is a type error already and needs
+nothing. A follow-up issue records applying this model to socket messages.
 
 ## 8. Alternatives considered
 
@@ -354,13 +360,32 @@ when a case needs it.
 | Intercept at the receiving runtime's server | It can't mock targets that have no runtime (third parties, fake rows), so a client-side path is needed anyway. |
 | Per-instance routes in discovery | A production change in two repos for a test need. |
 
-## 9. Open questions
+## 9. Decisions
 
-1. **Targeting without a runtime.** In a fan-out test with fake rows and no real relays, there's no `t.relayA` to
-   point `.on()` at. Options:
-   - require real relay runtimes for targeted tests (they're cheap once §5 exists);
-   - or let `.on()` also take an address target, e.g. `GGTest.target("127.0.0.2:41234")`, which an app helper
-     returns so tests never see the string: `.on(wsA.relay)`.
+1. Name: `.on()`.
+2. An active mock bypasses a custom `transport`; spies still go through it.
+3. One PR.
+4. WebSockets: out of scope, and `.on()` on a socket mock throws (§7).
+5. `.on()` also takes an **address target**, for targets that have no test runtime, e.g. a fan-out test with fake
+   rows. Apps wrap it in their own helpers, so tests don't hold strings:
 
-   I'd add the address target: it's small and it keeps mock-only fan-out tests light.
-2. **WebSocket schemas:** a follow-up issue (my recommendation, §7), or in this change?
+```ts
+// grest-ts
+export class GGTest {
+    static target(address: string): GGTestTarget          // "host:port" or a URL
+}
+// .on(target: Selector | GGTestTarget)
+
+// kratt bag helper: a seeded row with a loopback address nobody listens on (fails fast if not mocked)
+const wsA = await fakeRelayWorkspace()                      // {id, ip: "127.0.0.2", relay: GGTest.target("127.0.0.2:" + port)}
+const wsB = await fakeRelayWorkspace()
+
+await github.webhook.push({repo: "web", ref: "refs/heads/main"})
+    .waitFor(
+        RelayRepoEntitiesApi.mock.syncBranch.on(wsA.relay).andReturn(undefined),
+        RelayRepoEntitiesApi.mock.syncBranch.on(wsB.relay).andReturn(undefined),
+    )
+```
+
+   A target address matches calls dialled to that host and port. For a `@mockable` interceptor, `.on()` takes a
+   runtime only, and a `GGTestTarget` throws, because a method runs in a runtime, not at an address.
