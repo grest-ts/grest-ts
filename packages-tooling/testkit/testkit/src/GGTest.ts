@@ -1,5 +1,5 @@
 import {GG_TEST_RESOURCE, GG_TEST_RUNNER, GGTestRunner, TestResource} from "./GGTestRunner";
-import {RuntimeConstructor, RuntimeInput, StartResult, Selector} from "./testers/RuntimeSelector";
+import {RuntimeConstructor, RuntimeInput, StartResult} from "./testers/RuntimeSelector";
 import {GGTestMode, GGTestRuntime, GGTestRuntimeConfig} from "./GGTestRuntime";
 import {createStartResult} from "./testers/GGTestSelector";
 import {startRuntimes} from "./startRuntimes";
@@ -284,17 +284,3 @@ export class GGTest {
         return createdRuntimes;
     }
 }
-
-// -------------------------------------------------
-// Legacy exports for backwards compatibility
-// -------------------------------------------------
-
-/**
- * @deprecated Use StartResult instead
- */
-export type {RuntimeResult} from "./testers/RuntimeSelector";
-
-/**
- * @deprecated Use Awaitable<StartResult<T>> instead
- */
-export type AwaitableRuntimeResult<R extends RuntimeConstructor[]> = Awaitable<Selector<R>>;

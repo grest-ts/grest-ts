@@ -1,46 +1,49 @@
 import type {GGMockableInterceptor} from "./GGMockableInterceptor";
 import {GGTestComponent} from "../testers/GGTestComponent";
+import {GGInterceptorTable} from "../testers/GGInterceptorTable";
 import {GGTestRunner} from "../GGTestRunner";
-import {GGMockableIPC, MockableCallPayload, MockableSpyResultPayload} from "./GGMockableIPC";
+import {GGMockableIPC} from "./GGMockableIPC";
 import {ERROR} from "@grest-ts/schema";
 
 export const CALL_THROUGH = "__spyCallThrough|migo0am5g0htea";
 
 export class GGMockableInterceptorsServer implements GGTestComponent {
 
-    private readonly interceptors: Map<string, GGMockableInterceptor> = new Map();
+    private readonly interceptors = new GGInterceptorTable<GGMockableInterceptor>();
 
     constructor(runner: GGTestRunner) {
         const server = runner.ipcServer;
-        server.onFrameworkMessage(GGMockableIPC.testServer.call, body => this.call(body));
-        server.onFrameworkMessage(GGMockableIPC.testServer.spyResult, body => this.spyResult(body));
-    }
+        const runtimeOf = (runtimeId: string | undefined) => runtimeId === undefined ? undefined : runner.getRuntimeById(runtimeId);
 
-    /** Mock data for the call, or CALL_THROUGH when nothing mocks it (a spy, or no interceptor at all). */
-    private async call(body: MockableCallPayload): Promise<any> {
-        const handler = this.interceptors.get(body.className + "." + body.methodName);
-        if (!handler) return CALL_THROUGH;
+        server.onFrameworkMessage(GGMockableIPC.testServer.call, async (body, msg) => {
+            const runtime = runtimeOf(msg.runtimeId);
+            const handler = this.interceptors.match(body.className + "." + body.methodName, runtime, runtime?.label ?? "an unknown runtime");
+            // Unmocked @mockable methods run for real.
+            if (!handler) return CALL_THROUGH;
 
-        // onRequest validates input and returns mock data (or undefined for spy)
-        const result = await handler.onRequest(body.callArgs);
-        if (handler.passThrough) return CALL_THROUGH;
-        if (result instanceof Error) throw result;
-        return result;
-    }
+            const result = await handler.onRequest(body.callArgs);
 
-    private async spyResult(body: MockableSpyResultPayload): Promise<void> {
-        const handler = this.interceptors.get(body.className + "." + body.methodName);
-        // A call through without a spy: nothing to check.
-        if (!handler || !handler.passThrough) return;
-        await handler.onResponse(body.callError ? ERROR.fromJson(body.callError) : body.callResult);
+            if (handler.passThrough) {
+                return CALL_THROUGH;
+            } else if (result instanceof Error) {
+                throw result;
+            } else {
+                return result;
+            }
+        });
+
+        server.onFrameworkMessage(GGMockableIPC.testServer.spyResult, async (body, msg) => {
+            const handler = this.interceptors.match(body.className + "." + body.methodName, runtimeOf(msg.runtimeId));
+            if (handler?.passThrough) await handler.onResponse(body.callError ? ERROR.fromJson(body.callError) : body.callResult);
+        });
     }
 
     public addInterceptor(interceptor: GGMockableInterceptor) {
-        this.interceptors.set(interceptor.getKey(), interceptor);
+        this.interceptors.add(interceptor);
     }
 
     public deleteInterceptor(interceptor: GGMockableInterceptor) {
-        this.interceptors.delete(interceptor.getKey());
+        this.interceptors.delete(interceptor);
     }
 
     public async teardown(): Promise<void> {

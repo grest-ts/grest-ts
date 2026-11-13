@@ -1,4 +1,6 @@
 import type {GGTestRunner} from "../GGTestRunner";
+import type {GGTestRuntime} from "../GGTestRuntime";
+import {GGLocator, GGLocatorScope} from "@grest-ts/locator";
 import {GGExpectations} from "../utils/GGExpectations";
 import {GGTestError} from "../utils/GGTestError";
 import {GGLog} from "@grest-ts/logger";
@@ -27,6 +29,8 @@ export interface GGCallInterceptorConfig {
     returnData?: any;
     expectError?: ConstructorOf<ERROR<any, any>>;
     expectErrorContext?: Partial<GGErrorData>;
+    /** Set by `.on(runtime)`: only calls that happen at this runtime. */
+    target?: GGTestRuntime;
 }
 
 /**
@@ -49,10 +53,13 @@ export abstract class GGCallInterceptor implements IGGTestInterceptor {
     private readonly returnData?: any;
     protected readonly expectError?: ConstructorOf<ERROR<any, any>>;
     protected readonly expectErrorContext?: Partial<GGErrorData>;
+    public readonly target?: GGTestRuntime;
 
     private noOfTimesCalled = 0;
     private noOfResponses = 0;
     private isRegistered = false;
+    private scope!: GGLocatorScope;
+    private readonly elsewhere = new Map<string, number>();
     private validationError: Error | undefined;
 
     protected constructor(test: GGTestRunner, config: GGCallInterceptorConfig) {
@@ -66,6 +73,7 @@ export abstract class GGCallInterceptor implements IGGTestInterceptor {
         this.returnData = config.returnData;
         this.expectError = config.expectError;
         this.expectErrorContext = config.expectErrorContext;
+        this.target = config.target;
         if (this.passThrough) {
             if (this.returnData !== undefined) {
                 throw new Error("Spy can't have returnData! It calls through and returns what ever it receives!")
@@ -94,6 +102,12 @@ export abstract class GGCallInterceptor implements IGGTestInterceptor {
         return false;
     }
 
+    /** Kinds that can tell where a call happens override this; it throws for a target they can't match. */
+    protected checkTarget(_target: GGTestRuntime): void {
+        throw new Error(`[${this.getKey()}] .on() is not supported for this kind of mock or spy. ` +
+            "It works on HTTP schema mocks and spies (Api.mock.x / Api.spy.x) and on mockOf / spyOn.");
+    }
+
     /**
      * Transform request body before checking expectations.
      * Override to extract/transform the input for validation.
@@ -114,12 +128,15 @@ export abstract class GGCallInterceptor implements IGGTestInterceptor {
         if (this.noOfTimesCalled > 0) {
             throw new Error("Should not register interceptor multiple times. Something is wrong...");
         }
-        this.isRegistered = true;
+        if (this.target) this.checkTarget(this.target);
+        // Callbacks run here, not in the router's scope, so they can use the test's clients.
+        this.scope = GGLocator.getScope();
 
         const mode = this.passThrough ? "spy" : "mock";
-        GGLog.debug(this, `Add ${mode} interceptor [${this.getKey()}]`);
+        GGLog.debug(this, `Add ${mode} interceptor ${this.getLabel()}`);
 
         this.doRegister();
+        this.isRegistered = true;
     }
 
     public unregister(): void {
@@ -128,7 +145,7 @@ export abstract class GGCallInterceptor implements IGGTestInterceptor {
         }
 
         const mode = this.passThrough ? "spy" : "mock";
-        GGLog.debug(this, `Remove ${mode} interceptor [${this.getKey()}]`);
+        GGLog.debug(this, `Remove ${mode} interceptor ${this.getLabel()}`);
 
         this.doUnregister();
         this.isRegistered = false;
@@ -160,7 +177,7 @@ export abstract class GGCallInterceptor implements IGGTestInterceptor {
             await this.sleepIfNeeded();
             if (typeof this.returnData !== "function") return this.returnData;
             try {
-                return await this.returnData(transformed);
+                return await this.scope.run(() => this.returnData(transformed));
             } catch (error) {
                 if (error instanceof ERROR) return error;
                 throw error;
@@ -195,12 +212,17 @@ export abstract class GGCallInterceptor implements IGGTestInterceptor {
     // -------------------------------------------
 
     public validate(): void {
+        // A failed call (validation, routing) says more than the count; the caller reports it from getMockValidationError.
+        if (this.validationError) return;
         if (this.noOfTimesCalled < this.times.min) {
             throw new GGTestError({
-                context: `[${this.getKey()}]`,
+                context: this.getLabel(),
                 test: this.noOfTimesCalled ? "Interceptor called too few times!" : "Interceptor was never called!",
                 expected: this.expectedCalls(),
                 received: `Called ${this.noOfTimesCalled} time(s)`,
+                extra: this.elsewhere.size
+                    ? "Calls to this method in this action went to: " + [...this.elsewhere].map(([where, count]) => `${where} (${count})`).join(", ")
+                    : undefined,
                 sourceFile: this.definedInSourceFile
             });
         }
@@ -212,8 +234,31 @@ export abstract class GGCallInterceptor implements IGGTestInterceptor {
 
     /** Done: called (a spy that gets responses: responded) as often as expected, or a call failed its expectations. */
     public isCalled(): boolean {
+        if (this.times.min === 0) {
+            throw new GGTestError({
+                context: this.getLabel(),
+                test: ".waitFor() has nothing to wait for: a count from 0 is met by no call at all.",
+                expected: "A count from 1 (.times(1, n), .atLeastOnce()), or .with() to allow none while the action runs",
+                received: `.times(0, ${this.times.max})`,
+                sourceFile: this.definedInSourceFile
+            });
+        }
         const done = this.passThrough && this.spyGetsResponses() ? this.noOfResponses : this.noOfTimesCalled;
         return done >= this.times.min || this.validationError !== undefined;
+    }
+
+    /** A call to this method could not be routed at all; the action fails with the reason. */
+    public routingFailed(error: Error): void {
+        this.setMockValidationError(new Error(error.message), "ROUTING_FAILED");
+    }
+
+    /** A call to this method was handled elsewhere (another runtime, another interceptor) while this one was active. */
+    public wentElsewhere(where: string): void {
+        this.elsewhere.set(where, (this.elsewhere.get(where) ?? 0) + 1);
+    }
+
+    public getLabel(): string {
+        return this.target ? `[${this.getKey()} on ${this.target.label}]` : `[${this.getKey()}]`;
     }
 
     // -------------------------------------------
@@ -235,7 +280,7 @@ export abstract class GGCallInterceptor implements IGGTestInterceptor {
         this.noOfTimesCalled++;
         if (this.noOfTimesCalled > this.times.max) {
             throw new GGTestError({
-                context: `[${this.getKey()}]`,
+                context: this.getLabel(),
                 test: "Interceptor called too many times!",
                 expected: this.expectedCalls(),
                 received: `Called ${this.noOfTimesCalled} times(s)`,
@@ -245,7 +290,7 @@ export abstract class GGCallInterceptor implements IGGTestInterceptor {
     }
 
     protected setMockValidationError(originalError: Error, type: string): void {
-        const messagePrefix = `[${this.getKey()}] ${type}`;
+        const messagePrefix = `${this.getLabel()} ${type}`;
         GGLog.error(this, messagePrefix, originalError);
 
         (originalError as any).isMockValidationError = true;

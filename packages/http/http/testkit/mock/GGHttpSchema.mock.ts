@@ -100,6 +100,9 @@ export class GGHttpInterceptor extends GGCallInterceptor {
         return `${this.method} ${this.pathPrefix}${this.pathSuffix}`;
     }
 
+    protected checkTarget(): void {
+    }
+
     protected doRegister(): void {
         this.test.getExtensionInstance(GGHttpInterceptorsServer).addInterceptor(this);
     }

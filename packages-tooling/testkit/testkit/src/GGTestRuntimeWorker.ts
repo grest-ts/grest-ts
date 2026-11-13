@@ -20,6 +20,8 @@ export class GGTestRuntimeWorker {
     private static beforeRuntimeStartHandlers: (() => void | Promise<void>)[] = [];
     private static beforeRuntimeStartExecuted = false;
 
+    private static runtimeStartedHandlers: ((worker: GGTestRuntimeWorker) => void | Promise<void>)[] = [];
+
     public readonly ipcClient: IPCClient;
     public readonly config: GGTestEnvConfig;
     public runtime!: GGRuntime
@@ -61,6 +63,11 @@ export class GGTestRuntimeWorker {
         this.beforeRuntimeStartHandlers.push(handler);
     }
 
+    /** Called in every worker once its runtime has started, before the test runner sees it as started. */
+    public static onRuntimeStarted(handler: (worker: GGTestRuntimeWorker) => void | Promise<void>): void {
+        this.runtimeStartedHandlers.push(handler);
+    }
+
     public async start(createRuntime?: () => GGRuntime): Promise<void> {
         process.env.GG_LOCAL_ROUTER_PORT = String(this.config.testRouterPort);
 
@@ -96,6 +103,7 @@ export class GGTestRuntimeWorker {
                 this.runtime = new RuntimeClass();
             }
             await this.runtime!.start();
+            for (const handler of GGTestRuntimeWorker.runtimeStartedHandlers) await handler(this);
 
             // Send registered locator keys to test runner for callOn routing
             const keys = this.runtime!.scope.getKeys();

@@ -235,8 +235,8 @@ export class GGTestRunner {
 
             // 0. Initialize extension (testkits already loaded by vitest setup)
             for (const type of GGTestRunner.extensionFactories) {
-                // Create extension instance, which registers its IPC handlers
-                this.extensionInstances.set(type, new type(this));
+                // Registers its IPC handlers. One fetched before start() is kept: a second instance would register them twice.
+                this.getExtensionInstance(type);
             }
 
             // 1. Execute all hook beforeAll handlers in parallel

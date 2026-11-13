@@ -102,7 +102,7 @@ describe("mockOf on a @mockable class", () => {
             .toEqual("late:a")
     })
 
-    describe("atLeastOnce()", () => {
+    describe("call counts", () => {
 
         test("fails when never called", async () => {
             await expect(client.named({id: "a"})
@@ -114,6 +114,21 @@ describe("mockOf on a @mockable class", () => {
             await client.named({id: "a"})
                 .waitFor(mockOf(Upstream).named.atLeastOnce().andReturn("mocked"))
                 .toEqual("mocked")
+        })
+
+        test("a range from 0 has nothing for .waitFor() to wait for", async () => {
+            await expect(client.named({id: "a"})
+                .waitFor(mockOf(Upstream).named.times(0, 1).andReturn("mocked"))
+            ).rejects.toThrow(/\.waitFor\(\) has nothing to wait for/)
+        })
+
+        test("a range allows any count within it", async () => {
+            await client.named({id: "a"})
+                .with(mockOf(Upstream).lookup.times(0, 1).andReturn("unused"))
+                .toEqual("real:a")
+            await expect(client.pair({id: "a", count: 2})
+                .with(mockOf(Upstream).pair.times(0, 0).andReturn("mocked"))
+            ).rejects.toThrow(/called too many times/)
         })
 
         test("allows several calls", async () => {

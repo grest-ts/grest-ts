@@ -6,6 +6,8 @@ import {GG_TEST_RUNNER, GGTestRunner} from "../GGTestRunner";
 import {IGGTestWith} from "./IGGTestWith";
 import {IGGTestInterceptor} from "./IGGTestInterceptor";
 import {GGCallInterceptor, GGCallInterceptorConfig, GGCallTimes} from "./GGCallInterceptor";
+import {singleRuntime} from "./GGTestSelector";
+import type {GGTestRuntime} from "../GGTestRuntime";
 
 type InterceptorFactory = new (runner: GGTestRunner, config: any) => GGCallInterceptor;
 
@@ -25,6 +27,7 @@ export class GGSpyWith<RequestBody = any, ResponseData = any, ErrorsUnion = any>
     private _sleep: number = 0;
     private _times: GGCallTimes = {min: 1, max: 1};
     private _within?: number;
+    private _target?: GGTestRuntime;
 
     constructor(interceptorFactory: InterceptorFactory, config: Record<string, any>) {
         this.interceptorFactory = interceptorFactory;
@@ -40,6 +43,7 @@ export class GGSpyWith<RequestBody = any, ResponseData = any, ErrorsUnion = any>
             definedInSourceFile: this.definedInSourceFile,
             sleep: this._sleep,
             times: this._times,
+            target: this._target,
             passThrough: true,
             inputExpectations: this._expectInput,
             outputExpectations: this._expectOutput,
@@ -70,8 +74,18 @@ export class GGSpyWith<RequestBody = any, ResponseData = any, ErrorsUnion = any>
         return this._within;
     }
 
-    public times(amount: number): this {
-        this._times = {min: amount, max: amount};
+    /**
+     * Only calls that happen at this runtime: for a schema mock or spy, calls routed to it; for mockOf / spyOn, calls
+     * of the method inside it. Takes a selector holding exactly one runtime (`t.relayA`, `t[1]`, `t.hub[1]`).
+     */
+    public on(runtime: {readonly runtimes: GGTestRuntime[]}): this {
+        this._target = singleRuntime(runtime);
+        return this;
+    }
+
+    /** Exactly `min` calls, or with `max` any count from `min` to `max` (both inclusive). */
+    public times(min: number, max: number = min): this {
+        this._times = {min, max};
         return this;
     }
 

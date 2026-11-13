@@ -435,12 +435,14 @@ test("spy — call through but validate", async () => {
 - `.andReturn(value)` — the mock returns this value instead of calling real code.
 - `.andReturn(input => value)` — answers each call from its input; may be `async` (e.g. run a competing write, then return).
 - `.andReturn(new MY_ERROR())`, or a callback that throws it — the caller gets `MY_ERROR` thrown, class and data intact.
-- `.times(n)` — expect exactly n calls (fewer or more fails); `.times(0)` = never called; `.atLeastOnce()` = one or more.
+- `.times(n)` — expect exactly n calls (fewer or more fails); `.times(0)` = never called; `.atLeastOnce()` = one or more; `.times(min, max)` = a range (from 0 only when the test asserts the outcome itself).
 - `.sleep(ms)` — add delay before returning.
+- `.on(t.hub[1])` — only calls that happen at that one runtime instance (also on `Api.mock.x` / `Api.spy.x`: only calls routed to it). Use it when a test runs several instances; exactly one interceptor handles a call, and a targeted one wins over an untargeted one.
 - `spyOn(S).method` — calls real method but validates input/output.
 - `.responseToMatchObject(...)` — on a spyOn interceptor, validates the real return value.
 - `.toBeError(MY_ERROR).withContext({displayMessage}).toMatchObject(data)` — on a spy, the real call must throw it.
 - Mocks reach only calls made inside a runtime the testkit started. A service the test constructs and calls itself is never intercepted; call it through its API, or mark it `@testable` and use `callOn(S).m(...).with(mockOf(...))`.
+- `Api.mock.x` / `Api.spy.x` reach calls from discovery clients (`Api.createClient()`). A client with a custom `transport` is never mocked — wrap it in a `@mockable` class.
 - A mock is active while its action runs — any call to that method in that window hits it, including from parallel requests. Unmocked `@mockable` calls run for real.
 - `.with(a, b, …)` takes one or more interceptors as separate arguments (not an array); calls can also be chained.
 

@@ -192,6 +192,10 @@ export class GGHttpServer {
         return this._port;
     }
 
+    get host(): string {
+        return this.configuredHost;
+    }
+
     // =========================================================================
     // Common implementation
     // =========================================================================
