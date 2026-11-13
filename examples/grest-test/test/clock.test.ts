@@ -73,7 +73,7 @@ describe("GGTest.clock", () => {
         expect(() => GGTest.clock.advance(-1)).toThrow(/non-negative/)
     })
 
-    test("freeze stops time everywhere, start lets it flow again", async () => {
+    test("freeze stops time everywhere, resume lets it flow again", async () => {
         await GGTest.clock.set(T)
         await GGTest.clock.freeze()
         const frozen = Date.now()
@@ -83,10 +83,10 @@ describe("GGTest.clock", () => {
         await GGTest.clock.advance(1_000)
         expect(new Set(await readAll())).toEqual(new Set([frozen + 1_000]))
 
-        await GGTest.clock.start()
+        await GGTest.clock.resume()
         await sleep(30)
         for (const now of await readAll()) expect(now).toBeGreaterThan(frozen + 1_000)
-        expect(GGTest.clock.now()).toBeLessThan(frozen + 1_000 + SLACK)
+        expect(Date.now()).toBeLessThan(frozen + 1_000 + SLACK)
     })
 
     test("freeze(T) stops at exactly T everywhere, in one change", async () => {
@@ -164,15 +164,14 @@ describe("GGTest.clock", () => {
         }
     })
 
-    test("vi.useFakeTimers faking Date is detected", () => {
+    test("vi.useFakeTimers faking Date is detected", async () => {
         vi.useFakeTimers({toFake: ["Date"]})
         try {
-            expect(() => GGTest.clock.now()).toThrow(/vi.useFakeTimers faked Date/)
             expect(() => GGTest.clock.set(T)).toThrow(/vi.useFakeTimers faked Date/)
         } finally {
             vi.useRealTimers()
         }
-        expect(GGTest.clock.now()).toBeGreaterThan(0)
+        await GGTest.clock.set(T)
     })
 
     describe("a clock set at describe level", () => {
@@ -399,7 +398,7 @@ describe("GGTest.clock and scope timers", () => {
         await worker.fired().toEqual(["a", "a:nested"])
     })
 
-    test("a frozen clock fires nothing until advance; start re-arms", async () => {
+    test("a frozen clock fires nothing until advance; resume re-arms", async () => {
         await GGTest.clock.freeze()
         await worker.schedule({id: "a", ms: 50})
         await sleep(150)
@@ -410,7 +409,7 @@ describe("GGTest.clock and scope timers", () => {
         await worker.schedule({id: "b", ms: 50})
         await sleep(150)
         await worker.fired().toEqual(["a"])
-        await GGTest.clock.start()
+        await GGTest.clock.resume()
         await vi.waitFor(() => worker.fired().toEqual(["a", "b"]))
     })
 

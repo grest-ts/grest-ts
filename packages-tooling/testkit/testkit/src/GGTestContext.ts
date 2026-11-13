@@ -51,22 +51,22 @@ export class GGTestContext extends GGContext {
         return callOn(target, this)
     }
 
-    public beforeAll(callback: () => void): this {
+    public beforeAll(callback: () => void | Promise<void>): this {
         beforeAll(() => this.run(callback));
         return this;
     }
 
-    public beforeEach(callback: () => void): this {
+    public beforeEach(callback: () => void | Promise<void>): this {
         beforeEach(() => this.run(callback));
         return this;
     }
 
-    public afterEach(callback: () => void): this {
+    public afterEach(callback: () => void | Promise<void>): this {
         afterEach(() => this.run(callback));
         return this;
     }
 
-    public afterAll(callback: () => void): this {
+    public afterAll(callback: () => void | Promise<void>): this {
         afterAll(() => this.run(callback));
         return this;
     }

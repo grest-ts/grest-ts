@@ -92,7 +92,7 @@ export class GGTestClock {
 
     /**
      * Stop time at `at` (default: now) in one change: `Date.now()` stays exactly there, and scope timers wait, until
-     * the next set/advance/start. Forward, it fires due timers as `advance` does.
+     * the next set/advance/resume. Forward, it fires due timers as `advance` does.
      */
     public freeze(at?: Date | number): Promise<void> {
         const target = at instanceof Date ? at.getTime() : at;
@@ -101,15 +101,10 @@ export class GGTestClock {
     }
 
     /** Let time flow again from the current fake now. */
-    public start(): Promise<void> {
+    public resume(): Promise<void> {
         return this.change(state => state.stoppedAt === undefined
             ? state
             : {offsetMs: state.stoppedAt - GGDateShim.realNow()});
-    }
-
-    public now(): number {
-        GGDateShim.assertActive();
-        return Date.now();
     }
 
     private change(next: (state: GGClockState) => GGClockState, timeoutMs?: number): Promise<void> {

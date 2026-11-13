@@ -495,8 +495,7 @@ Time keeps flowing from the time you set, unless you freeze it.
 await GGTest.clock.set(new Date("2026-03-01T09:00:00Z"))   // number = epoch ms
 await GGTest.clock.advance(30 * 60_000)                    // jump forward, fire due scope timers
 await GGTest.clock.freeze(new Date("2026-03-01T09:00:00Z")) // stop at exactly that time (default: now)
-await GGTest.clock.start()                                 // flows again from the current fake now
-GGTest.clock.now()                                         // same as Date.now() in the test
+await GGTest.clock.resume()                                // flows again from the current fake now
 ```
 
 - **Freeze the clock when you assert on timers or exact times.** A flowing clock moves on between two calls, so a
@@ -572,7 +571,7 @@ this.expiry = GGLocator.setTimeout(() => socket.close(), expiresAt - Date.now())
 It doesn't wait for work a callback started without returning it (use `.waitFor(...)`), and requests in flight
 during the advance may see either time. A `set()` to a later time fires timers as `advance` does; a `set()` back
 fires nothing, and a pending scope timer then waits at most its own delay from the new time. With the clock frozen,
-scope timers wait for `advance` or `start()`. `GGJobRunner` schedules and the `withLock` heartbeat are scope timers: `advance` past a lock's TTL loses the lock, as a stalled run would. A
+scope timers wait for `advance` or `resume()`. `GGJobRunner` schedules and the `withLock` heartbeat are scope timers: `advance` past a lock's TTL loses the lock, as a stalled run would. A
 scheduled job run that fails doesn't fail the `advance`: the runner catches and logs it, so check its logs.
 
 Everything else stays on real time: raw `setTimeout`/`setInterval`, `sleep()`, `withTimeout()`, sockets, IPC and
