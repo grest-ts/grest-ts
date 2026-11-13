@@ -329,7 +329,7 @@ export class GGTestRunner {
             for (const runtime of this.globalRuntimes) {
                 await runtime.shutdown()
             }
-            // Workers parked by this runner (in-test runtimes included) stay for the next files.
+            // Older parked workers live until here, so runtimes started inside tests can take them; this runner's stay for the next files.
             WorkerRunner.terminateUnused(this.parkedMark);
 
             GGLog.debug(this, 'Tearing down router...');

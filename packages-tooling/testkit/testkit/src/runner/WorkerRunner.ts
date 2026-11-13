@@ -22,16 +22,19 @@ export class WorkerRunner implements RuntimeRunner {
         this.reuse = reuse;
     }
 
-    /** A mark to pass to terminateUnused() later. */
     public static parkedMark(): number {
         return WorkerRunner.parkings;
     }
 
-    /** Ends the workers parked before `mark` that no runtime took since, so a worker holds only what its next files reuse. */
+    /** Ends the workers parked before `mark` (from parkedMark()) that no runtime took since, so a worker holds only what
+     *  its next files reuse. */
     public static terminateUnused(mark: number): void {
         for (const [key, workers] of WorkerRunner.parked) {
-            const kept = workers.filter(p => p.parkedAt >= mark);
-            for (const p of workers) if (p.parkedAt < mark) void p.worker.terminate();
+            const kept = [];
+            for (const p of workers) {
+                if (p.parkedAt < mark) void p.worker.terminate();
+                else kept.push(p);
+            }
             if (kept.length) WorkerRunner.parked.set(key, kept);
             else WorkerRunner.parked.delete(key);
         }
