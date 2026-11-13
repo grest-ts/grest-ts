@@ -1,6 +1,7 @@
 import type {GGTestRunner} from "../GGTestRunner";
 import {GGCallInterceptor, GGCallInterceptorConfig} from "../testers/GGCallInterceptor";
 import {GGMockableInterceptorsServer} from "./GGMockableInterceptorsServer";
+import {GGInterceptorTarget, GGTestTarget} from "../testers/GGTestTarget";
 
 export interface MockableInterceptorConfig extends GGCallInterceptorConfig {
     className: string;
@@ -30,7 +31,10 @@ export class GGMockableInterceptor extends GGCallInterceptor {
         return `${this.className}.${this.methodName}`;
     }
 
-    protected checkTarget(): void {
+    protected checkTarget(target: GGInterceptorTarget): void {
+        if (target instanceof GGTestTarget) {
+            throw new Error(`[${this.getKey()}] .on() takes a runtime here, not an address: a method runs in a runtime, not at an address.`);
+        }
     }
 
     protected doRegister(): void {

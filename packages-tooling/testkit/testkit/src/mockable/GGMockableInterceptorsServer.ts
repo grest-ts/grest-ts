@@ -16,7 +16,7 @@ export class GGMockableInterceptorsServer implements GGTestComponent {
 
         server.onFrameworkMessage(GGMockableIPC.testServer.call, async (body, msg) => {
             const runtime = runtimeOf(msg.runtimeId);
-            const handler = this.interceptors.match(body.className + "." + body.methodName, runtime, runtime?.label ?? "an unknown runtime");
+            const handler = this.interceptors.match(body.className + "." + body.methodName, target => target === runtime, runtime?.label ?? "an unknown runtime");
             // Unmocked @mockable methods run for real.
             if (!handler) return CALL_THROUGH;
 
@@ -32,7 +32,8 @@ export class GGMockableInterceptorsServer implements GGTestComponent {
         });
 
         server.onFrameworkMessage(GGMockableIPC.testServer.spyResult, async (body, msg) => {
-            const handler = this.interceptors.match(body.className + "." + body.methodName, runtimeOf(msg.runtimeId));
+            const runtime = runtimeOf(msg.runtimeId);
+            const handler = this.interceptors.match(body.className + "." + body.methodName, target => target === runtime);
             if (handler?.passThrough) await handler.onResponse(body.callResult);
         });
     }
