@@ -135,6 +135,28 @@ const suite = (start: StartMode) => describe(`mocks and spies on client-addresse
         })
     })
 
+    describe("through discovery", () => {
+        const viaDiscovery = async (pick: "first" | "last") => {
+            AddressingRelayInfoApi.routing[pick]()
+            const {host} = await callOn(AddressingRelayInfoApi).target()
+            AddressingRelayApi.routing[pick]()
+            return {host, by: (await callOn(AddressingRelayApi).sync({branch: "main"})).by}
+        }
+
+        test("a TLS server bound to a specific host is reached at its own scheme and host", async () => {
+            for (const pick of ["first", "last"] as const) {
+                const {host, by} = await viaDiscovery(pick)
+                expect(by).toBe("real:" + host)
+            }
+        })
+
+        test("a spy forwards to it", async () => {
+            AddressingRelayApi.routing.first()
+            await callOn(AddressingRelayApi).sync({branch: "spied"})
+                .with(AddressingRelayApi.spy.sync.toMatchObject({branch: "spied"}).responseToMatchObject({by: expect.stringMatching(/^real:127\.0\.0\.[23]$/)}))
+        })
+    })
+
     describe("which runtime an address belongs to", () => {
         // The hub's server is bound to all interfaces; pretend it listens on relay A's port too.
         let addresses: Map<string, {host: string, port: number}[]>
@@ -201,8 +223,12 @@ const suite = (start: StartMode) => describe(`mocks and spies on client-addresse
             body: JSON.stringify({branch: "main"}),
         }).then(response => response.text())
 
+        // Discovery, which an external caller gets instead, picks relay B.
+        AddressingRelayApi.routing.first()
+        if ((await callOn(AddressingRelayApi).sync({branch: "main"})).by !== "real:127.0.0.3") AddressingRelayApi.routing.last()
+
         expect(await sync("127.0.0.1")).toContain("real:127.0.0.2")
-        expect(await sync(external)).not.toContain("real:127.0.0.2")
+        expect(await sync(external)).toContain("real:127.0.0.3")
     })
 
     test("a call with a relative base URL and no host is not sent to the router, so it fails as in production", async () => {

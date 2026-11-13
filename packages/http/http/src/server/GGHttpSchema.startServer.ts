@@ -69,7 +69,8 @@ function setupRoutes<TContract extends GGContractApiDefinition>(
             runtime: scope.serviceName,
             api: httpSchema.name,
             pathPrefix: pathPrefix,
-            protocol: "http",
+            protocol: server.protocol,
+            host: server.host,
             port: port
         }]);
     })
