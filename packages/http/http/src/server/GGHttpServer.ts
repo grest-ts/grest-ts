@@ -196,6 +196,10 @@ export class GGHttpServer {
         return this.configuredHost;
     }
 
+    get protocol(): "http" | "https" {
+        return this.httpServer instanceof https.Server ? "https" : "http";
+    }
+
     // =========================================================================
     // Common implementation
     // =========================================================================
@@ -283,7 +287,7 @@ export class GGHttpServer {
     public announce(pathPrefix: string, owner: string): void {
         this.onStart(() => {
             // Discovery keys routes by api name: one per prefix, or announcements replace each other.
-            GG_DISCOVERY.tryGet()?.registerRoutes([{runtime: this.scope.serviceName, api: `${owner}:${pathPrefix}`, pathPrefix, protocol: "http", port: this.port!}]);
+            GG_DISCOVERY.tryGet()?.registerRoutes([{runtime: this.scope.serviceName, api: `${owner}:${pathPrefix}`, pathPrefix, protocol: this.protocol, host: this.host, port: this.port!}]);
         });
     }
 

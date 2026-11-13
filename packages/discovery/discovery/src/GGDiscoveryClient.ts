@@ -12,7 +12,9 @@ export const GG_DISCOVERY = new GGLocatorKey<GGDiscoveryClient>("GGDiscovery");
 export interface GGServiceRegistration {
     runtime: string;
     api: string;
-    protocol: "http" | "ws";
+    protocol: "http" | "https" | "ws" | "wss";
+    /** The interface the server is bound to; unset or a wildcard (`0.0.0.0`, `::`) means every interface. */
+    host?: string;
     port: number;
     pathPrefix: string;
 }

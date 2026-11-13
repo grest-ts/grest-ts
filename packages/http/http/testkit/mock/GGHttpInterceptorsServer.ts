@@ -1,6 +1,7 @@
 import * as http from "http";
 import {isIPv4} from "net";
 import findMyWay, {HTTPMethod} from "find-my-way";
+import {Agent} from "undici";
 import {HttpRoute, IPCServer} from "@grest-ts/ipc";
 import {GGLog} from "@grest-ts/logger";
 import {ERROR} from "@grest-ts/schema";
@@ -31,6 +32,8 @@ interface Destination extends GGHttpAddress {
 }
 
 const WILDCARD = new Set(["0.0.0.0", "::"]);
+// Discovery destinations are test runtimes on this machine, often with self-signed certificates.
+const TEST_RUNTIME_DIALER = new Agent({connect: {rejectUnauthorized: false}});
 const REQUEST_HEADERS_NOT_FORWARDED = new Set(["host", "connection", "content-length", "transfer-encoding", DESTINATION_HEADER]);
 // fetch has already decoded the response body and re-frames it, so its original framing headers would be wrong.
 const RESPONSE_HEADERS_NOT_FORWARDED = new Set(["connection", "content-length", "content-encoding", "transfer-encoding", "set-cookie"]);
@@ -218,15 +221,16 @@ export class GGHttpInterceptorsServer implements GGTestComponent {
             for (const [name, value] of Object.entries(req.headers)) {
                 if (value !== undefined && !REQUEST_HEADERS_NOT_FORWARDED.has(name)) headers[name] = Array.isArray(value) ? value.join(", ") : value;
             }
-            response = await dial(destination.baseUrl + req.url, {
+            const init = {
                 method: req.method!,
                 headers,
                 body: body.length ? new Uint8Array(body) : undefined,
                 signal: abort.signal,
-                path: req.url!,
-                connectionSettings: destination.settings,
-                redirect: "manual",
-            });
+                redirect: "manual" as const,
+            };
+            response = destination.addressed
+                ? await dial(destination.baseUrl + req.url, {...init, path: req.url!, connectionSettings: destination.settings})
+                : await fetch(destination.baseUrl + req.url, {...init, dispatcher: TEST_RUNTIME_DIALER} as RequestInit);
             responseBody = Buffer.from(await response.arrayBuffer());
         } catch (error: any) {
             const cause = error?.cause?.code ?? error?.cause?.message ?? error?.message;

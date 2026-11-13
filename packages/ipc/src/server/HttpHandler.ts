@@ -13,7 +13,8 @@ export class HttpHandler {
     private readonly proxy: httpProxy;
 
     constructor() {
-        this.proxy = httpProxy.createProxyServer({});
+        // Targets are services on this machine, often with self-signed certificates.
+        this.proxy = httpProxy.createProxyServer({secure: false});
     }
 
     public setResolver(resolver: HttpResolver) {

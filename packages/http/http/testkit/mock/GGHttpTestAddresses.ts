@@ -12,7 +12,7 @@ export const GGHttpTestIPC = {
     addresses: IPCServer.defineRequest<GGHttpAddress[], void>("http/addresses"),
 }
 
-// Discovery only knows `localhost:<port>` per API; this is what ties a port to the runtime that listens on it.
+// Discovery knows where an API listens, not which runtime listens there; this ties a port to its runtime.
 GGTestRuntimeWorker.onRuntimeStarted(async (worker) => {
     const scope = worker.runtime.scope;
     const servers = scope.getKeys()

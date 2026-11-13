@@ -50,7 +50,7 @@ export class GGLocalDiscoveryClient extends GGDiscoveryClient {
         for (const reg of registrations) {
             this.entries.push({
                 api: reg.api,
-                baseUrl: `${reg.protocol}://localhost:${reg.port}`,
+                baseUrl: `${reg.protocol}://${urlHost(reg.host)}:${reg.port}`,
                 pathPrefix: reg.pathPrefix
             });
         }
@@ -126,3 +126,8 @@ export interface GGServiceDiscoveryEntry {
     pathPrefix: string;  // Path to append: "/api/users/"
 }
 
+
+function urlHost(host: string | undefined): string {
+    if (!host || host === "0.0.0.0" || host === "::") return "localhost";
+    return host.includes(":") ? `[${host}]` : host;
+}

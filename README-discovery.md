@@ -50,7 +50,8 @@ abstract class GGDiscoveryClient {
 interface GGServiceRegistration {
     runtime: string;           // Service name
     api: string;               // API name, e.g. "UserApi"
-    protocol: "http" | "ws";
+    protocol: "http" | "https" | "ws" | "wss";  // https/wss when the server has TLS
+    host?: string;             // bound interface; unset or 0.0.0.0/:: means all
     port: number;
     pathPrefix: string;        // e.g. "/api/users/"
 }
@@ -77,7 +78,8 @@ server.onStart(() => {
         runtime: scope.serviceName,
         api: httpSchema.name,
         pathPrefix: pathPrefix,
-        protocol: "http",
+        protocol: server.protocol,
+        host: server.host,
         port: server.port
     }]);
 });

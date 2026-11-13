@@ -210,7 +210,8 @@ export class GGSocketServer<Query, TSocket extends ServerSocket = GGSocket> {
                         // Discovery routes by startsWith(pathPrefix); a "/base/*" wildcard schema
                         // registers its base so subpath upgrades resolve to this server.
                         pathPrefix: wildcardPathBase(this.path),
-                        protocol: "ws",
+                        protocol: http.protocol === "https" ? "wss" : "ws",
+                        host: http.host,
                         // onStart fires after the http server has bound its port.
                         port: http.port!
                     }]);
