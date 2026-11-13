@@ -27,6 +27,11 @@ export const MockableContract = new GGContractClass("MockableApi", {
         success: IsString,
         errors: [SERVER_ERROR],
     },
+    refuse: {
+        input: IsObject({reason: IsString}),
+        success: IsString,
+        errors: [SERVER_ERROR],
+    },
 })
 
 export const MockableApi = new GGHttpSchema({
@@ -38,5 +43,6 @@ export const MockableApi = new GGHttpSchema({
         pair: GGRpc.POST("pair"),
         named: GGRpc.POST("named"),
         field: GGRpc.POST("field"),
+        refuse: GGRpc.POST("refuse"),
     },
 })

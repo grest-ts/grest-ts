@@ -349,8 +349,8 @@ GGTest.with(MyConfig.mysql).clone(["seed1.sql", "seed2.sql"]);
 Services decorated with `@mockable` can be mocked or spied on in tests using `mockOf()` and `spyOn()`.
 
 This is different from schema-level mock/spy (like `MyApi.mock.method`) which intercepts HTTP calls between runtimes.
-`mockOf`/`spyOn` intercept calls to internal services: in a runtime the testkit started, and in the test process itself
-(see [Instances the test makes](#instances-the-test-makes)).
+`mockOf`/`spyOn` intercept calls to internal services within a runtime the testkit started (see
+[Calling a service directly](#calling-a-service-directly)).
 
 ### mockOf() - replace with fake data
 
@@ -446,30 +446,34 @@ signature:
 sync method or a class without `@mockable`. A method that isn't `async` but returns a Promise is sync to `@mockable`:
 its type looks the same as an async one, so `mockOf(S).x` compiles and then throws; declare it `async`. Fields only exist
 on instances, so `mockOf` can't check them; a mock of a sync field never gets a call, which the default `times(1)`
-reports. Fields are wrapped when an instance is constructed under the testkit (in a runtime or in the test process);
-fields declared by a subclass of a `@mockable` class need `@mockable` on that subclass too.
+reports. Fields are wrapped when an instance is constructed inside a runtime the testkit started; fields declared by a subclass of a `@mockable` class need `@mockable` on that subclass too.
 
-### Instances the test makes
+### Calling a service directly
 
-`mockOf`/`spyOn` also reach a `@mockable` instance the test process makes and calls: in a test body, or one a
-`GGTest.startInline` runtime made (see the db-dynamodb README, "Testing Code Without an API in Front"). An interceptor
-is active while an action runs, or while `GGTest.waitFor` waits for it, so call the code next to a `GGTest.waitFor`:
+`@mockable` intercepts calls made inside a runtime the testkit started, while an action runs. A service the test
+itself constructs and calls (`new OrderStore(...).place(...)`) runs in the test process: its calls are never
+intercepted, and a plain promise has no `.with()` to attach a mock to. Pick by what you test:
 
-```typescript
-const [, order] = await Promise.all([
-    GGTest.waitFor(mockOf(PaymentsApi).charge.toMatchObject({amount: 5}).andReturn({id: "ch_1"})),
-    orders.place({sku: "A1", amount: 5}),
-])
-expect(order.chargeId).toBe("ch_1")
-```
+- **Through its API** (the default): a test client call, `alice.orders.place(...).with(mockOf(...))`.
+- **A service with no API in front:** build it in a runtime's `compose()`, mark it `@testable`, and call it with
+  `callOn`. The call runs in the runtime, so mocks and spies apply:
 
-`GGTest.waitFor` registers the interceptor before `Promise.all` evaluates the next item, so the call can't come first.
+  ```typescript
+  await callOn(OrderStore).place({sku: "A1", amount: 5})
+      .with(mockOf(PaymentsApi).charge.toMatchObject({amount: 5}).andReturn({id: "ch_1"}))
+      .toMatchObject({chargeId: "ch_1"})
+  ```
+
+- **One class with its dependencies swapped per test:** that's a unit test. Pass fakes to its constructor; don't reach
+  for `mockOf`.
+
+Don't construct a service in a test body and expect `mockOf`/`spyOn` to reach it.
 
 ### Schema mock/spy vs @mockable mock/spy
 
 | | Schema mock/spy (`MyApi.mock.method`) | @mockable mock/spy (`mockOf(Service).method`) |
 |---|---|---|
-| **What it intercepts** | HTTP calls between runtimes | Internal method calls, in a runtime or the test process |
+| **What it intercepts** | HTTP calls between runtimes | Internal method calls within a runtime |
 | **Use case** | Mock/spy on service-to-service communication | Mock/spy on external dependencies (3rd party APIs, etc.) |
 | **How to use** | `MyApi.mock.method.andReturn(...)` | `mockOf(Service).method.andReturn(...)` |
 | **Import** | `import "@grest-ts/http/testkit"` | `import {mockOf, spyOn} from "@grest-ts/testkit"` |

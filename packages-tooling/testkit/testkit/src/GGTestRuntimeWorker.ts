@@ -26,7 +26,7 @@ export class GGTestRuntimeWorker {
     private runtimeStopped = false;
 
     /** Bridges this runtime's @mockable calls to the test runner. */
-    public readonly mockableContext: MockableTestContext = {
+    private readonly mockableContext: MockableTestContext = {
         CALL_THROUGH,
         sendCall: (className, methodName, callArgs) =>
             this.ipcClient.sendFrameworkRequest(GGMockableIPC.testServer.call, {className, methodName, callArgs}),

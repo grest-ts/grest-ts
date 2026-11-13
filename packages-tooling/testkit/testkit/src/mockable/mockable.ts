@@ -9,19 +9,8 @@
 import {GGMockableInterceptor} from "./GGMockableInterceptor";
 import {GGMockWith} from "../testers/GGMockWith";
 import {GGSpyWith} from "../testers/GGSpyWith";
-import {mockableClassName, type MockableTestContext, setMockableContextFallback} from "@grest-ts/testkit-runtime";
+import {mockableClassName} from "@grest-ts/testkit-runtime";
 import type {ANY_ERROR} from "@grest-ts/schema";
-import {GG_TEST_RUNNER} from "../GGTestRunner";
-import {GG_TEST_RUNTIME_WORKER} from "../GGTestRuntimeWorkerKey";
-import {GGMockableInterceptorsServer} from "./GGMockableInterceptorsServer";
-
-// A call outside a runtime's own async context: in a runtime's scope entered from the test, it goes through that
-// runtime's worker as the runtime's own calls do; in a test body, straight to the runner's interceptors.
-setMockableContextFallback((): MockableTestContext | undefined => {
-    const worker = GG_TEST_RUNTIME_WORKER.tryGet();
-    if (worker) return worker.mockableContext;
-    return GG_TEST_RUNNER.tryGet()?.getExtensionInstance(GGMockableInterceptorsServer).testProcessContext;
-});
 
 // ============================================================================
 // Type helpers for mockBy/spyOn

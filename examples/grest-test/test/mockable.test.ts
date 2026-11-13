@@ -157,91 +157,52 @@ describe("mockOf on a @mockable class", () => {
     })
 })
 
-describe("a @mockable instance made in the test process", () => {
+describe("spyOn checks what the real call threw", () => {
     GGTest.startWorker(MockableRuntime)
-    const upstream = new Upstream()
+    const client = callOn(MockableApi)
 
-    test("is mocked when the test body calls it", async () => {
-        const [, result] = await Promise.all([
-            GGTest.waitFor(mockOf(Upstream).named.toEqual("a").andReturn("mocked")),
-            upstream.named("a"),
-        ])
-        expect(result).toBe("mocked")
+    test("its type, context and data", async () => {
+        await client.refuse({reason: "quota"})
+            .with(spyOn(Upstream).refuse.toEqual("quota")
+                .toBeError(UPSTREAM_REFUSED).withContext({displayMessage: "refused: quota"}).toMatchObject({reason: "quota"}))
+            .toEqual("refused:quota")
     })
 
-    test("has its async fields mocked too", async () => {
-        const [, result] = await Promise.all([
-            GGTest.waitFor(mockOf(Upstream).field.toEqual(["a", 2]).andReturn("mocked")),
-            upstream.field("a", 2),
-        ])
-        expect(result).toBe("mocked")
+    test("fails when the error doesn't match", async () => {
+        await expect(client.refuse({reason: "quota"})
+            .with(spyOn(Upstream).refuse.toBeError(UPSTREAM_REFUSED).toMatchObject({reason: "other"}))
+        ).rejects.toThrow(/SPY_RESPONSE_VALIDATION_FAILED/)
     })
 
-    test("runs for real when nothing mocks it", async () => {
-        expect(await upstream.named("a")).toBe("real:a")
+    test("fails when it expects an error and the call returns", async () => {
+        await expect(client.named({id: "a"})
+            .with(spyOn(Upstream).named.toBeError(UPSTREAM_REFUSED))
+        ).rejects.toThrow(/Expected error 'UPSTREAM_REFUSED', but the call returned/)
     })
 
-    test("is spied on, an error it throws included", async () => {
-        const [, error] = await Promise.all([
-            GGTest.waitFor(spyOn(Upstream).refuse.toEqual("quota")
-                .toBeError(UPSTREAM_REFUSED).withContext({displayMessage: "refused: quota"}).toMatchObject({reason: "quota"})),
-            upstream.refuse("quota").catch(e => e),
-        ])
-        expect(UPSTREAM_REFUSED.is(error)).toBe(true)
-    })
-
-    test("fails a spy whose error doesn't match, and the caller still gets the error", async () => {
-        const [spied, called] = await Promise.allSettled([
-            GGTest.waitFor(spyOn(Upstream).refuse.toBeError(UPSTREAM_REFUSED).toMatchObject({reason: "other"})),
-            upstream.refuse("quota"),
-        ])
-        expect(spied.status === "rejected" && String(spied.reason)).toMatch(/SPY_RESPONSE_VALIDATION_FAILED/)
-        expect(called.status === "rejected" && UPSTREAM_REFUSED.is(called.reason)).toBe(true)
-    })
-
-    test("fails a spy that expects an error when the call returns", async () => {
-        const [spied] = await Promise.allSettled([
-            GGTest.waitFor(spyOn(Upstream).named.toBeError(UPSTREAM_REFUSED)),
-            upstream.named("a"),
-        ])
-        expect(spied.status === "rejected" && String(spied.reason)).toMatch(/Expected error 'UPSTREAM_REFUSED', but the call returned/)
+    test("fails when the call throws and no error was expected", async () => {
+        await expect(client.refuse({reason: "quota"})
+            .with(spyOn(Upstream).refuse.toEqual("quota"))
+        ).rejects.toThrow(/Expected success 'OK', but got error 'UPSTREAM_REFUSED'/)
     })
 })
 
-let inlineUpstream: Upstream
 let inlineScope: GGLocatorScope
 
-class UpstreamTestRuntime extends GGRuntime {
-    public static readonly NAME = "upstream-test"
+class ScopeTestRuntime extends GGRuntime {
+    public static readonly NAME = "scope-test"
 
     protected compose(): void {
-        inlineUpstream = new Upstream()
         inlineScope = GGLocator.getScope()
     }
 }
 
-void UpstreamTestRuntime.cli(import.meta.url)
+void ScopeTestRuntime.cli(import.meta.url)
 
-describe("a @mockable instance an inline runtime made, used from the test", () => {
-    GGTest.startInline(UpstreamTestRuntime)
+describe("test-side API used in a runtime's scope", () => {
+    GGTest.startInline(ScopeTestRuntime)
 
-    test("is mocked in the test body", async () => {
-        const [, result] = await Promise.all([
-            GGTest.waitFor(mockOf(Upstream).named.andReturn("mocked")),
-            inlineUpstream.named("a"),
-        ])
-        expect(result).toBe("mocked")
-    })
-
-    test("is mocked in the runtime's scope", async () => {
-        const [, result] = await Promise.all([
-            GGTest.waitFor(mockOf(Upstream).field.andReturn("mocked")),
-            inlineScope.run(() => inlineUpstream.field("a", 2)),
-        ])
-        expect(result).toBe("mocked")
-    })
-
-    test("test-side API used in the runtime's scope says so", () => {
+    test("says it runs inside a runtime", () => {
         expect(() => inlineScope.run(() => GG_TEST_RUNNER.get())).toThrow(/is test-side API, and this code runs inside a runtime/)
     })
 })
@@ -319,6 +280,16 @@ describe("@mockable fields", () => {
         })
         expect(calls).toEqual([["Sub", "run", "a"], ["Sub", "more", ["a", 2]]])
         expect((mockOf(Sub).run.createInterceptor() as GGCallInterceptor).getKey()).toBe("Sub.run")
+    })
+
+    test("are left as they are on an instance made outside a test runtime", async () => {
+        @mockable
+        class Service {
+            run = async () => "real"
+        }
+        const service = new Service()
+        expect(await runWithMockableContext(context, () => service.run())).toBe("real")
+        expect(calls).toEqual([])
     })
 
     test("compiled to __awaiter with one unparenthesized parameter take one argument", async () => {
