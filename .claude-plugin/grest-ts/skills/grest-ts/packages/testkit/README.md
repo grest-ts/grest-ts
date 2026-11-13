@@ -452,6 +452,56 @@ in a test; fields declared by a subclass of a `@mockable` class need `@mockable`
 | **How to use** | `MyApi.mock.method.andReturn(...)` | `mockOf(Service).method.andReturn(...)` |
 | **Import** | `import "@grest-ts/http/testkit"` | `import {mockOf, spyOn} from "@grest-ts/testkit"` |
 
+### Which calls a schema mock or spy reaches
+
+`MyApi.mock.x` / `MyApi.spy.x` act in the test router, so they reach the calls that go through it: calls from a
+client that finds its target through discovery (`MyApi.createClient()` with no `url`).
+
+> **A client with a custom `transport` is never mocked or spied on.** The router can't run a client's own transport,
+> so such a call always goes out for real. Put the dependency behind a `@mockable` class, or let the client use
+> discovery.
+
+A call made from a detached async context (one that lost the runtime's locator scope, e.g. a callback of a library
+that doesn't keep async context) is also outside the test: a schema interceptor may miss it and `mockOf` / `spyOn`
+never see it, so it runs for real.
+
+### One interceptor per call, and targeting one runtime with `.on()`
+
+**Exactly one interceptor handles a call.** In order:
+
+1. a mock or spy targeted at the runtime the call happens at (`.on(runtime)`),
+2. an untargeted mock or spy of the method,
+3. a running service (for `mockOf` / `spyOn`: the real method),
+4. a framework default answer (e.g. placeholder service tokens),
+5. otherwise the call fails with "No route".
+
+An untargeted spy next to a targeted mock therefore does not see the targeted call. Two interceptors for the same
+method and the same target (or both untargeted) throw when the second one registers.
+
+`.on(runtime)` is a modifier like `.times()`; it narrows a mock or spy to one runtime instance:
+
+```typescript
+const t = GGTest.startWorker({hub: HubRuntime, relayA: RelayRuntime, relayB: RelayRuntime})
+
+// Schema mock / spy: only calls the router sends to that runtime
+.with(RelayApi.mock.sync.on(t.relayA).andReturn(undefined))
+.with(RelayApi.spy.sync.on(t.relayB).toMatchObject({branch: "main"}))
+
+// mockOf / spyOn: only calls of the method inside that runtime
+const r = GGTest.startWorker({hub: [HubRuntime, HubRuntime]})
+.with(mockOf(Mailer).send.on(r.hub[1]).andReturn(new SERVER_ERROR()))
+```
+
+- It takes a selector that holds exactly one runtime (`t`, `t.relayA`, `t[1]`, `t.hub[1]`); `.on(t.hub)` with two
+  hubs throws.
+- Each key of the `GGTest.start*` input selects its own runtimes, in the order given, also when two keys use the
+  same runtime class.
+- A targeted mock that is never called says where the method's calls went:
+  `[POST /api/relay/sync on relayA] Interceptor was never called! … went to: relayB (1)`.
+- Event and WebSocket message interceptors throw on `.on()`.
+- With one instance of each runtime, don't target. With several, target, because an untargeted mock also answers a
+  call that went to the wrong instance.
+
 A call that carries a service token from `@grest-ts/oauth` needs nothing extra: while no authorization
 server runs in the test, the token is a placeholder, and a schema mock never checks it. See
 [Service tokens in tests](../../../packages-libs/auth/oauth/README.md#service-tokens-in-tests).

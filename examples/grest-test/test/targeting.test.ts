@@ -1,12 +1,13 @@
 import {GGTest, GGTestContext, mockOf, spyOn} from "@grest-ts/testkit"
 import {SERVER_ERROR} from "@grest-ts/schema"
-import {TargetingGatewayRuntime, TargetingStoreRuntime} from "../src/TargetingRuntimes"
+import {TargetingGatewayRuntime} from "../src/TargetingGatewayRuntime"
+import {TargetingStoreRuntime} from "../src/TargetingStoreRuntime"
 import {STORE_REFUSED, TargetingGatewayApi, TargetingStoreApi} from "../src/api/TargetingApi"
 import {StoreClock} from "../src/services/targeting/StoreClock"
 
 const failure = (action: PromiseLike<unknown>) => expect(Promise.resolve(action)).rejects
 
-type StartMode = "startWorker" | "startInline"
+type StartMode = "startWorker" | "startInline" | "startIsolated"
 
 const schemaSuite = (start: StartMode) => describe(`targeting schema mocks and spies (${start})`, () => {
     const t = GGTest[start]({gateway: TargetingGatewayRuntime, storeA: TargetingStoreRuntime, storeB: TargetingStoreRuntime})
@@ -119,6 +120,12 @@ const schemaSuite = (start: StartMode) => describe(`targeting schema mocks and s
         ).toThrow(/Expected success 'OK', but got error 'STORE_REFUSED'/)
     })
 
+    test("a spied call keeps its path parameters and query string", async () => {
+        await alice.gateway.find({id: "7", tag: "x y"})
+            .with(TargetingStoreApi.spy.find.responseToMatchObject("7:x y"))
+            .toEqual("7:x y")
+    })
+
     test("a mock callback can use the test's own clients", async () => {
         await alice.gateway.save({text: "from-callback", times: 1})
             .with(TargetingStoreApi.mock.save.andReturn(async ({text}) => {
@@ -136,6 +143,7 @@ const schemaSuite = (start: StartMode) => describe(`targeting schema mocks and s
 
 schemaSuite("startWorker")
 schemaSuite("startInline")
+schemaSuite("startIsolated")
 
 const replicaSuite = (start: StartMode) => describe(`targeting replicas with mockOf and spyOn (${start})`, () => {
     const t = GGTest[start]({gateway: TargetingGatewayRuntime, store: [TargetingStoreRuntime, TargetingStoreRuntime]})
@@ -190,6 +198,7 @@ const replicaSuite = (start: StartMode) => describe(`targeting replicas with moc
 
 replicaSuite("startWorker")
 replicaSuite("startInline")
+replicaSuite("startIsolated")
 
 describe("schema interceptors with no instance of the API", () => {
     GGTest.startWorker({gateway: TargetingGatewayRuntime})

@@ -1,7 +1,7 @@
 # Testkit targeting: architecture note (gate 1)
 
-Status: **for approval, no code written.** Intent: `testkit-mock-routing.md` §1–§2 on `kratt/design-relay-mock-routing`.
-Every claim about today's code was read on `dev`.
+Status: **approved; PR 1 built, PR 2 not started.** Intent: `testkit-mock-routing.md` §1–§2 on
+`kratt/design-relay-mock-routing`. §7 records the owner's decisions and where PR 1 differs from this note.
 
 ## 1. The flow
 
@@ -132,13 +132,33 @@ Proposed changes to §1/§2:
   `nodeDefaultTransport`. The hub process itself no longer opens the TLS connection in tests.
 - **`GGTest.target()` and address matching arrive in PR 2.** PR 1's `.on()` takes a runtime only.
 
-### Needs your decision
+## 7. Decisions (owner) and what PR 1 built
 
-1. Custom `transport` clients excluded (use connection settings or `@mockable`). kratt's relay clients use
-   connection settings, so they are covered. OK?
-2. In tests every addressed call goes through the router, unmocked third-party calls included: one more hop, and the
-   TLS dial is made by the test process. OK?
-3. Test hook by re-registering the node default transport (0 production lines), with the explicit `createClient`
-   hook (≤6 lines) only as fallback. OK?
-4. Default precedence: a running service beats `addDefault` (today's documented behaviour), mocks beat both. OK?
-5. N7 (GET/DELETE mock input) and discovery's `http` for TLS servers stay out, as follow-up issues. OK?
+1. **Custom `transport` clients are excluded from interception.** Stated in the testkit README.
+2. **Every addressed call goes through the router in tests** (PR 2).
+3. **PR 2 uses an explicit hook of about 3 lines in `createClient`,** not the re-registered default transport. PR 1
+   prepares it: the default transport is resolved per call, and the transport init bag carries the schema `path`, so
+   a fixed `url` with a base path can still be matched to a template.
+4. **Precedence:** targeted > untargeted > running service > `addDefault` > 404. Exactly one interceptor handles a call.
+5. **Follow-up issues, not fixed here:** GET/DELETE mock input (N7), and discovery registering `http` for TLS servers.
+6. **"In a test scope"** means `GG_TEST_RUNTIME_WORKER` is in the locator scope. PR 2's hook uses that; a client
+   with no host uses the real transport, not the router.
+
+Where PR 1 differs from §2 and §4:
+- **The WebSocket resolver is `setWsResolver`;** `setRouteProxyResolver` is gone. `GGLocalDiscoveryServer` sets both
+  resolvers for local dev, and the http testkit replaces the HTTP one.
+- **find-my-way lives in `GGHttpInterceptorsServer`,** not in `GGInterceptorTable`, because `@mockable` keys aren't paths.
+- **"Went to" is kept on each interceptor** (`wentElsewhere`), because an interceptor is validated after it is
+  unregistered.
+- **A spy with no instance** still throws at registration ("service is not running"); if the instance disappears
+  later, the call gets a 502 naming the spy.
+- **The spy forward** aborts with the caller, uses `redirect: "manual"` and drops `host`, `connection`,
+  `content-length`, `content-encoding` and `transfer-encoding`. A dial failure reaches the caller as `SERVER_ERROR`.
+- **Addresses** are kept per runtimeId in the http testkit server, count only while the runtime is `STARTED`, and
+  are dropped on IPC disconnect. PR 1 matches wildcard and loopback binds by port; two matches throw.
+- **The router still listens on `0.0.0.0`.** kratt's VM integration tests reach the test router from the VM over
+  the bridge (`WorkspaceFlowTestRuntime.localHubCallbackPort`), and the dev gateway is reached at `host-ip:9000`.
+- **The deprecated `createRuntimeSelector` / `RuntimeResult`** are deleted (unused; they grouped by `NAME` too).
+
+PR 2 additions from review: dial without connection reuse (kratt's `invalidateTlsPinAgent`), strip the destination
+header before forwarding, base64 the PEMs, raise `maxHeaderSize` and test it. Estimate: about +200 lines, 4 days.

@@ -15,6 +15,11 @@ export const TargetingStoreContract = new GGContractClass("TargetingStoreApi", {
         success: IsString,
         errors: [SERVER_ERROR],
     },
+    find: {
+        input: IsObject({id: IsString, tag: IsString}),
+        success: IsString,
+        errors: [SERVER_ERROR],
+    },
     refuse: {
         errors: [STORE_REFUSED, SERVER_ERROR],
     },
@@ -26,6 +31,7 @@ export const TargetingStoreApi = new GGHttpSchema({
     routes: {
         save: GGRpc.POST("save"),
         stamp: GGRpc.POST("stamp"),
+        find: GGRpc.GET("find/:id"),
         refuse: GGRpc.POST("refuse"),
     },
 })
@@ -44,6 +50,11 @@ export const TargetingGatewayContract = new GGContractClass("TargetingGatewayApi
     stamp: {
         input: IsObject({times: IsNumber}),
         success: IsArray(IsString),
+        errors: [SERVER_ERROR],
+    },
+    find: {
+        input: IsObject({id: IsString, tag: IsString}),
+        success: IsString,
         errors: [SERVER_ERROR],
     },
     refuse: {
@@ -67,6 +78,7 @@ export const TargetingGatewayApi = new GGHttpSchema({
         save: GGRpc.POST("save"),
         saveAndStamp: GGRpc.POST("save-and-stamp"),
         stamp: GGRpc.POST("stamp"),
+        find: GGRpc.POST("find"),
         refuse: GGRpc.POST("refuse"),
         ack: GGRpc.POST("ack"),
         acks: GGRpc.POST("acks"),

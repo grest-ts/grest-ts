@@ -2,32 +2,6 @@ import {GGHttp, GGHttpServer} from "@grest-ts/http"
 import {GGRuntime} from "@grest-ts/runtime"
 import {GGContractClient} from "@grest-ts/schema"
 import {STORE_REFUSED, TargetingGatewayApi, TargetingStoreApi, TargetingStoreContract} from "./api/TargetingApi"
-import {StoreClock} from "./services/targeting/StoreClock"
-
-export class TargetingStoreRuntime extends GGRuntime {
-    public static readonly NAME = "targetingStore"
-
-    protected compose(): void {
-        new GGHttp(new GGHttpServer()).http(TargetingStoreApi, new TargetingStore(new StoreClock()))
-    }
-}
-
-class TargetingStore {
-
-    private readonly clock: StoreClock
-
-    constructor(clock: StoreClock) {
-        this.clock = clock
-    }
-
-    public save = async ({text}: {text: string}) => ({text, by: "real"})
-
-    public stamp = async () => this.clock.stamp()
-
-    public refuse = async (): Promise<void> => {
-        throw new STORE_REFUSED({reason: "closed"})
-    }
-}
 
 /** Calls the store through discovery, so the test router picks the store instance. */
 export class TargetingGatewayRuntime extends GGRuntime {
@@ -66,6 +40,8 @@ class TargetingGateway {
         return stamps
     }
 
+    public find = async (input: {id: string, tag: string}) => this.store.find(input)
+
     public refuse = async () => {
         try {
             await this.store.refuse()
@@ -83,5 +59,4 @@ class TargetingGateway {
     public acks = async () => this.acked
 }
 
-TargetingStoreRuntime.cli(import.meta.url).then()
 TargetingGatewayRuntime.cli(import.meta.url).then()
