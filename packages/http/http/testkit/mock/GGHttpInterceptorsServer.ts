@@ -291,7 +291,13 @@ function sameHost(a: string, b: string): boolean {
 async function readInput(route: GGHttpRoute, req: http.IncomingMessage, body: Buffer): Promise<unknown> {
     const parser = route.codec.createForServer({contract: route.contract, middlewares: []});
     const replay = Object.assign(Readable.from(body.length ? [body] : []), {url: req.url, method: req.method, headers: req.headers});
-    const raw = await parser.readRequest(replay as unknown as http.IncomingMessage);
+    let raw: unknown;
+    try {
+        raw = await parser.readRequest(replay as unknown as http.IncomingMessage);
+    } catch {
+        // A body the server would refuse (bad JSON, too large) still reaches a mock, and a spy still forwards it.
+        return parseJson(body);
+    }
     try {
         return parser.validateInput(raw);
     } catch {
