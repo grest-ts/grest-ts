@@ -20,24 +20,24 @@ describe.shuffle("routing", () => {
         ConfigTestApi.routing.last();
     });
 
-    test("first() routes to first instance", async () => {
+    // Runtimes start together, so which of t[0]/t[1] registered first with discovery is not fixed.
+    async function handledBy(message: string): Promise<number[]> {
+        const cursors = await Promise.all([t[0].logs.cursor(), t[1].logs.cursor()]);
+        await client.logMessage({message});
+        const logs = await Promise.all(cursors.map(c => c.retrieve()));
+        return [0, 1].filter(i => logs[i].some(l => l.message?.includes(`Log message: ${message}`)));
+    }
+
+    test("first() and last() each pin to one instance, not the same one", async () => {
         ConfigTestApi.routing.first();
+        const first = [...await handledBy("first 1"), ...await handledBy("first 2")];
 
-        const cursor = await t[0].logs.cursor();
-        await client.logMessage({message: "first test"});
-
-        const logs = await cursor.retrieve();
-        expect(logs.some(l => l.message?.includes("Log message: first test"))).toBe(true);
-    });
-
-    test("last() routes to last instance", async () => {
         ConfigTestApi.routing.last();
+        const last = [...await handledBy("last 1"), ...await handledBy("last 2")];
 
-        const cursor = await t[1].logs.cursor();
-        await client.logMessage({message: "last test"});
-
-        const logs = await cursor.retrieve();
-        expect(logs.some(l => l.message?.includes("Log message: last test"))).toBe(true);
+        expect(first).toHaveLength(2);
+        expect(first[0]).toBe(first[1]);
+        expect(last).toEqual([1 - first[0], 1 - first[0]]);
     });
 
     test("roundRobin() alternates between instances", async () => {
