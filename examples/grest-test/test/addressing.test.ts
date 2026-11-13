@@ -42,6 +42,12 @@ const suite = (start: StartMode) => describe(`mocks and spies on client-addresse
                 .toEqual(expect.stringMatching(/^failed:SERVER_ERROR:.*ECONNREFUSED/))
         })
 
+        test("a spy on an address needs no service running in the test", async () => {
+            await alice.hub.openPull({head: "fix"})
+                .with(AddressingThirdPartyApi.spy.createPull.on(GGTest.target("127.0.0.7:4001")).toMatchObject({head: "fix"}))
+                .toEqual(expect.stringMatching(/^failed:SERVER_ERROR:.*ECONNREFUSED/))
+        })
+
         test("a mock on the address, and one on another address that isn't called", async () => {
             await alice.hub.openPull({head: "fix"})
                 .with(
@@ -92,6 +98,12 @@ const suite = (start: StartMode) => describe(`mocks and spies on client-addresse
         test("a spy sees a real pinned call and its response", async () => {
             await alice.hub.sync({targets: [relayA], branch: "main"})
                 .with(AddressingRelayApi.spy.sync.on(t.relayA).toMatchObject({branch: "main"}).responseToMatchObject({by: "real:127.0.0.2"}))
+                .toEqual(["real:127.0.0.2"])
+        })
+
+        test("a spy on a runtime's address sees the same call", async () => {
+            await alice.hub.sync({targets: [relayA], branch: "main"})
+                .with(AddressingRelayApi.spy.sync.on(GGTest.target(`${relayA.host}:${relayA.port}`)).responseToMatchObject({by: "real:127.0.0.2"}))
                 .toEqual(["real:127.0.0.2"])
         })
 
