@@ -33,7 +33,7 @@ interface Destination extends GGHttpAddress {
 
 const WILDCARD = new Set(["0.0.0.0", "::"]);
 // Discovery destinations are test runtimes on this machine, often with self-signed certificates.
-const TEST_RUNTIME_DIALER = new Agent({connect: {rejectUnauthorized: false}});
+const TEST_RUNTIME_DIALER = new Agent({headersTimeout: 0, connect: {rejectUnauthorized: false}});
 const REQUEST_HEADERS_NOT_FORWARDED = new Set(["host", "connection", "content-length", "transfer-encoding", DESTINATION_HEADER]);
 // fetch has already decoded the response body and re-frames it, so its original framing headers would be wrong.
 const RESPONSE_HEADERS_NOT_FORWARDED = new Set(["connection", "content-length", "content-encoding", "transfer-encoding", "set-cookie"]);
