@@ -2,8 +2,9 @@ import * as http from 'http';
 import * as net from 'net';
 import {GGLog} from "@grest-ts/logger";
 import {Duplex} from "stream";
-import {HttpMethod} from "@grest-ts/common";
-import {HttpHandler} from "./HttpHandler";
+import {HttpHandler, HttpResolver} from "./HttpHandler";
+
+export type {HttpRoute, HttpResolver} from "./HttpHandler";
 import {ClientDisconnectListener, SocketHandler, SocketMessage} from "./SocketHandler";
 import {IPCClientRequest, IPCServerRequest} from "../common/IPCTypes";
 import {GGLocator, GGLocatorScope} from "@grest-ts/locator";
@@ -113,16 +114,11 @@ export class IPCServer {
     // Handling http/socket requests that services send between each other. Can intercept http here.
     // -----------------------------------------------
 
-    public interceptHttp(method: HttpMethod, path: string, handler: (body: any, pathParams?: Record<string, string>, headers?: Record<string, string>) => Promise<any>): void {
-        this.httpHandler.addRoute(method, path, handler);
+    public setHttpResolver(resolver: HttpResolver) {
+        this.httpHandler.setResolver(resolver);
     }
 
-    public removeInterceptHttp(method: HttpMethod, path: string): void {
-        this.httpHandler.removeRoute(method, path);
-    }
-
-    public setRouteProxyResolver(resolver: (path: string) => string) {
-        this.httpHandler.setRouteResolver(resolver);
+    public setWsResolver(resolver: (url: string) => string) {
         this.socketHandler.setRouteResolver(resolver);
     }
 

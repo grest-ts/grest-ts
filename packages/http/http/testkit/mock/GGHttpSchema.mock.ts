@@ -3,7 +3,7 @@ import {GGHttpInterceptorsServer} from "./GGHttpInterceptorsServer";
 import {parseContractResponse} from "../utils/validateContractResponse";
 import {HttpMethod} from "@grest-ts/common";
 import {GGHttpCodec, GGHttpSchema} from "../../src/schema/GGHttpSchema";
-import {GGContractApiDefinition} from "@grest-ts/schema";
+import {ERROR, GGContractApiDefinition} from "@grest-ts/schema";
 
 declare module "../../src/schema/GGHttpSchema" {
     interface GGHttpSchema<TContract extends GGContractApiDefinition> {
@@ -97,6 +97,9 @@ export class GGHttpInterceptor extends GGCallInterceptor {
         return `${this.method} ${this.pathPrefix}${this.pathSuffix}`;
     }
 
+    protected checkTarget(): void {
+    }
+
     protected doRegister(): void {
         this.test.getExtensionInstance(GGHttpInterceptorsServer).addInterceptor(this);
     }
@@ -106,6 +109,6 @@ export class GGHttpInterceptor extends GGCallInterceptor {
     }
 
     protected parseResponseData(result: any): any {
-        return parseContractResponse(result, this.expectError);
+        return parseContractResponse(ERROR.isJson(result) ? ERROR.fromJson(result) : result, this.expectError);
     }
 }

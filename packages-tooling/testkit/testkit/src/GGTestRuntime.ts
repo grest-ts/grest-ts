@@ -79,6 +79,9 @@ export class GGTestRuntime {
      */
     public readonly className: string
 
+    /** How failure messages name this instance: its key and index in the GGTest.start* input (`relayB`, `hub[1]`). */
+    public label: string
+
     /**
      * Lifecycle state of this runtime instance.
      */
@@ -117,6 +120,7 @@ export class GGTestRuntime {
         this.executablePath = executablePath;
         this.className = className;
         this.name = name;
+        this.label = name;
         this.runtimeId = GGTestRuntime.generateRuntimeId(name);
         this.config = config ?? {}
         this.config.mode ??= GGTestMode.WORKER

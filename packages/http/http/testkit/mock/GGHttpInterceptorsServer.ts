@@ -1,50 +1,63 @@
-import {IPCServer} from "@grest-ts/ipc";
+import * as http from "http";
+import findMyWay, {HTTPMethod} from "find-my-way";
+import {HttpRoute, IPCServer} from "@grest-ts/ipc";
 import {GGLog} from "@grest-ts/logger";
 import {ERROR} from "@grest-ts/schema";
-import {GGTestComponent, GGTestRunner} from "@grest-ts/testkit";
-import {GGLocalDiscoveryServer, ROUTING_STRATEGIES} from "@grest-ts/discovery-local";
+import {GGInterceptorTable, GGTestComponent, GGTestRunner, GGTestRuntime, GGTestRuntimeState} from "@grest-ts/testkit";
+import {GGLocalDiscoveryServer} from "@grest-ts/discovery-local";
 import type {HttpMethod} from "@grest-ts/common";
 import type {GGHttpSchema} from "../../src/schema/GGHttpSchema";
 import {GGHttpInterceptor} from "./GGHttpSchema.mock";
+import {GGHttpAddress, GGHttpTestIPC} from "./GGHttpTestAddresses";
 
 interface GGHttpDefaultAnswer {
     apiName: string
-    pathPrefix: string
-    method: HttpMethod
-    path: string
     answer: (body: any) => Promise<unknown>
 }
 
+const WILDCARD_OR_LOOPBACK = new Set(["0.0.0.0", "::", "localhost", "127.0.0.1", "::1"]);
+// fetch has already decoded the body and re-frames it, so the original framing headers would be wrong.
+const NOT_FORWARDED = new Set(["host", "connection", "content-length", "content-encoding", "transfer-encoding", "set-cookie"]);
+
+/**
+ * Decides every HTTP call that reaches the test router, before its body is read: one matching interceptor answers
+ * (mock) or observes (spy) it, otherwise it goes to the instance discovery picks, otherwise to a default answer.
+ */
 export class GGHttpInterceptorsServer implements GGTestComponent {
 
+    private readonly runner: GGTestRunner
     private readonly server: IPCServer
     private readonly discoveryServer: GGLocalDiscoveryServer;
-    private readonly interceptors: Map<string, GGHttpInterceptor> = new Map();
-    // Track APIs where we've added mock routes (to use "last" routing strategy)
-    private readonly mockRoutedApis: Set<string> = new Set();
+    private readonly interceptors = new GGInterceptorTable<GGHttpInterceptor>();
     private readonly defaults: Map<string, GGHttpDefaultAnswer> = new Map();
-    private started = false;
+    // Path templates (`delete/:id`) that have an interceptor or a default; the store is their key.
+    private readonly templates = findMyWay<findMyWay.HTTPVersion.V1>();
+    private readonly templateKeys = new Set<string>();
+    private readonly addresses: Map<string, GGHttpAddress[]> = new Map();
 
     constructor(runner: GGTestRunner) {
         if (!(runner.discoveryServer instanceof GGLocalDiscoveryServer)) {
             throw new Error("GGHttpInterceptorsServer requires GGLocalDiscoveryServer as discovery server. This should be default for tests...");
         }
+        this.runner = runner;
         this.server = runner.ipcServer;
         this.discoveryServer = runner.discoveryServer;
-    }
-
-    public async start(): Promise<void> {
-        this.started = true;
-        for (const answer of this.defaults.values()) {
-            this.routeToDefault(answer);
-            this.interceptWithDefault(answer);
-        }
+        this.discoveryServer.isServed = (api) => this.interceptors.some(i => i.apiName === api && !i.passThrough)
+            || [...this.defaults.values()].some(d => d.apiName === api);
+        this.server.setHttpResolver((req) => this.resolve(req));
+        this.server.onFrameworkMessage(GGHttpTestIPC.addresses, async (addresses, msg) => {
+            this.addresses.set(msg.runtimeId!, addresses);
+        });
+        // Ports get reused, so a gone runtime must not keep one.
+        this.server.onClientDisconnect((_clientId, runtimeId) => {
+            if (runtimeId) this.addresses.delete(runtimeId);
+        });
     }
 
     public async teardown(): Promise<void> {
         this.interceptors.clear();
-        this.mockRoutedApis.clear();
         this.defaults.clear();
+        this.addresses.clear();
     }
 
     /**
@@ -53,146 +66,141 @@ export class GGHttpInterceptorsServer implements GGTestComponent {
      * test's own mock of the method replaces the answer while it is active.
      */
     public addDefault(schema: GGHttpSchema<any>, answers: Record<string, (body: any) => Promise<unknown>>): void {
-        const pathPrefix = "/" + schema.pathPrefix + "/";
         for (const [name, answer] of Object.entries(answers)) {
             const codec = schema.codec[name];
-            const entry: GGHttpDefaultAnswer = {apiName: schema.name, pathPrefix, method: codec.method, path: pathPrefix + codec.path, answer};
-            this.defaults.set(`${entry.method} ${entry.path}`, entry);
-            if (this.started) {
-                this.routeToDefault(entry);
-                this.interceptWithDefault(entry);
-            }
+            const path = "/" + schema.pathPrefix + "/" + codec.path;
+            const key = `${codec.method} ${path}`;
+            this.defaults.set(key, {apiName: schema.name, answer});
+            this.addTemplate(codec.method, path, key);
         }
-    }
-
-    private routeToDefault(entry: GGHttpDefaultAnswer): void {
-        const testServer = this.server.getUrl();
-        this.discoveryServer.removeRoute(entry.apiName, testServer);
-        this.discoveryServer.addRoute({api: entry.apiName, baseUrl: testServer, pathPrefix: entry.pathPrefix});
-        this.discoveryServer.setRoutingStrategy(entry.apiName, {
-            select: (instances) => instances.find(i => i.baseUrl !== testServer) ?? instances[0]
-        });
-    }
-
-    private interceptWithDefault(entry: GGHttpDefaultAnswer): void {
-        this.server.interceptHttp(entry.method, entry.path, async (body, _pathParams, headers) => {
-            const running = this.runningService(entry.apiName);
-            if (running) {
-                return await this.forward(running, entry.method, entry.path, body, headers);
-            }
-            GGLog.debug(this, `[DEFAULT_ANSWER] [${entry.method} ${entry.path}]`, body);
-            return {success: true, statusCode: 200, type: "OK", data: await entry.answer(body)};
-        });
-    }
-
-    private runningService(apiName: string): string | undefined {
-        const route = this.discoveryServer.getRoute(apiName);
-        return route && route.baseUrl !== this.server.getUrl() ? route.baseUrl : undefined;
-    }
-
-    private async forward(baseUrl: string, method: HttpMethod, path: string, body: any, headers?: Record<string, string>): Promise<any> {
-        GGLog.debug(this, `Forwarding ${method} ${path} -> ${baseUrl}`);
-        // Forward original headers (including auth headers), add/override Content-Type
-        const response = await fetch(baseUrl + path, {
-            method,
-            headers: {...(headers || {}), 'content-type': 'application/json'},
-            body: body ? JSON.stringify(body) : undefined
-        });
-        return await response.json();
     }
 
     public addInterceptor(interceptor: GGHttpInterceptor) {
-        const key = interceptor.getKey();
-        const path = interceptor.pathPrefix + interceptor.pathSuffix;
-        const mode = interceptor.passThrough ? "spy" : "mock";
-
-        GGLog.debug(this, `Add http ${mode} interceptor [${key}]`);
-
-        if (this.defaults.has(key)) {
-            this.server.removeInterceptHttp(interceptor.method, path);
+        if (interceptor.passThrough && !this.discoveryServer.getRoute(interceptor.apiName)) {
+            throw new Error(
+                `Cannot add spy for '${interceptor.apiName}' - service is not running!\n` +
+                `Spies require the actual service to be running so requests can be proxied.\n` +
+                `Did you forget to add 'withRuntime(${interceptor.apiName.replace('Api', 'Runtime')})' to your test?`
+            );
         }
-
-        if (!interceptor.passThrough) {
-            // Mock mode - always add route to discovery server for mocking
-            // Use "last" strategy so our mock route (added after service routes) wins
-            this.discoveryServer.addRoute({
-                api: interceptor.apiName,
-                baseUrl: this.server.getUrl(),
-                pathPrefix: interceptor.pathPrefix
-            });
-            this.discoveryServer.setRoutingStrategy(interceptor.apiName, ROUTING_STRATEGIES.last);
-            this.mockRoutedApis.add(interceptor.apiName);
-
-            this.server.interceptHttp(interceptor.method, path, async (body) => {
-                GGLog.debug(this, `[MOCKED_REQUEST] [${key}]`, body);
-                const reply = await interceptor.onRequest(body);
-                GGLog.debug(this, `[MOCKED_REPLY] [${key}]`, reply);
-                if (reply instanceof ERROR) {
-                    return reply.toJSON();
-                }
-                return {
-                    success: true,
-                    statusCode: 200,
-                    type: "OK",
-                    data: reply
-                };
-            });
-
-        } else {
-            // Spy mode - proxy to real service
-            const targetBaseUrl = this.runningService(interceptor.apiName);
-            if (!targetBaseUrl) {
-                throw new Error(
-                    `Cannot add spy for '${interceptor.apiName}' - service is not running!\n` +
-                    `Spies require the actual service to be running so requests can be proxied.\n` +
-                    `Did you forget to add 'withRuntime(${interceptor.apiName.replace('Api', 'Runtime')})' to your test?`
-                );
-            }
-
-            this.server.interceptHttp(interceptor.method, path, async (body, _pathParams, headers) => {
-                GGLog.debug(this, `[SPIED_REQUEST] [${key}]`, body);
-                await interceptor.onRequest(body);
-
-                const responseBody = await this.forward(targetBaseUrl, interceptor.method, path, body, headers);
-
-                await interceptor.onResponse(responseBody);
-                GGLog.debug(this, `[SPIED_RESPONSE] [${key}]`, responseBody);
-                return responseBody;
-            });
-        }
-
-        this.interceptors.set(key, interceptor);
+        this.interceptors.add(interceptor);
+        this.addTemplate(interceptor.method, interceptor.pathPrefix + interceptor.pathSuffix, interceptor.getKey());
     }
 
     public deleteInterceptor(interceptor: GGHttpInterceptor) {
         const key = interceptor.getKey();
-        const path = interceptor.pathPrefix + interceptor.pathSuffix;
-        const mode = interceptor.passThrough ? "spy" : "mock";
+        this.interceptors.delete(interceptor);
+        if (this.interceptors.get(key).length === 0 && !this.defaults.has(key) && this.templateKeys.delete(key)) {
+            this.templates.off(interceptor.method as HTTPMethod, interceptor.pathPrefix + interceptor.pathSuffix);
+        }
+    }
 
-        this.interceptors.delete(key);
-        GGLog.debug(this, `Remove http ${mode} interceptor [${key}]`);
+    private addTemplate(method: HttpMethod, path: string, key: string): void {
+        if (this.templateKeys.has(key)) return;
+        this.templateKeys.add(key);
+        this.templates.on(method as HTTPMethod, path, () => {
+        }, key);
+    }
 
-        this.server.removeInterceptHttp(interceptor.method, path);
-
-        // For mock mode, remove only our mock route entry (by baseUrl), not the real service routes
-        if (!interceptor.passThrough) {
-            this.discoveryServer.removeRoute(interceptor.apiName, this.server.getUrl());
-            this.mockRoutedApis.delete(interceptor.apiName);
-            // Restore default routing strategy if no more mock routes for this API
-            this.discoveryServer.setRoutingStrategy(interceptor.apiName, ROUTING_STRATEGIES.roundRobin);
+    private resolve(req: http.IncomingMessage): HttpRoute {
+        const path = req.url!.split("?")[0];
+        const key = this.templates.find(req.method as HTTPMethod, path)?.store as string | undefined;
+        if (key === undefined) {
+            return this.discoveryServer.selectInstance(path)?.baseUrl;
         }
 
-        const defaultAnswer = this.defaults.get(key);
-        if (defaultAnswer) {
-            this.interceptWithDefault(defaultAnswer);
+        const candidates = this.interceptors.get(key);
+        // An untargeted mock alone answers wherever the call would go, so no instance is picked and round robin doesn't advance.
+        const untargetedMockOnly = candidates.length === 1 && !candidates[0].target && !candidates[0].passThrough;
+        const instance = untargetedMockOnly ? undefined : this.discoveryServer.selectInstance(path);
+        const runtime = instance && this.runtimeAt(instance.baseUrl);
+        const where = untargetedMockOnly ? undefined : runtime?.label ?? instance?.baseUrl ?? "no running instance";
+        const interceptor = this.interceptors.match(key, runtime, where);
+
+        if (interceptor && !interceptor.passThrough) {
+            return (req, res) => this.answer(req, res, `MOCKED ${interceptor.getLabel()}`, body => interceptor.onRequest(body));
         }
-        // Removing the mock's route also dropped the default's (same baseUrl).
-        for (const entry of this.defaults.values()) {
-            if (entry.apiName === interceptor.apiName) {
-                this.routeToDefault(entry);
-                break;
+        if (interceptor) {
+            return (req, res) => this.spy(req, res, interceptor, instance?.baseUrl);
+        }
+        if (instance) {
+            return instance.baseUrl;
+        }
+        const fallback = this.defaults.get(key);
+        return fallback && ((req, res) => this.answer(req, res, `DEFAULT_ANSWER [${key}]`, fallback.answer));
+    }
+
+    private runtimeAt(baseUrl: string): GGTestRuntime | undefined {
+        const {hostname, port} = new URL(baseUrl);
+        if (!WILDCARD_OR_LOOPBACK.has(hostname)) return undefined;
+        const listening: GGTestRuntime[] = [];
+        for (const [runtimeId, addresses] of this.addresses) {
+            const runtime = this.runner.getRuntimeById(runtimeId);
+            if (runtime?.state === GGTestRuntimeState.STARTED && addresses.some(a => a.port === Number(port) && WILDCARD_OR_LOOPBACK.has(a.host))) {
+                listening.push(runtime);
             }
         }
+        if (listening.length > 1) {
+            throw new Error(`${baseUrl} is served by several runtimes (${listening.map(r => r.label).join(", ")}), so the call's target is ambiguous.`);
+        }
+        return listening[0];
+    }
+
+    private async answer(req: http.IncomingMessage, res: http.ServerResponse, what: string, reply: (body: any) => Promise<unknown>): Promise<void> {
+        const body = parseJson(await readBody(req));
+        GGLog.debug(this, `[${what}] request`, body);
+        const data = await reply(body);
+        GGLog.debug(this, `[${what}] reply`, data);
+        res.writeHead(200, {"content-type": "application/json"});
+        res.end(JSON.stringify(data instanceof ERROR ? data.toJSON() : {success: true, statusCode: 200, type: "OK", data}));
+    }
+
+    private async spy(req: http.IncomingMessage, res: http.ServerResponse, interceptor: GGHttpInterceptor, baseUrl: string | undefined): Promise<void> {
+        const body = await readBody(req);
+        GGLog.debug(this, `[SPIED ${interceptor.getLabel()}] request -> ${baseUrl}`);
+        await interceptor.onRequest(parseJson(body));
+
+        let response: Response;
+        try {
+            if (!baseUrl) throw new Error(`no running instance serves '${interceptor.apiName}'`);
+            const abort = new AbortController();
+            res.on("close", () => abort.abort());
+            const headers: Record<string, string> = {};
+            for (const [name, value] of Object.entries(req.headers)) {
+                if (value !== undefined && !NOT_FORWARDED.has(name)) headers[name] = Array.isArray(value) ? value.join(", ") : value;
+            }
+            response = await fetch(baseUrl + req.url, {method: req.method, headers, body: body.length ? new Uint8Array(body) : undefined, redirect: "manual", signal: abort.signal});
+        } catch (error: any) {
+            const cause = error?.cause?.code ?? error?.cause?.message ?? error?.message;
+            res.writeHead(502, {"content-type": "application/json"});
+            res.end(JSON.stringify({issue: `Spy ${interceptor.getLabel()} could not forward the call to ${baseUrl}: ${cause} (Did the service crash?)`}));
+            return;
+        }
+        const responseBody = Buffer.from(await response.arrayBuffer());
+        await interceptor.onResponse(parseJson(responseBody));
+
+        const headers: Record<string, string | string[]> = {};
+        response.headers.forEach((value, name) => {
+            if (!NOT_FORWARDED.has(name)) headers[name] = value;
+        });
+        const cookies = response.headers.getSetCookie();
+        if (cookies.length) headers["set-cookie"] = cookies;
+        res.writeHead(response.status, headers);
+        res.end(responseBody);
+    }
+}
+
+async function readBody(req: http.IncomingMessage): Promise<Buffer> {
+    const chunks: Buffer[] = [];
+    for await (const chunk of req) chunks.push(chunk);
+    return Buffer.concat(chunks);
+}
+
+function parseJson(body: Buffer): any {
+    try {
+        return body.length ? JSON.parse(body.toString()) : undefined;
+    } catch {
+        return undefined;
     }
 }
 

@@ -33,6 +33,8 @@ export type GGHttpTransport = (
         body: string | FormData | undefined
         signal: AbortSignal
         credentials?: "omit" | "same-origin" | "include"
+        /** The schema-built path and query, without the client's base URL. */
+        path: string
         /** Transport-level dial settings (e.g. TLS pin) contributed by middleware and/or client config. */
         connectionSettings?: GGConnectionSettings
     }
@@ -119,7 +121,6 @@ export function createClient<TContract extends GGContractApiDefinition>(
     // A custom transport implies "I take over the wire layer" — discovery is
     // off the table (the transport knows how to find the target), and the
     // default base URL becomes "" so the transport sees just the request path.
-    const transport: GGHttpTransport = config.transport ?? nodeDefaultTransport ?? defaultFetchTransport;
     if (config.transport && config.url === undefined) {
         config.url = "";
     }
@@ -182,12 +183,14 @@ export function createClient<TContract extends GGContractApiDefinition>(
 
                 const controller = new AbortController();
                 const timeoutId = setTimeout(() => controller.abort(), config.timeout);
+                const transport: GGHttpTransport = config.transport ?? nodeDefaultTransport ?? defaultFetchTransport;
                 const wireResponse = await transport(baseUrl + fetchRequest.url, {
                     method: fetchRequest.method,
                     signal: controller.signal,
                     headers: fetchRequest.headers,
                     body: fetchRequest.body,
                     credentials: config.credentials,
+                    path: fetchRequest.url,
                     connectionSettings
                 }).finally(() => clearTimeout(timeoutId));
                 const resData = await wireFormat.parseResponse(wireResponse);

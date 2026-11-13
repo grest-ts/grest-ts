@@ -30,6 +30,9 @@ export class GGMockableInterceptor extends GGCallInterceptor {
         return `${this.className}.${this.methodName}`;
     }
 
+    protected checkTarget(): void {
+    }
+
     protected doRegister(): void {
         this.test.getExtensionInstance(GGMockableInterceptorsServer).addInterceptor(this);
     }
