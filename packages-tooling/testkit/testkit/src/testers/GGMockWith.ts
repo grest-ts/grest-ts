@@ -71,14 +71,15 @@ export class GGMockWith<RequestBody = any, ResponseData = any, ErrorsUnion = any
         return this;
     }
 
-    public times(amount: number): this {
-        this._times = {min: amount, max: amount};
+    /** Exactly `min` calls, or with `max` any count from `min` to `max` (both inclusive). */
+    public times(min: number, max: number = min): this {
+        this._times = {min, max};
         return this;
     }
 
-    /** Allow any number of calls, none included. */
-    public anyTimes(): this {
-        this._times = {min: 0, max: Infinity};
+    /** One call or more. */
+    public atLeastOnce(): this {
+        this._times = {min: 1, max: Infinity};
         return this;
     }
 

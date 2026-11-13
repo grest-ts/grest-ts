@@ -1,6 +1,8 @@
 import type {GGTestRunner} from "../GGTestRunner";
 import {GGCallInterceptor, GGCallInterceptorConfig} from "../testers/GGCallInterceptor";
 import {GGMockableInterceptorsServer} from "./GGMockableInterceptorsServer";
+import {checkError} from "../utils/checkError";
+import {ERROR} from "@grest-ts/schema";
 
 export interface MockableInterceptorConfig extends GGCallInterceptorConfig {
     className: string;
@@ -41,7 +43,16 @@ export class GGMockableInterceptor extends GGCallInterceptor {
         this.test.getExtensionInstance(GGMockableInterceptorsServer).deleteInterceptor(this);
     }
 
+    protected spyGetsResponses(): boolean {
+        return true;
+    }
+
     protected parseResponseData(result: any): any {
+        if (result instanceof ERROR) {
+            checkError(result, this.expectError, this.expectErrorContext);
+            return result.data;
+        }
+        if (this.expectError) throw new Error(`Expected error '${this.expectError.name}', but the call returned`);
         return result;
     }
 }

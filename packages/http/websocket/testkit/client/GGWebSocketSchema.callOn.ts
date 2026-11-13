@@ -178,7 +178,6 @@ GGWebSocketSchema.prototype[CALL_ON_FACTORY] = function (
 export interface SocketServerToClientInterceptorConfig extends GGCallInterceptorConfig {
     socket: GGSocket;
     path: string;
-    expectError?: any;
     contract?: GGContractMethod;
 }
 
@@ -192,7 +191,6 @@ export class GGSocketServerToClientInterceptor extends GGCallInterceptor {
 
     public readonly socket: GGSocket;
     public readonly path: string;
-    protected readonly expectError?: any;
     protected readonly contract?: GGContractMethod;
 
     constructor(test: GGTestRunner, config: SocketServerToClientInterceptorConfig) {
@@ -206,7 +204,6 @@ export class GGSocketServerToClientInterceptor extends GGCallInterceptor {
         super(test, config);
         this.socket = config.socket;
         this.path = config.path;
-        this.expectError = config.expectError;
         this.contract = config.contract;
     }
 
@@ -226,6 +223,6 @@ export class GGSocketServerToClientInterceptor extends GGCallInterceptor {
     }
 
     protected parseResponseData(result: any): any {
-        return parseContractResponse(result, this.expectError);
+        return parseContractResponse(result, this.expectError, this.expectErrorContext);
     }
 }

@@ -5,6 +5,7 @@ import {fileURLToPath} from "node:url";
 import {GGLocatorScope} from "@grest-ts/locator";
 import {GGLog} from "@grest-ts/logger";
 import {GGDateShim} from "./GGDateShim";
+import {outsideTestkitError} from "../utils/outsideTestkitError";
 
 interface ScopeTimer {
     handle: NodeJS.Timeout
@@ -253,7 +254,7 @@ function settle(shim: TimerShim, timer: ScopeTimer): void {
 
 function getShim(): TimerShim {
     const shim = slot[KEY];
-    if (!shim) throw new Error("GGTest.clock: the timer shim is not installed. Add '@grest-ts/testkit-vitest' to vitest setupFiles.");
+    if (!shim) throw outsideTestkitError("GGTest.clock (its timer shim)");
     return shim;
 }
 

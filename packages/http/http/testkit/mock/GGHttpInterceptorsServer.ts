@@ -180,8 +180,11 @@ export class GGHttpInterceptorsServer implements GGTestComponent {
             response = await fetch(baseUrl + req.url, {method: req.method, headers, body: body.length ? new Uint8Array(body) : undefined, redirect: "manual", signal: abort.signal});
         } catch (error: any) {
             const cause = error?.cause?.code ?? error?.cause?.message ?? error?.message;
+            const issue = `Spy ${interceptor.getLabel()} could not forward the call to ${baseUrl}: ${cause} (Did the service crash?)`;
+            // No response will come, so fail the spy now rather than let .waitFor() run out.
+            interceptor.routingFailed(new Error(issue));
             res.writeHead(502, {"content-type": "application/json"});
-            res.end(JSON.stringify({issue: `Spy ${interceptor.getLabel()} could not forward the call to ${baseUrl}: ${cause} (Did the service crash?)`}));
+            res.end(JSON.stringify({issue}));
             return;
         }
         const responseBody = Buffer.from(await response.arrayBuffer());

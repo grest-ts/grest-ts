@@ -237,7 +237,7 @@ await alice.checklist.list()
 
 ### Error assertions
 
-When testing error responses, use `.toBeError()` with an error class. After `.toBeError()`, further `.toMatchObject()` calls check the error data.
+When testing error responses, use `.toBeError()` with an error class. After `.toBeError()`, further `.toMatchObject()` calls check the error data, and `.withContext()` checks its context (`displayMessage`, `ref`, …). Spies (`MyApi.spy.x`, `spyOn(S).x`) take the same chain.
 
 ```typescript
 import {NOT_AUTHORIZED, VALIDATION_ERROR, NOT_FOUND, FORBIDDEN, EXISTS} from "@grest-ts/schema";
@@ -262,7 +262,8 @@ await alice.user.login({username: "alice", password: "wrong"})
 
 // The error's context: what the client sees as displayMessage
 await alice.user.create({name: "taken"})
-    .toBeError(SERVER_ERROR, {displayMessage: expect.stringContaining("Validation Failed")});
+    .toBeError(SERVER_ERROR)
+    .withContext({displayMessage: expect.stringContaining("Validation Failed")});
 ```
 
 ### Chaining with interceptors
@@ -356,7 +357,8 @@ GGTest.with(MyConfig.mysql).clone(["seed1.sql", "seed2.sql"]);
 Services decorated with `@mockable` can be mocked or spied on in tests using `mockOf()` and `spyOn()`.
 
 This is different from schema-level mock/spy (like `MyApi.mock.method`) which intercepts HTTP calls between runtimes.
-`mockOf`/`spyOn` intercept calls to internal services within a runtime.
+`mockOf`/`spyOn` intercept calls to internal services within a runtime the testkit started (see
+[Calling a service directly](#calling-a-service-directly)).
 
 ### mockOf() - replace with fake data
 
@@ -399,10 +401,18 @@ test('spy on external service', async () => {
     .andReturn(result)
     .times(2))                  // Expect exactly 2 calls
 
-// Any number of calls, none included
+// One call or more, when the count doesn't matter (a retry, a poll); .waitFor() waits for the first
 .with(mockOf(Service).method
     .andReturn(result)
-    .anyTimes())
+    .atLeastOnce())
+
+// A range, both ends included. A range from 0 allows no call at all: use it only where the test proves the outcome
+// another way, e.g. two targeted mocks where routing picks one and the result shows which answered.
+// .waitFor() rejects a range from 0: no call already meets it.
+.with(
+    Api.mock.save.on(t.storeA).times(0, 2).andReturn({by: "A"}),
+    Api.mock.save.on(t.storeB).times(0, 2).andReturn({by: "B"}),
+)
 
 // Answer each call from its input; the callback may be async
 .with(mockOf(Service).method
@@ -429,9 +439,11 @@ test('spy on external service', async () => {
     .response.toMatchObject({out: 1})   // Switch to response, then validate
 )
 
-// Spy expecting error response
+// Spy expecting error response: its context and data
 .with(spyOn(Service).method
-    .toBeError(NOT_FOUND)
+    .toBeError(QUOTA_EXCEEDED)
+    .withContext({displayMessage: "Over quota"})
+    .toMatchObject({left: 0})
 )
 ```
 
@@ -447,9 +459,31 @@ signature:
 | `pair(id: string, count: number)` | the arguments as a tuple: `["a", 2]` |
 
 `@mockable` intercepts async methods and async function fields (`run = async (…) => …`). `mockOf(S).x` throws for a
-sync method or a class without `@mockable`. Fields only exist on instances, so `mockOf` can't check them; a mock of a
-sync field never gets a call, which the default `times(1)` reports. Fields are wrapped when an instance is constructed
-in a test; fields declared by a subclass of a `@mockable` class need `@mockable` on that subclass too.
+sync method or a class without `@mockable`. A method that isn't `async` but returns a Promise is sync to `@mockable`:
+its type looks the same as an async one, so `mockOf(S).x` compiles and then throws; declare it `async`. Fields only exist
+on instances, so `mockOf` can't check them; a mock of a sync field never gets a call, which the default `times(1)`
+reports. Fields are wrapped when an instance is constructed inside a runtime the testkit started; fields declared by a subclass of a `@mockable` class need `@mockable` on that subclass too.
+
+### Calling a service directly
+
+`@mockable` intercepts calls made inside a runtime the testkit started, while an action runs. A service the test
+itself constructs and calls (`new OrderStore(...).place(...)`) runs in the test process: its calls are never
+intercepted, and a plain promise has no `.with()` to attach a mock to. Pick by what you test:
+
+- **Through its API** (the default): a test client call, `alice.orders.place(...).with(mockOf(...))`.
+- **A service with no API in front:** build it in a runtime's `compose()`, mark it `@testable`, and call it with
+  `callOn`. The call runs in the runtime, so mocks and spies apply:
+
+  ```typescript
+  await callOn(OrderStore).place({sku: "A1", amount: 5})
+      .with(mockOf(PaymentsApi).charge.toMatchObject({amount: 5}).andReturn({id: "ch_1"}))
+      .toMatchObject({chargeId: "ch_1"})
+  ```
+
+- **One class with its dependencies swapped per test:** that's a unit test. Pass fakes to its constructor; don't reach
+  for `mockOf`.
+
+Don't construct a service in a test body and expect `mockOf`/`spyOn` to reach it.
 
 ### Schema mock/spy vs @mockable mock/spy
 

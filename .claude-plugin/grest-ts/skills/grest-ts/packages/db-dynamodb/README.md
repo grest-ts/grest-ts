@@ -511,6 +511,8 @@ describe("OrderStore", () => {
 
 The test body runs outside the runtime's scope. A `GGSetting`/`GGResource` read at call time (as it should be) resolves only inside it, so code under test that reads config needs the scope: keep `GGLocator.getScope()` from `compose` and wrap each test, `aroundEach(run => scope.run(run))`.
 
+Calls the test body makes on those instances run in the test process, so `mockOf`/`spyOn` don't reach their `@mockable` dependencies. To mock one, mark the instance `@testable` and call it with `callOn(OrderStore).place(...).with(mockOf(...))`: see the testkit README, "Calling a service directly".
+
 ## Admin / Table Creation
 
 `GGDynamoDb.getRawClient()` returns a fresh low-level `DynamoDBClient` (no DocumentClient marshalling), or for `GGDynamoDb.forClient(client)` that client. Use it for `DescribeTable` and other operations the document layer doesn't cover. It reads config at call time, so it works before `start()` has run, which is what a seed script needs to create its tables with `GGDynamoDbDevTables.ensure` before any data exists. Don't keep a client built from it for data access: it doesn't follow config changes, while `getDocumentClient()` does.

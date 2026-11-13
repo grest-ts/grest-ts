@@ -1,3 +1,5 @@
+import {outsideTestkitError} from "../utils/outsideTestkitError"
+
 export interface GGClockState {
     offsetMs: number
     stoppedAt?: number
@@ -55,7 +57,7 @@ const DEFAULT_STATE: GGClockState = {offsetMs: 0}
 
 function getShim(): DateShim {
     const shim = slot[KEY]
-    if (!shim) throw new Error("GGTest.clock: the Date shim is not installed. Add '@grest-ts/testkit-vitest' to vitest setupFiles.")
+    if (!shim) throw outsideTestkitError("GGTest.clock (its Date shim)")
     return shim
 }
 

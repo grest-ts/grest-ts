@@ -33,7 +33,7 @@ type MockAccess<T> = {
 
 type SpyAccess<T> = {
     [K in keyof T]: T[K] extends (...args: infer A) => Promise<infer R>
-        ? GGSpyWith<MockInput<A>, Awaited<R>, never>
+        ? GGSpyWith<MockInput<A>, Awaited<R>, ANY_ERROR>
         : never
 };
 

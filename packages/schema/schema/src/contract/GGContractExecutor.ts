@@ -7,15 +7,7 @@ import {GGPromise} from "./GGPromise";
 
 export class GGContractExecutor {
 
-    private static readonly SYSTEM_ERRORS: Record<string, ANY_ERROR_CLS> = {
-        [NOT_AUTHORIZED.TYPE]: NOT_AUTHORIZED,
-        [FORBIDDEN.TYPE]: FORBIDDEN,
-        [NOT_FOUND.TYPE]: NOT_FOUND,
-        [ROUTE_NOT_FOUND.TYPE]: ROUTE_NOT_FOUND,
-        [EXISTS.TYPE]: EXISTS,
-        [VALIDATION_ERROR.TYPE]: VALIDATION_ERROR,
-        [SERVER_ERROR.TYPE]: SERVER_ERROR
-    };
+    private static readonly SYSTEM_ERRORS: readonly ANY_ERROR_CLS[] = [NOT_AUTHORIZED, FORBIDDEN, NOT_FOUND, ROUTE_NOT_FOUND, EXISTS, VALIDATION_ERROR, SERVER_ERROR];
 
     /**
      * Throws in case of validation error.
@@ -107,27 +99,7 @@ export class GGContractExecutor {
      * Convert error response JSON to error class instance.
      */
     public static createErrorObj<Type extends string, Data>(result: ERROR_JSON<Type, Data>, customErrors?: ANY_ERROR_CLS[]): ERROR<Type, Data> | typeof SERVER_ERROR.infer {
-        // Find custom error - support both array and object format
-        const factory: ANY_ERROR_CLS = this.SYSTEM_ERRORS[result.type] ?? customErrors?.find(e => e.TYPE === result.type)
-        if (factory) {
-            let err: ERROR<Type, Data> | undefined;
-            if (factory.schema) {
-                err = new factory(result.data, result.context)
-            } else {
-                err = new factory(result.context)
-            }
-            err.stack = undefined;
-            return err;
-        } else {
-            return new SERVER_ERROR({
-                debugMessage: "Failed to create error from server error response!",
-                debugData: {
-                    unknownErrorType: result.type,
-                    knownErrorTypes: customErrors?.map(e => e.TYPE).join(",") ?? "(none)",
-                    response: result
-                }
-            });
-        }
+        return ERROR.fromJson(result, {allowed: [...this.SYSTEM_ERRORS, ...customErrors ?? []]}) as ERROR<Type, Data>
     }
 
     /**

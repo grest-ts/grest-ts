@@ -9,18 +9,12 @@ import {GGLocatorKey} from "@grest-ts/locator";
 import {GGTestComponent, GGTestComponentType} from "./testers/GGTestComponent";
 import {IGGLocalDiscoveryServer} from "./IGGLocalDiscoveryServer";
 import {TestableIPC} from "./callOn/TestableIPC";
+import {outsideTestkitError} from "./utils/outsideTestkitError";
 
 class GGTestRunnerKey extends GGLocatorKey<GGTestRunner> {
     public get(): GGTestRunner {
         const runner = this.tryGet();
-        if (!runner) {
-            throw new Error(
-                "No GGTest runner here. GGTest.start*/with(...), test calls and other testkit calls work only within the testkit's " +
-                "describe, tests and hooks. A file that imports `describe` or a hook (`afterEach`, …) from \"vitest\" bypasses them: " +
-                "drop that import, or use a GGTestContext's hooks. vitest.config also needs " +
-                "setupFiles: [\"@grest-ts/testkit-vitest\"] + globalSetup: [\"@grest-ts/testkit-vitest/globalSetup\"]."
-            );
-        }
+        if (!runner) throw outsideTestkitError("GGTest.start*/with(...), a test call or another testkit call");
         return runner;
     }
 }

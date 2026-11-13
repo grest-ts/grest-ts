@@ -2,17 +2,18 @@ import {IPCClient, IPCClientRequest} from "@grest-ts/ipc";
 import {GGLog} from "@grest-ts/logger";
 import {GGLoggerConsole} from "@grest-ts/logger-console";
 import {GGRuntime} from "@grest-ts/runtime";
-import {GGLocatorKey, GGLocatorScope} from "@grest-ts/locator";
+import {GGLocatorScope} from "@grest-ts/locator";
+import {GG_TEST_RUNTIME_WORKER} from "./GGTestRuntimeWorkerKey";
 import {pathToFileURL} from "url";
 import {GGTestCommand, GGTestEnvConfig} from "./GGTestRuntime";
 import {GGExtensionDiscovery} from "@grest-ts/common";
+import {ERROR} from "@grest-ts/schema";
 import {type MockableTestContext, runWithMockableContext} from "@grest-ts/testkit-runtime";
 import {CALL_THROUGH} from "./mockable/GGMockableInterceptorsServer";
 import {GGMockableIPC} from "./mockable/GGMockableIPC";
 import {registerOnCallHandler} from "./callOn/registerOnCallHandler";
 import {TestableIPC} from "./callOn/TestableIPC";
 
-export const GG_TEST_RUNTIME_WORKER = new GGLocatorKey<GGTestRuntimeWorker>("GGTestRuntimeWorker");
 
 export class GGTestRuntimeWorker {
 
@@ -25,6 +26,19 @@ export class GGTestRuntimeWorker {
     public readonly config: GGTestEnvConfig;
     public runtime!: GGRuntime
     private runtimeStopped = false;
+
+    /** Bridges this runtime's @mockable calls to the test runner. */
+    private readonly mockableContext: MockableTestContext = {
+        CALL_THROUGH,
+        sendCall: (className, methodName, callArgs) =>
+            this.ipcClient.sendFrameworkRequest(GGMockableIPC.testServer.call, {className, methodName, callArgs}),
+        sendSpyResult: async (className, methodName, callResult) => {
+            await this.ipcClient.sendFrameworkRequest(GGMockableIPC.testServer.spyResult, {className, methodName, callResult});
+        },
+        sendSpyError: async (className, methodName, error) => {
+            await this.ipcClient.sendFrameworkRequest(GGMockableIPC.testServer.spyResult, {className, methodName, callError: ERROR.fromUnknown(error).toJSON()});
+        }
+    };
 
     private readonly scope: GGLocatorScope;
 
@@ -59,27 +73,8 @@ export class GGTestRuntimeWorker {
 
         await new GGExtensionDiscovery('testkit').load();
 
-        // Create mockable context that bridges to IPC
-        const mockableContext: MockableTestContext = {
-            CALL_THROUGH,
-            sendCall: async (className, methodName, callArgs) => {
-                return this.ipcClient.sendFrameworkRequest(GGMockableIPC.testServer.call, {
-                    className,
-                    methodName,
-                    callArgs
-                });
-            },
-            sendSpyResult: async (className, methodName, callResult) => {
-                await this.ipcClient.sendFrameworkRequest(GGMockableIPC.testServer.spyResult, {
-                    className,
-                    methodName,
-                    callResult
-                });
-            }
-        };
-
         // Wrap in mockable context so @mockable decorators can intercept
-        await runWithMockableContext(mockableContext, async () => {
+        await runWithMockableContext(this.mockableContext, async () => {
             await this.ipcClient.connect(this.config.runtimeId);
             GGLog.debug(this, 'Connected to test router');
 

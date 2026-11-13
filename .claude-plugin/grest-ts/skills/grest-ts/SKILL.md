@@ -313,7 +313,7 @@ await ctx.item.get({id: 999}).toBeError(NOT_FOUND)
 await ctx.item.create({title: ""}).toBeError(VALIDATION_ERROR).toMatchObject({
     title: {__issue: {message: "Value must not be empty"}}
 })
-await ctx.item.create({title: "x"}).toBeError(SERVER_ERROR, {displayMessage: "Upstream refused"})   // matches the error's context
+await ctx.item.create({title: "x"}).toBeError(SERVER_ERROR).withContext({displayMessage: "Upstream refused"})   // matches the error's context
 
 // Chain with interceptors (mocks, spies) — see §6
 await ctx.item.create({title: "foo"})
@@ -440,11 +440,13 @@ test("spy — call through but validate", async () => {
 - `.andReturn(value)` — the mock returns this value instead of calling real code.
 - `.andReturn(input => value)` — answers each call from its input; may be `async` (e.g. run a competing write, then return).
 - `.andReturn(new MY_ERROR())`, or a callback that throws it — the caller gets `MY_ERROR` thrown, class and data intact.
-- `.times(n)` — expect exactly n calls (fewer or more fails); `.times(0)` = never called; `.anyTimes()` = any number, none included.
+- `.times(n)` — expect exactly n calls (fewer or more fails); `.times(0)` = never called; `.atLeastOnce()` = one or more; `.times(min, max)` = a range (from 0 only when the test asserts the outcome itself).
 - `.sleep(ms)` — add delay before returning.
 - `.on(t.hub[1])` — only calls that happen at that one runtime instance (also on `Api.mock.x` / `Api.spy.x`: only calls routed to it). Use it when a test runs several instances; exactly one interceptor handles a call, and a targeted one wins over an untargeted one.
 - `spyOn(S).method` — calls real method but validates input/output.
 - `.responseToMatchObject(...)` — on a spyOn interceptor, validates the real return value.
+- `.toBeError(MY_ERROR).withContext({displayMessage}).toMatchObject(data)` — on a spy, the real call must throw it.
+- Mocks reach only calls made inside a runtime the testkit started. A service the test constructs and calls itself is never intercepted; call it through its API, or mark it `@testable` and use `callOn(S).m(...).with(mockOf(...))`.
 - `Api.mock.x` / `Api.spy.x` reach calls from discovery clients (`Api.createClient()`). A client with a custom `transport` is never mocked — wrap it in a `@mockable` class.
 - A mock is active while its action runs — any call to that method in that window hits it, including from parallel requests. Unmocked `@mockable` calls run for real.
 - `.with(a, b, …)` takes one or more interceptors as separate arguments (not an array); calls can also be chained.
@@ -654,6 +656,12 @@ setInterval(() => cleanup(), 60_000)
 setTimeout(() => socket.close(), expiresAt - Date.now())
 // ✅ A scope timer follows GGTest.clock and is cleared when the runtime stops:
 GGLocator.setTimeout(() => socket.close(), expiresAt - Date.now())
+
+// ❌ Constructing a service in the test body and mocking its dependency: the call runs outside any runtime, so the mock never fires
+const orders = new OrderStore(db, payments)
+await orders.place({sku: "A1"})   // mockOf(PaymentsApi) doesn't apply here
+// ✅ Build it in compose() as @testable and call it through callOn (or its API); for a true unit test, pass a fake to the constructor
+await callOn(OrderStore).place({sku: "A1"}).with(mockOf(PaymentsApi).charge.andReturn({id: "ch_1"}))
 
 // ❌ Module mocks in integration tests (jest.mock / vi.mock) — use @mockable + mockOf.
 //    Fine in a plain unit test of a single class.

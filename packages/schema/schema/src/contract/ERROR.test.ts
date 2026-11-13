@@ -355,6 +355,18 @@ describe('ERROR', () => {
             const error = ERROR.fromJson({success: false, type: 'NEVER_DEFINED', data: undefined});
             expect(SERVER_ERROR.is(error)).toBe(true);
         });
+
+        it('with allowed, rebuilds only the types it lists', () => {
+            const json = new MY_ERROR().toJSON();
+            expect(MY_ERROR.is(ERROR.fromJson(json, {allowed: [MY_ERROR]}))).toBe(true);
+            const error = ERROR.fromJson(json, {allowed: [SERVER_ERROR]});
+            expect(SERVER_ERROR.is(error)).toBe(true);
+            expect(error.getDebugContext()?.debugData).toMatchObject({unknownErrorType: json.type, knownErrorTypes: 'SERVER_ERROR'});
+        });
+
+        it('clears the stack, which would show only where the JSON was read', () => {
+            expect(ERROR.fromJson(new MY_ERROR().toJSON()).stack).toBeUndefined();
+        });
     });
 
     describe('fromUnknown()', () => {
