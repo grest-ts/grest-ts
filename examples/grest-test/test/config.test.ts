@@ -58,7 +58,8 @@ describe("config validation", () => {
             await t.config.update(MainConfigApi.settings.timeout, 5555)
                 .with(t.logs.expect({
                     contextName: "ConfigTestService",
-                    message: "Config timeout changed"
+                    message: "timeout changed",
+                    data: {newValue: 5555}
                 }));
         });
     });
