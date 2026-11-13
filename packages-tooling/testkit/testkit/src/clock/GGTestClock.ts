@@ -14,7 +14,8 @@ const hooks = () => hookState().list;
 
 /** A worker or isolated runtime's boot clock, set by its loader before any module loads; runBootHooks() runs the hooks for it. */
 export function bootClock(state: GGClockState | undefined): void {
-    // A reused worker keeps the previous runtime's clock unless reset here.
+    // A reused worker keeps the previous runtime's clock and raw-timer warnings unless reset here.
+    GGTimerShim.resetWarnings();
     if (!state) return GGDateShim.setState(GGDateShim.DEFAULT_STATE);
     GGDateShim.setState(state);
     hookState().bootPending = true;
@@ -44,7 +45,9 @@ export interface GGTestClockAdvanceOptions {
 
 /**
  * One fake wall clock (`Date`) shared by the test and every runtime it started.
- * Time keeps flowing unless stopped. Set in a test: undone after it. Set in describe or beforeAll: holds for that block.
+ * Time keeps flowing unless frozen, and only moves back when a test sets it back. After a test or block, time stays
+ * where it was left; only frozen or flowing is restored. Set in the top describe, its runtimes boot on it; the next
+ * top describe starts on real time.
  */
 export class GGTestClock {
 
@@ -87,36 +90,61 @@ export class GGTestClock {
             : {offsetMs: state.offsetMs, stoppedAt: state.stoppedAt + ms}, options.timeoutMs);
     }
 
-    /** Stop time: `Date.now()` stays put, and scope timers wait, until the next set/advance/start. */
-    public stop(): Promise<void> {
-        return this.change(state => state.stoppedAt === undefined
-            ? {offsetMs: state.offsetMs, stoppedAt: Date.now()}
-            : state);
+    /**
+     * Stop time at `at` (default: now) in one change: `Date.now()` stays exactly there, and scope timers wait, until
+     * the next set/advance/resume. Forward, it fires due timers as `advance` does.
+     */
+    public freeze(at?: Date | number): Promise<void> {
+        const target = at instanceof Date ? at.getTime() : at;
+        if (target !== undefined && !Number.isInteger(target)) throw new Error(`GGTest.clock.freeze(${String(at)}): not a valid time, expected whole epoch milliseconds`);
+        return this.change(state => ({offsetMs: state.offsetMs, stoppedAt: target ?? state.stoppedAt ?? Date.now()}));
     }
 
     /** Let time flow again from the current fake now. */
-    public start(): Promise<void> {
+    public resume(): Promise<void> {
         return this.change(state => state.stoppedAt === undefined
             ? state
             : {offsetMs: state.stoppedAt - GGDateShim.realNow()});
     }
 
-    public now(): number {
-        GGDateShim.assertActive();
-        return Date.now();
-    }
-
     private change(next: (state: GGClockState) => GGClockState, timeoutMs?: number): Promise<void> {
         GGDateShim.assertActive();
         const runner = GG_TEST_RUNNER.get();
-        if (!runner.started) {
-            beforeAll(() => this.change(next, timeoutMs));
+        const boot = preBootChanges.get(runner);
+        if (!runner.started && !boot?.applied) {
+            // The top describe's runtimes boot in runner.start(): apply its clock there, before they boot.
+            if (TestRunner.getCurrentSuite().suite?.suite === undefined) (boot ?? preBoot(runner)).changes.push(next);
+            else beforeAll(() => this.change(next, timeoutMs));
             return Promise.resolve();
         }
+        return this.apply(runner, next, timeoutMs);
+    }
+
+    private apply(runner: GGTestRunner, next: (state: GGClockState) => GGClockState, timeoutMs?: number): Promise<void> {
         const current = GGDateShim.getState();
         const state = next(current);
         return GGDateShim.same(state, current) ? Promise.resolve() : applyClock(runner, state, timeoutMs);
     }
+}
+
+const preBootChanges = new WeakMap<GGTestRunner, {changes: ((state: GGClockState) => GGClockState)[], applied: boolean}>();
+
+function preBoot(runner: GGTestRunner): {changes: ((state: GGClockState) => GGClockState)[], applied: boolean} {
+    const boot = {changes: [] as ((state: GGClockState) => GGClockState)[], applied: false};
+    preBootChanges.set(runner, boot);
+    runner.registerHook({
+        keyName: "GGTest.clock",
+        // One change, its state set before this hook's first await: the hooks start in one loop, so the others
+        // (database clones and their seeds) see the clock from their first await on.
+        beforeAll: async () => {
+            boot.applied = true;
+            const current = GGDateShim.getState();
+            const state = boot.changes.reduce((s, next) => next(s), current);
+            if (!GGDateShim.same(state, current)) await applyClock(runner, state);
+        },
+        afterAll: async () => {},
+    });
+    return boot;
 }
 
 /**
@@ -204,9 +232,16 @@ export class GGClockTestComponent implements GGTestComponent {
 
     // Never throws: a runtime that died mustn't keep later components' afterEach from running.
     private async restore(previous: GGClockState | undefined): Promise<void> {
-        if (!previous || GGDateShim.same(previous, GGDateShim.getState())) return;
+        if (!previous) return;
+        const current = GGDateShim.getState();
+        // Time stays where the test or block left it, as it would in production: what the runtimes wrote at that time
+        // stays consistent with it. Only frozen or flowing goes back to how it was.
+        const next = previous.stoppedAt === undefined
+            ? current.stoppedAt === undefined ? current : {offsetMs: current.stoppedAt - GGDateShim.realNow()}
+            : current.stoppedAt === undefined ? {offsetMs: current.offsetMs, stoppedAt: Date.now()} : current;
+        if (GGDateShim.same(next, current)) return;
         try {
-            await applyClock(this.runner, previous);
+            await applyClock(this.runner, next);
         } catch (err) {
             GGLog.warn(this, "GGTest.clock: restoring the clock failed", err as Error);
         }

@@ -1,6 +1,7 @@
 # Test clock: one fake time across the test and its runtimes
 
-Status: **proposal**, for discussion before anything is built. The driver is kratt, where expiry,
+Status: **implemented** (phases 1 and 2; README: `packages-tooling/testkit/testkit/README.md`, "Controlling
+time"). Where this text and the code disagree, the code wins. The driver is kratt, where expiry,
 retention and grace-period tests seed old timestamps, inject `now`, or wait in real time. The
 problem applies to any grest-ts app whose tests run runtimes with `GGTest.startWorker`.
 
@@ -50,8 +51,8 @@ inline runtimes. With no clock in use the shim adds offset 0, so it changes noth
 
 ```ts
 const RealDate = Date
-let offsetMs = 0, frozenAt: number | undefined
-const now = () => frozenAt ?? RealDate.now() + offsetMs
+let offsetMs = 0, stoppedAt: number | undefined
+const now = () => stoppedAt ?? RealDate.now() + offsetMs
 function GGDate(this: unknown, ...args: unknown[]) {
     if (!new.target) return new RealDate(now()).toString()
     return Reflect.construct(RealDate, args.length ? args : [now()], new.target)
@@ -69,8 +70,8 @@ A spike (Node 26) confirmed:
   implementation detail.
 
 **Time keeps flowing by default.** `set(T)` means "it's T now, and the clock keeps running".
-`GGTest.clock.stop()` really stops it (`Date.now()` stays put until the next `advance`/`set`),
-and `GGTest.clock.start()` lets it flow again. Flowing is the safer default because code that loops until a `Date`
+`GGTest.clock.freeze(at?)` really stops it, at exactly `at` in one change (`Date.now()` stays put until the next
+`advance`/`set`), and `GGTest.clock.resume()` lets it flow again. Tests that assert on timers or exact times freeze. Flowing is the safer default because code that loops until a `Date`
 deadline while waiting on real IO never exits under a frozen clock. kratt has such loops
 (`waitForServicesReady`, `GGConfigLocator`'s startup retry, `GGDynamoDbDevTables`). This is the
 same model as libfaketime's offset mode.
@@ -98,14 +99,16 @@ that stalls past its lease loses it.
 
 ### 1b. Scope timers follow the clock (phase 2)
 
-With a test clock active, the testkit patches `GGLocatorScope.prototype.setTimeout/setInterval`.
+The testkit always patches `GGLocatorScope.prototype.setTimeout/setInterval` in every isolate it boots; with the
+clock on real time a scope timer behaves as a plain one.
 This is the same pattern `@grest-ts/job/testkit` uses for `GGJobRunner.prototype.start`, and
 production code doesn't change. Each patched timer:
 
 - Records `{dueAt: Date.now() + ms, fn, intervalMs?}` against the shimmed clock.
-- Also arms a real timer for `ms`, so with a flowing clock it still fires by itself. A stopped
+- Also arms a real timer for `ms`, so with a flowing clock it still fires by itself. A frozen
   clock arms nothing.
-- Returns the real `Timeout`, so `unref` and `refresh` still work.
+- Returns a stand-in `Timeout` that never fires itself; its `ref`/`unref`/`refresh`/`close` drive the real timer
+  underneath, which is re-armed whenever the clock changes.
 
 App code cancels with the global `clearTimeout(handle)`, so the clock has to learn that a timer
 was cancelled, or `advance` would fire it anyway. In the runtimes, the testkit wraps the global
@@ -164,15 +167,17 @@ each app turns it on in its own lint config.
 
 This uses the existing extension mechanics; there's no new transport.
 
-- **Commands:** `GGClockIPC.worker.set({offsetMs, frozenAt})`, `.fireDue()` and `.reset()`.
-  They're registered through `GGTestRuntimeWorker.onBeforeRuntimeStart`, like `GGConfigIPC`, and
-  broadcast with `GGTestRunner.sendCommand`. A runtime started after the clock was set gets the
-  state through `initialCommands`, before its runtime class is imported.
+- **Commands:** `GGClockIPC.worker.set({offsetMs, stoppedAt})` and `.fireDue()`; a reset is a `set` to real time.
+  They're registered through `GGTestRuntimeWorker.onBeforeRuntimeStart`, like `GGConfigIPC`. A runtime boots on
+  the clock it was started under: its loader gets the state in the runtime config (`config.clock`) and applies it
+  before any app module loads.
 - **One source of truth:** the test isolate. Workers receive the absolute offset, never a delta,
   so a lost or repeated message can't make them drift.
 - **Lifecycle:** a `GGTestComponent`, like `GGConfigTestComponent`. A clock set in `beforeAll` or
-  at describe level holds for the file. A clock set in a test is undone in `afterEach`, and the
-  file returns to real time after `afterAll`. Real time is the default.
+  at describe level holds for that block. Set in the top describe, it's a runner hook (like
+  `GGTest.with(...).clone()`) that runs before the describe's runtimes start, so they boot on it. After a
+  test or block only frozen or flowing is restored, never the time (see "Time only moves forward"); the next
+  top describe starts on real time. Real time is the default.
 
 ### What `advance(ms)` guarantees when it resolves
 
@@ -237,22 +242,23 @@ app decides time and passes it in.
 | JWT `iat`/`exp` between runtimes and the test (`GGAuthAccessToken`, jose) | **Yes.** Every isolate shares the offset | Tokens minted *before* an advance expire *after* it, which is correct. The test handles it (log in after advancing); the testkit doesn't paper over it |
 | Tokens from a real external IdP, and fakes that run outside `GGTest` | **No** | Fakes started as GGTest runtimes (kratt's fakegit, if it is one) share the clock automatically |
 
-### Undoing a test's clock is a backwards jump
+### Time only moves forward
 
-The per-test undo moves time back to where the test started. Runtimes started at describe level
-keep running across tests, so state written at fake time stays in the future:
-- a scheduled job tick that held its lock until T+40d leaves later `jobs.run` calls `BUSY`;
-- rows stamped at T+40d win "latest" queries;
-- caches keyed on wall time (jose's JWKS cooldown) stay cold for the jump's length.
+The tests of a describe share its runtimes and their data. An automatic undo after each test (the first
+implementation) was a backwards jump under live runtimes, which production never makes: state written at fake
+time stayed in the future (a scheduled job's lock held until T+40d left later `jobs.run` calls `BUSY`, rows
+stamped at T+40d won "latest" queries, wall-time caches stayed cold), and tokens minted at T+40d were used again
+at T. So after a test or block, only frozen or flowing is restored; time stays where it was left, and each top
+describe starts on real time. Tokens minted before an advance expire with it and fail loudly, as in production.
 
-Production never steps 40 days back. Tests that advance far, and especially those that start
-schedules, should start their runtimes in the test or get their own `describe`. A SigV4 client
-pays one retried request for the advance and another for the undo.
+A test may still set the clock back explicitly. A pending scope timer then waits at most its own delay from the
+new time (its due time is clamped on every clock change), so an interval that ticked at T+30d doesn't go quiet
+for 30 days.
 
 ### Concurrent tests
 
 There is one clock per isolate. `test.concurrent` / `describe.concurrent` share it, and their
-undo frames interleave. Don't use the clock in concurrent tests.
+changes interleave. Don't use the clock in concurrent tests.
 
 ### 3a. Clock hooks for clocks the framework doesn't own
 
@@ -276,21 +282,21 @@ kratt's `libs/aws`, the first time a presign test needs it.
 ```ts
 import {GGTest} from "@grest-ts/testkit"
 
-GGTest.clock.set(new Date("2026-03-01T09:00:00Z"))   // every isolate; flowing from T (a stopped clock stays stopped at T)
+GGTest.clock.set(new Date("2026-03-01T09:00:00Z"))   // every isolate; flowing from T (a frozen clock stays frozen at T)
 GGTest.clock.set(Date.now() + 40 * DAY)              // number = epoch ms
-GGTest.clock.stop()                                   // really stops: Date.now() stays put until advance/set
-GGTest.clock.start()                                  // flowing again from where it stopped
+GGTest.clock.freeze(T)                                // stops at exactly T (default: now) until advance/set/start
+GGTest.clock.resume()                                 // flowing again from where it stopped
 await GGTest.clock.advance(30 * 60_000)               // jump, fire due scope timers, settle (§2)
-GGTest.clock.now()                                    // same as Date.now() in the test
-// Set in a test: undone after it. Set in describe/beforeAll: holds for the file. Default: real time.
+// Time only moves forward across the tests of a describe; each top describe starts on real time.
 ```
 
 - It lives on `GGTest`, like `GGTest.waitFor`. Every runtime in the test is on the same clock,
   as in production, where all instances share one wall time. Per-runtime skew
   (`t.cron.clock.skew(ms)`) is left out. The IPC payload is an absolute offset per runtime, so
   it can be added later without a redesign if a real test needs it.
-- `set`, `stop` and `start` return awaitables that resolve once every runtime has acknowledged. Called
-  in describe they're queued like `GGTest.with(...).clone()`.
+- `set`, `freeze`, `start` and `advance` return promises that resolve once every runtime has acknowledged.
+  Called in the top describe they run as a runner hook before its runtimes start, like `GGTest.with(...).clone()`;
+  in a nested describe, in its `beforeAll`.
 - Durations are `ms` numbers, consistent with `intervalMs` and `timeoutMs` elsewhere.
 - **Production-side API:** none in phase 1. In phase 2 the existing
   `GGLocator.setTimeout/setInterval` becomes the documented "business timer" API: *schedule a
@@ -392,7 +398,7 @@ await GGTest.clock.advance(5_000)   // replaces hubCronMultiInstance's 15 s vi.w
 
 | Phase | Scope | Effort | Risk |
 |---|---|---|---|
-| **1. `Date` everywhere** | Shim in the three loaders; `GGClockIPC.set/reset`; `GGTestComponent` undo per test or file; `initialCommands`; `GGTest.clock.set/stop/start/now/advance` (Date only); vi detection; move the framework's elapsed-time sites (table in §1a) to `performance.now()`; README-testkit section; testkit tests across inline, worker and isolated | 2–3 days | **Low–medium.** Third-party `Date` reads (SigV4 skew handled by retry, presign not); tokens minted before an advance expire; log timestamps show fake time, which is arguably correct. Code that captured `Date` before the shim is unaffected; the loader installs the shim first |
+| **1. `Date` everywhere** | Shim in the three loaders; `GGClockIPC.set`; `GGTestComponent` restoring frozen/flowing per test or block; the boot clock in the runtime config; `GGTest.clock.set/freeze/resume/advance` (Date only); vi detection; move the framework's elapsed-time sites (table in §1a) to `performance.now()`; README-testkit section; testkit tests across inline, worker and isolated | 2–3 days | **Low–medium.** Third-party `Date` reads (SigV4 skew handled by retry, presign not); tokens minted before an advance expire; log timestamps show fake time, which is arguably correct. Code that captured `Date` before the shim is unaffected; the loader installs the shim first |
 | **2. Scope timers and job scheduler** | Patch `GGLocatorScope` timers under the clock; `fireDue` with await-returned-promise and a real-time guard; pass-through wrap of the global timers (cancel tracking plus the raw-timer warning on `advance`); scope timers cleared on runtime teardown; `GGTestClock.onChange` hooks; `GGJobRunner.tick` returns its run; job README "Testing" section; tests for cooldown, interval coalescing and a timer cleared before the advance | 3–4 days | **Medium.** A callback that awaits something the test must do first deadlocks until the guard; cross-runtime ordering is by start order, not due time |
 | **3. kratt adoption** (kratt repo, not framework) | Delete the `now` seams and their tests' fakes; replace backdate helpers; move **all** business timers from raw `setTimeout` to `GGLocator.setTimeout`, so the codebase shows the pattern; an ESLint rule on raw timers (§1e) | Per file; about 2–3 days for the list in §7 | Low; each conversion stands alone |
 | *Not planned* | DB and container clocks (including MySQL/Postgres `NOW()`); global timer faking; per-runtime skew; a runtime throw on raw timers | — | — |
@@ -443,7 +449,7 @@ the seeds that only exist to fake elapsed time, especially those that duplicate 
 
 | # | Topic | Decision |
 |---|---|---|
-| 1 | Default | Flowing. `GGTest.clock.stop()` really stops it; `start()` resumes |
+| 1 | Default | Flowing. `GGTest.clock.freeze(at?)` really stops it; `resume()` resumes |
 | 2 | Per-runtime skew | Not built. All runtimes stay in sync; the per-runtime offset payload leaves room to add it later |
 | 3 | Order in `advance` | Barrier first (every runtime on the new time), then timers fire runtime by runtime in start order. No global due-time stepping: code that depends on which runtime's timer fires first is racy in production too |
 | 4 | Cancelled timers | The testkit wraps global `clearTimeout`/`clearInterval` as a pass-through. No Node internals, no new API |
@@ -452,11 +458,9 @@ the seeds that only exist to fake elapsed time, especially those that duplicate 
 | 7 | Tokens expiring after an advance | Correct behaviour, and the test's job (log in after advancing). Not a testkit concern. If "stay signed in across a jump" is ever wanted, it belongs in the auth library, not the clock |
 | 8 | Library time semantics (`JwksVerifier` key-cache age and similar) | Each library's own call, not a testkit concern. Rule of thumb for grest-ts libraries: elapsed time uses `performance.now()`, wall-clock deadlines use `Date` |
 | 9 | kratt's raw business timers | Move all of them to `GGLocator.setTimeout` in phase 3, and enforce with an ESLint rule, not a runtime throw (§1e) |
-
 | 10 | A `realTimeout()` helper | No, unless eslint-disable lines for raw timers become common |
-| 11 | `GGLocator.setTimeout` in production code | Fine. It already exists and the job runner and `withLock` use it. It runs the callback inside the runtime's scope. It throws outside a scope; tests have the testkit's root scope. Follow-up: the runtime scope tracks its timers and clears them on teardown, so a stopped runtime leaves none behind. No request-bound auto-cancel: a timer's lifetime belongs to the object that owns it (a socket clears its expiry timer on close), and "cancel when the request ends" is wrong for timers set during a request that must outlive it |
-
-| 12 | Taking over global timers | **Observe, don't fake.** In runtimes the testkit wraps `setTimeout`/`setInterval`/`clear*`. Scope timers follow the clock; every other timer runs on real time through the native functions. When an `advance` jumps past a pending raw timer created by app code, the testkit warns with the timer's creation site ("use `GGLocator.setTimeout` if it should follow the clock"). Capturing that site needs a stack trace per timer, so it is opt-in or limited to long timers. Fully faking every timer was rejected: `stop()` would hang IO (retries, backoff, polling); `advance` would fire unrelated IO timers that it doesn't wait for; and timers that bypass the globals (`timers/promises`, `AbortSignal.timeout`, undici, socket timeouts) would make the line arbitrary |
+| 11 | `GGLocator.setTimeout` in production code | Fine. It already exists and the job runner and `withLock` use it. It runs the callback inside the runtime's scope. Outside a scope it is a plain timer (CLIs); under the testkit it warns once per call site; tests have the testkit's root scope. Follow-up: the runtime scope tracks its timers and clears them on teardown, so a stopped runtime leaves none behind. No request-bound auto-cancel: a timer's lifetime belongs to the object that owns it (a socket clears its expiry timer on close), and "cancel when the request ends" is wrong for timers set during a request that must outlive it |
+| 12 | Taking over global timers | **Observe, don't fake.** In runtimes the testkit wraps `setTimeout`/`setInterval`/`clear*`. Scope timers follow the clock; every other timer runs on real time through the native functions. When an `advance` jumps past a pending raw timer created by app code, the testkit warns with the timer's creation site ("use `GGLocator.setTimeout` if it should follow the clock"). Capturing that site needs a stack trace per timer, so it is opt-in or limited to long timers. Fully faking every timer was rejected: `freeze()` would hang IO (retries, backoff, polling); `advance` would fire unrelated IO timers that it doesn't wait for; and timers that bypass the globals (`timers/promises`, `AbortSignal.timeout`, undici, socket timeouts) would make the line arbitrary |
 
 ## 9. Open questions
 
