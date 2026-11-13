@@ -128,7 +128,7 @@ const schemaSuite = (start: StartMode) => describe(`targeting schema mocks and s
 
     test("a mock callback can use the test's own clients", async () => {
         await alice.gateway.save({text: "from-callback", times: 1})
-            .with(TargetingStoreApi.mock.save.andReturn(async ({text}) => {
+            .with(TargetingStoreApi.mock.save.andReturn(async ({text}: {text: string}) => {
                 await alice.gateway.ack({text})
                 return {text, by: "mock"}
             }))
