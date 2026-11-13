@@ -1,4 +1,5 @@
 import {callOn, GGTest} from "@grest-ts/testkit"
+import {sleep} from "@grest-ts/common"
 import {WorkerReuseProbe, WorkerReuseRuntime} from "../src/WorkerReuseRuntime"
 
 // vitest.isolated.config.ts runs this file isolated too; only `isolate: false` reuses a stopped runtime's worker.
@@ -35,5 +36,18 @@ describe("worker reuse: runtimes started inside tests", () => {
     test("takes the worker the previous test parked", async () => {
         await GGTest.startWorker(WorkerReuseRuntime)
         expect(await callOn(WorkerReuseProbe).composeRunInWorker()).toBe(reuse ? 4 : 1)
+    })
+})
+
+describe("worker reuse: a parked worker that exits", () => {
+    test("exits once parked", async () => {
+        await GGTest.startWorker(WorkerReuseRuntime)
+        await callOn(WorkerReuseProbe).exitWorkerAfter(300)
+    })
+
+    test("is dropped, so the next start boots a fresh worker", async () => {
+        await sleep(800)
+        await GGTest.startWorker(WorkerReuseRuntime)
+        expect(await callOn(WorkerReuseProbe).composeRunInWorker()).toBe(1)
     })
 })

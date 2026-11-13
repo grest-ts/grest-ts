@@ -13,6 +13,11 @@ export class WorkerReuseProbe {
     }
 
     public composeRunInWorker = async (): Promise<number> => this.composeRun
+
+    /** Ends this worker thread after `ms`, by then parked: a raw timer outlives the runtime's stop. */
+    public exitWorkerAfter = async (ms: number): Promise<void> => {
+        setTimeout(() => process.exit(0), ms)
+    }
 }
 
 export class WorkerReuseRuntime extends GGRuntime {

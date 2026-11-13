@@ -34,12 +34,19 @@ const scope = new GGLocatorScope("GGTestRoot").enter()
 // GGTestRunner.reusableId: unique among concurrent workers, 1..maxWorkers.
 process.env.GG_TEST_WORKER ??= process.env.VITEST_POOL_ID;
 
+const isolate = inject("grest-ts:isolate");
 // Files that share a test process may share runtime workers too: each file still gets fresh runtime instances.
-// Provided by ./globalSetup; without it, workers aren't reused.
-WorkerRunner.setReuse(inject("grest-ts:isolate") === false);
+WorkerRunner.setReuse(isolate === false);
 
 GGLog.init();
 GGLog.add(new GGLoggerConsole());
+
+const warnedNoGlobalSetup = Symbol.for("grest-ts:testkit-vitest:warnedNoGlobalSetup");
+if (isolate === undefined && !(globalThis as any)[warnedNoGlobalSetup]) {
+    (globalThis as any)[warnedNoGlobalSetup] = true;
+    GGLog.warn("testkit-vitest", "globalSetup '@grest-ts/testkit-vitest/globalSetup' is missing from the vitest config: " +
+        "database clones and shared test resources fail without it, and runtime workers aren't reused under isolate: false.");
+}
 
 // -------------------------------------------------
 // Load testkit extensions
