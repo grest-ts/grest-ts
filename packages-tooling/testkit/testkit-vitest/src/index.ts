@@ -79,7 +79,7 @@ function wrapDescribeFunction(target: any): any {
             // Wrap modifier functions (sequential, concurrent, only, skip, todo, skipIf, runIf, shuffle)
             if (typeof value === 'function') {
                 if (prop === 'each' || prop === 'for') {
-                    return wrapEachFunction(value, wrapDescribeFunction, target);
+                    return wrapDescribeEachFunction(value, target);
                 }
                 return wrapDescribeFunction(value);
             }
@@ -124,12 +124,19 @@ function suiteFactory(name: string, callback: (...args: any[]) => void): (...arg
     });
 }
 
+function wrapDescribeEachFunction(eachFn: any, target: any): any {
+    return (...eachArgs: any[]) => {
+        const describeFn = eachFn.apply(target, eachArgs);
+        return (name: string, callback: (...args: any[]) => void, ...rest: any[]) => describeFn(name, suiteFactory(name, callback), ...rest);
+    };
+}
+
 /**
  * Wraps the .each() function which has special semantics:
  * .each(data)(name, fn) - returns a function that creates parameterized tests
  *
  * @param eachFn - The original .each function
- * @param wrapperFn - The wrapper function (wrapDescribeFunction or wrapTestFunction)
+ * @param wrapperFn - The wrapper function (wrapTestFunction)
  * @param target - The original describe/test target to bind 'this' context
  */
 function wrapEachFunction(eachFn: any, wrapperFn: (target: any) => any, target: any): any {
