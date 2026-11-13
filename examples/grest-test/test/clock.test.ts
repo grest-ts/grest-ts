@@ -1,5 +1,6 @@
 import {AsyncLocalStorage} from "node:async_hooks"
-import {callOn, GGDateShim, GGTest} from "@grest-ts/testkit"
+import {callOn, GGTest} from "@grest-ts/testkit"
+import {GGDateShim} from "@grest-ts/testkit/internal"
 import {GGLocator} from "@grest-ts/locator"
 import {GGRuntime} from "@grest-ts/runtime"
 import {GGSocket} from "@grest-ts/websocket"
@@ -69,9 +70,9 @@ describe("GGTest.clock", () => {
         expect(() => GGTest.clock.advance(-1)).toThrow(/non-negative/)
     })
 
-    test("stop freezes time everywhere, start lets it flow again", async () => {
+    test("freeze stops time everywhere, start lets it flow again", async () => {
         await GGTest.clock.set(T)
-        await GGTest.clock.stop()
+        await GGTest.clock.freeze()
         const frozen = Date.now()
         await sleep(30)
         expect(new Set(await readAll())).toEqual(new Set([frozen]))
@@ -83,6 +84,27 @@ describe("GGTest.clock", () => {
         await sleep(30)
         for (const now of await readAll()) expect(now).toBeGreaterThan(frozen + 1_000)
         expect(GGTest.clock.now()).toBeLessThan(frozen + 1_000 + SLACK)
+    })
+
+    test("freeze(T) stops at exactly T everywhere, in one change", async () => {
+        await GGTest.clock.freeze(T)
+        expect(new Set(await readAll())).toEqual(new Set([T]))
+        await sleep(30)
+        expect(new Set(await readAll())).toEqual(new Set([T]))
+
+        await GGTest.clock.freeze(T + DAY)
+        expect(new Set(await readAll())).toEqual(new Set([T + DAY]))
+    })
+
+    test("freeze() on a frozen clock keeps its time", async () => {
+        await GGTest.clock.freeze(T)
+        await GGTest.clock.freeze()
+        expect(Date.now()).toBe(T)
+    })
+
+    test("freeze rejects times that aren't whole milliseconds", () => {
+        expect(() => GGTest.clock.freeze(new Date("bad"))).toThrow(/not a valid time/)
+        expect(() => GGTest.clock.freeze(T + 0.5)).toThrow(/not a valid time/)
     })
 
     test("a runtime started inside the test after set sees the fake time", async () => {
@@ -210,6 +232,35 @@ describe("GGTest.clock", () => {
     })
 })
 
+describe("GGTest.clock frozen in the top describe", () => {
+    GGTest.clock.freeze(T)
+    GGTest.startInline(ClockInlineRuntime)
+    GGTest.startWorker(ClockWorkerRuntime)
+    GGTest.startIsolated(ClockIsolatedRuntime)
+    GGTest.startIsolated(ClockLateIsolatedRuntime)
+    GGTest.startWorker(ClockHookRuntime)
+
+    test("its runtimes boot on it", async () => {
+        expect((await callOn(ClockLateApi).read()).boot).toBe(T)
+        await callOn(ClockHookApi).offsets().toHaveLength(1)
+        expect(new Set(await readAll())).toEqual(new Set([T]))
+    })
+
+    test("a scope timer fires on advance, at exactly the frozen time plus the advance", async () => {
+        await runtimes.worker.schedule({id: "a", ms: 60_000})
+        await GGTest.clock.advance(59_999)
+        await runtimes.worker.fired().toEqual([])
+        await GGTest.clock.advance(1)
+        await runtimes.worker.fired().toEqual(["a"])
+        expect((await runtimes.worker.read()).now).toBe(T + 60_000)
+    })
+
+    test("a test's change is undone back to the frozen time", async () => {
+        expect(Date.now()).toBe(T)
+        expect((await runtimes.worker.read()).now).toBe(T)
+    })
+})
+
 describe("GGTest.clock set in beforeAll", () => {
     GGTest.startWorker(ClockWorkerRuntime)
 
@@ -330,8 +381,8 @@ describe("GGTest.clock and scope timers", () => {
         await worker.fired().toEqual(["a", "a:nested"])
     })
 
-    test("a stopped clock fires nothing until advance; start re-arms", async () => {
-        await GGTest.clock.stop()
+    test("a frozen clock fires nothing until advance; start re-arms", async () => {
+        await GGTest.clock.freeze()
         await worker.schedule({id: "a", ms: 50})
         await sleep(150)
         await worker.fired().toEqual([])
@@ -367,7 +418,7 @@ describe("GGTest.clock and scope timers", () => {
     })
 
     test("a retry set by a slow inline callback doesn't fire in the same advance", async () => {
-        await GGTest.clock.stop()
+        await GGTest.clock.freeze()
         await runtimes.inline.schedule({id: "a", ms: 1_000, asyncMs: 300, nested: true, nestedMs: 50})
         await GGTest.clock.advance(1_000)
         await runtimes.inline.fired().toEqual(["a", "a:done"])

@@ -489,27 +489,32 @@ export class GitHubApi {
 ## Controlling time
 
 `GGTest.clock` moves `Date` in the test and in every runtime it started (inline, worker, isolated) at once.
-Time keeps flowing from the time you set, unless you stop it.
+Time keeps flowing from the time you set, unless you freeze it.
 
 ```typescript
 await GGTest.clock.set(new Date("2026-03-01T09:00:00Z"))   // number = epoch ms
 await GGTest.clock.advance(30 * 60_000)                    // jump forward, fire due scope timers
-await GGTest.clock.stop()                                  // Date.now() and scope timers wait until set/advance/start
+await GGTest.clock.freeze(new Date("2026-03-01T09:00:00Z")) // stop at exactly that time (default: now)
 await GGTest.clock.start()                                 // flows again from the current fake now
 GGTest.clock.now()                                         // same as Date.now() in the test
 ```
 
+- **Freeze the clock when you assert on timers or exact times.** A flowing clock moves on between two calls, so a
+  timer can come due on its own a few milliseconds before your `advance`, and `Date.now()` is never exactly `T`.
+  `freeze(T)` stops at `T` in one change; `set(T)` then `freeze()` would stop a little after `T`.
 - Set in a test, it's undone after the test. Set in a `describe` or `beforeAll`, it holds for that block. The
-  default is real time. A runtime started later in a test starts on the clock's time; runtimes started at describe
-  level boot on real time, before a describe-level `set`.
+  default is real time. Set in the top `describe`, it's applied before that describe's runtimes start, so they boot
+  on it; in a nested `describe` or a `beforeAll`, the runtimes are already running and jump to it. A runtime
+  started in a test starts on the clock's time.
 - Clocks outside the app aren't faked: DynamoDB TTL, SQL `NOW()`, Redis `EXPIRE`, S3 `LastModified`. Pass the
   app's time to them instead.
 - `Date` and `Temporal.Now` are faked; `Intl`'s implicit "now" (e.g. `Intl.DateTimeFormat().format()` with no
   date) isn't. Pass it a date.
-- `set` on a stopped clock moves it and keeps it stopped there.
-- Undoing a test's clock is a jump back. Runtimes started at describe level keep what they wrote at the fake time:
-  job locks held by scheduled runs, rows, wall-time caches. A test that advances far or starts schedules should
-  start its runtimes in the test, or have its own `describe`.
+- `set` on a frozen clock moves it and keeps it frozen there.
+- The undo after a test rewinds the **clock**, not the **data**. Runtimes started at describe level keep what they
+  wrote at the fake time: job locks held by scheduled runs, rows, wall-time caches. Seeding data with old
+  timestamps (a row created "40 days ago") is fine and needs no clock. A test that advances the clock should own its
+  runtimes and its database clone: put it in its own top `describe`, with its own `GGTest.with(...).clone()`.
 - The clock is shared by the whole file: don't use it in `test.concurrent` tests. It needs a `describe` (the
   test runner lives there).
 - Don't fake `Date` with `vi.useFakeTimers` too. `GGTest.clock` throws while it's active; leave `Date` out of
@@ -539,7 +544,7 @@ this.expiry = GGLocator.setTimeout(() => socket.close(), expiresAt - Date.now())
 
 It doesn't wait for work a callback started without returning it (use `.waitFor(...)`), and requests in flight
 during the advance may see either time. A `set()` to a later time fires timers as `advance` does; a `set()` back
-fires nothing. With the clock stopped, scope timers wait for `advance` or `start()`. `GGJobRunner` schedules and the
+fires nothing. With the clock frozen, scope timers wait for `advance` or `start()`. `GGJobRunner` schedules and the
 `withLock` heartbeat are scope timers: `advance` past a lock's TTL loses the lock, as a stalled run would. A
 scheduled job run that fails doesn't fail the `advance`: the runner catches and logs it, so check its logs.
 

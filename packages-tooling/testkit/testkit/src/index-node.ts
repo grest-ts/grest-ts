@@ -33,8 +33,9 @@ import './callOn/GGContractClass.implement'
 export * from './GGTestRuntimeWorker'
 
 // Test clock (fake Date across the test and its runtimes)
-export * from './clock/GGDateShim'
-export * from './clock/GGTestClock'
+export type {GGClockState} from './clock/GGDateShim'
+export {GGTestClock} from './clock/GGTestClock'
+export type {GGTestClockAdvanceOptions} from './clock/GGTestClock'
 import './clock/GGClockCommands'
 
 // Test utilities - core infrastructure

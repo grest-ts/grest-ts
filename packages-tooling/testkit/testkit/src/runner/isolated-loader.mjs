@@ -34,7 +34,8 @@ if (!configJson) {
 }
 
 // Import runtime and testkit dependencies; the test clock goes in before any app module loads
-const {GGTestRuntimeWorker, installTestClock, bootClock} = await import('@grest-ts/testkit');
+const {GGTestRuntimeWorker} = await import('@grest-ts/testkit');
+const {installTestClock, bootClock} = await import('@grest-ts/testkit/internal');
 installTestClock();
 const {GGRuntime} = await import('@grest-ts/runtime');
 const {GGLog} = await import('@grest-ts/logger');
