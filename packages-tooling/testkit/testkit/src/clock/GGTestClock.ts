@@ -114,9 +114,10 @@ export class GGTestClock {
     private change(next: (state: GGClockState) => GGClockState, timeoutMs?: number): Promise<void> {
         GGDateShim.assertActive();
         const runner = GG_TEST_RUNNER.get();
-        if (!runner.started) {
+        const boot = preBootChanges.get(runner);
+        if (!runner.started && !boot?.applied) {
             // The top describe's runtimes boot in runner.start(): apply its clock there, before they boot.
-            if (TestRunner.getCurrentSuite().suite?.suite === undefined) preBoot(runner).push(() => this.apply(runner, next, timeoutMs));
+            if (TestRunner.getCurrentSuite().suite?.suite === undefined) (boot ?? preBoot(runner)).changes.push(next);
             else beforeAll(() => this.change(next, timeoutMs));
             return Promise.resolve();
         }
@@ -130,22 +131,24 @@ export class GGTestClock {
     }
 }
 
-const preBootChanges = new WeakMap<GGTestRunner, (() => Promise<void>)[]>();
+const preBootChanges = new WeakMap<GGTestRunner, {changes: ((state: GGClockState) => GGClockState)[], applied: boolean}>();
 
-function preBoot(runner: GGTestRunner): (() => Promise<void>)[] {
-    let changes = preBootChanges.get(runner);
-    if (!changes) {
-        const list: (() => Promise<void>)[] = changes = [];
-        preBootChanges.set(runner, list);
-        runner.registerHook({
-            keyName: "GGTest.clock",
-            beforeAll: async () => {
-                for (const change of list) await change();
-            },
-            afterAll: async () => {},
-        });
-    }
-    return changes;
+function preBoot(runner: GGTestRunner): {changes: ((state: GGClockState) => GGClockState)[], applied: boolean} {
+    const boot = {changes: [] as ((state: GGClockState) => GGClockState)[], applied: false};
+    preBootChanges.set(runner, boot);
+    runner.registerHook({
+        keyName: "GGTest.clock",
+        // One change, its state set before this hook's first await: the hooks start in one loop, so the others
+        // (database clones and their seeds) see the clock from their first await on.
+        beforeAll: async () => {
+            boot.applied = true;
+            const current = GGDateShim.getState();
+            const state = boot.changes.reduce((s, next) => next(s), current);
+            if (!GGDateShim.same(state, current)) await applyClock(runner, state);
+        },
+        afterAll: async () => {},
+    });
+    return boot;
 }
 
 /**

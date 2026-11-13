@@ -59,8 +59,11 @@ const warnedSites = new Set<string>();
 
 function warnOutsideScope(fn: string): void {
     if (!hasLiveTimerOwner()) return;
+    const limit = Error.stackTraceLimit;
+    Error.stackTraceLimit = 3;
     const site = new Error().stack?.split("\n")[3]?.trim() ?? "";
+    Error.stackTraceLimit = limit;
     if (warnedSites.has(site)) return;
     warnedSites.add(site);
-    console.warn(`GGLocator.${fn} was called outside a GGLocatorScope while a runtime runs: it's a plain timer that the runtime won't clear and the test clock won't move. Call it from code that runs in the runtime's scope. Set at: ${site}`);
+    console.warn(`GGLocator.${fn} was called outside a GGLocatorScope while a runtime runs. It's a plain timer: the runtime won't clear it when it stops, and GGTest.clock won't move it. Call it from code that runs in the runtime's scope. Set at: ${site}`);
 }
