@@ -1,5 +1,5 @@
 import type {GGTestRunner} from "../GGTestRunner";
-import type {GGTestRuntime} from "../GGTestRuntime";
+import type {GGInterceptorTarget} from "./GGTestTarget";
 import {GGLocator, GGLocatorScope} from "@grest-ts/locator";
 import {GGExpectations} from "../utils/GGExpectations";
 import {GGTestError} from "../utils/GGTestError";
@@ -29,8 +29,8 @@ export interface GGCallInterceptorConfig {
     returnData?: any;
     expectError?: ConstructorOf<ERROR<any, any>>;
     expectErrorContext?: Partial<GGErrorData>;
-    /** Set by `.on(runtime)`: only calls that happen at this runtime. */
-    target?: GGTestRuntime;
+    /** Set by `.on()`: only calls that happen at this runtime or address. */
+    target?: GGInterceptorTarget;
 }
 
 /**
@@ -53,7 +53,7 @@ export abstract class GGCallInterceptor implements IGGTestInterceptor {
     private readonly returnData?: any;
     protected readonly expectError?: ConstructorOf<ERROR<any, any>>;
     protected readonly expectErrorContext?: Partial<GGErrorData>;
-    public readonly target?: GGTestRuntime;
+    public readonly target?: GGInterceptorTarget;
 
     private noOfTimesCalled = 0;
     private noOfResponses = 0;
@@ -103,7 +103,7 @@ export abstract class GGCallInterceptor implements IGGTestInterceptor {
     }
 
     /** Kinds that can tell where a call happens override this; it throws for a target they can't match. */
-    protected checkTarget(_target: GGTestRuntime): void {
+    protected checkTarget(_target: GGInterceptorTarget): void {
         throw new Error(`[${this.getKey()}] .on() is not supported for this kind of mock or spy. ` +
             "It works on HTTP schema mocks and spies (Api.mock.x / Api.spy.x) and on mockOf / spyOn.");
     }

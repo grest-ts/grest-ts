@@ -6,3 +6,4 @@ export * from './routing/GGApiRoutingSelector';
 import './clientHttp/GGHttpSchema.callOn';
 import './routing/GGHttpSchema.routing';
 import './mock/GGHttpSchema.mock';
+import './mock/GGHttpTestTransport';

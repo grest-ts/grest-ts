@@ -496,11 +496,21 @@ Don't construct a service in a test body and expect `mockOf`/`spyOn` to reach it
 
 ### Which calls a schema mock or spy reaches
 
-`MyApi.mock.x` / `MyApi.spy.x` act in the test router, so they reach the calls that go through it: calls from a
-client that finds its target through discovery (`MyApi.createClient()` with no `url`).
+`MyApi.mock.x` / `MyApi.spy.x` act in the test router, and in a test runtime every call of a schema client goes
+through it, however the client finds its target:
 
-A client with a fixed `url` or with connection settings (a host, port or TLS pin set per client or per call) is not
-reached yet; that comes with the follow-up to this change ([#174](https://github.com/grest-ts/grest-ts/issues/174)).
+| Client | Where the call would go |
+|---|---|
+| `MyApi.createClient()` | the instance discovery picks |
+| `MyApi.createClient({url: "https://api.github.com"})` | that URL (a base path is fine) |
+| a host in `connectionSettings`, or set per call with a `GGConnectionSettingsKey` (with a port and TLS pin, CA or client certificate) | `host:port` over https, port 443 when unset |
+
+A mock answers before anything is dialled, so the address in a seeded row can be anything. With no mock, the router
+makes the real call for the client: same URL, same pin, CA and client certificate. A wrong pin or a refused
+connection fails the call as it would in production. Three things differ from production for such a call: the
+connection is opened by the test process, the response is buffered, and each pinned call opens a new connection.
+
+A client with `url: ""` and no host has nowhere to go; it is not sent to the router and fails as it does in production.
 
 > **A client with a custom `transport` is never mocked or spied on.** The router can't run a client's own transport,
 > so such a call always goes out for real. Put the dependency behind a `@mockable` class, or let the client use
@@ -516,8 +526,9 @@ never see it, so it runs for real.
 
 1. a mock or spy targeted at the runtime the call happens at (`.on(runtime)`),
 2. an untargeted mock or spy of the method,
-3. a running service (for `mockOf` / `spyOn`: the real method),
-4. a framework default answer (e.g. placeholder service tokens),
+3. its destination: the instance discovery picks, or the address the client names (for `mockOf` / `spyOn`: the
+   real method),
+4. a framework default answer (e.g. placeholder service tokens), for a discovery call no instance serves,
 5. otherwise the call fails with "No route".
 
 An untargeted spy next to a targeted mock therefore does not see the targeted call. Two interceptors for the same
@@ -539,6 +550,17 @@ const r = GGTest.startWorker({hub: [HubRuntime, HubRuntime]})
 
 - It takes a selector that holds exactly one runtime (`t`, `t.relayA`, `t[1]`, `t.hub[1]`); `.on(t.hub)` with two
   hubs throws.
+- A schema mock or spy also takes an address, for a target no test runtime listens at (a third party, a fake row in
+  a fan-out test): `.on(GGTest.target("127.0.0.8:9600"))`, or a URL (`GGTest.target("https://api.github.com")`).
+  A host without a port throws, and so does an address on `mockOf` / `spyOn`.
+- A call belongs to a runtime when one of the runtime's HTTP servers listens at the call's host and port.
+  `localhost`, `127.0.0.1` and `::1` are one host. A server bound to all interfaces (the `GGHttpServer` default)
+  stands for loopback hosts only, and a server bound to the very host wins over it. Two runtimes that both match
+  fail the action (`ROUTING_FAILED`).
+- To run several addressed runtimes side by side, bind each to its own loopback IP (`127.0.0.2`, `127.0.0.3`, …;
+  Linux routes all of `127.0.0.0/8`, macOS needs an alias per address).
+- An untargeted spy, or one on a runtime, needs a service running in the test. A spy on an address doesn't.
+- A runtime target and an address target that both match one call fail the action (`ROUTING_FAILED`).
 - Each key of the `GGTest.start*` input selects its own runtimes, in the order given, also when two keys use the
   same runtime class.
 - A targeted mock that is never called says where the method's calls went:

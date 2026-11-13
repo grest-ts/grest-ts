@@ -34,7 +34,8 @@ export class IPCServer {
         this.socketHandler = new SocketHandler();
 
         // Create HTTP server
-        this.httpServer = http.createServer(async (req, res) => {
+        // The http testkit carries a call's connection settings (CA and client certificate PEMs) in a request header.
+        this.httpServer = http.createServer({maxHeaderSize: 1024 * 1024}, async (req, res) => {
             this.scope.ensureEntered();
             await new GGContext("LocalRouter").run(async () => {
                 GG_TRACE.init();

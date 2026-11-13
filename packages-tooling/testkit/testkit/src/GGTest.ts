@@ -6,6 +6,7 @@ import {startRuntimes} from "./startRuntimes";
 import {IGGTestWith} from "./testers/IGGTestWith";
 import {DEFAULT_WAIT_FOR_MS, waitForInterceptors} from "./testers/waitForInterceptors";
 import {GGTestClock} from "./clock/GGTestClock";
+import {GGTestTarget} from "./testers/GGTestTarget";
 
 // -------------------------------------------------
 // GGTest - Static API for test setup
@@ -56,6 +57,11 @@ export class GGTest {
     // -------------------------------------------------
     // Public static methods
     // -------------------------------------------------
+
+    /** An address for `.on()` on a schema mock or spy, for a target that has no test runtime: `"host:port"` or a URL. */
+    public static target(address: string): GGTestTarget {
+        return new GGTestTarget(address);
+    }
 
     /**
      * Get a resource wrapper for calling test operations.

@@ -1,4 +1,4 @@
-import type {GGTestRuntime} from "../GGTestRuntime";
+import {GGInterceptorTarget, GGTestTarget} from "./GGTestTarget";
 import type {GGCallInterceptor} from "./GGCallInterceptor";
 
 /**
@@ -12,9 +12,9 @@ export class GGInterceptorTable<I extends GGCallInterceptor> {
     public add(interceptor: I): void {
         const key = interceptor.getKey();
         const list = this.byKey.get(key) ?? [];
-        if (list.some(i => i.target === interceptor.target)) {
+        if (list.some(i => sameTarget(i.target, interceptor.target))) {
             throw new Error(`${interceptor.getLabel()} already has an active mock or spy. Exactly one interceptor handles a call, so a second one for the same ` +
-                (interceptor.target ? "method and runtime" : "method") + " would never be called.");
+                (interceptor.target ? "method and target" : "method") + " would never be called.");
         }
         list.push(interceptor);
         this.byKey.set(key, list);
@@ -35,12 +35,18 @@ export class GGInterceptorTable<I extends GGCallInterceptor> {
     }
 
     /**
-     * `at` is the runtime the call happens at, when that is known and a test runtime. With `where` (the place's name
-     * in failure messages) the interceptors that didn't get the call note where it went.
+     * `isAt` says whether the call happens at a target; leave it out when where the call happens is unknown. With
+     * `where` (the place's name in failure messages) the interceptors that didn't get the call note where it went.
      */
-    public match(key: string, at: GGTestRuntime | undefined, where?: string): I | undefined {
+    public match(key: string, isAt: ((target: GGInterceptorTarget) => boolean) | undefined, where?: string): I | undefined {
         const list = this.get(key);
-        const matched = (at && list.find(i => i.target === at)) ?? list.find(i => !i.target);
+        const targeted = isAt ? list.filter(i => i.target && isAt(i.target)) : [];
+        if (targeted.length > 1) {
+            const error = new Error(`${targeted.map(i => i.getLabel()).join(" and ")} both match this call, and exactly one interceptor may handle a call.`);
+            targeted.forEach(i => i.routingFailed(error));
+            throw error;
+        }
+        const matched = targeted[0] ?? list.find(i => !i.target);
         if (where !== undefined) {
             for (const other of list) {
                 if (other !== matched) other.wentElsewhere(where);
@@ -59,4 +65,8 @@ export class GGInterceptorTable<I extends GGCallInterceptor> {
     public clear(): void {
         this.byKey.clear();
     }
+}
+
+function sameTarget(a: GGInterceptorTarget | undefined, b: GGInterceptorTarget | undefined): boolean {
+    return a === b || (a instanceof GGTestTarget && b instanceof GGTestTarget && a.host === b.host && a.port === b.port);
 }

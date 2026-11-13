@@ -442,7 +442,7 @@ test("spy — call through but validate", async () => {
 - `.responseToMatchObject(...)` — on a spyOn interceptor, validates the real return value.
 - `.toBeError(MY_ERROR).withContext({displayMessage}).toMatchObject(data)` — on a spy, the real call must throw it.
 - Mocks reach only calls made inside a runtime the testkit started. A service the test constructs and calls itself is never intercepted; call it through its API, or mark it `@testable` and use `callOn(S).m(...).with(mockOf(...))`.
-- `Api.mock.x` / `Api.spy.x` reach calls from discovery clients (`Api.createClient()`). A client with a custom `transport` is never mocked — wrap it in a `@mockable` class.
+- `Api.mock.x` / `Api.spy.x` reach every schema client call in a test runtime: discovery (`Api.createClient()`), a fixed `url`, or a host in connection settings (a `GGConnectionSettingsKey`). `.on(GGTest.target("host:port"))` targets an address no test runtime listens at. A client with a custom `transport` is never mocked — wrap it in a `@mockable` class.
 - A mock is active while its action runs — any call to that method in that window hits it, including from parallel requests. Unmocked `@mockable` calls run for real.
 - `.with(a, b, …)` takes one or more interceptors as separate arguments (not an array); calls can also be chained.
 

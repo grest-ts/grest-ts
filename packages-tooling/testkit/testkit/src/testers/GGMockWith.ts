@@ -8,6 +8,7 @@ import {IGGTestInterceptor} from "./IGGTestInterceptor";
 import {GGCallInterceptor, GGCallInterceptorConfig, GGCallTimes} from "./GGCallInterceptor";
 import {singleRuntime} from "./GGTestSelector";
 import type {GGTestRuntime} from "../GGTestRuntime";
+import {GGInterceptorTarget, GGTestTarget} from "./GGTestTarget";
 
 type InterceptorFactory = new (runner: GGTestRunner, config: any) => GGCallInterceptor;
 
@@ -21,7 +22,7 @@ export class GGMockWith<RequestBody = any, ResponseData = any, ErrorsUnion = any
     private _sleep: number = 0;
     private _times: GGCallTimes = {min: 1, max: 1};
     private _within?: number;
-    private _target?: GGTestRuntime;
+    private _target?: GGInterceptorTarget;
 
     private readonly expectations: GGExpectations<RequestBody> = new GGExpectations();
     private returnData?: Raw<ResponseData | ErrorsUnion> | MockReply<RequestBody, ResponseData | ErrorsUnion>;
@@ -63,11 +64,12 @@ export class GGMockWith<RequestBody = any, ResponseData = any, ErrorsUnion = any
     }
 
     /**
-     * Only calls that happen at this runtime: for a schema mock or spy, calls routed to it; for mockOf / spyOn, calls
-     * of the method inside it. Takes a selector holding exactly one runtime (`t.relayA`, `t[1]`, `t.hub[1]`).
+     * Only calls that happen at this target. A runtime (a selector holding exactly one: `t.relayA`, `t[1]`, `t.hub[1]`):
+     * for a schema mock or spy, calls sent to it; for mockOf / spyOn, calls of the method inside it. An address
+     * (`GGTest.target("host:port")`), for schema mocks and spies only: calls sent to that address.
      */
-    public on(runtime: {readonly runtimes: GGTestRuntime[]}): this {
-        this._target = singleRuntime(runtime);
+    public on(target: {readonly runtimes: GGTestRuntime[]} | GGTestTarget): this {
+        this._target = target instanceof GGTestTarget ? target : singleRuntime(target);
         return this;
     }
 

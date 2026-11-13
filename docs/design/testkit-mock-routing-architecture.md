@@ -1,7 +1,8 @@
 # Testkit targeting: architecture note (gate 1)
 
-Status: **approved; PR 1 built, PR 2 not started.** Intent: `testkit-mock-routing.md` §1–§2 on
-`kratt/design-relay-mock-routing`. §7 records the owner's decisions and where PR 1 differs from this note.
+Status: **approved; PR 1 merged, PR 2 built.** Intent: `testkit-mock-routing.md` §1–§2 on
+`kratt/design-relay-mock-routing`. §7 records the owner's decisions and where PR 1 differs from this note; §8 is PR 2
+as built.
 
 ## 1. The flow
 
@@ -162,5 +163,33 @@ Where PR 1 differs from §2 and §4:
   the bridge (`WorkspaceFlowTestRuntime.localHubCallbackPort`), and the dev gateway is reached at `host-ip:9000`.
 - **The deprecated `createRuntimeSelector` / `RuntimeResult`** are deleted (unused; they grouped by `NAME` too).
 
-PR 2 additions from review: dial without connection reuse (kratt's `invalidateTlsPinAgent`), strip the destination
-header before forwarding, base64 the PEMs, raise `maxHeaderSize` and test it. Estimate: about +200 lines, 4 days.
+## 8. PR 2 as built
+
+- **The hook is the existing `_registerNodeDefaultTransport`:** the http testkit registers a test transport over the
+  node default. This replaces decision 3's explicit hook: `createClient` already resolves the default per call, so
+  PR 2 changes no line of it, and a custom `transport` client is outside by construction.
+- **The test transport acts only when `GG_TEST_RUNTIME_WORKER` is in scope.** It passes a call through when the base
+  URL is the router's (a discovery call) or when there is no base URL and no settings host (nothing to dial).
+  Otherwise it sends the request to the router with `x-gg-test-destination`: base64 of `{url, settings}`.
+- **The router** reads the header in `resolve()`, so a destination is either the discovery pick or the carried one.
+  Matching, mocks, spies and "went to" are the same code. One `forward()` dials for spies and for addressed calls,
+  with the real `nodeDefaultTransport` and the carried settings; `spy()` and its own `fetch` are gone. An unmatched
+  discovery call is still proxied as a stream.
+- **Address rules:** a settings host wins over the URL's, port 443 when unset; a URL's port defaults by scheme.
+  `localhost`, `127.0.0.1` and `::1` are one host. A wildcard bind stands for loopback hosts only, a bind to the
+  very host wins, two matches throw as `ROUTING_FAILED`.
+- **`GGTest.target(address)`** is a second kind of interceptor target next to a runtime. `@mockable` interceptors
+  refuse it. A spy on an address skips the "service is not running" check.
+- **Custom-TLS connections aren't reused:** after each addressed dial the router drops the pooled agent of those
+  settings (pin, CA or client certificate), so a restarted target never meets a stale socket kept by the test
+  process. `invalidateTlsAgent(settings)` in the node transport is the one production addition for it.
+- **The destination header counts only from loopback callers.** The router listens on `0.0.0.0`, and it would dial
+  whatever the header names with the client certificate it carries; from any other address the header is ignored
+  and the call is routed as a discovery call.
+- **A relative base URL with no settings host** is treated like `""`: not sent to the router.
+- **Two targeted interceptors matching one call** (a runtime and its own address) fail it as `ROUTING_FAILED`.
+- **The header** is stripped before forwarding and never logged. The router's `maxHeaderSize` is 1 MB (`IPCServer`,
+  the one line outside the testkit), because CA and client-certificate PEMs travel in it.
+- **The router still listens on `0.0.0.0`** (see §7). Client keys only travel from a test runtime to the router over
+  loopback, but any host that can reach the port can send requests to it, as before.
+- **Not intercepted:** custom `transport` clients, and calls made outside a test runtime's scope.
