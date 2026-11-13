@@ -27,13 +27,11 @@ export class GGLogInterceptor implements IGGTestInterceptor {
         this.definedInSourceFile = definedInSourceFile;
     }
 
-    register(): void {
-        // Get cursor positions from each runtime
-        for (const runtime of this.runtimes) {
-            runtime.sendCommand(GGLogIPC.worker.getCursor, undefined).then(index => {
-                this.cursors.set(runtime, index);
-            });
-        }
+    async register(): Promise<void> {
+        // Awaited: until a runtime's cursor is known, a poll would search its whole log, entries from before this action included.
+        await Promise.all(this.runtimes.map(async runtime => {
+            this.cursors.set(runtime, await runtime.sendCommand(GGLogIPC.worker.getCursor, undefined));
+        }));
     }
 
     unregister(): void {
