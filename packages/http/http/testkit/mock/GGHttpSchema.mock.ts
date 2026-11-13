@@ -3,7 +3,7 @@ import {GGHttpInterceptorsServer} from "./GGHttpInterceptorsServer";
 import {parseContractResponse} from "../utils/validateContractResponse";
 import {HttpMethod} from "@grest-ts/common";
 import {GGHttpCodec, GGHttpSchema} from "../../src/schema/GGHttpSchema";
-import {GGContractApiDefinition} from "@grest-ts/schema";
+import {ERROR, GGContractApiDefinition} from "@grest-ts/schema";
 
 declare module "../../src/schema/GGHttpSchema" {
     interface GGHttpSchema<TContract extends GGContractApiDefinition> {
@@ -73,7 +73,6 @@ export interface HttpInterceptorConfig extends GGCallInterceptorConfig {
     apiName: string;
     pathPrefix: string;
     pathSuffix: string;
-    expectError?: any;
 }
 
 export class GGHttpInterceptor extends GGCallInterceptor {
@@ -82,7 +81,6 @@ export class GGHttpInterceptor extends GGCallInterceptor {
     public readonly apiName: string;
     public readonly pathPrefix: string;
     public readonly pathSuffix: string;
-    protected readonly expectError?: any;
 
     constructor(test: GGTestRunner, config: HttpInterceptorConfig) {
         super(test, config);
@@ -90,7 +88,6 @@ export class GGHttpInterceptor extends GGCallInterceptor {
         this.apiName = config.apiName;
         this.pathPrefix = config.pathPrefix;
         this.pathSuffix = config.pathSuffix;
-        this.expectError = config.expectError;
     }
 
     public getKey(): string {
@@ -105,7 +102,11 @@ export class GGHttpInterceptor extends GGCallInterceptor {
         this.test.getExtensionInstance(GGHttpInterceptorsServer).deleteInterceptor(this);
     }
 
+    protected spyGetsResponses(): boolean {
+        return true;
+    }
+
     protected parseResponseData(result: any): any {
-        return parseContractResponse(result, this.expectError);
+        return parseContractResponse(ERROR.isJson(result) ? ERROR.fromJson(result) : result, this.expectError, this.expectErrorContext);
     }
 }

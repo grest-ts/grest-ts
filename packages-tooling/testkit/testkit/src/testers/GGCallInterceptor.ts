@@ -2,7 +2,8 @@ import type {GGTestRunner} from "../GGTestRunner";
 import {GGExpectations} from "../utils/GGExpectations";
 import {GGTestError} from "../utils/GGTestError";
 import {GGLog} from "@grest-ts/logger";
-import {ERROR} from "@grest-ts/schema";
+import {ERROR, GGErrorData} from "@grest-ts/schema";
+import {ConstructorOf} from "@grest-ts/common";
 
 import {IGGTestInterceptor} from "./IGGTestInterceptor";
 
@@ -24,7 +25,8 @@ export interface GGCallInterceptorConfig {
     inputExpectations?: GGExpectations<any>;
     outputExpectations?: GGExpectations<any>;
     returnData?: any;
-    expectError?: any;
+    expectError?: ConstructorOf<ERROR<any, any>>;
+    expectErrorContext?: Partial<GGErrorData>;
 }
 
 /**
@@ -45,8 +47,11 @@ export abstract class GGCallInterceptor implements IGGTestInterceptor {
     private readonly inputExpectations?: GGExpectations<any>;
     private readonly outputExpectations?: GGExpectations<any>;
     private readonly returnData?: any;
+    protected readonly expectError?: ConstructorOf<ERROR<any, any>>;
+    protected readonly expectErrorContext?: Partial<GGErrorData>;
 
     private noOfTimesCalled = 0;
+    private noOfResponses = 0;
     private isRegistered = false;
     private validationError: Error | undefined;
 
@@ -59,6 +64,8 @@ export abstract class GGCallInterceptor implements IGGTestInterceptor {
         this.inputExpectations = config.inputExpectations;
         this.outputExpectations = config.outputExpectations;
         this.returnData = config.returnData;
+        this.expectError = config.expectError;
+        this.expectErrorContext = config.expectErrorContext;
         if (this.passThrough) {
             if (this.returnData !== undefined) {
                 throw new Error("Spy can't have returnData! It calls through and returns what ever it receives!")
@@ -81,6 +88,11 @@ export abstract class GGCallInterceptor implements IGGTestInterceptor {
     protected abstract doUnregister(): void;
 
     protected abstract parseResponseData(result: any): any;
+
+    /** Whether this transport calls onResponse for every spied call, so `.waitFor()` can wait for the response. */
+    protected spyGetsResponses(): boolean {
+        return false;
+    }
 
     /**
      * Transform request body before checking expectations.
@@ -171,6 +183,7 @@ export abstract class GGCallInterceptor implements IGGTestInterceptor {
             const data = this.parseResponseData(result);
             this.outputExpectations?.check(data);
             await this.sleepIfNeeded();
+            this.noOfResponses++;
         } catch (error: any) {
             this.setMockValidationError(error, "SPY_RESPONSE_VALIDATION_FAILED");
             throw error;
@@ -197,9 +210,19 @@ export abstract class GGCallInterceptor implements IGGTestInterceptor {
         return this.validationError;
     }
 
-    /** Done: called as often as expected, or a call failed its expectations. */
+    /** Done: called (a spy that gets responses: responded) as often as expected, or a call failed its expectations. */
     public isCalled(): boolean {
-        return this.noOfTimesCalled >= this.times.min || this.validationError !== undefined;
+        if (this.times.min === 0) {
+            throw new GGTestError({
+                context: `[${this.getKey()}]`,
+                test: ".waitFor() has nothing to wait for: .anyTimes() is met by no call at all.",
+                expected: "Use .times(n) to wait for n calls, or .with() to allow any number while the action runs",
+                received: ".anyTimes()",
+                sourceFile: this.definedInSourceFile
+            });
+        }
+        const done = this.passThrough && this.spyGetsResponses() ? this.noOfResponses : this.noOfTimesCalled;
+        return done >= this.times.min || this.validationError !== undefined;
     }
 
     // -------------------------------------------

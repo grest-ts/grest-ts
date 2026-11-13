@@ -255,15 +255,26 @@ export abstract class ERROR<Type extends string, Data> extends Error {
     }
 
     /**
-     * Rebuild a typed error from its JSON, as the class defined for its type in this process.
-     * A type not defined here becomes SERVER_ERROR.
+     * Rebuild a typed error from its JSON, as the class `allowed` has for its type, or without `allowed` the class
+     * defined for it in this process. Any other type becomes SERVER_ERROR. The stack is cleared: one taken here would
+     * show where the JSON was read, not where the error was thrown.
      */
-    public static fromJson(json: ERROR_JSON): ERROR<string, unknown> {
-        const cls = ERRORS_REGISTRY.get(json.type)
+    public static fromJson(json: ERROR_JSON, options?: {allowed?: readonly ANY_ERROR_CLS[]}): ERROR<string, unknown> {
+        const allowed = options?.allowed
+        const cls = allowed ? allowed.find(e => e.TYPE === json.type) : ERRORS_REGISTRY.get(json.type)
         if (!cls) {
-            return new SERVER_ERROR({debugMessage: "Unknown error type: " + json.type, debugData: json})
+            return new SERVER_ERROR({
+                debugMessage: "Unknown error type: " + json.type,
+                debugData: {
+                    unknownErrorType: json.type,
+                    knownErrorTypes: allowed ? allowed.map(e => e.TYPE).join(",") : "(any defined in this process)",
+                    response: json
+                }
+            })
         }
-        return cls.schema ? new cls(json.data, json.context) : new (cls as ERR_CLASS<string>)(json.context)
+        const error = cls.schema ? new cls(json.data, json.context) : new (cls as ERR_CLASS<string>)(json.context)
+        error.stack = undefined
+        return error
     }
 
     public static fromUnknown<E extends ERROR<string, unknown>>(error: E): 0 extends (1 & E) ? ERROR<string, unknown> : E;

@@ -45,6 +45,7 @@ export * from './testers/GGSpyWith'
 export * from './testers/GGCallInterceptor'
 export * from './utils/GGExpectations'
 export * from './utils/GGTestError'
+export * from './utils/checkError'
 export {captureStackSourceFile} from './utils/captureStack'
 export * from './GGTestSharedRef'
 

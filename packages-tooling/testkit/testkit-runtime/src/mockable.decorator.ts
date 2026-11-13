@@ -25,6 +25,11 @@ export interface MockableTestContext {
     sendSpyResult(className: string, methodName: string, callResult: any): Promise<void>;
 
     /**
+     * Report what a spied call threw back to the test runner.
+     */
+    sendSpyError(className: string, methodName: string, error: unknown): Promise<void>;
+
+    /**
      * Sentinel value indicating spy mode (call the real method).
      */
     readonly CALL_THROUGH: string;
@@ -43,6 +48,21 @@ const mockableContextStorage = new AsyncLocalStorage<MockableTestContext>();
  */
 export function runWithMockableContext<T>(ctx: MockableTestContext, fn: () => T): T {
     return mockableContextStorage.run(ctx, fn);
+}
+
+let fallbackContext: (() => MockableTestContext | undefined) | undefined;
+
+/**
+ * Where a call outside runWithMockableContext goes: set by the testkit, so a call made in the test process (a test
+ * body, or a runtime's scope entered from it) is intercepted too. Never set in production.
+ * @internal
+ */
+export function setMockableContextFallback(resolve: () => MockableTestContext | undefined): void {
+    fallbackContext = resolve;
+}
+
+function currentContext(): MockableTestContext | undefined {
+    return mockableContextStorage.getStore() ?? fallbackContext?.();
 }
 
 // ============================================================================
@@ -125,7 +145,7 @@ function interception(fn: Function): boolean | undefined {
  */
 function intercept(className: string, methodName: string, original: Function, oneArgument: boolean): Function {
     const wrapped = async function (this: any, ...args: any[]) {
-        const ctx = mockableContextStorage.getStore();
+        const ctx = currentContext();
 
         // Not in test mode - call original method directly (zero overhead path)
         if (!ctx) {
@@ -137,7 +157,13 @@ function intercept(className: string, methodName: string, original: Function, on
             return result;
         }
         // Spy mode - call the real method and report its result
-        const realResult = await original.apply(this, args);
+        let realResult: any;
+        try {
+            realResult = await original.apply(this, args);
+        } catch (error) {
+            await ctx.sendSpyError(className, methodName, error);
+            throw error;
+        }
         await ctx.sendSpyResult(className, methodName, realResult);
         return realResult;
     };
@@ -169,8 +195,8 @@ export function mockableClassName(cls: Function, methodName: string): string {
 /**
  * Decorator to mark a class as mockable in tests.
  * Its async methods and async function fields (`foo = async () => …`) are interceptable via mockOf() or spyOn().
- * Fields are wrapped when an instance is constructed in a test, so the decorated class is a subclass of the declared
- * one; fields a subclass of it declares are not wrapped unless that subclass is @mockable too.
+ * Fields are wrapped when an instance is constructed under the testkit, so the decorated class is a subclass of the
+ * declared one; fields a subclass of it declares are not wrapped unless that subclass is @mockable too.
  *
  * In production (when not running tests), this decorator has minimal overhead - a method wrapper immediately calls
  * through to the original, and fields are left as they are.
@@ -201,9 +227,9 @@ export function mockable<T extends { new(...args: any[]): {} }>(target: T): T {
     const mocked = class extends target {
         constructor(...args: any[]) {
             super(...args);
-            // Fields are wrapped only for an instance made in a test, and by the most-derived @mockable class, so
-            // they are keyed under the class mockOf() is given.
-            if (!mockableContextStorage.getStore() || (new.target as any)[MOCKABLE_CLASS] !== mocked) return;
+            // Fields are wrapped only under the testkit, and by the most-derived @mockable class, so they are keyed
+            // under the class mockOf() is given.
+            if ((!mockableContextStorage.getStore() && !fallbackContext) || (new.target as any)[MOCKABLE_CLASS] !== mocked) return;
             for (const key of Object.keys(this)) {
                 const descriptor = Object.getOwnPropertyDescriptor(this, key)!;
                 const value = descriptor.value;
