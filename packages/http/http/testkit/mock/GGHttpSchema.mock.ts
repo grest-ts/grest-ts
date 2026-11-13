@@ -3,7 +3,7 @@ import {GGHttpInterceptorsServer} from "./GGHttpInterceptorsServer";
 import {parseContractResponse} from "../utils/validateContractResponse";
 import {HttpMethod} from "@grest-ts/common";
 import {GGHttpCodec, GGHttpSchema} from "../../src/schema/GGHttpSchema";
-import {ERROR, GGContractApiDefinition} from "@grest-ts/schema";
+import {ANY_ERROR_CLS, ERROR, GGContractApiDefinition, GGContractExecutor} from "@grest-ts/schema";
 
 declare module "../../src/schema/GGHttpSchema" {
     interface GGHttpSchema<TContract extends GGContractApiDefinition> {
@@ -49,6 +49,7 @@ Object.defineProperty(GGHttpSchema.prototype, 'spy', {
         const fullPathPrefix = "/" + this.pathPrefix + "/"
         const name = this.name;
         const methods = this.codec;
+        const contract = this.contract;
         return new Proxy({}, {
             get(_target, prop: string) {
                 const methodDef: GGHttpCodec = methods[prop]
@@ -59,7 +60,8 @@ Object.defineProperty(GGHttpSchema.prototype, 'spy', {
                     apiName: name,
                     method: methodDef.method,
                     pathPrefix: fullPathPrefix,
-                    pathSuffix: methodDef.path
+                    pathSuffix: methodDef.path,
+                    errors: contract.methods[prop]?.errors
                 })
             }
         })
@@ -73,6 +75,8 @@ export interface HttpInterceptorConfig extends GGCallInterceptorConfig {
     apiName: string;
     pathPrefix: string;
     pathSuffix: string;
+    /** The method's contract errors: a spied error JSON is rebuilt as the client would. */
+    errors?: ANY_ERROR_CLS[];
 }
 
 export class GGHttpInterceptor extends GGCallInterceptor {
@@ -81,6 +85,7 @@ export class GGHttpInterceptor extends GGCallInterceptor {
     public readonly apiName: string;
     public readonly pathPrefix: string;
     public readonly pathSuffix: string;
+    private readonly errors?: ANY_ERROR_CLS[];
 
     constructor(test: GGTestRunner, config: HttpInterceptorConfig) {
         super(test, config);
@@ -88,6 +93,7 @@ export class GGHttpInterceptor extends GGCallInterceptor {
         this.apiName = config.apiName;
         this.pathPrefix = config.pathPrefix;
         this.pathSuffix = config.pathSuffix;
+        this.errors = config.errors;
     }
 
     public getKey(): string {
@@ -107,6 +113,6 @@ export class GGHttpInterceptor extends GGCallInterceptor {
     }
 
     protected parseResponseData(result: any): any {
-        return parseContractResponse(ERROR.isJson(result) ? ERROR.fromJson(result) : result, this.expectError, this.expectErrorContext);
+        return parseContractResponse(ERROR.isJson(result) ? GGContractExecutor.createErrorObj(result, this.errors) : result, this.expectError, this.expectErrorContext);
     }
 }

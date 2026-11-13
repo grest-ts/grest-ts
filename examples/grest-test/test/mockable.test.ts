@@ -190,12 +190,13 @@ describe("a @mockable instance made in the test process", () => {
         expect(UPSTREAM_REFUSED.is(error)).toBe(true)
     })
 
-    test("fails a spy whose error doesn't match", async () => {
-        const [spied] = await Promise.allSettled([
+    test("fails a spy whose error doesn't match, and the caller still gets the error", async () => {
+        const [spied, called] = await Promise.allSettled([
             GGTest.waitFor(spyOn(Upstream).refuse.toBeError(UPSTREAM_REFUSED).toMatchObject({reason: "other"})),
-            upstream.refuse("quota").catch(() => undefined),
+            upstream.refuse("quota"),
         ])
         expect(spied.status === "rejected" && String(spied.reason)).toMatch(/SPY_RESPONSE_VALIDATION_FAILED/)
+        expect(called.status === "rejected" && UPSTREAM_REFUSED.is(called.reason)).toBe(true)
     })
 
     test("fails a spy that expects an error when the call returns", async () => {

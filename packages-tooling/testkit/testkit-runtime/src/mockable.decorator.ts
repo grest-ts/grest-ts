@@ -161,7 +161,8 @@ function intercept(className: string, methodName: string, original: Function, on
         try {
             realResult = await original.apply(this, args);
         } catch (error) {
-            await ctx.sendSpyError(className, methodName, error);
+            // A spy that rejects it records that on itself; the caller still gets what the method threw.
+            await ctx.sendSpyError(className, methodName, error).catch(() => undefined);
             throw error;
         }
         await ctx.sendSpyResult(className, methodName, realResult);

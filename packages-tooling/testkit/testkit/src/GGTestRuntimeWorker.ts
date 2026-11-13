@@ -14,7 +14,6 @@ import {GGMockableIPC} from "./mockable/GGMockableIPC";
 import {registerOnCallHandler} from "./callOn/registerOnCallHandler";
 import {TestableIPC} from "./callOn/TestableIPC";
 
-export {GG_TEST_RUNTIME_WORKER};
 
 export class GGTestRuntimeWorker {
 

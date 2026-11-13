@@ -31,6 +31,7 @@ import './callOn/GGContractClass.implement'
 
 // Control channel for runtime config updates
 export * from './GGTestRuntimeWorker'
+export * from './GGTestRuntimeWorkerKey'
 
 // Test clock (fake Date across the test and its runtimes)
 export * from './clock/GGDateShim'

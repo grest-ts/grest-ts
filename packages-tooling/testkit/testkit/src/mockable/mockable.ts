@@ -12,7 +12,7 @@ import {GGSpyWith} from "../testers/GGSpyWith";
 import {mockableClassName, type MockableTestContext, setMockableContextFallback} from "@grest-ts/testkit-runtime";
 import type {ANY_ERROR} from "@grest-ts/schema";
 import {GG_TEST_RUNNER} from "../GGTestRunner";
-import {GG_TEST_RUNTIME_WORKER} from "../GGTestRuntimeWorker";
+import {GG_TEST_RUNTIME_WORKER} from "../GGTestRuntimeWorkerKey";
 import {GGMockableInterceptorsServer} from "./GGMockableInterceptorsServer";
 
 // A call outside a runtime's own async context: in a runtime's scope entered from the test, it goes through that
