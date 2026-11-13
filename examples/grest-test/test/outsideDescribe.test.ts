@@ -8,7 +8,7 @@ vitestDescribe("GGTest under vitest's own describe", () => {
     })
 
     vitestTest("says when the setup file isn't loaded", () => {
-        const loaded = Symbol.for("grest-ts:testkit-vitest:originals")
+        const loaded = Symbol.for("@grest-ts/testkit:GGDateShim")
         const g = globalThis as any
         const mark = g[loaded]
         delete g[loaded]

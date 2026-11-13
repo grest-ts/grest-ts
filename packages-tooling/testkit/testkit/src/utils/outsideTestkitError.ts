@@ -1,7 +1,7 @@
 import {GG_TEST_RUNTIME_WORKER} from "../GGTestRuntimeWorkerKey";
 
-// Set on globalThis by @grest-ts/testkit-vitest's setup file.
-const SETUP_FILE_LOADED = Symbol.for("grest-ts:testkit-vitest:originals");
+// The Date shim's slot: the setup file installs it (installTestClock) before anything else runs.
+const SETUP_FILE_LOADED = Symbol.for("@grest-ts/testkit:GGDateShim");
 
 /** The error for test-side API used where it can't work, saying which of the usual mistakes it is. */
 export function outsideTestkitError(what: string): Error {
