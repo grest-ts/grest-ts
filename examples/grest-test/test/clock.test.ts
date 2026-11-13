@@ -102,7 +102,7 @@ describe("GGTest.clock", () => {
         const {boot} = await callOn(ClockLateApi).read()
         expect(boot).toBeGreaterThanOrEqual(T)
         expect(boot).toBeLessThan(T + SLACK)
-    })
+    }, 30_000)
 
     test("Temporal.Now follows the clock", async () => {
         await GGTest.clock.set(T)

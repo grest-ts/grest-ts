@@ -33,6 +33,8 @@ export class GGLocalDiscoveryServer {
     private readonly routes: Map<string, RegisteredEntry[]> = new Map();
     private readonly routingStrategies: Map<string, RoutingStrategy> = new Map();
     public onYield?: () => Promise<void>;
+    /** An API the router answers itself, with no instance registered. */
+    public isServed?: (api: string) => boolean;
     public readonly kind: DiscoveryServerKind
 
     constructor(server: IPCServer, kind: DiscoveryServerKind = DiscoveryServerKind.Embedded) {
@@ -49,12 +51,13 @@ export class GGLocalDiscoveryServer {
             }
         });
 
-        this.server.onFrameworkMessage(GGDiscoveryIPC.discoveryServer.unregister, async (routes) => {
-            routes.forEach(route => this.removeRoute(route.api));
+        // Only the sender's own routes: other replicas of the same API keep serving.
+        this.server.onFrameworkMessage(GGDiscoveryIPC.discoveryServer.unregister, async (_routes, msg) => {
+            this.removeRoutesByClient(msg.clientId);
         });
 
         this.server.onFrameworkMessage(GGDiscoveryIPC.discoveryServer.discoverApi, async (apiName) => {
-            if (this.getRoute(apiName)) {
+            if (this.getRoute(apiName) || this.isServed?.(apiName)) {
                 return {success: true, url: this.server.getUrl()};
             }
             return {success: false, error: "Service '" + apiName + "' is not registered! Did you forget to start it?"};
@@ -71,9 +74,8 @@ export class GGLocalDiscoveryServer {
             }, 10);
         });
 
-        this.server.setRouteProxyResolver((path) => {
-            return this.matchRoute(path)?.baseUrl || "";
-        })
+        this.server.setHttpResolver((req) => this.selectInstance(req.url!.split('?')[0])?.baseUrl);
+        this.server.setWsResolver((url) => this.selectInstance(url)?.baseUrl || "");
 
         // When an IPC client's socket closes — for any reason, including
         // a SIGKILLed remote process — drop the routes owned by that
@@ -147,7 +149,7 @@ export class GGLocalDiscoveryServer {
             }
         }
         if (removed > 0) {
-            GGLog.info(this, `Cleaned up ${removed} routes from disconnected client ${clientId}`);
+            GGLog.info(this, `Removed ${removed} routes of client ${clientId}`);
         }
     }
 
@@ -173,7 +175,7 @@ export class GGLocalDiscoveryServer {
     }
 
     public getRoutingUrl(api: string): string {
-        if (!this.getRoute(api)) {
+        if (!this.getRoute(api) && !this.isServed?.(api)) {
             throw new Error(`API '${api}' not registered in router`);
         }
         if (!this.server.getUrl()) {
@@ -182,7 +184,7 @@ export class GGLocalDiscoveryServer {
         return this.server.getUrl();
     }
 
-    private matchRoute(path: string): GGServiceDiscoveryEntry | undefined {
+    public selectInstance(path: string): GGServiceDiscoveryEntry | undefined {
         let bestApi: string | undefined;
         let longestMatch = 0;
 

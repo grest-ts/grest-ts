@@ -7,7 +7,6 @@ definePackage({
     keywords: ["ipc", "inter-process-communication", "proxy"],
     targets: { node: true },
     dependencies: {
-        "find-my-way": "^9.4.0",
         "http-proxy": "^1.18.1",
         "ws": "^8.19.0"
     },

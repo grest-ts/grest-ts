@@ -119,33 +119,3 @@ export type StartResult<T extends RuntimeInput> =
             : T extends RuntimeConstructor
                 ? Selector<[T]>
                 : never;
-
-// ============================================================================
-// Legacy RuntimeResult (for backwards compatibility with .get())
-// ============================================================================
-
-/**
- * @deprecated Use the new startWorker overloads instead.
- * Legacy result type that provides .get() method.
- */
-export interface RuntimeResult<T extends RuntimeConstructor[]> {
-    /**
-     * Get selector for a specific runtime type
-     */
-    get<R extends T[number]>(runtime: R): Selector<[R]>;
-
-    /**
-     * Get selector for all runtimes
-     */
-    all(): Selector<T>;
-
-    /**
-     * Stop all runtimes.
-     */
-    stop(): Promise<void>;
-
-    /**
-     * Shutdown all runtimes.
-     */
-    shutdown(): Promise<void>;
-}

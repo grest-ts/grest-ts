@@ -6,7 +6,7 @@ import "@grest-ts/websocket/testkit"
 // The seed's delay makes onSnapshot arrive well after the requestSnapshot action has finished.
 describe("waitFor on socket messages", () => {
 
-    GGTest.startWorker(MainRuntime)
+    const t = GGTest.startWorker(MainRuntime)
 
     const socket = callOn(BroadcastSocketApi)
     beforeAll(() => socket.connect())
@@ -32,5 +32,11 @@ describe("waitFor on socket messages", () => {
             .waitFor(socket.mock.onSnapshot.toMatchObject({values: [999]}))
         ).rejects.toThrow(/MOCK_VALIDATION_FAILED/)
         expect(Date.now() - start).toBeLessThan(2_000)
+    })
+
+    test(".on() throws: a socket mock already applies to this test socket only", async () => {
+        await expect(socket.requestSnapshot({delayMs: 0})
+            .waitFor(socket.mock.onSnapshot.on(t))
+        ).rejects.toThrow(/\.on\(\) is not supported/)
     })
 })
