@@ -35,12 +35,14 @@ export class GGLocator {
         return this.getScope().setImmediate(fn);
     }
 
+    /** Outside a scope (a CLI, a plain unit test) this is a plain `setTimeout`. */
     public static setTimeout<R>(fn: () => R, timeout: number): NodeJS.Timeout {
-        return this.getScope().setTimeout(fn, timeout);
+        return this.tryGetScope()?.setTimeout(fn, timeout) ?? setTimeout(fn, timeout);
     }
 
+    /** Outside a scope (a CLI, a plain unit test) this is a plain `setInterval`. */
     public static setInterval<R>(fn: () => R, timeout: number): NodeJS.Timeout {
-        return this.getScope().setInterval(fn, timeout);
+        return this.tryGetScope()?.setInterval(fn, timeout) ?? setInterval(fn, timeout);
     }
 
 }

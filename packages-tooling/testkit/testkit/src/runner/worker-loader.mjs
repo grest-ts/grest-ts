@@ -21,12 +21,14 @@ process.on('unhandledRejection', (reason) => {
     console.error(`[WorkerThread ${config?.runtimeId}] Unhandled rejection:`, reason);
 });
 
-// Import control client from @grest-ts/testkit
-const {GGTestRuntimeWorker} = await import('@grest-ts/testkit');
+// Import control client from @grest-ts/testkit; the test clock goes in before any app module loads
+const {GGTestRuntimeWorker, installTestClock, bootClock} = await import('@grest-ts/testkit');
+installTestClock();
 
 let controlClient;
 
 async function start() {
+    bootClock(config.clock);
     controlClient = new GGTestRuntimeWorker(config);
     try {
         await controlClient.start();

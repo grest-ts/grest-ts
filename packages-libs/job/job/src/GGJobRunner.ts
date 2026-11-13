@@ -147,7 +147,8 @@ class JobLoop {
         }
     }
 
-    private tick(): void {
+    /** Returns the run it started, so the test clock can wait for it; production timers ignore it. */
+    private tick(): Promise<unknown> | undefined {
         if (this.stopped.signal.aborted) return
         let config: RunConfig
         try {
@@ -155,14 +156,16 @@ class JobLoop {
         } catch (err) {
             // An unreadable setting must not end the loop: keep the last good one, or retry in a minute.
             GGLog.error(this.job, "Job settings unreadable", {job: this.job.config.name, err: (err as Error).message})
-            if (!this.lastConfig) return this.schedule(MIN_CHECK_EVERY_MS)
+            if (!this.lastConfig) return void this.schedule(MIN_CHECK_EVERY_MS)
             config = this.lastConfig
         }
+        let run: Promise<unknown> | undefined
         if (config.enabled && !this.running) {
-            this.track(this.runOnce(config, true))
+            run = this.track(this.runOnce(config, true))
                 .catch(err => GGLog.error(this.job, "Job run failed", {job: this.job.config.name, err: (err as Error).message}))
         }
         this.schedule(this.oneInstance ? config.checkEveryMs : config.intervalMs)
+        return run
     }
 
     async runNow(): Promise<GGJobRunResult> {
@@ -182,6 +185,7 @@ class JobLoop {
         const name = this.job.config.name
         const signal = this.stopped.signal
         const startedAt = Date.now()
+        const runStart = performance.now()
         const overdue = this.scope.setTimeout(() => {
             GGLog.warn(this.job, "Job still running past its timeout", {job: name, timeoutMs: config.timeoutMs})
         }, config.timeoutMs)
@@ -192,7 +196,7 @@ class JobLoop {
             try {
                 totals = await this.runBatches(config, s)
             } finally {
-                const durationMs = Date.now() - startedAt
+                const durationMs = Math.round(performance.now() - runStart)
                 metric(() => GGJobMetrics.runDuration.inc(durationMs, {job: name}))
                 if (durationMs > config.intervalMs * WARN_RATIO) GGLog.warn(this.job, "Job run took most of its interval", {job: name, durationMs, intervalMs: config.intervalMs})
             }
@@ -221,7 +225,7 @@ class JobLoop {
         const name = this.job.config.name
         const totals = {rows: 0, failed: 0, batches: 0}
         for (let extra = 0; ; extra++) {
-            const startedAt = Date.now()
+            const startedAt = performance.now()
             const rows = await this.job.getDataSet(limit)
             if (rows.length > limit) GGLog.warn(this.job, "Job data set exceeds its limit", {job: name, rows: rows.length, limit})
             else if (rows.length > Math.ceil(limit * WARN_RATIO)) GGLog.warn(this.job, "Job data set is near its limit", {job: name, rows: rows.length, limit})
@@ -238,7 +242,7 @@ class JobLoop {
             totals.rows += next
             totals.failed += failed
             totals.batches++
-            const report = {rows: next, failed, durationMs: Date.now() - startedAt}
+            const report = {rows: next, failed, durationMs: Math.round(performance.now() - startedAt)}
             if (rows.length > 0) GGLog.info(this.job, "Job batch done", {job: name, ...report})
             await this.job.dataSetFinished?.(report)
                 .catch(err => GGLog.warn(this.job, "Job dataSetFinished failed", {job: name, err: (err as Error).message}))

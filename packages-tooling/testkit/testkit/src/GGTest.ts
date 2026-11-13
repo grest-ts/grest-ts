@@ -5,6 +5,7 @@ import {createStartResult} from "./testers/GGTestSelector";
 import {startRuntimes} from "./startRuntimes";
 import {IGGTestWith} from "./testers/IGGTestWith";
 import {DEFAULT_WAIT_FOR_MS, waitForInterceptors} from "./testers/waitForInterceptors";
+import {GGTestClock} from "./clock/GGTestClock";
 
 // -------------------------------------------------
 // GGTest - Static API for test setup
@@ -42,6 +43,15 @@ export class GGTest {
     // When GG_COVERAGE_MODE is set, force INLINE mode for all runtimes
     // This is needed because v8 coverage doesn't capture worker_threads or child_process
     private static readonly forceCoverageInline = process.env.GG_COVERAGE_MODE === '1';
+
+    /**
+     * The fake wall clock (`Date`) shared by the test and all its runtimes.
+     *
+     * @example
+     * await GGTest.clock.set(new Date("2026-03-01T09:00:00Z"))
+     * await GGTest.clock.advance(30 * 60_000)
+     */
+    public static readonly clock = new GGTestClock();
 
     // -------------------------------------------------
     // Public static methods

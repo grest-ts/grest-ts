@@ -174,8 +174,8 @@ async function describe(client: DynamoDBClient, name: string): Promise<TableDesc
 }
 
 async function waitForIndex(client: DynamoDBClient, table: string, index: string, timeoutMs: number): Promise<void> {
-    const deadline = Date.now() + timeoutMs
-    while (Date.now() < deadline) {
+    const deadline = performance.now() + timeoutMs
+    while (performance.now() < deadline) {
         const live = await describe(client, table)
         if (live?.GlobalSecondaryIndexes?.find(i => i.IndexName === index)?.IndexStatus === "ACTIVE") return
         await new Promise(r => setTimeout(r, 2_000))

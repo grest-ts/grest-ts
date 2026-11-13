@@ -372,6 +372,12 @@ await t.jobs.run("expired-sessions")
 
 `t[1].jobs.run(...)` picks an instance; `await t.jobs.start()` starts the schedules for a test about scheduling. Never sleep waiting for a timed run.
 
+### Time
+
+`await GGTest.clock.set(date)` / `.advance(ms)` moves `Date` in the test and every runtime; it's undone after the test. Use it instead of `now` parameters or backdated rows. Don't also fake `Date` with `vi.useFakeTimers`.
+
+`advance` also fires, once, the due timers set with `GGLocator.setTimeout/setInterval` (job schedules included) and waits for the promises they return. Business timers that tests must control use `GGLocator.setTimeout`, not raw `setTimeout`; raw timers stay on real time. Never sleep waiting for a timer: `await t.jobs.start()` then `await GGTest.clock.advance(ms)`.
+
 ---
 
 ## 6. @mockable and mockOf
@@ -637,6 +643,11 @@ public list = async (): Promise<Item[]> => { ... }
 // ❌ setInterval for periodic work: it runs once per instance and tests can't control it
 setInterval(() => cleanup(), 60_000)
 // ✅ A GGJob on the runtime's GGJobRunner (@grest-ts/job); in tests: await t.jobs.run("cleanup")
+
+// ❌ Raw setTimeout for a business timer (an expiry, a grace period): GGTest.clock can't fire it
+setTimeout(() => socket.close(), expiresAt - Date.now())
+// ✅ A scope timer follows GGTest.clock and is cleared when the runtime stops:
+GGLocator.setTimeout(() => socket.close(), expiresAt - Date.now())
 
 // ❌ Module mocks in integration tests (jest.mock / vi.mock) — use @mockable + mockOf.
 //    Fine in a plain unit test of a single class.
