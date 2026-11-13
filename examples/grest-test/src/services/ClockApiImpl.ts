@@ -23,6 +23,7 @@ export class ClockApiImpl {
             if (nested) void this.schedule({id: id + ":nested", ms: nestedMs ?? ms})
             if (fail) return Promise.reject(new Error(`timer ${id} failed`))
             if (asyncMs) return sleep(asyncMs).then(() => { this.firedIds.push(id + ":done") })
+            return undefined
         }
         this.timers.set(id, interval ? GGLocator.setInterval(fire, ms) : GGLocator.setTimeout(fire, ms))
     }
