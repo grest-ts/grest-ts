@@ -13,7 +13,8 @@ export class WorkerRunner implements RuntimeRunner {
 
     // Workers whose runtime was released, by runtime module + class: their module graph is loaded, so the next start
     // of the same runtime only constructs and starts a fresh instance.
-    private static readonly parked = new Map<string, Worker[]>();
+    private static readonly parked = new Map<string, ParkedWorker[]>();
+    private static parkings = 0;
     private static reuse = false;
 
     /** Keep a stopped runtime's worker for the next start of the same runtime (set by testkit-vitest under `isolate: false`). */
@@ -21,12 +22,25 @@ export class WorkerRunner implements RuntimeRunner {
         this.reuse = reuse;
     }
 
-    /** Ends parked workers no runtime of the current file took, so a worker holds only what its next files reuse. */
-    public static terminateUnused(): void {
+    public static parkedMark(): number {
+        return WorkerRunner.parkings;
+    }
+
+    /** Ends the workers parked before `mark` (from parkedMark()) that no runtime took since, so a worker holds only what
+     *  its next files reuse. */
+    public static terminateUnused(mark: number): void {
         for (const workers of WorkerRunner.parked.values()) {
-            for (const worker of workers) void worker.terminate();
+            for (const entry of workers.filter(p => p.parkedAt < mark)) {
+                WorkerRunner.unpark(workers, entry);
+                void entry.worker.terminate();
+            }
         }
-        WorkerRunner.parked.clear();
+    }
+
+    private static unpark(workers: ParkedWorker[], entry: ParkedWorker): void {
+        const i = workers.indexOf(entry);
+        if (i >= 0) workers.splice(i, 1);
+        entry.worker.off('exit', entry.onExit);
     }
 
     /**
@@ -55,7 +69,9 @@ export class WorkerRunner implements RuntimeRunner {
             );
         }
 
-        const parked = WorkerRunner.parked.get(this.poolKey)?.pop();
+        const entry = WorkerRunner.parked.get(this.poolKey)?.pop();
+        if (entry) entry.worker.off('exit', entry.onExit);
+        const parked = entry?.worker;
         const worker = parked ?? this.spawn(WorkerRunner.workerLoaderPath);
         this.worker = worker;
         if (parked) {
@@ -184,7 +200,9 @@ export class WorkerRunner implements RuntimeRunner {
         if (this.started && WorkerRunner.reuse && await this.release(worker)) {
             worker.unref();
             const parked = WorkerRunner.parked.get(this.poolKey) ?? [];
-            parked.push(worker);
+            const entry: ParkedWorker = {worker, parkedAt: WorkerRunner.parkings++, onExit: () => WorkerRunner.unpark(parked, entry)};
+            worker.once('exit', entry.onExit);
+            parked.push(entry);
             WorkerRunner.parked.set(this.poolKey, parked);
             GGLog.debug(this, 'Worker parked for reuse');
             return;
@@ -228,4 +246,10 @@ export class WorkerRunner implements RuntimeRunner {
             worker.postMessage({type: 'release'});
         });
     }
+}
+
+interface ParkedWorker {
+    worker: Worker;
+    parkedAt: number;
+    onExit: () => void;
 }

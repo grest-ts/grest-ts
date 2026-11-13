@@ -360,6 +360,11 @@ describe("cross-service flow", () => {
 Service tokens (`@grest-ts/oauth` `GGOAuthServiceClient`) need no test setup: with the auth runtime
 running they are real; without it they are placeholders that only mocked APIs (`Api.mock.x`) accept.
 
+### Runtime start rules
+
+- Runtimes of a `describe` start in parallel: never call a peer service from a runtime's `start()`; call it when a request needs it. Discovery doesn't wait for a booting peer, so such a call fails as "not registered".
+- `compose()` must be re-entrant: under vitest `isolate: false` (with the testkit `globalSetup`) a runtime's worker is reused and `compose()` runs again in an already-loaded module graph. No module-level `.define()`, cache or registry filled from `compose()`; keep state on the instances it creates.
+
 ### Periodic jobs
 
 Under `GGTest`, a runtime's `GGJob`s don't run on their own. Run one when the test needs it — it goes through the real runner (settings, lock) and sees the action's mocks:

@@ -5,6 +5,14 @@
 
 # Testkit
 
+## Three tiers
+
+| API | Acts on | For how long |
+|---|---|---|
+| `GGTest.*` (`startWorker`, `with(cfg)`, `clock`) | the test file and every runtime it starts | the `describe` it is in, or the test when called inside one |
+| `t.x.*` (`t.main.config`, `t.main.logs`, `t.main.jobs`) | one runtime (`t.all()` for all of them) | the test (config changes are undone after it) |
+| Interceptors (`mockOf(S).m`, `spyOn(S).m`, `Api.mock.m`) and their modifiers (`.times(n)`, `.andReturn(...)`) | the calls made while their action runs | one test action: the `.with(...)` / `.waitFor(...)` it is passed to |
+
 ## Overview
 
 The testkit provides comprehensive testing capabilities to the framework, mostly focusing on backend integration & component level testing.
@@ -589,6 +597,20 @@ GGTestClock.onChange(({offsetMs, stoppedAt}) => { /* resync the SDK's clients */
 ```
 
 ---
+
+## Runtime start and worker reuse
+
+- **Runtimes start in parallel.** All runtimes of a `describe` boot at the same time, so a runtime must not call a peer
+  from its `start()`: the peer may not be registered yet, and the call fails as a discovery miss ("Service '…' is not
+  registered"). Call peers lazily, when a request needs them. Discovery deliberately doesn't wait for a booting peer:
+  production starts runtimes independently too, so a start that needs a peer would only hide the problem in tests.
+- **`compose()` must be re-entrant.** Under vitest's `isolate: false` a stopped runtime's worker thread is reused for
+  the next start of the same runtime, in a later `describe`, a later file of the same vitest worker, or a test that
+  starts it: `compose()` runs again in a module graph that is already loaded. Keep state on the instances `compose()`
+  creates; no module-level `.define()`, cache or registry filled from `compose()`.
+- Reuse is on when the vitest project runs with `isolate: false` and has
+  `globalSetup: ['@grest-ts/testkit-vitest/globalSetup']`, which passes the setting to the test files. Under the
+  default `isolate: true` every start boots a fresh worker.
 
 ## Usage
 

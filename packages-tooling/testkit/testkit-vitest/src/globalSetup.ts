@@ -2,9 +2,17 @@ import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import type {TestProject} from "vitest/node";
 import {GGTestSharedRef} from "@grest-ts/testkit";
 
-export function setup() {
+declare module "vitest" {
+    interface ProvidedContext {
+        "grest-ts:isolate": boolean
+    }
+}
+
+export function setup(project: TestProject) {
+    project.provide("grest-ts:isolate", project.config.isolate);
     if (!process.env.GG_TEST_RUN_ID) {
         process.env.GG_TEST_RUN_ID = "r" + Date.now().toString(36) + crypto.randomBytes(4).toString('hex');
     }
