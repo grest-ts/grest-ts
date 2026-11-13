@@ -239,6 +239,8 @@ export type GGLocatorServiceType = Values<typeof GGLocatorServiceType>;
 export interface GGLocatorLifecycleCallbacks {
     // Numeric start/stop priority (lower starts first). The named anchors stay visible in editors; `number & {}` keeps the union from collapsing to bare `number` so offsets like CONFIG + 1 are still allowed.
     type: GGLocatorServiceType | (number & {})
+    // Stop priority (higher stops first), when it differs from start order. Defaults to `type`.
+    teardownType?: GGLocatorServiceType | (number & {})
     start: () => any | Promise<any>
     teardown?: () => any | Promise<any>
 }

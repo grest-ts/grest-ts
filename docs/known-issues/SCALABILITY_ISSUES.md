@@ -33,20 +33,17 @@ Roughly in priority order.
 - Cache with a TTL and apply a timeout.
 - Consider making `discoverApiViaDns` the default.
 
-## 3. Shutdown tears down business services before HTTP stops taking requests
+## 3. Shutdown: stray rejections and load-balancer deregistration
 
-**Where:** `packages/runtime/src/GGRuntime.ts:43-44` (hard-coded `shutdownTimeoutMs: 10000`), `:100-103`, `:195`, `:205-218`; `packages/locator/src/GGLocatorScope.ts` (`GGLocatorServiceType` order); `packages/http/http/src/server/GGHttpServer.ts:117,265` (3 s drain)
+Fixed: HTTP servers stop taking requests and drain before business services are torn down (`teardownType`), both timeouts are settable (`GGRuntimeConfig.shutdownTimeoutMs`, `GGHttpServerAdapterConfig.drainTimeoutMs`), and a timed-out shutdown logs and exits with 1.
+
+**Where:** `packages/runtime/src/GGRuntime.ts` (`teardown`, SIGTERM handler)
 
 **Breaks:**
-- Teardown runs from the highest service type down: discovery → periodic jobs → **business** → intl → **HTTP** → DB. Until HTTP's turn, the server keeps routing requests to business services that are already torn down.
-- The 3 s drain and 10 s total are hard-coded (`GGRuntimeConfig.shutdownTimeoutMs` can't be set).
-- If the timeout fires, `withTimeout` rejects inside the SIGTERM handler, an unhandled rejection, and the process exits with 1 instead of 0.
-- There is no `unhandledRejection` handler, so one stray rejection in app code kills the instance. That's Node's default, but combined with #5 the framework itself can trigger it.
+- There is no `unhandledRejection` handler, so one stray rejection in app code kills the instance. That's Node's default, but combined with #4 the framework itself can trigger it.
+- A load balancer or k8s Service may still send requests for a moment after SIGTERM; they get 503 from the draining server.
 
 **Fix:**
-- At the start of shutdown, stop accepting traffic: HTTP returns 503 and the readiness probe fails. Then tear down services. Optionally wait a short "deregistration delay" first.
-- Make the drain and shutdown timeouts configurable.
-- Catch the timeout and exit with an explicit code.
 - Document a `preStop` sleep for k8s and the LB deregistration delay.
 
 ## 4. Events: silent local fallback, dropped publishes, crash on timer flush

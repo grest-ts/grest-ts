@@ -45,7 +45,9 @@ CREATED → BOOTSTRAPPING → COMPOSING → STARTING → RUNNING → STOPPING �
 2. **Composing** — Calls your `compose()` method where you register services
 3. **Starting** — Calls `start()` on all registered services (by priority)
 4. **Running** — Service is live
-5. **Stopping** — On `SIGTERM`/`SIGINT`, tears down services in reverse order with a configurable timeout (default 10s)
+5. **Stopping** — On `SIGTERM`/`SIGINT`, HTTP servers stop taking requests (new ones get 503) and drain in-flight ones, then the other services are torn down in reverse order. If shutdown takes longer than `shutdownTimeoutMs` (default 10s), the process exits with code 1.
+
+Set the timeouts to fit your platform's stop grace period: `super({shutdownTimeoutMs: 25_000})` in your runtime's constructor, and `new GGHttpServer({drainTimeoutMs})` (default 3s) for the drain, which runs inside the shutdown timeout.
 
 If any service fails to start, already-started services are cleaned up automatically.
 
@@ -75,7 +77,7 @@ class MyService {
 }
 ```
 
-Services of the same priority type start concurrently. Different priority levels start sequentially (CONFIG first, then DATABASE, HTTP, and so on). Teardown runs in reverse order.
+Services of the same priority type start concurrently. Different priority levels start sequentially (CONFIG first, then DATABASE, HTTP, and so on). Teardown runs in reverse order, except where a service sets `teardownType`: `GGHttpServer` uses it to stop right after discovery, before the services its requests use.
 
 ## `cli()` Entry Point
 
