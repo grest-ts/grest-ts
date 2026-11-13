@@ -72,48 +72,14 @@ function wrapDescribeFunction(target: any): any {
     return new Proxy(target, {
         apply(target, thisArg, args) {
             const [name, callback, ...rest] = args;
-
-            if (GG_TEST_RUNNER.has()) {
-                const ggTest = GG_TEST_RUNNER.get();
-                const scope = GGLocator.getScope().branch(name);
-                target.call(thisArg, name, (...cbArgs: any[]) => scope.run(() => {
-                    beforeAll(() => ggTest.runBeforeAllHooks());
-                    afterAll(() => ggTest.runAfterAllHooks());
-                    callback(...cbArgs);
-                }), ...rest)
-
-            } else {
-                scope.run(() => {
-                    // Don't use .enter() - the scope is used via .run() in callOriginalDescribe
-                    const describeBlockCtx = GGLocator.getScope().branch(name);
-
-                    const ipcServer = new IPCServer(0);
-                    const discoveryServer = new GGLocalDiscoveryServer(ipcServer);
-                    const ggTest = new GGTestRunner(ipcServer, discoveryServer);
-                    const discoveryClient = new GGTestDiscoveryClient(discoveryServer);
-
-                    describeBlockCtx.set(GG_TEST_RUNNER, ggTest);
-                    describeBlockCtx.set(GG_DISCOVERY, discoveryClient);
-
-                    // Call original describe with hooks registered INSIDE the callback
-                    // This ensures Vitest properly associates hooks with this suite
-                    target.call(thisArg, name, (...cbArgs: any[]) => describeBlockCtx.run(() => {
-                        beforeAll(() => ggTest.start(), 30000);
-                        beforeEach(() => ggTest.runBeforeEachHooks());
-                        afterEach(() => ggTest.runAfterEachHooks());
-                        afterAll(() => ggTest.teardown(), 30000);
-                        callback(...cbArgs);
-                    }), ...rest)
-                })
-            }
+            return target.call(thisArg, name, suiteFactory(name, callback), ...rest);
         },
         get(target, prop, receiver) {
             const value = Reflect.get(target, prop, receiver);
             // Wrap modifier functions (sequential, concurrent, only, skip, todo, skipIf, runIf, shuffle)
             if (typeof value === 'function') {
-                // Special handling for .each - it returns a function when called with data
-                if (prop === 'each') {
-                    return wrapEachFunction(value, wrapDescribeFunction, target);
+                if (prop === 'each' || prop === 'for') {
+                    return wrapDescribeEachFunction(value, target);
                 }
                 return wrapDescribeFunction(value);
             }
@@ -123,11 +89,54 @@ function wrapDescribeFunction(target: any): any {
 }
 
 /**
+ * The suite factory sets up its context each time vitest runs it, so every case of a `describe.each` gets its own.
+ * Top-level suites get new test infrastructure (IPCServer, discovery, etc.); nested ones reuse their parent's.
+ */
+function suiteFactory(name: string, callback: (...args: any[]) => void): (...args: any[]) => void {
+    if (GG_TEST_RUNNER.has()) {
+        const ggTest = GG_TEST_RUNNER.get();
+        const parent = GGLocator.getScope();
+        return (...cbArgs) => parent.branch(name).run(() => {
+            beforeAll(() => ggTest.runBeforeAllHooks());
+            afterAll(() => ggTest.runAfterAllHooks());
+            callback(...cbArgs);
+        });
+    }
+    return (...cbArgs) => scope.run(() => {
+        const describeBlockCtx = scope.branch(name);
+
+        const ipcServer = new IPCServer(0);
+        const discoveryServer = new GGLocalDiscoveryServer(ipcServer);
+        const ggTest = new GGTestRunner(ipcServer, discoveryServer);
+        const discoveryClient = new GGTestDiscoveryClient(discoveryServer);
+
+        describeBlockCtx.set(GG_TEST_RUNNER, ggTest);
+        describeBlockCtx.set(GG_DISCOVERY, discoveryClient);
+
+        // Hooks are registered inside the factory so vitest associates them with this suite.
+        describeBlockCtx.run(() => {
+            beforeAll(() => ggTest.start(), 30000);
+            beforeEach(() => ggTest.runBeforeEachHooks());
+            afterEach(() => ggTest.runAfterEachHooks());
+            afterAll(() => ggTest.teardown(), 30000);
+            callback(...cbArgs);
+        });
+    });
+}
+
+function wrapDescribeEachFunction(eachFn: any, target: any): any {
+    return (...eachArgs: any[]) => {
+        const describeFn = eachFn.apply(target, eachArgs);
+        return (name: string, callback: (...args: any[]) => void, ...rest: any[]) => describeFn(name, suiteFactory(name, callback), ...rest);
+    };
+}
+
+/**
  * Wraps the .each() function which has special semantics:
  * .each(data)(name, fn) - returns a function that creates parameterized tests
  *
  * @param eachFn - The original .each function
- * @param wrapperFn - The wrapper function (wrapDescribeFunction or wrapTestFunction)
+ * @param wrapperFn - The wrapper function (wrapTestFunction)
  * @param target - The original describe/test target to bind 'this' context
  */
 function wrapEachFunction(eachFn: any, wrapperFn: (target: any) => any, target: any): any {
@@ -182,8 +191,8 @@ function wrapTestFunction(target: any): any {
             const value = Reflect.get(target, prop, receiver);
             // Wrap modifier functions (sequential, concurrent, only, skip, todo, skipIf, runIf, fails)
             if (typeof value === 'function') {
-                // Special handling for .each - it returns a function when called with data
-                if (prop === 'each') {
+                // .each/.for return a function when called with data
+                if (prop === 'each' || prop === 'for') {
                     return wrapEachFunction(value, wrapTestFunction, target);
                 }
                 return wrapTestFunction(value);
