@@ -378,7 +378,7 @@ await t.jobs.run("expired-sessions")
 
 ### Time
 
-`await GGTest.clock.set(date)` / `.advance(ms)` / `.freeze(date?)` moves `Date` in the test and every runtime. Time only moves forward: the next test in the `describe` goes on from where the last one left it; each top `describe` starts on real time. Freeze it when asserting on timers or exact times. Use it instead of `now` parameters or backdated deadlines. Don't also fake `Date` with `vi.useFakeTimers`.
+`await GGTest.clock.set(date)` / `.advance(ms)` / `.freeze(date?)` / `.resume()` moves `Date` in the test and every runtime. Time only moves forward: the next test in the `describe` goes on from where the last one left it; each top `describe` starts on real time. Freeze it when asserting on timers or exact times. Use it instead of `now` parameters or backdated deadlines. Don't also fake `Date` with `vi.useFakeTimers`.
 
 `advance` also fires, once, the due timers set with `GGLocator.setTimeout/setInterval` (job schedules included) and waits for the promises they return. Business timers that tests must control use `GGLocator.setTimeout`, not raw `setTimeout`; raw timers stay on real time. Never sleep waiting for a timer: `await t.jobs.start()` then `await GGTest.clock.advance(ms)`.
 
@@ -439,7 +439,7 @@ test("spy — call through but validate", async () => {
 - `.toEqual(...)` / `.toMatchObject(...)` after `mockOf(S).method` — validates the input the mock received. A method's only argument is matched as itself (`run(input: {id})` → `{id}`, `get(id: string)` → `"a"`); several arguments as a typed tuple (`pair(id, count)` → `["a", 2]`).
 - `.andReturn(value)` — the mock returns this value instead of calling real code.
 - `.andReturn(input => value)` — answers each call from its input; may be `async` (e.g. run a competing write, then return).
-- `.andReturn(new MY_ERROR())`, or a callback that throws it — the caller gets `MY_ERROR` thrown, class and data intact.
+- `.andReturn(new MY_ERROR())`, or a callback that throws it — the caller gets `MY_ERROR` thrown, class and data intact, if the runtime loads the code that defines it (else it arrives as `SERVER_ERROR`).
 - `.times(n)` — expect exactly n calls (fewer or more fails); `.times(0)` = never called; `.atLeastOnce()` = one or more; `.times(min, max)` = a range (from 0 only when the test asserts the outcome itself).
 - `.sleep(ms)` — add delay before returning.
 - `.on(t.hub[1])` — only calls that happen at that one runtime instance (also on `Api.mock.x` / `Api.spy.x`: only calls routed to it). Use it when a test runs several instances; exactly one interceptor handles a call, and a targeted one wins over an untargeted one.

@@ -8,7 +8,7 @@
  *
  * Key patterns demonstrated:
  * 1. Full runtime integration testing via HTTP API
- * 2. Per-request mocking at any level (A, B, or C) using mockBy()
+ * 2. Per-request mocking at any level (A, B, or C) using mockOf()
  * 3. Direct service invocation via testable() - THE KEY FEATURE
  * 4. Mixing direct invocation with mocking
  * 5. Spy mode for validation without mocking
@@ -208,7 +208,7 @@ describe("chain - testable() direct service invocation", () => {
 });
 
 // ============================================================================
-// SECTION 3: testable() Combined with mockBy() - Maximum Power
+// SECTION 3: testable() Combined with mockOf() - Maximum Power
 // ============================================================================
 
 describe("chain - testable() with mocking", () => {
@@ -219,7 +219,7 @@ describe("chain - testable() with mocking", () => {
      * THE MOST POWERFUL PATTERN: Call ServiceB directly while mocking ServiceC.
      * This tests ServiceB's logic in isolation without setting up complex mocks.
      */
-    test("testable(ServiceB) with mockBy(ServiceC) - test B logic with controlled C", async () => {
+    test("testable(ServiceB) with mockOf(ServiceC) - test B logic with controlled C", async () => {
         await callOn(CityService)
             .getCityInfo("Arctic Base")
             .with(
@@ -239,7 +239,7 @@ describe("chain - testable() with mocking", () => {
     /**
      * Call ServiceA directly while mocking ServiceB - tests A's logic only
      */
-    test("testable(ServiceA) with mockBy(ServiceB) - test A logic with controlled B", async () => {
+    test("testable(ServiceA) with mockOf(ServiceB) - test A logic with controlled B", async () => {
         await callOn(TravelPlannerService)
             .planTravel({destination: "Test City"})
             .with(
@@ -261,7 +261,7 @@ describe("chain - testable() with mocking", () => {
     /**
      * Call ServiceA directly while mocking at ServiceC level (skip B's mock)
      */
-    test("testable(ServiceA) with mockBy(ServiceC) - test A+B logic together", async () => {
+    test("testable(ServiceA) with mockOf(ServiceC) - test A+B logic together", async () => {
         await callOn(TravelPlannerService)
             .quickWeatherCheck({city: "Tropical Island"})
             .with(

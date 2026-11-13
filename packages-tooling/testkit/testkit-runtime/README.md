@@ -27,8 +27,9 @@ export class WeatherService {
 In production, calls pass through unchanged. During tests, `@grest-ts/testkit` can intercept calls via `mockOf()` and `spyOn()`.
 
 Async methods and async function fields (`getWeather = async (city) => …`) are wrapped; fields when an instance is
-constructed, so the decorated class is a subclass of the declared one with the same name. Sync methods aren't, and
-`mockOf()` throws for them.
+constructed inside a runtime the testkit started, so the decorated class is a subclass of the declared one with the
+same name. Sync methods aren't, and `mockOf()` throws for them. Only calls made inside a runtime the testkit started
+are intercepted.
 
 ## `@testable`
 

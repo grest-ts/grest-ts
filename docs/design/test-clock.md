@@ -284,7 +284,7 @@ import {GGTest} from "@grest-ts/testkit"
 
 GGTest.clock.set(new Date("2026-03-01T09:00:00Z"))   // every isolate; flowing from T (a frozen clock stays frozen at T)
 GGTest.clock.set(Date.now() + 40 * DAY)              // number = epoch ms
-GGTest.clock.freeze(T)                                // stops at exactly T (default: now) until advance/set/start
+GGTest.clock.freeze(T)                                // stops at exactly T (default: now) until advance/set/resume
 GGTest.clock.resume()                                 // flowing again from where it stopped
 await GGTest.clock.advance(30 * 60_000)               // jump, fire due scope timers, settle (§2)
 // Time only moves forward across the tests of a describe; each top describe starts on real time.
@@ -294,7 +294,7 @@ await GGTest.clock.advance(30 * 60_000)               // jump, fire due scope ti
   as in production, where all instances share one wall time. Per-runtime skew
   (`t.cron.clock.skew(ms)`) is left out. The IPC payload is an absolute offset per runtime, so
   it can be added later without a redesign if a real test needs it.
-- `set`, `freeze`, `start` and `advance` return promises that resolve once every runtime has acknowledged.
+- `set`, `freeze`, `resume` and `advance` return promises that resolve once every runtime has acknowledged.
   Called in the top describe they run as a runner hook before its runtimes start, like `GGTest.with(...).clone()`;
   in a nested describe, in its `beforeAll`.
 - Durations are `ms` numbers, consistent with `intervalMs` and `timeoutMs` elsewhere.
