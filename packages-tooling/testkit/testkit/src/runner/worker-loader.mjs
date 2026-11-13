@@ -3,6 +3,7 @@
  * This file is loaded by worker threads to execute test runtimes
  *
  * workerData is GGTestEnvConfig: { executablePath, testRouterPort, testId, runtimeId, initialCommands }
+ * A released worker keeps its loaded modules and starts a fresh runtime instance on the next 'start' message.
  */
 import {register} from 'tsx/esm/api';
 import {parentPort, workerData} from 'worker_threads';
@@ -10,30 +11,32 @@ import {parentPort, workerData} from 'worker_threads';
 // Register tsx to handle TypeScript with ESM
 register();
 
+let config = workerData;
+
 // Catch unhandled errors in worker thread
 process.on('uncaughtException', (err) => {
-    console.error(`[WorkerThread ${workerData?.runtimeId}] Uncaught exception:`, err);
+    console.error(`[WorkerThread ${config?.runtimeId}] Uncaught exception:`, err);
 });
 process.on('unhandledRejection', (reason) => {
-    console.error(`[WorkerThread ${workerData?.runtimeId}] Unhandled rejection:`, reason);
+    console.error(`[WorkerThread ${config?.runtimeId}] Unhandled rejection:`, reason);
 });
-
-// workerData is GGTestEnvConfig directly
-const config = workerData;
 
 // Import control client from @grest-ts/testkit
 const {GGTestRuntimeWorker} = await import('@grest-ts/testkit');
 
-// Create control client
-const controlClient = new GGTestRuntimeWorker(config);
+let controlClient;
 
-// Start the runtime
-try {
-    await controlClient.start();
-    parentPort.postMessage({type: 'ready'});
-} catch (err) {
-    parentPort.postMessage({type: 'error', error: err.stack || err.message});
+async function start() {
+    controlClient = new GGTestRuntimeWorker(config);
+    try {
+        await controlClient.start();
+        parentPort.postMessage({type: 'ready'});
+    } catch (err) {
+        parentPort.postMessage({type: 'error', error: err.stack || err.message});
+    }
 }
+
+await start();
 
 // Handle messages from parent
 parentPort.on('message', async (msg) => {
@@ -45,5 +48,14 @@ parentPort.on('message', async (msg) => {
         // Fully shutdown worker
         await controlClient.shutdown();
         process.exit(0);
+    } else if (msg.type === 'release') {
+        await controlClient.shutdown();
+        parentPort.postMessage({type: 'released'});
+    } else if (msg.type === 'start') {
+        // The parent's env as of this start, as a fresh worker would have copied it.
+        for (const key of Object.keys(process.env)) if (!(key in msg.env)) delete process.env[key];
+        Object.assign(process.env, msg.env);
+        config = msg.config;
+        await start();
     }
 });

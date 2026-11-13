@@ -14,7 +14,7 @@ import "./_dedupCheck";
 import {GGLog} from "@grest-ts/logger";
 import {GGLoggerConsole} from "@grest-ts/logger-console";
 import {IPCServer} from "@grest-ts/ipc";
-import {GG_TEST_RUNNER, GGTestRunner} from "@grest-ts/testkit";
+import {GG_TEST_RUNNER, GGTestRunner, WorkerRunner} from "@grest-ts/testkit";
 import {GGLocator, GGLocatorScope} from "@grest-ts/locator";
 // -------------------------------------------------
 // Global test mode marker
@@ -30,6 +30,10 @@ const scope = new GGLocatorScope("GGTestRoot").enter()
 
 // GGTestRunner.reusableId: unique among concurrent workers, 1..maxWorkers.
 process.env.GG_TEST_WORKER ??= process.env.VITEST_POOL_ID;
+
+// Files that share a test process may share runtime workers too: each file still gets fresh runtime instances.
+// `__vitest_worker__` is vitest's internal per-worker state; without it, workers aren't reused.
+WorkerRunner.setReuse((globalThis as any).__vitest_worker__?.config?.isolate === false);
 
 GGLog.init();
 GGLog.add(new GGLoggerConsole());
@@ -128,8 +132,19 @@ if (!(globalThis as any).describe) {
     throw new Error("This functionality is meant to be used within vitest! You are importing this while manually to your code, you should not do that. Check your imports for 'global.ts'")
 }
 
-(globalThis as any).describe = wrapDescribeFunction((globalThis as any).describe);
-(globalThis as any).suite = wrapDescribeFunction((globalThis as any).suite);
+// Under `isolate: false` vitest re-runs this file for every test file in the same worker while keeping its globals, so
+// each run wraps the original function, never the previous file's wrapper.
+const originals: WeakMap<object, any> = ((globalThis as any)[Symbol.for("grest-ts:testkit-vitest:originals")] ??= new WeakMap());
+
+function rewrap(name: string, wrap: (original: any) => any): void {
+    const g = globalThis as any;
+    const original = originals.get(g[name]) ?? g[name];
+    g[name] = wrap(original);
+    originals.set(g[name], original);
+}
+
+rewrap("describe", wrapDescribeFunction);
+rewrap("suite", wrapDescribeFunction);
 
 // ---------------------------------------------
 // Wrap test to run in test context
@@ -167,8 +182,8 @@ function wrapTestFunction(target: any): any {
     });
 }
 
-(globalThis as any).test = wrapTestFunction((globalThis as any).test);
-(globalThis as any).it = wrapTestFunction((globalThis as any).it);
+rewrap("test", wrapTestFunction);
+rewrap("it", wrapTestFunction);
 
 // ---------------------------------------------
 // Custom lifecycle hooks (beforeAll, beforeEach, afterAll, afterEach)
@@ -187,10 +202,10 @@ function wrapLifecycleHook(original: any) {
     });
 }
 
-(globalThis as any).beforeAll = wrapLifecycleHook((globalThis as any).beforeAll);
-(globalThis as any).beforeEach = wrapLifecycleHook((globalThis as any).beforeEach);
-(globalThis as any).afterAll = wrapLifecycleHook((globalThis as any).afterAll);
-(globalThis as any).afterEach = wrapLifecycleHook((globalThis as any).afterEach);
+rewrap("beforeAll", wrapLifecycleHook);
+rewrap("beforeEach", wrapLifecycleHook);
+rewrap("afterAll", wrapLifecycleHook);
+rewrap("afterEach", wrapLifecycleHook);
 
 // Make this file a module
 export {};

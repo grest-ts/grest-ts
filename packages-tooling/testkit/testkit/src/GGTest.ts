@@ -2,6 +2,7 @@ import {GG_TEST_RESOURCE, GG_TEST_RUNNER, GGTestRunner, TestResource} from "./GG
 import {RuntimeConstructor, RuntimeInput, StartResult, Selector} from "./testers/RuntimeSelector";
 import {GGTestMode, GGTestRuntime, GGTestRuntimeConfig} from "./GGTestRuntime";
 import {createStartResult} from "./testers/GGTestSelector";
+import {startRuntimes} from "./startRuntimes";
 import {IGGTestWith} from "./testers/IGGTestWith";
 import {DEFAULT_WAIT_FOR_MS, waitForInterceptors} from "./testers/waitForInterceptors";
 
@@ -166,7 +167,7 @@ export class GGTest {
         if (test.started) {
             // We're inside a test block - start immediately
             // Cleanup is handled by the global afterEach registered in initInTestCleanup
-            const startupPromise = this.startRuntimesInTestBlock(runtimes);
+            const startupPromise = startRuntimes(runtimes);
             return this.makeAwaitable(result, startupPromise);
         } else {
             // We're in describe block - normal flow, runtimes start in beforeAll
@@ -199,16 +200,6 @@ export class GGTest {
             }
         }
         return constructors;
-    }
-
-    /**
-     * Start runtimes immediately (for in-test usage).
-     * Runtimes are automatically tracked by the runner for afterEach cleanup.
-     */
-    private static async startRuntimesInTestBlock(runtimes: GGTestRuntime[]): Promise<void> {
-        for (const runtime of runtimes) {
-            await runtime.start();
-        }
     }
 
     /**
