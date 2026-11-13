@@ -3,12 +3,13 @@ import {isIPv4} from "net";
 import findMyWay, {HTTPMethod} from "find-my-way";
 import {HttpRoute, IPCServer} from "@grest-ts/ipc";
 import {GGLog} from "@grest-ts/logger";
-import {ERROR} from "@grest-ts/schema";
+import {ERROR, GGContractMethod} from "@grest-ts/schema";
+import {Readable} from "stream";
 import type {GGConnectionSettings} from "@grest-ts/context";
 import {GGInterceptorTable, GGTestComponent, GGTestRunner, GGTestRuntime, GGTestRuntimeState, GGTestTarget} from "@grest-ts/testkit";
 import {GGLocalDiscoveryServer} from "@grest-ts/discovery-local";
 import type {HttpMethod} from "@grest-ts/common";
-import type {GGHttpSchema} from "../../src/schema/GGHttpSchema";
+import type {GGHttpCodec, GGHttpSchema} from "../../src/schema/GGHttpSchema";
 import {GGHttpInterceptor} from "./GGHttpSchema.mock";
 import {GGHttpAddress, GGHttpTestIPC} from "./GGHttpTestAddresses";
 import {decodeDestination, DESTINATION_HEADER} from "./GGHttpTestTransport";
@@ -17,7 +18,14 @@ import type {GGHttpTransport} from "../../src/client/GGHttpSchema.createClient";
 
 interface GGHttpDefaultAnswer {
     apiName: string
-    answer: (body: any) => Promise<unknown>
+    route: GGHttpRoute
+    answer: (input: any) => Promise<unknown>
+}
+
+/** What reading a call's input takes: the route's codec and its contract method. */
+export interface GGHttpRoute {
+    codec: GGHttpCodec
+    contract: GGContractMethod
 }
 
 /** Where a call goes: the instance discovery picked, or what an addressed client carried. */
@@ -82,12 +90,12 @@ export class GGHttpInterceptorsServer implements GGTestComponent {
      * `schema`'s methods while no runtime serves the API. A running service still gets the call, and a
      * test's own mock of the method replaces the answer while it is active.
      */
-    public addDefault(schema: GGHttpSchema<any>, answers: Record<string, (body: any) => Promise<unknown>>): void {
+    public addDefault(schema: GGHttpSchema<any>, answers: Record<string, (input: any) => Promise<unknown>>): void {
         for (const [name, answer] of Object.entries(answers)) {
             const codec = schema.codec[name];
             const path = "/" + schema.pathPrefix + "/" + codec.path;
             const key = `${codec.method} ${path}`;
-            this.defaults.set(key, {apiName: schema.name, answer});
+            this.defaults.set(key, {apiName: schema.name, route: {codec, contract: schema.contract.methods[name]}, answer});
             this.addTemplate(codec.method, path, key);
         }
     }
@@ -149,7 +157,7 @@ export class GGHttpInterceptorsServer implements GGTestComponent {
         ), where);
 
         if (interceptor && !interceptor.passThrough) {
-            return (req, res) => this.answer(req, res, `MOCKED ${interceptor.getLabel()}`, body => interceptor.onRequest(body));
+            return (req, res) => this.answer(req, res, `MOCKED ${interceptor.getLabel()}`, interceptor.route, input => interceptor.onRequest(input));
         }
         if (interceptor || destination?.addressed) {
             return (req, res) => this.forward(req, res, destination, interceptor);
@@ -158,7 +166,7 @@ export class GGHttpInterceptorsServer implements GGTestComponent {
             return destination.baseUrl;
         }
         const fallback = this.defaults.get(key);
-        return fallback && ((req, res) => this.answer(req, res, `DEFAULT_ANSWER [${key}]`, fallback.answer));
+        return fallback && ((req, res) => this.answer(req, res, `DEFAULT_ANSWER [${key}]`, fallback.route, fallback.answer));
     }
 
     private destinationOf(carried: string | undefined, path: string): Destination | undefined {
@@ -193,8 +201,8 @@ export class GGHttpInterceptorsServer implements GGTestComponent {
         return listening[0];
     }
 
-    private async answer(req: http.IncomingMessage, res: http.ServerResponse, what: string, reply: (body: any) => Promise<unknown>): Promise<void> {
-        const body = parseJson(await readBody(req));
+    private async answer(req: http.IncomingMessage, res: http.ServerResponse, what: string, route: GGHttpRoute, reply: (input: any) => Promise<unknown>): Promise<void> {
+        const body = await readInput(route, req, await readBody(req));
         GGLog.debug(this, `[${what}] request`, body);
         const data = await reply(body);
         GGLog.debug(this, `[${what}] reply`, data);
@@ -206,7 +214,7 @@ export class GGHttpInterceptorsServer implements GGTestComponent {
     private async forward(req: http.IncomingMessage, res: http.ServerResponse, destination: Destination | undefined, spy?: GGHttpInterceptor): Promise<void> {
         const body = await readBody(req);
         GGLog.debug(this, `[FORWARDED${spy ? " SPIED " + spy.getLabel() : ""}] ${req.method} ${req.url} -> ${destination?.label}`);
-        await spy?.onRequest(parseJson(body));
+        if (spy) await spy.onRequest(await readInput(spy.route, req, body));
 
         let response: Response;
         let responseBody: Buffer;
@@ -277,6 +285,18 @@ function isLoopback(host: string): boolean {
 function sameHost(a: string, b: string): boolean {
     const one = (host: string) => host === "localhost" || host === "::1" ? "127.0.0.1" : host;
     return one(canonicalHost(a)) === one(canonicalHost(b));
+}
+
+/** The input the server would see: the route's own codec reads path, query and body, then the contract parses it. */
+async function readInput(route: GGHttpRoute, req: http.IncomingMessage, body: Buffer): Promise<unknown> {
+    const parser = route.codec.createForServer({contract: route.contract, middlewares: []});
+    const replay = Object.assign(Readable.from(body.length ? [body] : []), {url: req.url, method: req.method, headers: req.headers});
+    const raw = await parser.readRequest(replay as unknown as http.IncomingMessage);
+    try {
+        return parser.validateInput(raw);
+    } catch {
+        return raw;
+    }
 }
 
 async function readBody(req: http.IncomingMessage): Promise<Buffer> {

@@ -1,5 +1,5 @@
 import {GGCallInterceptor, GGCallInterceptorConfig, GGMockWith, GGSpyWith, GGTestRunner} from "@grest-ts/testkit"
-import {GGHttpInterceptorsServer} from "./GGHttpInterceptorsServer";
+import {GGHttpInterceptorsServer, GGHttpRoute} from "./GGHttpInterceptorsServer";
 import {parseContractResponse} from "../utils/validateContractResponse";
 import {HttpMethod} from "@grest-ts/common";
 import {GGHttpCodec, GGHttpSchema} from "../../src/schema/GGHttpSchema";
@@ -24,6 +24,7 @@ Object.defineProperty(GGHttpSchema.prototype, 'mock', {
     get(this: GGHttpSchema<any>) {
         const name = this.name;
         const methods = this.codec;
+        const contract = this.contract;
         const fullPathPrefix = "/" + this.pathPrefix + "/"
         return new Proxy({}, {
             get(_target, prop: string) {
@@ -35,7 +36,8 @@ Object.defineProperty(GGHttpSchema.prototype, 'mock', {
                     apiName: name,
                     method: methodDef.method,
                     pathPrefix: fullPathPrefix,
-                    pathSuffix: methodDef.path
+                    pathSuffix: methodDef.path,
+                    route: {codec: methodDef, contract: contract.methods[prop]}
                 });
             }
         })
@@ -61,6 +63,7 @@ Object.defineProperty(GGHttpSchema.prototype, 'spy', {
                     method: methodDef.method,
                     pathPrefix: fullPathPrefix,
                     pathSuffix: methodDef.path,
+                    route: {codec: methodDef, contract: contract.methods[prop]},
                     errors: contract.methods[prop]?.errors
                 })
             }
@@ -75,6 +78,7 @@ export interface HttpInterceptorConfig extends GGCallInterceptorConfig {
     apiName: string;
     pathPrefix: string;
     pathSuffix: string;
+    route: GGHttpRoute;
     /** The method's contract errors: a spied error JSON is rebuilt as the client would. */
     errors?: ANY_ERROR_CLS[];
 }
@@ -85,6 +89,7 @@ export class GGHttpInterceptor extends GGCallInterceptor {
     public readonly apiName: string;
     public readonly pathPrefix: string;
     public readonly pathSuffix: string;
+    public readonly route: GGHttpRoute;
     private readonly errors?: ANY_ERROR_CLS[];
 
     constructor(test: GGTestRunner, config: HttpInterceptorConfig) {
@@ -93,6 +98,7 @@ export class GGHttpInterceptor extends GGCallInterceptor {
         this.apiName = config.apiName;
         this.pathPrefix = config.pathPrefix;
         this.pathSuffix = config.pathSuffix;
+        this.route = config.route;
         this.errors = config.errors;
     }
 
