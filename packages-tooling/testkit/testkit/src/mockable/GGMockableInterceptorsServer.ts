@@ -31,8 +31,9 @@ export class GGMockableInterceptorsServer implements GGTestComponent {
             if (handler.passThrough) {
                 // Spy mode - signal worker to call through
                 return CALL_THROUGH;
+            } else if (result instanceof Error) {
+                throw result;
             } else {
-                // Mock mode - return the mock data
                 return result;
             }
         });

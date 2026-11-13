@@ -6,8 +6,28 @@ import {GGTestEnvConfig} from "../GGTestRuntime";
 export class WorkerRunner implements RuntimeRunner {
     private worker?: Worker;
     private readonly config: GGTestEnvConfig
+    private started = false;
+    private onUnexpectedExit?: (code: number) => void;
 
     private static workerLoaderPath: string | undefined;
+
+    // Workers whose runtime was released, by runtime module + class: their module graph is loaded, so the next start
+    // of the same runtime only constructs and starts a fresh instance.
+    private static readonly parked = new Map<string, Worker[]>();
+    private static reuse = false;
+
+    /** Keep a stopped runtime's worker for the next start of the same runtime (set by testkit-vitest under `isolate: false`). */
+    public static setReuse(reuse: boolean): void {
+        this.reuse = reuse;
+    }
+
+    /** Ends parked workers no runtime of the current file took, so a worker holds only what its next files reuse. */
+    public static terminateUnused(): void {
+        for (const workers of WorkerRunner.parked.values()) {
+            for (const worker of workers) void worker.terminate();
+        }
+        WorkerRunner.parked.clear();
+    }
 
     /**
      * Set the path to the worker-loader.mjs file.
@@ -21,6 +41,10 @@ export class WorkerRunner implements RuntimeRunner {
         this.config = config
     }
 
+    private get poolKey(): string {
+        return this.config.executablePath + "#" + this.config.className;
+    }
+
     async start(): Promise<void> {
         GGLog.debug(this, 'Starting worker: ' + this.config.executablePath);
 
@@ -30,9 +54,71 @@ export class WorkerRunner implements RuntimeRunner {
                 "Make sure to import '@grest-ts/testkit-vitest' in your vitest setup."
             );
         }
-        const workerLoaderPath = WorkerRunner.workerLoaderPath;
 
-        this.worker = new Worker(workerLoaderPath, {
+        const parked = WorkerRunner.parked.get(this.poolKey)?.pop();
+        const worker = parked ?? this.spawn(WorkerRunner.workerLoaderPath);
+        this.worker = worker;
+        if (parked) {
+            parked.ref();
+            parked.postMessage({type: 'start', config: this.config, env: {...process.env}});
+        }
+
+        // Wait for worker to signal ready
+        try {
+            await new Promise<void>((resolve, reject) => {
+                const timeout = setTimeout(() => {
+                    cleanup();
+                    // CRITICAL: Terminate worker on timeout to prevent leak
+                    worker.terminate();
+                    reject(new Error('Worker did not start within 30 seconds'));
+                }, 30000);
+
+                const messageHandler = (msg: any) => {
+                    if (msg.type === 'ready') {
+                        cleanup();
+                        this.started = true;
+                        // Monitor for unexpected worker exit after successful startup
+                        this.onUnexpectedExit = (code) => GGLog.error(this, `Worker exited unexpectedly with code ${code}`);
+                        worker.on('exit', this.onUnexpectedExit);
+                        GGLog.debug(this, 'Worker ready');
+                        resolve();
+                    } else if (msg.type === 'error') {
+                        cleanup();
+                        worker.terminate();
+                        reject(new Error(`Runtime worker startup failed! ${msg.error}`));
+                    }
+                };
+                const errorHandler = (err: Error) => {
+                    cleanup();
+                    worker.terminate();
+                    reject(err);
+                };
+                const exitHandler = (code: number) => {
+                    if (code !== 0) {
+                        cleanup();
+                        reject(new Error(`Worker exited with code ${code}`));
+                    }
+                };
+                const cleanup = () => {
+                    clearTimeout(timeout);
+                    worker.off('message', messageHandler);
+                    worker.off('error', errorHandler);
+                    worker.off('exit', exitHandler);
+                };
+
+                worker.on('message', messageHandler);
+                worker.once('error', errorHandler);
+                worker.once('exit', exitHandler);
+            });
+        } catch (error) {
+            // Ensure worker is cleaned up on any error
+            this.worker = undefined;
+            throw error;
+        }
+    }
+
+    private spawn(workerLoaderPath: string): Worker {
+        const worker = new Worker(workerLoaderPath, {
             workerData: this.config,
             stdout: true,
             stderr: true
@@ -40,76 +126,19 @@ export class WorkerRunner implements RuntimeRunner {
 
         // Forward worker stdout to parent's console using console.log
         // so vitest can capture and sequence it properly with test output
-        this.worker.stdout.on('data', (data: Buffer) => {
-            const str = data.toString();
-            // Split by newlines and log each line (trimming trailing newline)
-            const lines = str.split('\n');
-            for (const line of lines) {
+        worker.stdout.on('data', (data: Buffer) => {
+            for (const line of data.toString().split('\n')) {
                 if (line) console.log(line);
             }
         });
 
         // Forward worker stderr to parent's console
-        this.worker.stderr.on('data', (data: Buffer) => {
-            const str = data.toString();
-            const lines = str.split('\n');
-            for (const line of lines) {
+        worker.stderr.on('data', (data: Buffer) => {
+            for (const line of data.toString().split('\n')) {
                 if (line) console.error(line);
             }
         });
-
-        // Wait for worker to signal ready
-        try {
-            await new Promise<void>((resolve, reject) => {
-                if (!this.worker) {
-                    reject(new Error('Worker failed to start'));
-                    return;
-                }
-
-                const timeout = setTimeout(() => {
-                    // CRITICAL: Terminate worker on timeout to prevent leak
-                    this.worker?.terminate();
-                    reject(new Error('Worker did not start within 30 seconds'));
-                }, 30000);
-
-                const messageHandler = (msg: any) => {
-                    if (msg.type === 'ready') {
-                        clearTimeout(timeout);
-                        this.worker?.off('message', messageHandler);
-                        // Monitor for unexpected worker exit after successful startup
-                        this.worker?.on('exit', (code) => {
-                            GGLog.error(this, `Worker exited unexpectedly with code ${code}`);
-                        });
-                        GGLog.debug(this, 'Worker ready');
-                        resolve();
-                    } else if (msg.type === 'error') {
-                        clearTimeout(timeout);
-                        this.worker?.off('message', messageHandler);
-                        this.worker?.terminate();
-                        reject(new Error(`Runtime worker startup failed! ${msg.error}`));
-                    }
-                };
-
-                this.worker.on('message', messageHandler);
-
-                this.worker.once('error', (err) => {
-                    clearTimeout(timeout);
-                    this.worker?.terminate();
-                    reject(err);
-                });
-
-                this.worker.once('exit', (code) => {
-                    if (code !== 0) {
-                        clearTimeout(timeout);
-                        reject(new Error(`Worker exited with code ${code}`));
-                    }
-                });
-            });
-        } catch (error) {
-            // Ensure worker is cleaned up on any error
-            this.worker = undefined;
-            throw error;
-        }
+        return worker;
     }
 
     async stopRuntime(): Promise<void> {
@@ -145,37 +174,58 @@ export class WorkerRunner implements RuntimeRunner {
     }
 
     async shutdown(): Promise<void> {
-        if (!this.worker) {
+        const worker = this.worker;
+        if (!worker) {
+            return;
+        }
+        this.worker = undefined;
+        if (this.onUnexpectedExit) worker.off('exit', this.onUnexpectedExit);
+
+        if (this.started && WorkerRunner.reuse && await this.release(worker)) {
+            worker.unref();
+            const parked = WorkerRunner.parked.get(this.poolKey) ?? [];
+            parked.push(worker);
+            WorkerRunner.parked.set(this.poolKey, parked);
+            GGLog.debug(this, 'Worker parked for reuse');
             return;
         }
 
         GGLog.debug(this, 'Shutting down worker...');
 
         return new Promise<void>((resolve) => {
-            if (!this.worker) {
-                resolve();
-                return;
-            }
-
-            this.worker.once('exit', () => {
+            worker.once('exit', () => {
                 clearTimeout(forceTerminateTimeout);
-                this.worker = undefined;
                 GGLog.debug(this, 'Worker shut down');
                 resolve();
             });
 
             // Send shutdown message for graceful shutdown
-            this.worker.postMessage({type: 'shutdown'});
+            worker.postMessage({type: 'shutdown'});
 
             // Force terminate after 2 seconds if graceful shutdown doesn't work
             const forceTerminateTimeout = setTimeout(() => {
-                if (this.worker) {
-                    GGLog.debug(this, 'Force terminating worker (timeout)');
-                    this.worker.terminate();
-                    this.worker = undefined;
-                    resolve();
-                }
+                GGLog.debug(this, 'Force terminating worker (timeout)');
+                worker.terminate();
+                resolve();
             }, 2000);
+        });
+    }
+
+    private release(worker: Worker): Promise<boolean> {
+        return new Promise<boolean>((resolve) => {
+            const timeout = setTimeout(() => {
+                worker.off('message', messageHandler);
+                resolve(false);
+            }, 2000);
+            const messageHandler = (msg: any) => {
+                if (msg.type === 'released') {
+                    clearTimeout(timeout);
+                    worker.off('message', messageHandler);
+                    resolve(true);
+                }
+            };
+            worker.on('message', messageHandler);
+            worker.postMessage({type: 'release'});
         });
     }
 }

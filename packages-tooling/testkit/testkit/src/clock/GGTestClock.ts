@@ -14,7 +14,8 @@ const hooks = () => hookState().list;
 
 /** A worker or isolated runtime's boot clock, set by its loader before any module loads; runBootHooks() runs the hooks for it. */
 export function bootClock(state: GGClockState | undefined): void {
-    if (!state) return;
+    // A reused worker keeps the previous runtime's clock unless reset here.
+    if (!state) return GGDateShim.setState(GGDateShim.DEFAULT_STATE);
     GGDateShim.setState(state);
     hookState().bootPending = true;
 }

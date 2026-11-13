@@ -1,4 +1,4 @@
-import {ERROR, OK, VALIDATION_ERROR} from "@grest-ts/schema";
+import {ERROR, GGErrorData, OK, VALIDATION_ERROR} from "@grest-ts/schema";
 import {GGLog} from "@grest-ts/logger";
 
 /**
@@ -7,11 +7,14 @@ import {GGLog} from "@grest-ts/logger";
  *
  * @returns The data to validate, or undefined if no data validation needed
  */
-export function parseContractResponse(result: any, expectError: any): any {
+export function parseContractResponse(result: any, expectError: any, expectContext?: Partial<GGErrorData>): any {
     if (result instanceof ERROR) {
         if (expectError) {
             if (result.constructor.name !== expectError.name) {
-                throw new Error(`Expected error '${expectError.name}', but got '${result.constructor.name}'`);
+                throw new Error(`Expected error '${expectError.name}', but got '${result.constructor.name}'`, {cause: result});
+            }
+            if (expectContext) {
+                expect(result.context, `Context of error '${result.type}'`).toMatchObject(expectContext);
             }
             if (result instanceof VALIDATION_ERROR) {
                 return toErrorsObject(result.data);
@@ -24,7 +27,8 @@ export function parseContractResponse(result: any, expectError: any): any {
             return undefined;
         } else {
             GGLog.error("GGTest", result)
-            throw new Error("Expected success 'OK', but got error '" + result.type + "'");
+            const displayMessage = result.context?.displayMessage ? ": " + result.context.displayMessage : "";
+            throw new Error("Expected success 'OK', but got error '" + result.type + "'" + displayMessage, {cause: result});
         }
     } else if (OK.isJson(result)) {
         if (expectError) {

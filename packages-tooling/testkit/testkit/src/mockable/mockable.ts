@@ -9,28 +9,55 @@
 import {GGMockableInterceptor} from "./GGMockableInterceptor";
 import {GGMockWith} from "../testers/GGMockWith";
 import {GGSpyWith} from "../testers/GGSpyWith";
+import {mockableClassName} from "@grest-ts/testkit-runtime";
+import type {ANY_ERROR} from "@grest-ts/schema";
 
 // ============================================================================
 // Type helpers for mockBy/spyOn
 // ============================================================================
 
-/**
- * Type for mock access - maps class methods to GGMockWith
- */
+/** What a mock's matchers and `andReturn` callback get: a method's only argument itself, otherwise its arguments as a tuple. */
+type MockInput<A extends any[]> = A extends []
+    ? []
+    : A extends [infer Only]
+        ? Only
+        : A extends [(infer Only)?]
+            ? Only | undefined
+            : A;
+
 type MockAccess<T> = {
     [K in keyof T]: T[K] extends (...args: infer A) => Promise<infer R>
-        ? GGMockWith<A extends [infer Single] ? (Single extends object ? Single : Record<string, Single>) : Record<string, any>, Awaited<R>, never>
+        ? GGMockWith<MockInput<A>, Awaited<R>, ANY_ERROR>
         : never
 };
 
-/**
- * Type for spy access - maps class methods to GGSpyWith
- */
 type SpyAccess<T> = {
     [K in keyof T]: T[K] extends (...args: infer A) => Promise<infer R>
-        ? GGSpyWith<A extends [infer Single] ? (Single extends object ? Single : Record<string, Single>) : Record<string, any>, Awaited<R>, never>
+        ? GGSpyWith<MockInput<A>, Awaited<R>, never>
         : never
 };
+
+/** Read by `await` and by inspection (pretty-format, JSON): a tester only for an async method of that name, else undefined. */
+const PROBED_KEYS = new Set(["then", "toJSON", "asymmetricMatch", "$$typeof", "nodeType"]);
+
+function interceptorConfig(cls: Function, methodName: string): {className: string, methodName: string} | undefined {
+    if (PROBED_KEYS.has(methodName) && typeof cls.prototype?.[methodName] !== "function") return undefined;
+    try {
+        return {className: mockableClassName(cls, methodName), methodName};
+    } catch (error) {
+        if (PROBED_KEYS.has(methodName)) return undefined;
+        throw error;
+    }
+}
+
+function accessProxy(cls: Function, tester: (config: {className: string, methodName: string}) => unknown): any {
+    return new Proxy({}, {
+        get: (_, key) => {
+            const config = typeof key === "string" ? interceptorConfig(cls, key) : undefined;
+            return config && tester(config);
+        }
+    });
+}
 
 /**
  * Get mock access for a @mockable class.
@@ -39,16 +66,12 @@ type SpyAccess<T> = {
  * @example
  * ```typescript
  * .with(mockOf(AddressResolverService).resolveAddress
- *     .toEqual({address: "123 Main St"})
+ *     .toEqual("123 Main St")
  *     .andReturn({lat: 40.7, lng: -74.0}))
  * ```
  */
 export function mockOf<T>(cls: new (...args: any[]) => T): MockAccess<T> {
-    return new Proxy({} as any, {
-        get(_, methodName: string) {
-            return new GGMockWith(GGMockableInterceptor, {className: cls.name, methodName})
-        }
-    });
+    return accessProxy(cls, config => new GGMockWith(GGMockableInterceptor, config));
 }
 
 /**
@@ -58,14 +81,10 @@ export function mockOf<T>(cls: new (...args: any[]) => T): MockAccess<T> {
  * @example
  * ```typescript
  * .with(spyOn(AddressResolverService).resolveAddress
- *     .toEqual({address: "123 Main St"})
+ *     .toEqual("123 Main St")
  *     .responseToMatchObject({lat: 40.7}))
  * ```
  */
 export function spyOn<T>(cls: new (...args: any[]) => T): SpyAccess<T> {
-    return new Proxy({} as any, {
-        get(_, methodName: string) {
-            return new GGSpyWith(GGMockableInterceptor, {className: cls.name, methodName})
-        }
-    });
+    return accessProxy(cls, config => new GGSpyWith(GGMockableInterceptor, config));
 }

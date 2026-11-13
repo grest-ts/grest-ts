@@ -1,4 +1,6 @@
 import {GGTestRuntime} from "./GGTestRuntime"
+import {startRuntimes} from "./startRuntimes"
+import {WorkerRunner} from "./runner/WorkerRunner"
 import {GGLog} from "@grest-ts/logger"
 import {IPCClientRequest, IPCServer} from "@grest-ts/ipc";
 import {GGContext} from "@grest-ts/context";
@@ -8,7 +10,22 @@ import {GGTestComponent, GGTestComponentType} from "./testers/GGTestComponent";
 import {IGGLocalDiscoveryServer} from "./IGGLocalDiscoveryServer";
 import {TestableIPC} from "./callOn/TestableIPC";
 
-export const GG_TEST_RUNNER = new GGLocatorKey<GGTestRunner>("GGTestRunner");
+class GGTestRunnerKey extends GGLocatorKey<GGTestRunner> {
+    public get(): GGTestRunner {
+        const runner = this.tryGet();
+        if (!runner) {
+            throw new Error(
+                "No GGTest runner here. GGTest.start*/with(...), test calls and other testkit calls work only within the testkit's " +
+                "describe, tests and hooks. A file that imports `describe` or a hook (`afterEach`, …) from \"vitest\" bypasses them: " +
+                "drop that import, or use a GGTestContext's hooks. vitest.config also needs " +
+                "setupFiles: [\"@grest-ts/testkit-vitest\"] + globalSetup: [\"@grest-ts/testkit-vitest/globalSetup\"]."
+            );
+        }
+        return runner;
+    }
+}
+
+export const GG_TEST_RUNNER: GGLocatorKey<GGTestRunner> = new GGTestRunnerKey("GGTestRunner");
 
 /**
  * Interface for test lifecycle hooks.
@@ -260,9 +277,8 @@ export class GGTestRunner {
             }
 
             // 4. Start runtimes (they will receive commands via env)
-            for (const runtime of this.globalRuntimes) {
-                await runtime.start()
-            }
+            await startRuntimes(this.globalRuntimes)
+            WorkerRunner.terminateUnused()
             this._started = true;
         });
     }

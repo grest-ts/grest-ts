@@ -5,7 +5,7 @@ import {ConstructorOf, DeepPartial} from "@grest-ts/common";
 import {GG_TEST_RUNNER, GGTestRunner} from "../GGTestRunner";
 import {IGGTestWith} from "./IGGTestWith";
 import {IGGTestInterceptor} from "./IGGTestInterceptor";
-import {GGCallInterceptor, GGCallInterceptorConfig} from "./GGCallInterceptor";
+import {GGCallInterceptor, GGCallInterceptorConfig, GGCallTimes} from "./GGCallInterceptor";
 
 type InterceptorFactory = new (runner: GGTestRunner, config: any) => GGCallInterceptor;
 
@@ -22,7 +22,7 @@ export class GGSpyWith<RequestBody = any, ResponseData = any, ErrorsUnion = any>
     private activeExpect: GGExpectations<any>;
 
     private _sleep: number = 0;
-    private _times: number = 1;
+    private _times: GGCallTimes = {min: 1, max: 1};
     private _within?: number;
 
     constructor(interceptorFactory: InterceptorFactory, config: Record<string, any>) {
@@ -69,7 +69,13 @@ export class GGSpyWith<RequestBody = any, ResponseData = any, ErrorsUnion = any>
     }
 
     public times(amount: number): this {
-        this._times = amount;
+        this._times = {min: amount, max: amount};
+        return this;
+    }
+
+    /** Allow any number of calls, none included. */
+    public anyTimes(): this {
+        this._times = {min: 0, max: Infinity};
         return this;
     }
 

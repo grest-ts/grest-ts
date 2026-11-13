@@ -2,8 +2,15 @@ import type {GGTestRunner} from "../GGTestRunner";
 import {GGExpectations} from "../utils/GGExpectations";
 import {GGTestError} from "../utils/GGTestError";
 import {GGLog} from "@grest-ts/logger";
+import {ERROR} from "@grest-ts/schema";
 
 import {IGGTestInterceptor} from "./IGGTestInterceptor";
+
+/** How many calls an interceptor expects, both bounds inclusive. */
+export interface GGCallTimes {
+    min: number;
+    max: number;
+}
 
 /**
  * Configuration for creating an interceptor.
@@ -12,7 +19,7 @@ import {IGGTestInterceptor} from "./IGGTestInterceptor";
 export interface GGCallInterceptorConfig {
     definedInSourceFile: string;
     sleep: number;
-    times: number;
+    times: GGCallTimes;
     passThrough: boolean;
     inputExpectations?: GGExpectations<any>;
     outputExpectations?: GGExpectations<any>;
@@ -33,7 +40,7 @@ export abstract class GGCallInterceptor implements IGGTestInterceptor {
     protected readonly test: GGTestRunner;
     private readonly definedInSourceFile: string;
     private readonly _sleep: number;
-    private readonly times: number;
+    private readonly times: GGCallTimes;
     public readonly passThrough: boolean;
     private readonly inputExpectations?: GGExpectations<any>;
     private readonly outputExpectations?: GGExpectations<any>;
@@ -139,7 +146,13 @@ export abstract class GGCallInterceptor implements IGGTestInterceptor {
 
         if (!this.passThrough) {
             await this.sleepIfNeeded();
-            return typeof this.returnData === "function" ? this.returnData(transformed) : this.returnData;
+            if (typeof this.returnData !== "function") return this.returnData;
+            try {
+                return await this.returnData(transformed);
+            } catch (error) {
+                if (error instanceof ERROR) return error;
+                throw error;
+            }
         }
 
         return undefined;
@@ -169,11 +182,11 @@ export abstract class GGCallInterceptor implements IGGTestInterceptor {
     // -------------------------------------------
 
     public validate(): void {
-        if (this.noOfTimesCalled < this.times) {
+        if (this.noOfTimesCalled < this.times.min) {
             throw new GGTestError({
                 context: `[${this.getKey()}]`,
                 test: this.noOfTimesCalled ? "Interceptor called too few times!" : "Interceptor was never called!",
-                expected: `Called ${this.times} time(s)`,
+                expected: this.expectedCalls(),
                 received: `Called ${this.noOfTimesCalled} time(s)`,
                 sourceFile: this.definedInSourceFile
             });
@@ -186,12 +199,17 @@ export abstract class GGCallInterceptor implements IGGTestInterceptor {
 
     /** Done: called as often as expected, or a call failed its expectations. */
     public isCalled(): boolean {
-        return this.noOfTimesCalled >= this.times || this.validationError !== undefined;
+        return this.noOfTimesCalled >= this.times.min || this.validationError !== undefined;
     }
 
     // -------------------------------------------
     // Helpers
     // -------------------------------------------
+
+    private expectedCalls(): string {
+        const {min, max} = this.times;
+        return min === max ? `Called ${min} time(s)` : max === Infinity ? `Called at least ${min} time(s)` : `Called ${min}-${max} time(s)`;
+    }
 
     protected async sleepIfNeeded(): Promise<void> {
         if (this._sleep) {
@@ -201,11 +219,11 @@ export abstract class GGCallInterceptor implements IGGTestInterceptor {
 
     protected checkNoOfTimesCalled(): void {
         this.noOfTimesCalled++;
-        if (this.noOfTimesCalled > this.times) {
+        if (this.noOfTimesCalled > this.times.max) {
             throw new GGTestError({
                 context: `[${this.getKey()}]`,
                 test: "Interceptor called too many times!",
-                expected: `Called ${this.times} time(s)`,
+                expected: this.expectedCalls(),
                 received: `Called ${this.noOfTimesCalled} times(s)`,
                 sourceFile: this.definedInSourceFile
             });

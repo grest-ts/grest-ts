@@ -2,6 +2,7 @@ import WebSocket from 'ws';
 import {GGLog} from "@grest-ts/logger";
 import {GGLocator} from "@grest-ts/locator";
 import {enumOf, type Values} from "@grest-ts/common";
+import {ERROR, type ERROR_JSON} from "@grest-ts/schema";
 
 export const IPCMessageType = enumOf({
     MSG: 'm',
@@ -139,13 +140,13 @@ export class IPCSocket {
     private async handleIncomingRequest(msg: IPCMessage): Promise<void> {
         const handler = this.requestHandlers.get(msg.path);
 
-        const sendResponse = (success: boolean, data?: unknown, error?: string) => {
+        const sendResponse = (success: boolean, data?: unknown, error?: string, typedError?: ERROR_JSON) => {
             if (this.ws.readyState === WebSocket.OPEN) {
                 const response: IPCMessage = {
                     type: IPCMessageType.RES,
                     id: msg.id,
                     path: msg.path,
-                    data: {success, data, error}
+                    data: {success, data, error, typedError}
                 };
                 this.ws.send(IPCSocket.serialize(response));
             }
@@ -160,8 +161,11 @@ export class IPCSocket {
             const result = await handler(msg.data);
             sendResponse(true, result);
         } catch (error: any) {
-            GGLog.error(this, `Request handler error for ${msg.path}`, error);
-            sendResponse(false, undefined, error.message || String(error));
+            // A typed error reaches the requester as itself, with its data, and is often expected (a mocked refusal).
+            const typed = error instanceof ERROR;
+            if (typed) GGLog.debug(this, `Request handler error for ${msg.path}`, error);
+            else GGLog.error(this, `Request handler error for ${msg.path}`, error);
+            sendResponse(false, undefined, error.message || String(error), typed ? error.toJSON() : undefined);
         }
     }
 
@@ -175,9 +179,11 @@ export class IPCSocket {
         clearTimeout(pending.timeout);
         this.pendingRequests.delete(msg.id);
 
-        const response = msg.data as { success: boolean; data?: unknown; error?: string };
+        const response = msg.data as { success: boolean; data?: unknown; error?: string; typedError?: ERROR_JSON };
         if (response.success) {
             pending.resolve(response.data);
+        } else if (response.typedError) {
+            pending.reject(ERROR.fromJson(response.typedError));
         } else {
             pending.reject(new Error(response.error || 'Request failed'));
         }
