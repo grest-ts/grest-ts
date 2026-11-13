@@ -110,7 +110,7 @@ export class GGTestLogger implements GGLogger {
                         return value.test(String(entryValue));
                     }
                     if (key === 'message' && typeof value === 'string') {
-                        return typeof entryValue === 'string' && entryValue.includes(value);
+                        return this.matches(entry, {type: 'string', value});
                     }
                     return matchesPartially(entryValue, value);
                 });
