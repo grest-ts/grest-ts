@@ -65,7 +65,8 @@ export interface GGHttpServerAdapterConfig {
     tls?: {
         cert: string | Buffer;
         key: string | Buffer;
-    };
+    };    /** How long teardown waits for in-flight requests after it stops accepting new ones. Default 3000. */
+    drainTimeoutMs?: number;
 }
 
 export class GGHttpServer {
@@ -77,6 +78,7 @@ export class GGHttpServer {
     private readonly configuredPort: number;
     private readonly configuredHost: string;
     private readonly cors?: GGCorsConfig;
+    private readonly drainTimeoutMs: number;
 
     private readonly _onStart: Array<() => void> = [];
     private readonly _onTeardown: Array<() => void> = [];
@@ -107,9 +109,12 @@ export class GGHttpServer {
         this.configuredPort = config?.port ?? (process.env.PORT ? Number(process.env.PORT) : 0);
         this.configuredHost = config?.host ?? '0.0.0.0';
         this.cors = config?.cors;
+        this.drainTimeoutMs = config?.drainTimeoutMs ?? 3000;
 
         this.scope.setWithLifecycle(config?.key ?? GG_HTTP_SERVER, this, {
             type: GGLocatorServiceType.HTTP,
+            // Stop taking requests before the services that handle them are torn down.
+            teardownType: GGLocatorServiceType.SERVICE_DISCOVERY - 1,
             start: this.start.bind(this),
             teardown: this.teardown.bind(this)
         });
@@ -271,8 +276,7 @@ export class GGHttpServer {
         return this.teardownPromise = (async () => {
             await Promise.all(this._onTeardown.map(callback => callback()));
             this.httpServer.close();
-            const maxWaitTime = 3000;
-            const deadline = performance.now() + maxWaitTime;
+            const deadline = performance.now() + this.drainTimeoutMs;
             while (this.activeRequests > 0 && performance.now() < deadline) {
                 await new Promise(resolve => setTimeout(resolve, 25));
             }
