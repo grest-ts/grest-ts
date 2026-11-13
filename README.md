@@ -335,6 +335,29 @@ describe("Checklist with Blocker service", () => {
 })
 ```
 
+### Controlling Time
+
+`GGTest.clock` moves `Date` in the test and in every runtime it started, so expiry, retention and scheduling are
+tested without `now` parameters, backdated rows or sleeps. Timers set with `GGLocator.setTimeout` and scheduled jobs
+fire on `advance`:
+
+```typescript
+describe("orders", () => {
+    const t = GGTest.startWorker(OrderRuntime)
+    const ctx = new TestContext("Buyer").apis({order: OrderApi})
+
+    test("an unpaid order expires after 30 minutes", async () => {
+        const order = await ctx.order.create({item: "book"})
+        await GGTest.clock.advance(30 * 60_000)
+        await t.jobs.run("expire-orders")
+        await ctx.order.get({id: order.id}).toMatchObject({status: "EXPIRED"})
+    })
+})
+```
+
+The clock is undone after each test. See [Controlling time](./packages-tooling/testkit/testkit/README.md#controlling-time)
+for what is and isn't faked.
+
 ---
 
 ## Service-to-Service Communication
