@@ -97,6 +97,8 @@ export class GGTestRunner {
     private readonly hooks: Map<string, GGTestRunnerHook> = new Map()
 
     private workerSeat: number | undefined
+    private parkedMark = 0
+    private hadRuntimes = false
 
     constructor(ipcServer: IPCServer, discoveryServer: IGGLocalDiscoveryServer, userConfig?: Partial<GGTestConfig>) {
         this.testId = "t" + Math.random().toString(36).substring(2, 8);
@@ -204,6 +206,7 @@ export class GGTestRunner {
      * Automatically routes to the appropriate list based on lifecycle stage.
      */
     public addRuntime(runtime: GGTestRuntime): void {
+        this.hadRuntimes = true;
         if (this._started) {
             // Added within a test block - managed by afterEach
             this.inTestRuntimes.push(runtime);
@@ -234,6 +237,7 @@ export class GGTestRunner {
             if (this._started) {
                 throw new Error("Already started!");
             }
+            this.parkedMark = WorkerRunner.parkedMark();
 
             // 0. Initialize extension (testkits already loaded by vitest setup)
             for (const type of GGTestRunner.extensionFactories) {
@@ -278,7 +282,6 @@ export class GGTestRunner {
 
             // 4. Start runtimes (they will receive commands via env)
             await startRuntimes(this.globalRuntimes)
-            WorkerRunner.terminateUnused()
             this._started = true;
         });
     }
@@ -317,16 +320,22 @@ export class GGTestRunner {
     public async teardown(): Promise<void> {
         await new GGContext("Test").run(async () => {
             GG_TRACE.init();
-            // Stop global runtimes (teardown services, keep IPC alive)
-            GGLog.debug(this, 'Stopping global runtimes...');
-            for (const runtime of this.globalRuntimes) {
-                await runtime.stop()
-            }
+            try {
+                // Stop global runtimes (teardown services, keep IPC alive)
+                GGLog.debug(this, 'Stopping global runtimes...');
+                for (const runtime of this.globalRuntimes) {
+                    await runtime.stop()
+                }
 
-            // Shutdown global runtimes (terminate workers/processes)
-            GGLog.debug(this, 'Shutting down global runtimes...');
-            for (const runtime of this.globalRuntimes) {
-                await runtime.shutdown()
+                // Shutdown global runtimes (terminate workers/processes)
+                GGLog.debug(this, 'Shutting down global runtimes...');
+                for (const runtime of this.globalRuntimes) {
+                    await runtime.shutdown()
+                }
+            } finally {
+                // Older parked workers live until here, so runtimes started inside tests can take them; this runner's
+                // stay for the next files. A runner without runtimes leaves them to the next one that has some.
+                if (this.hadRuntimes) WorkerRunner.terminateUnused(this.parkedMark);
             }
 
             GGLog.debug(this, 'Tearing down router...');
