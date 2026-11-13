@@ -9,7 +9,7 @@ import {WorkerRunner} from "./runner/WorkerRunner";
 import {IsolatedRunner} from "./runner/IsolatedRunner";
 import type {GGTestRunner} from "./GGTestRunner";
 import {GGClockState, GGDateShim} from "./clock/GGDateShim";
-import {GGClockIPC} from "./clock/GGClockIPC";
+import {DEFAULT_TIMEOUT_MS, fireDueOn, GGClockIPC} from "./clock/GGClockIPC";
 
 /**
  * Lifecycle state of a runtime instance.
@@ -86,6 +86,10 @@ export class GGTestRuntime {
 
     public get state(): GGTestRuntimeState {
         return this._state;
+    }
+
+    public get mode(): GGTestMode {
+        return this.config.mode!;
     }
 
     /**
@@ -167,14 +171,18 @@ export class GGTestRuntime {
                     'Service ' + this.className + ' failed to start within ' + startupTimeout + 'ms'
                 );
                 this._state = GGTestRuntimeState.STARTED;
-                // The clock may have changed while it booted; applyClock only reaches started runtimes.
-                const current = GGDateShim.getState()
-                if (!GGDateShim.same(clock, current)) await this.sendCommand(GGClockIPC.worker.set, current)
                 GGLog.debug(this, this.className + ' started successfully')
             } catch (error) {
                 // Mark as failed but keep runner alive for diagnostics (e.g., log retrieval)
                 this._state = GGTestRuntimeState.FAILED;
                 throw error;
+            }
+            // The clock may have changed while it booted; applyClock only reaches started runtimes. A timer callback
+            // failing here fails start() but leaves the runtime STARTED, as it is.
+            const current = GGDateShim.getState()
+            if (this.mode !== GGTestMode.INLINE && !GGDateShim.same(clock, current)) {
+                await this.sendCommand(GGClockIPC.worker.set, current)
+                await fireDueOn(this, Date.now(), DEFAULT_TIMEOUT_MS)
             }
         });
         return this
@@ -238,7 +246,7 @@ export class GGTestRuntime {
         });
     }
 
-    public async sendCommand<Payload, Result>(type: IPCClientRequest<Payload, Result>, payload: Payload): Promise<Result> {
+    public async sendCommand<Payload, Result>(type: IPCClientRequest<Payload, Result>, payload: Payload, timeoutMs?: number): Promise<Result> {
         switch (this._state) {
             case GGTestRuntimeState.CREATED:
                 this.initialCommands.push({method: type, payload: payload});
@@ -247,7 +255,7 @@ export class GGTestRuntime {
             case GGTestRuntimeState.FAILED:
             case GGTestRuntimeState.STOPPED:
                 // IPC still available in these states
-                return await this.runner.ipcServer.sendFrameworkMessage(this.runtimeId, type, payload);
+                return await this.runner.ipcServer.sendFrameworkMessage(this.runtimeId, type, payload, timeoutMs);
             case GGTestRuntimeState.SHUTDOWN:
                 throw new Error(`Cannot send command to shut down runtime ${this.className}`);
         }

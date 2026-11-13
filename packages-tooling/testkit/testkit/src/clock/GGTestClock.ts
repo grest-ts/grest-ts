@@ -1,9 +1,45 @@
 import {GGLog} from "@grest-ts/logger";
+import {TestRunner} from "vitest";
 import {GG_TEST_RUNNER, GGTestRunner} from "../GGTestRunner";
-import {GGTestRuntimeState} from "../GGTestRuntime";
+import {GGTestMode, GGTestRuntimeState} from "../GGTestRuntime";
 import {GGTestComponent} from "../testers/GGTestComponent";
-import {GGClockIPC} from "./GGClockIPC";
-import {GGClockState, GGDateShim} from "./GGDateShim";
+import {DEFAULT_TIMEOUT_MS, fireDueOn, GGClockIPC} from "./GGClockIPC";
+import {GGClockState, GGDateShim, installDateShim} from "./GGDateShim";
+import {GGTimerShim, installTimerShim, rejections, throwAll} from "./GGTimerShim";
+
+const HOOKS = Symbol.for("@grest-ts/testkit:GGTestClock.hooks");
+const hookSlot = globalThis as unknown as Record<symbol, {list: ((state: GGClockState) => unknown)[], bootPending: boolean} | undefined>;
+const hookState = () => hookSlot[HOOKS] ??= {list: [], bootPending: false};
+const hooks = () => hookState().list;
+
+/** A worker or isolated runtime's boot clock, set by its loader before any module loads; runBootHooks() runs the hooks for it. */
+export function bootClock(state: GGClockState | undefined): void {
+    if (!state) return;
+    GGDateShim.setState(state);
+    hookState().bootPending = true;
+}
+
+/** Once extensions have loaded: their hooks for the boot clock, awaited, and a failure fails the runtime's start. */
+export async function runBootHooks(): Promise<void> {
+    const slot = hookState();
+    if (!slot.bootPending) return;
+    slot.bootPending = false;
+    throwAll(await runClockHooks(GGDateShim.getState()));
+}
+
+/** Fake Date, and scope timers that follow it. Install before any app module loads. */
+export function installTestClock(): void {
+    installDateShim();
+    installTimerShim();
+}
+
+export interface GGTestClockAdvanceOptions {
+    /**
+     * Real time to wait for the promises of the timers it fires, across all runtimes. Default: the current test's
+     * timeout less a margin, or 30 s outside a test.
+     */
+    timeoutMs?: number
+}
 
 /**
  * One fake wall clock (`Date`) shared by the test and every runtime it started.
@@ -11,7 +47,24 @@ import {GGClockState, GGDateShim} from "./GGDateShim";
  */
 export class GGTestClock {
 
-    /** Jump to `time`; the clock keeps running from there (or stays stopped at it). */
+    /**
+     * Runs `hook` in this isolate whenever the clock changes, before the change is acknowledged and before any timer
+     * fires. For clocks the framework doesn't own, such as an SDK's clock offset. Register it from test-only code,
+     * e.g. a package's `testkit/index-testkit.ts`. Registered later, while the clock is off real time, it runs once
+     * right away.
+     */
+    public static onChange(hook: (state: GGClockState) => unknown): void {
+        hooks().push(hook);
+        const state = GGDateShim.getState();
+        if (hookState().bootPending || GGDateShim.isDefault(state)) return;
+        try {
+            Promise.resolve(hook({...state})).catch(err => GGLog.warn(GGTestClock, "GGTest.clock: onChange hook failed", err as Error));
+        } catch (err) {
+            GGLog.warn(GGTestClock, "GGTest.clock: onChange hook failed", err as Error);
+        }
+    }
+
+    /** Jump to `time`; the clock keeps running from there (or stays stopped at it). Forward, it fires due timers as `advance` does. */
     public set(time: Date | number): Promise<void> {
         const target = time instanceof Date ? time.getTime() : time;
         if (!Number.isInteger(target)) throw new Error(`GGTest.clock.set(${String(time)}): not a valid time, expected whole epoch milliseconds`);
@@ -20,15 +73,20 @@ export class GGTestClock {
             : {offsetMs: state.offsetMs, stoppedAt: target});
     }
 
-    /** Jump forward by `ms`. Only moves `Date`; timers are not fired. */
-    public advance(ms: number): Promise<void> {
+    /**
+     * Jump forward by `ms`, like a machine waking from sleep. Resolves once every runtime is on the new time, and every
+     * scope timer (`GGLocator.setTimeout/setInterval`) that was due by then has fired once: started in due order per
+     * runtime, runtimes in start order, and their returned promises awaited together. Any rejection fails the advance,
+     * after every runtime has fired its timers.
+     */
+    public advance(ms: number, options: GGTestClockAdvanceOptions = {}): Promise<void> {
         if (!(Number.isInteger(ms) && ms >= 0)) throw new Error(`GGTest.clock.advance(${ms}): ms must be a non-negative integer`);
         return this.change(state => state.stoppedAt === undefined
             ? {offsetMs: state.offsetMs + ms}
-            : {offsetMs: state.offsetMs, stoppedAt: state.stoppedAt + ms});
+            : {offsetMs: state.offsetMs, stoppedAt: state.stoppedAt + ms}, options.timeoutMs);
     }
 
-    /** Stop time: `Date.now()` stays put until the next set/advance/start. */
+    /** Stop time: `Date.now()` stays put, and scope timers wait, until the next set/advance/start. */
     public stop(): Promise<void> {
         return this.change(state => state.stoppedAt === undefined
             ? {offsetMs: state.offsetMs, stoppedAt: Date.now()}
@@ -47,25 +105,61 @@ export class GGTestClock {
         return Date.now();
     }
 
-    private change(next: (state: GGClockState) => GGClockState): Promise<void> {
+    private change(next: (state: GGClockState) => GGClockState, timeoutMs?: number): Promise<void> {
         GGDateShim.assertActive();
         const runner = GG_TEST_RUNNER.get();
         if (!runner.started) {
-            beforeAll(() => this.change(next));
+            beforeAll(() => this.change(next, timeoutMs));
             return Promise.resolve();
         }
         const current = GGDateShim.getState();
         const state = next(current);
-        return GGDateShim.same(state, current) ? Promise.resolve() : applyClock(runner, state);
+        return GGDateShim.same(state, current) ? Promise.resolve() : applyClock(runner, state, timeoutMs);
     }
 }
 
-async function applyClock(runner: GGTestRunner, state: GGClockState): Promise<void> {
-    GGDateShim.setState(state);
-    const runtimes = runner.getAllRuntimes().filter(r => r.state === GGTestRuntimeState.STARTED);
-    const results = await Promise.allSettled(runtimes.map(r => r.sendCommand(GGClockIPC.worker.set, state)));
-    const failed = results.filter((r): r is PromiseRejectedResult => r.status === "rejected");
-    if (failed.length > 0) throw new AggregateError(failed.map(f => f.reason), `GGTest.clock: ${failed.length} runtime(s) didn't take the new time: ${failed.map(f => f.reason?.message).join("; ")}`);
+/**
+ * This isolate's half of a change: the new state, the hooks, timers re-armed, and the barrier snapshot of pending
+ * timers. Hook errors are thrown at the end, after the rest is done.
+ */
+export async function applyLocalClock(state: GGClockState): Promise<void> {
+    let errors: unknown[] = [];
+    if (!GGDateShim.same(state, GGDateShim.getState())) {
+        GGDateShim.setState(state);
+        errors = await runClockHooks(state);
+        GGTimerShim.rearm();
+    }
+    GGTimerShim.snapshot();
+    throwAll(errors);
+}
+
+async function runClockHooks(state: GGClockState): Promise<unknown[]> {
+    return rejections(await Promise.allSettled(hooks().map(async hook => hook({...state}))));
+}
+
+async function applyClock(runner: GGTestRunner, state: GGClockState, timeoutMs = defaultTimeoutMs()): Promise<void> {
+    const errors: unknown[] = [];
+    const collect = (work: Promise<unknown>) => work.then(() => {}, err => { errors.push(err); });
+    const deadline = performance.now() + timeoutMs;
+    const remaining = () => Math.max(1, deadline - performance.now());
+
+    // Inline runtimes share this isolate: its own apply and fireDue cover them.
+    const runtimes = runner.getAllRuntimes().filter(r => r.state === GGTestRuntimeState.STARTED && r.mode !== GGTestMode.INLINE);
+    await collect(applyLocalClock(state));
+    await Promise.all(runtimes.map(r => collect(r.sendCommand(GGClockIPC.worker.set, state))));
+    // Every isolate is on the new time before any timer fires, so a timer that calls another runtime finds it there.
+    const target = Date.now();
+    await collect(GGTimerShim.fireDue(target, remaining()));
+    for (const runtime of runtimes) {
+        await collect(fireDueOn(runtime, target, remaining()));
+    }
+    throwAll(errors);
+}
+
+/** Inside a test: its timeout less a margin, so the guard reports the stuck timer before vitest times the test out. */
+function defaultTimeoutMs(): number {
+    const timeout = TestRunner.getCurrentTest()?.timeout;
+    return timeout ? Math.max(100, timeout - Math.min(1_000, timeout / 5)) : DEFAULT_TIMEOUT_MS;
 }
 
 export class GGClockTestComponent implements GGTestComponent {
@@ -98,7 +192,13 @@ export class GGClockTestComponent implements GGTestComponent {
     }
 
     async teardown(): Promise<void> {
-        if (!GGDateShim.isDefault(GGDateShim.getState())) GGDateShim.setState(GGDateShim.DEFAULT_STATE);
+        GGTimerShim.resetWarnings();
+        // A failing onChange hook mustn't keep the runner's later teardown steps from running.
+        try {
+            await applyLocalClock(GGDateShim.DEFAULT_STATE);
+        } catch (err) {
+            GGLog.warn(this, "GGTest.clock: resetting the clock failed", err as Error);
+        }
     }
 
     // Never throws: a runtime that died mustn't keep later components' afterEach from running.

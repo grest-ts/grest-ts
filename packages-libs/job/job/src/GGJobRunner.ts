@@ -147,7 +147,8 @@ class JobLoop {
         }
     }
 
-    private tick(): void {
+    /** Returns the run it started, so the test clock can wait for it; production timers ignore it. */
+    private tick(): Promise<unknown> | undefined {
         if (this.stopped.signal.aborted) return
         let config: RunConfig
         try {
@@ -155,14 +156,16 @@ class JobLoop {
         } catch (err) {
             // An unreadable setting must not end the loop: keep the last good one, or retry in a minute.
             GGLog.error(this.job, "Job settings unreadable", {job: this.job.config.name, err: (err as Error).message})
-            if (!this.lastConfig) return this.schedule(MIN_CHECK_EVERY_MS)
+            if (!this.lastConfig) return void this.schedule(MIN_CHECK_EVERY_MS)
             config = this.lastConfig
         }
+        let run: Promise<unknown> | undefined
         if (config.enabled && !this.running) {
-            this.track(this.runOnce(config, true))
+            run = this.track(this.runOnce(config, true))
                 .catch(err => GGLog.error(this.job, "Job run failed", {job: this.job.config.name, err: (err as Error).message}))
         }
         this.schedule(this.oneInstance ? config.checkEveryMs : config.intervalMs)
+        return run
     }
 
     async runNow(): Promise<GGJobRunResult> {

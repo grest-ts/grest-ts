@@ -52,6 +52,7 @@ export abstract class GGRuntime {
             this.scope = new GGLocatorScope(scopeName, undefined, this.name);
             GGLog.init(this.scope)
         }
+        this.scope.ownTimers();
     }
 
     /**
@@ -139,6 +140,7 @@ export abstract class GGRuntime {
                     this.scope.setLifecycleOwner(undefined);
                     GGLog.error(this, err instanceof Error ? err : new Error(String(err)));
                     await this.callTeardownCallbacks();
+                    this.scope.clearTimers();
                     this.state = GGRuntimeState.STOPPED;
                     throw err;
                 }
@@ -192,7 +194,11 @@ export abstract class GGRuntime {
                 GG_TRACE.init();
                 this.state = GGRuntimeState.STOPPING;
                 GGLog.info(this, "Gracefully shutting down");
-                await withTimeout(this.callTeardownCallbacks(), this.runtimeConfig.shutdownTimeoutMs, `Shutdown timeout after ${this.runtimeConfig.shutdownTimeoutMs}ms, forcing exit`)
+                try {
+                    await withTimeout(this.callTeardownCallbacks(), this.runtimeConfig.shutdownTimeoutMs, `Shutdown timeout after ${this.runtimeConfig.shutdownTimeoutMs}ms, forcing exit`)
+                } finally {
+                    this.scope.clearTimers();
+                }
                 GGLog.info(this, "Shutdown complete");
                 this.state = GGRuntimeState.STOPPED;
                 if (exit === true) {
