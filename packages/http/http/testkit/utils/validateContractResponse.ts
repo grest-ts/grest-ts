@@ -1,5 +1,5 @@
 import {ERROR, GGErrorData, OK, VALIDATION_ERROR} from "@grest-ts/schema";
-import {GGLog} from "@grest-ts/logger";
+import {checkError} from "@grest-ts/testkit";
 
 /**
  * Parse contract response - unwrap OK/error structure and return inner data.
@@ -9,27 +9,11 @@ import {GGLog} from "@grest-ts/logger";
  */
 export function parseContractResponse(result: any, expectError: any, expectContext?: Partial<GGErrorData>): any {
     if (result instanceof ERROR) {
-        if (expectError) {
-            if (result.constructor.name !== expectError.name) {
-                throw new Error(`Expected error '${expectError.name}', but got '${result.constructor.name}'`, {cause: result});
-            }
-            if (expectContext) {
-                expect(result.context, `Context of error '${result.type}'`).toMatchObject(expectContext);
-            }
-            if (result instanceof VALIDATION_ERROR) {
-                return toErrorsObject(result.data);
-            }
-            // For other error types, return the data if present
-            const errorData = (result as ERROR<any, any>).data;
-            if (errorData !== undefined) {
-                return errorData;
-            }
-            return undefined;
-        } else {
-            GGLog.error("GGTest", result)
-            const displayMessage = result.context?.displayMessage ? ": " + result.context.displayMessage : "";
-            throw new Error("Expected success 'OK', but got error '" + result.type + "'" + displayMessage, {cause: result});
+        checkError(result, expectError, expectContext);
+        if (result instanceof VALIDATION_ERROR) {
+            return toErrorsObject(result.data);
         }
+        return (result as ERROR<any, any>).data;
     } else if (OK.isJson(result)) {
         if (expectError) {
             throw new Error("Expected error '" + expectError.name + "', but got success 'OK'");

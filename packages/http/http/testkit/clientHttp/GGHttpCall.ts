@@ -32,12 +32,18 @@ export class GGHttpCall<InputData, SuccessData, ErrorsUnion extends ERROR<any, a
         this._execute = execute;
     }
 
-    /** `context` is matched like `toMatchObject` against the error's context, e.g. `{displayMessage: expect.stringContaining("…")}`. */
-    public toBeError<Type extends ConstructorOf<ErrorsUnion>>(type: Type, context?: Partial<GGErrorData>): GGHttpCall<InputData, ExtractBadRequestData<Type, ErrorsUnion, InputData>, never> {
+    /** The call ends with this error; the matchers after it check the error's data. */
+    public toBeError<Type extends ConstructorOf<ErrorsUnion>>(type: Type): GGHttpCall<InputData, ExtractBadRequestData<Type, ErrorsUnion, InputData>, never> {
         this._validatingError = type;
-        this._validatingContext = context;
         this.responseExpectations.flush();
         return this as any;
+    }
+
+    /** After `.toBeError()`: matched like `toMatchObject` against the error's context, e.g. `{displayMessage: expect.stringContaining("…")}`. */
+    public withContext(context: Partial<GGErrorData>): this {
+        if (!this._validatingError) throw new Error(".withContext() checks the error's context: call .toBeError() first.");
+        this._validatingContext = context;
+        return this;
     }
 
     protected async executeAction(): Promise<tActionRawData> {

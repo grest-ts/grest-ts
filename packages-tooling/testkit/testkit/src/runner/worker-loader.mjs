@@ -22,7 +22,8 @@ process.on('unhandledRejection', (reason) => {
 });
 
 // Import control client from @grest-ts/testkit; the test clock goes in before any app module loads
-const {GGTestRuntimeWorker, installTestClock, bootClock} = await import('@grest-ts/testkit');
+const {GGTestRuntimeWorker} = await import('@grest-ts/testkit');
+const {installTestClock, bootClock} = await import('@grest-ts/testkit/internal');
 installTestClock();
 
 let controlClient;

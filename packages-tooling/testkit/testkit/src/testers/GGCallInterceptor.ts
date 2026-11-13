@@ -4,7 +4,8 @@ import {GGLocator, GGLocatorScope} from "@grest-ts/locator";
 import {GGExpectations} from "../utils/GGExpectations";
 import {GGTestError} from "../utils/GGTestError";
 import {GGLog} from "@grest-ts/logger";
-import {ERROR} from "@grest-ts/schema";
+import {ERROR, GGErrorData} from "@grest-ts/schema";
+import {ConstructorOf} from "@grest-ts/common";
 
 import {IGGTestInterceptor} from "./IGGTestInterceptor";
 
@@ -26,7 +27,8 @@ export interface GGCallInterceptorConfig {
     inputExpectations?: GGExpectations<any>;
     outputExpectations?: GGExpectations<any>;
     returnData?: any;
-    expectError?: any;
+    expectError?: ConstructorOf<ERROR<any, any>>;
+    expectErrorContext?: Partial<GGErrorData>;
     /** Set by `.on()`: only calls that happen at this runtime or address. */
     target?: GGInterceptorTarget;
 }
@@ -49,9 +51,12 @@ export abstract class GGCallInterceptor implements IGGTestInterceptor {
     private readonly inputExpectations?: GGExpectations<any>;
     private readonly outputExpectations?: GGExpectations<any>;
     private readonly returnData?: any;
+    protected readonly expectError?: ConstructorOf<ERROR<any, any>>;
+    protected readonly expectErrorContext?: Partial<GGErrorData>;
     public readonly target?: GGInterceptorTarget;
 
     private noOfTimesCalled = 0;
+    private noOfResponses = 0;
     private isRegistered = false;
     private scope!: GGLocatorScope;
     private readonly elsewhere = new Map<string, number>();
@@ -66,6 +71,8 @@ export abstract class GGCallInterceptor implements IGGTestInterceptor {
         this.inputExpectations = config.inputExpectations;
         this.outputExpectations = config.outputExpectations;
         this.returnData = config.returnData;
+        this.expectError = config.expectError;
+        this.expectErrorContext = config.expectErrorContext;
         this.target = config.target;
         if (this.passThrough) {
             if (this.returnData !== undefined) {
@@ -89,6 +96,11 @@ export abstract class GGCallInterceptor implements IGGTestInterceptor {
     protected abstract doUnregister(): void;
 
     protected abstract parseResponseData(result: any): any;
+
+    /** Whether this transport calls onResponse for every spied call, so `.waitFor()` can wait for the response. */
+    protected spyGetsResponses(): boolean {
+        return false;
+    }
 
     /** Kinds that can tell where a call happens override this; it throws for a target they can't match. */
     protected checkTarget(_target: GGInterceptorTarget): void {
@@ -188,6 +200,7 @@ export abstract class GGCallInterceptor implements IGGTestInterceptor {
             const data = this.parseResponseData(result);
             this.outputExpectations?.check(data);
             await this.sleepIfNeeded();
+            this.noOfResponses++;
         } catch (error: any) {
             this.setMockValidationError(error, "SPY_RESPONSE_VALIDATION_FAILED");
             throw error;
@@ -199,6 +212,8 @@ export abstract class GGCallInterceptor implements IGGTestInterceptor {
     // -------------------------------------------
 
     public validate(): void {
+        // A failed call (validation, routing) says more than the count; the caller reports it from getMockValidationError.
+        if (this.validationError) return;
         if (this.noOfTimesCalled < this.times.min) {
             throw new GGTestError({
                 context: this.getLabel(),
@@ -217,9 +232,19 @@ export abstract class GGCallInterceptor implements IGGTestInterceptor {
         return this.validationError;
     }
 
-    /** Done: called as often as expected, or a call failed its expectations. */
+    /** Done: called (a spy that gets responses: responded) as often as expected, or a call failed its expectations. */
     public isCalled(): boolean {
-        return this.noOfTimesCalled >= this.times.min || this.validationError !== undefined;
+        if (this.times.min === 0) {
+            throw new GGTestError({
+                context: this.getLabel(),
+                test: ".waitFor() has nothing to wait for: a count from 0 is met by no call at all.",
+                expected: "A count from 1 (.times(1, n), .atLeastOnce()), or .with() to allow none while the action runs",
+                received: `.times(0, ${this.times.max})`,
+                sourceFile: this.definedInSourceFile
+            });
+        }
+        const done = this.passThrough && this.spyGetsResponses() ? this.noOfResponses : this.noOfTimesCalled;
+        return done >= this.times.min || this.validationError !== undefined;
     }
 
     /** A call to this method could not be routed at all; the action fails with the reason. */

@@ -14,7 +14,8 @@ import "./_dedupCheck";
 import {GGLog} from "@grest-ts/logger";
 import {GGLoggerConsole} from "@grest-ts/logger-console";
 import {IPCServer} from "@grest-ts/ipc";
-import {GG_TEST_RUNNER, GGTestRunner, installTestClock, WorkerRunner} from "@grest-ts/testkit";
+import {GG_TEST_RUNNER, GGTestRunner, WorkerRunner} from "@grest-ts/testkit";
+import {installTestClock} from "@grest-ts/testkit/internal";
 import {GGLocator, GGLocatorScope} from "@grest-ts/locator";
 // -------------------------------------------------
 // Global test mode marker

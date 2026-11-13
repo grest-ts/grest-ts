@@ -43,10 +43,11 @@ const suite = (start: StartMode) => describe(`mocks and spies on client-addresse
                 .toEqual(expect.stringMatching(/^failed:SERVER_ERROR:.*ECONNREFUSED/))
         })
 
-        test("a spy on an address needs no service running in the test", async () => {
-            await alice.hub.openPull({head: "fix"})
-                .with(AddressingThirdPartyApi.spy.createPull.on(GGTest.target("127.0.0.7:4001")).toMatchObject({head: "fix"}))
-                .toEqual(expect.stringMatching(/^failed:SERVER_ERROR:.*ECONNREFUSED/))
+        test("a spy on an address needs no service running in the test, and fails with the dial error when nothing answers", async () => {
+            await failure(
+                alice.hub.openPull({head: "fix"})
+                    .with(AddressingThirdPartyApi.spy.createPull.on(GGTest.target("127.0.0.7:4001")).toMatchObject({head: "fix"}))
+            ).toThrow(/ROUTING_FAILED[^]*could not forward[^]*ECONNREFUSED/)
         })
 
         test("a mock on the address, and one on another address that isn't called", async () => {
@@ -177,8 +178,8 @@ const suite = (start: StartMode) => describe(`mocks and spies on client-addresse
     test("a runtime target and an address target for the same place fail the action", async () => {
         await failure(
             alice.hub.sync({targets: [relayA], branch: "main"}).with(
-                AddressingRelayApi.mock.sync.on(t.relayA).anyTimes().andReturn({branch: "main", by: "mockA"}),
-                AddressingRelayApi.mock.sync.on(GGTest.target(`${relayA.host}:${relayA.port}`)).anyTimes().andReturn({branch: "main", by: "mockA"}),
+                AddressingRelayApi.mock.sync.on(t.relayA).atLeastOnce().andReturn({branch: "main", by: "mockA"}),
+                AddressingRelayApi.mock.sync.on(GGTest.target(`${relayA.host}:${relayA.port}`)).atLeastOnce().andReturn({branch: "main", by: "mockA"}),
             )
         ).toThrow(/ROUTING_FAILED[^]*relayA[^]*both match/)
     })

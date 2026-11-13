@@ -7,6 +7,7 @@ definePackage({
     targets: {node: true},
     hasTests: true,
     publishToNpm: true,
+    customExports: {"./internal": "./src/index-internal.ts"},
     peerDependencies: {
         "esbuild": ">=0.28.0"
     }

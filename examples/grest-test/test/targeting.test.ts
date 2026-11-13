@@ -42,12 +42,14 @@ const schemaSuite = (start: StartMode) => describe(`targeting schema mocks and s
         TargetingStoreApi.routing.first()
         await alice.gateway.save({text: "a", times: 1})
             .with(TargetingStoreApi.mock.save.andReturn({text: "a", by: "mock"}))
+        // Routing picks one of the two; the results prove a targeted mock answered both calls.
         const [one, two] = await alice.gateway.save({text: "a", times: 2})
             .with(
-                TargetingStoreApi.mock.save.on(t.storeA).anyTimes().andReturn({text: "a", by: "storeA"}),
-                TargetingStoreApi.mock.save.on(t.storeB).anyTimes().andReturn({text: "a", by: "storeB"}),
+                TargetingStoreApi.mock.save.on(t.storeA).times(0, 2).andReturn({text: "a", by: "storeA"}),
+                TargetingStoreApi.mock.save.on(t.storeB).times(0, 2).andReturn({text: "a", by: "storeB"}),
             )
-        expect(one).toBe(two)
+        expect(["storeA", "storeB"]).toContain(one)
+        expect(two).toBe(one)
     })
 
     test("a targeted mock answers only the calls routed to its runtime", async () => {
@@ -87,9 +89,10 @@ const schemaSuite = (start: StartMode) => describe(`targeting schema mocks and s
         TargetingStoreApi.routing.first()
         const [first] = await alice.gateway.save({text: "a", times: 1})
             .with(
-                TargetingStoreApi.mock.save.on(t.storeA).anyTimes().andReturn({text: "a", by: "storeA"}),
-                TargetingStoreApi.mock.save.on(t.storeB).anyTimes().andReturn({text: "a", by: "storeB"}),
+                TargetingStoreApi.mock.save.on(t.storeA).times(0, 1).andReturn({text: "a", by: "storeA"}),
+                TargetingStoreApi.mock.save.on(t.storeB).times(0, 1).andReturn({text: "a", by: "storeB"}),
             )
+        expect(["storeA", "storeB"]).toContain(first)
         const other = first === "storeA" ? t.storeB : t.storeA
         await failure(
             alice.gateway.save({text: "a", times: 1})
@@ -145,7 +148,7 @@ const schemaSuite = (start: StartMode) => describe(`targeting schema mocks and s
         try {
             await failure(
                 alice.gateway.save({text: "a", times: 2})
-                    .with(TargetingStoreApi.mock.save.on(t.storeA).anyTimes().andReturn({text: "a", by: "mock"}))
+                    .with(TargetingStoreApi.mock.save.on(t.storeA).andReturn({text: "a", by: "mock"}))
             ).toThrow(/ROUTING_FAILED[^]*served by several runtimes/)
         } finally {
             addresses.set(storeB, real)

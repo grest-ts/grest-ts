@@ -25,6 +25,11 @@ export interface MockableTestContext {
     sendSpyResult(className: string, methodName: string, callResult: any): Promise<void>;
 
     /**
+     * Report what a spied call threw back to the test runner.
+     */
+    sendSpyError(className: string, methodName: string, error: unknown): Promise<void>;
+
+    /**
      * Sentinel value indicating spy mode (call the real method).
      */
     readonly CALL_THROUGH: string;
@@ -137,7 +142,14 @@ function intercept(className: string, methodName: string, original: Function, on
             return result;
         }
         // Spy mode - call the real method and report its result
-        const realResult = await original.apply(this, args);
+        let realResult: any;
+        try {
+            realResult = await original.apply(this, args);
+        } catch (error) {
+            // A spy that rejects it records that on itself; the caller still gets what the method threw.
+            await ctx.sendSpyError(className, methodName, error).catch(() => undefined);
+            throw error;
+        }
         await ctx.sendSpyResult(className, methodName, realResult);
         return realResult;
     };
@@ -169,8 +181,8 @@ export function mockableClassName(cls: Function, methodName: string): string {
 /**
  * Decorator to mark a class as mockable in tests.
  * Its async methods and async function fields (`foo = async () => …`) are interceptable via mockOf() or spyOn().
- * Fields are wrapped when an instance is constructed in a test, so the decorated class is a subclass of the declared
- * one; fields a subclass of it declares are not wrapped unless that subclass is @mockable too.
+ * Fields are wrapped when an instance is constructed inside a runtime the testkit started, so the decorated class is a
+ * subclass of the declared one; fields a subclass of it declares are not wrapped unless that subclass is @mockable too.
  *
  * In production (when not running tests), this decorator has minimal overhead - a method wrapper immediately calls
  * through to the original, and fields are left as they are.
@@ -201,8 +213,8 @@ export function mockable<T extends { new(...args: any[]): {} }>(target: T): T {
     const mocked = class extends target {
         constructor(...args: any[]) {
             super(...args);
-            // Fields are wrapped only for an instance made in a test, and by the most-derived @mockable class, so
-            // they are keyed under the class mockOf() is given.
+            // Fields are wrapped only for an instance made in a test runtime, and by the most-derived @mockable class,
+            // so they are keyed under the class mockOf() is given.
             if (!mockableContextStorage.getStore() || (new.target as any)[MOCKABLE_CLASS] !== mocked) return;
             for (const key of Object.keys(this)) {
                 const descriptor = Object.getOwnPropertyDescriptor(this, key)!;

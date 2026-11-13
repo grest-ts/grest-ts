@@ -230,8 +230,11 @@ export class GGHttpInterceptorsServer implements GGTestComponent {
             responseBody = Buffer.from(await response.arrayBuffer());
         } catch (error: any) {
             const cause = error?.cause?.code ?? error?.cause?.message ?? error?.message;
+            const issue = `Test router could not forward ${req.method} ${req.url} to ${destination?.label}: ${cause} (Is the target running?)`;
+            // No response will come, so fail the spy now rather than let .waitFor() run out.
+            spy?.routingFailed(new Error(issue));
             res.writeHead(502, {"content-type": "application/json"});
-            res.end(JSON.stringify({issue: `Test router could not forward ${req.method} ${req.url} to ${destination?.label}: ${cause} (Is the target running?)`}));
+            res.end(JSON.stringify({issue}));
             return;
         } finally {
             // The caller may have dropped its connections to a restarted target; the router must not keep its own.

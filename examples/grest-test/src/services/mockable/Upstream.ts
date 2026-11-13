@@ -22,6 +22,10 @@ export class Upstream {
         return "real:" + id
     }
 
+    async refuse(reason: string): Promise<string> {
+        throw new UPSTREAM_REFUSED({reason}, {displayMessage: "refused: " + reason})
+    }
+
     field = async (id: string, count: number): Promise<string> => `real:${id}x${count}`
 
     label(id: string): string {

@@ -1,4 +1,5 @@
-import {GG_TEST_RUNTIME_WORKER, GGTestRuntimeWorker} from "../GGTestRuntimeWorker";
+import {GGTestRuntimeWorker} from "../GGTestRuntimeWorker";
+import {GG_TEST_RUNTIME_WORKER} from "../GGTestRuntimeWorkerKey";
 import {GGClockIPC} from "./GGClockIPC";
 import {GGTimerShim} from "./GGTimerShim";
 import {applyLocalClock, runBootHooks} from "./GGTestClock";

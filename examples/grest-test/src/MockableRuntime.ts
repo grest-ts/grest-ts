@@ -35,6 +35,15 @@ class MockableApiImpl {
     public named = async ({id}: {id: string}) => this.upstream.named(id)
 
     public field = async ({id, count}: {id: string, count: number}) => this.upstream.field(id, count)
+
+    public refuse = async ({reason}: {reason: string}) => {
+        try {
+            return await this.upstream.refuse(reason)
+        } catch (error) {
+            if (UPSTREAM_REFUSED.is(error)) return "refused:" + error.data.reason
+            throw error
+        }
+    }
 }
 
 MockableRuntime.cli(import.meta.url).then()

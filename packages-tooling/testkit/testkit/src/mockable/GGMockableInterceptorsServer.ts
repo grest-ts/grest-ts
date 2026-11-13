@@ -3,6 +3,7 @@ import {GGTestComponent} from "../testers/GGTestComponent";
 import {GGInterceptorTable} from "../testers/GGInterceptorTable";
 import {GGTestRunner} from "../GGTestRunner";
 import {GGMockableIPC} from "./GGMockableIPC";
+import {ERROR} from "@grest-ts/schema";
 
 export const CALL_THROUGH = "__spyCallThrough|migo0am5g0htea";
 
@@ -34,7 +35,7 @@ export class GGMockableInterceptorsServer implements GGTestComponent {
         server.onFrameworkMessage(GGMockableIPC.testServer.spyResult, async (body, msg) => {
             const runtime = runtimeOf(msg.runtimeId);
             const handler = this.interceptors.match(body.className + "." + body.methodName, target => target === runtime);
-            if (handler?.passThrough) await handler.onResponse(body.callResult);
+            if (handler?.passThrough) await handler.onResponse(body.callError ? ERROR.fromJson(body.callError) : body.callResult);
         });
     }
 

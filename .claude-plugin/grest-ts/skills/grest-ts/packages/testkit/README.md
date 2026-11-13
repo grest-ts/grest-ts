@@ -237,7 +237,7 @@ await alice.checklist.list()
 
 ### Error assertions
 
-When testing error responses, use `.toBeError()` with an error class. After `.toBeError()`, further `.toMatchObject()` calls check the error data.
+When testing error responses, use `.toBeError()` with an error class. After `.toBeError()`, further `.toMatchObject()` calls check the error data, and `.withContext()` checks its context (`displayMessage`, `ref`, …). Spies (`MyApi.spy.x`, `spyOn(S).x`) take the same chain.
 
 ```typescript
 import {NOT_AUTHORIZED, VALIDATION_ERROR, NOT_FOUND, FORBIDDEN, EXISTS} from "@grest-ts/schema";
@@ -262,7 +262,8 @@ await alice.user.login({username: "alice", password: "wrong"})
 
 // The error's context: what the client sees as displayMessage
 await alice.user.create({name: "taken"})
-    .toBeError(SERVER_ERROR, {displayMessage: expect.stringContaining("Validation Failed")});
+    .toBeError(SERVER_ERROR)
+    .withContext({displayMessage: expect.stringContaining("Validation Failed")});
 ```
 
 ### Chaining with interceptors
@@ -356,7 +357,8 @@ GGTest.with(MyConfig.mysql).clone(["seed1.sql", "seed2.sql"]);
 Services decorated with `@mockable` can be mocked or spied on in tests using `mockOf()` and `spyOn()`.
 
 This is different from schema-level mock/spy (like `MyApi.mock.method`) which intercepts HTTP calls between runtimes.
-`mockOf`/`spyOn` intercept calls to internal services within a runtime.
+`mockOf`/`spyOn` intercept calls to internal services within a runtime the testkit started (see
+[Calling a service directly](#calling-a-service-directly)).
 
 ### mockOf() - replace with fake data
 
@@ -399,10 +401,18 @@ test('spy on external service', async () => {
     .andReturn(result)
     .times(2))                  // Expect exactly 2 calls
 
-// Any number of calls, none included
+// One call or more, when the count doesn't matter (a retry, a poll); .waitFor() waits for the first
 .with(mockOf(Service).method
     .andReturn(result)
-    .anyTimes())
+    .atLeastOnce())
+
+// A range, both ends included. A range from 0 allows no call at all: use it only where the test proves the outcome
+// another way, e.g. two targeted mocks where routing picks one and the result shows which answered.
+// .waitFor() rejects a range from 0: no call already meets it.
+.with(
+    Api.mock.save.on(t.storeA).times(0, 2).andReturn({by: "A"}),
+    Api.mock.save.on(t.storeB).times(0, 2).andReturn({by: "B"}),
+)
 
 // Answer each call from its input; the callback may be async
 .with(mockOf(Service).method
@@ -429,9 +439,11 @@ test('spy on external service', async () => {
     .response.toMatchObject({out: 1})   // Switch to response, then validate
 )
 
-// Spy expecting error response
+// Spy expecting error response: its context and data
 .with(spyOn(Service).method
-    .toBeError(NOT_FOUND)
+    .toBeError(QUOTA_EXCEEDED)
+    .withContext({displayMessage: "Over quota"})
+    .toMatchObject({left: 0})
 )
 ```
 
@@ -447,9 +459,31 @@ signature:
 | `pair(id: string, count: number)` | the arguments as a tuple: `["a", 2]` |
 
 `@mockable` intercepts async methods and async function fields (`run = async (…) => …`). `mockOf(S).x` throws for a
-sync method or a class without `@mockable`. Fields only exist on instances, so `mockOf` can't check them; a mock of a
-sync field never gets a call, which the default `times(1)` reports. Fields are wrapped when an instance is constructed
-in a test; fields declared by a subclass of a `@mockable` class need `@mockable` on that subclass too.
+sync method or a class without `@mockable`. A method that isn't `async` but returns a Promise is sync to `@mockable`:
+its type looks the same as an async one, so `mockOf(S).x` compiles and then throws; declare it `async`. Fields only exist
+on instances, so `mockOf` can't check them; a mock of a sync field never gets a call, which the default `times(1)`
+reports. Fields are wrapped when an instance is constructed inside a runtime the testkit started; fields declared by a subclass of a `@mockable` class need `@mockable` on that subclass too.
+
+### Calling a service directly
+
+`@mockable` intercepts calls made inside a runtime the testkit started, while an action runs. A service the test
+itself constructs and calls (`new OrderStore(...).place(...)`) runs in the test process: its calls are never
+intercepted, and a plain promise has no `.with()` to attach a mock to. Pick by what you test:
+
+- **Through its API** (the default): a test client call, `alice.orders.place(...).with(mockOf(...))`.
+- **A service with no API in front:** build it in a runtime's `compose()`, mark it `@testable`, and call it with
+  `callOn`. The call runs in the runtime, so mocks and spies apply:
+
+  ```typescript
+  await callOn(OrderStore).place({sku: "A1", amount: 5})
+      .with(mockOf(PaymentsApi).charge.toMatchObject({amount: 5}).andReturn({id: "ch_1"}))
+      .toMatchObject({chargeId: "ch_1"})
+  ```
+
+- **One class with its dependencies swapped per test:** that's a unit test. Pass fakes to its constructor; don't reach
+  for `mockOf`.
+
+Don't construct a service in a test body and expect `mockOf`/`spyOn` to reach it.
 
 ### Schema mock/spy vs @mockable mock/spy
 
@@ -572,31 +606,62 @@ export class GitHubApi {
 ## Controlling time
 
 `GGTest.clock` moves `Date` in the test and in every runtime it started (inline, worker, isolated) at once.
-Time keeps flowing from the time you set, unless you stop it.
+Time keeps flowing from the time you set, unless you freeze it.
 
 ```typescript
 await GGTest.clock.set(new Date("2026-03-01T09:00:00Z"))   // number = epoch ms
 await GGTest.clock.advance(30 * 60_000)                    // jump forward, fire due scope timers
-await GGTest.clock.stop()                                  // Date.now() and scope timers wait until set/advance/start
-await GGTest.clock.start()                                 // flows again from the current fake now
-GGTest.clock.now()                                         // same as Date.now() in the test
+await GGTest.clock.freeze(new Date("2026-03-01T09:00:00Z")) // stop at exactly that time (default: now)
+await GGTest.clock.resume()                                // flows again from the current fake now
 ```
 
-- Set in a test, it's undone after the test. Set in a `describe` or `beforeAll`, it holds for that block. The
-  default is real time. A runtime started later in a test starts on the clock's time; runtimes started at describe
-  level boot on real time, before a describe-level `set`.
+- **Freeze the clock when you assert on timers or exact times.** A flowing clock moves on between two calls, so a
+  timer can come due on its own a few milliseconds before your `advance`, and `Date.now()` is never exactly `T`.
+  `freeze(T)` stops at `T` in one change; `set(T)` then `freeze()` would stop a little after `T`.
+- **Time only moves forward, as in production.** The tests of a `describe` share its runtimes and their data, so
+  time a test moved stays moved for the next one; after a test or block only frozen or flowing goes back to how it
+  was. Each top `describe` starts on real time. Moving time back takes an explicit `set`/`freeze` to an earlier
+  time, and then what the runtimes wrote is dated in its future.
+- The default is real time. Set in the top `describe`, the clock is applied before that describe's runtimes start,
+  so they boot on it; in a nested `describe` or a `beforeAll`, the runtimes are already running and jump to it. A
+  runtime started in a test starts on the clock's time. Boot code that waits on a `Date` deadline never finishes
+  under a frozen clock: freeze after the runtimes are up, or wait with `performance.now()`.
 - Clocks outside the app aren't faked: DynamoDB TTL, SQL `NOW()`, Redis `EXPIRE`, S3 `LastModified`. Pass the
   app's time to them instead.
 - `Date` and `Temporal.Now` are faked; `Intl`'s implicit "now" (e.g. `Intl.DateTimeFormat().format()` with no
   date) isn't. Pass it a date.
-- `set` on a stopped clock moves it and keeps it stopped there.
-- Undoing a test's clock is a jump back. Runtimes started at describe level keep what they wrote at the fake time:
-  job locks held by scheduled runs, rows, wall-time caches. A test that advances far or starts schedules should
-  start its runtimes in the test, or have its own `describe`.
+- `set` on a frozen clock moves it and keeps it frozen there.
+- Seeding data with old timestamps (a row created "40 days ago") is fine and needs no clock. Advance the clock for
+  what happens over time: deadlines, expiry, schedules.
+- After a large advance, tokens minted before it have expired, as they would in production: sign in again.
 - The clock is shared by the whole file: don't use it in `test.concurrent` tests. It needs a `describe` (the
   test runner lives there).
 - Don't fake `Date` with `vi.useFakeTimers` too. `GGTest.clock` throws while it's active; leave `Date` out of
   `toFake`.
+
+A sequential flow in one `describe`, each test going on from the time the last one left:
+
+```typescript
+describe("trial expiry", () => {
+    const t = GGTest.startWorker(AppRuntime)
+    const admin = new TestContext("Admin").apis({account: AccountApi}).beforeAll(() => admin.login())
+
+    test("a new trial is active", async () => {
+        await admin.account.startTrial({accountId}).toMatchObject({status: "trial"})
+    })
+
+    test("14 days later it has expired", async () => {
+        await GGTest.clock.advance(14 * DAY)
+        await t.jobs.run("trial-expiry")
+        await admin.login()                                  // the earlier token expired with the advance
+        await admin.account.get({accountId}).toMatchObject({status: "expired"})
+    })
+
+    test("renewing starts a new period from now", async () => {   // still 14 days on
+        await admin.account.renew({accountId}).toMatchObject({status: "active"})
+    })
+})
+```
 
 ### Timers that follow the clock
 
@@ -622,8 +687,8 @@ this.expiry = GGLocator.setTimeout(() => socket.close(), expiresAt - Date.now())
 
 It doesn't wait for work a callback started without returning it (use `.waitFor(...)`), and requests in flight
 during the advance may see either time. A `set()` to a later time fires timers as `advance` does; a `set()` back
-fires nothing. With the clock stopped, scope timers wait for `advance` or `start()`. `GGJobRunner` schedules and the
-`withLock` heartbeat are scope timers: `advance` past a lock's TTL loses the lock, as a stalled run would. A
+fires nothing, and a pending scope timer then waits at most its own delay from the new time. With the clock frozen,
+scope timers wait for `advance` or `resume()`. `GGJobRunner` schedules and the `withLock` heartbeat are scope timers: `advance` past a lock's TTL loses the lock, as a stalled run would. A
 scheduled job run that fails doesn't fail the `advance`: the runner catches and logs it, so check its logs.
 
 Everything else stays on real time: raw `setTimeout`/`setInterval`, `sleep()`, `withTimeout()`, sockets, IPC and
@@ -632,6 +697,10 @@ with a delay of 1 s or more, the runtime logs a warning with where it was set, o
 `GGLocator.setTimeout` if it should follow the clock. An `eslint-disable` on the line doesn't silence it.
 `GG_TEST_CLOCK_RAW_TIMER_MS` changes that 1 s threshold (`0` checks every raw timer, including `setTimeout(fn)`
 with no delay, at the cost of a stack trace each).
+
+`GGLocator.setTimeout`/`setInterval` called outside any scope (a callback that lost its async context) is a plain
+timer, as in a CLI: its runtime won't clear it and the clock won't move it. Under the testkit it logs a warning with
+where it was set, once per place per test file.
 
 Mixed with `vi.useFakeTimers`: a scope timer set while vitest fakes `setTimeout` is a vitest timer, and one set while
 vitest fakes `Date` gets its due time in vitest's time. Scope timers set before `vi.useFakeTimers` stay on the clock.
