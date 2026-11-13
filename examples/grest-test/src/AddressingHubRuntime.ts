@@ -15,6 +15,8 @@ export class AddressingHubRuntime extends GGRuntime {
 
     protected compose(): void {
         const relay = AddressingRelayApi.createClient({url: ""})
+        // A browser-style same-origin URL: nothing to dial from node.
+        const sameOrigin = AddressingThirdPartyApi.createClient({url: "/api"})
         new GGHttp(new GGHttpServer()).http(AddressingHubApi, {
             sync: async ({targets, branch}: {targets: RelayTarget[], branch: string}) => {
                 const by: string[] = []
@@ -28,6 +30,7 @@ export class AddressingHubRuntime extends GGRuntime {
             },
             syncWithoutTarget: async ({branch}: {branch: string}) => relay.sync({branch}).then(result => result.by, failed),
             openPull: async ({head}: {head: string}) => thirdParty.createPull({head}).then(pull => "pull:" + pull.number, failed),
+            openPullAtRelativeUrl: async ({head}: {head: string}) => sameOrigin.createPull({head}).then(pull => "pull:" + pull.number, failed),
         })
     }
 }

@@ -180,8 +180,14 @@ Where PR 1 differs from §2 and §4:
   very host wins, two matches throw as `ROUTING_FAILED`.
 - **`GGTest.target(address)`** is a second kind of interceptor target next to a runtime. `@mockable` interceptors
   refuse it. A spy on an address skips the "service is not running" check.
-- **Pinned connections aren't reused:** after each pinned dial the router drops that pin's pooled agent, so a
-  restarted target never meets a stale socket kept by the test process.
+- **Custom-TLS connections aren't reused:** after each addressed dial the router drops the pooled agent of those
+  settings (pin, CA or client certificate), so a restarted target never meets a stale socket kept by the test
+  process. `invalidateTlsAgent(settings)` in the node transport is the one production addition for it.
+- **The destination header counts only from loopback callers.** The router listens on `0.0.0.0`, and it would dial
+  whatever the header names with the client certificate it carries; from any other address the header is ignored
+  and the call is routed as a discovery call.
+- **A relative base URL with no settings host** is treated like `""`: not sent to the router.
+- **Two targeted interceptors matching one call** (a runtime and its own address) fail it as `ROUTING_FAILED`.
 - **The header** is stripped before forwarding and never logged. The router's `maxHeaderSize` is 1 MB (`IPCServer`,
   the one line outside the testkit), because CA and client-certificate PEMs travel in it.
 - **The router still listens on `0.0.0.0`** (see §7). Client keys only travel from a test runtime to the router over

@@ -30,8 +30,8 @@ const testTransport: GGHttpTransport = (url, init) => {
     const worker = GG_TEST_RUNTIME_WORKER.tryGet();
     const baseUrl = url.slice(0, url.length - init.path.length);
     const router = `http://localhost:${worker?.config.testRouterPort}`;
-    // No base URL and no host is a call that can't be dialled; it must fail in a test as it does in production.
-    if (!worker || baseUrl === router || (baseUrl === "" && !init.connectionSettings?.host)) {
+    // No absolute base URL and no host is a call that can't be dialled; it must fail in a test as it does in production.
+    if (!worker || baseUrl === router || (!URL.canParse(baseUrl) && !init.connectionSettings?.host)) {
         return nodeDefaultTransport(url, init);
     }
     const {connectionSettings, ...rest} = init;

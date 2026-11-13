@@ -1,4 +1,5 @@
 import * as http from "http";
+import {isIPv4} from "net";
 import findMyWay, {HTTPMethod} from "find-my-way";
 import {HttpRoute, IPCServer} from "@grest-ts/ipc";
 import {GGLog} from "@grest-ts/logger";
@@ -11,7 +12,8 @@ import type {GGHttpSchema} from "../../src/schema/GGHttpSchema";
 import {GGHttpInterceptor} from "./GGHttpSchema.mock";
 import {GGHttpAddress, GGHttpTestIPC} from "./GGHttpTestAddresses";
 import {decodeDestination, DESTINATION_HEADER} from "./GGHttpTestTransport";
-import {invalidateTlsPinAgent, nodeDefaultTransport} from "../../src/client/nodeConnectionTransport.node.js";
+import {invalidateTlsAgent, nodeDefaultTransport} from "../../src/client/nodeConnectionTransport.node.js";
+import type {GGHttpTransport} from "../../src/client/GGHttpSchema.createClient";
 
 interface GGHttpDefaultAnswer {
     apiName: string
@@ -95,8 +97,8 @@ export class GGHttpInterceptorsServer implements GGTestComponent {
         if (interceptor.passThrough && !(interceptor.target instanceof GGTestTarget) && !this.discoveryServer.getRoute(interceptor.apiName)) {
             throw new Error(
                 `Cannot add spy for '${interceptor.apiName}' - service is not running!\n` +
-                `Spies require the actual service to be running so requests can be proxied.\n` +
-                `Did you forget to add 'withRuntime(${interceptor.apiName.replace('Api', 'Runtime')})' to your test?`
+                `A spy forwards the call, so a runtime that serves the API must run in the test.\n` +
+                `If the client addresses the call itself (a fixed url or a connection-settings host), name the address: .on(GGTest.target("host:port")).`
             );
         }
         this.interceptors.add(interceptor);
@@ -120,7 +122,8 @@ export class GGHttpInterceptorsServer implements GGTestComponent {
 
     private resolve(req: http.IncomingMessage): HttpRoute {
         const path = req.url!.split("?")[0];
-        const carried = req.headers[DESTINATION_HEADER] as string | undefined;
+        // Only a test runtime on this machine may name a destination: the router would dial it, with the client certificate it carries.
+        const carried = isLoopback(req.socket.remoteAddress ?? "") ? req.headers[DESTINATION_HEADER] as string | undefined : undefined;
         const key = this.templates.find(req.method as HTTPMethod, path)?.store as string | undefined;
         if (key === undefined) {
             const destination = this.destinationOf(carried, path);
@@ -215,8 +218,15 @@ export class GGHttpInterceptorsServer implements GGTestComponent {
             for (const [name, value] of Object.entries(req.headers)) {
                 if (value !== undefined && !REQUEST_HEADERS_NOT_FORWARDED.has(name)) headers[name] = Array.isArray(value) ? value.join(", ") : value;
             }
-            const init = {method: req.method!, headers, body: body.length ? new Uint8Array(body) : undefined, signal: abort.signal, path: req.url!, connectionSettings: destination.settings, redirect: "manual"};
-            response = await nodeDefaultTransport(destination.baseUrl + req.url, init as any);
+            response = await dial(destination.baseUrl + req.url, {
+                method: req.method!,
+                headers,
+                body: body.length ? new Uint8Array(body) : undefined,
+                signal: abort.signal,
+                path: req.url!,
+                connectionSettings: destination.settings,
+                redirect: "manual",
+            });
             responseBody = Buffer.from(await response.arrayBuffer());
         } catch (error: any) {
             const cause = error?.cause?.code ?? error?.cause?.message ?? error?.message;
@@ -224,9 +234,8 @@ export class GGHttpInterceptorsServer implements GGTestComponent {
             res.end(JSON.stringify({issue: `Test router could not forward ${req.method} ${req.url} to ${destination?.label}: ${cause} (Is the target running?)`}));
             return;
         } finally {
-            // The caller may have dropped this pin's connections (a restarted target); the router must not keep its own.
-            const pin = destination?.settings?.tlsPin;
-            if (pin) invalidateTlsPinAgent(pin.fingerprint256);
+            // The caller may have dropped its connections to a restarted target; the router must not keep its own.
+            if (destination?.settings) invalidateTlsAgent(destination.settings);
         }
         await spy?.onResponse(parseJson(responseBody));
 
@@ -241,6 +250,12 @@ export class GGHttpInterceptorsServer implements GGTestComponent {
     }
 }
 
+// The node transport hands its init to fetch as it is; a forwarded call needs two things createClient never sends.
+const dial = nodeDefaultTransport as (
+    url: string,
+    init: Omit<Parameters<GGHttpTransport>[1], "body"> & {body: Uint8Array | undefined, redirect: "manual"}
+) => Promise<Response>;
+
 function addressOf(url: string): GGHttpAddress {
     const {hostname, port, protocol} = new URL(url);
     return {host: canonicalHost(hostname), port: port ? Number(port) : protocol === "https:" ? 443 : 80};
@@ -251,7 +266,8 @@ function canonicalHost(host: string): string {
 }
 
 function isLoopback(host: string): boolean {
-    return host === "localhost" || host === "::1" || host.startsWith("127.");
+    const ip = host.replace(/^::ffff:/, "");
+    return host === "localhost" || host === "::1" || (isIPv4(ip) && ip.startsWith("127."));
 }
 
 /** `localhost`, `127.0.0.1` and `::1` are one host; `127.0.0.2` is another. */

@@ -40,7 +40,13 @@ export class GGInterceptorTable<I extends GGCallInterceptor> {
      */
     public match(key: string, isAt: ((target: GGInterceptorTarget) => boolean) | undefined, where?: string): I | undefined {
         const list = this.get(key);
-        const matched = (isAt && list.find(i => i.target && isAt(i.target))) ?? list.find(i => !i.target);
+        const targeted = isAt ? list.filter(i => i.target && isAt(i.target)) : [];
+        if (targeted.length > 1) {
+            const error = new Error(`${targeted.map(i => i.getLabel()).join(" and ")} both match this call, and exactly one interceptor may handle a call.`);
+            targeted.forEach(i => i.routingFailed(error));
+            throw error;
+        }
+        const matched = targeted[0] ?? list.find(i => !i.target);
         if (where !== undefined) {
             for (const other of list) {
                 if (other !== matched) other.wentElsewhere(where);

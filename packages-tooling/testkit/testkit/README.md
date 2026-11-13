@@ -492,8 +492,9 @@ never see it, so it runs for real.
 
 1. a mock or spy targeted at the runtime the call happens at (`.on(runtime)`),
 2. an untargeted mock or spy of the method,
-3. a running service (for `mockOf` / `spyOn`: the real method),
-4. a framework default answer (e.g. placeholder service tokens),
+3. its destination: the instance discovery picks, or the address the client names (for `mockOf` / `spyOn`: the
+   real method),
+4. a framework default answer (e.g. placeholder service tokens), for a discovery call no instance serves,
 5. otherwise the call fails with "No route".
 
 An untargeted spy next to a targeted mock therefore does not see the targeted call. Two interceptors for the same
@@ -525,6 +526,7 @@ const r = GGTest.startWorker({hub: [HubRuntime, HubRuntime]})
 - To run several addressed runtimes side by side, bind each to its own loopback IP (`127.0.0.2`, `127.0.0.3`, …;
   Linux routes all of `127.0.0.0/8`, macOS needs an alias per address).
 - An untargeted spy, or one on a runtime, needs a service running in the test. A spy on an address doesn't.
+- A runtime target and an address target that both match one call fail the action (`ROUTING_FAILED`).
 - Each key of the `GGTest.start*` input selects its own runtimes, in the order given, also when two keys use the
   same runtime class.
 - A targeted mock that is never called says where the method's calls went:

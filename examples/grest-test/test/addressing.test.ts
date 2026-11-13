@@ -1,6 +1,7 @@
 import {callOn, GG_TEST_RUNNER, GGTest, GGTestContext, mockOf} from "@grest-ts/testkit"
 import {GGHttpInterceptorsServer} from "@grest-ts/http/testkit"
 import {SERVER_ERROR} from "@grest-ts/schema"
+import {networkInterfaces} from "node:os"
 import {AddressingHubRuntime} from "../src/AddressingHubRuntime"
 import {AddressingRelayARuntime} from "../src/AddressingRelayARuntime"
 import {AddressingRelayBRuntime} from "../src/AddressingRelayBRuntime"
@@ -171,6 +172,42 @@ const suite = (start: StartMode) => describe(`mocks and spies on client-addresse
                 )
                 .toEqual(["mock"])
         })
+    })
+
+    test("a runtime target and an address target for the same place fail the action", async () => {
+        await failure(
+            alice.hub.sync({targets: [relayA], branch: "main"}).with(
+                AddressingRelayApi.mock.sync.on(t.relayA).anyTimes().andReturn({branch: "main", by: "mockA"}),
+                AddressingRelayApi.mock.sync.on(GGTest.target(`${relayA.host}:${relayA.port}`)).anyTimes().andReturn({branch: "main", by: "mockA"}),
+            )
+        ).toThrow(/ROUTING_FAILED[^]*relayA[^]*both match/)
+    })
+
+    test("an untargeted spy on an API no runtime serves points to an address target", async () => {
+        await failure(
+            alice.hub.openPull({head: "fix"}).with(AddressingThirdPartyApi.spy.createPull)
+        ).toThrow(/\.on\(GGTest\.target\(/)
+    })
+
+    test("the router carries a destination only for callers on this machine", async () => {
+        const external = Object.values(networkInterfaces()).flat().find(address => address?.family === "IPv4" && !address.internal)?.address
+        if (!external) return
+        const port = GG_TEST_RUNNER.get().ipcServer.getPort()
+        const destination = Buffer.from(JSON.stringify({url: "", settings: {host: relayA.host, port: relayA.port, tlsPin: {fingerprint256: relayA.fingerprint256}}})).toString("base64")
+        const sync = (host: string) => fetch(`http://${host}:${port}/api/addressing-relay/sync`, {
+            method: "POST",
+            headers: {"content-type": "application/json", "x-gg-test-destination": destination},
+            body: JSON.stringify({branch: "main"}),
+        }).then(response => response.text())
+
+        expect(await sync("127.0.0.1")).toContain("real:127.0.0.2")
+        expect(await sync(external)).not.toContain("real:127.0.0.2")
+    })
+
+    test("a call with a relative base URL and no host is not sent to the router, so it fails as in production", async () => {
+        await alice.hub.openPullAtRelativeUrl({head: "fix"})
+            .with(AddressingThirdPartyApi.mock.createPull.times(0).andReturn({number: 7}))
+            .toEqual(expect.stringMatching(/^failed:SERVER_ERROR/))
     })
 
     test("a call with no base URL and no host is not sent to the router, so it fails as in production", async () => {

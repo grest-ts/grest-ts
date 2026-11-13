@@ -77,6 +77,11 @@ export const AddressingHubContract = new GGContractClass("AddressingHubApi", {
         success: IsString,
         errors: [SERVER_ERROR],
     },
+    openPullAtRelativeUrl: {
+        input: IsObject({head: IsString}),
+        success: IsString,
+        errors: [SERVER_ERROR],
+    },
 })
 
 export const AddressingHubApi = new GGHttpSchema({
@@ -86,5 +91,6 @@ export const AddressingHubApi = new GGHttpSchema({
         sync: GGRpc.POST("sync"),
         syncWithoutTarget: GGRpc.POST("sync-without-target"),
         openPull: GGRpc.POST("open-pull"),
+        openPullAtRelativeUrl: GGRpc.POST("open-pull-at-relative-url"),
     },
 })

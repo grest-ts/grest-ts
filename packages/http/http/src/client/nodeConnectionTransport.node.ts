@@ -144,7 +144,7 @@ class TlsAgentCache {
         }
     }
 
-    private drop(key: string): void {
+    drop(key: string): void {
         const existing = this.agents.get(key)
         if (!existing) return
         // close() drains in-flight requests then closes idle sockets; destroy() is the hard fallback.
@@ -158,6 +158,11 @@ const AGENT_CACHE = new TlsAgentCache()
 /** Drop the pooled dispatcher(s) for a pinned fingerprint so stale sockets don't linger after a restart. */
 export function invalidateTlsPinAgent(fingerprint256: string): void {
     AGENT_CACHE.invalidateFingerprint(fingerprint256)
+}
+
+/** Drop the pooled dispatcher for exactly these settings, whatever kind of TLS setup they describe. */
+export function invalidateTlsAgent(settings: GGConnectionSettings): void {
+    if (needsDispatcher(settings)) AGENT_CACHE.drop(agentKey(settings))
 }
 
 /**
