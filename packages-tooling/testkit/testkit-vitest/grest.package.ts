@@ -8,7 +8,7 @@ definePackage({
     hasTests: true,
     publishToNpm: true,
     peerDependencies: {
-        "vitest": ">=3.0.0"
+        "vitest": ">=4.0.0"
     },
     customExports: {
         "./globalSetup": "./src/globalSetup.ts",

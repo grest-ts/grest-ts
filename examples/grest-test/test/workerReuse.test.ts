@@ -12,6 +12,12 @@ describe("worker reuse: first start", () => {
     })
 })
 
+describe("worker reuse: a describe without runtimes", () => {
+    test("leaves parked workers to the next describe", () => {
+        expect(true).toBe(true)
+    })
+})
+
 describe("worker reuse: next describe", () => {
     GGTest.startWorker(WorkerReuseRuntime)
 

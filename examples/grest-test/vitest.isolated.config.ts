@@ -1,7 +1,6 @@
 import {defineConfig} from 'vitest/config';
 import base from './vitest.config';
 
-// The suites that depend on how runtime workers are started, under vitest's default `isolate: true`.
 export default defineConfig({
     test: {
         ...base.test,
