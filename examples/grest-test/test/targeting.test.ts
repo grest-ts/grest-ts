@@ -126,8 +126,14 @@ const schemaSuite = (start: StartMode) => describe(`targeting schema mocks and s
 
     test("a spied call keeps its path parameters and query string", async () => {
         await alice.gateway.find({id: "7", tag: "x y"})
-            .with(TargetingStoreApi.spy.find.responseToMatchObject("7:x y"))
+            .with(TargetingStoreApi.spy.find.toEqual({id: "7", tag: "x y"}).responseToMatchObject("7:x y"))
             .toEqual("7:x y")
+    })
+
+    test("a mock on a GET route sees its path parameters and query string as input", async () => {
+        await alice.gateway.find({id: "7", tag: "x y"})
+            .with(TargetingStoreApi.mock.find.toEqual({id: "7", tag: "x y"}).andReturn(({id, tag}: {id: string, tag: string}) => `mock ${id}/${tag}`))
+            .toEqual("mock 7/x y")
     })
 
     test("a mock callback can use the test's own clients", async () => {

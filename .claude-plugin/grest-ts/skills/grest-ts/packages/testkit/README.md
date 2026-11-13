@@ -494,6 +494,9 @@ Don't construct a service in a test body and expect `mockOf`/`spyOn` to reach it
 | **How to use** | `MyApi.mock.method.andReturn(...)` | `mockOf(Service).method.andReturn(...)` |
 | **Import** | `import "@grest-ts/http/testkit"` | `import {mockOf, spyOn} from "@grest-ts/testkit"` |
 
+A schema mock or spy sees the input the server would: the route's codec reads path params, query string and body,
+and the contract parses them (`.toEqual({id: 7})` on a `GET("items/:id")` route).
+
 ### Which calls a schema mock or spy reaches
 
 `MyApi.mock.x` / `MyApi.spy.x` act in the test router, and in a test runtime every call of a schema client goes
