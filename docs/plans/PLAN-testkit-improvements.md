@@ -2,7 +2,7 @@
 
 ## Goal
 
-Testkit features that remove hand-written test plumbing: polling loops, string-path HTTP helpers, fake clients, log-regex stand-ins for events. Ordered by correctness first, then by how common the underlying need is. Overlaps with `docs/IDEA_LIST_FOR_TESTS.md` are noted per item; time control is covered separately in `SPEC-TESTS_CONTROLLING_TIME.md`.
+Testkit features that remove hand-written test plumbing: polling loops, string-path HTTP helpers, fake clients, log-regex stand-ins for events. Ordered by correctness first, then by how common the underlying need is. Overlaps with `docs/IDEA_LIST_FOR_TESTS.md` are noted per item; time control is covered separately in `docs/design/test-clock.md`.
 
 ---
 
