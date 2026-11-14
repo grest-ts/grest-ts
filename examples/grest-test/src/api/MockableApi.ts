@@ -17,6 +17,11 @@ export const MockableContract = new GGContractClass("MockableApi", {
         success: IsString,
         errors: [SERVER_ERROR],
     },
+    optional: {
+        input: IsObject({id: IsString, tag: IsString.orUndefined}),
+        success: IsString,
+        errors: [SERVER_ERROR],
+    },
     named: {
         input: IsObject({id: IsString}),
         success: IsString,
@@ -41,6 +46,7 @@ export const MockableApi = new GGHttpSchema({
         lookup: GGRpc.POST("lookup"),
         tagged: GGRpc.POST("tagged"),
         pair: GGRpc.POST("pair"),
+        optional: GGRpc.POST("optional"),
         named: GGRpc.POST("named"),
         field: GGRpc.POST("field"),
         refuse: GGRpc.POST("refuse"),

@@ -32,6 +32,8 @@ class MockableApiImpl {
 
     public pair = async ({id, count}: {id: string, count: number}) => this.upstream.pair(id, count)
 
+    public optional = async ({id, tag}: {id: string, tag?: string}) => this.upstream.optional(id, tag)
+
     public named = async ({id}: {id: string}) => this.upstream.named(id)
 
     public field = async ({id, count}: {id: string, count: number}) => this.upstream.field(id, count)

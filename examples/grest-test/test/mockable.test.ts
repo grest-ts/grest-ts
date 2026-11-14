@@ -33,6 +33,12 @@ describe("mockOf on a @mockable class", () => {
                 .with(mockOf(Upstream).pair.toEqual(["a", 2]).andReturn(([id, count]) => `mocked:${id}x${count}`))
                 .toEqual("mocked:ax2")
         })
+
+        test("an undefined argument as undefined, not null", async () => {
+            await client.optional({id: "a", tag: undefined})
+                .with(mockOf(Upstream).optional.toEqual(["a", undefined]).andReturn(([id, tag]) => `mocked:${id}:${tag === undefined}`))
+                .toEqual("mocked:a:true")
+        })
     })
 
     describe("an async function field is mocked like a method", () => {

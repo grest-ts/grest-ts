@@ -78,8 +78,15 @@ export class IPCSocket {
 
     private static DELIMITER = ':';
 
+    // JSON writes an undefined array item as null; a sentinel keeps it, so a mocked call's arguments arrive as sent.
+    private static UNDEFINED = '__ggIpcUndefined';
+
     private static serialize(msg: IPCMessage): string {
-        const dataStr = msg.data !== undefined ? JSON.stringify(msg.data) : '';
+        const dataStr = msg.data !== undefined
+            ? JSON.stringify(msg.data, function (this: unknown, _key, value) {
+                return value === undefined && Array.isArray(this) ? {[IPCSocket.UNDEFINED]: true} : value;
+            })
+            : '';
         return `${msg.type}${this.DELIMITER}${msg.id}${this.DELIMITER}${msg.path}${this.DELIMITER}${dataStr}`;
     }
 
@@ -95,7 +102,9 @@ export class IPCSocket {
         let data: unknown;
         if (dataStr) {
             try {
-                data = JSON.parse(dataStr);
+                data = JSON.parse(dataStr, (_key, value) => Array.isArray(value)
+                    ? value.map(item => item?.[IPCSocket.UNDEFINED] === true ? undefined : item)
+                    : value);
             } catch {
                 // Invalid JSON
             }

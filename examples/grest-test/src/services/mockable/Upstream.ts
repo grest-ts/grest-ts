@@ -18,6 +18,10 @@ export class Upstream {
         return `real:${id}x${count}`
     }
 
+    async optional(id: string, tag?: string): Promise<string> {
+        return `real:${id}:${tag ?? "-"}`
+    }
+
     async named(id: string): Promise<string> {
         return "real:" + id
     }
