@@ -76,11 +76,8 @@ export type Raw<T> =
                             T extends bigint ? (T extends object ? bigint : T) :
                                 // Handle functions (preserve as-is, don't recurse)
                                 T extends Function ? T :
-                                    // Handle arrays (must come before object check as arrays are objects)
-                                    T extends Array<infer U> ? Raw<U>[] :
-                                        T extends ReadonlyArray<infer U> ? readonly Raw<U>[] :
-                                            // Handle objects recursively - map over properties
-                                            T extends object ? { [K in keyof T]: Raw<T[K]> } :
-                                                // Otherwise keep the type as-is (catches unknown, any, never, etc.)
-                                                T;
+                                    // Objects, arrays and tuples: a homomorphic mapped type keeps an array's or tuple's shape and readonly
+                                    T extends object ? { [K in keyof T]: Raw<T[K]> } :
+                                        // Otherwise keep the type as-is (catches unknown, any, never, etc.)
+                                        T;
 

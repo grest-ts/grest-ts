@@ -1,4 +1,4 @@
-import {RuntimeConstructor, RuntimeResult, Selector, SelectorExtensions, ObjectResult, StartResult, RuntimeInput} from "./RuntimeSelector";
+import {RuntimeConstructor, Selector, SelectorExtensions, ObjectResult, StartResult, RuntimeInput} from "./RuntimeSelector";
 import {GGTestRuntime} from "../GGTestRuntime";
 import type {GGTestRunner} from "../GGTestRunner";
 
@@ -145,7 +145,9 @@ export function createStartResult<T extends RuntimeInput>(
         return createObjectResult(input, runtimes) as StartResult<T>;
     }
 
-    // Array or single runtime → Selector
+    if (runtimes.length > 1) {
+        runtimes.forEach((runtime, index) => runtime.label = `${runtime.name}[${index}]`);
+    }
     return createSelector(runtimes) as StartResult<T>;
 }
 
@@ -165,12 +167,11 @@ function createObjectResult<T extends Record<string, RuntimeConstructor | Runtim
 ): ObjectResult<T> {
     const result: Record<string, Selector<any>> = {};
 
-    // Group runtimes by the key they were registered under
-    // We need to track which runtimes belong to which key
+    // Same order as GGTest.extractConstructors created them in.
+    let next = 0;
     for (const [key, value] of Object.entries(input)) {
-        const constructors = Array.isArray(value) ? value : [value];
-        const names = constructors.map(c => c.NAME);
-        const keyRuntimes = runtimes.filter(r => names.includes(r.name));
+        const keyRuntimes = runtimes.slice(next, next += Array.isArray(value) ? value.length : 1);
+        keyRuntimes.forEach((runtime, index) => runtime.label = Array.isArray(value) ? `${key}[${index}]` : key);
         result[key] = createSelector(keyRuntimes);
     }
 
@@ -190,36 +191,14 @@ function createObjectResult<T extends Record<string, RuntimeConstructor | Runtim
     return result as ObjectResult<T>;
 }
 
-// ============================================================================
-// Legacy factory (for backwards compatibility)
-// ============================================================================
-
-/**
- * @deprecated Use createStartResult instead.
- * Create a RuntimeResult for accessing runtimes via get() method.
- */
-export function createRuntimeSelector<T extends RuntimeConstructor[]>(runtimes: GGTestRuntime[]): RuntimeResult<T> {
-    return {
-        get(runtimeConstructor: RuntimeConstructor): Selector<any> {
-            const name = runtimeConstructor.NAME;
-            const filtered = runtimes.filter(r => r.name === name);
-            return createSelector(filtered);
-        },
-
-        all(): Selector<any> {
-            return createSelector(runtimes);
-        },
-
-        async stop(): Promise<void> {
-            for (const runtime of runtimes) {
-                await runtime.stop();
-            }
-        },
-
-        async shutdown(): Promise<void> {
-            for (const runtime of runtimes) {
-                await runtime.shutdown();
-            }
-        }
-    } as RuntimeResult<T>;
+export function singleRuntime(selector: {readonly runtimes: GGTestRuntime[]}): GGTestRuntime {
+    const runtimes = selector?.runtimes;
+    if (!Array.isArray(runtimes)) {
+        throw new Error(".on() takes a runtime selector, e.g. the result of GGTest.startWorker(MyRuntime) or one of its keys or indexes.");
+    }
+    if (runtimes.length !== 1) {
+        throw new Error(`.on() takes exactly one runtime, but this selector holds ${runtimes.length}` +
+            (runtimes.length ? ` (${runtimes.map(r => r.label).join(", ")}). Pick one by index or key.` : "."));
+    }
+    return runtimes[0];
 }

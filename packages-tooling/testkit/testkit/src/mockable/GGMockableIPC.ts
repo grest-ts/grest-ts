@@ -1,4 +1,5 @@
 import {IPCServer} from "@grest-ts/ipc";
+import type {ERROR_JSON} from "@grest-ts/schema";
 
 export interface MockableCallPayload {
     className: string;
@@ -9,7 +10,9 @@ export interface MockableCallPayload {
 export interface MockableSpyResultPayload {
     className: string;
     methodName: string;
-    callResult: any;
+    callResult?: any;
+    /** What the spied call threw, instead of a result. */
+    callError?: ERROR_JSON;
 }
 
 export const GGMockableIPC = {

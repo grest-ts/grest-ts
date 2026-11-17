@@ -237,7 +237,7 @@ method's errors. List the authority in the schema's `use:` next to its credentia
 const authz = new GGAuthz({model: AppAuthz, policies, resolver, facts, approvals})
 ```
 
-The constructor validates `policies` with `IsGGAuthzPolicies` (throwing `GGIssuesList`), resolves
+The constructor validates `policies` with `IsGGAuthzPolicies` (throwing `GGParseError`), resolves
 every role and action name and indexes the policies. **One engine per tenant**: cache an instance
 and rebuild it when that tenant's policies change (~20 ms for 5k bindings). The tree, groups and
 attributes are read on every request, so changes to them need no rebuild.

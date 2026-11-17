@@ -7,14 +7,26 @@ import {NOT_AUTHORIZED} from "@grest-ts/schema"
 // Comparing fixed-length HMAC digests keeps timingSafeEqual from leaking the secret's length.
 const COMPARE_KEY = randomBytes(32)
 
+// A wire takes one .define() per process, and a runtime's compose() runs once per runtime instance.
+const VERIFIED = new WeakMap<GGWireContextKey, GGWireHandlerRegistration<GGSecret<string>>>()
+
 /**
  * A secret header two services share. `verify` gives the wire its server half, `attach` its client
  * half. The secret is read per request, so both can be set up before the config store is live.
  */
 export class GGSharedSecret {
 
-    /** Call once per wire (it `.define()`s it); `.create(secret)` once per runtime. */
+    /** The wire's server half; `.create(secret)` once per runtime. Repeat calls for a wire return the same registration. */
     public static verify(wire: GGWireContextKey): GGWireHandlerRegistration<GGSecret<string>> {
+        let registration = VERIFIED.get(wire)
+        if (!registration) {
+            registration = GGSharedSecret.define(wire)
+            VERIFIED.set(wire, registration)
+        }
+        return registration
+    }
+
+    private static define(wire: GGWireContextKey): GGWireHandlerRegistration<GGSecret<string>> {
         return wire.define((secret: GGSecret<string>) => ({
             process: async () => {
                 const expected = secret.reveal()

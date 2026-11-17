@@ -15,14 +15,14 @@ export interface GGPendingWait {
  * what the interceptor saw instead.
  */
 export async function waitForInterceptors(waits: GGPendingWait[], release: (interceptor: IGGTestInterceptor) => Promise<void>): Promise<void> {
-    const start = Date.now();
+    const start = performance.now();
     const pending = new Set(waits);
     while (pending.size) {
         for (const wait of pending) {
             if (wait.interceptor.isCalled()) {
                 pending.delete(wait);
                 await release(wait.interceptor);
-            } else if (Date.now() - start > wait.timeout) {
+            } else if (performance.now() - start > wait.timeout) {
                 throw await timeoutError(wait);
             }
         }

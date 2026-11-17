@@ -83,7 +83,7 @@ export class GGSocket {
     private tearingDownPromise?: Promise<void>;
     private heartbeatStarted = false;
 
-    private lastActivity = Date.now();
+    private lastActivity = performance.now();
 
     private readonly onTearDownCallbacks: Array<() => Promise<void>> = [];
     private readonly onCloseCallbacks: Array<() => void> = [];
@@ -121,7 +121,7 @@ export class GGSocket {
 
                 if (this.isActive) {
                     // Any inbound frame is proof of life for the heartbeat watchdog.
-                    this.lastActivity = Date.now();
+                    this.lastActivity = performance.now();
                     if (msg.type === MessageType.MSG || msg.type === MessageType.REQ) {
                         GG_WS_MESSAGE.set({path: msg.path});
                         await this.handleIncomingMessage(msg);
@@ -356,8 +356,8 @@ export class GGSocket {
         return startSocketHeartbeat(this.socket, {
             config,
             isActive: () => this.isActive,
-            stampActivity: () => { this.lastActivity = Date.now(); },
-            idleMs: () => Date.now() - this.lastActivity,
+            stampActivity: () => { this.lastActivity = performance.now(); },
+            idleMs: () => performance.now() - this.lastActivity,
             apiName: this.apiName,
             socketPath: this.socketPath,
             metrics: this.metrics,

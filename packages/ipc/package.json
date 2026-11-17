@@ -44,7 +44,6 @@
     "node": ">=24"
   },
   "dependencies": {
-    "find-my-way": "^9.4.0",
     "http-proxy": "^1.18.1",
     "ws": "^8.19.0"
   },
@@ -53,6 +52,7 @@
     "@grest-ts/context": "0.0.101",
     "@grest-ts/locator": "0.0.101",
     "@grest-ts/logger": "0.0.101",
+    "@grest-ts/schema": "0.0.101",
     "@grest-ts/trace": "0.0.101"
   },
   "devDependencies": {

@@ -5,7 +5,7 @@
  * (interceptors, expectations, logging).
  */
 
-import {ERROR, GGPromise, VALIDATION_ERROR, ValidationIssueJson} from "@grest-ts/schema";
+import {ERROR, GGErrorData, GGPromise, VALIDATION_ERROR, ValidationIssueJson} from "@grest-ts/schema";
 import {GGTestAction, GGTestActionConfig, tActionRawData} from "@grest-ts/testkit";
 import {ConstructorOf} from "@grest-ts/common";
 import {parseContractResponse} from "../utils/validateContractResponse";
@@ -17,6 +17,7 @@ export class GGHttpCall<InputData, SuccessData, ErrorsUnion extends ERROR<any, a
     private readonly _execute: (data: any) => GGPromise<any, any>;
 
     private _validatingError: ConstructorOf<ERROR<any, any>> | undefined;
+    private _validatingContext: Partial<GGErrorData> | undefined;
 
     constructor(ctx: GGContext, methodName: string, data: any, execute: (data: any) => GGPromise<any, any>) {
         const config: GGTestActionConfig = {
@@ -31,10 +32,18 @@ export class GGHttpCall<InputData, SuccessData, ErrorsUnion extends ERROR<any, a
         this._execute = execute;
     }
 
+    /** The call ends with this error; the matchers after it check the error's data. */
     public toBeError<Type extends ConstructorOf<ErrorsUnion>>(type: Type): GGHttpCall<InputData, ExtractBadRequestData<Type, ErrorsUnion, InputData>, never> {
         this._validatingError = type;
         this.responseExpectations.flush();
         return this as any;
+    }
+
+    /** After `.toBeError()`: matched like `toMatchObject` against the error's context, e.g. `{displayMessage: expect.stringContaining("…")}`. */
+    public withContext(context: Partial<GGErrorData>): this {
+        if (!this._validatingError) throw new Error(".withContext() checks the error's context: call .toBeError() first.");
+        this._validatingContext = context;
+        return this;
     }
 
     protected async executeAction(): Promise<tActionRawData> {
@@ -42,7 +51,7 @@ export class GGHttpCall<InputData, SuccessData, ErrorsUnion extends ERROR<any, a
     }
 
     protected processRawResponse(result: tActionRawData): Promise<SuccessData> {
-        return parseContractResponse(result, this._validatingError);
+        return parseContractResponse(result, this._validatingError, this._validatingContext);
     }
 }
 

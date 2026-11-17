@@ -2,27 +2,43 @@ import {IPCClient, IPCClientRequest} from "@grest-ts/ipc";
 import {GGLog} from "@grest-ts/logger";
 import {GGLoggerConsole} from "@grest-ts/logger-console";
 import {GGRuntime} from "@grest-ts/runtime";
-import {GGLocatorKey, GGLocatorScope} from "@grest-ts/locator";
+import {GGLocatorScope} from "@grest-ts/locator";
+import {GG_TEST_RUNTIME_WORKER} from "./GGTestRuntimeWorkerKey";
 import {pathToFileURL} from "url";
 import {GGTestCommand, GGTestEnvConfig} from "./GGTestRuntime";
 import {GGExtensionDiscovery} from "@grest-ts/common";
+import {ERROR} from "@grest-ts/schema";
 import {type MockableTestContext, runWithMockableContext} from "@grest-ts/testkit-runtime";
 import {CALL_THROUGH} from "./mockable/GGMockableInterceptorsServer";
 import {GGMockableIPC} from "./mockable/GGMockableIPC";
 import {registerOnCallHandler} from "./callOn/registerOnCallHandler";
 import {TestableIPC} from "./callOn/TestableIPC";
 
-export const GG_TEST_RUNTIME_WORKER = new GGLocatorKey<GGTestRuntimeWorker>("GGTestRuntimeWorker");
 
 export class GGTestRuntimeWorker {
 
-    private static beforeRuntimeStartHandlers: (() => void)[] = [];
+    private static beforeRuntimeStartHandlers: (() => void | Promise<void>)[] = [];
     private static beforeRuntimeStartExecuted = false;
+
+    private static runtimeStartedHandlers: ((worker: GGTestRuntimeWorker) => void | Promise<void>)[] = [];
 
     public readonly ipcClient: IPCClient;
     public readonly config: GGTestEnvConfig;
     public runtime!: GGRuntime
     private runtimeStopped = false;
+
+    /** Bridges this runtime's @mockable calls to the test runner. */
+    private readonly mockableContext: MockableTestContext = {
+        CALL_THROUGH,
+        sendCall: (className, methodName, callArgs) =>
+            this.ipcClient.sendFrameworkRequest(GGMockableIPC.testServer.call, {className, methodName, callArgs}),
+        sendSpyResult: async (className, methodName, callResult) => {
+            await this.ipcClient.sendFrameworkRequest(GGMockableIPC.testServer.spyResult, {className, methodName, callResult});
+        },
+        sendSpyError: async (className, methodName, error) => {
+            await this.ipcClient.sendFrameworkRequest(GGMockableIPC.testServer.spyResult, {className, methodName, callError: ERROR.fromUnknown(error).toJSON()});
+        }
+    };
 
     private readonly scope: GGLocatorScope;
 
@@ -40,11 +56,16 @@ export class GGTestRuntimeWorker {
      * Safe to call at module load time - just adds to array.
      * Handlers are executed during start() after extensions are loaded but before runtime creation.
      */
-    public static onBeforeRuntimeStart(handler: () => void): void {
+    public static onBeforeRuntimeStart(handler: () => void | Promise<void>): void {
         if (this.beforeRuntimeStartExecuted) {
             throw new Error("Cannot register beforeRuntimeStart handler after worker has started");
         }
         this.beforeRuntimeStartHandlers.push(handler);
+    }
+
+    /** Called in every worker once its runtime has started, before the test runner sees it as started. */
+    public static onRuntimeStarted(handler: (worker: GGTestRuntimeWorker) => void | Promise<void>): void {
+        this.runtimeStartedHandlers.push(handler);
     }
 
     public async start(createRuntime?: () => GGRuntime): Promise<void> {
@@ -52,27 +73,8 @@ export class GGTestRuntimeWorker {
 
         await new GGExtensionDiscovery('testkit').load();
 
-        // Create mockable context that bridges to IPC
-        const mockableContext: MockableTestContext = {
-            CALL_THROUGH,
-            sendCall: async (className, methodName, callArgs) => {
-                return this.ipcClient.sendFrameworkRequest(GGMockableIPC.testServer.call, {
-                    className,
-                    methodName,
-                    callArgs
-                });
-            },
-            sendSpyResult: async (className, methodName, callResult) => {
-                await this.ipcClient.sendFrameworkRequest(GGMockableIPC.testServer.spyResult, {
-                    className,
-                    methodName,
-                    callResult
-                });
-            }
-        };
-
         // Wrap in mockable context so @mockable decorators can intercept
-        await runWithMockableContext(mockableContext, async () => {
+        await runWithMockableContext(this.mockableContext, async () => {
             await this.ipcClient.connect(this.config.runtimeId);
             GGLog.debug(this, 'Connected to test router');
 
@@ -80,7 +82,7 @@ export class GGTestRuntimeWorker {
             registerOnCallHandler(this);
 
             GGTestRuntimeWorker.beforeRuntimeStartExecuted = true;
-            GGTestRuntimeWorker.beforeRuntimeStartHandlers.forEach(handler => handler());
+            for (const handler of GGTestRuntimeWorker.beforeRuntimeStartHandlers) await handler();
 
             if (createRuntime) {
                 this.runtime = createRuntime();
@@ -101,6 +103,7 @@ export class GGTestRuntimeWorker {
                 this.runtime = new RuntimeClass();
             }
             await this.runtime!.start();
+            for (const handler of GGTestRuntimeWorker.runtimeStartedHandlers) await handler(this);
 
             // Send registered locator keys to test runner for callOn routing
             const keys = this.runtime!.scope.getKeys();

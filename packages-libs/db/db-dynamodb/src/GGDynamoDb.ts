@@ -1,5 +1,5 @@
 import {DynamoDBClient, ListTablesCommand} from "@aws-sdk/client-dynamodb"
-import {DynamoDBDocumentClient, GetCommand, PutCommand, QueryCommand, DeleteCommand, ScanCommand, UpdateCommand} from "@aws-sdk/lib-dynamodb"
+import {DynamoDBDocumentClient, GetCommand, PutCommand, QueryCommand, DeleteCommand, ScanCommand, TransactWriteCommand, UpdateCommand, type TransactWriteCommandInput} from "@aws-sdk/lib-dynamodb"
 import {GGLocator, GGLocatorKey, GGLocatorServiceType} from "@grest-ts/locator"
 import {GGLog} from "@grest-ts/logger"
 import type {GGDynamoDbConfig, GGDynamoDbHostData, GGDynamoDbUserData} from "./GGDynamoDbConfig"
@@ -16,6 +16,8 @@ export interface GGDynamoDbCommand {
     name: string
     input: Record<string, unknown>
 }
+
+export type GGDynamoDbTransactItem = NonNullable<TransactWriteCommandInput["TransactItems"]>[number]
 
 export interface GGDynamoDbGetOptions {
     /** Strongly consistent read — sees every write acknowledged before it, at 2× the read
@@ -53,7 +55,13 @@ export interface GGDynamoDbScanOptions extends Omit<GGDynamoDbQueryOptions, "des
 
 export interface GGDynamoDbScanPageOptions extends GGDynamoDbScanOptions {
     cursor?: string
+    /** A parallel scan: this worker reads segment `segment` of `totalSegments`, each with its own cursor. */
+    segment?: number
+    totalSegments?: number
 }
+
+/** A transaction's outcome; `conditionFailed` lists the positions of the items whose condition stopped it. */
+export type GGDynamoDbTransactResult = {ok: true} | {ok: false, conditionFailed: number[]}
 
 // DynamoDB caps a single Query/Scan response at 1MB however many rows match,
 // handing back LastEvaluatedKey instead — so one command is never proof of a
@@ -88,6 +96,18 @@ export class GGDynamoDbCursorError extends Error {
     constructor() {
         super("GGDynamoDb: malformed cursor")
         this.name = "GGDynamoDbCursorError"
+    }
+}
+
+// A well-formed cursor from another table, index or segment fails only at DynamoDB.
+async function withCursor<R>(cursor: string | undefined, send: () => Promise<R>): Promise<R> {
+    try {
+        return await send()
+    } catch (err) {
+        if (cursor && (err as {name?: string}).name === "ValidationException" && /start(ing)? key/i.test(String((err as Error).message))) {
+            throw new GGDynamoDbCursorError()
+        }
+        throw err
     }
 }
 
@@ -170,6 +190,19 @@ export class GGDynamoDb {
     private unwatchHost: (() => void) | undefined
     private unwatchUser: (() => void) | undefined
     private readonly succeeded = new Set<(command: GGDynamoDbCommand) => void>()
+    private fixedClient: DynamoDBClient | undefined
+
+    /**
+     * A GGDynamoDb over an SDK client you already hold, for tests, fixtures and seed scripts: not registered with the
+     * runtime and not reconfigured from config. It uses that client itself (`getRawClient` returns it, and its errors gain
+     * this db's name); the caller keeps owning it and destroys it.
+     */
+    static forClient(client: DynamoDBClient, name = "forClient"): GGDynamoDb {
+        const db = Object.create(GGDynamoDb.prototype) as GGDynamoDb
+        Object.assign(db, {config: {name}, started: true, fixedClient: client, succeeded: new Set()})
+        db.client = db.documentClient(client)
+        return db
+    }
 
     constructor(config: GGDynamoDbConfig) {
         this.config = config
@@ -266,12 +299,16 @@ export class GGDynamoDb {
             }),
         })
 
-        return this.withErrorContext(DynamoDBDocumentClient.from(raw, {
-            marshallOptions: {removeUndefinedValues: true},
-        }))
+        return this.documentClient(raw)
     }
 
-    private getClient(): DynamoDBDocumentClient {
+    private documentClient(raw: DynamoDBClient): DynamoDBDocumentClient {
+        return this.withErrorContext(DynamoDBDocumentClient.from(raw, {marshallOptions: {removeUndefinedValues: true}}))
+    }
+
+    /** The managed document client, for commands this class doesn't wrap. Valid from `start()` until teardown;
+     *  don't cache it, a config change replaces it. */
+    getDocumentClient(): DynamoDBDocumentClient {
         if (!this.client) {
             throw new Error(
                 `GGDynamoDb '${this.config.name}' not connected. ` +
@@ -323,7 +360,7 @@ export class GGDynamoDb {
     }
 
     async get<T>(table: string, key: Record<string, unknown>, opts?: GGDynamoDbGetOptions): Promise<T | undefined> {
-        const result = await this.getClient().send(new GetCommand({
+        const result = await this.getDocumentClient().send(new GetCommand({
             TableName: table,
             Key: key,
             ConsistentRead: opts?.consistentRead ?? true,
@@ -332,7 +369,7 @@ export class GGDynamoDb {
     }
 
     async put(table: string, item: object): Promise<void> {
-        await this.getClient().send(new PutCommand({
+        await this.getDocumentClient().send(new PutCommand({
             TableName: table,
             Item: item as Record<string, unknown>,
         }))
@@ -354,7 +391,7 @@ export class GGDynamoDb {
         attributeNames?: Record<string, string>,
     ): Promise<boolean> {
         try {
-            await this.getClient().send(new PutCommand({
+            await this.getDocumentClient().send(new PutCommand({
                 TableName: table,
                 Item: item as Record<string, unknown>,
                 ConditionExpression: conditionExpression,
@@ -379,7 +416,7 @@ export class GGDynamoDb {
         const names = Object.keys(fields)
         const keyNames = Object.keys(key)
         try {
-            const result = await this.getClient().send(new UpdateCommand({
+            const result = await this.getDocumentClient().send(new UpdateCommand({
                 TableName: table,
                 Key: key,
                 UpdateExpression: "SET " + names.map((_, i) => `#f${i} = :f${i}`).join(", "),
@@ -399,7 +436,7 @@ export class GGDynamoDb {
     }
 
     async delete(table: string, key: Record<string, unknown>): Promise<void> {
-        await this.getClient().send(new DeleteCommand({TableName: table, Key: key}))
+        await this.getDocumentClient().send(new DeleteCommand({TableName: table, Key: key}))
     }
 
     /**
@@ -414,7 +451,7 @@ export class GGDynamoDb {
         attributeNames?: Record<string, string>,
     ): Promise<boolean> {
         try {
-            await this.getClient().send(new DeleteCommand({
+            await this.getDocumentClient().send(new DeleteCommand({
                 TableName: table,
                 Key: key,
                 ConditionExpression: conditionExpression,
@@ -424,6 +461,25 @@ export class GGDynamoDb {
             return true
         } catch (err) {
             if (isConditionFailed(err)) return false
+            throw err
+        }
+    }
+
+    /**
+     * All-or-nothing write of up to 100 items (`GGDynamoDbTypedTable.tx` builds them). Not `ok` when it was cancelled
+     * only by failed conditions (`conditionFailed` lists those items); any other cancellation reason, alone or beside a
+     * failed condition (a conflicting transaction, throttling), rethrows the TransactionCanceledException.
+     */
+    async transactWrite(items: GGDynamoDbTransactItem[]): Promise<GGDynamoDbTransactResult> {
+        try {
+            await this.getDocumentClient().send(new TransactWriteCommand({TransactItems: items}))
+            return {ok: true}
+        } catch (err) {
+            const reasons = (err as {CancellationReasons?: {Code?: string}[]}).CancellationReasons ?? []
+            const conditionFailed = reasons.flatMap((r, i) => r.Code === "ConditionalCheckFailed" ? [i] : [])
+            // An item DynamoDB didn't get to reports "None" (or no code).
+            const onlyConditions = conditionFailed.length > 0 && reasons.every(r => r.Code === "ConditionalCheckFailed" || r.Code === "None" || r.Code === undefined)
+            if ((err as {name?: string}).name === "TransactionCanceledException" && onlyConditions) return {ok: false, conditionFailed}
             throw err
         }
     }
@@ -443,14 +499,14 @@ export class GGDynamoDb {
         values: Record<string, unknown>,
         opts?: GGDynamoDbQueryPageOptions,
     ): Promise<GGDynamoDbPage<T>> {
-        const result = await this.getClient().send(new QueryCommand({
+        const result = await withCursor(opts?.cursor, () => this.getDocumentClient().send(new QueryCommand({
             TableName: table,
             IndexName: indexName,
             KeyConditionExpression: keyCondition,
             Limit: opts?.limit,
             ...(opts?.descending && {ScanIndexForward: false}),
             ...readInput(opts, values),
-        }))
+        })))
         return {
             items: (result.Items ?? []) as T[],
             cursor: result.LastEvaluatedKey ? encodeCursor(result.LastEvaluatedKey) : undefined,
@@ -486,11 +542,12 @@ export class GGDynamoDb {
 
     /** One page of a full-table scan. See `queryPage`. */
     async scanPage<T>(table: string, opts?: GGDynamoDbScanPageOptions): Promise<GGDynamoDbPage<T>> {
-        const result = await this.getClient().send(new ScanCommand({
+        const result = await withCursor(opts?.cursor, () => this.getDocumentClient().send(new ScanCommand({
             TableName: table,
             Limit: opts?.limit,
+            ...(opts?.totalSegments !== undefined && {Segment: opts.segment, TotalSegments: opts.totalSegments}),
             ...readInput(opts, opts?.values),
-        }))
+        })))
         return {
             items: (result.Items ?? []) as T[],
             cursor: result.LastEvaluatedKey ? encodeCursor(result.LastEvaluatedKey) : undefined,
@@ -509,12 +566,14 @@ export class GGDynamoDb {
 
     /**
      * Escape hatch — exposes a fresh raw low-level client (no
-     * DocumentClient marshalling). Used for table-create / admin
-     * operations that the document layer doesn't cover. Reads config at
-     * call time, so it works before `start()` has run — useful for seed
-     * scripts that create tables before any data exists.
+     * DocumentClient marshalling), or for `forClient` the client it was
+     * given. Used for table-create / admin operations that the document
+     * layer doesn't cover. Reads config at call time, so it works before
+     * `start()` has run — useful for seed scripts that create tables
+     * before any data exists.
      */
     getRawClient(): DynamoDBClient {
+        if (this.fixedClient) return this.fixedClient
         const host = this.config.host.get()
         const user = this.config.user.reveal()
         const endpoint = host?.endpoint

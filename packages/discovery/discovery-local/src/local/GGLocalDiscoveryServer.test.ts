@@ -131,4 +131,21 @@ describe("GGLocalDiscoveryServer — disconnect handling", () => {
 
         wsB.close();
     });
+
+    test("graceful unregister of one replica leaves the other replica's route intact", async () => {
+        const wsA = await openFollower("replica-a");
+        const wsB = await openFollower("replica-b");
+
+        const entryA = {api: "replicaapi", baseUrl: "http://localhost:9001", pathPrefix: "/api/replica/"};
+        const entryB = {api: "replicaapi", baseUrl: "http://localhost:9002", pathPrefix: "/api/replica/"};
+        await sendFrameworkRequest(wsA, "1", "discovery/register", [entryA]);
+        await sendFrameworkRequest(wsB, "1", "discovery/register", [entryB]);
+
+        await sendFrameworkRequest(wsA, "2", "discovery/unregister", [entryA]);
+
+        expect(discovery.getRoute("replicaapi")?.baseUrl).toBe("http://localhost:9002");
+
+        wsA.close();
+        wsB.close();
+    });
 });

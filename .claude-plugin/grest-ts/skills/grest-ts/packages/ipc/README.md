@@ -11,7 +11,7 @@ Type-safe inter-process communication over WebSocket with built-in HTTP routing 
 
 ## What it provides
 
-- **IPCServer** - HTTP server with WebSocket support, route interception, and proxy routing
+- **IPCServer** - HTTP server with WebSocket support, a per-request route resolver, and proxy routing
 - **IPCClient** - WebSocket client that connects to an IPCServer
 - **IPCSocket** - Low-level WebSocket wrapper with request-response messaging and fire-and-forget messages
 - **Type-safe request definitions** - Branded string types (`IPCServerRequest`, `IPCClientRequest`) that enforce payload/response types at compile time
@@ -49,10 +49,9 @@ constructor(server: IPCServer) {
         return {success: false, error: "Service not registered"}
     })
 
-    // Route unhandled HTTP/WebSocket traffic to actual services
-    server.setRouteProxyResolver((path) => {
-        return this.matchRoute(path)?.baseUrl || undefined
-    })
+    // Route HTTP/WebSocket traffic to actual services
+    server.setHttpResolver((req) => this.selectInstance(req.url.split("?")[0])?.baseUrl)
+    server.setWsResolver((url) => this.selectInstance(url)?.baseUrl || "")
 }
 ```
 
@@ -118,28 +117,17 @@ await client.sendFrameworkRequest(TestableIPC.server.registerKeys, {
 
 ### 3. HTTP Interception (Test Mocking/Spying)
 
-The HTTP testkit uses the IPCServer's HTTP routing to intercept requests during tests - either mocking responses or spying on traffic while proxying to real services.
-
-**Mock mode** - intercept and return custom responses:
-
-```typescript
-// Route discovery traffic for this API to the test server
-discoveryServer.addRoute({api: "user-api", baseUrl: server.getUrl(), pathPrefix: "/users"})
-
-// Register a mock handler
-server.interceptHttp("GET", "/users/:id", async (body, pathParams) => {
-    return {success: true, statusCode: 200, data: {id: pathParams.id, name: "Mock User"}}
-})
-```
-
-**Spy mode** - observe traffic while forwarding to the real service:
+The HTTP testkit replaces the HTTP resolver. For each request, before its body is read, the resolver returns a base
+URL to proxy to, a handler that answers the request itself, or nothing (404):
 
 ```typescript
-server.interceptHttp("POST", "/orders", async (body, _pathParams, headers) => {
-    await interceptor.onRequest(body)               // observe the request
-    const response = await fetch(targetUrl, {...})   // forward to real service
-    await interceptor.onResponse(response)           // observe the response
-    return response
+server.setHttpResolver((req) => {
+    const interceptor = findInterceptor(req)              // by method, path template and target
+    if (!interceptor) return selectInstance(req)?.baseUrl // proxied untouched
+    return async (req, res) => {                          // mock: answer; spy: forward and observe
+        res.writeHead(200, {"content-type": "application/json"})
+        res.end(JSON.stringify(await interceptor.onRequest(await readJson(req))))
+    }
 })
 ```
 
@@ -178,7 +166,7 @@ const myCommand = IPCClient.defineRequest<CommandPayload, CommandResult>("my/com
 
 ```
 IPCServer
-├── HttpHandler       - Route matching (find-my-way), request handling, HTTP proxying (http-proxy)
+├── HttpHandler       - Asks the resolver where a request goes: a handler, or HTTP proxying (http-proxy)
 ├── SocketHandler     - WebSocket upgrade handling, client tracking by clientId/runtimeId, WS proxying
 │   └── IPCSocket     - Per-connection message framing, request-response correlation, timeouts
 └── http.Server       - Underlying Node.js HTTP server (handles both HTTP and WS upgrade)

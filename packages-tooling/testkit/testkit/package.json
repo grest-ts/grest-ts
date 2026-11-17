@@ -9,6 +9,10 @@
     ".": {
       "types": "./src/index-node.ts",
       "import": "./src/index-node.ts"
+    },
+    "./internal": {
+      "types": "./src/index-internal.ts",
+      "import": "./src/index-internal.ts"
     }
   },
   "files": [

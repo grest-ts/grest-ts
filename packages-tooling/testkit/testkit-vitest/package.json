@@ -71,7 +71,8 @@
     "@grest-ts/oauth": "0.0.101",
     "@grest-ts/schema-file": "0.0.101",
     "@grest-ts/testkit": "0.0.101",
-    "@grest-ts/websocket": "0.0.101"
+    "@grest-ts/websocket": "0.0.101",
+    "vitest": ">=4.0.0"
   },
   "peerDependenciesMeta": {
     "@grest-ts/config": {

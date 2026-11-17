@@ -1,11 +1,14 @@
 import {captureStackSourceFile} from "../utils/captureStack";
 import {GGExpectations} from "../utils/GGExpectations";
-import {Raw} from "@grest-ts/schema";
+import {ERROR, GGErrorData, Raw} from "@grest-ts/schema";
 import {ConstructorOf, DeepPartial} from "@grest-ts/common";
 import {GG_TEST_RUNNER, GGTestRunner} from "../GGTestRunner";
 import {IGGTestWith} from "./IGGTestWith";
 import {IGGTestInterceptor} from "./IGGTestInterceptor";
-import {GGCallInterceptor, GGCallInterceptorConfig} from "./GGCallInterceptor";
+import {GGCallInterceptor, GGCallInterceptorConfig, GGCallTimes} from "./GGCallInterceptor";
+import {singleRuntime} from "./GGTestSelector";
+import type {GGTestRuntime} from "../GGTestRuntime";
+import {GGInterceptorTarget, GGTestTarget} from "./GGTestTarget";
 
 type InterceptorFactory = new (runner: GGTestRunner, config: any) => GGCallInterceptor;
 
@@ -16,14 +19,16 @@ export class GGSpyWith<RequestBody = any, ResponseData = any, ErrorsUnion = any>
     private readonly definedInSourceFile: string;
 
     private readonly _expectInput: GGExpectations<RequestBody> = new GGExpectations()
-    private _expectError?: ConstructorOf<ErrorsUnion>
+    private _expectError?: ConstructorOf<ERROR<any, any>>
+    private _expectErrorContext?: Partial<GGErrorData>
     private readonly _expectOutput: GGExpectations<ResponseData> = new GGExpectations()
 
     private activeExpect: GGExpectations<any>;
 
     private _sleep: number = 0;
-    private _times: number = 1;
+    private _times: GGCallTimes = {min: 1, max: 1};
     private _within?: number;
+    private _target?: GGInterceptorTarget;
 
     constructor(interceptorFactory: InterceptorFactory, config: Record<string, any>) {
         this.interceptorFactory = interceptorFactory;
@@ -39,10 +44,12 @@ export class GGSpyWith<RequestBody = any, ResponseData = any, ErrorsUnion = any>
             definedInSourceFile: this.definedInSourceFile,
             sleep: this._sleep,
             times: this._times,
+            target: this._target,
             passThrough: true,
             inputExpectations: this._expectInput,
             outputExpectations: this._expectOutput,
-            expectError: this._expectError
+            expectError: this._expectError,
+            expectErrorContext: this._expectErrorContext
         };
         return new this.interceptorFactory(test, config);
     }
@@ -68,8 +75,25 @@ export class GGSpyWith<RequestBody = any, ResponseData = any, ErrorsUnion = any>
         return this._within;
     }
 
-    public times(amount: number): this {
-        this._times = amount;
+    /**
+     * Only calls that happen at this target. A runtime (a selector holding exactly one: `t.relayA`, `t[1]`, `t.hub[1]`):
+     * for a schema mock or spy, calls sent to it; for mockOf / spyOn, calls of the method inside it. An address
+     * (`GGTest.target("host:port")`), for schema mocks and spies only: calls sent to that address.
+     */
+    public on(target: {readonly runtimes: GGTestRuntime[]} | GGTestTarget): this {
+        this._target = target instanceof GGTestTarget ? target : singleRuntime(target);
+        return this;
+    }
+
+    /** Exactly `min` calls, or with `max` any count from `min` to `max` (both inclusive). */
+    public times(min: number, max: number = min): this {
+        this._times = {min, max};
+        return this;
+    }
+
+    /** One call or more. */
+    public atLeastOnce(): this {
+        this._times = {min: 1, max: Infinity};
         return this;
     }
 
@@ -79,10 +103,19 @@ export class GGSpyWith<RequestBody = any, ResponseData = any, ErrorsUnion = any>
         return this as any;
     }
 
-    public toBeError<Type extends ConstructorOf<ErrorsUnion>>(type: Type): GGSpyWith<Extract<ErrorsUnion, InstanceType<Type>>, never, never> {
-        this._expectError = type;
+    /** The call ends with this error; the matchers after it check the error's data. */
+    public toBeError<Type extends ConstructorOf<ErrorsUnion>>(type: Type): GGSpyWith<ErrorDataOf<InstanceType<Type>>, never, never> {
+        this._expectError = type as ConstructorOf<any>;
+        this.activeExpect = this._expectOutput;
         this._expectOutput.flush();
         return this as any;
+    }
+
+    /** After `.toBeError()`: matched like `toMatchObject` against the error's context, e.g. its `displayMessage`. */
+    public withContext(context: Partial<GGErrorData>): this {
+        if (!this._expectError) throw new Error(".withContext() checks the error's context: call .toBeError() first.");
+        this._expectErrorContext = context;
+        return this;
     }
 
     public toEqual(expectedData: Raw<RequestBody>): this {
@@ -124,3 +157,5 @@ export class GGSpyWith<RequestBody = any, ResponseData = any, ErrorsUnion = any>
         return this.interceptorConfig.requiresWaitFor === true;
     }
 }
+
+type ErrorDataOf<E> = E extends ERROR<any, infer Data> ? Data : never;
