@@ -87,8 +87,9 @@ token expired) reuses it, silently when its scopes cover the request, and a clie
 is what the consent page passed to `consent(data)` when the grant was made, `{}` for a first-party client
 (handle that in `claims`). The data is stored in the grant's own row, written and revoked with it, and never
 changes: to act differently (e.g. in another org), add the client at another URL or revoke the grant.
-`grant(subject, grantId)` reads one of the subject's grants (`{grantId, accountId, clientId, clientName, data}`,
-`undefined` once revoked or expired). A grant lives 365 days from its first consent, however much it is
+`grant(subject, grantId)` reads one of the subject's grants (`{grantId, accountId, clientId, data, expiresAt}`,
+`undefined` once revoked or expired) in one store read, never fetching its client's metadata document, so it
+can run on every request. A grant lives 365 days from its first consent, however much it is
 used: then the connection ends and the user consents again. A service token has no grant.
 
 A user's access token carries `auth_time` (OIDC: when the user signed in, epoch seconds; a refresh
@@ -148,7 +149,13 @@ server discovery finds for `GGOAuthServiceApi`, since `mount` serves both (`new 
 When those keys can't be fetched (`JwksVerifier` throws `SERVER_ERROR`), `protect` answers 503 rather
 than sending the client to sign in again.
 
-`listGrants(subject)` and `revokeGrant(subject, grantId)` back a "connected apps" page. Each grant has `createdAt` and `lastUsedAt`: when it last got tokens, so within one access-token lifetime of its last use.
+`listGrants(subject)` and `revokeGrant(subject, grantId)` back a "connected apps" page. Each grant has its client's
+name, its consent `data`, `createdAt` and `lastUsedAt`: when it last got tokens, so within one access-token lifetime of its last use.
+
+**Rows bound to a grant.** The app's own data that belongs to a grant and may change (unlike the grant's `data`)
+goes in the store under a model named in `grantBound` (e.g. `grantBound: ["AppProfile"]`), with `grantId` in its
+payload: revoking the grant removes it. Write it with the grant's remaining lifetime so it expires with it:
+`store.upsert("AppProfile", grantId, {grantId, ...}, Math.ceil((grant.expiresAt - Date.now()) / 1000))`.
 `revokeAll(subject)` is "log out everywhere"; call it next to `GGAuthRefreshToken.revokeAll`.
 
 ### Service tokens in tests
