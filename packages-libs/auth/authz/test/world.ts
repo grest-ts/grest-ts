@@ -14,7 +14,7 @@ export const rn = {
 
 export const Vm = defineAuthzService("vm", {
     description: "Developer VMs",
-    types: {workspace: {description: "A developer's VM", in: ["org:project"]}},
+    types: {workspace: {description: "A developer's VM", parents: ["org:project"]}},
     actions: {
         ReadWorkspace: {on: ["workspace"], description: "See a workspace and its state"},
         StartWorkspace: {on: ["workspace"]},
@@ -23,15 +23,15 @@ export const Vm = defineAuthzService("vm", {
     },
 })
 export const Secrets = defineAuthzService("secrets", {
-    types: {secret: {description: "A secret value, project- or workspace-level", in: ["org:project", "vm:workspace"]}},
+    types: {secret: {description: "A secret value, project- or workspace-level", parents: ["org:project", "vm:workspace"]}},
     actions: {Read: {on: ["secret"]}, Write: {on: ["secret"]}},
 })
 export const Git = defineAuthzService("git", {
-    types: {repo: {description: "A repository", in: ["org:project"]}},
+    types: {repo: {description: "A repository", parents: ["org:project"]}},
     actions: {Read: {on: ["repo"]}, Push: {on: ["repo"]}},
 })
 export const Cloud = defineAuthzService("cloud", {
-    types: {provider: {description: "A compute provider", in: ["org:org", "org:project"]}},
+    types: {provider: {description: "A compute provider", parents: ["org:org", "org:project"]}},
     actions: {Launch: {on: ["provider"], description: "Start a machine on the provider"}},
 })
 export const Org = defineAuthzService("org", {

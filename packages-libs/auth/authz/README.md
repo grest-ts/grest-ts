@@ -154,11 +154,12 @@ export const AppAuthz = defineAuthzModel({
 - **Where a type lives.** `types: {doc: {description: "A document", in: ["folder", Org.types.project]}}`
   says a doc can be directly inside a folder or a project. Every action on `doc` then also applies to those
   types, so a create or a list is decided on the parent (`.in(field)`, §2). To stop docs living in
-  projects, remove it from that list. A type without `in` lives directly under the tenant root
-  (`tenantType`), which itself is in nothing.
+  projects, remove it from that list. `parents: [...]` places a type in the scope tree without its
+  actions applying there (a workspace in its project, while workspace actions stay on workspaces).
+  A type with neither lives directly under the tenant root (`tenantType`), which itself is in nothing.
 - **The type tree is enforced.** Every scope chain the engine decides on (a request's
-  `properties.ancestors` or the resolver's) must step only from a type to one of its `in` types (or to
-  the root, for a type without `in`), stay in the resource's partition and tenant, and end at the
+  `properties.ancestors` or the resolver's) must step only from a type to one of its `in` or `parents`
+  types (or to the root, for a type with neither), stay in the resource's partition and tenant, and end at the
   tenant root. Anything else is an `invalid` denial: a loader that drops an ancestor can't skip the
   denies and guardrails bound on it.
 - An action's `on` may also name another service's type as `service:type`; the model fails if no

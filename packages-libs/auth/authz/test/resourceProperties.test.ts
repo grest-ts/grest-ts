@@ -8,7 +8,7 @@ const ws = "rn:acme:vm:acme:workspace/w1"
 const model = {
     partition: "acme",
     tenantType: "org:org",
-    types: [{name: "org:org"}, {name: "org:project"}, {name: "vm:workspace", in: ["org:project"]}],
+    types: [{name: "org:org"}, {name: "org:project"}, {name: "vm:workspace", parents: ["org:project"]}],
     actions: [{name: "vm:Stop", resourceTypes: ["vm:workspace"]}],
     roles: [{name: "operator", actions: ["vm:Stop"]}],
 }

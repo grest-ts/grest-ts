@@ -17,14 +17,14 @@ const model: GGAuthzModel = {
     types: [
         {name: "org:org"},
         {name: "ext:catalog"},
-        {name: "ext:publisher", in: ["ext:catalog"]},
-        {name: "ext:extension", in: ["ext:publisher"]},
+        {name: "ext:publisher", parents: ["ext:catalog"]},
+        {name: "ext:extension", parents: ["ext:publisher"]},
         {name: "ws:workspace"},
-        {name: "ws:extension", in: ["ws:workspace"]},
+        {name: "ws:extension", parents: ["ws:workspace"]},
         {name: "profile:profile"},
         {name: "sites:site"},
         {name: "secrets:store"},
-        {name: "secrets:secret", in: ["secrets:store"]},
+        {name: "secrets:secret", parents: ["secrets:store"]},
     ],
     actions: [
         {name: "ext:Install", resourceTypes: ["ext:extension"]},

@@ -10,7 +10,7 @@ const doc = "rn:acme:docs:acme:doc/plan"
 const model = {
     partition: "acme",
     tenantType: "org:org",
-    types: [{name: "org:org"}, {name: "org:project"}, {name: "docs:doc", in: ["org:project"]}],
+    types: [{name: "org:org"}, {name: "org:project"}, {name: "docs:doc", parents: ["org:project"]}],
     actions: [
         {name: "docs:Read", resourceTypes: ["docs:doc"]},
         {name: "docs:Write", resourceTypes: ["docs:doc"]},

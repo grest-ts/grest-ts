@@ -5,7 +5,7 @@ import {Cloud, model, Org, Secrets, Vm} from "./world"
 
 describe("define functions", () => {
     test("a service gives typed, frozen actions and types", () => {
-        expect(Vm.StopWorkspace).toEqual({name: "vm:StopWorkspace", resourceTypes: ["vm:workspace", "org:project"], description: undefined})
+        expect(Vm.StopWorkspace).toEqual({name: "vm:StopWorkspace", resourceTypes: ["vm:workspace"], description: undefined})
         expect(Vm.types.workspace).toBe("vm:workspace")
         expect(Vm.all).toBe("vm:*")
         expect(Object.isFrozen(Vm)).toBe(true)
@@ -52,7 +52,14 @@ describe("define functions", () => {
         expect(() => defineAuthzModel({partition: "p", tenantType: "org:org", services: [Pages, Org], roles: []})).toThrow("Type pages:page is in books:book, which no service in the model declares")
         expect(() => defineAuthzModel({partition: "p", tenantType: "books:book", services: [Org], roles: []})).toThrow("The tenant type books:book is not declared")
         expect(() => defineAuthzModel({partition: "p", tenantType: Vm.types.workspace, services: [Vm, Org], roles: []})).toThrow("The tenant type vm:workspace can't be in another type")
-        expect(model).toMatchObject({tenantType: "org:org", types: expect.arrayContaining([{name: "vm:workspace", in: ["org:project"]}, {name: "org:org", in: undefined}])})
+        expect(model).toMatchObject({tenantType: "org:org", types: expect.arrayContaining([{name: "vm:workspace", parents: ["org:project"]}, {name: "org:org", parents: undefined}])})
+    })
+
+    test("`parents` place a type in the tree without its actions applying there; `in` does both", () => {
+        const Shelf = defineAuthzService("shelf", {types: {box: {description: "", in: ["shelf"], parents: [Org.types.project]}, shelf: ""}, actions: {Open: {on: ["box"]}}})
+        expect(Shelf.Open.resourceTypes).toEqual(["shelf:box", "shelf:shelf"])
+        const defined = defineAuthzModel({partition: "p", tenantType: Org.types.org, services: [Shelf, Org], roles: []})
+        expect(defined.types.find(t => t.name === Shelf.types.box)?.parents).toEqual(["shelf:shelf", "org:project"])
     })
 })
 
@@ -86,8 +93,8 @@ describe("contract methods", () => {
 
     test("document renders the catalog as markdown", () => {
         const md = documentAuthzModel(model, {contracts: [WorkspaceApi]})
-        expect(md).toContain("| `vm:StopWorkspace` | `vm:workspace`, `org:project` |  | member, owner, admin | workspaces:operate |  | `WorkspaceApi.stop` |")
-        expect(md).toContain(`| \`${Secrets.Write.name}\` | \`secrets:secret\`, \`org:project\`, \`vm:workspace\` |  | owner, admin |  | ask |  |`)
+        expect(md).toContain("| `vm:StopWorkspace` | `vm:workspace` |  | member, owner, admin | workspaces:operate |  | `WorkspaceApi.stop` |")
+        expect(md).toContain(`| \`${Secrets.Write.name}\` | \`secrets:secret\` |  | owner, admin |  | ask |  |`)
         expect(md).toContain("| viewer | Read-only | `vm:ReadWorkspace`, `git:Read` |")
     })
 })

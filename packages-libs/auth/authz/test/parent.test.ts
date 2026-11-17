@@ -28,7 +28,7 @@ describe("types with parents", () => {
     test("every action on the type also applies to its parents", () => {
         expect(Clouds.Write.resourceTypes).toEqual(["clouds:cloud", "places:org", "places:project", "places:member"])
         expect(Clouds.Read.resourceTypes).toEqual(["clouds:cloud", "clouds:image", "places:org", "places:project", "places:member"])
-        expect(Clouds.resourceTypes[0]).toEqual({name: "clouds:cloud", description: "A cloud account", in: ["places:org", "places:project", "places:member"]})
+        expect(Clouds.resourceTypes[0]).toEqual({name: "clouds:cloud", description: "A cloud account", in: ["places:org", "places:project", "places:member"], parents: ["places:org", "places:project", "places:member"]})
         expect(() => defineAuthzService("typos-in", {types: {thing: {description: "", in: ["nowhere"]}}, actions: {}})).toThrow("Type typos-in:thing is on unknown type nowhere")
     })
 

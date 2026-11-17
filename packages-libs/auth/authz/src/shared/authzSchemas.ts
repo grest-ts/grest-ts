@@ -107,7 +107,7 @@ export type GGAuthzTokenScope = typeof IsGGAuthzTokenScope.infer
 
 export const IsGGAuthzType = IsObject({
     name: IsGGAuthzResourceType,
-    in: IsArray(IsGGAuthzResourceType).orUndefined.docs({description: "The types it can be directly inside; without it, only the tenant root"}),
+    parents: IsArray(IsGGAuthzResourceType).orUndefined.docs({description: "The types it can be directly inside; without it, only the tenant root"}),
 })
 export type GGAuthzType = typeof IsGGAuthzType.infer
 

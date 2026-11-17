@@ -10,14 +10,14 @@ import {req} from "../util"
 const Org = defineAuthzService("org", {
     types: {
         partition: "The partition",
-        root: {description: "An organization's root", in: ["partition"]},
-        ou: {description: "Organizational unit", in: ["root"]},
-        account: {description: "Account, or an outside one", in: ["ou", "root", "partition"]},
+        root: {description: "An organization's root", parents: ["partition"]},
+        ou: {description: "Organizational unit", parents: ["root"]},
+        account: {description: "Account, or an outside one", parents: ["ou", "root", "partition"]},
     },
     actions: {},
 })
 const S3 = defineAuthzService("s3", {
-    types: {bucket: {description: "Bucket", in: [Org.types.account]}, object: {description: "Object", in: ["bucket"]}},
+    types: {bucket: {description: "Bucket", parents: [Org.types.account]}, object: {description: "Object", parents: ["bucket"]}},
     actions: {
         ListBucket: {on: ["bucket"]},
         DeleteBucket: {on: ["bucket"]},
@@ -27,19 +27,19 @@ const S3 = defineAuthzService("s3", {
     },
 })
 const Ec2 = defineAuthzService("ec2", {
-    types: {instance: {description: "Instance", in: [Org.types.account]}},
+    types: {instance: {description: "Instance", parents: [Org.types.account]}},
     actions: {StartInstances: {on: ["instance"]}, TerminateInstances: {on: ["instance"]}},
 })
 const Iam = defineAuthzService("iam", {
-    types: {user: {description: "User", in: [Org.types.account]}},
+    types: {user: {description: "User", parents: [Org.types.account]}},
     actions: {CreateUser: {on: ["user"]}, ChangePassword: {on: ["user"]}},
 })
 const Cloudwatch = defineAuthzService("cloudwatch", {
-    types: {dashboard: {description: "Dashboard", in: [Org.types.account]}},
+    types: {dashboard: {description: "Dashboard", parents: [Org.types.account]}},
     actions: {GetDashboard: {on: ["dashboard"]}, DeleteDashboards: {on: ["dashboard"]}},
 })
 const SecretsManager = defineAuthzService("secretsmanager", {
-    types: {secret: {description: "Secret", in: [Org.types.account]}},
+    types: {secret: {description: "Secret", parents: [Org.types.account]}},
     actions: {GetSecretValue: {on: ["secret"]}},
 })
 

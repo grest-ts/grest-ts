@@ -230,7 +230,7 @@ export class GGAuthz {
         })
         this.workloadTypes = new Set(this.model.workloadTypes)
 
-        for (const t of this.model.types) this.parentTypes.set(t.name, new Set(t.name === this.model.tenantType ? [] : t.in ?? [this.model.tenantType]))
+        for (const t of this.model.types) this.parentTypes.set(t.name, new Set(t.name === this.model.tenantType ? [] : t.parents ?? [this.model.tenantType]))
         for (const a of this.model.actions) {
             if (this.actions.has(a.name)) throw new Error(`Duplicate action ${a.name}`)
             this.actions.set(a.name, new Set(a.resourceTypes))
@@ -347,6 +347,7 @@ export class GGAuthz {
 
     /** Which of `actions` the subject doesn't hold on `on`, as `canGrant` asks of a grantor; unknown actions are skipped. */
     public async missingActions(request: {subject: GGAuthzSubject, actions: readonly string[], on: string, context?: Record<string, unknown>}): Promise<string[] | undefined> {
+        if (!this.inPartition(request.on)) return undefined
         const loader = this.loader()
         const chain = await loader.chain(request.on)
         if (typeof chain === "string") return undefined
@@ -620,11 +621,12 @@ export class GGAuthz {
     /** The chain, resource first, if it is a path the model's types allow within one tenant to its root; else why not. */
     private checkedChain(chain: string[]): string[] | string {
         if (chain.length > MAX_DEPTH || new Set(chain).size !== chain.length) return `is cyclic or deeper than ${MAX_DEPTH}`
-        const tenant = GGAuthzRn.parse(chain[0]!)?.tenant
+        let tenant: string | undefined
         let child: string | undefined
         for (const rn of chain) {
             const parts = GGAuthzRn.parse(rn)
             if (parts?.partition !== this.model.partition) return `has ${rn}, not a resource name in partition ${this.model.partition}`
+            tenant ??= parts.tenant
             if (parts.tenant !== tenant) return `leaves tenant ${tenant} at ${rn}`
             const type = `${parts.service}:${parts.path[parts.path.length - 1]!.type}`
             if (!this.parentTypes.has(type)) return `has ${rn}, of a type the model doesn't declare`

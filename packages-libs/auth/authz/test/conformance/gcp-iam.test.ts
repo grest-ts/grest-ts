@@ -24,9 +24,9 @@ const model: GGAuthzModel = {
     types: [
         {name: "crm:organization"},
         {name: "crm:folder"},
-        {name: "crm:project", in: ["crm:folder"]},
-        ...["pubsub:topic", "storage:bucket", "compute:instance", "compute:network", "iam:service-account"].map(name => ({name, in: ["crm:project"]})),
-        {name: "storage:object", in: ["storage:bucket"]},
+        {name: "crm:project", parents: ["crm:folder"]},
+        ...["pubsub:topic", "storage:bucket", "compute:instance", "compute:network", "iam:service-account"].map(name => ({name, parents: ["crm:project"]})),
+        {name: "storage:object", parents: ["storage:bucket"]},
     ],
     actions: [
         {name: "crm:GetProject", resourceTypes: ["crm:project"]},

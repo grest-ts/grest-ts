@@ -140,9 +140,9 @@ export function randomWorld(r: Rng, size = 1): World {
             types: [
                 {name: "org:org"},
                 {name: "org:project"},
-                {name: "vm:workspace", in: ["org:project"]},
-                {name: "secrets:secret", in: ["org:project", "vm:workspace"]},
-                {name: "git:repo", in: ["org:project"]},
+                {name: "vm:workspace", parents: ["org:project"]},
+                {name: "secrets:secret", parents: ["org:project", "vm:workspace"]},
+                {name: "git:repo", parents: ["org:project"]},
             ],
             actions,
             roles,
