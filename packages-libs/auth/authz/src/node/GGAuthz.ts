@@ -239,10 +239,11 @@ export class GGAuthz {
         const lenient = (source: string) => config.unknownActions === "ignore" ? (action: string) => !!this.inactive.push({source, action}) : undefined
         this.roles = expandRoles(this.actions, [...this.model.roles, ...policies.roles ?? []], role => tenantRoles.has(role) ? lenient(`role ${role}`) : undefined)
         for (const s of this.model.tokenScopes ?? []) this.tokenScopes.set(s.name, s.allow.map(r => this.rule(r)))
-        this.approvalFloor = (this.model.approvalFloor ?? []).map(a => ({...this.approval(a), locked: true}))
-        for (const a of this.model.approvalFloor ?? []) mark(this.roots, a.conditions)
+        this.approvalFloor = (this.model.approvalFloor ?? []).map(a => {
+            mark(this.roots, a.conditions)
+            return {...this.approval(a), locked: true}
+        })
         this.levelKey = config.approvalLevelAttribute && `resource.${config.approvalLevelAttribute}`
-        this.roots.resource ||= !!this.levelKey
         if (this.model.grantAction && !this.actions.has(this.model.grantAction)) throw new Error(`Unknown action ${this.model.grantAction}`)
 
         for (const b of policies.bindings ?? []) {
@@ -291,14 +292,18 @@ export class GGAuthz {
 
     /** Authorizes the subject in GG_AUTHZ_SUBJECT; throws on denial. */
     public async authorize(action: GGAuthzActionRef, resource: string, context?: Record<string, unknown>, properties?: GGAuthzResourceProperties): Promise<GGAuthzDecision> {
-        const name = actionName(action)
-        const request: GGAuthzRequest = {subject: this.contextSubject(), action: {name}, resource: {type: GGAuthzRn.type(resource) ?? "", id: resource, properties}, context}
+        const request = GGAuthz.request(action, resource, context, properties)
         return this.enforce(request, await this.evaluate(request))
+    }
+
+    /** The request `authorize` decides for the subject in GG_AUTHZ_SUBJECT. */
+    public static request(action: GGAuthzActionRef, resource: string, context?: Record<string, unknown>, properties?: GGAuthzResourceProperties): GGAuthzRequest {
+        return {subject: contextSubject(), action: {name: actionName(action)}, resource: {type: GGAuthzRn.type(resource) ?? "", id: resource, properties}, context}
     }
 
     /** `canGrant` for the subject in GG_AUTHZ_SUBJECT, throwing like `authorize`. */
     public async authorizeGrant(binding: GGAuthzBinding, context?: Record<string, unknown>): Promise<GGAuthzDecision> {
-        const subject = this.contextSubject()
+        const subject = contextSubject()
         const action = this.model.grantAction ?? "grant"
         const request: GGAuthzRequest = {subject, action: {name: action}, resource: {type: GGAuthzRn.type(binding.on) ?? "", id: binding.on}, context}
         return this.enforce(request, await this.canGrant({subject, binding, context}))
@@ -403,6 +408,8 @@ export class GGAuthz {
             for (const r of g.deny) if (r.actions.has(action)) add(exclude, residual(g.on, r.source, "deny"))
         }
         if (p.workload) exclude.push(...await this.humansOnlyFilters(action, loader))
+        // `present` first: an absent attribute raises nothing, but an unknown exclude would drop the row.
+        if (p.workload && this.levelKey) exclude.push({conditions: [{key: this.levelKey, op: "present", value: true}, {key: this.levelKey, op: "eq", value: "humans-only"}]})
         return Object.keys(values).length ? {action, resourceType, include, exclude, require, values} : {action, resourceType, include, exclude, require}
     }
 
@@ -426,12 +433,6 @@ export class GGAuthz {
         return GGAuthzRn.parse(rn)?.partition === this.model.partition
     }
 
-    private contextSubject(): GGAuthzSubject {
-        const subject = GG_AUTHZ_SUBJECT.get()
-        if (!subject) throw new NOT_AUTHORIZED({debugMessage: "No GG_AUTHZ_SUBJECT in context"})
-        return subject
-    }
-
     private async evaluateWith(request: GGAuthzRequest, loader: Loader): Promise<GGAuthzDecision> {
         const action = request.action.name
         if (!this.actions.has(action)) throw new Error(`Unknown action ${action}`)
@@ -443,7 +444,8 @@ export class GGAuthz {
         const given = request.resource.properties?.ancestors
         const [chain, p] = await Promise.all([given ? checkedChain([rn, ...given]) : loader.chain(rn), this.principals(request.subject, loader)])
         if (!chain) return invalid(`Scope chain of ${rn} is cyclic or deeper than ${MAX_DEPTH}`)
-        const get = await this.lookup(request, p, loader, this.rootsFor(request.subject))
+        const roots = this.rootsFor(request.subject)
+        const get = await this.lookup(request, p, loader, {...roots, resource: roots.resource || (p.workload && !!this.levelKey)})
 
         const facts = new Map<string, boolean | undefined>()
         const decision = this.decideWith(this.eval(request, chain, p, get, facts))
@@ -745,6 +747,12 @@ function matchers(resources: string[] | undefined): Matcher[] | undefined {
 
 function checkedChain(chain: string[]): string[] | undefined {
     return chain.length > MAX_DEPTH || new Set(chain).size !== chain.length ? undefined : chain
+}
+
+function contextSubject(): GGAuthzSubject {
+    const subject = GG_AUTHZ_SUBJECT.get()
+    if (!subject) throw new NOT_AUTHORIZED({debugMessage: "No GG_AUTHZ_SUBJECT in context"})
+    return subject
 }
 
 function invalid(message: string): GGAuthzDecision {

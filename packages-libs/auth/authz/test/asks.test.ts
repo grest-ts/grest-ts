@@ -115,6 +115,23 @@ describe("the resource's level attribute raises too", () => {
         vi.spyOn(resolver, "attributes").mockRejectedValue(new Error("store down"))
         await expect(decide(engine(undefined, {}, resolver, "approvalLevel"), agent([]), "git:Read")).rejects.toThrow("store down")
     })
+
+    test("only a workload's decision loads it", async () => {
+        const resolver = new GGAuthzMemoryResolver(data)
+        const load = vi.spyOn(resolver, "attributes")
+        expect((await decide(engine(undefined, {}, resolver, "approvalLevel"), {type: "user", id: "ann"}, "git:Read", repo("prod"))).decision).toBe(true)
+        expect(load).not.toHaveBeenCalled()
+    })
+
+    test("listAllowed leaves out a workload's humans-only rows, and keeps rows without the attribute", async () => {
+        const resolver = new GGAuthzMemoryResolver({...data, parents: {...data.parents, [repo("vault")]: org}, attributes: {...data.attributes, [repo("vault")]: {approvalLevel: "humans-only"}}})
+        const authz = engine(undefined, {}, resolver, "approvalLevel")
+        const rows = [repo("site"), repo("prod"), repo("vault")]
+        const list = async (subject: GGAuthzSubject) => GGAuthz.applyPlan(await authz.listAllowed({subject, action: {name: "git:Read"}, resource: {type: "git:repo"}}), rows, {resolver})
+        expect(await list(agent([]))).toEqual([repo("site"), repo("prod")])
+        expect(await list({type: "user", id: "ann"})).toEqual(rows)
+        expect((await decide(authz, agent([]), "git:Read", repo("vault"))).decision).toBe(false)
+    })
 })
 
 describe("conditional floors", () => {

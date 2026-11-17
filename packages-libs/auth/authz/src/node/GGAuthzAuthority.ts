@@ -2,7 +2,7 @@ import {FORBIDDEN, type GGPermission, GGPermissionChecker, type GGRequirement, t
 import {actionName, type GGAuthzActionRef} from "../shared/defineAuthz"
 import {APPROVAL_REQUIRED, INSUFFICIENT_SCOPE, STEP_UP_REQUIRED} from "../shared/authzErrors"
 import {GG_AUTHZ_SUBJECT} from "./GG_AUTHZ_SUBJECT"
-import type {GGAuthz} from "./GGAuthz"
+import {GGAuthz} from "./GGAuthz"
 import {GGAuthzRn} from "../shared/GGAuthzRn"
 import {type GGAuthzApprovalLevel, type GGAuthzDecision, type GGAuthzRequest, type GGAuthzResourceProperties} from "../shared/authzSchemas"
 
@@ -216,10 +216,8 @@ export class GGAuthzAuthority {
     private async decide(action: GGAuthzActionRef, resource: GGAuthzResourceRef, options?: {hidden?: boolean, key?: (resource: GGAuthzResolvedResource) => {type: string, id: string}}): Promise<GGAuthzApprovalNeed | undefined> {
         const name = actionName(action)
         const resolved = await this.resolve(resource)
-        const subject = GG_AUTHZ_SUBJECT.get()
-        if (!subject) throw new NOT_AUTHORIZED({debugMessage: "No GG_AUTHZ_SUBJECT in context"})
         const [engine, facts] = await Promise.all([this.config.engine(resolved.tenant), this.config.facts?.(name, resolved)])
-        const request: GGAuthzRequest = {subject, action: {name}, resource: {type: GGAuthzRn.type(resolved.rn) ?? "", id: resolved.rn, properties: resolved.properties}, context: facts}
+        const request = GGAuthz.request(name, resolved.rn, facts, resolved.properties)
         const decision = await engine.evaluate(request)
         try {
             await engine.enforce(request, decision)
