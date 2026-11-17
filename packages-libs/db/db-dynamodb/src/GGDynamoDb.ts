@@ -11,6 +11,12 @@ export interface GGDynamoDbPage<T> {
     cursor: string | undefined
 }
 
+/** A command a client sent: its SDK name (`PutItemCommand`, `TransactWriteItemsCommand`, ...) and input. */
+export interface GGDynamoDbCommand {
+    name: string
+    input: Record<string, unknown>
+}
+
 export type GGDynamoDbTransactItem = NonNullable<TransactWriteCommandInput["TransactItems"]>[number]
 
 export interface GGDynamoDbGetOptions {
@@ -183,6 +189,7 @@ export class GGDynamoDb {
     private client: DynamoDBDocumentClient | undefined
     private unwatchHost: (() => void) | undefined
     private unwatchUser: (() => void) | undefined
+    private readonly succeeded = new Set<(command: GGDynamoDbCommand) => void>()
     private fixedClient: DynamoDBClient | undefined
 
     /**
@@ -192,7 +199,7 @@ export class GGDynamoDb {
      */
     static forClient(client: DynamoDBClient, name = "forClient"): GGDynamoDb {
         const db = Object.create(GGDynamoDb.prototype) as GGDynamoDb
-        Object.assign(db, {config: {name}, started: true, fixedClient: client})
+        Object.assign(db, {config: {name}, started: true, fixedClient: client, succeeded: new Set()})
         db.client = db.documentClient(client)
         return db
     }
@@ -244,6 +251,15 @@ export class GGDynamoDb {
             region: host?.region ?? "(SDK default)",
             endpoint: host?.endpoint ?? "(default AWS)",
         })
+    }
+
+    /**
+     * Calls `listener` after each command sent through this db succeeds, from any client it builds (`getRawClient`'s
+     * included), in the sender's async context. Returns the unsubscribe.
+     */
+    onSucceeded(listener: (command: GGDynamoDbCommand) => void): () => void {
+        this.succeeded.add(listener)
+        return () => this.succeeded.delete(listener)
     }
 
     private async start(): Promise<void> {
@@ -310,13 +326,15 @@ export class GGDynamoDb {
      * the document operations below and anything built from `getRawClient`.
      * The original error is kept as `cause` ($metadata, requestId, stack)
      * and its `name` is copied across so callers can still branch on it
-     * (e.g. `ConditionalCheckFailedException`).
+     * (e.g. `ConditionalCheckFailedException`). A success goes to the
+     * `onSucceeded` listeners.
      */
     private withErrorContext<C extends DynamoDBClient | DynamoDBDocumentClient>(client: C): C {
         client.middlewareStack.add(
             (next, context) => async (args) => {
+                let result
                 try {
-                    return await next(args)
+                    result = await next(args)
                 } catch (err) {
                     const table = (args.input as {TableName?: string}).TableName
                     if (!table) throw err
@@ -326,6 +344,15 @@ export class GGDynamoDb {
                     if (name) wrapped.name = name
                     throw wrapped
                 }
+                for (const listener of this.succeeded) {
+                    try {
+                        listener({name: context.commandName ?? "", input: args.input as Record<string, unknown>})
+                    } catch (err) {
+                        // The command already happened: failing it now would have its caller retry a done write.
+                        GGLog.error(this, "An onSucceeded listener threw", {name: this.config.name, error: err instanceof Error ? err.message : String(err)})
+                    }
+                }
+                return result
             },
             {step: "initialize", name: "ggTableErrorContext", override: true},
         )
