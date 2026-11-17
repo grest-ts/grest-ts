@@ -39,10 +39,8 @@ export class GGOAuthResourceServer<R extends GGOAuthProtectedResource<any> = GGO
         server.announce(RESOURCE_METADATA, "GGOAuthResourceServer")
     }
 
-    // Serves `path` (the resource URL's path), and with `subPaths` the URLs under it; each takes only tokens
-    // issued for exactly that URL.
-    // Requests without a valid token for `resource` get 401 + `WWW-Authenticate: Bearer
-    // resource_metadata=…`, the discovery handshake MCP clients run before signing in.
+    // Serves `path` (with `subPaths`, the URLs under it too), each taking only tokens issued for exactly its URL; any
+    // other request gets 401 + `WWW-Authenticate: Bearer resource_metadata=…`, the discovery MCP clients run first.
     public protect<C extends object>(
         server: GGHttpServer,
         resource: GGOAuthProtectedResource<C>,
@@ -80,9 +78,11 @@ export class GGOAuthResourceServer<R extends GGOAuthProtectedResource<any> = GGO
 
     // What `url` is a resource of: a resource's own URL, or a plain URL (no query, fragment, `//`, `.` or `..`) under
     // one with `subPaths`. The innermost one answers.
-    public resourceAt(url: string): R | undefined {
+    public resourceAt(url: string | undefined): R | undefined {
+        if (url === undefined) return undefined
+        const href = URL.parse(url)?.href
         const resources = this.options.resources
-        return resources.find(r => r.resource() === url) ?? (isPlainUrl(url)
+        return resources.find(r => new URL(r.resource()).href === href) ?? (isPlainUrl(url)
             ? resources.filter(r => r.subPaths && `${url}/`.startsWith(`${r.resource().replace(/\/$/, "")}/`)).sort((a, b) => b.resource().length - a.resource().length)[0]
             : undefined)
     }
@@ -90,20 +90,21 @@ export class GGOAuthResourceServer<R extends GGOAuthProtectedResource<any> = GGO
     // Served by the URL's path on any host: the resource whose own origin gives a URL it answers for.
     private resourceMetadata = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
         const path = new URL(req.url ?? "/", "http://x").pathname.slice(RESOURCE_METADATA.length)
-        const url = this.options.resources.map(r => new URL(r.resource()).origin + path).find(u => this.resourceAt(u))
-        const resource = url && this.resourceAt(url)
-        if (!resource) {
-            res.writeHead(404)
-            res.end()
+        for (const r of this.options.resources) {
+            const url = new URL(r.resource()).origin + path
+            const resource = this.resourceAt(url)
+            if (!resource) continue
+            res.writeHead(200, {"content-type": "application/json"})
+            res.end(JSON.stringify({
+                resource: url,
+                authorization_servers: [this.options.authorizationServer()],
+                scopes_supported: resource.scopes,
+                bearer_methods_supported: ["header"],
+            }))
             return
         }
-        res.writeHead(200, {"content-type": "application/json"})
-        res.end(JSON.stringify({
-            resource: url,
-            authorization_servers: [this.options.authorizationServer()],
-            scopes_supported: resource.scopes,
-            bearer_methods_supported: ["header"],
-        }))
+        res.writeHead(404)
+        res.end()
     }
 }
 

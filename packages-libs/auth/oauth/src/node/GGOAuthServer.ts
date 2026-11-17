@@ -9,7 +9,7 @@ import {GG_TRACE} from "@grest-ts/trace"
 import {GG_HTTP_REQUEST, GGHttp, httpRequestContext, type GGHttpServer} from "@grest-ts/http"
 import type {GGAccessPayload, GGAccessTokenData, GGAuthAccessToken, TokenVerifier} from "@grest-ts/auth"
 import {GGOAuthResourceServer, type GGOAuthProtectedResource} from "./GGOAuthResourceServer"
-import {GRANT_BOUND, toOidcAdapter, type GGOAuthStore} from "./store/GGOAuthStore"
+import {GRANT_BOUND, GRANT_KEY, GRANT_USAGE, toOidcAdapter, type GGOAuthStore} from "./store/GGOAuthStore"
 import {GG_OAUTH_SERVICE_CLIENT, GGOAuthServiceApi, SUBJECT_TOKEN_INVALID} from "./GGOAuthServiceApi"
 import {GGOAuthExternalSignIn, type GGOAuthExternalSignInOptions} from "./GGOAuthExternalSignIn"
 
@@ -177,10 +177,6 @@ const MAX_FORM_BYTES = 16 * 1024
 // no-referrer would make browsers post `Origin: null`, which the interaction pages refuse.
 const PAGE_HEADERS = {"content-type": "text/html; charset=utf-8", "referrer-policy": "same-origin", "cache-control": "no-store"}
 const TICKET = "GGOAuthTicket"
-// Not an oidc-provider model: when each grant last got tokens, for listGrants. Carries grantId, so revoking the grant removes it.
-const GRANT_USAGE = "GrantUsage"
-// Nor this: the grant of (account, third-party client, resource URL), under grantKey. Revoked with the grant, expires with it.
-const GRANT_KEY = "GrantKey"
 // Claims resolved during a refresh before the presented token was consumed (see rotateRefreshToken).
 const prefetchedClaims = new WeakMap<object, {resource: string, claims: object}>()
 // Comparing fixed-length HMAC digests keeps timingSafeEqual from leaking the secret's length.
@@ -469,13 +465,13 @@ export class GGOAuthServer {
         const oidc = requested.filter(s => OIDC_SCOPES.includes(s))
         if (oidc.length) grant.addOIDCScope(oidc.join(" "))
         const indicator = this.requestedIndicator(params, String(grant.clientId))
-        const resourceScopes = requested.filter(s => this.resourceAt(indicator)!.scopes.includes(s))
+        const resourceScopes = requested.filter(s => this.resourceServer.resourceAt(indicator)!.scopes.includes(s))
         if (resourceScopes.length) grant.addResourceScope(indicator, resourceScopes.join(" "))
     }
 
     private requestedIndicator(params: Record<string, unknown>, clientId: string): string {
         const indicator = typeof params.resource === "string" ? params.resource : undefined
-        return indicator && this.resourceAt(indicator) ? indicator : this.defaultResource(clientId).resource()
+        return indicator && this.resourceServer.resourceAt(indicator) ? indicator : this.defaultResource(clientId).resource()
     }
 
     // The user's grant to a third-party client for this resource URL, by its GrantKey row: what a re-authorization reuses.
@@ -483,8 +479,9 @@ export class GGOAuthServer {
         const key = grantKey(accountId, clientId, indicator)
         const pointer = await this.options.store.find(GRANT_KEY, key)
         const grant: Grant | undefined = pointer && await this.provider().Grant.find(String(pointer.grantId))
-        // Left by a revocation that failed half-way (oidc-provider removes the grant and its rows concurrently).
-        if (pointer && !grant) await this.options.store.destroy(GRANT_KEY, key)
+        // Left by a revocation that failed half-way (oidc-provider removes the grant and its rows concurrently). By grantId,
+        // so a concurrent consent's fresh row survives.
+        if (pointer && !grant) await this.options.store.revokeByGrantId(String(pointer.grantId), new Set([GRANT_KEY]))
         return grant
     }
 
@@ -500,11 +497,7 @@ export class GGOAuthServer {
         return winner
     }
 
-    private resourceAt(indicator: string | undefined): GGOAuthResource<any> | undefined {
-        return indicator === undefined ? undefined : this.resourceServer.resourceAt(indicator)
-    }
-
-    private resource(indicator: string | undefined): GGOAuthResource<any> | undefined {
+    private exactResource(indicator: string | undefined): GGOAuthResource<any> | undefined {
         return this.options.resources.find(r => r.resource() === indicator)
     }
 
@@ -517,7 +510,7 @@ export class GGOAuthServer {
     }
 
     private usableResource(indicator: string, clientId: string): GGOAuthResource<any> {
-        const resource = this.resourceAt(indicator)
+        const resource = this.resourceServer.resourceAt(indicator)
         if (!resource) throw new oidcErrors.InvalidTarget()
         if (!this.mayUse(resource, clientId)) throw new oidcErrors.InvalidTarget("resource not available to this client")
         return resource
@@ -537,7 +530,7 @@ export class GGOAuthServer {
     // leaves. A placeholder-signed token that escaped any other way verifies nowhere.
     private async resign(token: string): Promise<string> {
         const claims = decodeJwt(token)
-        const resource = this.resourceAt(String(claims["aud"]))
+        const resource = this.resourceServer.resourceAt(String(claims["aud"]))
         if (!resource) throw new Error("GGOAuthServer: issued an access token for an unknown audience")
         // The token kind's audience (what its wire verifies) and the exact resource URL it was issued for.
         return resource.accessToken.signer.sign({...claims, aud: [resource.accessToken.audience, claims["aud"]]})
@@ -554,7 +547,7 @@ export class GGOAuthServer {
 
     private serviceToken = async ({resource}: {resource: string}): Promise<GGAccessTokenData> => {
         const clientId = SERVICE_CLIENT.get()!
-        const target = this.resource(resource)
+        const target = this.exactResource(resource)
         if (target?.clients !== "service") throw new FORBIDDEN({debugMessage: "Resource is not available to service clients"})
         const claims = await target.claims(clientId, {clientId, name: clientId})
         if (!claims) throw new FORBIDDEN({debugMessage: "No token for this client"})
@@ -563,7 +556,7 @@ export class GGOAuthServer {
 
     // Same subject, no actor: the service asks on the subject's behalf with the subject's own token.
     private exchange = async ({subjectToken, resource, params}: {subjectToken: string, resource: string, params: Record<string, string>}): Promise<GGAccessTokenData> => {
-        const target = this.resource(resource)
+        const target = this.exactResource(resource)
         if (!target?.exchange) throw new FORBIDDEN({debugMessage: "Resource is not issuable by exchange"})
         const subject = await target.exchange.from.verify(subjectToken).catch((err: unknown) => {
             if (err instanceof NOT_AUTHORIZED) return undefined
@@ -577,7 +570,7 @@ export class GGOAuthServer {
     }
 
     private ttlOf(indicator: string | undefined): number {
-        const resource = this.resourceAt(indicator)
+        const resource = this.resourceServer.resourceAt(indicator)
         return resource ? Math.floor(resource.accessToken.accessTtlMs / 1000) : 600
     }
 
@@ -722,7 +715,7 @@ export class GGOAuthServer {
             extraTokenClaims: async (_ctx: KoaContextWithOIDC, token) => {
                 if (token.kind !== "AccessToken") return undefined
                 const at = token as InstanceType<Provider["AccessToken"]>
-                const resource = this.resourceAt(at.resourceServer?.identifier())
+                const resource = this.resourceServer.resourceAt(at.resourceServer?.identifier())
                 if (!resource) return undefined
                 const prefetched = prefetchedClaims.get(_ctx)
                 const claims = prefetched?.resource === resource.resource() ? prefetched.claims : await resource.claims(String(at.accountId), this.clientOf(_ctx))

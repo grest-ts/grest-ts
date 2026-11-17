@@ -74,8 +74,9 @@ export class DynamoOAuthStore extends GGDynamoDbTable<OAuthRow, "pk"> implements
 
     public revokeByGrantId = (grantId: string, models: ReadonlySet<string>): Promise<void> => {
         const names = [...models].map((_, i) => `:m${i}`)
+        // Conditional: the index lags, and a row it still shows may since carry another grant (a re-inserted GrantKey).
         return this.deleteAll("grantId-index", "grantId = :g", {":g": grantId, ...Object.fromEntries([...models].map((m, i) => [names[i], m]))},
-            {filter: `#m IN (${names.join(", ")})`, names: {"#m": "model"}})
+            {filter: `#m IN (${names.join(", ")})`, names: {"#m": "model"}}, row => this.deleteConditional(row.pk, "grantId = :g", {":g": grantId}))
     }
 
     public listGrantIds = async (accountId: string): Promise<string[]> =>
@@ -83,14 +84,14 @@ export class DynamoOAuthStore extends GGDynamoDbTable<OAuthRow, "pk"> implements
             .filter(row => this.live(row)).map(row => row.id!)
 
     public destroySessions = (accountId: string): Promise<void> =>
-        this.deleteAll("accountId-index", "accountId = :a", {":a": accountId, ":model": "Session"}, {filter: "#m = :model", names: {"#m": "model"}})
+        this.deleteAll("accountId-index", "accountId = :a", {":a": accountId, ":model": "Session"}, {filter: "#m = :model", names: {"#m": "model"}}, row => this.delete(row.pk))
 
     // A long-lived grant accumulates one spent refresh token per rotation (kept for reuse detection), so page.
-    private async deleteAll(index: string, condition: string, values: Record<string, unknown>, opts?: {filter: string, names: Record<string, string>}): Promise<void> {
+    private async deleteAll(index: string, condition: string, values: Record<string, unknown>, opts: {filter: string, names: Record<string, string>}, remove: (row: OAuthRow) => Promise<unknown>): Promise<void> {
         let cursor: string | undefined
         do {
             const page = await this.queryPage(index, condition, values, {...opts, cursor, limit: 100})
-            await Promise.all(page.items.map(row => this.delete(row.pk)))
+            await Promise.all(page.items.map(remove))
             cursor = page.cursor
         } while (cursor)
     }

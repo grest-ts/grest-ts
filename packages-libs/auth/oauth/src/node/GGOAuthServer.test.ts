@@ -91,7 +91,7 @@ const UPSTREAM = "https://upstream.example"
 // Every bearer value the tests saw: tokens, codes, approval tickets and the login session cookie.
 const bearers = new Set<string>()
 
-// DynamoDB as DynamoOAuthStore uses it: key lookups, the GSIs it queries, its model filters and its one put condition.
+// DynamoDB as DynamoOAuthStore uses it: key lookups, the GSIs it queries, its model filters and its put and delete conditions.
 function fakeDynamo() {
     const rows = new Map<string, Record<string, unknown>>()
     const query = async (_table: string, index: string, _condition: string, {":model": model, ...values}: Record<string, unknown>) => {
@@ -118,6 +118,11 @@ function fakeDynamo() {
             return true
         },
         delete: async (_table: string, key: {pk: string}) => { rows.delete(key.pk) },
+        deleteConditional: async (_table: string, key: {pk: string}, _condition: "grantId = :g", values: {":g": string}) => {
+            if (rows.get(key.pk)?.grantId !== values[":g"]) return false
+            rows.delete(key.pk)
+            return true
+        },
         query,
         queryPage: async (...args: Parameters<typeof query>) => ({items: await query(...args), cursor: undefined}),
     }
@@ -581,6 +586,13 @@ describe("GGOAuthServer", () => {
         const other = await call("/x")
         expect(other.status).toBe(401)
         expect(other.headers.get("www-authenticate")).toContain(`resource_metadata="${ROOT}/.well-known/oauth-protected-resource/x"`)
+    })
+
+    test("a root resource with a trailing slash is the resource of its origin's metadata URL", () => {
+        const root = {resource: () => `${ROOT}/`, accessToken: new GGAuthAccessToken({signer: rootSigner, claimSchema: IsClaims, audience: "app-root"}), scopes: ["root"] as [string]}
+        const resources = new GGOAuthResourceServer({authorizationServer: () => ISSUER, resources: [root]})
+        expect(resources.resourceAt(ROOT)).toBe(root)
+        expect(resources.resourceAt(`${ROOT}/x`)).toBeUndefined()
     })
 
     test("a sub-resource indicator must be a plain URL under a resource with subPaths", async () => {
