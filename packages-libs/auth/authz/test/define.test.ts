@@ -1,11 +1,11 @@
 import {GGContractClass, IsObject, IsString, NOT_FOUND} from "@grest-ts/schema"
 import {describe, expect, test} from "vitest"
 import {APPROVAL_REQUIRED, defineAuthzModel, defineAuthzRole, defineAuthzService, describeAuthzModel, documentAuthzModel} from "../src/index-node"
-import {Cloud, model, Secrets, Vm} from "./world"
+import {Cloud, model, Org, Secrets, Vm} from "./world"
 
 describe("define functions", () => {
     test("a service gives typed, frozen actions and types", () => {
-        expect(Vm.StopWorkspace).toEqual({name: "vm:StopWorkspace", resourceTypes: ["vm:workspace"], description: undefined})
+        expect(Vm.StopWorkspace).toEqual({name: "vm:StopWorkspace", resourceTypes: ["vm:workspace", "org:project"], description: undefined})
         expect(Vm.types.workspace).toBe("vm:workspace")
         expect(Vm.all).toBe("vm:*")
         expect(Object.isFrozen(Vm)).toBe(true)
@@ -15,8 +15,8 @@ describe("define functions", () => {
 
     test("the model is validated and deep-frozen", () => {
         expect(Object.isFrozen(model.roles[0]!.actions)).toBe(true)
-        expect(() => defineAuthzModel({partition: "acme", services: [Vm], roles: [defineAuthzRole("needs-cloud", {actions: [Cloud.Launch]})]})).toThrow("Unknown action cloud:Launch")
-        expect(() => defineAuthzModel({partition: "acme", services: [Vm, Vm], roles: []})).toThrow("Duplicate action")
+        expect(() => defineAuthzModel({partition: "acme", tenantType: "org:org", services: [Vm, Org], roles: [defineAuthzRole("needs-cloud", {actions: [Cloud.Launch]})]})).toThrow("Unknown action cloud:Launch")
+        expect(() => defineAuthzModel({partition: "acme", tenantType: "org:org", services: [Vm, Vm, Org], roles: []})).toThrow("Duplicate action")
     })
 
     test("a name defined in two places throws; re-evaluating the same definition does not", () => {
@@ -30,7 +30,7 @@ describe("define functions", () => {
 
     test("an approval floor without workload types fails at load", () => {
         const Floor = defineAuthzService("floor", {types: {thing: ""}, actions: {Use: {on: ["thing"]}}})
-        expect(() => defineAuthzModel({partition: "p", services: [Floor], roles: [], approvalFloor: [{actions: [Floor.Use], level: "ask"}]})).toThrow("workloadTypes")
+        expect(() => defineAuthzModel({partition: "p", tenantType: Floor.types.thing, services: [Floor], roles: [], approvalFloor: [{actions: [Floor.Use], level: "ask"}]})).toThrow("workloadTypes")
     })
 
     test("bad names fail at definition", () => {
@@ -43,8 +43,16 @@ describe("define functions", () => {
         const Folders = defineAuthzService("folders", {types: {folder: ""}, actions: {Read: {on: ["folder"]}}})
         const Files = defineAuthzService("files", {types: {file: ""}, actions: {Create: {on: ["folders:folder"]}, Read: {on: ["file"]}}})
         expect(Files.Create.resourceTypes).toEqual(["folders:folder"])
-        expect(defineAuthzModel({partition: "p", services: [Folders, Files], roles: []}).actions.map(a => a.name)).toContain("files:Create")
-        expect(() => defineAuthzModel({partition: "p", services: [Files], roles: []})).toThrow("files:Create is on folders:folder, which no service in the model declares")
+        expect(defineAuthzModel({partition: "p", tenantType: Folders.types.folder, services: [Folders, Files], roles: []}).actions.map(a => a.name)).toContain("files:Create")
+        expect(() => defineAuthzModel({partition: "p", tenantType: Files.types.file, services: [Files], roles: []})).toThrow("files:Create is on folders:folder, which no service in the model declares")
+    })
+
+    test("the type tree: every parent is declared, and the tenant type is declared and in nothing", () => {
+        const Pages = defineAuthzService("pages", {types: {page: {description: "", in: ["books:book"]}}, actions: {}})
+        expect(() => defineAuthzModel({partition: "p", tenantType: "org:org", services: [Pages, Org], roles: []})).toThrow("Type pages:page is in books:book, which no service in the model declares")
+        expect(() => defineAuthzModel({partition: "p", tenantType: "books:book", services: [Org], roles: []})).toThrow("The tenant type books:book is not declared")
+        expect(() => defineAuthzModel({partition: "p", tenantType: Vm.types.workspace, services: [Vm, Org], roles: []})).toThrow("The tenant type vm:workspace can't be in another type")
+        expect(model).toMatchObject({tenantType: "org:org", types: expect.arrayContaining([{name: "vm:workspace", in: ["org:project"]}, {name: "org:org", in: undefined}])})
     })
 })
 
@@ -78,8 +86,8 @@ describe("contract methods", () => {
 
     test("document renders the catalog as markdown", () => {
         const md = documentAuthzModel(model, {contracts: [WorkspaceApi]})
-        expect(md).toContain("| `vm:StopWorkspace` | `vm:workspace` |  | member, owner, admin | workspaces:operate |  | `WorkspaceApi.stop` |")
-        expect(md).toContain(`| \`${Secrets.Write.name}\` | \`secrets:secret\` |  | owner, admin |  | ask |  |`)
+        expect(md).toContain("| `vm:StopWorkspace` | `vm:workspace`, `org:project` |  | member, owner, admin | workspaces:operate |  | `WorkspaceApi.stop` |")
+        expect(md).toContain(`| \`${Secrets.Write.name}\` | \`secrets:secret\`, \`org:project\`, \`vm:workspace\` |  | owner, admin |  | ask |  |`)
         expect(md).toContain("| viewer | Read-only | `vm:ReadWorkspace`, `git:Read` |")
     })
 })

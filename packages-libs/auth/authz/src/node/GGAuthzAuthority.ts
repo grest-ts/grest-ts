@@ -8,13 +8,15 @@ import {GG_AUTHZ_APPROVAL_LEVELS, type GGAuthzApprovalLevel, type GGAuthzRequest
 
 type Awaitable<T> = T | Promise<T>
 
-/** A row's ancestors and attributes, and the row itself for the handler (`row`). */
+/** A row's tenant, ancestors and attributes, and the row itself for the handler (`row`). */
 export interface GGAuthzLoaded {
+    /** The row's own tenant: a row of another tenant than the request's is NOT_FOUND. */
+    tenant: string
     properties: GGAuthzResourceProperties
     row?: unknown
 }
 
-/** Undefined when the row doesn't exist in this tenant (answered NOT_FOUND). */
+/** Undefined when the row doesn't exist (answered NOT_FOUND). */
 export type GGAuthzLoader = (tenant: string, id: string) => Awaitable<GGAuthzLoaded | undefined>
 
 /** A resource for `assert`/`can`; with `properties` (from the row the handler loaded) no loader runs. */
@@ -108,15 +110,18 @@ export class GGAuthzAuthority {
     public load(tenant: string, type: string, id: string): Promise<GGAuthzLoaded | undefined> {
         const loader = this.loaders.get(type)
         if (!loader) throw new Error(`No loader registered for ${type}`)
+        const read = async () => {
+            const loaded = await loader(tenant, id)
+            return loaded?.tenant === tenant ? loaded : undefined
+        }
         const subject = GG_AUTHZ_SUBJECT.get()
-        if (!subject) return Promise.resolve(loader(tenant, id))
+        if (!subject) return read()
         let loaded = this.loadedBy.get(subject)
         if (!loaded) this.loadedBy.set(subject, loaded = new Map())
         const key = `${tenant} ${type} ${id}`
         let row = loaded.get(key)
         if (!row) {
-            const read = Promise.resolve(loader(tenant, id))
-            loaded.set(key, row = read.catch(e => {
+            loaded.set(key, row = read().catch(e => {
                 loaded.delete(key)
                 throw e
             }))

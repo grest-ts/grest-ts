@@ -72,6 +72,8 @@ export interface GGAuthzDefinedTokenScope {
 
 export interface GGAuthzModelSpec {
     partition: string
+    /** The tenant root's type, e.g. `org:org`: every scope chain ends at it. */
+    tenantType: string
     services: readonly GGAuthzService[]
     roles: readonly GGAuthzDefinedRole[]
     tokenScopes?: readonly GGAuthzDefinedTokenScope[]
@@ -136,6 +138,8 @@ export function defineAuthzTokenScope(name: string, spec: {allow: readonly GGAut
 export function defineAuthzModel(spec: GGAuthzModelSpec): GGAuthzModel {
     const model = IsGGAuthzModel.parse({
         partition: spec.partition,
+        tenantType: spec.tenantType,
+        types: spec.services.flatMap(s => s.resourceTypes.map(t => ({name: t.name, in: t.in && [...t.in]}))),
         actions: spec.services.flatMap(s => s.actions.map(a => ({name: a.name, resourceTypes: [...a.resourceTypes], description: a.description}))),
         roles: spec.roles.map(r => ({name: r.name, actions: [...r.actions], includes: r.includes && [...r.includes], description: r.description})),
         tokenScopes: spec.tokenScopes?.map(s => ({name: s.name, allow: s.allow, description: s.description})),
@@ -144,7 +148,10 @@ export function defineAuthzModel(spec: GGAuthzModelSpec): GGAuthzModel {
         stepUpFacts: spec.stepUpFacts && [...spec.stepUpFacts],
         grantAction: spec.grantAction && actionName(spec.grantAction),
     })
-    const types = new Set(spec.services.flatMap(s => s.resourceTypes.map(t => t.name)))
+    const types = new Set(model.types.map(t => t.name))
+    for (const t of model.types) for (const parent of t.in ?? []) if (!types.has(parent)) throw new Error(`Type ${t.name} is in ${parent}, which no service in the model declares`)
+    if (!types.has(model.tenantType)) throw new Error(`The tenant type ${model.tenantType} is not declared by any service in the model`)
+    if (model.types.find(t => t.name === model.tenantType)?.in) throw new Error(`The tenant type ${model.tenantType} can't be in another type`)
     const known = new Map<string, unknown>()
     for (const a of model.actions) {
         if (known.has(a.name)) throw new Error(`Duplicate action ${a.name}`)

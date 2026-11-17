@@ -20,6 +20,14 @@ const deployer = "rn:gcp:iam:acme:service-account/deployer"
 
 const model: GGAuthzModel = {
     partition: "gcp",
+    tenantType: "crm:organization",
+    types: [
+        {name: "crm:organization"},
+        {name: "crm:folder"},
+        {name: "crm:project", in: ["crm:folder"]},
+        ...["pubsub:topic", "storage:bucket", "compute:instance", "compute:network", "iam:service-account"].map(name => ({name, in: ["crm:project"]})),
+        {name: "storage:object", in: ["storage:bucket"]},
+    ],
     actions: [
         {name: "crm:GetProject", resourceTypes: ["crm:project"]},
         {name: "crm:DeleteProject", resourceTypes: ["crm:project"]},

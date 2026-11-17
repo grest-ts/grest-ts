@@ -9,6 +9,8 @@ const doc = "rn:acme:docs:acme:doc/plan"
 
 const model = {
     partition: "acme",
+    tenantType: "org:org",
+    types: [{name: "org:org"}, {name: "org:project"}, {name: "docs:doc", in: ["org:project"]}],
     actions: [
         {name: "docs:Read", resourceTypes: ["docs:doc"]},
         {name: "docs:Write", resourceTypes: ["docs:doc"]},
@@ -67,7 +69,7 @@ describe("roles: inheritance and tenant-defined roles", () => {
     test("define functions accept includes", () => {
         const roles = [defineAuthzRole("t-viewer", {actions: ["docs:Read"]})]
         roles.push(defineAuthzRole("t-editor", {actions: ["docs:Write"], includes: [roles[0]!]}))
-        const defined = defineAuthzModel({partition: "acme", services: [defineAuthzService("docs", {types: {doc: ""}, actions: {Read: {on: ["doc"]}, Write: {on: ["doc"]}}})], roles})
+        const defined = defineAuthzModel({partition: "acme", tenantType: "docs:doc", services: [defineAuthzService("docs", {types: {doc: ""}, actions: {Read: {on: ["doc"]}, Write: {on: ["doc"]}}})], roles})
         expect(describeAuthzModel(defined).roles.find(r => r.name === "t-editor")!.actions).toEqual(["docs:Write", "docs:Read"])
     })
 })

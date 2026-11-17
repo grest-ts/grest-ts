@@ -136,6 +136,14 @@ export function randomWorld(r: Rng, size = 1): World {
     return {
         model: {
             partition: "acme",
+            tenantType: "org:org",
+            types: [
+                {name: "org:org"},
+                {name: "org:project"},
+                {name: "vm:workspace", in: ["org:project"]},
+                {name: "secrets:secret", in: ["org:project", "vm:workspace"]},
+                {name: "git:repo", in: ["org:project"]},
+            ],
             actions,
             roles,
             tokenScopes: [{name: "s0", allow: [rule()]}, {name: "s1", allow: [rule(), rule()]}],

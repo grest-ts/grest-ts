@@ -9,6 +9,8 @@ const object = "rn:acme:store:acme:bucket/logs/object/a"
 
 const model = {
     partition: "acme",
+    tenantType: "store:bucket",
+    types: [{name: "store:bucket"}, {name: "store:object"}],
     actions: [{name: "store:Read", resourceTypes: ["store:bucket", "store:object"]}, {name: "store:Write", resourceTypes: ["store:bucket", "store:object"]}],
     roles: [{name: "reader", actions: ["store:Read"]}, {name: "writer", actions: ["store:*"]}],
 }

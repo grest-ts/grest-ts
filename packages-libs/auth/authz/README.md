@@ -136,6 +136,7 @@ const viewer = defineAuthzRole("viewer", {actions: [Docs.Read], description: "Re
 
 export const AppAuthz = defineAuthzModel({
     partition: "acme",
+    tenantType: Org.types.org,
     services: [Org, Docs],
     roles: [
         viewer,
@@ -151,9 +152,15 @@ export const AppAuthz = defineAuthzModel({
 ```
 
 - **Where a type lives.** `types: {doc: {description: "A document", in: ["folder", Org.types.project]}}`
-  says a doc can be inside a folder or a project. Every action on `doc` then also applies to those
+  says a doc can be directly inside a folder or a project. Every action on `doc` then also applies to those
   types, so a create or a list is decided on the parent (`.in(field)`, §2). To stop docs living in
-  projects, remove it from that list.
+  projects, remove it from that list. A type without `in` lives directly under the tenant root
+  (`tenantType`), which itself is in nothing.
+- **The type tree is enforced.** Every scope chain the engine decides on (a request's
+  `properties.ancestors` or the resolver's) must step only from a type to one of its `in` types (or to
+  the root, for a type without `in`), stay in the resource's partition and tenant, and end at the
+  tenant root. Anything else is an `invalid` denial: a loader that drops an ancestor can't skip the
+  denies and guardrails bound on it.
 - An action's `on` may also name another service's type as `service:type`; the model fails if no
   service declares it.
 - **Fail at load.** `defineAuthzModel` validates the model and every action it names, then
@@ -273,7 +280,7 @@ runs synchronously. A batch shares the loads. Return the whole ancestor list in 
 
 A request may carry its resource's ancestors and attributes in `resource.properties`
 (`{ancestors, attributes}`), and then the resolver isn't asked — use it when the handler has just
-read the row. `GGAuthzMemoryResolver` is an in-memory resolver for tests and small worlds.
+read the row. Either way the chain is checked against the model's type tree (§1). `GGAuthzMemoryResolver` is an in-memory resolver for tests and small worlds.
 
 ### The subject
 
@@ -299,7 +306,7 @@ const authority = new GGAuthzAuthority({
     facts: (action, resource) => ...,              // request-time facts, e.g. published
     contexts: {currentDoc: () => ...},
 })
-authority.register(Docs.types.doc, (tenantId, id) => docs.loadForAuthz(tenantId, id))   // → {properties: {ancestors, attributes}, row} | undefined
+authority.register(Docs.types.doc, (tenantId, id) => docs.loadForAuthz(tenantId, id))   // → {tenant, properties: {ancestors, attributes}, row} | undefined
 authority.assertLoaders([DocsApiContract, FoldersApiContract])
 
 // api package: export const DOCS_AUTHORITY = new GGAuthority("docs"), listed in the schemas' `use:`
@@ -307,8 +314,9 @@ const DOCS_AUTHORITY_HANDLER = DOCS_AUTHORITY.define((handler: GGAuthorityHandle
 DOCS_AUTHORITY_HANDLER.create(authority)                // in compose()
 ```
 
-- **Loaders** are registered per resource type by whoever owns the rows, and are tenant-scoped: a
-  missing row, one from another tenant, or an id that can't form an RN is `NOT_FOUND`. A row is
+- **Loaders** are registered per resource type by whoever owns the rows, and return the row's own
+  `tenant`: the authority answers `NOT_FOUND` for a row of another tenant than the request's, so a
+  loader needn't compare it. A missing row or an id that can't form an RN is `NOT_FOUND` too. A row is
   loaded once per request; the handler takes it with `authority.row(type, id)`.
 - `assertLoaders(contracts)` throws for each method whose requirement needs a type with no loader;
   run it at startup.

@@ -58,7 +58,7 @@ describe("authorize: the subject comes from context, failures throw", () => {
 })
 
 test("an approval floor without workload types fails when the engine is built; tenant approvals don't", () => {
-    const plain = {partition: "acme", actions: [{name: "docs:Read", resourceTypes: ["docs:doc"]}], roles: []}
+    const plain = {partition: "acme", tenantType: "docs:doc", types: [{name: "docs:doc"}], actions: [{name: "docs:Read", resourceTypes: ["docs:doc"]}], roles: []}
     const resolver = new GGAuthzMemoryResolver({})
     expect(() => new GGAuthz({model: {...plain, approvalFloor: [{actions: ["docs:Read"], level: "ask" as const}]}, policies: {}, resolver})).toThrow("workloadTypes")
     const approvals = {resourcePolicies: [{on: "rn:acme:docs:acme:doc/d", approvals: [{actions: ["docs:Read"], level: "ask" as const}]}]}

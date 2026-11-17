@@ -6,6 +6,8 @@ const repo = (id: string) => `rn:acme:git:acme:repo/${id}`
 
 const model = {
     partition: "acme",
+    tenantType: "org:org",
+    types: [{name: "org:org"}, {name: "git:repo"}],
     actions: ["git:Read", "git:Push", "git:Delete"].map(name => ({name, resourceTypes: ["git:repo"]})),
     roles: [{name: "writer", actions: ["git:*"]}],
     workloadTypes: ["agent", "client"],

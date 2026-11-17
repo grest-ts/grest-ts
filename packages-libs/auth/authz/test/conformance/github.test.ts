@@ -26,6 +26,8 @@ const onRepo = ["repo:repo"]
 const onBoth = ["repo:repo", "repo:branch"]
 const model: GGAuthzModel = {
     partition: "gh",
+    tenantType: "org:enterprise",
+    types: [{name: "org:enterprise"}, {name: "org:org"}, {name: "repo:repo", in: ["org:org"]}, {name: "repo:branch", in: ["repo:repo"]}],
     actions: [
         ...[R.Read, R.Push].map(name => ({name, resourceTypes: onBoth})),
         {name: R.ForcePush, resourceTypes: ["repo:branch"]},

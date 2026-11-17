@@ -68,6 +68,7 @@ describe("types with parents", () => {
 
 const model = defineAuthzModel({
     partition: "acme",
+    tenantType: Places.types.org,
     services: [Places, Clouds],
     roles: [
         defineAuthzRole("cloud-editor", {actions: [Clouds.Read, Clouds.Write]}),
@@ -86,7 +87,7 @@ const engine = new GGAuthz({
     resolver: new GGAuthzMemoryResolver({}),
 })
 const authority = new GGAuthzAuthority({partition: "acme", tenantType: Places.types.org, tenant: () => "acme", engine: async () => engine})
-authority.register(Places.types.project, (_tenant, id) => ["web", "ml"].includes(id) ? {properties: {ancestors: [rn.org]}} : undefined)
+authority.register(Places.types.project, (_tenant, id) => ["web", "ml"].includes(id) ? {tenant: "acme", properties: {ancestors: [rn.org]}} : undefined)
 
 const ann: GGAuthzSubject = {type: "user", id: "ann"}
 const fail = (p: Promise<unknown>) => p.then(() => undefined, e => e)

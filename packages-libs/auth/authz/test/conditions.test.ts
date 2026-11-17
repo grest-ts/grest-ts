@@ -6,6 +6,8 @@ const doc = (id: string) => `${bucket}/object/${id}`
 
 const model = {
     partition: "acme",
+    tenantType: "store:bucket",
+    types: [{name: "store:bucket"}, {name: "store:object"}],
     actions: [{name: "store:Read", resourceTypes: ["store:object"]}, {name: "store:Delete", resourceTypes: ["store:object"]}],
     roles: [{name: "reader", actions: ["store:Read"]}, {name: "admin", actions: ["store:*"]}],
 }

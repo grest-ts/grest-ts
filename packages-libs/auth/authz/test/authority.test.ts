@@ -22,12 +22,12 @@ const authority = new GGAuthzAuthority({
 })
 const workspaces: Record<string, string> = {"ann-1": rn.web, "ben-1": rn.web, "cleo-1": rn.ml, "dan-1": rn.ml}
 const workspaceLoads: string[] = []
-authority.register(Vm.types.workspace, (tenant, id) => {
+authority.register(Vm.types.workspace, (_tenant, id) => {
     workspaceLoads.push(id)
-    return tenant === "acme" && workspaces[id] ? {properties: {ancestors: [workspaces[id]!, rn.org]}, row: {id}} : undefined
+    return workspaces[id] ? {tenant: "acme", properties: {ancestors: [workspaces[id]!, rn.org]}, row: {id}} : undefined
 })
-authority.register(Org.types.project, (_tenant, id) => id === "web" || id === "ml" ? {properties: {ancestors: [rn.org]}} : undefined)
-authority.register(Git.types.repo, (_tenant, id) => id === "site" || id === "models" ? {properties: {ancestors: [id === "site" ? rn.web : rn.ml, rn.org]}} : undefined)
+authority.register(Org.types.project, (_tenant, id) => id === "web" || id === "ml" ? {tenant: "acme", properties: {ancestors: [rn.org]}} : undefined)
+authority.register(Git.types.repo, (_tenant, id) => id === "site" || id === "models" ? {tenant: "acme", properties: {ancestors: [id === "site" ? rn.web : rn.ml, rn.org]}} : undefined)
 
 const ann: GGAuthzSubject = {type: "user", id: "ann"}
 
@@ -61,6 +61,14 @@ describe("GGAuthzAuthority", () => {
         await expect(as(ann, () => authority.authorize(Vm.StopWorkspace.on(Vm.types.workspace), {}))).rejects.toThrow("only org:org")
     })
 
+    test("a row the loader gives from another tenant is NOT_FOUND, and never reaches the handler", async () => {
+        const leaky = new GGAuthzAuthority({partition: "acme", tenantType: Org.types.org, tenant: () => "acme", engine: async () => engine})
+        leaky.register(Vm.types.workspace, (_tenant, id) => ({tenant: "other", properties: {ancestors: [rn.web, rn.org]}, row: {id}}))
+        expect(NOT_FOUND.is(await fail(as(ann, () => leaky.authorize(Vm.StopWorkspace.on("workspaceId"), {workspaceId: "ann-1"}))))).toBe(true)
+        expect(NOT_FOUND.is(await fail(as(ann, () => leaky.row(Vm.types.workspace, "ann-1"))))).toBe(true)
+        expect(await leaky.load("acme", Vm.types.workspace, "ann-1")).toBeUndefined()
+    })
+
     test("an upsert checks the existing resource, or the parent when creating", async () => {
         const save = Org.ManageMembers.on(Org.types.project, "projectId").orCreateOn(Org.types.org, "orgId")
         const creating = await fail(as(ann, () => authority.authorize(save, {orgId: "acme"})))
@@ -75,7 +83,7 @@ describe("GGAuthzAuthority", () => {
 
     test("the config's hidden makes a denial on that resource NOT_FOUND, also when asking what an approval needs", async () => {
         const hiding = new GGAuthzAuthority({partition: "acme", tenantType: Org.types.org, tenant: () => "acme", engine: async () => engine, hidden: r => r.id === "cleo-1"})
-        hiding.register(Vm.types.workspace, (_tenant, id) => workspaces[id] ? {properties: {ancestors: [workspaces[id]!, rn.org]}} : undefined)
+        hiding.register(Vm.types.workspace, (_tenant, id) => workspaces[id] ? {tenant: "acme", properties: {ancestors: [workspaces[id]!, rn.org]}} : undefined)
         expect(NOT_FOUND.is(await fail(as(ann, () => hiding.authorize(Vm.StopWorkspace.on("workspaceId"), {workspaceId: "cleo-1"}))))).toBe(true)
         expect(NOT_FOUND.is(await fail(as(ann, () => hiding.approvalNeed(Vm.StopWorkspace, {type: Vm.types.workspace, id: "cleo-1"}))))).toBe(true)
         expect(FORBIDDEN.is(await fail(as(ann, () => hiding.authorize(Vm.StopWorkspace.on("workspaceId"), {workspaceId: "dan-1"}))))).toBe(true)
@@ -83,7 +91,7 @@ describe("GGAuthzAuthority", () => {
 
     test("hidden is asked about the denied action, so a denial can stay FORBIDDEN for some actions only", async () => {
         const exempt = new GGAuthzAuthority({partition: "acme", tenantType: Org.types.org, tenant: () => "acme", engine: async () => engine, hidden: (r, action) => r.id === "cleo-1" && action !== Vm.StopWorkspace.name})
-        exempt.register(Vm.types.workspace, (_tenant, id) => workspaces[id] ? {properties: {ancestors: [workspaces[id]!, rn.org]}} : undefined)
+        exempt.register(Vm.types.workspace, (_tenant, id) => workspaces[id] ? {tenant: "acme", properties: {ancestors: [workspaces[id]!, rn.org]}} : undefined)
         expect(FORBIDDEN.is(await fail(as(ann, () => exempt.authorize(Vm.StopWorkspace.on("workspaceId"), {workspaceId: "cleo-1"}))))).toBe(true)
     })
 
@@ -99,7 +107,7 @@ describe("GGAuthzAuthority", () => {
                 return new FORBIDDEN({displayMessage: `why ${r.id}`})
             },
         })
-        explaining.register(Vm.types.workspace, (_tenant, id) => workspaces[id] ? {properties: {ancestors: [workspaces[id]!, rn.org]}} : undefined)
+        explaining.register(Vm.types.workspace, (_tenant, id) => workspaces[id] ? {tenant: "acme", properties: {ancestors: [workspaces[id]!, rn.org]}} : undefined)
         const err = await fail(as(ann, () => explaining.authorize(Vm.StopWorkspace.on("workspaceId"), {workspaceId: "dan-1"})))
         expect(FORBIDDEN.is(err) && err.context?.displayMessage).toBe("why dan-1")
         expect(NOT_FOUND.is(await fail(as(ann, () => explaining.authorize(Vm.StopWorkspace.on("workspaceId"), {workspaceId: "cleo-1"}))))).toBe(true)
@@ -120,7 +128,7 @@ describe("GGAuthzAuthority", () => {
                 throw new Error("audit down")
             },
         })
-        auditing.register(Vm.types.workspace, (_tenant, id) => workspaces[id] ? {properties: {ancestors: [workspaces[id]!, rn.org]}} : undefined)
+        auditing.register(Vm.types.workspace, (_tenant, id) => workspaces[id] ? {tenant: "acme", properties: {ancestors: [workspaces[id]!, rn.org]}} : undefined)
         expect(FORBIDDEN.is(await fail(as(ann, () => auditing.authorize(Vm.StopWorkspace.on("workspaceId"), {workspaceId: "dan-1"}))))).toBe(true)
         expect(NOT_FOUND.is(await fail(as(ann, () => auditing.authorize(Vm.StopWorkspace.on("workspaceId"), {workspaceId: "cleo-1"}))))).toBe(true)
         await as(ann, () => auditing.authorize(Vm.StopWorkspace.on("workspaceId"), {workspaceId: "ann-1"}))
@@ -150,7 +158,7 @@ describe("GGAuthzAuthority", () => {
         const flaky = new GGAuthzAuthority({partition: "acme", tenantType: Org.types.org, tenant: () => "acme", engine: async () => engine})
         flaky.register(Vm.types.workspace, async () => {
             if (calls++ === 0) throw new Error("throttled")
-            return {properties: {ancestors: [rn.web, rn.org]}, row: {id: "ann-1"}}
+            return {tenant: "acme", properties: {ancestors: [rn.web, rn.org]}, row: {id: "ann-1"}}
         })
         await as({...ann}, async () => {
             await expect(flaky.row(Vm.types.workspace, "ann-1")).rejects.toThrow("throttled")
@@ -219,7 +227,7 @@ describe("GGAuthzAuthority", () => {
         const agent: GGAuthzSubject = {type: "agent", id: "ws-ann", properties: {onBehalfOf: {type: "user", id: "ann"}}}
         const make = (approvals?: GGAuthzAuthorityConfig["approvals"]) => {
             const a = new GGAuthzAuthority({partition: "acme", tenantType: Org.types.org, tenant: () => "acme", engine: async () => engine, approvals, approvalLevelAttribute: "approvalLevel"})
-            a.register(Vm.types.workspace, (_t, id) => ({properties: {ancestors: [rn.web, rn.org], attributes: id === "ann-1" ? {} : {approvalLevel: "critical"}}}))
+            a.register(Vm.types.workspace, (_t, id) => ({tenant: "acme", properties: {ancestors: [rn.web, rn.org], attributes: id === "ann-1" ? {} : {approvalLevel: "critical"}}}))
             return a
         }
 
@@ -263,7 +271,7 @@ describe("GGAuthzAuthority", () => {
             partition: "acme", tenantType: Org.types.org, tenant: () => "acme", engine: async () => engine,
             undeclared: (call, action) => reported.push(`${call.api}.${call.method} ${action}`),
         })
-        guarded.register(Vm.types.workspace, (_tenant, id) => workspaces[id] ? {properties: {ancestors: [workspaces[id]!, rn.org]}} : undefined)
+        guarded.register(Vm.types.workspace, (_tenant, id) => workspaces[id] ? {tenant: "acme", properties: {ancestors: [workspaces[id]!, rn.org]}} : undefined)
         const ws = {type: Vm.types.workspace, id: "ann-1"}
         await as(ann, async () => {
             await guarded.authorize(Vm.StopWorkspace.on("workspaceId"), {workspaceId: "ann-1"}, {api: "VmApi", method: "stop"})

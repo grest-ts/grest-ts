@@ -14,7 +14,7 @@ export const rn = {
 
 export const Vm = defineAuthzService("vm", {
     description: "Developer VMs",
-    types: {workspace: "A developer's VM"},
+    types: {workspace: {description: "A developer's VM", in: ["org:project"]}},
     actions: {
         ReadWorkspace: {on: ["workspace"], description: "See a workspace and its state"},
         StartWorkspace: {on: ["workspace"]},
@@ -23,15 +23,15 @@ export const Vm = defineAuthzService("vm", {
     },
 })
 export const Secrets = defineAuthzService("secrets", {
-    types: {secret: "A secret value, project- or workspace-level"},
+    types: {secret: {description: "A secret value, project- or workspace-level", in: ["org:project", "vm:workspace"]}},
     actions: {Read: {on: ["secret"]}, Write: {on: ["secret"]}},
 })
 export const Git = defineAuthzService("git", {
-    types: {repo: "A repository"},
+    types: {repo: {description: "A repository", in: ["org:project"]}},
     actions: {Read: {on: ["repo"]}, Push: {on: ["repo"]}},
 })
 export const Cloud = defineAuthzService("cloud", {
-    types: {provider: "A compute provider"},
+    types: {provider: {description: "A compute provider", in: ["org:org", "org:project"]}},
     actions: {Launch: {on: ["provider"], description: "Start a machine on the provider"}},
 })
 export const Org = defineAuthzService("org", {
@@ -41,6 +41,7 @@ export const Org = defineAuthzService("org", {
 
 export const model = defineAuthzModel({
     partition: "acme",
+    tenantType: Org.types.org,
     services: [Vm, Secrets, Git, Cloud, Org],
     roles: [
         defineAuthzRole("viewer", {actions: [Vm.ReadWorkspace, Git.Read], description: "Read-only"}),

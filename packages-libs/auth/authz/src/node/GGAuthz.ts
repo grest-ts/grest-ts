@@ -185,7 +185,8 @@ interface Eval {
 }
 
 interface Loader {
-    chain(rn: string): Promise<string[] | undefined>
+    /** The chain, or why it is invalid. */
+    chain(rn: string): Promise<string[] | string>
     identity(entity: GGAuthzEntity): Promise<Identity>
     attributes(entity: string): Promise<Attributes | undefined>
 }
@@ -201,6 +202,7 @@ export class GGAuthz {
     private readonly approvals?: GGAuthzApprovals
     private readonly stepUpFacts: readonly string[]
     private readonly actions = new Map<string, Set<string>>()
+    private readonly parentTypes = new Map<string, Set<string>>()
     private readonly roles: Map<string, Set<string>>
     private readonly workloadTypes: Set<string>
     private readonly approvalFloor: Approval[]
@@ -228,6 +230,7 @@ export class GGAuthz {
         })
         this.workloadTypes = new Set(this.model.workloadTypes)
 
+        for (const t of this.model.types) this.parentTypes.set(t.name, new Set(t.name === this.model.tenantType ? [] : t.in ?? [this.model.tenantType]))
         for (const a of this.model.actions) {
             if (this.actions.has(a.name)) throw new Error(`Duplicate action ${a.name}`)
             this.actions.set(a.name, new Set(a.resourceTypes))
@@ -332,8 +335,9 @@ export class GGAuthz {
             granted = await this.evaluateWith({subject, action: {name: this.model.grantAction}, resource: {type: GGAuthzRn.type(on)!, id: on}, context}, loader)
             if (!granted.decision) return granted
         }
-        const missing = await this.missingWith(subject, [...actions], on, context, loader)
-        if (!missing) return invalid(`Scope chain of ${on} is cyclic or deeper than ${MAX_DEPTH}`)
+        const chain = await loader.chain(on)
+        if (typeof chain === "string") return invalid(`Scope chain of ${on} ${chain}`)
+        const missing = await this.missingWith(subject, [...actions], chain, context, loader)
         if (missing.length) {
             return deny([{layer: "grant", kind: "escalation", role: binding.role, on, actions: missing, ref: binding.ref, message: `granting role ${binding.role} on ${on} needs ${missing.join(", ")}, which the grantor doesn't hold there`}])
         }
@@ -343,13 +347,14 @@ export class GGAuthz {
 
     /** Which of `actions` the subject doesn't hold on `on`, as `canGrant` asks of a grantor; unknown actions are skipped. */
     public async missingActions(request: {subject: GGAuthzSubject, actions: readonly string[], on: string, context?: Record<string, unknown>}): Promise<string[] | undefined> {
-        if (!this.inPartition(request.on)) return undefined
-        return this.missingWith(request.subject, request.actions.filter(a => this.actions.has(a)), request.on, request.context, this.loader())
+        const loader = this.loader()
+        const chain = await loader.chain(request.on)
+        if (typeof chain === "string") return undefined
+        return this.missingWith(request.subject, request.actions.filter(a => this.actions.has(a)), chain, request.context, loader)
     }
 
-    private async missingWith(subject: GGAuthzSubject, actions: readonly string[], on: string, context: Record<string, unknown> | undefined, loader: Loader): Promise<string[] | undefined> {
-        const chain = await loader.chain(on)
-        if (!chain) return undefined
+    private async missingWith(subject: GGAuthzSubject, actions: readonly string[], chain: string[], context: Record<string, unknown> | undefined, loader: Loader): Promise<string[]> {
+        const on = chain[0]!
         const p = await this.principals(subject, loader)
         const missing: string[] = []
         for (const action of actions) {
@@ -436,8 +441,8 @@ export class GGAuthz {
         if (request.resource.type !== type) throw new Error(`Resource type ${request.resource.type} does not match ${rn}`)
         this.assertApplies(action, type)
         const given = request.resource.properties?.ancestors
-        const [chain, p] = await Promise.all([given ? checkedChain([rn, ...given]) : loader.chain(rn), this.principals(request.subject, loader)])
-        if (!chain) return invalid(`Scope chain of ${rn} is cyclic or deeper than ${MAX_DEPTH}`)
+        const [chain, p] = await Promise.all([given ? this.checkedChain([rn, ...given]) : loader.chain(rn), this.principals(request.subject, loader)])
+        if (typeof chain === "string") return invalid(`Scope chain of ${rn} ${chain}`)
         const get = await this.lookup(request, p, loader, this.rootsFor(request.subject))
 
         const facts = new Map<string, boolean | undefined>()
@@ -604,11 +609,29 @@ export class GGAuthz {
         const chains = await Promise.all(lower.map(y => loader.chain(y)))
         const exceptions = new Map<string, string[]>()
         lower.forEach((y, i) => {
-            for (const ancestor of chains[i]?.slice(1) ?? []) {
+            const chain = chains[i]!
+            for (const ancestor of typeof chain === "string" ? [] : chain.slice(1)) {
                 if (strict.get(ancestor) === false) push(exceptions, ancestor, y)
             }
         })
         return [...strict].map(([on, locked]): GGAuthzPlanFilter => !locked && exceptions.has(on) ? {within: on, exceptWithin: exceptions.get(on)} : {within: on})
+    }
+
+    /** The chain, resource first, if it is a path the model's types allow within one tenant to its root; else why not. */
+    private checkedChain(chain: string[]): string[] | string {
+        if (chain.length > MAX_DEPTH || new Set(chain).size !== chain.length) return `is cyclic or deeper than ${MAX_DEPTH}`
+        const tenant = GGAuthzRn.parse(chain[0]!)?.tenant
+        let child: string | undefined
+        for (const rn of chain) {
+            const parts = GGAuthzRn.parse(rn)
+            if (parts?.partition !== this.model.partition) return `has ${rn}, not a resource name in partition ${this.model.partition}`
+            if (parts.tenant !== tenant) return `leaves tenant ${tenant} at ${rn}`
+            const type = `${parts.service}:${parts.path[parts.path.length - 1]!.type}`
+            if (!this.parentTypes.has(type)) return `has ${rn}, of a type the model doesn't declare`
+            if (child !== undefined && !this.parentTypes.get(child)!.has(type)) return `puts ${child} in ${type}, which the model doesn't allow`
+            child = type
+        }
+        return child === this.model.tenantType ? chain : `ends at ${child}, not at the tenant root ${this.model.tenantType}`
     }
 
     private assertApplies(action: string, type: string): void {
@@ -618,7 +641,7 @@ export class GGAuthz {
     }
 
     private loader(): Loader {
-        const chains = new Map<string, Promise<string[] | undefined>>()
+        const chains = new Map<string, Promise<string[] | string>>()
         const identities = new Map<string, Promise<Identity>>()
         const attributes = new Map<string, Promise<Attributes | undefined>>()
         const memo = <T>(map: Map<string, Promise<T>>, key: string, load: () => Promise<T>) => {
@@ -629,7 +652,7 @@ export class GGAuthz {
         const resolver = this.resolver
         return {
             chain: rn => memo(chains, rn, async () => {
-                return checkedChain([rn, ...await resolver.ancestors(rn)])
+                return this.checkedChain([rn, ...await resolver.ancestors(rn)])
             }),
             identity: entity => memo(identities, `${entity.type}:${entity.id}`, async () => {
                 const key = `${entity.type}:${entity.id}`
@@ -737,10 +760,6 @@ export class GGAuthz {
     private approval(a: {actions: string[], level: GGAuthzApprovalLevel, locked?: boolean}, onUnknown?: OnUnknownAction): Approval {
         return {actions: expandActions(this.actions, a.actions, onUnknown), level: GG_AUTHZ_APPROVAL_LEVELS.indexOf(a.level), locked: a.locked === true}
     }
-}
-
-function checkedChain(chain: string[]): string[] | undefined {
-    return chain.length > MAX_DEPTH || new Set(chain).size !== chain.length ? undefined : chain
 }
 
 function invalid(message: string): GGAuthzDecision {
