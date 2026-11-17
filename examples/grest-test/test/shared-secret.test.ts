@@ -1,6 +1,7 @@
 import {callOn, GGTest} from "@grest-ts/testkit"
 import {GGContext} from "@grest-ts/context"
 import {NOT_AUTHORIZED} from "@grest-ts/schema"
+import {GGSharedSecret} from "@grest-ts/service-auth"
 import {SharedSecretRuntime} from "../src/SharedSecretRuntime"
 import {INTERNAL_SECRET_WIRE, SharedSecretApi, SharedSecretCallerApi} from "../src/api/SharedSecretApi"
 
@@ -29,6 +30,10 @@ describe("GGSharedSecret", () => {
 
         test("refuses a call without the header", async () => {
             await callOn(SharedSecretApi).ping().toBeError(NOT_AUTHORIZED)
+        })
+
+        test("can be called again for the same wire, as a compose() run per runtime instance does", () => {
+            expect(GGSharedSecret.verify(INTERNAL_SECRET_WIRE)).toBe(GGSharedSecret.verify(INTERNAL_SECRET_WIRE))
         })
     })
 

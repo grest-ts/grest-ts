@@ -33,7 +33,7 @@ export abstract class GGRuntime {
     private readonly services: GGLocatorLifecycleCallbacks[][] = [];
     private state: GGRuntimeState = GGRuntimeState.CREATED
 
-    public constructor() {
+    public constructor(config?: GGRuntimeConfig) {
         this.name = (this.constructor as any).NAME;
         if (!this.name) {
             throw new Error(`"${this.constructor.name}" must define static NAME property!\n
@@ -41,7 +41,7 @@ export abstract class GGRuntime {
         }
 
         this.runtimeConfig = {
-            shutdownTimeoutMs: 10000,
+            shutdownTimeoutMs: config?.shutdownTimeoutMs ?? 10000,
         };
         const scopeName = this.constructor.name + "[" + this.name + "]";
         if (GGLocator.hasScope()) {
@@ -52,6 +52,7 @@ export abstract class GGRuntime {
             this.scope = new GGLocatorScope(scopeName, undefined, this.name);
             GGLog.init(this.scope)
         }
+        this.scope.ownTimers();
     }
 
     /**
@@ -139,6 +140,7 @@ export abstract class GGRuntime {
                     this.scope.setLifecycleOwner(undefined);
                     GGLog.error(this, err instanceof Error ? err : new Error(String(err)));
                     await this.callTeardownCallbacks();
+                    this.scope.clearTimers();
                     this.state = GGRuntimeState.STOPPED;
                     throw err;
                 }
@@ -170,10 +172,11 @@ export abstract class GGRuntime {
             }
         } catch (error) {
             GGLog.error(this, "Service startup failed, cleaning up already-started services...");
-            for (let i = startedServices.length - 1; i >= 0; i--) {
+            const cleanupOrder = startedServices.reverse().sort((a, b) => teardownPriority(b) - teardownPriority(a));
+            for (const service of cleanupOrder) {
                 try {
                     GGLog.info(this, "Cleaning up service");
-                    await startedServices[i]?.teardown?.();
+                    await service.teardown?.();
                 } catch (error) {
                     GGLog.error(this, "Failed to cleanup", error);
                 }
@@ -192,7 +195,15 @@ export abstract class GGRuntime {
                 GG_TRACE.init();
                 this.state = GGRuntimeState.STOPPING;
                 GGLog.info(this, "Gracefully shutting down");
-                await withTimeout(this.callTeardownCallbacks(), this.runtimeConfig.shutdownTimeoutMs, `Shutdown timeout after ${this.runtimeConfig.shutdownTimeoutMs}ms, forcing exit`)
+                try {
+                    await withTimeout(this.callTeardownCallbacks(), this.runtimeConfig.shutdownTimeoutMs, `Shutdown timeout after ${this.runtimeConfig.shutdownTimeoutMs}ms, forcing exit`)
+                } catch (error) {
+                    if (!exit) throw error;
+                    GGLog.error(this, error as Error);
+                    process.exit(1);
+                } finally {
+                    this.scope.clearTimers();
+                }
                 GGLog.info(this, "Shutdown complete");
                 this.state = GGRuntimeState.STOPPED;
                 if (exit === true) {
@@ -203,10 +214,14 @@ export abstract class GGRuntime {
     }
 
     private async callTeardownCallbacks(): Promise<void> {
-        for (let i = this.services.length - 1; i >= 0; i--) {
-            if (!this.services[i]) continue;
-            const teardownPromises = this.services[i].map(async (service) => {
-                GGLog.info(this, "Tearing down service P" + service.type);
+        const byPriority = new Map<number, GGLocatorLifecycleCallbacks[]>();
+        for (const service of this.services.flat()) {
+            const priority = teardownPriority(service);
+            byPriority.set(priority, [...(byPriority.get(priority) ?? []), service]);
+        }
+        for (const priority of [...byPriority.keys()].sort((a, b) => b - a)) {
+            const teardownPromises = byPriority.get(priority)!.map(async (service) => {
+                GGLog.info(this, "Tearing down service P" + priority);
                 if (!service.teardown) return;
                 try {
                     await service.teardown();
@@ -217,4 +232,8 @@ export abstract class GGRuntime {
             await Promise.allSettled(teardownPromises);
         }
     }
+}
+
+function teardownPriority(service: GGLocatorLifecycleCallbacks): number {
+    return service.teardownType ?? service.type;
 }

@@ -37,6 +37,7 @@ export * from "./Definition";
 export * from "./issue/types";
 export * from "./issue/GGIssueKey";
 export * from "./issue/GGIssuesList";
+export * from "./issue/GGParseError";
 export * from "./issue/GGIssueRegistry";
 export * from "./issue/issues/GGIssueInvalid";
 export * from "./issue/issues/GGRangeIssue";

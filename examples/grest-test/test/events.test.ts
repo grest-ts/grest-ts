@@ -36,6 +36,13 @@ describe.shuffle("Events testkit tests (SNS/SQS)", async () => {
             });
     });
 
+    test('.on() throws for event interceptors', async () => {
+        await expect(api
+            .publishSomething(testData(100))
+            .with(EventsTestPublisher.spy.created.on(t.main))
+        ).rejects.toThrow(/\.on\(\) is not supported/);
+    });
+
     test('start test publishes started event via SNS', async () => {
         const testReq = testData(2);
         const created = await api.publishSomething(testReq);

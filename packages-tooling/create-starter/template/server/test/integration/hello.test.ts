@@ -24,7 +24,7 @@ describe("Hello API", () => {
     test("hello uses GreetingService (mockable demo)", async () => {
         await ctx.hello.hello({name: "World"})
             .with(mockOf(GreetingService).format
-                .toEqual({name: "World"})
+                .toEqual("World")
                 .andReturn("Mocked!")
             )
             .toMatchObject({message: "Mocked!"})

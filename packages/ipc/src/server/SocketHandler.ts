@@ -38,7 +38,8 @@ export class SocketHandler {
 
     constructor() {
         this.wss = new WebSocketServer({noServer: true});
-        this.proxy = httpProxy.createProxyServer({});
+        // Targets are services on this machine, often with self-signed certificates.
+        this.proxy = httpProxy.createProxyServer({secure: false});
     }
 
     public setRouteResolver(routeResolver: (path: string) => string) {

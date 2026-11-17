@@ -15,7 +15,6 @@ export * from './IGGLocalDiscoveryServer'
 export * from './GGTestRuntime'
 export * from './testers/GGTestComponent'
 export * from './mockable/GGMockable'
-export * from './mockable/GGMockableCall'
 export * from './mockable/mockable'
 export * from './GGTestContext'
 
@@ -32,6 +31,13 @@ import './callOn/GGContractClass.implement'
 
 // Control channel for runtime config updates
 export * from './GGTestRuntimeWorker'
+export * from './GGTestRuntimeWorkerKey'
+
+// Test clock (fake Date across the test and its runtimes)
+export type {GGClockState} from './clock/GGDateShim'
+export {GGTestClock} from './clock/GGTestClock'
+export type {GGTestClockAdvanceOptions} from './clock/GGTestClock'
+import './clock/GGClockCommands'
 
 // Test utilities - core infrastructure
 export * from './testers/IGGTestWith'
@@ -39,8 +45,11 @@ export * from './testers/GGTestAction'
 export * from './testers/GGMockWith'
 export * from './testers/GGSpyWith'
 export * from './testers/GGCallInterceptor'
+export * from './testers/GGInterceptorTable'
+export * from './testers/GGTestTarget'
 export * from './utils/GGExpectations'
 export * from './utils/GGTestError'
+export * from './utils/checkError'
 export {captureStackSourceFile} from './utils/captureStack'
 export * from './GGTestSharedRef'
 

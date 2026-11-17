@@ -11,7 +11,8 @@ The package gives you three layers:
 
 - **`GGDynamoDbConfig`** — config wrapper. Defines the `GGResource` (region/endpoint) and `GGSecret` (credentials) keys for one DynamoDB connection. Use inside `GGConfig.define()`.
 - **`GGDynamoDb`** — the connection. Owns the SDK client, exposes raw `get` / `put` / `query` / `queryPage` / `scan` / `scanPage` / `delete` primitives plus conditional put and delete helpers.
-- **`GGDynamoDbTable<T, PK>`** — schema-bound table gateway. Validates against a `GGSchema` on every write. Subclass it to add typed helpers for an entity (e.g. `getByOrgId`).
+- **`GGDynamoDbTableSpec` + `GGDynamoDbTypedTable`** — one declaration per table (schema, keys, derived index attributes, indexes) from which writes derive their index keys, queries are typed per index, and the `CreateTable` input is generated. Prefer it for new tables; see [Typed Tables](#typed-tables).
+- **`GGDynamoDbTable<T, PK>`** — schema-bound table gateway with string queries. Validates against a `GGSchema` on every write. Subclass it to add typed helpers for an entity (e.g. `getByOrgId`).
 
 ## Defining the Config
 
@@ -175,9 +176,243 @@ DynamoDB reads are eventually consistent unless asked otherwise: a read shortly 
 - **`get` is strongly consistent by default.** The common "get, then `putConditional` on a version" pattern would otherwise act on a stale item and fail the condition right after a write. Opt out where staleness is fine and cost matters: `db.get(table, key, { consistentRead: false })`, `users.get(id, undefined, { consistentRead: false })`.
 - **`query` / `queryPage` / `scan` / `scanPage` are eventually consistent by default.** Pass `{ consistentRead: true }` to change that. It works on the base table and on local secondary indexes; global secondary indexes are always eventually consistent, and DynamoDB rejects the request with a `ValidationException` if you ask.
 
+## Typed Tables
+
+`GGDynamoDbTableSpec.define` declares a table once: its row schema, keys, the attributes the library derives for index keys, and its indexes. `new GGDynamoDbTypedTable(db, spec)` binds it to a connection.
+
+```typescript
+import { GGDynamoDbTableSpec, GGDynamoDbTypedTable, type GGDynamoDbTableOf } from "@grest-ts/db-dynamodb"
+
+export const WorkspacesTable = GGDynamoDbTableSpec.define({
+    name: "workspaces",
+    schema: IsWorkspace,                       // IsObject, or a union of them; derived attributes are not in it
+    pk: "workspaceId",
+    derived: d => ({
+        orgUser: d.join("orgId", "userId"),                                          // "org#user"
+        liveOrg: d.join("orgId").when(["status"], r => r.status !== "deleted"),       // sparse
+        flowPending: d.flag(["pendingOp"], r => !!r.pendingOp),                       // "1" or absent
+        activeUntil: d.number(["endedAt"], r => r.endedAt ?? Number.MAX_SAFE_INTEGER),
+    }),
+    indexes: {
+        byOrgUser: { pk: "orgUser", sk: "status" },                                  // named orgUser-status-index
+        liveByOrg: { name: "liveOrg-createdAt-index", pk: "liveOrg", sk: "createdAt", projection: ["name", "status"] },
+        pendingFlows: { pk: "flowPending", projection: "KEYS_ONLY" },
+    },
+})
+
+// A store extends the table: get / put / update / delete / query / index / tx are inherited, the store adds its own.
+export class WorkspaceStore extends GGDynamoDbTypedTable.of(WorkspacesTable) {
+    listForMember(orgId: string, userId: string) {
+        return this.index.byOrgUser.query({ orgId, userId }, { sk: { lt: "deleted" } })
+    }
+}
+const workspaces = new WorkspaceStore(db)
+await workspaces.get("w-1")              // a table keyed on one plain field also takes the bare value
+```
+
+`new GGDynamoDbTypedTable(db, spec)` works too, for a table used as is; `GGDynamoDbTableOf<typeof Spec>` names its type. `new WorkspaceStore(db, { name: "workspaces-ci-42" })` (or `spec.withName(name)`) points one instance at another table, e.g. per environment; `createTableInput()` and `GGDynamoDbDevTables.ensure` follow it.
+
+### Derived attributes
+
+A derived attribute is computed from the row on **every** write path — `put`, `putMany`, `update`, `tx.*` — so application code never computes an index key. Each builder names the fields it reads, and its function sees only those. Returning `undefined` (or `""`, which DynamoDB can't index) leaves the attribute off the row, which keeps the row out of every index keyed on it (a sparse index).
+
+| Builder | Stored | Queried by |
+|---|---|---|
+| `d.join("a")` | `a`'s value | `{a}` |
+| `d.join("a", "b")` | `"<a>#<b>"` (absent while a part is undefined) | `{a, b}` |
+| `.separator(":")` on a join | `"<a>:<b>"` | as the join |
+| `.when(fields, test)` on a join | absent while `test` is false | as the join |
+| `d.flag(fields, test)` | `"1"` (or `{ value: "live" }`'s) while `test` holds | nothing: `index.x.query()` |
+| `d.string(fields, fn)` / `d.number(fields, fn)` | `fn`'s result | its `fields` |
+
+A `join` sorts as a string: `"10"` before `"9"`. When order matters, build the value with `d.string` (e.g. pad numbers). The separator inside a part is refused, as it would let two rows share one value — except in the last part, which takes the rest of the value (a path, a free-form id).
+
+`.readable()` on any builder returns the attribute on reads too, typed as optional (`T & { lastActivityAt?: number }`), so a value the app would otherwise recompute is read back. The others stay on the stored item only.
+
+A `d.string` / `d.number` may read a map field: `d.string(["orgId", "principal"], r => r.orgId + "/" + r.principal.kind)`. Such a key's inputs are compared by value, as DynamoDB compares maps.
+
+A derived name may not also be a schema field, nor read a `sets` field.
+
+### Rows come back in the schema's shape
+
+Reads return the schema's fields and nothing else (plus `.readable()` derived ones): other derived attributes, and attributes the schema no longer has (a field you removed), stay on the stored item out of the app's sight. That decides what writes keep:
+
+- `update` writes only the fields it is given, so everything else on the item, retired attributes included, stays. It refuses a field the schema doesn't have.
+- `put` / `save` replace the whole item, so an item written from a read sheds its retired attributes.
+
+**Before converting a table, make its schema the full stored shape** — every attribute a row carries that must survive, encrypted blobs and bookkeeping fields included. A `put` of a row read through a narrower schema erases the rest.
+
+For a write or read that can't go through the table (a seed script, a raw command), `spec.withDerived(row)` adds the derived attributes and `spec.toRow(item)` gives the schema's shape.
+
+### Several row shapes
+
+The schema may be a union of objects — `IsDiscriminated("status", { queued: IsQueued, running: IsRunning })` or `IsUnion(A, B)` — for a table holding rows of several shapes. Reads return the union, to narrow on the discriminator. Everything addressed field by field (keys, derived inputs, indexes, conditions, `update` fields) sees the union's fields one by one: a field some variants lack is optional, so an index keyed on it holds only the rows that have it. `put` validates the whole row against its variant; `update` validates each field against the variants that have it, and can't know the stored row's variant — switching a row to another variant through `update` must write that variant's required fields (or use `put` / `save`). A discriminated variant needn't declare the discriminator itself.
+
+When the kinds are keyed differently — an item and a pointer to it — declare one spec per kind with the same `name` instead. `GGDynamoDbDevTables.ensure` merges them into one table and refuses them when they disagree on its key, an attribute's type, a same-named index or TTL. Each spec's table reads and writes its own rows; `db.transactWrite` spans both. `scan` returns every row on the table, so filter by kind; `backfillPage` leaves (and counts as `skipped`) the rows lacking its spec's required fields or holding a key it doesn't derive: the other kinds'. `get` and queries go by the key, so a kind with its own key shape (as the pointer above) only meets its own rows; kinds sharing a key shape must be told apart by their fields.
+
+### Table keys from parts
+
+The table's own `pk` / `sk` may be derived too, so a composite key is never assembled by hand. Rows are then addressed by the key's inputs, which are fixed once a row exists: `update` refuses them, and treats them as known inputs of other derived attributes. A table key can't be sparse: no `flag`, no `.when`, no optional `join` part.
+
+```typescript
+const UsageTable = GGDynamoDbTableSpec.define({
+    name: "usage", schema: IsUsage, pk: "userId", sk: "providerDay",
+    derived: d => ({ providerDay: d.join("orgId", "provider", "day") }),
+})
+await usage.get({ userId, orgId, provider, day })
+await usage.query({ userId }, { sk: { prefix: { orgId } } })    // begins_with "<orgId>#": the leading parts
+```
+
+A `join` key maps back to exactly one set of parts. A `d.string` / `d.number` key may not (`second: d.number(["at"], r => Math.floor(r.at / 1000))` puts many `at`s on one key), so `get` / `getMany` only return a row holding the key's inputs, and `update`, `delete` and `tx` items condition on them.
+
+An index with a KEYS_ONLY / INCLUDE projection also projects the table key's inputs, so a row it returns can be addressed. `backfillPage` never rewrites a key: a different value would be a different row.
+
+### Queries
+
+Each index is `table.index.<key>`, with its key input and sort-key condition typed from the spec. Index and expression strings never appear in application code; every attribute goes through a placeholder, so reserved words (`status`, `name`) just work.
+
+```typescript
+await table.index.byOrgUser.query({ orgId, userId }, { sk: { lt: "deleted" } })
+await table.index.liveByOrg.queryPage({ orgId }, { descending: true, limit: 30, cursor })
+await table.index.pendingFlows.queryOne()
+await table.query({ streamId }, { sk: { between: [10, 20] } })   // the table's own key, for a table with a sort key
+```
+
+Sort-key conditions: `eq`, `lt`, `lte`, `gt`, `gte`, `between: [a, b]`, `beginsWith` on string keys, and `prefix` (leading parts) on a `join` key of several parts. On a derived sort key the operands may be its inputs: `{ between: [{ at: from }, { at: to }] }`. `consistentRead` is offered on the table's own key and local indexes only: a GSI is always eventually consistent.
+
+`query` drains every page (capped, as in [Paging](#paging)) and accepts a `filter`, on anything but the queried key (DynamoDB refuses that: use `sk`). `queryPage` takes no filter, because DynamoDB's `Limit` counts rows before the filter and a filtered page could come back short or empty while matches remain. A cursor handed back to another query throws `GGDynamoDbCursorError`, as a malformed one does.
+
+Rows are typed by the index's projection: `"ALL"` (default) returns the row; `"KEYS_ONLY"` the table and index key fields; a list (DynamoDB's INCLUDE) those plus the listed fields. Share a projection list `as const` to keep its literal types.
+
+An INCLUDE list is created as named, a table key attribute included, so a spec can match an index already deployed. When the deployed index also projects an attribute the schema no longer has, name it in `retiredAttributes: ["status"]`: it is created with the index and never read back.
+
+### Writes and conditions
+
+```typescript
+await table.put(row)                                              // validates, derives, writes the whole row
+await table.put(row, { if: { status: { eq: "running" } } })      // false when the condition fails
+await table.create(row)                                           // only when no row has the key yet; false if one has
+await table.take(key)                                             // deletes and returns the old row, atomically; undefined if none
+await table.update({ workspaceId }, { name: "x" })                // the updated row, or undefined
+await table.delete({ workspaceId }, { if: { version: { eq: 3 } } })
+await table.getMany([{ workspaceId: a }, { workspaceId: b }])   // in the keys' order; missing rows skipped
+await table.putMany(rows)                                         // 25 per request; no conditions, not atomic
+await table.deleteMany(keys)
+await table.scan({ filter: { status: { eq: "running" } } })
+```
+
+Conditions are typed by field, one operator each: `eq`, `ne`, `exists`, `in: [...]`, `lt` / `lte` / `gt` / `gte` / `between` (strings and numbers), `beginsWith` and `contains` (a substring, or a list's or set's element), and `size: { ... }` (a string's length, or an element count). Several fields are AND-ed, `anyOf: [...]` to OR whole conditions and `allOf: [...]` to AND them (for two conditions on one field). A dotted key reads one level into a map field, typed from the schema: `{ "lease.owner": { eq: workerId } }`; every dot is a path step, so a map key containing one can't be addressed. As in DynamoDB, `ne` holds on a row without the field; `allOf: [{ f: { exists: true } }, { f: { ne: v } }]` requires it.
+
+### Partial updates
+
+`update(key, fields, opts)` sets `fields` on an existing row; a field given as `undefined` is removed (with `skipUndefined: true`, left as it is). A derived attribute none of whose inputs are in `fields` is left alone. One whose inputs are touched is rewritten in the same write, but only from values the write proves are on the row:
+
+- inputs in `fields`,
+- inputs pinned by a top-level `eq` (or `exists: false`) in `opts.if`,
+- inputs read from `opts.current`, the row the caller read — the update then lands only while those inputs are unchanged.
+
+If an input is none of these, `update` throws before writing. So a concurrent change to an input fails the update instead of leaving a stale key behind. `update` returns `undefined` when the row is missing, `opts.if` fails, or an input taken from `opts.current` changed: re-read and retry.
+
+```typescript
+// liveOrg reads orgId and status; current supplies orgId and pins it
+await table.update({ workspaceId }, { status: "deleted" }, { current: row, if: { version: { eq: row.version } } })
+// the condition pins deactivatedAt, which the flag reads alongside deactivationHandledFor
+await users.update({ userId }, { deactivationHandledFor: at }, { if: { deactivatedAt: { eq: at } } })
+```
+
+### Counters, sets, upserts and partial writes
+
+`opts.add` adds atomically to a number field (from 0 when absent); `opts.delete` removes elements from a set. Array fields listed in the spec's `sets` (optional ones) are stored as DynamoDB sets — unique elements, atomic `add` / `delete`, no attribute when empty — and read back as arrays. `opts.upsert` creates the row when it is missing instead of returning `undefined`. Because it may create the row, `fields`, `setIfMissing`, `add` and the key must cover every required field; it writes every derived attribute, so their inputs must be known — including optional ones, given as `undefined` when the row has none; and it can't take `opts.current`.
+
+```typescript
+const Usage = GGDynamoDbTableSpec.define({ name: "usage", schema: IsUsage, pk: "userId", sk: "day" })
+await usage.update({ userId, day }, { lastAt: Date.now() }, { upsert: true, add: { requests: 1, seconds } })
+
+const Workspaces = GGDynamoDbTableSpec.define({ ..., sets: ["lockedOutBy"] })
+await workspaces.update({ workspaceId }, {}, { add: { lockedOutBy: [key] }, if: { status: { ne: "deleted" } } })
+```
+
+More partial writes, each atomic in the one `UpdateItem`:
+
+- `setIfMissing: { createdAt: now }` sets a field only where the row has none (`if_not_exists`), e.g. on an upsert.
+- `append: { history: [entry] }` appends to a list field (`list_append`), creating it when absent.
+- `merge: { limits: { daily: 5, monthly: undefined } }` sets keys inside a map field and removes the `undefined` ones, leaving its other keys. The map must exist; `update` throws when it doesn't.
+- Arithmetic is `add`, with a negative number to subtract.
+
+A derived attribute can't read a field changed by `add`, `delete`, `setIfMissing`, `append` or `merge`: the write doesn't know the result, so `update` throws.
+
+### Optimistic locking
+
+With `version: "version"` in the spec, the field counts the row's writes, and nothing writes it directly:
+
+- `save(row)` writes the whole row while the stored version is still `row.version`, storing it plus one, and returns the row as written — or `undefined` when another write got there first: re-read and retry.
+- `create(row)` writes a new row as version 1.
+- `update` adds one to the stored version; `{ expectVersion: n }` writes only while it is still `n`.
+- `put`, `putMany` and `tx.put` are refused: a whole-row write can't count from the stored version. `tx.save` / `tx.create` / `tx.update` are the transactional ones.
+
+A row without a version — a missing row, or one stored before the table had a version — counts as version 0, so `save` of a row without one may create the row or replace an unversioned one; use `create` for a write that must be new.
+
+```typescript
+const project = await projects.get(id)
+const saved = await projects.save({ ...project, name })   // undefined: someone else saved first
+```
+
+### Transactions
+
+`table.tx.put / create / save / update / delete / check` build items with the same validation, derivation and conditions; `db.transactWrite(items)` writes them all or none. When a condition cancels it, the result names the items whose condition failed:
+
+```typescript
+const result = await db.transactWrite([orders.tx.put(order), stock.tx.update({ sku }, { reserved }, { if: { version: { eq: v } } })])
+if (!result.ok) result.conditionFailed   // [1]: the stock update's condition
+```
+
+The result is not `ok` only when failed conditions alone cancelled the transaction. Any other cancellation reason — a
+conflicting transaction, throttling — rethrows DynamoDB's `TransactionCanceledException`, also when it comes beside a
+failed condition: `ok: false` always means "a condition you wrote doesn't hold", never "try again".
+
+### Tables for development and tests
+
+Production tables belong to your infrastructure code (Terraform or similar), not to the service. For local development, tests and seed scripts, `GGDynamoDbDevTables.ensure` creates the tables a set of specs describes: a missing table with on-demand billing, a GSI a live table lacks (waiting for it to turn ACTIVE), and the spec's TTL. It only adds; an index the spec no longer declares is reported, never dropped. Nothing calls it on its own, and a service must not call it at startup.
+
+```typescript
+import { GGDynamoDbDevTables } from "@grest-ts/db-dynamodb/dev-tables"
+
+await GGDynamoDbDevTables.ensure(rawClient, [WorkspacesTable, UsersTable], { log: console.log })
+```
+
+It lives on its own `dev-tables` entry, off the package's main one. What it can't fix — an index declared differently than the live one, TTL on another attribute, an LSI on an existing table — it reports through `log` and leaves as is.
+
+In a test, `GGTest.with(cfg.db).clone({ host, tables: [WorkspacesTable, UsersTable] })` creates them in the suite's isolated database. A test, fixture or script holding an SDK client gets a `GGDynamoDb` over it with `GGDynamoDb.forClient(rawClient)`, so it writes through the typed table (derived keys included) instead of raw commands.
+
+`spec.createTableInput()` returns the `CreateTableCommandInput` itself (keys, attribute types, GSIs and LSIs with their projections; no billing mode), to compare against the infrastructure code's definition. Attribute types come from the schema (string fields → `S`, number fields → `N`) or the builder.
+
+An index with `local: true` is a local secondary index, on a table with a sort key: the table's `pk`, its own `sk`, `consistentRead` allowed. DynamoDB creates LSIs with the table only, and caps each partition (rows plus index entries) at 10 GB.
+
+`ttl: "purgeAt"` names a number attribute holding a Unix time in seconds after which DynamoDB may delete the row, usually within days; reads still see it until then. It may be a field or a `d.number` derived attribute, so callers never compute it: `ttl: "purgeAt", derived: d => ({ purgeAt: d.number(["expiresAt"], r => Math.floor(r.expiresAt / 1000) + 30 * DAY_SEC) })`. DynamoDB enables TTL with a separate call: `GGDynamoDbDevTables.ensure` makes it, and `spec.timeToLiveInput()` returns its `UpdateTimeToLiveCommandInput`.
+
+### Backfilling derived attributes
+
+After adding an index or changing a key function, rewrite existing rows with `backfillPage`. It reads one page, recomputes every derived attribute, and rewrites only the rows that differ (`concurrency` at a time, default 10), each conditioned on the inputs it read being unchanged — a row another writer changed meanwhile is counted as a conflict and left to that writer, which derived its keys itself. A row whose key function throws is reported in `failed` and left alone. It is resumable from any returned cursor and tied to no job framework:
+
+```typescript
+let cursor: string | undefined
+do {
+    const page = await table.backfillPage({ cursor, limit: 200 })   // { scanned, rewritten, conflicts, skipped, failed, cursor }
+    cursor = page.cursor
+} while (cursor)
+```
+
+For a large table, run `totalSegments` workers, each with its own `segment` (0-based) and cursor. Run a backfill once every writer derives with the new spec. Attributes no longer in the spec are not removed; a DynamoDB error fails the page, which is safe to run again.
+
+### Migrating from `GGDynamoDbTable`
+
+Both classes share a `GGDynamoDb`, so tables move one at a time. A store that extended `GGDynamoDbTable` extends `GGDynamoDbTypedTable.of(spec)` instead and keeps its domain methods. Give derived attributes and indexes the names already on disk (`name` on an index, only where it differs from the default `<pk>[-<sk>]-index`) and the stored rows need no migration; check that the schema is the full stored shape (see [Rows come back in the schema's shape](#rows-come-back-in-the-schemas-shape)). Move every writer of a table at once: a writer left on `GGDynamoDbTable` would not derive the keys. For a command the typed table doesn't cover, `db.getDocumentClient()` returns the managed document client — keep such writes off derived attributes' inputs.
+
 ## Schema-Bound Tables
 
-For application code, prefer `GGDynamoDbTable`. It binds a table to a schema and validates every write — shape mistakes throw at the boundary instead of becoming silent DynamoDB corruption.
+> Deprecated: declare the table with `GGDynamoDbTableSpec` and use `GGDynamoDbTypedTable` (see [Typed Tables](#typed-tables)).
+
+`GGDynamoDbTable` binds a table to a schema and validates every write — shape mistakes throw at the boundary instead of becoming silent DynamoDB corruption.
 
 ```typescript
 import { GGDynamoDbTable } from "@grest-ts/db-dynamodb"
@@ -247,16 +482,40 @@ const user = await users.queryOne(
 )
 ```
 
-## Admin / Table Creation
+## Testing Code Without an API in Front
 
-`GGDynamoDb.getRawClient()` returns a fresh low-level `DynamoDBClient` (no DocumentClient marshalling). Use it for `CreateTable` / `DescribeTable` / etc. — operations the document layer doesn't cover. It reads config at call time, so it works before `start()` has run, which is what seed scripts need to create tables before any data exists.
+A service, store or job that tests construct directly (because each test hands it different fakes) still gets its database from a runtime: a small test runtime builds the `GGDynamoDb` and whatever needs it, `GGTest.startInline` runs it in the test's process, and `clone` gives the suite its isolated database. The test then uses the instances the runtime built.
 
 ```typescript
-import { CreateTableCommand } from "@aws-sdk/client-dynamodb"
+export let orders: OrderStore
 
-const raw = db.getRawClient()
-await raw.send(new CreateTableCommand({ /* ... */ }))
+export class OrdersTestRuntime extends GGRuntime {
+    public static readonly NAME = "orders-test"
+
+    protected compose(): void {
+        new GGConfigLocator(TestConfig).add([GGResource, GGSecret], new GGConfigStoreLocal(TestConfig, {
+            db: {host: {endpoint: ENDPOINT, region: "eu-west-1"}, user: {accessKeyId: undefined, secretAccessKey: undefined}},
+        }))
+        orders = new OrderStore(TestConfig.db.newDynamoDb())
+    }
+}
+OrdersTestRuntime.cli(import.meta.url).then()
+
+describe("OrderStore", () => {
+    GGTest.startInline(OrdersTestRuntime)
+    GGTest.with(TestConfig.db).clone({host: {endpoint: ENDPOINT, region: "eu-west-1"}, tables: [OrdersTable]})
+
+    test("...", async () => { await orders.place(...) })
+})
 ```
+
+The test body runs outside the runtime's scope. A `GGSetting`/`GGResource` read at call time (as it should be) resolves only inside it, so code under test that reads config needs the scope: keep `GGLocator.getScope()` from `compose` and wrap each test, `aroundEach(run => scope.run(run))`.
+
+Calls the test body makes on those instances, even inside `scope.run`, are not calls inside the runtime, so `mockOf`/`spyOn` don't reach their `@mockable` dependencies. To mock one, mark the class `@testable` and call it with `callOn(OrderStore).place(...).with(mockOf(...))`: see the testkit README, "Calling a service directly".
+
+## Admin / Table Creation
+
+`GGDynamoDb.getRawClient()` returns a fresh low-level `DynamoDBClient` (no DocumentClient marshalling), or for `GGDynamoDb.forClient(client)` that client. Use it for `DescribeTable` and other operations the document layer doesn't cover. It reads config at call time, so it works before `start()` has run, which is what a seed script needs to create its tables with `GGDynamoDbDevTables.ensure` before any data exists. Don't keep a client built from it for data access: it doesn't follow config changes, while `getDocumentClient()` does.
 
 ## Reads Are Not Validated
 

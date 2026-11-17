@@ -14,7 +14,8 @@ import "./_dedupCheck";
 import {GGLog} from "@grest-ts/logger";
 import {GGLoggerConsole} from "@grest-ts/logger-console";
 import {IPCServer} from "@grest-ts/ipc";
-import {GG_TEST_RUNNER, GGTestRunner} from "@grest-ts/testkit";
+import {GG_TEST_RUNNER, GGTestRunner, WorkerRunner} from "@grest-ts/testkit";
+import {installTestClock} from "@grest-ts/testkit/internal";
 import {GGLocator, GGLocatorScope} from "@grest-ts/locator";
 // -------------------------------------------------
 // Global test mode marker
@@ -25,14 +26,28 @@ import {GG_DISCOVERY} from "@grest-ts/discovery";
 import {GGLocalDiscoveryServer} from "@grest-ts/discovery-local";
 import {GGTestDiscoveryClient} from "./GGTestDiscoveryClient";
 import {GGExtensionDiscovery} from "@grest-ts/common";
+import {inject} from "vitest";
+
+installTestClock();
 
 const scope = new GGLocatorScope("GGTestRoot").enter()
 
 // GGTestRunner.reusableId: unique among concurrent workers, 1..maxWorkers.
 process.env.GG_TEST_WORKER ??= process.env.VITEST_POOL_ID;
 
+const isolate = inject("grest-ts:isolate");
+// Files that share a test process may share runtime workers too: each file still gets fresh runtime instances.
+WorkerRunner.setReuse(isolate === false);
+
 GGLog.init();
 GGLog.add(new GGLoggerConsole());
+
+const warnedNoGlobalSetup = Symbol.for("grest-ts:testkit-vitest:warnedNoGlobalSetup");
+if (isolate === undefined && !(globalThis as any)[warnedNoGlobalSetup]) {
+    (globalThis as any)[warnedNoGlobalSetup] = true;
+    GGLog.warn("testkit-vitest", "globalSetup '@grest-ts/testkit-vitest/globalSetup' is missing from the vitest config: " +
+        "database clones and shared test resources fail without it, and runtime workers aren't reused under isolate: false.");
+}
 
 // -------------------------------------------------
 // Load testkit extensions
@@ -57,48 +72,14 @@ function wrapDescribeFunction(target: any): any {
     return new Proxy(target, {
         apply(target, thisArg, args) {
             const [name, callback, ...rest] = args;
-
-            if (GG_TEST_RUNNER.has()) {
-                const ggTest = GG_TEST_RUNNER.get();
-                const scope = GGLocator.getScope().branch(name);
-                target.call(thisArg, name, (...cbArgs: any[]) => scope.run(() => {
-                    beforeAll(() => ggTest.runBeforeAllHooks());
-                    afterAll(() => ggTest.runAfterAllHooks());
-                    callback(...cbArgs);
-                }), ...rest)
-
-            } else {
-                scope.run(() => {
-                    // Don't use .enter() - the scope is used via .run() in callOriginalDescribe
-                    const describeBlockCtx = GGLocator.getScope().branch(name);
-
-                    const ipcServer = new IPCServer(0);
-                    const discoveryServer = new GGLocalDiscoveryServer(ipcServer);
-                    const ggTest = new GGTestRunner(ipcServer, discoveryServer);
-                    const discoveryClient = new GGTestDiscoveryClient(discoveryServer);
-
-                    describeBlockCtx.set(GG_TEST_RUNNER, ggTest);
-                    describeBlockCtx.set(GG_DISCOVERY, discoveryClient);
-
-                    // Call original describe with hooks registered INSIDE the callback
-                    // This ensures Vitest properly associates hooks with this suite
-                    target.call(thisArg, name, (...cbArgs: any[]) => describeBlockCtx.run(() => {
-                        beforeAll(() => ggTest.start(), 30000);
-                        beforeEach(() => ggTest.runBeforeEachHooks());
-                        afterEach(() => ggTest.runAfterEachHooks());
-                        afterAll(() => ggTest.teardown(), 30000);
-                        callback(...cbArgs);
-                    }), ...rest)
-                })
-            }
+            return target.call(thisArg, name, suiteFactory(name, callback), ...rest);
         },
         get(target, prop, receiver) {
             const value = Reflect.get(target, prop, receiver);
             // Wrap modifier functions (sequential, concurrent, only, skip, todo, skipIf, runIf, shuffle)
             if (typeof value === 'function') {
-                // Special handling for .each - it returns a function when called with data
-                if (prop === 'each') {
-                    return wrapEachFunction(value, wrapDescribeFunction, target);
+                if (prop === 'each' || prop === 'for') {
+                    return wrapDescribeEachFunction(value, target);
                 }
                 return wrapDescribeFunction(value);
             }
@@ -108,11 +89,54 @@ function wrapDescribeFunction(target: any): any {
 }
 
 /**
+ * The suite factory sets up its context each time vitest runs it, so every case of a `describe.each` gets its own.
+ * Top-level suites get new test infrastructure (IPCServer, discovery, etc.); nested ones reuse their parent's.
+ */
+function suiteFactory(name: string, callback: (...args: any[]) => void): (...args: any[]) => void {
+    if (GG_TEST_RUNNER.has()) {
+        const ggTest = GG_TEST_RUNNER.get();
+        const parent = GGLocator.getScope();
+        return (...cbArgs) => parent.branch(name).run(() => {
+            beforeAll(() => ggTest.runBeforeAllHooks());
+            afterAll(() => ggTest.runAfterAllHooks());
+            callback(...cbArgs);
+        });
+    }
+    return (...cbArgs) => scope.run(() => {
+        const describeBlockCtx = scope.branch(name);
+
+        const ipcServer = new IPCServer(0);
+        const discoveryServer = new GGLocalDiscoveryServer(ipcServer);
+        const ggTest = new GGTestRunner(ipcServer, discoveryServer);
+        const discoveryClient = new GGTestDiscoveryClient(discoveryServer);
+
+        describeBlockCtx.set(GG_TEST_RUNNER, ggTest);
+        describeBlockCtx.set(GG_DISCOVERY, discoveryClient);
+
+        // Hooks are registered inside the factory so vitest associates them with this suite.
+        describeBlockCtx.run(() => {
+            beforeAll(() => ggTest.start(), 30000);
+            beforeEach(() => ggTest.runBeforeEachHooks());
+            afterEach(() => ggTest.runAfterEachHooks());
+            afterAll(() => ggTest.teardown(), 30000);
+            callback(...cbArgs);
+        });
+    });
+}
+
+function wrapDescribeEachFunction(eachFn: any, target: any): any {
+    return (...eachArgs: any[]) => {
+        const describeFn = eachFn.apply(target, eachArgs);
+        return (name: string, callback: (...args: any[]) => void, ...rest: any[]) => describeFn(name, suiteFactory(name, callback), ...rest);
+    };
+}
+
+/**
  * Wraps the .each() function which has special semantics:
  * .each(data)(name, fn) - returns a function that creates parameterized tests
  *
  * @param eachFn - The original .each function
- * @param wrapperFn - The wrapper function (wrapDescribeFunction or wrapTestFunction)
+ * @param wrapperFn - The wrapper function (wrapTestFunction)
  * @param target - The original describe/test target to bind 'this' context
  */
 function wrapEachFunction(eachFn: any, wrapperFn: (target: any) => any, target: any): any {
@@ -128,8 +152,19 @@ if (!(globalThis as any).describe) {
     throw new Error("This functionality is meant to be used within vitest! You are importing this while manually to your code, you should not do that. Check your imports for 'global.ts'")
 }
 
-(globalThis as any).describe = wrapDescribeFunction((globalThis as any).describe);
-(globalThis as any).suite = wrapDescribeFunction((globalThis as any).suite);
+// Under `isolate: false` vitest re-runs this file for every test file in the same worker while keeping its globals, so
+// each run wraps the original function, never the previous file's wrapper.
+const originals: WeakMap<object, any> = ((globalThis as any)[Symbol.for("grest-ts:testkit-vitest:originals")] ??= new WeakMap());
+
+function rewrap(name: string, wrap: (original: any) => any): void {
+    const g = globalThis as any;
+    const original = originals.get(g[name]) ?? g[name];
+    g[name] = wrap(original);
+    originals.set(g[name], original);
+}
+
+rewrap("describe", wrapDescribeFunction);
+rewrap("suite", wrapDescribeFunction);
 
 // ---------------------------------------------
 // Wrap test to run in test context
@@ -146,7 +181,8 @@ function wrapTestFunction(target: any): any {
             if (GGLocator.hasScope()) {
                 const testCtx = GGLocator.getScope().branch("Test: " + name);
                 // Preserve fn args (used by .each() to pass test data)
-                return target.call(thisArg, name, (...fnArgs: any[]) => testCtx.run(() => fn(...fnArgs)), timeout);
+                // Awaited inside the scope: a returned GGTestAction only runs when then() is called on it.
+                return target.call(thisArg, name, (...fnArgs: any[]) => testCtx.run(async () => await fn(...fnArgs)), timeout);
             } else {
                 return target(fn, timeout);
             }
@@ -155,8 +191,8 @@ function wrapTestFunction(target: any): any {
             const value = Reflect.get(target, prop, receiver);
             // Wrap modifier functions (sequential, concurrent, only, skip, todo, skipIf, runIf, fails)
             if (typeof value === 'function') {
-                // Special handling for .each - it returns a function when called with data
-                if (prop === 'each') {
+                // .each/.for return a function when called with data
+                if (prop === 'each' || prop === 'for') {
                     return wrapEachFunction(value, wrapTestFunction, target);
                 }
                 return wrapTestFunction(value);
@@ -166,8 +202,8 @@ function wrapTestFunction(target: any): any {
     });
 }
 
-(globalThis as any).test = wrapTestFunction((globalThis as any).test);
-(globalThis as any).it = wrapTestFunction((globalThis as any).it);
+rewrap("test", wrapTestFunction);
+rewrap("it", wrapTestFunction);
 
 // ---------------------------------------------
 // Custom lifecycle hooks (beforeAll, beforeEach, afterAll, afterEach)
@@ -178,7 +214,7 @@ function wrapLifecycleHook(original: any) {
             const [fn, timeout] = args;
             if (GGLocator.hasScope()) {
                 const describeCtx = GGLocator.getScope();
-                return target(() => describeCtx.run(fn), timeout);
+                return target(() => describeCtx.run(async () => await fn()), timeout);
             } else {
                 return target(fn, timeout);
             }
@@ -186,10 +222,10 @@ function wrapLifecycleHook(original: any) {
     });
 }
 
-(globalThis as any).beforeAll = wrapLifecycleHook((globalThis as any).beforeAll);
-(globalThis as any).beforeEach = wrapLifecycleHook((globalThis as any).beforeEach);
-(globalThis as any).afterAll = wrapLifecycleHook((globalThis as any).afterAll);
-(globalThis as any).afterEach = wrapLifecycleHook((globalThis as any).afterEach);
+rewrap("beforeAll", wrapLifecycleHook);
+rewrap("beforeEach", wrapLifecycleHook);
+rewrap("afterAll", wrapLifecycleHook);
+rewrap("afterEach", wrapLifecycleHook);
 
 // Make this file a module
 export {};

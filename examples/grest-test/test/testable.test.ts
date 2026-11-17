@@ -8,7 +8,7 @@
  *
  * Key patterns demonstrated:
  * 1. Full runtime integration testing via HTTP API
- * 2. Per-request mocking at any level (A, B, or C) using mockBy()
+ * 2. Per-request mocking at any level (A, B, or C) using mockOf()
  * 3. Direct service invocation via testable() - THE KEY FEATURE
  * 4. Mixing direct invocation with mocking
  * 5. Spy mode for validation without mocking
@@ -44,12 +44,12 @@ describe("testable tests - full runtime integration", () => {
             .planTravel({destination: "Alaska"})
             .with(
                 mockOf(WeatherService).getWeather
-                    .toEqual({city: "Alaska"})
+                    .toEqual("Alaska")
                     .andReturn({temperature: 20, condition: "snowy", humidity: 80})
             )
             .with(
                 mockOf(WeatherService).getTimezone
-                    .toEqual({city: "Alaska"})
+                    .toEqual("Alaska")
                     .andReturn({timezone: "America/Anchorage", offset: -9})
             )
             .toMatchObject({
@@ -67,7 +67,7 @@ describe("testable tests - full runtime integration", () => {
             .planTravel({destination: "Paris"})
             .with(
                 mockOf(CityService).getCityInfo
-                    .toEqual({city: "Paris"})
+                    .toEqual("Paris")
                     .andReturn({
                         city: "Paris",
                         weather: {temperature: 55, condition: "cloudy", humidity: 70},
@@ -87,7 +87,7 @@ describe("testable tests - full runtime integration", () => {
             .planTravel({destination: "NYC"})
             .with(
                 spyOn(WeatherService).getWeather
-                    .toEqual({city: "NYC"})
+                    .toEqual("NYC")
                     .responseToMatchObject({condition: "sunny"})
             );
     });
@@ -117,11 +117,11 @@ describe("testable tests - full runtime integration", () => {
         const interceptor = mockOf(WeatherService).getWeather.times(2)
             .andReturn({temperature: 1, condition: "clear", humidity: 1})
             .createInterceptor() as GGCallInterceptor
-        await interceptor.onRequest({city: "Oslo"})
+        await interceptor.onRequest("Oslo")
         expect(() => interceptor.validate()).toThrow(/too few/)
-        await interceptor.onRequest({city: "Oslo"})
+        await interceptor.onRequest("Oslo")
         expect(() => interceptor.validate()).not.toThrow()
-        await expect(interceptor.onRequest({city: "Oslo"})).rejects.toThrow(/too many/)
+        await expect(interceptor.onRequest("Oslo")).rejects.toThrow(/too many/)
     })
 
     test("andReturn with a function answers each call from its input", async () => {
@@ -129,7 +129,7 @@ describe("testable tests - full runtime integration", () => {
             .compareDestinations({destinations: ["Hot City", "Cold City"]})
             .with(
                 mockOf(WeatherService).getWeather.times(2)
-                    .andReturn(({city}) => ({temperature: city === "Hot City" ? 95 : 35, condition: "clear", humidity: 50})),
+                    .andReturn(city => ({temperature: city === "Hot City" ? 95 : 35, condition: "clear", humidity: 50})),
                 mockOf(WeatherService).getTimezone.times(2)
                     .andReturn({timezone: "UTC", offset: 0})
             )
@@ -208,7 +208,7 @@ describe("chain - testable() direct service invocation", () => {
 });
 
 // ============================================================================
-// SECTION 3: testable() Combined with mockBy() - Maximum Power
+// SECTION 3: testable() Combined with mockOf() - Maximum Power
 // ============================================================================
 
 describe("chain - testable() with mocking", () => {
@@ -219,15 +219,15 @@ describe("chain - testable() with mocking", () => {
      * THE MOST POWERFUL PATTERN: Call ServiceB directly while mocking ServiceC.
      * This tests ServiceB's logic in isolation without setting up complex mocks.
      */
-    test("testable(ServiceB) with mockBy(ServiceC) - test B logic with controlled C", async () => {
+    test("testable(ServiceB) with mockOf(ServiceC) - test B logic with controlled C", async () => {
         await callOn(CityService)
             .getCityInfo("Arctic Base")
             .with(
                 mockOf(WeatherService).getWeather
-                    .toEqual({city: "Arctic Base"})
+                    .toEqual("Arctic Base")
                     .andReturn({temperature: -40, condition: "blizzard", humidity: 90}),
                 mockOf(WeatherService).getTimezone
-                    .toEqual({city: "Arctic Base"})
+                    .toEqual("Arctic Base")
                     .andReturn({timezone: "Arctic/Base", offset: 0})
             )
             .toMatchObject({
@@ -239,12 +239,12 @@ describe("chain - testable() with mocking", () => {
     /**
      * Call ServiceA directly while mocking ServiceB - tests A's logic only
      */
-    test("testable(ServiceA) with mockBy(ServiceB) - test A logic with controlled B", async () => {
+    test("testable(ServiceA) with mockOf(ServiceB) - test A logic with controlled B", async () => {
         await callOn(TravelPlannerService)
             .planTravel({destination: "Test City"})
             .with(
                 mockOf(CityService).getCityInfo
-                    .toEqual({city: "Test City"})
+                    .toEqual("Test City")
                     .andReturn({
                         city: "Test City",
                         weather: {temperature: 100, condition: "scorching", humidity: 10},
@@ -261,12 +261,12 @@ describe("chain - testable() with mocking", () => {
     /**
      * Call ServiceA directly while mocking at ServiceC level (skip B's mock)
      */
-    test("testable(ServiceA) with mockBy(ServiceC) - test A+B logic together", async () => {
+    test("testable(ServiceA) with mockOf(ServiceC) - test A+B logic together", async () => {
         await callOn(TravelPlannerService)
             .quickWeatherCheck({city: "Tropical Island"})
             .with(
                 mockOf(WeatherService).getWeather
-                    .toEqual({city: "Tropical Island"})
+                    .toEqual("Tropical Island")
                     .andReturn({temperature: 85, condition: "sunny", humidity: 80})
             )
             .toMatchObject({
