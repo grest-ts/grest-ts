@@ -20,7 +20,7 @@ export interface GGOAuthStore {
     // concurrent redemptions one fails cleanly (a 5xx would be retried, and the retry is reuse).
     consume(model: string, id: string): Promise<void>
     destroy(model: string, id: string): Promise<void>
-    // Every row of these models carrying this grantId.
+    // Every row of these models still carrying this grantId when it is deleted (a row the index shows may since carry another).
     revokeByGrantId(grantId: string, models: ReadonlySet<string>): Promise<void>
     listGrantIds(accountId: string): Promise<string[]>
     destroySessions(accountId: string): Promise<void>

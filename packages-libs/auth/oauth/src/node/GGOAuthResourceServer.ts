@@ -96,7 +96,7 @@ export class GGOAuthResourceServer<R extends GGOAuthProtectedResource<any> = GGO
             if (!resource) continue
             res.writeHead(200, {"content-type": "application/json"})
             res.end(JSON.stringify({
-                resource: url,
+                resource: new URL(resource.resource()).href === new URL(url).href ? resource.resource() : url,
                 authorization_servers: [this.options.authorizationServer()],
                 scopes_supported: resource.scopes,
                 bearer_methods_supported: ["header"],
