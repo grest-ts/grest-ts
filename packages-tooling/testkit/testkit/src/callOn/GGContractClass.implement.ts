@@ -13,10 +13,13 @@ const originalImplement = GGContractClass.prototype.implement;
 
 export const LOCATOR_KEY_PREFIX_FOR_CONTRACT = "@contract:"
 
+const implementationOf = new WeakMap<object, unknown>()
+
 /**
  * Patched implement() that registers the returned client in GGLocator.
  *
- * Strict by default: registering the same contract name twice is an error.
+ * Strict by default: registering the same contract name twice is an error, unless it's
+ * the same implementation served again (two schemas of one contract, at two path prefixes).
  * Transports that produce per-connection or per-client impls (WebSocket's
  * startServer, HTTP's createClient) pass `{skipLocatorRegistration: true}`
  * in options to opt out — those impls have no business in the callOn registry.
@@ -40,6 +43,7 @@ GGContractClass.prototype.implement = function (
     if (scope) {
         const key = new GGLocatorKey<typeof client>(LOCATOR_KEY_PREFIX_FOR_CONTRACT + contractName);
         if (scope.has(key)) {
+            if (implementationOf.get(scope.get(key)) === instance) return client;
             throw new Error(
                 `Contract '${contractName}' is already registered in this scope. ` +
                 `If this is an internal per-connection implement (e.g. WebSocket server handler) ` +
@@ -47,6 +51,7 @@ GGContractClass.prototype.implement = function (
             );
         }
         scope.set(key, client);
+        implementationOf.set(client, instance);
     }
 
     return client;
