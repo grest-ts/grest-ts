@@ -844,8 +844,9 @@ function isAllowedDocumentUrl(clientId: string, prefixes: string[]): boolean {
     return prefixes.some(prefix => (url.origin + url.pathname).startsWith(prefix))
 }
 
+// Keyed by the URL's href, as resourceAt matches it: `https://h` and `https://h/` are one resource, so one grant.
 function grantKey(accountId: string, clientId: string, indicator: string): string {
-    return createHash("sha256").update(JSON.stringify([accountId, clientId, indicator])).digest("base64url")
+    return createHash("sha256").update(JSON.stringify([accountId, clientId, new URL(indicator).href])).digest("base64url")
 }
 
 function requestedScopes(params: Record<string, unknown>): string[] {

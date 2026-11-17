@@ -214,9 +214,10 @@ const renderSignIn = async ({interaction, action, method, form, html, login, con
 
 - `interaction.prompt` is `"login"` (no login session, `prompt=login` or an expired `max_age`) or `"consent"`: a signed-in `accountId` approves a
   third-party client. Show the client's name and redirect hosts, and warn when `loopbackOnly` is set.
-- `consent(data?)` grants on the user's grant to the client for the requested resource URL. Only a new
-  grant takes `data` (e.g. the org the user picked on the page); an existing one keeps what it has.
-  `claims` and `grant()` read it back.
+- `consent(data?)` grants on the user's grant to the client for the requested resource URL (spellings of one URL,
+  like `https://h` and `https://h/`, are one grant). Only a new grant takes `data` (e.g. the org the user picked on
+  the page); an existing one keeps what it has, by design: what the grant acts in is fixed for its lifetime, so a
+  different org is a new connection (revoke, then connect again). `claims` and `grant()` read it back.
 - A first-party client never gets a consent prompt: it re-authorizes silently while the login
   session lives (single sign-on).
 - The request reaches your code only from the browser that started the flow (it holds the

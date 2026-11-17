@@ -31,6 +31,7 @@ import {
     type GGAuthzResourceProperties,
     type GGAuthzRule,
     type GGAuthzSubject,
+    IsGGAuthzApprovalLevel,
     IsGGAuthzModel,
     IsGGAuthzPolicies,
 } from "../shared/authzSchemas"
@@ -408,8 +409,9 @@ export class GGAuthz {
             for (const r of g.deny) if (r.actions.has(action)) add(exclude, residual(g.on, r.source, "deny"))
         }
         if (p.workload) exclude.push(...await this.humansOnlyFilters(action, loader))
-        // `present` first: an absent attribute raises nothing, but an unknown exclude would drop the row.
-        if (p.workload && this.levelKey) exclude.push({conditions: [{key: this.levelKey, op: "present", value: true}, {key: this.levelKey, op: "eq", value: "humans-only"}]})
+        // `present` first: an absent attribute raises nothing, but an unknown exclude would drop the row. A value that
+        // isn't a level fails the row's decision, so it's left out too.
+        if (p.workload && this.levelKey) exclude.push({conditions: [{key: this.levelKey, op: "present", value: true}, {key: this.levelKey, op: "notIn", value: GG_AUTHZ_APPROVAL_LEVELS.slice(0, HUMANS_ONLY)}]})
         return Object.keys(values).length ? {action, resourceType, include, exclude, require, values} : {action, resourceType, include, exclude, require}
     }
 
@@ -579,7 +581,8 @@ export class GGAuthz {
             on = floorOn
         }
         const ask = applying(e.asks).reduce<Approval | undefined>((top, a) => a.level > (top?.level ?? level) ? a : top, undefined)
-        const attribute = this.levelKey ? GG_AUTHZ_APPROVAL_LEVELS.indexOf(e.get(this.levelKey) as GGAuthzApprovalLevel) : -1
+        const value = this.levelKey ? e.get(this.levelKey) : undefined
+        const attribute = value === undefined ? -1 : GG_AUTHZ_APPROVAL_LEVELS.indexOf(IsGGAuthzApprovalLevel.parse(value))
         if (attribute > Math.max(level, ask?.level ?? -1)) {
             return {layer: "approval", kind: "approval", level: GG_AUTHZ_APPROVAL_LEVELS[attribute]!, locked: false, lowered, message: `resource ${this.levelKey}`, source: "attribute"}
         }

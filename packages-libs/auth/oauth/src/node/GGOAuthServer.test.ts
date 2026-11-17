@@ -536,6 +536,14 @@ describe("GGOAuthServer", () => {
         expect(mcpClient!.grant!.data).toEqual({org: "o2"})
     })
 
+    test("spellings of one resource URL share its grant", async () => {
+        const clientId = await register()
+        await connect(new Browser(), clientId, MCP, "o1")
+        await connect(new Browser(), clientId, MCP.replace("localhost", "LOCALHOST"), "o2")
+        expect(await grantsOf(clientId)).toHaveLength(1)
+        expect(mcpClient!.grant!.data).toEqual({org: "o1"})
+    })
+
     test("of two concurrent first consents for one resource URL, both end on one grant", async () => {
         const clientId = await register()
         const consentPage = async (browser: Browser) => browser.page(browser.submit(await browser.page(authorizeUrl(clientId, THIRD_PARTY_REDIRECT, pkce().challenge)), "login", {sub: "alice"}))

@@ -482,7 +482,8 @@ A third outcome besides allow and deny, `allow-with-approval`, for workloads onl
   action out of a restriction instead.
 - **A resource attribute may raise it too**: `approvalLevelAttribute` in the engine config names the
   attribute (e.g. a critical secret's `approvalLevel`), raising even `auto` (`source: "attribute"`).
-  An absent attribute raises nothing; a failed load is an error, not a decision.
+  An absent attribute raises nothing; a failed load, or a value that isn't a level, is an error, not a decision
+  (`listAllowed` leaves such a row out for a workload).
 - **An ask naming an unknown action throws**, like a policy would: a typo must not silently never ask.
 - **Floors and asks fail toward asking**: one applies when it names the action, its resources
   match, and none of its facts or conditions is known to be false. An unknown raises the level.

@@ -116,6 +116,14 @@ describe("the resource's level attribute raises too", () => {
         await expect(decide(engine(undefined, {}, resolver, "approvalLevel"), agent([]), "git:Read")).rejects.toThrow("store down")
     })
 
+    test("a value that isn't a level is an error, and listAllowed leaves its row out", async () => {
+        const resolver = new GGAuthzMemoryResolver({...data, attributes: {...data.attributes, [repo("site")]: {approvalLevel: "critcal"}}})
+        const authz = engine(undefined, {}, resolver, "approvalLevel")
+        await expect(decide(authz, agent([]), "git:Read", repo("site"))).rejects.toThrow()
+        const plan = await authz.listAllowed({subject: agent([]), action: {name: "git:Read"}, resource: {type: "git:repo"}})
+        expect(await GGAuthz.applyPlan(plan, [repo("site"), repo("prod")], {resolver})).toEqual([repo("prod")])
+    })
+
     test("only a workload's decision loads it", async () => {
         const resolver = new GGAuthzMemoryResolver(data)
         const load = vi.spyOn(resolver, "attributes")
