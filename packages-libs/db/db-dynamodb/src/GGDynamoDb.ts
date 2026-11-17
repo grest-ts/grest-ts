@@ -11,7 +11,8 @@ export interface GGDynamoDbPage<T> {
     cursor: string | undefined
 }
 
-/** A command a client sent: its SDK name (`PutItemCommand`, `TransactWriteItemsCommand`, ...) and input. */
+/** A command a client sent: its SDK name (`PutItemCommand`, `TransactWriteItemsCommand`, ...) and input. Item values in
+ *  `input` are as the sending client gave them: plain values from the document client, `AttributeValue`s from a raw one. */
 export interface GGDynamoDbCommand {
     name: string
     input: Record<string, unknown>
@@ -195,7 +196,8 @@ export class GGDynamoDb {
     /**
      * A GGDynamoDb over an SDK client you already hold, for tests, fixtures and seed scripts: not registered with the
      * runtime and not reconfigured from config. It uses that client itself (`getRawClient` returns it, and its errors gain
-     * this db's name); the caller keeps owning it and destroys it.
+     * this db's name); the caller keeps owning it and destroys it. One client backs one GGDynamoDb: a second `forClient`
+     * on it replaces the first's middleware, so the first loses its error naming and `onSucceeded` listeners.
      */
     static forClient(client: DynamoDBClient, name = "forClient"): GGDynamoDb {
         const db = Object.create(GGDynamoDb.prototype) as GGDynamoDb
@@ -349,7 +351,7 @@ export class GGDynamoDb {
                         listener({name: context.commandName ?? "", input: args.input as Record<string, unknown>})
                     } catch (err) {
                         // The command already happened: failing it now would have its caller retry a done write.
-                        GGLog.error(this, "An onSucceeded listener threw", {name: this.config.name, error: err instanceof Error ? err.message : String(err)})
+                        GGLog.error(this, `An onSucceeded listener of '${this.config.name}' threw`, err)
                     }
                 }
                 return result
