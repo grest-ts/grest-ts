@@ -20,8 +20,9 @@ export interface GGAuthzActionSpec<Type extends string> {
 }
 
 /** A type with `in` can live inside those types (its own, or another service's as `service:type`): every action on it
- *  also applies to them, so a create or a list is decided on the parent. */
-export type GGAuthzTypeSpec = string | {readonly description: string, readonly in?: readonly string[]}
+ *  also applies to them, so a create or a list is decided on the parent. `parents` are where else it can sit in the
+ *  scope tree, without its actions applying there. A type with neither lives directly under the tenant root. */
+export type GGAuthzTypeSpec = string | {readonly description: string, readonly in?: readonly string[], readonly parents?: readonly string[]}
 
 export interface GGAuthzServiceSpec<Types extends Record<string, GGAuthzTypeSpec>, Actions extends Record<string, GGAuthzActionSpec<keyof Types & string>>> {
     description?: string
@@ -39,7 +40,7 @@ export type GGAuthzService<Service extends string = string, Types extends Record
     readonly all: `${Service}:*`
     readonly description?: string
     readonly types: {readonly [K in keyof Types & string]: `${Service}:${K}`}
-    readonly resourceTypes: readonly {readonly name: string, readonly description: string, readonly in?: readonly string[]}[]
+    readonly resourceTypes: readonly {readonly name: string, readonly description: string, readonly in?: readonly string[], readonly parents?: readonly string[]}[]
     /** The input schema of a field naming the parent a `type` is created or listed in, for `.in(field)`. */
     parentRef<const K extends {[T in keyof Types & string]: Types[T] extends {in: readonly string[]} ? T : never}[keyof Types & string]>(type: K): GGSchema<GGAuthzParentRef<ParentsOf<Service, Types[K]>>>
     readonly actions: readonly GGAuthzDefinedAction[]
@@ -72,6 +73,8 @@ export interface GGAuthzDefinedTokenScope {
 
 export interface GGAuthzModelSpec {
     partition: string
+    /** The tenant root's type, e.g. `org:org`: every scope chain ends at it. */
+    tenantType: string
     services: readonly GGAuthzService[]
     roles: readonly GGAuthzDefinedRole[]
     tokenScopes?: readonly GGAuthzDefinedTokenScope[]
@@ -102,7 +105,8 @@ export function defineAuthzService<const Service extends string, const Types ext
         if (typeof s === "string") return {name: types[type]!, description: s}
         const within = s.in?.map(t => typeName(t, `Type ${name}:${type}`))
         if (within?.length) parents.set(types[type]!, within)
-        return {name: types[type]!, description: s.description, ...within && {in: within}}
+        const tree = [...new Set([...within ?? [], ...s.parents?.map(t => typeName(t, `Type ${name}:${type}`)) ?? []])]
+        return {name: types[type]!, description: s.description, ...within && {in: within}, ...tree.length && {parents: tree}}
     })
     const actions: GGAuthzDefinedAction[] = []
     const service: Record<string, unknown> = {name, all: `${name}:*`, description: spec.description, types, resourceTypes, actions, definedAt: definedAt()}
@@ -136,6 +140,8 @@ export function defineAuthzTokenScope(name: string, spec: {allow: readonly GGAut
 export function defineAuthzModel(spec: GGAuthzModelSpec): GGAuthzModel {
     const model = IsGGAuthzModel.parse({
         partition: spec.partition,
+        tenantType: spec.tenantType,
+        types: spec.services.flatMap(s => s.resourceTypes.map(t => ({name: t.name, parents: t.parents && [...t.parents]}))),
         actions: spec.services.flatMap(s => s.actions.map(a => ({name: a.name, resourceTypes: [...a.resourceTypes], description: a.description}))),
         roles: spec.roles.map(r => ({name: r.name, actions: [...r.actions], includes: r.includes && [...r.includes], description: r.description})),
         tokenScopes: spec.tokenScopes?.map(s => ({name: s.name, allow: s.allow, description: s.description})),
@@ -144,7 +150,10 @@ export function defineAuthzModel(spec: GGAuthzModelSpec): GGAuthzModel {
         stepUpFacts: spec.stepUpFacts && [...spec.stepUpFacts],
         grantAction: spec.grantAction && actionName(spec.grantAction),
     })
-    const types = new Set(spec.services.flatMap(s => s.resourceTypes.map(t => t.name)))
+    const types = new Set(model.types.map(t => t.name))
+    for (const t of model.types) for (const parent of t.parents ?? []) if (!types.has(parent)) throw new Error(`Type ${t.name} is in ${parent}, which no service in the model declares`)
+    if (!types.has(model.tenantType)) throw new Error(`The tenant type ${model.tenantType} is not declared by any service in the model`)
+    if (model.types.find(t => t.name === model.tenantType)?.parents) throw new Error(`The tenant type ${model.tenantType} can't be in another type`)
     const known = new Map<string, unknown>()
     for (const a of model.actions) {
         if (known.has(a.name)) throw new Error(`Duplicate action ${a.name}`)

@@ -6,6 +6,23 @@ const r = (service: string, path: string) => `rn:fga:${service}:t:${path}`
 
 const model: GGAuthzModel = {
     partition: "fga",
+    tenantType: "tenant:tenant",
+    types: [
+        {name: "tenant:tenant"},
+        {name: "zdoc:folder"},
+        {name: "zdoc:doc", parents: ["zdoc:folder"]},
+        {name: "drive:doc", parents: ["drive:doc", "tenant:tenant"]},
+        {name: "gh:org"},
+        {name: "gh:repo", parents: ["gh:org"]},
+        {name: "doc:org"},
+        {name: "doc:folder"},
+        {name: "doc:document", parents: ["doc:folder", "doc:org", "tenant:tenant"]},
+        {name: "trip:trip"},
+        {name: "asset:category"},
+        {name: "bank:branch"},
+        {name: "bank:account", parents: ["bank:branch"]},
+        {name: "bank:transaction", parents: ["bank:account"]},
+    ],
     actions: [
         {name: "zdoc:Read", resourceTypes: ["zdoc:doc", "zdoc:folder"]},
         {name: "zdoc:Write", resourceTypes: ["zdoc:doc"]},
@@ -52,6 +69,7 @@ const model: GGAuthzModel = {
 }
 
 const rn = {
+    tenant: r("tenant", "tenant/t"),
     readme: r("zdoc", "doc/readme"),
     folderA: r("zdoc", "folder/A"),
     budget: r("drive", "doc/2021-budget"),
@@ -115,6 +133,7 @@ const policies: GGAuthzPolicies = {
 
 const resolver = new GGAuthzMemoryResolver({
     parents: {
+        ...Object.fromEntries(Object.values(rn).filter(x => x !== rn.tenant).map(x => [x, rn.tenant])),
         [rn.readme]: rn.folderA,
         [rn.budget]: rn.planning,
         [rn.tooling]: rn.contoso,

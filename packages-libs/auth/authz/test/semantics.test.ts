@@ -4,11 +4,13 @@ import {req, subject} from "./util"
 import {rn} from "./world"
 import * as fixture from "./world"
 
-const bucket = "rn:acme:store:acme:bucket/logs"
-const object = "rn:acme:store:acme:bucket/logs/object/a"
+const bucket = "rn:acme:store:logs:bucket/logs"
+const object = "rn:acme:store:logs:bucket/logs/object/a"
 
 const model = {
     partition: "acme",
+    tenantType: "store:bucket",
+    types: [{name: "store:bucket"}, {name: "store:object"}],
     actions: [{name: "store:Read", resourceTypes: ["store:bucket", "store:object"]}, {name: "store:Write", resourceTypes: ["store:bucket", "store:object"]}],
     roles: [{name: "reader", actions: ["store:Read"]}, {name: "writer", actions: ["store:*"]}],
 }
@@ -87,7 +89,7 @@ describe("exact resource matcher", () => {
     test("listAllowed carries the exact matcher as a residual", async () => {
         const authz = engine({resourcePolicies: [{on: bucket, statements: [{effect: "allow", principals: ["user:ann"], actions: ["store:Read"], resources: [`=${object}`]}]}]})
         const plan = await authz.listAllowed({subject: {type: "user", id: "ann"}, action: {name: "store:Read"}, resource: {type: "store:object"}})
-        const other = "rn:acme:store:acme:bucket/logs/object/b"
+        const other = "rn:acme:store:logs:bucket/logs/object/b"
         expect(GGAuthz.applyPlan(plan, [object, other], {resolver: new GGAuthzMemoryResolver({parents: {[object]: bucket, [other]: bucket}})})).toEqual([object])
     })
 

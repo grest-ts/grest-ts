@@ -13,6 +13,19 @@ const secret = (user: string, id: string) => `${store(user)}/secret/${id}`
 
 const model: GGAuthzModel = {
     partition: "ide",
+    tenantType: "org:org",
+    types: [
+        {name: "org:org"},
+        {name: "ext:catalog"},
+        {name: "ext:publisher", parents: ["ext:catalog"]},
+        {name: "ext:extension", parents: ["ext:publisher"]},
+        {name: "ws:workspace"},
+        {name: "ws:extension", parents: ["ws:workspace"]},
+        {name: "profile:profile"},
+        {name: "sites:site"},
+        {name: "secrets:store"},
+        {name: "secrets:secret", parents: ["secrets:store"]},
+    ],
     actions: [
         {name: "ext:Install", resourceTypes: ["ext:extension"]},
         {name: "ext:Activate", resourceTypes: ["ws:extension"]},

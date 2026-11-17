@@ -1,11 +1,13 @@
 import {describe, expect, test} from "vitest"
 import {GGAuthz, type GGAuthzCondition, GGAuthzMemoryResolver, type GGAuthzPolicies, IsGGAuthzCondition, IsGGAuthzPolicies} from "../src/index-node"
 
-const bucket = "rn:acme:store:acme:bucket/logs"
+const bucket = "rn:acme:store:logs:bucket/logs"
 const doc = (id: string) => `${bucket}/object/${id}`
 
 const model = {
     partition: "acme",
+    tenantType: "store:bucket",
+    types: [{name: "store:bucket"}, {name: "store:object"}],
     actions: [{name: "store:Read", resourceTypes: ["store:object"]}, {name: "store:Delete", resourceTypes: ["store:object"]}],
     roles: [{name: "reader", actions: ["store:Read"]}, {name: "admin", actions: ["store:*"]}],
 }

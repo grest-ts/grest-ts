@@ -3,12 +3,21 @@ import {defineAuthzModel, defineAuthzService, defineAuthzTokenScope, GGAuthz, GG
 import {req} from "../util"
 
 // Mapping: partition root above every organization (so SCPs and identity policies follow the principal anywhere)
-// → org root → OU → account (tenant) → resources. Identity policies are statements at the partition root scoped by
+// → org root → OU → account → resources, all one tenant: a scope chain never leaves its tenant. Identity policies are statements at the partition root scoped by
 // principal; SCPs are guardrails selected by account/OU group membership; RCPs are guardrails on the account/OU
 // scope; permission boundaries are boundaries; session policies are token scopes.
 
+const Org = defineAuthzService("org", {
+    types: {
+        partition: "The partition",
+        root: {description: "An organization's root", parents: ["partition"]},
+        ou: {description: "Organizational unit", parents: ["root"]},
+        account: {description: "Account, or an outside one", parents: ["ou", "root", "partition"]},
+    },
+    actions: {},
+})
 const S3 = defineAuthzService("s3", {
-    types: {bucket: "Bucket", object: "Object"},
+    types: {bucket: {description: "Bucket", parents: [Org.types.account]}, object: {description: "Object", parents: ["bucket"]}},
     actions: {
         ListBucket: {on: ["bucket"]},
         DeleteBucket: {on: ["bucket"]},
@@ -18,25 +27,26 @@ const S3 = defineAuthzService("s3", {
     },
 })
 const Ec2 = defineAuthzService("ec2", {
-    types: {instance: "Instance"},
+    types: {instance: {description: "Instance", parents: [Org.types.account]}},
     actions: {StartInstances: {on: ["instance"]}, TerminateInstances: {on: ["instance"]}},
 })
 const Iam = defineAuthzService("iam", {
-    types: {user: "User"},
+    types: {user: {description: "User", parents: [Org.types.account]}},
     actions: {CreateUser: {on: ["user"]}, ChangePassword: {on: ["user"]}},
 })
 const Cloudwatch = defineAuthzService("cloudwatch", {
-    types: {dashboard: "Dashboard"},
+    types: {dashboard: {description: "Dashboard", parents: [Org.types.account]}},
     actions: {GetDashboard: {on: ["dashboard"]}, DeleteDashboards: {on: ["dashboard"]}},
 })
 const SecretsManager = defineAuthzService("secretsmanager", {
-    types: {secret: "Secret"},
+    types: {secret: {description: "Secret", parents: [Org.types.account]}},
     actions: {GetSecretValue: {on: ["secret"]}},
 })
 
 const model = defineAuthzModel({
     partition: "aws",
-    services: [S3, Ec2, Iam, Cloudwatch, SecretsManager],
+    tenantType: Org.types.partition,
+    services: [Org, S3, Ec2, Iam, Cloudwatch, SecretsManager],
     roles: [],
     tokenScopes: [
         defineAuthzTokenScope("session-s3-read", {allow: [{actions: [S3.GetObject]}]}),
@@ -45,16 +55,16 @@ const model = defineAuthzModel({
 })
 
 const partition = "rn:aws:org:aws:partition/aws"
-const orgRoot = "rn:aws:org:o-1:root/r-1"
-const ou = (id: string) => `rn:aws:org:o-1:ou/${id}`
-const account = (id: string) => `rn:aws:org:o-1:account/${id}`
-const external = "rn:aws:org:333333333333:account/333333333333"
-const bucket = (acct: string, name: string) => `rn:aws:s3:${acct}:bucket/${name}`
+const orgRoot = "rn:aws:org:aws:root/r-1"
+const ou = (id: string) => `rn:aws:org:aws:ou/${id}`
+const account = (id: string) => `rn:aws:org:aws:account/${id}`
+const external = "rn:aws:org:aws:account/333333333333"
+const bucket = (acct: string, name: string) => `rn:aws:s3:aws:account/${acct}/bucket/${name}`
 const object = (acct: string, name: string, key: string) => `${bucket(acct, name)}/object/${key}`
-const instance = (acct: string, id: string) => `rn:aws:ec2:${acct}:instance/${id}`
-const iamUser = (acct: string, name: string) => `rn:aws:iam:${acct}:user/${name}`
-const dashboard = (acct: string, name: string) => `rn:aws:cloudwatch:${acct}:dashboard/${name}`
-const secret = (acct: string, name: string) => `rn:aws:secretsmanager:${acct}:secret/${name}`
+const instance = (acct: string, id: string) => `rn:aws:ec2:aws:account/${acct}/instance/${id}`
+const iamUser = (acct: string, name: string) => `rn:aws:iam:aws:account/${acct}/user/${name}`
+const dashboard = (acct: string, name: string) => `rn:aws:cloudwatch:aws:account/${acct}/dashboard/${name}`
+const secret = (acct: string, name: string) => `rn:aws:secretsmanager:aws:account/${acct}/secret/${name}`
 
 const A = "111111111111"
 const B = "222222222222"

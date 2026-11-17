@@ -105,8 +105,16 @@ export const IsGGAuthzTokenScope = IsObject({
 })
 export type GGAuthzTokenScope = typeof IsGGAuthzTokenScope.infer
 
+export const IsGGAuthzType = IsObject({
+    name: IsGGAuthzResourceType,
+    parents: IsArray(IsGGAuthzResourceType).orUndefined.docs({description: "The types it can be directly inside; without it, only the tenant root"}),
+})
+export type GGAuthzType = typeof IsGGAuthzType.infer
+
 export const IsGGAuthzModel = IsObject({
     partition: IsString.regex(/^[a-z][a-z0-9-]*$/),
+    tenantType: IsGGAuthzResourceType.docs({description: "The tenant root's type: every scope chain ends at it"}),
+    types: IsArray(IsGGAuthzType).docs({description: "Every resource type and where it can be: a scope chain that steps anywhere else is invalid"}),
     actions: IsArray(IsGGAuthzAction),
     roles: IsArray(IsGGAuthzRole),
     tokenScopes: IsArray(IsGGAuthzTokenScope).orUndefined,

@@ -2,7 +2,7 @@ import {describe, expect, test} from "vitest"
 import {GGAuthz, type GGAuthzMemoryData, GGAuthzMemoryResolver, type GGAuthzModel, type GGAuthzPolicies} from "../../src/index-node"
 import {req} from "../util"
 
-const org = "rn:gcp:crm:acme:organization/123"
+const org = "rn:gcp:crm:acme:organization/acme"
 const folderEng = "rn:gcp:crm:acme:folder/eng"
 const folderOps = "rn:gcp:crm:acme:folder/ops"
 const project1 = "rn:gcp:crm:acme:project/project-1"
@@ -20,6 +20,14 @@ const deployer = "rn:gcp:iam:acme:service-account/deployer"
 
 const model: GGAuthzModel = {
     partition: "gcp",
+    tenantType: "crm:organization",
+    types: [
+        {name: "crm:organization"},
+        {name: "crm:folder"},
+        {name: "crm:project", parents: ["crm:folder"]},
+        ...["pubsub:topic", "storage:bucket", "compute:instance", "compute:network", "iam:service-account"].map(name => ({name, parents: ["crm:project"]})),
+        {name: "storage:object", parents: ["storage:bucket"]},
+    ],
     actions: [
         {name: "crm:GetProject", resourceTypes: ["crm:project"]},
         {name: "crm:DeleteProject", resourceTypes: ["crm:project"]},
