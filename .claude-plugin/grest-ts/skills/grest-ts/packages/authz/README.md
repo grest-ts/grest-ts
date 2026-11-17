@@ -160,7 +160,7 @@ export const AppAuthz = defineAuthzModel({
 - **The type tree is enforced.** Every scope chain the engine decides on (a request's
   `properties.ancestors` or the resolver's) must step only from a type to one of its `in` or `parents`
   types (or to the root, for a type with neither), stay in the resource's partition and tenant, and end at the
-  tenant root. Anything else is an `invalid` denial: a loader that drops an ancestor can't skip the
+  tenant root, the `tenantType` resource whose id is the tenant (`rn:acme:org:acme:org/acme`). Anything else is an `invalid` denial: a loader that drops an ancestor can't skip the
   denies and guardrails bound on it.
 - An action's `on` may also name another service's type as `service:type`; the model fails if no
   service declares it.

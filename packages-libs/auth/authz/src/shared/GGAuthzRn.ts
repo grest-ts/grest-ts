@@ -37,7 +37,11 @@ export class GGAuthzRn {
     /** `service:type` of the last path segment, e.g. `secrets:secret`. */
     public static type(rn: string): string | undefined {
         const parsed = GGAuthzRn.parse(rn)
-        return parsed && `${parsed.service}:${parsed.path[parsed.path.length - 1]!.type}`
+        return parsed && GGAuthzRn.typeOf(parsed)
+    }
+
+    public static typeOf(parts: GGAuthzRnParts): string {
+        return `${parts.service}:${parts.path[parts.path.length - 1]!.type}`
     }
 
     /** `=rn:…` matches that resource only, not what's under it. */

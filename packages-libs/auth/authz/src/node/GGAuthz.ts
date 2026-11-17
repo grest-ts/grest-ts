@@ -618,22 +618,25 @@ export class GGAuthz {
         return [...strict].map(([on, locked]): GGAuthzPlanFilter => !locked && exceptions.has(on) ? {within: on, exceptWithin: exceptions.get(on)} : {within: on})
     }
 
-    /** The chain, resource first, if it is a path the model's types allow within one tenant to its root; else why not. */
+    /** The chain, resource first, if it is a path the model's types allow within one tenant to its root (the tenant
+     *  type with the tenant's id); else why not. */
     private checkedChain(chain: string[]): string[] | string {
         if (chain.length > MAX_DEPTH || new Set(chain).size !== chain.length) return `is cyclic or deeper than ${MAX_DEPTH}`
         let tenant: string | undefined
         let child: string | undefined
+        let rootId: string | undefined
         for (const rn of chain) {
             const parts = GGAuthzRn.parse(rn)
             if (parts?.partition !== this.model.partition) return `has ${rn}, not a resource name in partition ${this.model.partition}`
             tenant ??= parts.tenant
             if (parts.tenant !== tenant) return `leaves tenant ${tenant} at ${rn}`
-            const type = `${parts.service}:${parts.path[parts.path.length - 1]!.type}`
+            const type = GGAuthzRn.typeOf(parts)
             if (!this.parentTypes.has(type)) return `has ${rn}, of a type the model doesn't declare`
             if (child !== undefined && !this.parentTypes.get(child)!.has(type)) return `puts ${child} in ${type}, which the model doesn't allow`
             child = type
+            rootId = parts.path[parts.path.length - 1]!.id
         }
-        return child === this.model.tenantType ? chain : `ends at ${child}, not at the tenant root ${this.model.tenantType}`
+        return child === this.model.tenantType && rootId === tenant ? chain : `ends at ${chain[chain.length - 1]}, not at the tenant root ${this.model.tenantType} ${tenant}`
     }
 
     private assertApplies(action: string, type: string): void {

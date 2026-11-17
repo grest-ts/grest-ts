@@ -2,7 +2,7 @@ import {describe, expect, test} from "vitest"
 import {GGAuthz, type GGAuthzMemoryData, GGAuthzMemoryResolver, type GGAuthzModel, type GGAuthzPolicies} from "../../src/index-node"
 import {req} from "../util"
 
-const org = "rn:gcp:crm:acme:organization/123"
+const org = "rn:gcp:crm:acme:organization/acme"
 const folderEng = "rn:gcp:crm:acme:folder/eng"
 const folderOps = "rn:gcp:crm:acme:folder/ops"
 const project1 = "rn:gcp:crm:acme:project/project-1"

@@ -51,8 +51,9 @@ describe("the scope chain is a path the model's types allow", () => {
     test("a missing ancestor, a parent of the wrong type or a chain short of the root is invalid, never an allow", async () => {
         expect(await reason(stop({ancestors: [org]}))).toEqual(invalid("puts vm:workspace in org:org, which the model doesn't allow"))
         expect(await reason(stop({ancestors: ["rn:acme:vm:acme:workspace/w0", project, org]}))).toEqual(invalid("puts vm:workspace in vm:workspace, which the model doesn't allow"))
-        expect(await reason(stop({ancestors: [project]}))).toEqual(invalid("ends at org:project, not at the tenant root org:org"))
-        expect(await reason(stop({ancestors: []}))).toEqual(invalid("ends at vm:workspace, not at the tenant root org:org"))
+        expect(await reason(stop({ancestors: [project]}))).toEqual(invalid("ends at rn:acme:org:acme:project/web, not at the tenant root org:org acme"))
+        expect(await reason(stop({ancestors: [project, "rn:acme:org:acme:org/other"]}))).toEqual(invalid("ends at rn:acme:org:acme:org/other, not at the tenant root org:org acme"))
+        expect(await reason(stop({ancestors: []}))).toEqual(invalid("ends at rn:acme:vm:acme:workspace/w1, not at the tenant root org:org acme"))
     })
 
     test("an ancestor in another tenant or partition is invalid", async () => {
