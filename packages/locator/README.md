@@ -212,3 +212,6 @@ GGLocator.setInterval(() => { ...
 GGLocator.setImmediate(() => { ...
 })
 ```
+
+Outside a scope, `GGLocator.setTimeout`/`setInterval` are plain timers, so code shared with a CLI can use them.
+Inside a runtime they are *scope timers*: cleared when the runtime stops, and driven by `GGTest.clock` in tests.

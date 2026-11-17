@@ -33,8 +33,8 @@ Not global mocks. Not implementation-level mocks. Contract-level, per-request:
 
 ```typescript
 await alice.checklist.add({...})
-    .with(mockBy(AddressResolverService).resolveAddress
-        .toEqual({address: "123 Main St"})
+    .with(mockOf(AddressResolverService).resolveAddress
+        .toEqual("123 Main St")
         .andReturn({lat: 40.7589, lng: -73.9851})
     )
     .toMatchObject({...});
@@ -138,6 +138,7 @@ of the pure function rather than mocking the world around a class.
 
 `times(n)` fails the test when the mock is called more *or fewer* than `n` times. The default
 is 1. `times(0)` asserts the method is never called.
+`times(min, max)` allows a range; `atLeastOnce()` is `times(1, Infinity)`.
 
 ### Unmocked `@mockable` calls go through
 

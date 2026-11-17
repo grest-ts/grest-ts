@@ -47,7 +47,7 @@ if (IsUser.is(user)) {
 }
 
 // ---
-// Assert - throws on validation failure
+// Assert - throws GGParseError on validation failure
 IsUser.assert(data)
 
 // ---

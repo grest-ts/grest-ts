@@ -152,8 +152,8 @@ test("logs across all runtimes", async () => {
 interface LogMatcher {
     contextName?: string    // Service/class name
     message?: string        // Log message (substring)
-    level?: LogLevel        // Minimum log level
-    data?: object           // Data properties to match
+    level?: LogLevel        // Exact log level
+    data?: object           // Partial deep match, like toMatchObject
 }
 
 // Example

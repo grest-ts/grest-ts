@@ -1,9 +1,12 @@
 import {GG_TEST_RESOURCE, GG_TEST_RUNNER, GGTestRunner, TestResource} from "./GGTestRunner";
-import {RuntimeConstructor, RuntimeInput, StartResult, Selector} from "./testers/RuntimeSelector";
+import {RuntimeConstructor, RuntimeInput, StartResult} from "./testers/RuntimeSelector";
 import {GGTestMode, GGTestRuntime, GGTestRuntimeConfig} from "./GGTestRuntime";
 import {createStartResult} from "./testers/GGTestSelector";
+import {startRuntimes} from "./startRuntimes";
 import {IGGTestWith} from "./testers/IGGTestWith";
 import {DEFAULT_WAIT_FOR_MS, waitForInterceptors} from "./testers/waitForInterceptors";
+import {GGTestClock} from "./clock/GGTestClock";
+import {GGTestTarget} from "./testers/GGTestTarget";
 
 // -------------------------------------------------
 // GGTest - Static API for test setup
@@ -42,9 +45,23 @@ export class GGTest {
     // This is needed because v8 coverage doesn't capture worker_threads or child_process
     private static readonly forceCoverageInline = process.env.GG_COVERAGE_MODE === '1';
 
+    /**
+     * The fake wall clock (`Date`) shared by the test and all its runtimes.
+     *
+     * @example
+     * await GGTest.clock.set(new Date("2026-03-01T09:00:00Z"))
+     * await GGTest.clock.advance(30 * 60_000)
+     */
+    public static readonly clock = new GGTestClock();
+
     // -------------------------------------------------
     // Public static methods
     // -------------------------------------------------
+
+    /** An address for `.on()` on a schema mock or spy, for a target that has no test runtime: `"host:port"` or a URL. */
+    public static target(address: string): GGTestTarget {
+        return new GGTestTarget(address);
+    }
 
     /**
      * Get a resource wrapper for calling test operations.
@@ -166,7 +183,7 @@ export class GGTest {
         if (test.started) {
             // We're inside a test block - start immediately
             // Cleanup is handled by the global afterEach registered in initInTestCleanup
-            const startupPromise = this.startRuntimesInTestBlock(runtimes);
+            const startupPromise = startRuntimes(runtimes);
             return this.makeAwaitable(result, startupPromise);
         } else {
             // We're in describe block - normal flow, runtimes start in beforeAll
@@ -199,16 +216,6 @@ export class GGTest {
             }
         }
         return constructors;
-    }
-
-    /**
-     * Start runtimes immediately (for in-test usage).
-     * Runtimes are automatically tracked by the runner for afterEach cleanup.
-     */
-    private static async startRuntimesInTestBlock(runtimes: GGTestRuntime[]): Promise<void> {
-        for (const runtime of runtimes) {
-            await runtime.start();
-        }
     }
 
     /**
@@ -283,17 +290,3 @@ export class GGTest {
         return createdRuntimes;
     }
 }
-
-// -------------------------------------------------
-// Legacy exports for backwards compatibility
-// -------------------------------------------------
-
-/**
- * @deprecated Use StartResult instead
- */
-export type {RuntimeResult} from "./testers/RuntimeSelector";
-
-/**
- * @deprecated Use Awaitable<StartResult<T>> instead
- */
-export type AwaitableRuntimeResult<R extends RuntimeConstructor[]> = Awaitable<Selector<R>>;

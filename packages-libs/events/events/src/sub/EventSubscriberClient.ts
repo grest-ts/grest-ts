@@ -131,7 +131,7 @@ export class EventSubscriberClient<TEventMap> {
 
     private async processMessage(receivedMessage: ReceivedMessage): Promise<void> {
         const queue = this.config.resource.queueName
-        const startTime = Date.now()
+        const startTime = performance.now()
         const settings = this.config.settings.get()
 
         const mData = {queue, provider: this.provider}
@@ -155,7 +155,7 @@ export class EventSubscriberClient<TEventMap> {
         }
 
         const finalize = (eventType: string | "unknown", result: 'ERROR' | "OK" | "SKIPPED") => {
-            const processingDuration = Date.now() - startTime
+            const processingDuration = Math.round(performance.now() - startTime)
             GGEventsMetrics.subscriber.processed.inc(1, {queue, provider: this.provider, eventType, result})
             GGEventsMetrics.subscriber.inFlight.dec(1, mData)
             GGEventsMetrics.subscriber.processingDurationSum.inc(processingDuration, mData)

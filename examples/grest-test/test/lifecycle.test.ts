@@ -1,8 +1,10 @@
-import {GGTest} from "@grest-ts/testkit";
+import {GGTest, GGTestContext} from "@grest-ts/testkit";
 import {GGLog} from "@grest-ts/logger";
 import {GGLocator, GGLocatorKey, GGLocatorServiceType} from "@grest-ts/locator";
 import {GGRuntime} from "@grest-ts/runtime";
 import {GGMetricsLoader} from "@grest-ts/metrics";
+import {GGHttp, GGHttpSchema, GGHttpServer, GGRpc} from "@grest-ts/http";
+import {GGContractClass, SERVER_ERROR} from "@grest-ts/schema";
 
 export class LifecycleService {
     public readonly name: string
@@ -65,7 +67,49 @@ export class FailingLifecycleTestRuntime extends LifecycleTestRuntime {
     }
 }
 
+const ShutdownProbeApi = new GGHttpSchema({
+    contract: new GGContractClass("ShutdownProbe", {
+        useAfterHttpTeardownStarts: {errors: [SERVER_ERROR]},
+    }),
+    pathPrefix: "api/shutdown-probe",
+    routes: {
+        useAfterHttpTeardownStarts: GGRpc.POST("use"),
+    },
+})
+
+let requestEntered: () => void
+let entered: Promise<void>
+
+class ShutdownProbeRuntime extends GGRuntime {
+    public static readonly NAME = "shutdown-probe"
+    public static readonly SOURCE_MODULE_URL = import.meta.url
+
+    protected compose(): void {
+        entered = new Promise(resolve => requestEntered = resolve)
+        let open = true
+        let httpTeardownStarted!: () => void
+        const httpTeardown = new Promise<void>(resolve => httpTeardownStarted = resolve)
+
+        const server = new GGHttpServer().onTeardown(() => httpTeardownStarted())
+        GGLocator.getScope().setWithLifecycle(new GGLocatorKey<object>("ShutdownProbeService"), {}, {
+            type: GGLocatorServiceType.BUSINESS,
+            start: () => undefined,
+            teardown: () => { open = false },
+        })
+        new GGHttp(server).http(ShutdownProbeApi, {
+            useAfterHttpTeardownStarts: async () => {
+                requestEntered()
+                await httpTeardown
+                if (!open) throw new Error("business service was torn down while HTTP was still serving")
+            },
+        })
+    }
+}
+
 describe("lifecycle - startup and shutdown order", () => {
+
+    const probe = new GGTestContext("probe").apis({api: ShutdownProbeApi})
+
 
     test("success path - startup, shutdown, and log accessibility", async () => {
         const t = await GGTest.startInline(LifecycleTestRuntime);
@@ -161,4 +205,12 @@ describe("lifecycle - startup and shutdown order", () => {
         const stopA = lifecycleLogs.indexOf("LIFECYCLE:STOP:A:P0");
         expect(stopB).toBeLessThan(stopA);
     });
+
+    test("HTTP stops and drains before business services are torn down", async () => {
+        const t = await GGTest.startInline(ShutdownProbeRuntime)
+        const inFlight = (async () => await probe.api.useAfterHttpTeardownStarts().toBeUndefined())()
+        await entered
+        await t.stop()
+        await inFlight
+    })
 });

@@ -132,7 +132,7 @@ export class EventPublisherClient<TEventMap> {
     private async publishImmediate(message: EventMessage<TEventMap>): Promise<OK_JSON<void> | typeof SERVER_ERROR.infer> {
         const topic = this.config.resource.topicName
         const eventType = String(message.type)
-        const startTime = Date.now()
+        const startTime = performance.now()
 
         const settings = this.config.settings.get()
         const retryAttempts = settings.retryAttempts ?? 3
@@ -140,7 +140,7 @@ export class EventPublisherClient<TEventMap> {
         for (let attempt = 1; attempt <= retryAttempts; attempt++) {
             try {
                 const {messageSize} = await this.adapter.publish(message)
-                const duration = Date.now() - startTime
+                const duration = Math.round(performance.now() - startTime)
 
                 GGEventsMetrics.publisher.messageSizeSum.inc(messageSize, {topic, provider: this.provider})
                 GGEventsMetrics.publisher.published.inc(1, {topic, provider: this.provider, eventType, result: 'OK'})
@@ -164,7 +164,7 @@ export class EventPublisherClient<TEventMap> {
                 if (attempt === retryAttempts) {
                     GGLog.error(this, `Failed to publish message after ${retryAttempts} attempts:`, error)
                     GGEventsMetrics.publisher.published.inc(1, {topic, provider: this.provider, eventType, result: 'ERROR'})
-                    GGEventsMetrics.publisher.publishDurationSum.inc(Date.now() - startTime, {topic, provider: this.provider})
+                    GGEventsMetrics.publisher.publishDurationSum.inc(Math.round(performance.now() - startTime), {topic, provider: this.provider})
                     return new SERVER_ERROR({
                         debugMessage: `Failed to publish message!`,
                         debugData: {retryAttempts, message},

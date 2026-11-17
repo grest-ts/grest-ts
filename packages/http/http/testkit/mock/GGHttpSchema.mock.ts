@@ -1,9 +1,9 @@
 import {GGCallInterceptor, GGCallInterceptorConfig, GGMockWith, GGSpyWith, GGTestRunner} from "@grest-ts/testkit"
-import {GGHttpInterceptorsServer} from "./GGHttpInterceptorsServer";
+import {GGHttpInterceptorsServer, GGHttpRoute} from "./GGHttpInterceptorsServer";
 import {parseContractResponse} from "../utils/validateContractResponse";
 import {HttpMethod} from "@grest-ts/common";
 import {GGHttpCodec, GGHttpSchema} from "../../src/schema/GGHttpSchema";
-import {GGContractApiDefinition} from "@grest-ts/schema";
+import {ANY_ERROR_CLS, ERROR, GGContractApiDefinition, GGContractExecutor} from "@grest-ts/schema";
 
 declare module "../../src/schema/GGHttpSchema" {
     interface GGHttpSchema<TContract extends GGContractApiDefinition> {
@@ -24,6 +24,7 @@ Object.defineProperty(GGHttpSchema.prototype, 'mock', {
     get(this: GGHttpSchema<any>) {
         const name = this.name;
         const methods = this.codec;
+        const contract = this.contract;
         const fullPathPrefix = "/" + this.pathPrefix + "/"
         return new Proxy({}, {
             get(_target, prop: string) {
@@ -35,7 +36,8 @@ Object.defineProperty(GGHttpSchema.prototype, 'mock', {
                     apiName: name,
                     method: methodDef.method,
                     pathPrefix: fullPathPrefix,
-                    pathSuffix: methodDef.path
+                    pathSuffix: methodDef.path,
+                    route: {codec: methodDef, contract: contract.methods[prop]}
                 });
             }
         })
@@ -49,6 +51,7 @@ Object.defineProperty(GGHttpSchema.prototype, 'spy', {
         const fullPathPrefix = "/" + this.pathPrefix + "/"
         const name = this.name;
         const methods = this.codec;
+        const contract = this.contract;
         return new Proxy({}, {
             get(_target, prop: string) {
                 const methodDef: GGHttpCodec = methods[prop]
@@ -59,7 +62,9 @@ Object.defineProperty(GGHttpSchema.prototype, 'spy', {
                     apiName: name,
                     method: methodDef.method,
                     pathPrefix: fullPathPrefix,
-                    pathSuffix: methodDef.path
+                    pathSuffix: methodDef.path,
+                    route: {codec: methodDef, contract: contract.methods[prop]},
+                    errors: contract.methods[prop]?.errors
                 })
             }
         })
@@ -73,7 +78,9 @@ export interface HttpInterceptorConfig extends GGCallInterceptorConfig {
     apiName: string;
     pathPrefix: string;
     pathSuffix: string;
-    expectError?: any;
+    route: GGHttpRoute;
+    /** The method's contract errors: a spied error JSON is rebuilt as the client would. */
+    errors?: ANY_ERROR_CLS[];
 }
 
 export class GGHttpInterceptor extends GGCallInterceptor {
@@ -82,7 +89,8 @@ export class GGHttpInterceptor extends GGCallInterceptor {
     public readonly apiName: string;
     public readonly pathPrefix: string;
     public readonly pathSuffix: string;
-    protected readonly expectError?: any;
+    public readonly route: GGHttpRoute;
+    private readonly errors?: ANY_ERROR_CLS[];
 
     constructor(test: GGTestRunner, config: HttpInterceptorConfig) {
         super(test, config);
@@ -90,11 +98,15 @@ export class GGHttpInterceptor extends GGCallInterceptor {
         this.apiName = config.apiName;
         this.pathPrefix = config.pathPrefix;
         this.pathSuffix = config.pathSuffix;
-        this.expectError = config.expectError;
+        this.route = config.route;
+        this.errors = config.errors;
     }
 
     public getKey(): string {
         return `${this.method} ${this.pathPrefix}${this.pathSuffix}`;
+    }
+
+    protected checkTarget(): void {
     }
 
     protected doRegister(): void {
@@ -105,7 +117,11 @@ export class GGHttpInterceptor extends GGCallInterceptor {
         this.test.getExtensionInstance(GGHttpInterceptorsServer).deleteInterceptor(this);
     }
 
+    protected spyGetsResponses(): boolean {
+        return true;
+    }
+
     protected parseResponseData(result: any): any {
-        return parseContractResponse(result, this.expectError);
+        return parseContractResponse(ERROR.isJson(result) ? GGContractExecutor.createErrorObj(result, this.errors) : result, this.expectError, this.expectErrorContext);
     }
 }

@@ -5,9 +5,14 @@ import {Raw} from "@grest-ts/schema";
 import {GG_TEST_RUNNER, GGTestRunner} from "../GGTestRunner";
 import {IGGTestWith} from "./IGGTestWith";
 import {IGGTestInterceptor} from "./IGGTestInterceptor";
-import {GGCallInterceptor, GGCallInterceptorConfig} from "./GGCallInterceptor";
+import {GGCallInterceptor, GGCallInterceptorConfig, GGCallTimes} from "./GGCallInterceptor";
+import {singleRuntime} from "./GGTestSelector";
+import type {GGTestRuntime} from "../GGTestRuntime";
+import {GGInterceptorTarget, GGTestTarget} from "./GGTestTarget";
 
 type InterceptorFactory = new (runner: GGTestRunner, config: any) => GGCallInterceptor;
+
+type MockReply<RequestBody, Reply> = (input: Raw<RequestBody>) => Raw<Reply> | Promise<Raw<Reply>>;
 
 export class GGMockWith<RequestBody = any, ResponseData = any, ErrorsUnion = any> implements IGGTestWith {
 
@@ -15,11 +20,12 @@ export class GGMockWith<RequestBody = any, ResponseData = any, ErrorsUnion = any
     private readonly interceptorConfig: Record<string, any>;
     private readonly definedInSourceFile: string;
     private _sleep: number = 0;
-    private _times: number = 1;
+    private _times: GGCallTimes = {min: 1, max: 1};
     private _within?: number;
+    private _target?: GGInterceptorTarget;
 
     private readonly expectations: GGExpectations<RequestBody> = new GGExpectations();
-    private returnData?: ResponseData | ErrorsUnion | ((input: Raw<RequestBody>) => Raw<ResponseData | ErrorsUnion>);
+    private returnData?: Raw<ResponseData | ErrorsUnion> | MockReply<RequestBody, ResponseData | ErrorsUnion>;
 
     constructor(interceptorFactory: InterceptorFactory, config: Record<string, any>) {
         this.interceptorFactory = interceptorFactory;
@@ -34,6 +40,7 @@ export class GGMockWith<RequestBody = any, ResponseData = any, ErrorsUnion = any
             definedInSourceFile: this.definedInSourceFile,
             sleep: this._sleep,
             times: this._times,
+            target: this._target,
             passThrough: false,
             inputExpectations: this.expectations,
             returnData: this.returnData
@@ -56,8 +63,25 @@ export class GGMockWith<RequestBody = any, ResponseData = any, ErrorsUnion = any
         return this;
     }
 
-    public times(amount: number): this {
-        this._times = amount;
+    /**
+     * Only calls that happen at this target. A runtime (a selector holding exactly one: `t.relayA`, `t[1]`, `t.hub[1]`):
+     * for a schema mock or spy, calls sent to it; for mockOf / spyOn, calls of the method inside it. An address
+     * (`GGTest.target("host:port")`), for schema mocks and spies only: calls sent to that address.
+     */
+    public on(target: {readonly runtimes: GGTestRuntime[]} | GGTestTarget): this {
+        this._target = target instanceof GGTestTarget ? target : singleRuntime(target);
+        return this;
+    }
+
+    /** Exactly `min` calls, or with `max` any count from `min` to `max` (both inclusive). */
+    public times(min: number, max: number = min): this {
+        this._times = {min, max};
+        return this;
+    }
+
+    /** One call or more. */
+    public atLeastOnce(): this {
+        this._times = {min: 1, max: Infinity};
         return this;
     }
 
@@ -91,8 +115,11 @@ export class GGMockWith<RequestBody = any, ResponseData = any, ErrorsUnion = any
         return this;
     }
 
-    /** A function is called per call with that call's input, so one mock can answer each call differently. */
-    public andReturn(data: Raw<ResponseData | ErrorsUnion> | ((input: Raw<RequestBody>) => Raw<ResponseData | ErrorsUnion>)): this {
+    /**
+     * A function is called per call with that call's input, so one mock can answer each call differently; it may be async.
+     * An error, returned or thrown by the function, is thrown at the caller.
+     */
+    public andReturn(data: Raw<ResponseData | ErrorsUnion> | MockReply<RequestBody, ResponseData | ErrorsUnion>): this {
         this.returnData = data as any;
         return this;
     }

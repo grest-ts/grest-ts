@@ -90,7 +90,7 @@ describe("checklist", () => {
                 address: "123 Main St, New York, NY"
             })
             .with(mockOf(AddressResolverService).resolveAddress
-                .toEqual({address: "123 Main St, New York, NY"})
+                .toEqual("123 Main St, New York, NY")
                 .andReturn({lat: 40.7589, lng: -73.9851})
             )
             .toMatchObject({
@@ -120,7 +120,7 @@ describe("checklist", () => {
             address: "123 Main St, New York, NY"
         })
             .with(mockOf(AddressResolverService).resolveAddress
-                .toEqual({address: "123 Main St, New York, NY"})
+                .toEqual("123 Main St, New York, NY")
                 .andReturn({lat: 11, lng: -73.9851})
             );
 
@@ -164,7 +164,7 @@ describe("checklist", () => {
             address: "123 Main St, New York, NY"
         })
             .with(spyOn(AddressResolverService).resolveAddress
-                .toEqual({address: "123 Main St, New York, NY"})
+                .toEqual("123 Main St, New York, NY")
                 .responseToMatchObject({lat: 40.7128, lng: -74.0060})
             );
 

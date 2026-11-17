@@ -9,6 +9,7 @@ definePackage({
     vitestWorkspaceExtraEntries: [
         'examples/checklist',
         'examples/grest-test',
+        'examples/grest-test/vitest.isolated.config.ts',
         'examples/auth/server'
     ],
     workspaceExtraEntries: [

@@ -139,13 +139,13 @@ export class GGConfigLocator<T extends object> {
 
     async #startStore(store: GGConfigStore<GGConfigKey>): Promise<void> {
         const retryMs = process.env.NODE_ENV === "production" ? this.#options.startupRetryMs ?? 10_000 : 0;
-        const deadline = Date.now() + (this.#options.startupTimeoutMs ?? 600_000);
+        const deadline = performance.now() + (this.#options.startupTimeoutMs ?? 600_000);
         while (true) {
             try {
                 return await store.start();
             } catch (error) {
                 if (!retryMs || !(error instanceof GGConfigLoadError) || this.#tornDown.signal.aborted) throw error;
-                if (Date.now() + retryMs > deadline) {
+                if (performance.now() + retryMs > deadline) {
                     GGLog.critical(this, "Config still failing to load, giving up on startup", error);
                     throw error;
                 }

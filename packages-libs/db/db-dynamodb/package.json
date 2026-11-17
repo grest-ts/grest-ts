@@ -10,6 +10,10 @@
       "types": "./src/index-node.ts",
       "import": "./src/index-node.ts"
     },
+    "./dev-tables": {
+      "types": "./src/GGDynamoDbDevTables.ts",
+      "import": "./src/GGDynamoDbDevTables.ts"
+    },
     "./testkit": {
       "types": "./testkit/index-testkit.ts",
       "import": "./testkit/index-testkit.ts"

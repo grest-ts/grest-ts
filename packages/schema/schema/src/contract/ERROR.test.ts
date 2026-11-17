@@ -4,6 +4,7 @@ import {VALIDATION_ERROR} from './standardErrors';
 import {IsString} from '../schemas/IsString';
 import {IsNumber} from '../schemas/IsNumber';
 import {IsObject} from '../schemas/IsObject';
+import {GGParseError} from '../issue/GGParseError';
 
 const MY_ERROR = ERROR.define('MY_ERROR', 418);
 
@@ -288,6 +289,17 @@ describe('ERROR', () => {
             expect(ERROR.anyToText(42)).toBe('42');
         });
 
+        it('should render a handler parse failure as SERVER_ERROR with the GGParseError stack', async () => {
+            const handler = async () => IsNumber.parse('not-a-number');
+            const error = await handler().then(() => expect.unreachable(), ERROR.fromUnknown);
+            expect(error).toBeInstanceOf(SERVER_ERROR);
+            expect(error.getDebugContext()?.originalError).toBeInstanceOf(GGParseError);
+            const text = error.toText();
+            expect(text).toContain('Original error: GGParseError: Validation failed');
+            expect(text).toContain('ERROR.test.ts');
+            expect(text).not.toContain('not-a-number');
+        });
+
         it('should truncate validation issues beyond 10', () => {
             const issues = Array.from({length: 12}, (_, i) => ({path: `f${i}`, code: 'invalid', message: `m${i}`}));
             const text = new VALIDATION_ERROR(issues).toText(BARE);
@@ -321,6 +333,39 @@ describe('ERROR', () => {
             expect(debug?.debugMessage).toBeUndefined();
             expect(debug?.debugData).toBeUndefined();
             expect(debug?.originalError).toBeUndefined();
+        });
+    });
+
+    describe('fromJson()', () => {
+
+        it('rebuilds the defined class with its data and context', () => {
+            const QUOTA = ERROR.badRequest('FROM_JSON_QUOTA', IsObject({left: IsNumber}));
+            const json = new QUOTA({left: 2}, {displayMessage: 'over quota', ref: 'r1'}).toJSON();
+            const error = ERROR.fromJson(json);
+            expect(QUOTA.is(error)).toBe(true);
+            expect(error.data).toEqual({left: 2});
+            expect(error.context).toMatchObject({displayMessage: 'over quota', ref: 'r1'});
+        });
+
+        it('rebuilds an error without data', () => {
+            expect(MY_ERROR.is(ERROR.fromJson(new MY_ERROR().toJSON()))).toBe(true);
+        });
+
+        it('turns a type not defined here into SERVER_ERROR', () => {
+            const error = ERROR.fromJson({success: false, type: 'NEVER_DEFINED', data: undefined});
+            expect(SERVER_ERROR.is(error)).toBe(true);
+        });
+
+        it('with allowed, rebuilds only the types it lists', () => {
+            const json = new MY_ERROR().toJSON();
+            expect(MY_ERROR.is(ERROR.fromJson(json, {allowed: [MY_ERROR]}))).toBe(true);
+            const error = ERROR.fromJson(json, {allowed: [SERVER_ERROR]});
+            expect(SERVER_ERROR.is(error)).toBe(true);
+            expect(error.getDebugContext()?.debugData).toMatchObject({unknownErrorType: json.type, knownErrorTypes: 'SERVER_ERROR'});
+        });
+
+        it('clears the stack, which would show only where the JSON was read', () => {
+            expect(ERROR.fromJson(new MY_ERROR().toJSON()).stack).toBeUndefined();
         });
     });
 

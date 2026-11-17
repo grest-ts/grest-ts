@@ -1,4 +1,5 @@
 import {GGIssuesList} from "./issue/GGIssuesList";
+import {GGParseError} from "./issue/GGParseError";
 import {GGIssueKey} from "./issue/GGIssueKey";
 import {GGSchemaDefinition, GGSchemaDocs, GGSchemaBinaryData, GGJsonStringifyResult, GGSchemaNonJsonDefinition, isNonJsonDef} from "./Definition";
 import type {ArrayDef, DiscriminatedDef, ObjectDef, TupleDef, UnionDef} from "./Definition";
@@ -166,13 +167,13 @@ export abstract class GGSchema<Type, TDef extends GGSchemaDefinition = GGSchemaD
     /**
      * Asserts if value matches expected structure
      * Does not check for extra properties!
-     * If not valid, throws.
+     * If not valid, throws GGParseError.
      */
     public assert(value: unknown): asserts value is Type {
         const issues = new GGIssuesList()
         this._parse(value, issues, "");
         if (issues.length > 0) {
-            throw issues
+            throw new GGParseError(issues)
         }
     }
 
@@ -194,13 +195,13 @@ export abstract class GGSchema<Type, TDef extends GGSchemaDefinition = GGSchemaD
     }
 
     /**
-     * Returns cleaned and checked value or throws GGIssuesList
+     * Returns cleaned and checked value or throws GGParseError (issues in `.issues`)
      */
     public parse(value: unknown, coerce?: boolean): Type {
         const issues = new GGIssuesList();
         const result = this._parse(value, issues, "", coerce);
         if (issues.length > 0) {
-            throw issues
+            throw new GGParseError(issues)
         } else {
             return result!
         }

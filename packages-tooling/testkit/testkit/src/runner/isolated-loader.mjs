@@ -33,12 +33,15 @@ if (!configJson) {
     process.exit(1);
 }
 
-// Import runtime and testkit dependencies
-const {GGRuntime} = await import('@grest-ts/runtime');
+// Import runtime and testkit dependencies; the test clock goes in before any app module loads
 const {GGTestRuntimeWorker} = await import('@grest-ts/testkit');
+const {installTestClock, bootClock} = await import('@grest-ts/testkit/internal');
+installTestClock();
+const {GGRuntime} = await import('@grest-ts/runtime');
 const {GGLog} = await import('@grest-ts/logger');
 
 const config = JSON.parse(configJson);
+bootClock(config.clock);
 
 // Override cli() to intercept runtime startup in isolated mode
 

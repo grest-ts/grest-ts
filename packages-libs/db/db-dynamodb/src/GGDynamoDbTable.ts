@@ -5,6 +5,9 @@ import type {
 } from "./GGDynamoDb"
 
 /**
+ * @deprecated Declare the table with `GGDynamoDbTableSpec` and use `GGDynamoDbTypedTable` (or extend
+ * `GGDynamoDbTypedTable.of(spec)`): typed keys, queries and conditions, and index keys derived on every write.
+ *
  * Schema-bound table gateway. Owns one DynamoDB table; all reads/writes
  * go through it. `query` / `scan` follow DynamoDB's 1MB continuation to the
  * end (capped — see `GGDynamoDb.query`); `queryPage` / `scanPage` hand the
