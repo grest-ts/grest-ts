@@ -1,6 +1,6 @@
 import "./_dedupCheck";
 export {GGOAuthServer, ACCESS_TOKEN_JWKS_PATH} from "./node/GGOAuthServer"
-export type {GGOAuthServerOptions, GGOAuthFirstPartyClient, GGOAuthResource, GGOAuthServiceClientRegistration, GGOAuthInteraction, GGOAuthInteractionClient, GGOAuthInteractionRequest} from "./node/GGOAuthServer"
+export type {GGOAuthServerOptions, GGOAuthFirstPartyClient, GGOAuthResource, GGOAuthTokenClient, GGOAuthGrant, GGOAuthGrantData, GGOAuthServiceClientRegistration, GGOAuthInteraction, GGOAuthInteractionClient, GGOAuthInteractionRequest} from "./node/GGOAuthServer"
 export {GGOAuthExternalSignIn} from "./node/GGOAuthExternalSignIn"
 export type {GGOAuthExternalSignInOptions, GGOAuthExternalResult, GGOAuthRedirect} from "./node/GGOAuthExternalSignIn"
 export {GGOAuthHeadlessBrowser, GGOAuthTokenError} from "./node/GGOAuthHeadlessBrowser"
