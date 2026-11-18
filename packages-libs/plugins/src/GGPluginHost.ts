@@ -56,7 +56,7 @@ export class GGPluginHost<F extends object, P extends Readonly<Record<string, F>
 
     private readonly activeNames: ReadonlySet<string>
     private readonly names: ReadonlySet<string>
-    private readonly provided = new Map<string, {point: GGPoint<unknown>, contributions: GGContribution<unknown>[]}>()
+    private readonly provided = new Map<string, {point: GGPoint<unknown>, contributions: {from: string, c: GGContribution<unknown>}[]}>()
     private readonly configs = new Map<string, unknown>()
     private readonly configPrefix: (name: string) => string
 
@@ -91,19 +91,21 @@ export class GGPluginHost<F extends object, P extends Readonly<Record<string, F>
         this.names = names
         this.dropped = dropped
         this.configPrefix = options.configPrefix ?? (name => `plugins/${name}/`)
-        for (const p of this.active) this.add(p.name, (p.facet as GGPluginFacet).provides ?? [])
+        for (const p of this.active) this.add(p.name, "provides", (p.facet as GGPluginFacet).provides ?? [])
     }
 
     public isActive(name: string): boolean {
         return this.activeNames.has(name)
     }
 
-    /** Calls `facet[phase](ctx, config)` on every active plugin in order; entries it returns are provided. */
+    /** Calls `facet[phase](ctx, config)` on every active plugin in order; entries it returns are provided, replacing
+     *  what an earlier run of the phase provided (a runtime may compose again in the same process). */
     public async run<K extends PhaseOf<F>>(phase: K, ctx: PhaseCtx<F, K>): Promise<void> {
+        for (const slot of this.provided.values()) slot.contributions = slot.contributions.filter(c => c.from !== phase)
         for (const p of this.active) {
             const fn = p.facet[phase] as AnyFn | undefined
             const result = await fn?.call(p.facet, ctx, this.configs.get(p.name))
-            if (Array.isArray(result)) this.add(p.name, result as GGPointEntry[])
+            if (Array.isArray(result)) this.add(p.name, String(phase), result as GGPointEntry[])
         }
     }
 
@@ -148,19 +150,19 @@ export class GGPluginHost<F extends object, P extends Readonly<Record<string, F>
     public many<T>(point: GGPoint<T>, isOn?: (name: string) => boolean): GGContribution<T>[] {
         const owner = point.owner
         if (owner !== undefined && ((this.names.has(owner) && !this.isActive(owner)) || !(isOn?.(owner) ?? true))) return []
-        const contributions = (this.provided.get(point.key)?.contributions ?? []) as GGContribution<T>[]
+        const contributions = (this.provided.get(point.key)?.contributions ?? []).map(e => e.c as GGContribution<T>)
         return contributions
             .filter(c => isOn?.(c.plugin) ?? true)
             .sort((a, b) => orderOf(a.item) - orderOf(b.item))
     }
 
-    private add(plugin: string, entries: readonly GGPointEntry[]): void {
+    private add(plugin: string, from: string, entries: readonly GGPointEntry[]): void {
         for (const {point, items} of entries) {
             const slot = this.provided.get(point.key) ?? {point, contributions: []}
             if (slot.point.cardinality !== point.cardinality) throw new Error(`Point "${point.key}" is defined as both "one" and "many"`)
-            slot.contributions.push(...items.map(item => ({plugin, item})))
+            slot.contributions.push(...items.map(item => ({from, c: {plugin, item}})))
             if (point.cardinality === "one" && slot.contributions.length > 1) {
-                throw new Error(`Point "${point.key}" takes one item; ${slot.contributions.map(c => c.plugin).join(", ")} provide it`)
+                throw new Error(`Point "${point.key}" takes one item; ${slot.contributions.map(e => e.c.plugin).join(", ")} provide it`)
             }
             this.provided.set(point.key, slot)
         }

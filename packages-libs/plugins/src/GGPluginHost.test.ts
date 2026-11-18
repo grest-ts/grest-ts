@@ -66,6 +66,14 @@ describe("GGPluginHost", () => {
         expect(h.many(Tiles, name => name !== "elsewhere")).toEqual([])
     })
 
+    it("replaces what a phase provided when it runs again", async () => {
+        const Repo = GGPoint.one<string>("repo")
+        const h = host({a: {compose: () => [Repo.provide("x")]}})
+        await h.run("compose", [])
+        await h.run("compose", [])
+        expect(h.one(Repo)).toBe("x")
+    })
+
     it("matches points by id, sorts items by `order`", () => {
         const h = host({a: {provides: [GGPoint.many<{order: number}>("p").provide({order: 2}, {order: 1})]}})
         expect(h.many(GGPoint.many<{order: number}>("p")).map(c => c.item.order)).toEqual([1, 2])
