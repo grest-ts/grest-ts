@@ -74,8 +74,10 @@ describe("GGPluginHost", () => {
     it("builds config under each plugin's prefix and hands it to phases", async () => {
         const seen: unknown[] = []
         const a: Facet = {config: prefix => ({prefix}), compose: (_, config) => void seen.push(config)}
-        const h = new GGPluginHost<Facet>({plugins: {"my-a": a, b: {}}, configPrefix: name => `plugins/${name.replace(/-/g, "_")}/`})
-        expect(h.configTree()).toEqual({"my-a": {prefix: "plugins/my_a/"}})
+        const plugins = {"my-a": a as Facet & {config(prefix: string): {prefix: string}}, b: {}}
+        const h = new GGPluginHost<Facet, typeof plugins>({plugins, configPrefix: name => `plugins/${name.replace(/-/g, "_")}/`})
+        const tree: {"my-a": {prefix: string}} = h.configTree()
+        expect(tree).toEqual({"my-a": {prefix: "plugins/my_a/"}})
         expect(h.configOf(a)).toEqual({prefix: "plugins/my_a/"})
         await h.run("compose", [])
         expect(seen).toEqual([{prefix: "plugins/my_a/"}])

@@ -11,9 +11,9 @@ export interface GGDroppedPlugin {
     readonly missing: string
 }
 
-export interface GGPluginHostOptions<F> {
+export interface GGPluginHostOptions<F, P extends Readonly<Record<string, F>> = Readonly<Record<string, F>>> {
     /** This layer's facet per plugin name. */
-    plugins: Readonly<Record<string, F>>
+    plugins: P
     /** Plugins of this host that must be on, and come first. */
     dependsOn?: (name: string, facet: F) => readonly string[] | undefined
     /** Which plugins this host runs; one whose dependency is off is dropped. Default: all. */
@@ -32,6 +32,11 @@ export interface GGPluginFacet<TConfig = unknown> {
     localConfig?(): unknown
 }
 
+type ConfigOf<X> = X extends {config?: (prefix: string) => infer C} ? C : never
+
+/** Each plugin's config handles under its name, for the plugins that declare config. */
+export type GGPluginConfigTree<P> = {[K in keyof P as [ConfigOf<P[K]>] extends [void] ? never : unknown extends ConfigOf<P[K]> ? never : K]: ConfigOf<P[K]>}
+
 type AnyFn = (...args: any[]) => unknown
 type PhaseOf<F> = {[K in keyof F]-?: NonNullable<F[K]> extends AnyFn ? K : never}[keyof F]
 type PhaseCtx<F, K extends keyof F> = NonNullable<F[K]> extends (ctx: infer C, ...rest: any[]) => unknown ? C : never
@@ -40,7 +45,7 @@ type PhaseCtx<F, K extends keyof F> = NonNullable<F[K]> extends (ctx: infer C, .
  * Runs one layer's plugins in one process: orders them by `dependsOn`, drops the ones that are off, runs lifecycle
  * phases and collects what they provide to extension points.
  */
-export class GGPluginHost<F extends object> {
+export class GGPluginHost<F extends object, P extends Readonly<Record<string, F>> = Readonly<Record<string, F>>> {
 
     /** Every plugin, dependencies first, then by name. */
     public readonly all: readonly GGPlugin<F>[]
@@ -54,7 +59,7 @@ export class GGPluginHost<F extends object> {
     private readonly configs = new Map<string, unknown>()
     private readonly configPrefix: (name: string) => string
 
-    public constructor(options: GGPluginHostOptions<F>) {
+    public constructor(options: GGPluginHostOptions<F, P>) {
         const deps = (p: GGPlugin<F>) => options.dependsOn?.(p.name, p.facet) ?? []
         const plugins = Object.keys(options.plugins).sort().map(name => ({name, facet: options.plugins[name]}))
         const names = new Set(plugins.map(p => p.name))
@@ -101,7 +106,7 @@ export class GGPluginHost<F extends object> {
     }
 
     /** Every active plugin's config handles under its name. Call it inside the app's `GGConfig.define`. */
-    public configTree(): Record<string, unknown> {
+    public configTree(): GGPluginConfigTree<P> {
         const tree: Record<string, unknown> = {}
         for (const p of this.active) {
             const facet = p.facet as GGPluginFacet
@@ -110,7 +115,7 @@ export class GGPluginHost<F extends object> {
             this.configs.set(p.name, config)
             tree[p.name] = config
         }
-        return tree
+        return tree as GGPluginConfigTree<P>
     }
 
     public localConfigTree(): Record<string, unknown> {
