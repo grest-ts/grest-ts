@@ -1,0 +1,7 @@
+{
+  "//": "THIS FILE IS GENERATED - DO NOT EDIT",
+  "extends": "../../tsconfig.base.json",
+  "include": [
+    "grest.package.ts"
+  ]
+}

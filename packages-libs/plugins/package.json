@@ -1,0 +1,62 @@
+{
+  "//": "THIS FILE IS GENERATED - DO NOT EDIT",
+  "name": "@grest-ts/plugins",
+  "version": "0.0.101",
+  "type": "module",
+  "license": "MIT",
+  "description": "Plugins for an app with several runtimes: typed extension points, dependency order, enablement, and generated registries",
+  "exports": {
+    ".": {
+      "types": "./src/index-node.ts",
+      "import": "./src/index-node.ts"
+    },
+    "./react": {
+      "types": "./src/react/index.ts",
+      "import": "./src/react/index.ts"
+    },
+    "./gen": {
+      "types": "./src/gen/GGPluginGen.ts",
+      "import": "./src/gen/GGPluginGen.ts"
+    }
+  },
+  "files": [
+    "src"
+  ],
+  "scripts": {
+    "typecheck": "tsc --noEmit -p src",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "test:coverage:html": "vitest run --coverage --reporter=html"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/grest-ts/grest-ts.git",
+    "directory": "packages-libs/plugins"
+  },
+  "homepage": "https://grest-ts.com/packages/plugins",
+  "bugs": {
+    "url": "https://github.com/grest-ts/grest-ts/issues"
+  },
+  "keywords": [
+    "typescript",
+    "framework",
+    "contract",
+    "api",
+    "microservices",
+    "testing",
+    "plugins",
+    "extension-points",
+    "slots",
+    "registry",
+    "codegen"
+  ],
+  "engines": {
+    "node": ">=24"
+  },
+  "peerDependencies": {
+    "react": "^19"
+  }
+}

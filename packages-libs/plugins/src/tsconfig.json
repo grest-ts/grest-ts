@@ -1,0 +1,19 @@
+{
+  "//": "THIS FILE IS GENERATED - DO NOT EDIT",
+  "extends": "../../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "lib": [
+      "ES2022",
+      "DOM"
+    ],
+    "types": [
+      "node",
+      "vitest/globals"
+    ],
+    "jsx": "react-jsx"
+  },
+  "include": [
+    "**/*"
+  ]
+}
