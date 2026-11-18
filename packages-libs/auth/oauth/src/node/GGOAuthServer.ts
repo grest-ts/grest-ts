@@ -683,9 +683,12 @@ export class GGOAuthServer {
                 // The session's grant may be gone (oidc-provider revokes it on a replayed refresh token or code) or lack
                 // what this request asks for: either way a first-party client gets it granted, never a consent prompt.
                 const existing = session.grantIdFor(client.clientId)
-                const grant = (existing && await ctx.oidc.provider.Grant.find(existing)) || new ctx.oidc.provider.Grant({accountId: session.accountId, clientId: client.clientId})
+                const found = existing ? await ctx.oidc.provider.Grant.find(existing) : undefined
+                const grant = found ?? new ctx.oidc.provider.Grant({accountId: session.accountId, clientId: client.clientId})
+                const granted = () => JSON.stringify([grant.openid, grant.resources])
+                const before = found && granted()
                 this.grantRequested(grant, ctx.oidc.params as Record<string, unknown>)
-                await grant.save()
+                if (granted() !== before) await grant.save()
                 session.ensureClientContainer(client.clientId)
                 session.grantIdFor(client.clientId, grant.jti)
                 return grant
