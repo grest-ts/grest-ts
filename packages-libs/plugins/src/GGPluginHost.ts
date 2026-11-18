@@ -55,6 +55,7 @@ export class GGPluginHost<F extends object, P extends Readonly<Record<string, F>
     public readonly dropped: readonly GGDroppedPlugin[]
 
     private readonly activeNames: ReadonlySet<string>
+    private readonly names: ReadonlySet<string>
     private readonly provided = new Map<string, {point: GGPoint<unknown>, contributions: GGContribution<unknown>[]}>()
     private readonly configs = new Map<string, unknown>()
     private readonly configPrefix: (name: string) => string
@@ -87,6 +88,7 @@ export class GGPluginHost<F extends object, P extends Readonly<Record<string, F>
         this.all = all
         this.active = all.filter(p => on.has(p.name))
         this.activeNames = on
+        this.names = names
         this.dropped = dropped
         this.configPrefix = options.configPrefix ?? (name => `plugins/${name}/`)
         for (const p of this.active) this.add(p.name, (p.facet as GGPluginFacet).provides ?? [])
@@ -141,9 +143,11 @@ export class GGPluginHost<F extends object, P extends Readonly<Record<string, F>
         return first.item
     }
 
-    /** Every item provided to `point` by plugins `isOn` accepts, in host order; items with a numeric `order` sort by it. */
+    /** Every item provided to `point` by plugins `isOn` accepts, in host order; items with a numeric `order` sort by it.
+     *  Empty while the point's owner is off (an owner without a facet in this host counts as on). */
     public many<T>(point: GGPoint<T>, isOn?: (name: string) => boolean): GGContribution<T>[] {
-        if (point.owner !== undefined && !(this.isActive(point.owner) && (isOn?.(point.owner) ?? true))) return []
+        const owner = point.owner
+        if (owner !== undefined && ((this.names.has(owner) && !this.isActive(owner)) || !(isOn?.(owner) ?? true))) return []
         const contributions = (this.provided.get(point.key)?.contributions ?? []) as GGContribution<T>[]
         return contributions
             .filter(c => isOn?.(c.plugin) ?? true)

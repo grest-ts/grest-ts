@@ -59,6 +59,13 @@ describe("GGPluginHost", () => {
         expect(h.many(GGPoint.many<string>("tiles", {owner: "b"}))).toEqual([])
     })
 
+    it("counts an owner without a facet in this host as on", () => {
+        const Tiles = GGPoint.many<string>("tiles", {owner: "elsewhere"})
+        const h = host({a: {provides: [Tiles.provide("x")]}})
+        expect(h.many(Tiles).map(c => c.item)).toEqual(["x"])
+        expect(h.many(Tiles, name => name !== "elsewhere")).toEqual([])
+    })
+
     it("matches points by id, sorts items by `order`", () => {
         const h = host({a: {provides: [GGPoint.many<{order: number}>("p").provide({order: 2}, {order: 1})]}})
         expect(h.many(GGPoint.many<{order: number}>("p")).map(c => c.item.order)).toEqual([1, 2])
