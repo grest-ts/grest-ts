@@ -687,6 +687,12 @@ Many packages provide testkit utilities making testing easier. These are
 | [`@grest-ts/lock`](./packages-libs/lock/lock)                  | Lease locks (`GGLock`, `withLock`) and in-memory implementations     |
 | [`@grest-ts/lock-dynamodb`](./packages-libs/lock/lock-dynamodb) | `GGLock` on DynamoDB, shared across instances                        |
 
+### Plugins (All optional)
+
+| Package                                        | Purpose                                                                                       |
+|------------------------------------------------|-----------------------------------------------------------------------------------------------|
+| [`@grest-ts/plugins`](./packages-libs/plugins) | Plugins across runtimes: typed extension points, dependency order, enablement, generated registries |
+
 ### Auth (All optional)
 
 | Package                                              | Purpose                                                                                                            |

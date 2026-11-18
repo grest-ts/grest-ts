@@ -44,6 +44,7 @@
     "packages-libs/lock/lock-dynamodb/src/**/*",
     "packages-libs/lock/lock-dynamodb/test/**/*",
     "packages-libs/lock/lock/src/**/*",
+    "packages-libs/plugins/src/**/*",
     "packages-libs/sql/src/**/*",
     "packages-libs/sql/test/**/*",
     "packages-libs/struct/src/**/*",

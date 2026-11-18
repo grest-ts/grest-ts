@@ -728,6 +728,7 @@ Read these only when you need package-specific detail (exact API, options, advan
 - **@grest-ts/metrics** — `packages/metrics/README-extending.md`, `packages/metrics/README-testkit.md`, `packages/metrics/README-usage.md`, `packages/metrics/README.md`
 - **@grest-ts/oauth** — `packages/oauth/README.md`
 - **@grest-ts/openapi** — `packages/openapi/README.md`
+- **@grest-ts/plugins** — `packages/plugins/README.md`
 - **@grest-ts/runtime** — `packages/runtime/README.md`
 - **@grest-ts/schema** — `packages/schema/README-codec.md`, `packages/schema/README-contract.md`, `packages/schema/README-extending.md`, `packages/schema/README-localization.md`, `packages/schema/README-usage.md`, `packages/schema/README.md`
 - **@grest-ts/schema-file** — `packages/schema-file/README.md`
