@@ -132,14 +132,14 @@ export class GGPluginHost<F extends object> {
     /** The one item provided to `point`; throws when none is. */
     public one<T>(point: GGPoint<T, "one">, isOn?: (name: string) => boolean): T {
         const [first] = this.many(point as unknown as GGPoint<T, "many">, isOn)
-        if (!first) throw new Error(`No plugin provides "${point.id}"`)
+        if (!first) throw new Error(`No plugin provides "${point.key}"`)
         return first.item
     }
 
     /** Every item provided to `point` by plugins `isOn` accepts, in host order; items with a numeric `order` sort by it. */
     public many<T>(point: GGPoint<T>, isOn?: (name: string) => boolean): GGContribution<T>[] {
         if (point.owner !== undefined && !(this.isActive(point.owner) && (isOn?.(point.owner) ?? true))) return []
-        const contributions = (this.provided.get(point.id)?.contributions ?? []) as GGContribution<T>[]
+        const contributions = (this.provided.get(point.key)?.contributions ?? []) as GGContribution<T>[]
         return contributions
             .filter(c => isOn?.(c.plugin) ?? true)
             .sort((a, b) => orderOf(a.item) - orderOf(b.item))
@@ -147,13 +147,13 @@ export class GGPluginHost<F extends object> {
 
     private add(plugin: string, entries: readonly GGPointEntry[]): void {
         for (const {point, items} of entries) {
-            const slot = this.provided.get(point.id) ?? {point, contributions: []}
-            if (slot.point.cardinality !== point.cardinality) throw new Error(`Point "${point.id}" is defined as both "one" and "many"`)
+            const slot = this.provided.get(point.key) ?? {point, contributions: []}
+            if (slot.point.cardinality !== point.cardinality) throw new Error(`Point "${point.key}" is defined as both "one" and "many"`)
             slot.contributions.push(...items.map(item => ({plugin, item})))
             if (point.cardinality === "one" && slot.contributions.length > 1) {
-                throw new Error(`Point "${point.id}" takes one item; ${slot.contributions.map(c => c.plugin).join(", ")} provide it`)
+                throw new Error(`Point "${point.key}" takes one item; ${slot.contributions.map(c => c.plugin).join(", ")} provide it`)
             }
-            this.provided.set(point.id, slot)
+            this.provided.set(point.key, slot)
         }
     }
 }

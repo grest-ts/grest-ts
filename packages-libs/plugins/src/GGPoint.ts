@@ -12,18 +12,21 @@ export interface GGPointOptions {
 
 /**
  * A typed extension point. Plugins fill it with `provide(...)` entries; the host reads it with `one` / `many`.
- * Points are matched by `id`, so two copies of the module defining one still meet.
+ * Points are matched by `key` (owner and id), not by object, so two copies of the module defining one still meet.
  */
 export class GGPoint<T, C extends GGPointCardinality = GGPointCardinality> {
 
     public readonly id: string
     public readonly cardinality: C
     public readonly owner: string | undefined
+    /** `<owner>/<id>`, or `id` for an app point. */
+    public readonly key: string
 
     private constructor(id: string, cardinality: C, options: GGPointOptions) {
         this.id = id
         this.cardinality = cardinality
         this.owner = options.owner
+        this.key = options.owner === undefined ? id : `${options.owner}/${id}`
     }
 
     /** At most one plugin provides it. */

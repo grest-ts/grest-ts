@@ -53,6 +53,12 @@ describe("GGPluginHost", () => {
         expect(h.many(Owned, name => name === "b")).toEqual([])
     })
 
+    it("tells points apart by owner and id", () => {
+        const h = host({a: {provides: [GGPoint.many<string>("tiles", {owner: "a"}).provide("x")]}, b: {}})
+        expect(h.many(GGPoint.many<string>("tiles", {owner: "a"})).map(c => c.item)).toEqual(["x"])
+        expect(h.many(GGPoint.many<string>("tiles", {owner: "b"}))).toEqual([])
+    })
+
     it("matches points by id, sorts items by `order`", () => {
         const h = host({a: {provides: [GGPoint.many<{order: number}>("p").provide({order: 2}, {order: 1})]}})
         expect(h.many(GGPoint.many<{order: number}>("p")).map(c => c.item.order)).toEqual([1, 2])

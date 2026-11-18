@@ -42,7 +42,7 @@ export const gitHubPlugin = defineHubPlugin({
 })
 ```
 
-Points are matched by `id`. A `one` point refuses a second provider. Items with a numeric `order` field are sorted by it.
+Points are matched by owner and `id`. A `one` point refuses a second provider. Items with a numeric `order` field are sorted by it.
 
 ## Host
 

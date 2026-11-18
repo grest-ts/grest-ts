@@ -28,7 +28,8 @@ export interface GGPluginGenConfig {
     generatedBy: string
 }
 
-interface LoadedPlugin {
+export interface GGPluginPackage {
+    /** Absolute. */
     dir: string
     manifest: {name: string}
     pkg: {name: string, exports?: Record<string, string | {import?: string}>}
@@ -43,14 +44,9 @@ export class GGPluginGen {
         this.config = config
     }
 
-    /** Every plugin's manifest, by name. */
-    public async manifests(): Promise<{name: string}[]> {
-        return (await this.load()).map(p => p.manifest)
-    }
-
     /** Generated content per root-relative path. */
     public async generate(): Promise<Map<string, string>> {
-        const plugins = await this.load()
+        const plugins = await this.plugins()
         const files = new Map<string, {imports: string[], bodies: string[]}>()
         const file = (out: string) => {
             const f = files.get(out) ?? {imports: [], bodies: []}
@@ -124,18 +120,19 @@ export class GGPluginGen {
         return JSON.stringify(pkg, null, 2) + "\n"
     }
 
-    private async load(): Promise<LoadedPlugin[]> {
+    /** Every plugin package, by name. */
+    public async plugins(): Promise<GGPluginPackage[]> {
         const root = JSON.parse(readFileSync(join(this.config.root, "package.json"), "utf-8")) as {workspaces?: string[]}
         const dirs = (root.workspaces ?? []).flatMap(w => w.endsWith("/*")
             ? readdirSync(join(this.config.root, w.slice(0, -2)), {withFileTypes: true}).filter(e => e.isDirectory()).map(e => join(w.slice(0, -2), e.name))
             : [w])
-        const plugins: LoadedPlugin[] = []
+        const plugins: GGPluginPackage[] = []
         for (const dir of dirs) {
             const manifestFile = join(this.config.root, dir, this.config.manifest)
             if (!existsSync(manifestFile)) continue
             const {manifest} = await import(pathToFileURL(manifestFile).href) as {manifest?: {name?: unknown}}
             if (typeof manifest?.name !== "string") throw new Error(`${relative(this.config.root, manifestFile)}: export const manifest = {name, ...}`)
-            const pkg = JSON.parse(readFileSync(join(this.config.root, dir, "package.json"), "utf-8")) as LoadedPlugin["pkg"]
+            const pkg = JSON.parse(readFileSync(join(this.config.root, dir, "package.json"), "utf-8")) as GGPluginPackage["pkg"]
             plugins.push({dir: join(this.config.root, dir), manifest: manifest as {name: string}, pkg})
         }
         plugins.sort((a, b) => a.manifest.name.localeCompare(b.manifest.name))
@@ -150,7 +147,7 @@ function camel(name: string): string {
     return name.replace(/-([a-z])/g, (_, c: string) => c.toUpperCase())
 }
 
-function exportTarget(pkg: LoadedPlugin["pkg"], subpath: string): string | undefined {
+function exportTarget(pkg: GGPluginPackage["pkg"], subpath: string): string | undefined {
     const target = pkg.exports?.[subpath]
     return typeof target === "string" ? target : target?.import
 }
