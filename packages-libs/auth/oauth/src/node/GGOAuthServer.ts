@@ -680,9 +680,10 @@ export class GGOAuthServer {
                 if (consented) return ctx.oidc.provider.Grant.find(consented)
                 if (!session.accountId) return undefined
                 if (!firstParty.has(client.clientId)) return this.connectionGrant(session.accountId, client.clientId, this.requestedIndicator(ctx.oidc.params as Record<string, unknown>, client.clientId))
+                // The session's grant may be gone (oidc-provider revokes it on a replayed refresh token or code) or lack
+                // what this request asks for: either way a first-party client gets it granted, never a consent prompt.
                 const existing = session.grantIdFor(client.clientId)
-                if (existing) return ctx.oidc.provider.Grant.find(existing)
-                const grant = new ctx.oidc.provider.Grant({accountId: session.accountId, clientId: client.clientId})
+                const grant = (existing && await ctx.oidc.provider.Grant.find(existing)) || new ctx.oidc.provider.Grant({accountId: session.accountId, clientId: client.clientId})
                 this.grantRequested(grant, ctx.oidc.params as Record<string, unknown>)
                 await grant.save()
                 session.ensureClientContainer(client.clientId)

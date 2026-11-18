@@ -431,6 +431,27 @@ describe("GGOAuthServer", () => {
         expect(again.searchParams.get("code")).toEqual(expect.any(String))
     })
 
+    test("a first-party client whose grant was revoked under its login session re-auths silently, never through consent", async () => {
+        const browser = new Browser()
+        const {tokens} = await signIn(browser, "app", FIRST_PARTY_REDIRECT)
+        const body = {grant_type: "refresh_token", refresh_token: tokens.refreshToken!, client_id: "app"}
+        await token(body)
+        // A replayed refresh token (two tabs refreshing at once) revokes the grant the login session points at.
+        expect((await token(body)).error).toBe("invalid_grant")
+        const {verifier, challenge} = pkce()
+        const again = await browser.done(authorizeUrl("app", FIRST_PARTY_REDIRECT, challenge))
+        const code = again.searchParams.get("code")!
+        const redeemed = await token({grant_type: "authorization_code", code, redirect_uri: FIRST_PARTY_REDIRECT, client_id: "app", code_verifier: verifier, ...target("app")})
+        expect((await userToken.verify(redeemed.access_token)).sub).toBe("alice")
+    })
+
+    test("a first-party client asking for another of its resources under a live login session gets it silently", async () => {
+        const browser = new Browser()
+        await signIn(browser, "app", FIRST_PARTY_REDIRECT)
+        const again = await browser.done(authorizeUrl("app", FIRST_PARTY_REDIRECT, pkce().challenge, {resource: ORG, scope: "org"}))
+        expect(again.searchParams.get("code")).toEqual(expect.any(String))
+    })
+
     test("the login session cookie is HttpOnly, SameSite=Lax and has the configured name", async () => {
         const browser = new Browser()
         await signIn(browser, "app", FIRST_PARTY_REDIRECT)
