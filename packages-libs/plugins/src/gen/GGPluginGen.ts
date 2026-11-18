@@ -1,5 +1,5 @@
 // Runs under plain `node` (type stripping): node:* imports only, no relative imports.
-import {existsSync, readdirSync, readFileSync, writeFileSync} from "node:fs"
+import {existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync} from "node:fs"
 import {dirname, join, relative} from "node:path"
 import {fileURLToPath, pathToFileURL} from "node:url"
 
@@ -94,7 +94,9 @@ export class GGPluginGen {
             const abs = join(this.config.root, path)
             if ((existsSync(abs) ? readFileSync(abs, "utf-8") : "") === content) continue
             stale.push(path)
-            if (!check) writeFileSync(abs, content)
+            if (check) continue
+            mkdirSync(dirname(abs), {recursive: true})
+            writeFileSync(abs, content)
         }
         return stale
     }
@@ -152,15 +154,19 @@ function exportTarget(pkg: GGPluginPackage["pkg"], subpath: string): string | un
     return typeof target === "string" ? target : target?.import
 }
 
-function exportsSymbol(entry: string, symbol: string): boolean {
-    const re = new RegExp(`export ((const|function|async function) ${symbol}\\b|\\{[^}]*\\b${symbol}\\b)`)
-    return sourceFiles(dirname(entry)).some(f => re.test(readFileSync(f, "utf-8")))
+/** Whether `file` exports `symbol`: declared there, named in an `export {...}`, or through an `export * from`. */
+function exportsSymbol(file: string, symbol: string, seen = new Set<string>()): boolean {
+    if (seen.has(file) || !existsSync(file)) return false
+    seen.add(file)
+    const src = readFileSync(file, "utf-8")
+    if (new RegExp(`export (const|let|class|function|async function) ${symbol}\\b`).test(src)) return true
+    for (const [, names] of src.matchAll(/export \{([^}]*)\}/g)) {
+        if (names.split(",").some(n => n.trim().split(/\s+as\s+/).pop() === symbol)) return true
+    }
+    return [...src.matchAll(/export \* from "(\.[^"]+)"/g)].some(([, spec]) => exportsSymbol(sourceOf(file, spec), symbol, seen))
 }
 
-function sourceFiles(dir: string): string[] {
-    return readdirSync(dir, {withFileTypes: true}).flatMap(e => {
-        const path = join(dir, e.name)
-        if (e.isDirectory()) return sourceFiles(path)
-        return /\.tsx?$/.test(e.name) && !/\.test\.tsx?$/.test(e.name) ? [path] : []
-    })
+function sourceOf(from: string, spec: string): string {
+    const base = join(dirname(from), spec).replace(/\.js$/, "")
+    return [".ts", ".tsx", "/index.ts", "/index.tsx"].map(ext => base + ext).find(f => existsSync(f)) ?? base
 }

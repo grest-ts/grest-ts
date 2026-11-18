@@ -15,7 +15,7 @@ export interface GGPluginHostOptions<F, P extends Readonly<Record<string, F>> = 
     /** This layer's facet per plugin name. */
     plugins: P
     /** Plugins of this host that must be on, and come first. */
-    dependsOn?: (name: string, facet: F) => readonly string[] | undefined
+    dependsOn?: (name: string) => readonly string[] | undefined
     /** Which plugins this host runs; one whose dependency is off is dropped. Default: all. */
     isOn?: (name: string) => boolean
     /** Where a plugin's config keys go. Default: `plugins/<name>/`. */
@@ -38,7 +38,7 @@ type ConfigOf<X> = X extends {config?: (prefix: string) => infer C} ? C : never
 export type GGPluginConfigTree<P> = {[K in keyof P as [ConfigOf<P[K]>] extends [void] ? never : unknown extends ConfigOf<P[K]> ? never : K]: ConfigOf<P[K]>}
 
 type AnyFn = (...args: any[]) => unknown
-type PhaseOf<F> = {[K in keyof F]-?: NonNullable<F[K]> extends AnyFn ? K : never}[keyof F]
+type PhaseOf<F> = Exclude<{[K in keyof F]-?: NonNullable<F[K]> extends AnyFn ? K : never}[keyof F], "config" | "localConfig">
 type PhaseCtx<F, K extends keyof F> = NonNullable<F[K]> extends (ctx: infer C, ...rest: any[]) => unknown ? C : never
 
 /**
@@ -54,14 +54,12 @@ export class GGPluginHost<F extends object, P extends Readonly<Record<string, F>
     /** Plugins switched on whose dependency is off. */
     public readonly dropped: readonly GGDroppedPlugin[]
 
-    private readonly activeNames: ReadonlySet<string>
-    private readonly names: ReadonlySet<string>
     private readonly provided = new Map<string, {point: GGPoint<unknown>, contributions: {from: string, c: GGContribution<unknown>}[]}>()
     private readonly configs = new Map<string, unknown>()
     private readonly configPrefix: (name: string) => string
 
     public constructor(options: GGPluginHostOptions<F, P>) {
-        const deps = (p: GGPlugin<F>) => options.dependsOn?.(p.name, p.facet) ?? []
+        const deps = (p: GGPlugin<F>) => options.dependsOn?.(p.name) ?? []
         const plugins = Object.keys(options.plugins).sort().map(name => ({name, facet: options.plugins[name]}))
         const names = new Set(plugins.map(p => p.name))
         for (const p of plugins) {
@@ -87,15 +85,9 @@ export class GGPluginHost<F extends object, P extends Readonly<Record<string, F>
         }
         this.all = all
         this.active = all.filter(p => on.has(p.name))
-        this.activeNames = on
-        this.names = names
         this.dropped = dropped
         this.configPrefix = options.configPrefix ?? (name => `plugins/${name}/`)
         for (const p of this.active) this.add(p.name, "provides", (p.facet as GGPluginFacet).provides ?? [])
-    }
-
-    public isActive(name: string): boolean {
-        return this.activeNames.has(name)
     }
 
     /** Calls `facet[phase](ctx, config)` on every active plugin in order; entries it returns are provided, replacing
@@ -104,12 +96,15 @@ export class GGPluginHost<F extends object, P extends Readonly<Record<string, F>
         for (const slot of this.provided.values()) slot.contributions = slot.contributions.filter(c => c.from !== phase)
         for (const p of this.active) {
             const fn = p.facet[phase] as AnyFn | undefined
-            const result = await fn?.call(p.facet, ctx, this.configs.get(p.name))
+            if (!fn) continue
+            if ((p.facet as GGPluginFacet).config && !this.configs.has(p.name)) throw new Error(`Plugin "${p.name}" declares config, but configTree() wasn't called on this host`)
+            const result = await fn.call(p.facet, ctx, this.configs.get(p.name))
             if (Array.isArray(result)) this.add(p.name, String(phase), result as GGPointEntry[])
         }
     }
 
-    /** Every active plugin's config handles under its name. Call it inside the app's `GGConfig.define`. */
+    /** Every active plugin's config handles under its name (typed for every plugin: one that is off has none). Call it
+     *  inside the app's `GGConfig.define`. */
     public configTree(): GGPluginConfigTree<P> {
         const tree: Record<string, unknown> = {}
         for (const p of this.active) {
@@ -138,19 +133,16 @@ export class GGPluginHost<F extends object, P extends Readonly<Record<string, F>
         return this.configs.get(p.name) as C
     }
 
-    /** The one item provided to `point`; throws when none is. */
-    public one<T>(point: GGPoint<T, "one">, isOn?: (name: string) => boolean): T {
-        const [first] = this.many(point as unknown as GGPoint<T, "many">, isOn)
-        if (!first) throw new Error(`No plugin provides "${point.key}"`)
-        return first.item
+    /** The item provided to `point`, or undefined while no active plugin provides it. */
+    public one<T>(point: GGPoint<T, "one">): T | undefined {
+        return this.many(point)[0]?.item
     }
 
-    /** Every item provided to `point` by plugins `isOn` accepts, in host order; items with a numeric `order` sort by it.
-     *  Empty while the point's owner is off (an owner without a facet in this host counts as on). */
+    /** Every item provided to `point` by active plugins `isOn` accepts, in host order; items with a numeric `order`
+     *  sort by it. `isOn` is a narrower scope (one workspace) and must already leave out plugins whose dependency is off.
+     *  The returned contribution objects are stable for the host's lifetime. */
     public many<T>(point: GGPoint<T>, isOn?: (name: string) => boolean): GGContribution<T>[] {
-        const owner = point.owner
-        if (owner !== undefined && ((this.names.has(owner) && !this.isActive(owner)) || !(isOn?.(owner) ?? true))) return []
-        const contributions = (this.provided.get(point.key)?.contributions ?? []).map(e => e.c as GGContribution<T>)
+        const contributions = (this.provided.get(point.id)?.contributions ?? []).map(e => e.c as GGContribution<T>)
         return contributions
             .filter(c => isOn?.(c.plugin) ?? true)
             .sort((a, b) => orderOf(a.item) - orderOf(b.item))
@@ -158,13 +150,13 @@ export class GGPluginHost<F extends object, P extends Readonly<Record<string, F>
 
     private add(plugin: string, from: string, entries: readonly GGPointEntry[]): void {
         for (const {point, items} of entries) {
-            const slot = this.provided.get(point.key) ?? {point, contributions: []}
-            if (slot.point.cardinality !== point.cardinality) throw new Error(`Point "${point.key}" is defined as both "one" and "many"`)
+            const slot = this.provided.get(point.id) ?? {point, contributions: []}
+            if (slot.point.cardinality !== point.cardinality) throw new Error(`Point "${point.id}" is defined as both "one" and "many"`)
             slot.contributions.push(...items.map(item => ({from, c: {plugin, item}})))
             if (point.cardinality === "one" && slot.contributions.length > 1) {
-                throw new Error(`Point "${point.key}" takes one item; ${slot.contributions.map(e => e.c.plugin).join(", ")} provide it`)
+                throw new Error(`Point "${point.id}" takes one item; ${slot.contributions.map(e => e.c.plugin).join(", ")} provide it`)
             }
-            this.provided.set(point.key, slot)
+            this.provided.set(point.id, slot)
         }
     }
 }

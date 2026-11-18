@@ -11,7 +11,7 @@ interface Facet {
 }
 
 const host = (plugins: Record<string, Facet>, isOn?: (name: string) => boolean) =>
-    new GGPluginHost<Facet>({plugins, dependsOn: (_, f) => f.dependsOn, isOn})
+    new GGPluginHost<Facet>({plugins, dependsOn: name => plugins[name].dependsOn, isOn})
 
 describe("GGPluginHost", () => {
     it("orders dependencies first, then by name", () => {
@@ -28,7 +28,6 @@ describe("GGPluginHost", () => {
         const h = host({a: {}, b: {dependsOn: ["a"]}, c: {dependsOn: ["b"]}, d: {}}, name => name !== "a")
         expect(h.active.map(p => p.name)).toEqual(["d"])
         expect(h.dropped).toEqual([{name: "b", missing: "a"}, {name: "c", missing: "b"}])
-        expect(h.isActive("b")).toBe(false)
     })
 
     it("runs a phase over every active plugin before the next phase", async () => {
@@ -40,30 +39,17 @@ describe("GGPluginHost", () => {
         expect(log).toEqual(["compose a", "compose b", "wire a", "wire b"])
     })
 
-    it("collects static and phase-returned entries, gated by plugin and owner", async () => {
+    it("collects static and phase-returned entries of active plugins, narrowed by `isOn`", async () => {
         const Names = GGPoint.many<string>("names")
-        const Owned = GGPoint.many<string>("owned", {owner: "a"})
         const h = host({
-            a: {provides: [Names.provide("a1", "a2"), Owned.provide("from a")]},
-            b: {compose: () => [Names.provide("b1"), Owned.provide("from b")]},
-        })
+            a: {provides: [Names.provide("a1", "a2")]},
+            b: {compose: () => [Names.provide("b1")]},
+            off: {provides: [Names.provide("off")]},
+        }, name => name !== "off")
         await h.run("compose", [])
         expect(h.many(Names).map(c => [c.plugin, c.item])).toEqual([["a", "a1"], ["a", "a2"], ["b", "b1"]])
         expect(h.many(Names, name => name === "b").map(c => c.item)).toEqual(["b1"])
-        expect(h.many(Owned, name => name === "b")).toEqual([])
-    })
-
-    it("tells points apart by owner and id", () => {
-        const h = host({a: {provides: [GGPoint.many<string>("tiles", {owner: "a"}).provide("x")]}, b: {}})
-        expect(h.many(GGPoint.many<string>("tiles", {owner: "a"})).map(c => c.item)).toEqual(["x"])
-        expect(h.many(GGPoint.many<string>("tiles", {owner: "b"}))).toEqual([])
-    })
-
-    it("counts an owner without a facet in this host as on", () => {
-        const Tiles = GGPoint.many<string>("tiles", {owner: "elsewhere"})
-        const h = host({a: {provides: [Tiles.provide("x")]}})
-        expect(h.many(Tiles).map(c => c.item)).toEqual(["x"])
-        expect(h.many(Tiles, name => name !== "elsewhere")).toEqual([])
+        expect(h.many(Names)[0]).toBe(h.many(Names)[0])
     })
 
     it("replaces what a phase provided when it runs again", async () => {
@@ -82,7 +68,8 @@ describe("GGPluginHost", () => {
     it("allows one provider for a `one` point", () => {
         const Repo = GGPoint.one<string>("repo")
         expect(host({a: {provides: [Repo.provide("x")]}}).one(Repo)).toBe("x")
-        expect(() => host({}).one(Repo)).toThrow(`No plugin provides "repo"`)
+        expect(host({}).one(Repo)).toBeUndefined()
+        expect(host({a: {provides: [Repo.provide("x")]}}, () => false).one(Repo)).toBeUndefined()
         expect(() => host({a: {provides: [Repo.provide("x")]}, b: {provides: [Repo.provide("y")]}})).toThrow(`Point "repo" takes one item; a, b provide it`)
     })
 
@@ -96,5 +83,10 @@ describe("GGPluginHost", () => {
         expect(h.configOf(a)).toEqual({prefix: "plugins/my_a/"})
         await h.run("compose", [])
         expect(seen).toEqual([{prefix: "plugins/my_a/"}])
+    })
+
+    it("refuses to run a plugin that declares config before configTree()", async () => {
+        const h = host({a: {config: prefix => ({prefix}), compose: () => {}}})
+        await expect(h.run("compose", [])).rejects.toThrow(`Plugin "a" declares config, but configTree() wasn't called on this host`)
     })
 })

@@ -5,38 +5,29 @@ export interface GGPointEntry {
     readonly items: readonly unknown[]
 }
 
-export interface GGPointOptions {
-    /** The plugin that hosts the point: while it is off, nothing reaches it. */
-    owner?: string
-}
-
 /**
  * A typed extension point. Plugins fill it with `provide(...)` entries; the host reads it with `one` / `many`.
- * Points are matched by `key` (owner and id), not by object, so two copies of the module defining one still meet.
+ * Points are matched by `id`, not by object, so two copies of the module defining one still meet: prefix the id of a
+ * plugin's own point with its name (`"approvals.grantTypes"`).
  */
 export class GGPoint<T, C extends GGPointCardinality = GGPointCardinality> {
 
     public readonly id: string
     public readonly cardinality: C
-    public readonly owner: string | undefined
-    /** `<owner>/<id>`, or `id` for an app point. */
-    public readonly key: string
 
-    private constructor(id: string, cardinality: C, options: GGPointOptions) {
+    private constructor(id: string, cardinality: C) {
         this.id = id
         this.cardinality = cardinality
-        this.owner = options.owner
-        this.key = options.owner === undefined ? id : `${options.owner}/${id}`
     }
 
     /** At most one plugin provides it. */
-    public static one<T>(id: string, options: GGPointOptions = {}): GGPoint<T, "one"> {
-        return new GGPoint<T, "one">(id, "one", options)
+    public static one<T>(id: string): GGPoint<T, "one"> {
+        return new GGPoint<T, "one">(id, "one")
     }
 
-    /** Any number of plugins provide items, in host order. */
-    public static many<T>(id: string, options: GGPointOptions = {}): GGPoint<T, "many"> {
-        return new GGPoint<T, "many">(id, "many", options)
+    /** Any number of plugins provide items, in host order; items with a numeric `order` field are sorted by it. */
+    public static many<T>(id: string): GGPoint<T, "many"> {
+        return new GGPoint<T, "many">(id, "many")
     }
 
     public provide(...items: C extends "one" ? [item: T] : T[]): GGPointEntry {

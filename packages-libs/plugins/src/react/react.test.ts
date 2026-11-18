@@ -3,7 +3,7 @@ import {createElement, type ReactNode} from "react"
 import {renderToStaticMarkup} from "react-dom/server"
 import {GGPoint} from "../GGPoint"
 import {GGPluginHost} from "../GGPluginHost"
-import {GGPluginsProvider, useSlot, useSlotHooks, useSlotOne} from "./index"
+import {GGPluginsProvider, usePoint, usePointHooks, usePointOne} from "./index"
 
 const Items = GGPoint.many<string>("items")
 const Panel = GGPoint.one<string>("panel")
@@ -19,19 +19,19 @@ function render(body: () => unknown): string {
 }
 
 describe("react binding", () => {
-    it("useSlot gives the items of plugins on in the scope", () => {
-        expect(render(() => useSlot(Items))).toBe(`["a","b"]`.replace(/"/g, "&quot;"))
-        expect(render(() => useSlot(Items, "ws1"))).toBe(`["b"]`.replace(/"/g, "&quot;"))
+    it("usePoint gives the items of plugins on in the scope", () => {
+        expect(render(() => usePoint(Items))).toBe(`["a","b"]`.replace(/"/g, "&quot;"))
+        expect(render(() => usePoint(Items, "ws1"))).toBe(`["b"]`.replace(/"/g, "&quot;"))
     })
 
-    it("useSlotOne is undefined while its provider is off", () => {
-        expect(render(() => useSlotOne(Panel))).toBe("&quot;panel of a&quot;")
-        expect(render(() => useSlotOne(Panel, "ws1") ?? null)).toBe("null")
+    it("usePointOne is undefined while its provider is off", () => {
+        expect(render(() => usePointOne(Panel))).toBe("&quot;panel of a&quot;")
+        expect(render(() => usePointOne(Panel, "ws1") ?? null)).toBe("null")
     })
 
-    it("useSlotHooks calls every item's hook and keeps the results of the ones on", () => {
+    it("usePointHooks calls every item's hook and keeps the results of the ones on", () => {
         const called: string[] = []
-        const out = render(() => useSlotHooks(Items, (item, on) => {
+        const out = render(() => usePointHooks(Items, (item, on) => {
             called.push(`${item}:${on}`)
             return item.toUpperCase()
         }, "ws1"))
@@ -40,7 +40,7 @@ describe("react binding", () => {
     })
 
     it("throws without a provider", () => {
-        const Probe = (): ReactNode => JSON.stringify(useSlot(Items))
+        const Probe = (): ReactNode => JSON.stringify(usePoint(Items))
         expect(() => renderToStaticMarkup(createElement(Probe))).toThrow("No GGPluginsProvider")
     })
 })

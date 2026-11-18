@@ -29,29 +29,29 @@ function usePlugins(): GGPluginsValue {
 }
 
 /** Every item provided to `point`, ungated by scope: for a caller that checks a scope per item outside render. */
-export function useSlotContributions<T>(point: GGPoint<T>): GGContribution<T>[] {
+export function usePointContributions<T>(point: GGPoint<T>): GGContribution<T>[] {
     const {host} = usePlugins()
     return useMemo(() => host.many(point), [host, point])
 }
 
 /** The items of plugins on in `scope`. */
-export function useSlot<T>(point: GGPoint<T>, scope?: string): T[] {
+export function usePoint<T>(point: GGPoint<T>, scope?: string): T[] {
     const {host, useIsOn} = usePlugins()
     const isOn = useIsOn(scope)
     return useMemo(() => host.many(point, isOn).map(c => c.item), [host, point, isOn])
 }
 
 /** The item of a `one` point, or undefined while none is on in `scope`. */
-export function useSlotOne<T>(point: GGPoint<T, "one">, scope?: string): T | undefined {
-    return useSlot(point, scope)[0]
+export function usePointOne<T>(point: GGPoint<T, "one">, scope?: string): T | undefined {
+    return usePoint(point, scope)[0]
 }
 
 /**
  * For items whose hooks feed one result: calls `use` on every provided item, on or not, so switching a plugin can't
  * change the hook order; an item that is off gets `on: false` and should do no work. Returns the results of the
- * items {@link useSlot} would give.
+ * items {@link usePoint} would give.
  */
-export function useSlotHooks<T, R>(point: GGPoint<T>, use: (item: T, on: boolean) => R, scope?: string): R[] {
+export function usePointHooks<T, R>(point: GGPoint<T>, use: (item: T, on: boolean) => R, scope?: string): R[] {
     const {host, useIsOn} = usePlugins()
     const isOn = useIsOn(scope)
     const all = useMemo(() => host.many(point), [host, point])
