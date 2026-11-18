@@ -20,8 +20,8 @@ const agent = (properties: NonNullable<GGAuthzSubject["properties"]>): GGAuthzSu
 const decide = (subject: GGAuthzSubject, action: string) => authz.evaluate({subject, action: {name: action}, resource: {type: "git:repo", id: repo("site")}})
 
 describe("restriction sets: several per-request ceilings", () => {
-    const own = {id: "own", rules: [{actions: ["git:Read"]}, {actions: ["git:Push"], approval: "ask" as const}]}
-    const app = {id: "app", rules: [{actions: ["git:Read"]}, {actions: ["git:Push"], approval: "critical" as const}, {actions: ["git:Delete"]}]}
+    const own = {id: "own", rules: [{actions: ["git:Read"]}, {actions: ["git:Push"]}]}
+    const app = {id: "app", rules: [{actions: ["git:Read"]}, {actions: ["git:Push"]}, {actions: ["git:Delete"]}]}
 
     test("they intersect: an action outside either set is denied by that set", async () => {
         const d = await decide(agent({restrictionSets: [own, app]}), "git:Delete")
@@ -30,10 +30,8 @@ describe("restriction sets: several per-request ceilings", () => {
         expect((await decide(agent({restrictionSets: [own, app]}), "git:Read")).context.outcome).toBe("allow")
     })
 
-    test("the strictest set's level counts", async () => {
-        const d = await decide(agent({restrictionSets: [own, app]}), "git:Push")
-        expect(d.context.approval).toBe("critical")
-        expect(d.context.reasons).toContainEqual(expect.objectContaining({layer: "approval", level: "critical", message: "restriction app"}))
+    test("a set only allows: an action in every set passes with no level of its own", async () => {
+        expect((await decide(agent({restrictionSets: [own, app]}), "git:Push")).context).toMatchObject({outcome: "allow", approval: "auto"})
     })
 
     test("they combine with the single `restrictions` set; every refusing set is reported", async () => {

@@ -1,12 +1,14 @@
 import {ERROR, IsArray, IsObject, IsString} from "@grest-ts/schema"
 import {IsGGAuthzActionName, IsGGAuthzApprovalLevel, IsGGAuthzFactName, IsGGAuthzRn} from "./authzSchemas"
 
-/** `resource` is what was decided; `key`, when set, is what the approval is for instead (a create's new row). */
+/** `resource` is what was decided; `key`, when set, is what the approval is for instead (a create's new row);
+ *  `requestId`, the request the authority's `approvals` hook filed for it, when it filed one. */
 export const APPROVAL_REQUIRED = ERROR.define("APPROVAL_REQUIRED", 403, IsObject({
     action: IsGGAuthzActionName,
     resource: IsGGAuthzRn,
     level: IsGGAuthzApprovalLevel,
     key: IsGGAuthzRn.orUndefined,
+    requestId: IsString.orUndefined,
 }))
 
 /** OAuth `insufficient_scope`: a token with one of `scopes` would be allowed. */
