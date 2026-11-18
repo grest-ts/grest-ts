@@ -517,6 +517,8 @@ Calls the test body makes on those instances, even inside `scope.run`, are not c
 
 `GGDynamoDb.getRawClient()` returns a fresh low-level `DynamoDBClient` (no DocumentClient marshalling), or for `GGDynamoDb.forClient(client)` that client. Use it for `DescribeTable` and other operations the document layer doesn't cover. It reads config at call time, so it works before `start()` has run, which is what a seed script needs to create its tables with `GGDynamoDbDevTables.ensure` before any data exists. Don't keep a client built from it for data access: it doesn't follow config changes, while `getDocumentClient()` does.
 
+`db.onSucceeded(command => ...)` hears every command that succeeded on any client of the db, raw ones from `getRawClient()` included, with its SDK name and input (e.g. to invalidate a cache after a write). It runs after the command, in the sender's async context, and returns the unsubscribe. A listener that throws is logged and swallowed: the write already happened.
+
 ## Reads Are Not Validated
 
 Schema validation is applied on `put`, `putConditional` and `updateFields` only. Reads (`get`, `query`, `queryPage`, `scan`, `scanPage`) return whatever the table holds, cast to `T`. This is deliberate — it keeps the read path fast and avoids forcing a migration when a column is added. If you need read-side validation, wrap the call site.

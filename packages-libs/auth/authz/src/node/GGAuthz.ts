@@ -9,6 +9,7 @@ import {GG_AUTHZ_SUBJECT} from "./GG_AUTHZ_SUBJECT"
 import {GGAuthzRn} from "../shared/GGAuthzRn"
 import {
     type GGAuthzApprovalLevel,
+    type GGAuthzAsk,
     GG_AUTHZ_APPROVAL_LEVELS,
     type GGAuthzBinding,
     type GGAuthzCondition,
@@ -30,6 +31,7 @@ import {
     type GGAuthzResourceProperties,
     type GGAuthzRule,
     type GGAuthzSubject,
+    IsGGAuthzApprovalLevel,
     IsGGAuthzModel,
     IsGGAuthzPolicies,
 } from "../shared/authzSchemas"
@@ -59,6 +61,8 @@ export interface GGAuthzConfig {
     facts?: GGAuthzFacts
     /** Without it, `authorize` throws APPROVAL_REQUIRED for decisions that need approval. */
     approvals?: GGAuthzApprovals
+    /** A resource attribute holding an approval level that raises a workload's (e.g. a critical secret). */
+    approvalLevelAttribute?: string
     /**
      * `ignore`: actions in `policies` the model doesn't know (e.g. from an uninstalled module) are skipped and listed in
      * `inactive`, instead of failing the build. Default `throw`.
@@ -86,11 +90,12 @@ interface Conditional {
     conditions?: GGAuthzCondition[]
 }
 
-interface Rule extends Conditional {
+interface Matchable extends Conditional {
     actions: Set<string>
     resources?: Matcher[]
-    /** In a ceiling: the level a workload passing through it needs (-1: none). */
-    approval: number
+}
+
+interface Rule extends Matchable {
     source: GGAuthzRule
 }
 
@@ -110,10 +115,10 @@ interface Statement extends Rule {
     on: string
 }
 
-interface Approval {
-    actions: Set<string>
+interface Approval extends Matchable {
     level: number
     locked: boolean
+    ref?: string
 }
 
 interface Policy {
@@ -142,14 +147,6 @@ interface Ceiling {
     on?: string
     rules: Rule[]
     ids?: string[]
-}
-
-interface CeilingLevel {
-    level: number
-    layer: GGAuthzCeilingLayer
-    id: string
-    on?: string
-    ref?: string
 }
 
 interface Identity {
@@ -182,6 +179,7 @@ interface Eval {
     p: Principals
     get: AttributeLookup
     facts: Map<string, boolean | undefined>
+    asks: Approval[]
 }
 
 interface Loader {
@@ -204,6 +202,10 @@ export class GGAuthz {
     private readonly roles: Map<string, Set<string>>
     private readonly workloadTypes: Set<string>
     private readonly approvalFloor: Approval[]
+    // A subject's rules and asks compiled once per object: callers keep a connection's subject properties between calls.
+    private readonly requestRules = new WeakMap<GGAuthzRule, Rule>()
+    private readonly asks = new WeakMap<GGAuthzAsk, Approval>()
+    private readonly levelKey?: string
     private readonly tokenScopes = new Map<string, Rule[]>()
     private readonly bindingsByScope = new Map<string, Binding[]>()
     private readonly bindingsByPrincipal = new Map<string, Binding[]>()
@@ -238,7 +240,11 @@ export class GGAuthz {
         const lenient = (source: string) => config.unknownActions === "ignore" ? (action: string) => !!this.inactive.push({source, action}) : undefined
         this.roles = expandRoles(this.actions, [...this.model.roles, ...policies.roles ?? []], role => tenantRoles.has(role) ? lenient(`role ${role}`) : undefined)
         for (const s of this.model.tokenScopes ?? []) this.tokenScopes.set(s.name, s.allow.map(r => this.rule(r)))
-        this.approvalFloor = (this.model.approvalFloor ?? []).map(a => ({...this.approval(a), locked: true}))
+        this.approvalFloor = (this.model.approvalFloor ?? []).map(a => {
+            mark(this.roots, a.conditions)
+            return {...this.approval(a), locked: true}
+        })
+        this.levelKey = config.approvalLevelAttribute && `resource.${config.approvalLevelAttribute}`
         if (this.model.grantAction && !this.actions.has(this.model.grantAction)) throw new Error(`Unknown action ${this.model.grantAction}`)
 
         for (const b of policies.bindings ?? []) {
@@ -287,14 +293,18 @@ export class GGAuthz {
 
     /** Authorizes the subject in GG_AUTHZ_SUBJECT; throws on denial. */
     public async authorize(action: GGAuthzActionRef, resource: string, context?: Record<string, unknown>, properties?: GGAuthzResourceProperties): Promise<GGAuthzDecision> {
-        const name = actionName(action)
-        const request: GGAuthzRequest = {subject: this.contextSubject(), action: {name}, resource: {type: GGAuthzRn.type(resource) ?? "", id: resource, properties}, context}
+        const request = GGAuthz.request(action, resource, context, properties)
         return this.enforce(request, await this.evaluate(request))
+    }
+
+    /** The request `authorize` decides for the subject in GG_AUTHZ_SUBJECT. */
+    public static request(action: GGAuthzActionRef, resource: string, context?: Record<string, unknown>, properties?: GGAuthzResourceProperties): GGAuthzRequest {
+        return {subject: contextSubject(), action: {name: actionName(action)}, resource: {type: GGAuthzRn.type(resource) ?? "", id: resource, properties}, context}
     }
 
     /** `canGrant` for the subject in GG_AUTHZ_SUBJECT, throwing like `authorize`. */
     public async authorizeGrant(binding: GGAuthzBinding, context?: Record<string, unknown>): Promise<GGAuthzDecision> {
-        const subject = this.contextSubject()
+        const subject = contextSubject()
         const action = this.model.grantAction ?? "grant"
         const request: GGAuthzRequest = {subject, action: {name: action}, resource: {type: GGAuthzRn.type(binding.on) ?? "", id: binding.on}, context}
         return this.enforce(request, await this.canGrant({subject, binding, context}))
@@ -368,7 +378,7 @@ export class GGAuthz {
         this.assertApplies(action, resourceType)
         const loader = this.loader()
         const p = await this.principals(request.subject, loader)
-        if (p.workload && this.floorLevel(action) === HUMANS_ONLY) return plan
+        if (p.workload && this.approvalFloor.some(a => a.level === HUMANS_ONLY && a.actions.has(action))) return plan
         const probe: GGAuthzRequest = {subject: request.subject, action: request.action, resource: {type: resourceType, id: ""}, context: request.context}
         const get = await this.lookup(probe, p, loader, {...this.rootsFor(request.subject), resource: false})
         const values: Record<string, unknown> = {}
@@ -399,10 +409,14 @@ export class GGAuthz {
             for (const r of g.deny) if (r.actions.has(action)) add(exclude, residual(g.on, r.source, "deny"))
         }
         if (p.workload) exclude.push(...await this.humansOnlyFilters(action, loader))
+        // `present` first: an absent attribute raises nothing, but an unknown exclude would drop the row. A value that
+        // isn't a level fails the row's decision, so it's left out too.
+        if (p.workload && this.levelKey) exclude.push({conditions: [{key: this.levelKey, op: "present", value: true}, {key: this.levelKey, op: "notIn", value: GG_AUTHZ_APPROVAL_LEVELS.slice(0, HUMANS_ONLY)}]})
         return Object.keys(values).length ? {action, resourceType, include, exclude, require, values} : {action, resourceType, include, exclude, require}
     }
 
-    private async enforce(request: GGAuthzRequest, decision: GGAuthzDecision): Promise<GGAuthzDecision> {
+    /** Throws for `decision` (of `request`) as `authorize` does. */
+    public async enforce(request: GGAuthzRequest, decision: GGAuthzDecision): Promise<GGAuthzDecision> {
         if (!decision.decision) {
             const debug = {debugMessage: explain(request, decision)}
             const remedy = decision.context.remedy
@@ -421,12 +435,6 @@ export class GGAuthz {
         return GGAuthzRn.parse(rn)?.partition === this.model.partition
     }
 
-    private contextSubject(): GGAuthzSubject {
-        const subject = GG_AUTHZ_SUBJECT.get()
-        if (!subject) throw new NOT_AUTHORIZED({debugMessage: "No GG_AUTHZ_SUBJECT in context"})
-        return subject
-    }
-
     private async evaluateWith(request: GGAuthzRequest, loader: Loader): Promise<GGAuthzDecision> {
         const action = request.action.name
         if (!this.actions.has(action)) throw new Error(`Unknown action ${action}`)
@@ -438,7 +446,8 @@ export class GGAuthz {
         const given = request.resource.properties?.ancestors
         const [chain, p] = await Promise.all([given ? checkedChain([rn, ...given]) : loader.chain(rn), this.principals(request.subject, loader)])
         if (!chain) return invalid(`Scope chain of ${rn} is cyclic or deeper than ${MAX_DEPTH}`)
-        const get = await this.lookup(request, p, loader, this.rootsFor(request.subject))
+        const roots = this.rootsFor(request.subject)
+        const get = await this.lookup(request, p, loader, {...roots, resource: roots.resource || (p.workload && !!this.levelKey)})
 
         const facts = new Map<string, boolean | undefined>()
         const decision = this.decideWith(this.eval(request, chain, p, get, facts))
@@ -449,7 +458,8 @@ export class GGAuthz {
     }
 
     private eval(request: GGAuthzRequest, chain: string[], p: Principals, get: AttributeLookup, facts: Map<string, boolean | undefined>): Eval {
-        return {request, action: request.action.name, rn: request.resource.id, chain, chainSet: new Set(chain), p, get, facts}
+        const asks = (request.subject.properties?.asks ?? []).map(a => this.ask(a))
+        return {request, action: request.action.name, rn: request.resource.id, chain, chainSet: new Set(chain), p, get, facts, asks}
     }
 
     /** `bindingsOnly`: only bindings grant, as `canGrant` needs; no remedies. There a deny the scope can't decide only
@@ -457,7 +467,6 @@ export class GGAuthz {
      *  action: it binds the grantee the same. Any other unknown — a principal, actor or context attribute, a fact the
      *  request didn't give — still denies. */
     private decideWith(e: Eval, bindingsOnly = false): GGAuthzDecision {
-        const action = e.action
         const denies = (r: Rule) => bindingsOnly ? this.deniesHolding(r, e) : this.matches(r, e) !== false
         const denied: GGAuthzReason[] = []
         for (const scope of e.chain) {
@@ -477,22 +486,15 @@ export class GGAuthz {
 
         const passed: GGAuthzReason[] = []
         const failed: GGAuthzReason[] = []
-        // Rules within a ceiling are a union: its least strict matching rule sets its level. Ceilings intersect: the strictest counts.
-        let ceilingLevel: CeilingLevel | undefined
         for (const c of this.ceilings(e.request.subject, e.p, e.chainSet)) {
-            let r: Rule | undefined
-            for (const m of c.rules) {
-                if ((!r || m.approval < r.approval) && this.matches(m, e) === true) r = m
-                if (r?.approval === -1) break
-            }
-            const id = c.ids ? c.ids[c.rules.indexOf(r!)] ?? c.id : c.id
-            if (r) passed.push({layer: c.layer, kind: "ceiling-passed", id, on: c.on, actions: r.source.actions, ref: r.source.ref})
+            const i = c.rules.findIndex(r => this.matches(r, e) === true)
+            const r = c.rules[i]
+            if (r) passed.push({layer: c.layer, kind: "ceiling-passed", id: c.ids?.[i] ?? c.id, on: c.on, actions: r.source.actions, ref: r.source.ref})
             else failed.push({layer: c.layer, kind: "ceiling-failed", id: c.id, on: c.on})
-            if (r && r.approval > (ceilingLevel?.level ?? -1)) ceilingLevel = {level: r.approval, layer: c.layer, id, on: c.on, ref: r.source.ref}
         }
         if (failed.length) {
             // A ceiling hides the humans-only level beneath it; report it too, so a caller needn't re-evaluate without the ceiling.
-            const approval = !bindingsOnly && e.p.workload ? this.approvalFor(action, e.chain) : undefined
+            const approval = !bindingsOnly && e.p.workload ? this.approvalFor(e) : undefined
             if (approval?.level === "humans-only") return deny([...failed, approval])
             if (!bindingsOnly && failed.every(f => f.layer === "scope") && this.grants(e).length) {
                 const scopes = [...this.tokenScopes].filter(([, rules]) => rules.some(r => this.matches(r, e) === true)).map(([name]) => name)
@@ -506,7 +508,7 @@ export class GGAuthz {
 
         const reasons = [...allowed, ...passed]
         if (!e.p.workload) return {decision: true, context: {outcome: "allow", reasons}}
-        const approval = this.approvalFor(action, e.chain, ceilingLevel)
+        const approval = this.approvalFor(e)
         reasons.push(approval)
         if (approval.level === "humans-only") return deny([approval])
         return {
@@ -552,15 +554,17 @@ export class GGAuthz {
         return ceilings
     }
 
-    private approvalFor(action: string, chain: string[], ceiling?: CeilingLevel): GGAuthzReason {
-        let floor = this.floorLevel(action)
+    /** Floors and asks apply unless known not to hold: an unknown raises the level. */
+    private approvalFor(e: Eval): GGAuthzReason {
+        const applying = (approvals: Approval[]) => approvals.filter(a => this.matches(a, e) !== false)
+        let floor = Math.max(-1, ...applying(this.approvalFloor).map(a => a.level))
         let floorOn: string | undefined
         let level = -1
         let on: string | undefined
         let lowered: GGAuthzReason["lowered"]
-        for (let i = chain.length - 1; i >= 0; i--) {
-            const scope = chain[i]!
-            const rules = this.policies.get(scope)?.approvals.filter(a => a.actions.has(action)) ?? []
+        for (let i = e.chain.length - 1; i >= 0; i--) {
+            const scope = e.chain[i]!
+            const rules = applying(this.policies.get(scope)?.approvals ?? [])
             if (!rules.length) continue
             const set = Math.max(...rules.map(a => a.level))
             const locked = Math.max(-1, ...rules.filter(a => a.locked).map(a => a.level))
@@ -576,20 +580,17 @@ export class GGAuthz {
             level = floor
             on = floorOn
         }
-        if (ceiling && ceiling.level > level) {
-            return {
-                layer: "approval", kind: "approval", level: GG_AUTHZ_APPROVAL_LEVELS[ceiling.level]!, locked: false, lowered,
-                message: `${ceiling.layer} ${ceiling.id}`, source: ceiling.layer, id: ceiling.id, on: ceiling.on, ref: ceiling.ref,
-            }
+        const ask = applying(e.asks).reduce<Approval | undefined>((top, a) => a.level > (top?.level ?? level) ? a : top, undefined)
+        const value = this.levelKey ? e.get(this.levelKey) : undefined
+        const attribute = value === undefined ? -1 : GG_AUTHZ_APPROVAL_LEVELS.indexOf(IsGGAuthzApprovalLevel.parse(value))
+        if (attribute > Math.max(level, ask?.level ?? -1)) {
+            return {layer: "approval", kind: "approval", level: GG_AUTHZ_APPROVAL_LEVELS[attribute]!, locked: false, lowered, message: `resource ${this.levelKey}`, source: "attribute"}
         }
+        if (ask) return {layer: "approval", kind: "approval", level: GG_AUTHZ_APPROVAL_LEVELS[ask.level]!, locked: false, lowered, message: ask.ref ? `ask ${ask.ref}` : "ask", source: "ask", ref: ask.ref}
         const resolved = GG_AUTHZ_APPROVAL_LEVELS[Math.max(0, level)]!
         const source = on ? "policy" : level < 0 ? "default" : "floor"
         const message = on ? undefined : level < 0 ? "default" : "platform floor"
         return {layer: "approval", kind: "approval", level: resolved, on, locked: level >= 0 && level === floor, lowered, message, source}
-    }
-
-    private floorLevel(action: string): number {
-        return Math.max(-1, ...this.approvalFloor.filter(a => a.actions.has(action)).map(a => a.level))
     }
 
     private async humansOnlyFilters(action: string, loader: Loader): Promise<GGAuthzPlanFilter[]> {
@@ -674,10 +675,10 @@ export class GGAuthz {
     }
 
     private rootsFor(subject: GGAuthzSubject): Roots {
-        const sets = restrictionSets(subject)
-        if (!sets.length) return this.roots
+        const rules = [...restrictionSets(subject).flatMap(s => s.rules), ...subject.properties?.asks ?? []]
+        if (!rules.length) return this.roots
         const roots = {...this.roots}
-        for (const set of sets) for (const r of set.rules) mark(roots, r.conditions)
+        for (const r of rules) mark(roots, r.conditions)
         return roots
     }
 
@@ -692,7 +693,7 @@ export class GGAuthz {
         return missing.length > 0 && missing.every(isResourceKey)
     }
 
-    private matches(r: Rule, e: Eval): boolean | undefined {
+    private matches(r: Matchable, e: Eval): boolean | undefined {
         if (!r.actions.has(e.action)) return false
         if (r.resources && !r.resources.some(m => m.exact !== undefined ? e.rn === m.exact : m.prefix !== undefined ? e.rn.startsWith(m.prefix) : e.chainSet.has(m.within!))) return false
         return this.conditions(r, e)
@@ -719,28 +720,42 @@ export class GGAuthz {
     /** A request's own ceiling rule: its conditions are marked per request (`rootsFor`), and an action the model
      *  doesn't know only narrows it. */
     private requestRule(r: GGAuthzRule): Rule {
-        return this.compile(r, () => true)
+        const rule = this.requestRules.get(r) ?? this.compile(r, () => true)
+        this.requestRules.set(r, rule)
+        return rule
+    }
+
+    private ask(a: GGAuthzAsk): Approval {
+        const ask = this.asks.get(a) ?? this.approval(a)
+        this.asks.set(a, ask)
+        return ask
     }
 
     private compile(r: GGAuthzRule, onUnknown?: OnUnknownAction): Rule {
-        return {
-            actions: expandActions(this.actions, r.actions, onUnknown),
-            resources: r.resources?.map(m => GGAuthzRn.isExact(m) ? {exact: m.slice(1)} : GGAuthzRn.isPattern(m) ? {prefix: m.slice(0, -1)} : {within: m}),
-            when: r.when,
-            unless: r.unless,
-            conditions: r.conditions,
-            approval: r.approval ? GG_AUTHZ_APPROVAL_LEVELS.indexOf(r.approval) : -1,
-            source: r,
-        }
+        return {...this.matchable(r, onUnknown), source: r}
     }
 
-    private approval(a: {actions: string[], level: GGAuthzApprovalLevel, locked?: boolean}, onUnknown?: OnUnknownAction): Approval {
-        return {actions: expandActions(this.actions, a.actions, onUnknown), level: GG_AUTHZ_APPROVAL_LEVELS.indexOf(a.level), locked: a.locked === true}
+    private approval(a: Conditional & {actions: string[], resources?: string[], level: GGAuthzApprovalLevel, locked?: boolean, ref?: string}, onUnknown?: OnUnknownAction): Approval {
+        return {...this.matchable(a, onUnknown), level: GG_AUTHZ_APPROVAL_LEVELS.indexOf(a.level), locked: a.locked === true, ref: a.ref}
     }
+
+    private matchable(m: Conditional & {actions: string[], resources?: string[]}, onUnknown?: OnUnknownAction): Matchable {
+        return {actions: expandActions(this.actions, m.actions, onUnknown), resources: matchers(m.resources), when: m.when, unless: m.unless, conditions: m.conditions}
+    }
+}
+
+function matchers(resources: string[] | undefined): Matcher[] | undefined {
+    return resources?.map(m => GGAuthzRn.isExact(m) ? {exact: m.slice(1)} : GGAuthzRn.isPattern(m) ? {prefix: m.slice(0, -1)} : {within: m})
 }
 
 function checkedChain(chain: string[]): string[] | undefined {
     return chain.length > MAX_DEPTH || new Set(chain).size !== chain.length ? undefined : chain
+}
+
+function contextSubject(): GGAuthzSubject {
+    const subject = GG_AUTHZ_SUBJECT.get()
+    if (!subject) throw new NOT_AUTHORIZED({debugMessage: "No GG_AUTHZ_SUBJECT in context"})
+    return subject
 }
 
 function invalid(message: string): GGAuthzDecision {
