@@ -86,7 +86,8 @@ The examples use a document platform: tenant `acme` → project → folder → d
 **How one request is decided**
 
 1. A deny statement or guardrail deny matches → **no**.
-2. A ceiling, boundary, token scope or restriction doesn't cover it → **no**.
+2. A ceiling, boundary, token scope or restriction doesn't cover it → **no** (a restriction set with
+   `miss` asks a workload instead, see step 4).
 3. A binding or allow statement matches → **yes**.
 4. For workloads: the approval level is attached, or `humans-only` → **no**. Resource policies set
    it down the tree (the deepest wins unless an ancestor locked it); the floor, the request's asks and
@@ -429,6 +430,13 @@ subject: {
   missing from any set is denied). Sets only allow: levels come from `asks`. Every refusing set is
   reported with its `id`, so ids must be unique (the subject schema rejects duplicates). A set with no
   rules allows nothing; `restrictionSets: []` adds no ceiling.
+  **A set with `miss: <ask level>` asks instead of refusing**: a workload's request outside its rules
+  goes on, and needs approval at that level at least (`source: "restriction"`, the set's `id`). It is
+  what the workload does unasked, e.g. the allows an admin gave an agent, when everything else its
+  human may do is one approval away. It still never grants, a set without `miss` still refuses next
+  to it, and a person carrying it is refused. `listAllowed` and `canGrant` count only what its rules
+  cover: rows it would have to ask for aren't listed. `miss` takes an ask level only (not `auto` or
+  `humans-only`); the engine throws on anything else.
   An action the model doesn't know is left out of a request's restriction, which only narrows it.
 
 ### Conditions and facts
@@ -487,6 +495,9 @@ A third outcome besides allow and deny, `allow-with-approval`, for workloads onl
 - **An ask naming an unknown action throws**, like a policy would: a typo must not silently never ask.
 - **Floors and asks fail toward asking**: one applies when it names the action, its resources
   match, and none of its facts or conditions is known to be false. An unknown raises the level.
+- **A restriction set's `miss` raises it too** (§4, "Acting for someone else"), where the set doesn't
+  cover the request and nothing above asks as much: a floor, a tree level or an ask of the same level
+  is the one reported.
 - **An approval never widens access**: it is computed only when the request would otherwise be
   allowed. `humans-only` denies workloads; `auto` still sets `audit: true`; humans get no level.
 
@@ -498,7 +509,7 @@ A third outcome besides allow and deny, `allow-with-approval`, for workloads onl
 |---|---|---|---|
 | 1 | request | the RN doesn't parse, is in another partition, or its scope chain is cyclic or too deep | `request` |
 | 2 | explicit deny | a guardrail deny rule or a resource-policy deny statement on the resource or an ancestor matches | `guardrail`, `deny` |
-| 3 | ceilings | a guardrail ceiling on the chain, a boundary of any acting principal, the token scopes or the request's restrictions has no matching rule | `guardrail`, `boundary`, `scope`, `restriction` |
+| 3 | ceilings | a guardrail ceiling on the chain, a boundary of any acting principal, the token scopes or the request's restrictions has no matching rule (but a workload under a restriction set with `miss`: step 5 raises its level) | `guardrail`, `boundary`, `scope`, `restriction` |
 | 4 | allows | — grants: bindings ∪ resource-policy allow statements on the chain | `allow` |
 | 5 | approval | a workload request whose resolved level is `humans-only` | `approval` |
 | 6 | default deny | no allow was found in step 4 | `default` |
@@ -536,7 +547,8 @@ boundary, token scope or statement, and `ref` returns whatever opaque string the
 author put on the deciding binding or rule (`ref` on `GGAuthzBinding` and `GGAuthzRule`, so on
 statements and guardrail, boundary, scope and restriction rules too), e.g. the caller's own record id.
 An approval reason's `source` says what set the level: `default`, `floor` (`model.approvalFloor`),
-`policy` (a resource policy's approvals, at `on`) or `ask` (one of the subject's asks, with its `ref`). `message` is for humans; don't match on it. A `ref` on request `restrictions` is the caller's, as
+`policy` (a resource policy's approvals, at `on`), `ask` (one of the subject's asks, with its `ref`),
+`attribute` (the resource's level attribute) or `restriction` (a restriction set's `miss`, with its `id`). `message` is for humans; don't match on it. A `ref` on request `restrictions` is the caller's, as
 trusted as the rest of the request. When a ceiling denies a
 workload whose level would be `humans-only` anyway, that approval reason is reported too.
 

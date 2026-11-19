@@ -107,13 +107,15 @@ export const IsGGAuthzFloorRule = IsObject({
 ).docs({description: "Applies unless its facts or conditions are known not to hold"})
 export type GGAuthzFloorRule = typeof IsGGAuthzFloorRule.infer
 
+const IsAskLevel = IsLiteral(...GG_AUTHZ_APPROVAL_LEVELS.filter((l): l is Exclude<GGAuthzApprovalLevel, "auto" | "humans-only"> => l !== "auto" && l !== "humans-only"))
+
 export const IsGGAuthzAsk = IsObject({
     actions: IsActions,
     resources: IsResources,
     when: IsWhen,
     unless: IsUnless,
     conditions: IsConditions,
-    level: IsLiteral(...GG_AUTHZ_APPROVAL_LEVELS.filter((l): l is Exclude<GGAuthzApprovalLevel, "auto" | "humans-only"> => l !== "auto" && l !== "humans-only")),
+    level: IsAskLevel,
     ref: IsRef,
 }).docs({description: "Raises a workload's approval level; applies unless its facts or conditions are known not to hold. Never permits"})
 export type GGAuthzAsk = typeof IsGGAuthzAsk.infer
@@ -198,6 +200,7 @@ export type GGAuthzEntity = typeof IsGGAuthzEntity.infer
 export const IsGGAuthzRestrictionSet = IsObject({
     id: IsString.nonEmpty.docs({description: "Reported as the reason `id` when this set decides"}),
     rules: IsArray(IsGGAuthzRule),
+    miss: IsAskLevel.orUndefined.docs({description: "A workload's request no rule covers isn't refused: it needs approval at this level at least. Lists and `canGrant` still leave it out"}),
 })
 export type GGAuthzRestrictionSet = typeof IsGGAuthzRestrictionSet.infer
 
@@ -249,8 +252,8 @@ export const IsGGAuthzReason = IsObject({
     level: IsGGAuthzApprovalLevel.orUndefined,
     locked: IsBoolean.orUndefined.docs({description: "The resolved level is a locked minimum: nothing below may lower it"}),
     lowered: IsObject({on: IsString, level: IsGGAuthzApprovalLevel}).orUndefined.docs({description: "A descendant's attempt to go below a locked minimum, ignored"}),
-    source: IsLiteral("default", "floor", "policy", "ask", "attribute").orUndefined.docs({
-        description: "On an approval reason, what set the level: nothing (`default`), `model.approvalFloor` (`floor`), a resource policy's approvals (`policy`, see `on`), one of the subject's `asks` (`ask`, see `ref`) or the resource's `approvalLevelAttribute` (`attribute`)",
+    source: IsLiteral("default", "floor", "policy", "ask", "attribute", "restriction").orUndefined.docs({
+        description: "On an approval reason, what set the level: nothing (`default`), `model.approvalFloor` (`floor`), a resource policy's approvals (`policy`, see `on`), one of the subject's `asks` (`ask`, see `ref`), the resource's `approvalLevelAttribute` (`attribute`) or a restriction set's `miss` (`restriction`, see `id`)",
     }),
     ref: IsString.orUndefined.docs({description: "The deciding binding's, rule's or ask's `ref`"}),
 })

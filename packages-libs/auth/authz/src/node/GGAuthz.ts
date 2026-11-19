@@ -147,6 +147,8 @@ interface Ceiling {
     on?: string
     rules: Rule[]
     ids?: string[]
+    /** A restriction set's `miss`: the level a workload's request outside the rules needs, instead of a refusal. */
+    miss?: number
 }
 
 interface Identity {
@@ -486,10 +488,12 @@ export class GGAuthz {
 
         const passed: GGAuthzReason[] = []
         const failed: GGAuthzReason[] = []
+        const missed: Ceiling[] = []
         for (const c of this.ceilings(e.request.subject, e.p, e.chainSet)) {
             const i = c.rules.findIndex(r => this.matches(r, e) === true)
             const r = c.rules[i]
             if (r) passed.push({layer: c.layer, kind: "ceiling-passed", id: c.ids?.[i] ?? c.id, on: c.on, actions: r.source.actions, ref: r.source.ref})
+            else if (c.miss !== undefined && e.p.workload && !bindingsOnly) missed.push(c)
             else failed.push({layer: c.layer, kind: "ceiling-failed", id: c.id, on: c.on})
         }
         if (failed.length) {
@@ -508,7 +512,7 @@ export class GGAuthz {
 
         const reasons = [...allowed, ...passed]
         if (!e.p.workload) return {decision: true, context: {outcome: "allow", reasons}}
-        const approval = this.approvalFor(e)
+        const approval = this.approvalFor(e, missed)
         reasons.push(approval)
         if (approval.level === "humans-only") return deny([approval])
         return {
@@ -550,12 +554,18 @@ export class GGAuthz {
             const rules = granted.flatMap(s => this.tokenScopes.get(s)!)
             ceilings.push({layer: "scope", id: "token scopes", rules, ids: granted.flatMap(s => this.tokenScopes.get(s)!.map(() => s))})
         }
-        for (const set of restrictionSets(subject)) ceilings.push({layer: "restriction", id: set.id, rules: set.rules.map(r => this.requestRule(r))})
+        for (const set of restrictionSets(subject)) {
+            const miss = set.miss === undefined ? undefined : GG_AUTHZ_APPROVAL_LEVELS.indexOf(set.miss)
+            // Not left to the schema: `auto` or a typo would turn the ceiling into an allow.
+            if (miss !== undefined && (miss < 1 || miss >= HUMANS_ONLY)) throw new Error(`Restriction set ${set.id}: miss must be an ask level, not ${String(set.miss)}`)
+            ceilings.push({layer: "restriction", id: set.id, rules: set.rules.map(r => this.requestRule(r)), miss})
+        }
         return ceilings
     }
 
-    /** Floors and asks apply unless known not to hold: an unknown raises the level. */
-    private approvalFor(e: Eval): GGAuthzReason {
+    /** Floors and asks apply unless known not to hold: an unknown raises the level. `missed`: the restriction sets
+     *  that ask where they don't cover the request; one sets the level only where nothing else asks as much. */
+    private approvalFor(e: Eval, missed: Ceiling[] = []): GGAuthzReason {
         const applying = (approvals: Approval[]) => approvals.filter(a => this.matches(a, e) !== false)
         let floor = Math.max(-1, ...applying(this.approvalFloor).map(a => a.level))
         let floorOn: string | undefined
@@ -583,6 +593,10 @@ export class GGAuthz {
         const ask = applying(e.asks).reduce<Approval | undefined>((top, a) => a.level > (top?.level ?? level) ? a : top, undefined)
         const value = this.levelKey ? e.get(this.levelKey) : undefined
         const attribute = value === undefined ? -1 : GG_AUTHZ_APPROVAL_LEVELS.indexOf(IsGGAuthzApprovalLevel.parse(value))
+        const miss = missed.reduce<Ceiling | undefined>((top, c) => c.miss! > (top?.miss ?? Math.max(level, ask?.level ?? -1, attribute)) ? c : top, undefined)
+        if (miss) {
+            return {layer: "approval", kind: "approval", level: GG_AUTHZ_APPROVAL_LEVELS[miss.miss!]!, locked: false, lowered, message: `request restriction ${miss.id} does not cover it`, source: "restriction", id: miss.id}
+        }
         if (attribute > Math.max(level, ask?.level ?? -1)) {
             return {layer: "approval", kind: "approval", level: GG_AUTHZ_APPROVAL_LEVELS[attribute]!, locked: false, lowered, message: `resource ${this.levelKey}`, source: "attribute"}
         }
