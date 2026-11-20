@@ -750,6 +750,19 @@ describe("GGOAuthServer", () => {
         expect(await oauth.clientName("https://elsewhere.example/oauth/client.json")).toBeUndefined()
     })
 
+    test("a client's metadata makes the server fetch nothing more: public clients only, no sector check", async () => {
+        const registered = (metadata: object) => fetch(`${ISSUER}/oauth/register`, {
+            method: "POST", headers: {"content-type": "application/json"},
+            body: JSON.stringify({redirect_uris: [THIRD_PARTY_REDIRECT], application_type: "web", ...metadata}),
+        })
+        const keyed = await registered({token_endpoint_auth_method: "private_key_jwt", jwks_uri: "https://clients.example/jwks.json"})
+        expect(keyed.status).toBe(400)
+        expect(await keyed.text()).toContain("token_endpoint_auth_method")
+        // Its sector URL answers nowhere: checked, the registration would fail.
+        const sectored = await registered({token_endpoint_auth_method: "none", sector_identifier_uri: "https://sector.invalid/uris.json"})
+        expect(sectored.status).toBe(201)
+    })
+
     test("deny sends access_denied to the client", async () => {
         const browser = new Browser()
         const login = await browser.page(authorizeUrl(await register(), THIRD_PARTY_REDIRECT, pkce().challenge))

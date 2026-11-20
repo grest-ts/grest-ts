@@ -629,6 +629,10 @@ export class GGOAuthServer {
             scopes: OIDC_SCOPES,
             responseTypes: ["code"],
             pkce: {required: () => true},
+            // A client's metadata names no further URL this server fetches: with public clients only, `jwks_uri` is
+            // never read, and `sector_identifier_uri` isn't checked (subjects are public, nothing uses it).
+            clientAuthMethods: ["none"],
+            sectorIdentifierUriValidate: () => false,
             features: {
                 devInteractions: {enabled: false},
                 revocation: {enabled: true},
