@@ -6,7 +6,7 @@ import {GG_HTTP_REQUEST, GGHttpServer} from "@grest-ts/http"
 import {GG_TRACE} from "@grest-ts/trace"
 import {FORBIDDEN, IsArray, IsObject, IsString, NOT_AUTHORIZED} from "@grest-ts/schema"
 import {GGAuthAccessToken, HmacSigner, JwksVerifier, JwsSigningStrategy, type JwsSigner} from "@grest-ts/auth"
-import {ACCESS_TOKEN_JWKS_PATH, deriveEs256Jwk, GGOAuthServer, type GGOAuthInteraction, type GGOAuthResource, type GGOAuthTokenClient} from "./GGOAuthServer"
+import {ACCESS_TOKEN_JWKS_PATH, asPublicClient, deriveEs256Jwk, GGOAuthServer, type GGOAuthInteraction, type GGOAuthResource, type GGOAuthTokenClient} from "./GGOAuthServer"
 import type {GGDynamoDb} from "@grest-ts/db-dynamodb"
 import {InMemoryOAuthStore} from "./store/InMemoryOAuthStore"
 import {DynamoOAuthStore} from "./store/DynamoOAuthStore"
@@ -766,6 +766,34 @@ describe("GGOAuthServer", () => {
         // Its sector URL answers nowhere: checked, the registration would fail.
         const sectored = await registered({token_endpoint_auth_method: "none", sector_identifier_uri: "https://sector.invalid/uris.json"})
         expect(sectored.status).toBe(201)
+    })
+
+    test("a metadata document that prefers a key but also supports none is read as a public client, its key dropped", () => {
+        const url = "https://clients.example/oauth/client.json"
+        // As ChatGPT publishes itself.
+        const chatgpt = {
+            client_id: url,
+            client_name: "ChatGPT",
+            redirect_uris: ["https://clients.example/callback"],
+            token_endpoint_auth_method: "private_key_jwt",
+            token_endpoint_auth_methods_supported: ["none", "private_key_jwt"],
+            token_endpoint_auth_signing_alg: "RS256",
+            jwks_uri: "https://clients.example/oauth/jwks.json",
+        }
+        expect(JSON.parse(asPublicClient(JSON.stringify(chatgpt), url))).toEqual({
+            client_id: url,
+            client_name: "ChatGPT",
+            redirect_uris: ["https://clients.example/callback"],
+            token_endpoint_auth_method: "none",
+        })
+        const unchanged = (document: object, at = url) => expect(asPublicClient(JSON.stringify(document), at)).toBe(JSON.stringify(document))
+        // Key only: it stays what it says, and this server refuses it.
+        unchanged({...chatgpt, token_endpoint_auth_methods_supported: ["private_key_jwt"]})
+        unchanged({...chatgpt, token_endpoint_auth_methods_supported: undefined})
+        // Already public, or not the document of the client asked for.
+        unchanged({...chatgpt, token_endpoint_auth_method: "none"})
+        unchanged(chatgpt, "https://clients.example/oauth/other.json")
+        expect(asPublicClient("not json", url)).toBe("not json")
     })
 
     test("deny sends access_denied to the client", async () => {

@@ -199,6 +199,8 @@ provides the discovery handshake MCP clients run:
 Every client is public (`token_endpoint_auth_method: "none"`, PKCE required). A client's metadata never makes the
 server fetch a second URL: `jwks_uri` is unused and `sector_identifier_uri` isn't checked, so the document itself
 (5 KB, 2.5 s, no redirects, no private addresses) is the only outbound request a client can cause.
+A document that prefers a key (`private_key_jwt`) but lists `none` in `token_endpoint_auth_methods_supported`, as
+ChatGPT's does, is read as a public client and its key is ignored; one that supports a key only is refused.
 
 ### Login and consent pages
 
