@@ -862,10 +862,9 @@ function isClientOrigin(client: GGOAuthFirstPartyClient, origin: string): boolea
 
 const DOCUMENT_LIMIT = 5 * 1024
 
-// A client metadata document may prefer a key (`token_endpoint_auth_method: "private_key_jwt"`, as ChatGPT's does) and
-// still list `none` in `token_endpoint_auth_methods_supported`: such a client connects as a public one, so its
-// document is read as one. The provider has no hook between fetching a document and validating it but its `fetch`,
-// which with public clients only fetches nothing else.
+// A metadata document may prefer a key and still list `none` as supported (ChatGPT's does): that client connects as
+// a public one, so its document is read as one. The provider's `fetch` is its only hook before validating a document;
+// with public clients only it fetches nothing else, and a feature that fetches more must not go through this cap.
 async function fetchAsPublicClient(url: string | URL, options?: RequestInit): Promise<Response> {
     const response = await fetch(url, options)
     if (response.status !== 200 || !response.body) return response
@@ -873,7 +872,7 @@ async function fetchAsPublicClient(url: string | URL, options?: RequestInit): Pr
     let size = 0
     for await (const chunk of response.body as unknown as AsyncIterable<Uint8Array>) {
         size += chunk.length
-        if (size > DOCUMENT_LIMIT) return new Response(null, {status: 413})
+        if (size > DOCUMENT_LIMIT) throw new Error("response too large")
         chunks.push(chunk)
     }
     const text = Buffer.concat(chunks).toString()
@@ -892,7 +891,7 @@ export function asPublicClient(text: string, url: string): string {
     }
     if (typeof document !== "object" || document === null) return text
     const {token_endpoint_auth_method: method, token_endpoint_auth_methods_supported: supported, ...rest} = document as Record<string, unknown>
-    if (rest.client_id !== url || method === undefined || method === "none") return text
+    if (rest.client_id !== url || method !== "private_key_jwt") return text
     if (!Array.isArray(supported) || !supported.includes("none")) return text
     delete rest.jwks_uri
     delete rest.jwks

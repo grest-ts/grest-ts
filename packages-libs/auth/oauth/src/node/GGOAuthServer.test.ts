@@ -794,6 +794,46 @@ describe("GGOAuthServer", () => {
         unchanged({...chatgpt, token_endpoint_auth_method: "none"})
         unchanged(chatgpt, "https://clients.example/oauth/other.json")
         expect(asPublicClient("not json", url)).toBe("not json")
+        // A shared secret is never turned into a public client: the provider refuses the document as it is.
+        unchanged({...chatgpt, token_endpoint_auth_method: "client_secret_basic"})
+    })
+
+    test("a metadata document is fetched once, capped, without following redirects, and resolved as a public client", async () => {
+        const at = (name: string) => `https://clients.example/oauth/${name}.json`
+        const document = (name: string, extra: object = {}) => JSON.stringify({
+            client_id: at(name),
+            client_name: name,
+            redirect_uris: [THIRD_PARTY_REDIRECT],
+            token_endpoint_auth_method: "none",
+            ...extra,
+        })
+        const served: Record<string, () => Response> = {
+            [at("keyed")]: () => new Response(document("keyed", {
+                token_endpoint_auth_method: "private_key_jwt",
+                token_endpoint_auth_methods_supported: ["none", "private_key_jwt"],
+                jwks_uri: "https://clients.example/oauth/jwks.json",
+            })),
+            [at("huge")]: () => new Response(document("huge", {padding: "x".repeat(6 * 1024)})),
+            [at("moved")]: () => new Response(null, {status: 302, headers: {location: at("keyed")}}),
+        }
+        const real = globalThis.fetch
+        const requests: Array<{url: string, init?: RequestInit}> = []
+        const stub = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+            const url = String(input)
+            if (!served[url]) return real(input, init)
+            requests.push({url, init})
+            return served[url]()
+        })
+        try {
+            expect(await oauth.clientName(at("keyed"))).toBe("keyed")
+            expect(await oauth.clientName(at("huge"))).toBeUndefined()
+            expect(await oauth.clientName(at("moved"))).toBeUndefined()
+            // Only the documents themselves were fetched: no key set, and the redirect wasn't followed.
+            expect(requests.map(r => r.url)).toEqual([at("keyed"), at("huge"), at("moved")])
+            expect(requests.every(r => r.init?.redirect === "manual" && r.init.signal instanceof AbortSignal)).toBe(true)
+        } finally {
+            stub.mockRestore()
+        }
     })
 
     test("deny sends access_denied to the client", async () => {
