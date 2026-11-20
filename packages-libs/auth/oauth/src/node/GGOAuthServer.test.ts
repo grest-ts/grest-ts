@@ -755,14 +755,22 @@ describe("GGOAuthServer", () => {
         expect(await oauth.clientName("https://elsewhere.example/oauth/client.json")).toBeUndefined()
     })
 
-    test("a client's metadata makes the server fetch nothing more: public clients only, no sector check", async () => {
+    test("no shared-secret clients, and no sector check: a client's metadata names at most its key set", async () => {
         const registered = (metadata: object) => fetch(`${ISSUER}/oauth/register`, {
             method: "POST", headers: {"content-type": "application/json"},
             body: JSON.stringify({redirect_uris: [THIRD_PARTY_REDIRECT], application_type: "web", ...metadata}),
         })
-        const keyed = await registered({token_endpoint_auth_method: "private_key_jwt", jwks_uri: "https://clients.example/jwks.json"})
-        expect(keyed.status).toBe(400)
-        expect(await keyed.text()).toContain("token_endpoint_auth_method")
+        const secret = await registered({token_endpoint_auth_method: "client_secret_basic"})
+        expect(secret.status).toBe(400)
+        expect(await secret.text()).toContain("token_endpoint_auth_method")
+        // As ChatGPT publishes itself. Its keys are read only when it authenticates, never at registration.
+        const keyed = await registered({
+            token_endpoint_auth_method: "private_key_jwt",
+            token_endpoint_auth_signing_alg: "RS256",
+            jwks_uri: "https://clients.invalid/jwks.json",
+            grant_types: ["authorization_code", "refresh_token"],
+        })
+        expect(keyed.status).toBe(201)
         // Its sector URL answers nowhere: checked, the registration would fail.
         const sectored = await registered({token_endpoint_auth_method: "none", sector_identifier_uri: "https://sector.invalid/uris.json"})
         expect(sectored.status).toBe(201)
