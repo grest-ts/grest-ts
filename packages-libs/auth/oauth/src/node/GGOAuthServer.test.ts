@@ -744,8 +744,13 @@ describe("GGOAuthServer", () => {
         }
     })
 
-    test("a client's name is read by its id; none for an unknown client or a document outside the allowed prefixes", async () => {
+    test("a client's name is read by its id, without control or format characters; none for an unknown client or a document outside the allowed prefixes", async () => {
         expect(await oauth.clientName(await register())).toBe("Claude")
+        const named = await fetch(`${ISSUER}/oauth/register`, {
+            method: "POST", headers: {"content-type": "application/json"},
+            body: JSON.stringify({client_name: "\u202eedualC\u0007 ", redirect_uris: [THIRD_PARTY_REDIRECT], token_endpoint_auth_method: "none", application_type: "web"}),
+        })
+        expect(await oauth.clientName((await named.json()).client_id)).toBe("edualC")
         expect(await oauth.clientName("nobody")).toBeUndefined()
         expect(await oauth.clientName("https://elsewhere.example/oauth/client.json")).toBeUndefined()
     })
