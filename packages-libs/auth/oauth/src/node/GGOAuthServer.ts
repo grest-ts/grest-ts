@@ -636,11 +636,9 @@ export class GGOAuthServer {
             scopes: OIDC_SCOPES,
             responseTypes: ["code"],
             pkce: {required: () => true},
-            // No shared secrets: a client is public, or signs with a key it publishes (`private_key_jwt`: its
-            // `jwks_uri` is the one further URL a client's metadata makes this server fetch, capped here; unlimited
-            // by default). `sector_identifier_uri` isn't checked (subjects are public, nothing uses it).
-            clientAuthMethods: ["none", "private_key_jwt"],
-            fetchResponseBodyLimits: {jwks_uri: 64 * 1024},
+            // A client's metadata names no further URL this server fetches: with public clients only, `jwks_uri` is
+            // never read, and `sector_identifier_uri` isn't checked (subjects are public, nothing uses it).
+            clientAuthMethods: ["none"],
             sectorIdentifierUriValidate: () => false,
             features: {
                 devInteractions: {enabled: false},
