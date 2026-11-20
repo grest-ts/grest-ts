@@ -744,6 +744,30 @@ describe("GGOAuthServer", () => {
         }
     })
 
+    test("a client's name is read by its id, without control or format characters; none for an unknown client or a document outside the allowed prefixes", async () => {
+        expect(await oauth.clientName(await register())).toBe("Claude")
+        const named = await fetch(`${ISSUER}/oauth/register`, {
+            method: "POST", headers: {"content-type": "application/json"},
+            body: JSON.stringify({client_name: "\u202eedualC\u0007 ", redirect_uris: [THIRD_PARTY_REDIRECT], token_endpoint_auth_method: "none", application_type: "web"}),
+        })
+        expect(await oauth.clientName((await named.json()).client_id)).toBe("edualC")
+        expect(await oauth.clientName("nobody")).toBeUndefined()
+        expect(await oauth.clientName("https://elsewhere.example/oauth/client.json")).toBeUndefined()
+    })
+
+    test("a client's metadata makes the server fetch nothing more: public clients only, no sector check", async () => {
+        const registered = (metadata: object) => fetch(`${ISSUER}/oauth/register`, {
+            method: "POST", headers: {"content-type": "application/json"},
+            body: JSON.stringify({redirect_uris: [THIRD_PARTY_REDIRECT], application_type: "web", ...metadata}),
+        })
+        const keyed = await registered({token_endpoint_auth_method: "private_key_jwt", jwks_uri: "https://clients.example/jwks.json"})
+        expect(keyed.status).toBe(400)
+        expect(await keyed.text()).toContain("token_endpoint_auth_method")
+        // Its sector URL answers nowhere: checked, the registration would fail.
+        const sectored = await registered({token_endpoint_auth_method: "none", sector_identifier_uri: "https://sector.invalid/uris.json"})
+        expect(sectored.status).toBe(201)
+    })
+
     test("deny sends access_denied to the client", async () => {
         const browser = new Browser()
         const login = await browser.page(authorizeUrl(await register(), THIRD_PARTY_REDIRECT, pkce().challenge))

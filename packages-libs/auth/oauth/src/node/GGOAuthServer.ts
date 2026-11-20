@@ -308,13 +308,26 @@ export class GGOAuthServer {
                 return {
                     grantId: g!.jti,
                     clientId: g!.clientId!,
-                    clientName: String(client?.clientName ?? g!.clientId),
+                    clientName: this.nameOf(g!.clientId!, client),
                     firstParty: this.firstParty.has(g!.clientId!),
                     data: g!.appData ?? {},
                     createdAt: (g!.iat ?? 0) * 1000,
                     lastUsedAt: usage?.lastUsedAt as number | undefined,
                 }
             }))
+    }
+
+    // undefined for an unknown client, or a metadata document that isn't allowed or can't be read.
+    public clientName = async (clientId: string): Promise<string | undefined> => {
+        const client = await this.provider().Client.find(clientId).catch(() => undefined)
+        return client && this.nameOf(clientId, client)
+    }
+
+    // A third party's name is its own claim, shown to people: without control and format characters (a bidi
+    // override would reorder the text around it).
+    private nameOf(clientId: string, client: {clientName?: unknown} | undefined): string {
+        return this.firstParty.get(clientId)?.name
+            ?? (String(client?.clientName ?? "").replace(/[\p{Cc}\p{Cf}]/gu, "").trim() || clientId)
     }
 
     // undefined once the grant is revoked or expired. One store read: never the client (a metadata document fetch).
@@ -398,7 +411,7 @@ export class GGOAuthServer {
             accountId: interaction.session?.accountId,
             client: {
                 clientId,
-                name: this.firstParty.get(clientId)?.name ?? String(client.clientName ?? clientId),
+                name: this.nameOf(clientId, client),
                 firstParty: this.firstParty.has(clientId),
                 redirectHosts: hosts,
                 loopbackOnly: hosts.length > 0 && hosts.every(h => /^(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/.test(h)),
@@ -505,7 +518,7 @@ export class GGOAuthServer {
     private clientOf(ctx: KoaContextWithOIDC): GGOAuthTokenClient {
         const client = ctx.oidc.client!
         const grant: Grant = ctx.oidc.entities.Grant!
-        const name = this.firstParty.get(client.clientId)?.name ?? String(client.clientName ?? client.clientId)
+        const name = this.nameOf(client.clientId, client)
         return {clientId: client.clientId, name, grant: {grantId: grant.jti, data: grant.appData ?? {}}}
     }
 
@@ -623,6 +636,10 @@ export class GGOAuthServer {
             scopes: OIDC_SCOPES,
             responseTypes: ["code"],
             pkce: {required: () => true},
+            // A client's metadata names no further URL this server fetches: with public clients only, `jwks_uri` is
+            // never read, and `sector_identifier_uri` isn't checked (subjects are public, nothing uses it).
+            clientAuthMethods: ["none"],
+            sectorIdentifierUriValidate: () => false,
             features: {
                 devInteractions: {enabled: false},
                 revocation: {enabled: true},

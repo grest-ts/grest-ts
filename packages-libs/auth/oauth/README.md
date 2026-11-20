@@ -151,6 +151,8 @@ than sending the client to sign in again.
 
 `listGrants(subject)` and `revokeGrant(subject, grantId)` back a "connected apps" page. Each grant has its client's
 name, its consent `data`, `createdAt` and `lastUsedAt`: when it last got tokens, so within one access-token lifetime of its last use.
+`clientName(clientId)` gives one client's name before any grant exists (undefined for an unknown client, or a metadata
+document that isn't allowed or can't be read).
 
 **Rows bound to a grant.** The app's own data that belongs to a grant and may change (unlike the grant's `data`)
 goes in the store under a model named in `grantBound` (e.g. `grantBound: ["AppProfile"]`), with `grantId` in its
@@ -193,6 +195,10 @@ provides the discovery handshake MCP clients run:
 | Client ID Metadata Document under `allowedUrlPrefixes` (https, default port) | `client_id` is its document URL, fetched by the server | Once per grant (one per resource URL) |
 | Loopback / CLI (no `application_type` declared → native) | Any port on `localhost`/`127.0.0.1` matches | **Every** authorization: any local process could claim the redirect |
 | Dynamic registration (opt-in) | `POST /oauth/register` | Once per grant (one per resource URL) |
+
+Every client is public (`token_endpoint_auth_method: "none"`, PKCE required). A client's metadata never makes the
+server fetch a second URL: `jwks_uri` is unused and `sector_identifier_uri` isn't checked, so the document itself
+(5 KB, 2.5 s, no redirects, no private addresses) is the only outbound request a client can cause.
 
 ### Login and consent pages
 
