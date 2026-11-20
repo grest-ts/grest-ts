@@ -744,6 +744,12 @@ describe("GGOAuthServer", () => {
         }
     })
 
+    test("a client's name is read by its id; none for an unknown client or a document outside the allowed prefixes", async () => {
+        expect(await oauth.clientName(await register())).toBe("Claude")
+        expect(await oauth.clientName("nobody")).toBeUndefined()
+        expect(await oauth.clientName("https://elsewhere.example/oauth/client.json")).toBeUndefined()
+    })
+
     test("deny sends access_denied to the client", async () => {
         const browser = new Browser()
         const login = await browser.page(authorizeUrl(await register(), THIRD_PARTY_REDIRECT, pkce().challenge))

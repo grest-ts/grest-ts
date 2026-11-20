@@ -317,6 +317,12 @@ export class GGOAuthServer {
             }))
     }
 
+    // undefined for an unknown client, or a metadata document that isn't allowed or can't be read.
+    public clientName = async (clientId: string): Promise<string | undefined> => {
+        const client = await this.provider().Client.find(clientId).catch(() => undefined)
+        return client && (this.firstParty.get(clientId)?.name ?? String(client.clientName ?? clientId))
+    }
+
     // undefined once the grant is revoked or expired. One store read: never the client (a metadata document fetch).
     public grant = async (subject: string, grantId: string): Promise<GGOAuthGrant | undefined> => {
         const grant: Grant | undefined = await this.provider().Grant.find(grantId)
