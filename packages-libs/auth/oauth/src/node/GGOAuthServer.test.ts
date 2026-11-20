@@ -6,7 +6,7 @@ import {GG_HTTP_REQUEST, GGHttpServer} from "@grest-ts/http"
 import {GG_TRACE} from "@grest-ts/trace"
 import {FORBIDDEN, IsArray, IsObject, IsString, NOT_AUTHORIZED} from "@grest-ts/schema"
 import {GGAuthAccessToken, HmacSigner, JwksVerifier, JwsSigningStrategy, type JwsSigner} from "@grest-ts/auth"
-import {ACCESS_TOKEN_JWKS_PATH, deriveEs256Jwk, GGOAuthServer, type GGOAuthInteraction, type GGOAuthResource, type GGOAuthTokenClient} from "./GGOAuthServer"
+import {ACCESS_TOKEN_JWKS_PATH, asPublicClient, deriveEs256Jwk, GGOAuthServer, type GGOAuthInteraction, type GGOAuthResource, type GGOAuthTokenClient} from "./GGOAuthServer"
 import type {GGDynamoDb} from "@grest-ts/db-dynamodb"
 import {InMemoryOAuthStore} from "./store/InMemoryOAuthStore"
 import {DynamoOAuthStore} from "./store/DynamoOAuthStore"
@@ -755,25 +755,85 @@ describe("GGOAuthServer", () => {
         expect(await oauth.clientName("https://elsewhere.example/oauth/client.json")).toBeUndefined()
     })
 
-    test("no shared-secret clients, and no sector check: a client's metadata names at most its key set", async () => {
+    test("a client's metadata makes the server fetch nothing more: public clients only, no sector check", async () => {
         const registered = (metadata: object) => fetch(`${ISSUER}/oauth/register`, {
             method: "POST", headers: {"content-type": "application/json"},
             body: JSON.stringify({redirect_uris: [THIRD_PARTY_REDIRECT], application_type: "web", ...metadata}),
         })
-        const secret = await registered({token_endpoint_auth_method: "client_secret_basic"})
-        expect(secret.status).toBe(400)
-        expect(await secret.text()).toContain("token_endpoint_auth_method")
-        // As ChatGPT publishes itself. Its keys are read only when it authenticates, never at registration.
-        const keyed = await registered({
-            token_endpoint_auth_method: "private_key_jwt",
-            token_endpoint_auth_signing_alg: "RS256",
-            jwks_uri: "https://clients.invalid/jwks.json",
-            grant_types: ["authorization_code", "refresh_token"],
-        })
-        expect(keyed.status).toBe(201)
+        const keyed = await registered({token_endpoint_auth_method: "private_key_jwt", jwks_uri: "https://clients.example/jwks.json"})
+        expect(keyed.status).toBe(400)
+        expect(await keyed.text()).toContain("token_endpoint_auth_method")
         // Its sector URL answers nowhere: checked, the registration would fail.
         const sectored = await registered({token_endpoint_auth_method: "none", sector_identifier_uri: "https://sector.invalid/uris.json"})
         expect(sectored.status).toBe(201)
+    })
+
+    test("a metadata document that prefers a key but also supports none is read as a public client, its key dropped", () => {
+        const url = "https://clients.example/oauth/client.json"
+        // As ChatGPT publishes itself.
+        const chatgpt = {
+            client_id: url,
+            client_name: "ChatGPT",
+            redirect_uris: ["https://clients.example/callback"],
+            token_endpoint_auth_method: "private_key_jwt",
+            token_endpoint_auth_methods_supported: ["none", "private_key_jwt"],
+            token_endpoint_auth_signing_alg: "RS256",
+            jwks_uri: "https://clients.example/oauth/jwks.json",
+        }
+        expect(JSON.parse(asPublicClient(JSON.stringify(chatgpt), url))).toEqual({
+            client_id: url,
+            client_name: "ChatGPT",
+            redirect_uris: ["https://clients.example/callback"],
+            token_endpoint_auth_method: "none",
+        })
+        const unchanged = (document: object, at = url) => expect(asPublicClient(JSON.stringify(document), at)).toBe(JSON.stringify(document))
+        // Key only: it stays what it says, and this server refuses it.
+        unchanged({...chatgpt, token_endpoint_auth_methods_supported: ["private_key_jwt"]})
+        unchanged({...chatgpt, token_endpoint_auth_methods_supported: undefined})
+        // Already public, or not the document of the client asked for.
+        unchanged({...chatgpt, token_endpoint_auth_method: "none"})
+        unchanged(chatgpt, "https://clients.example/oauth/other.json")
+        expect(asPublicClient("not json", url)).toBe("not json")
+        // A shared secret is never turned into a public client: the provider refuses the document as it is.
+        unchanged({...chatgpt, token_endpoint_auth_method: "client_secret_basic"})
+    })
+
+    test("a metadata document is fetched once, capped, without following redirects, and resolved as a public client", async () => {
+        const at = (name: string) => `https://clients.example/oauth/${name}.json`
+        const document = (name: string, extra: object = {}) => JSON.stringify({
+            client_id: at(name),
+            client_name: name,
+            redirect_uris: [THIRD_PARTY_REDIRECT],
+            token_endpoint_auth_method: "none",
+            ...extra,
+        })
+        const served: Record<string, () => Response> = {
+            [at("keyed")]: () => new Response(document("keyed", {
+                token_endpoint_auth_method: "private_key_jwt",
+                token_endpoint_auth_methods_supported: ["none", "private_key_jwt"],
+                jwks_uri: "https://clients.example/oauth/jwks.json",
+            })),
+            [at("huge")]: () => new Response(document("huge", {padding: "x".repeat(6 * 1024)})),
+            [at("moved")]: () => new Response(null, {status: 302, headers: {location: at("keyed")}}),
+        }
+        const real = globalThis.fetch
+        const requests: Array<{url: string, init?: RequestInit}> = []
+        const stub = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+            const url = String(input)
+            if (!served[url]) return real(input, init)
+            requests.push({url, init})
+            return served[url]()
+        })
+        try {
+            expect(await oauth.clientName(at("keyed"))).toBe("keyed")
+            expect(await oauth.clientName(at("huge"))).toBeUndefined()
+            expect(await oauth.clientName(at("moved"))).toBeUndefined()
+            // Only the documents themselves were fetched: no key set, and the redirect wasn't followed.
+            expect(requests.map(r => r.url)).toEqual([at("keyed"), at("huge"), at("moved")])
+            expect(requests.every(r => r.init?.redirect === "manual" && r.init.signal instanceof AbortSignal)).toBe(true)
+        } finally {
+            stub.mockRestore()
+        }
     })
 
     test("deny sends access_denied to the client", async () => {

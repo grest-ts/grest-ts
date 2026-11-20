@@ -636,12 +636,11 @@ export class GGOAuthServer {
             scopes: OIDC_SCOPES,
             responseTypes: ["code"],
             pkce: {required: () => true},
-            // No shared secrets: a client is public, or signs with a key it publishes (`private_key_jwt`: its
-            // `jwks_uri` is the one further URL a client's metadata makes this server fetch, capped here; unlimited
-            // by default). `sector_identifier_uri` isn't checked (subjects are public, nothing uses it).
-            clientAuthMethods: ["none", "private_key_jwt"],
-            fetchResponseBodyLimits: {jwks_uri: 64 * 1024},
+            // A client's metadata names no further URL this server fetches: with public clients only, `jwks_uri` is
+            // never read, and `sector_identifier_uri` isn't checked (subjects are public, nothing uses it).
+            clientAuthMethods: ["none"],
             sectorIdentifierUriValidate: () => false,
+            fetch: fetchAsPublicClient,
             features: {
                 devInteractions: {enabled: false},
                 revocation: {enabled: true},
@@ -859,6 +858,45 @@ export class GGOAuthServer {
 // "null" is every opaque origin (a custom-scheme redirect's, a sandboxed frame's), never one client's.
 function isClientOrigin(client: GGOAuthFirstPartyClient, origin: string): boolean {
     return origin !== "" && origin !== "null" && client.redirectUris.some(u => new URL(u).origin === origin)
+}
+
+const DOCUMENT_LIMIT = 5 * 1024
+
+// A metadata document may prefer a key and still list `none` as supported (ChatGPT's does): that client connects as
+// a public one, so its document is read as one. The provider's `fetch` is its only hook before validating a document;
+// with public clients only it fetches nothing else, and a feature that fetches more must not go through this cap.
+async function fetchAsPublicClient(url: string | URL, options?: RequestInit): Promise<Response> {
+    const response = await fetch(url, options)
+    if (response.status !== 200 || !response.body) return response
+    const chunks: Uint8Array[] = []
+    let size = 0
+    for await (const chunk of response.body as unknown as AsyncIterable<Uint8Array>) {
+        size += chunk.length
+        if (size > DOCUMENT_LIMIT) throw new Error("response too large")
+        chunks.push(chunk)
+    }
+    const text = Buffer.concat(chunks).toString()
+    const headers = new Headers(response.headers)
+    headers.delete("content-length")
+    headers.delete("content-encoding")
+    return new Response(asPublicClient(text, String(url)), {status: 200, headers})
+}
+
+export function asPublicClient(text: string, url: string): string {
+    let document: unknown
+    try {
+        document = JSON.parse(text)
+    } catch {
+        return text
+    }
+    if (typeof document !== "object" || document === null) return text
+    const {token_endpoint_auth_method: method, token_endpoint_auth_methods_supported: supported, ...rest} = document as Record<string, unknown>
+    if (rest.client_id !== url || method !== "private_key_jwt") return text
+    if (!Array.isArray(supported) || !supported.includes("none")) return text
+    delete rest.jwks_uri
+    delete rest.jwks
+    delete rest.token_endpoint_auth_signing_alg
+    return JSON.stringify({...rest, token_endpoint_auth_method: "none"})
 }
 
 function isAllowedDocumentUrl(clientId: string, prefixes: string[]): boolean {
