@@ -151,6 +151,8 @@ than sending the client to sign in again.
 
 `listGrants(subject)` and `revokeGrant(subject, grantId)` back a "connected apps" page. Each grant has its client's
 name, its consent `data`, `createdAt` and `lastUsedAt`: when it last got tokens, so within one access-token lifetime of its last use.
+`clientName(clientId)` gives one client's name before any grant exists (undefined for an unknown client, or a metadata
+document that isn't allowed or can't be read).
 
 **Rows bound to a grant.** The app's own data that belongs to a grant and may change (unlike the grant's `data`)
 goes in the store under a model named in `grantBound` (e.g. `grantBound: ["AppProfile"]`), with `grantId` in its
