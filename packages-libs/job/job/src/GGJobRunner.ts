@@ -230,15 +230,15 @@ class JobLoop {
     private async runBatches({limit, parallel, maxExtraRuns}: RunConfig, signal: AbortSignal): Promise<{rows: number, failed: number, batches: number}> {
         const totals = {rows: 0, failed: 0, batches: 0}
         for (let extra = 0; ; extra++) {
-            const {fetched, report} = await inJobBatchContext(() => this.runBatch(limit, parallel, signal))
-            totals.rows += report.rows
-            totals.failed += report.failed
+            const batch = await inJobBatchContext(() => this.runBatch(limit, parallel, signal))
+            totals.rows += batch.rows
+            totals.failed += batch.failed
             totals.batches++
-            if (signal.aborted || report.failed > 0 || fetched < limit || extra >= maxExtraRuns) return totals
+            if (signal.aborted || batch.failed > 0 || batch.fetched < limit || extra >= maxExtraRuns) return totals
         }
     }
 
-    private async runBatch(limit: number, parallel: number, signal: AbortSignal): Promise<{fetched: number, report: {rows: number, failed: number, durationMs: number}}> {
+    private async runBatch(limit: number, parallel: number, signal: AbortSignal): Promise<{fetched: number, rows: number, failed: number}> {
         const name = this.job.config.name
         const startedAt = performance.now()
         const rows = await this.job.getDataSet(limit)
@@ -258,7 +258,7 @@ class JobLoop {
         if (rows.length > 0) GGLog.info(this.job, "Job batch done", {job: name, ...report})
         await this.job.dataSetFinished?.(report)
             .catch(err => GGLog.warn(this.job, "Job dataSetFinished failed", {job: name, err: (err as Error).message}))
-        return {fetched: rows.length, report}
+        return {fetched: rows.length, ...report}
     }
 
     private runRow(row: unknown, signal: AbortSignal): Promise<boolean> {

@@ -128,7 +128,8 @@ from `@grest-ts/trace`.
 A unit of work's context is strict: a key can be set once in it, and a second `set()` throws, so two parts of one
 request can't silently overwrite each other's value. A key that must change mid-unit, like the trace, is declared
 `new GGContextKey(name, schema, {mutable: true})`. To scope a different value to part of the work, run that part in a
-child context instead.
+child context instead. A scope timer set inside a unit of work runs in that unit's context, so a repeating one that
+sets a key runs its body in a child context.
 
 A runtime runs compose and start in its root context, and **seals** it once running: `set()` on it throws. Code that
 still runs there later, such as a raw `setTimeout` or an emitter listener set up in compose, would otherwise leak what
