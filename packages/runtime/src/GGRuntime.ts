@@ -95,8 +95,13 @@ export abstract class GGRuntime {
             }
             this.state = GGRuntimeState.BOOTSTRAPPING;
             const root = new GGContext("Runtime");
-            // A timer set from the root (in compose or start) runs as a unit of work: its root is sealed by then.
-            this.scope.setTimerRunner(fn => GGContextStore.tryGetContext() === root ? runInFreshContext("TIMER", fn) : fn());
+            // A timer set from the root (in compose or start) runs as a unit of work: its root is sealed by then. One set
+            // from inside a unit runs each tick in a child of it, so ticks can't trip over each other's values.
+            this.scope.setTimerRunner(fn => {
+                const current = GGContextStore.tryGetContext();
+                if (current === root) return runInFreshContext("TIMER", fn);
+                return current ? new GGContext("TIMER", current, {strict: true}).run(fn) : fn();
+            });
             await root.run(async () => {
                 GG_TRACE.init();
                 // GGLog.info(this, "Runtime starting");

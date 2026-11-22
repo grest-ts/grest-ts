@@ -5,10 +5,13 @@ import {GGLocator} from "@grest-ts/locator"
 import {IsBoolean} from "@grest-ts/schema"
 import {GG_TRACE} from "@grest-ts/trace"
 
-export const SEALED_ROOT_PATH = "/sealed-root/probe"
+export const SEALED_ROOT_PREFIX = "/sealed-root"
+export const SEALED_ROOT_PATH = SEALED_ROOT_PREFIX + "/probe"
+export const SEALED_ROOT_TICKER_PATH = SEALED_ROOT_PREFIX + "/ticker"
 const MARK = new GGContextKey<boolean>("sealed-root-mark", IsBoolean)
 
-/** Work left running in the root context after start: a raw interval, and a scope timer set in compose. */
+/** Work left running in the root context after start (a raw interval, a scope timer set in compose), and a scope timer
+ *  a request starts. */
 export class SealedRootRuntime extends GGRuntime {
     public static readonly NAME = "sealed-root"
 
@@ -31,12 +34,24 @@ export class SealedRootRuntime extends GGRuntime {
             MARK.set(true)
         }, 20)
 
+        const tickerFires: {context?: string, traceId?: string, marked: boolean}[] = []
+        let requestTraceId: string | undefined
+
         const httpServer = new GGHttpServer()
         httpServer.registerRoute("GET", SEALED_ROOT_PATH, async (_req, res) => {
             res.writeHead(200, {"content-type": "application/json"})
-            res.end(JSON.stringify({raw, timerFires: timerFires.slice(-2), marked: MARK.has()}))
+            res.end(JSON.stringify({raw, timerFires: timerFires.slice(-2), tickerFires: tickerFires.slice(-2), requestTraceId, marked: MARK.has()}))
         })
-        httpServer.announce(SEALED_ROOT_PATH, "SealedRoot")
+        httpServer.registerRoute("POST", SEALED_ROOT_TICKER_PATH, async (_req, res) => {
+            requestTraceId = GG_TRACE.get()?.traceId
+            GGLocator.setInterval(() => {
+                tickerFires.push({context: GGContextStore.tryGetContext()?.name, traceId: GG_TRACE.get()?.traceId, marked: MARK.has()})
+                MARK.set(true)
+            }, 20)
+            res.writeHead(204)
+            res.end()
+        })
+        httpServer.announce(SEALED_ROOT_PREFIX, "SealedRoot")
     }
 }
 

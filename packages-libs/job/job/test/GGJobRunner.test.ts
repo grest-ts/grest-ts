@@ -1,7 +1,7 @@
 import {afterEach, beforeEach, describe, expect, test, vi} from "vitest"
 import {GGContext, GGContextKey} from "@grest-ts/context"
 import {GGLocatorScope} from "@grest-ts/locator"
-import {IsBoolean} from "@grest-ts/schema"
+import {IsBoolean, IsNumber} from "@grest-ts/schema"
 import {GG_TRACE, type TraceContext} from "@grest-ts/trace"
 import {GGLog} from "@grest-ts/logger"
 import {sleep} from "@grest-ts/common"
@@ -202,6 +202,28 @@ describe("GGJobRunner", () => {
         await vi.advanceTimersByTimeAsync(1_500)
 
         expect(marked).toEqual([false])
+    })
+
+    test("what getDataSet sets, that batch's rows see, and every batch sets it afresh", async () => {
+        const BATCH = new GGContextKey<number>("job-test-batch", IsNumber)
+        const pending = ["a", "b", "c", "d"]
+        const seen: number[] = []
+        let batches = 0
+        class BatchJob extends TestJob {
+            override async getDataSet(limit: number): Promise<string[]> {
+                BATCH.set(++batches)
+                return super.getDataSet(limit)
+            }
+        }
+        const job = new BatchJob({runOn: "everyInstance", limit: 2, maxExtraRuns: 1}, () => pending, async row => {
+            seen.push(BATCH.get())
+            pending.splice(pending.indexOf(row), 1)
+        })
+        newRunner(new GGInstanceLock(), "a").add(job).start()
+
+        await vi.advanceTimersByTimeAsync(1_500)
+
+        expect(seen).toEqual([1, 1, 2, 2])
     })
 
     test("a full batch runs again up to maxExtraRuns, in parallel up to `parallel`", async () => {

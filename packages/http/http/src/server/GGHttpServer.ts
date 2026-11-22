@@ -129,11 +129,11 @@ export class GGHttpServer {
                 res.end();
                 return;
             }
-            this.activeRequests++;
             const startTime = performance.now();
             let result: string | void;
             const resolved = req.method === 'OPTIONS' ? null : this.router.find(req.method as HTTPMethod, req.url ?? "");
             const route = resolved?.store as RouteStore | undefined;
+            this.activeRequests++;
             try {
                 const cors = corsResponseHeaders(req.headers.origin, this.cors, this._corsHeadersCache, this._corsExposeHeadersCache);
                 for (const name in cors) res.setHeader(name, cors[name]);
@@ -158,8 +158,9 @@ export class GGHttpServer {
                 }
             } catch (error) {
                 GGLog.error(this, error instanceof Error ? error : new Error(String(error)));
-                res.writeHead(500);
-                res.end();
+                result = "500";
+                if (res.headersSent) res.destroy();
+                else res.writeHead(500).end();
             } finally {
                 this.activeRequests--;
                 if (route) recordRequest(route.labels, result ?? String(res.statusCode), startTime);

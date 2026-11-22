@@ -71,8 +71,9 @@ The runner starts with the runtime. On teardown it stops new rows, waits for run
 
 Every run, scheduled or `run()`, gets a fresh context with no parent: it never runs in its caller's context. A
 `run()` continues its caller's trace as a span; a scheduled run starts a new one.
-What `getDataSet` sets in that context, its rows see. Each row runs in its own child context, as a span of the run's
-trace, so what one row sets the next one never sees.
+Each batch runs in a child context: what `getDataSet` sets there, that batch's rows see, and the next batch sets it
+afresh. Each row runs in its own child context, as a span of the run's trace, so what one row sets the next one never
+sees. These contexts are strict: a key can be set once in each.
 
 ## Where It Runs
 
