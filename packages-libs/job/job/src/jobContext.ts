@@ -9,7 +9,7 @@ export function inJobRunContext<T>(fn: () => Promise<T>, caller?: TraceContext):
 
 /** A row is a child span of its run, in its own context: what one row sets the next one never sees. */
 export function inJobRowContext<T>(fn: () => Promise<T>): Promise<T> {
-    return new GGContext("JOB-ROW", GGContextStore.tryGetContext(), true).run(() => {
+    return new GGContext("JOB-ROW", GGContextStore.tryGetContext(), {strict: true}).run(() => {
         GG_TRACE.startSpan()
         return fn()
     })

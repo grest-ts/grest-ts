@@ -8,7 +8,7 @@ import {GG_TRACE, type TraceContext} from "./GG_TRACE";
  * `mutable` can be set once, so two parts of the same unit can't silently overwrite each other's value.
  */
 export function runInFreshContext<R>(name: string, fn: () => R, trace?: TraceContext): R {
-    return new GGContext(name, undefined, true).run(() => {
+    return new GGContext(name, undefined, {strict: true}).run(() => {
         GG_TRACE.startSpan(trace);
         return fn();
     });

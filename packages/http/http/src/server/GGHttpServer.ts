@@ -131,33 +131,30 @@ export class GGHttpServer {
             }
             this.activeRequests++;
             const startTime = performance.now();
-            let route: RouteStore | undefined;
-            let result: string | void = undefined;
+            let result: string | void;
+            const resolved = req.method === 'OPTIONS' ? null : this.router.find(req.method as HTTPMethod, req.url ?? "");
+            const route = resolved?.store as RouteStore | undefined;
             try {
                 const cors = corsResponseHeaders(req.headers.origin, this.cors, this._corsHeadersCache, this._corsExposeHeadersCache);
                 for (const name in cors) res.setHeader(name, cors[name]);
                 if (req.method === 'OPTIONS') {
                     res.writeHead(204);
                     res.end();
-                } else {
-                    const resolved = this.router.find(req.method as HTTPMethod, req.url ?? "")
-                    if (resolved) {
-                        const matched = route = resolved.store as RouteStore;
-                        this.scope.ensureEntered();
-                        result = await runInFreshContext("REQ", () => {
-                            GG_HTTP_REQUEST.set({
-                                port: this._port ?? 0,
-                                method: req.method ?? "",
-                                path: req.url ?? "",
-                                pathTemplate: matched.path,
-                                ...requestPeer(req),
-                            });
-                            return (resolved.handler as unknown as GGHttpRouteHandler)(req, res);
+                } else if (resolved && route) {
+                    this.scope.ensureEntered();
+                    result = await runInFreshContext("REQ", () => {
+                        GG_HTTP_REQUEST.set({
+                            port: this._port ?? 0,
+                            method: req.method ?? "",
+                            path: req.url ?? "",
+                            pathTemplate: route.path,
+                            ...requestPeer(req),
                         });
-                    } else {
-                        res.writeHead(404);
-                        res.end();
-                    }
+                        return (resolved.handler as unknown as GGHttpRouteHandler)(req, res);
+                    });
+                } else {
+                    res.writeHead(404);
+                    res.end();
                 }
             } catch (error) {
                 GGLog.error(this, error instanceof Error ? error : new Error(String(error)));
@@ -165,7 +162,7 @@ export class GGHttpServer {
                 res.end();
             } finally {
                 this.activeRequests--;
-                if (route) recordRequest(route, result ?? String(res.statusCode), startTime);
+                if (route) recordRequest(route.labels, result ?? String(res.statusCode), startTime);
             }
         };
 
@@ -270,7 +267,7 @@ export class GGHttpServer {
             );
         }
         this._routeOwners.set(route, owner ?? path);
-        const store: RouteStore = {path, metricPath: route, ...labels}
+        const store: RouteStore = {path, labels: {...labels, path: route}}
         this.router.on(method as HTTPMethod, path, handler as unknown as findMyWay.Handler<findMyWay.HTTPVersion.V1>, store);
     }
 
@@ -334,19 +331,17 @@ export class GGHttpServer {
 
 interface RouteStore {
     path: string
-    metricPath: string
-    api: string
-    method: string
+    labels: {api: string, method: string, path: string}
 }
 
 export type GGHttpRequestCallback = (req: http.IncomingMessage, res: http.ServerResponse) => Promise<void>;
 /** A route handler that returns the `result` label of its request metric; the response status code when it returns nothing. */
 type GGHttpRouteHandler = (req: http.IncomingMessage, res: http.ServerResponse) => Promise<string | void>;
 
-function recordRequest(route: RouteStore, result: string, startTime: number): void {
+function recordRequest(labels: RouteStore["labels"], result: string, startTime: number): void {
     if (!GG_METRICS.has()) return;
-    GGHttpMetrics.requests.inc(1, {api: route.api, method: route.method, path: route.metricPath, result});
-    GGHttpMetrics.requestDuration.observe(performance.now() - startTime, {api: route.api, method: route.method, path: route.metricPath});
+    GGHttpMetrics.requests.inc(1, {...labels, result});
+    GGHttpMetrics.requestDuration.observe(performance.now() - startTime, labels);
 }
 
 /**

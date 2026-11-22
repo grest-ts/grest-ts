@@ -9,11 +9,13 @@ export class GGContext {
     private readonly strict: boolean
     private sealed = false
 
-    constructor(name: string, parent?: GGContext, strict: boolean = false) {
+    /** `strict`: a key that isn't `mutable` can be set once here. Units of work run strict; a long-lived client context
+     *  that updates its values (a refreshed token, a switched locale) doesn't. */
+    constructor(name: string, parent?: GGContext, options: {strict?: boolean} = {}) {
         this.name = name
         this.parent = parent
         this.values = new Map();
-        this.strict = strict
+        this.strict = options.strict ?? false
     }
 
     public get<T>(token: GGContextKey<T>): T {
@@ -23,7 +25,8 @@ export class GGContext {
     public set<T>(token: GGContextKey<T>, value: T): this {
         this.assertNotSealed(token)
         if (this.strict && !token.mutable && this.values.has(token.name)) {
-            throw new Error(`Context key '${token.name}' is already set in this request scope and cannot be re-set. Pass {mutable: true} to GGContextKey if it must be re-set (e.g. trace).`)
+            throw new Error(`Context key '${token.name}' is already set in context '${this.name}' and can't be set again there. Set it in a child `
+                + `context to scope another value to part of the work, or pass {mutable: true} to GGContextKey if it must change (like the trace).`)
         }
         this.values.set(token.name, value);
         return this;
