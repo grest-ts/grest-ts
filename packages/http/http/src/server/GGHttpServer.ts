@@ -14,7 +14,7 @@ import "../schema/GGWireContextKey.node.js";
 import {GGContractMethod} from "@grest-ts/schema";
 import {GGContext, GGContextStore, type GGTransportMiddleware} from "@grest-ts/context";
 import {GG_TRACE} from "@grest-ts/trace";
-import {GG_HTTP_REQUEST, httpRequestContext} from "./GG_HTTP_REQUEST";
+import {GG_HTTP_REQUEST, requestPeer} from "./GG_HTTP_REQUEST";
 // Forward declaration — actual type lives in @grest-ts/websocket to avoid circular dep.
 // GGHttpServer only stores the array; callers cast as needed. `contract` is absent for
 // byte-stream schemas (they carry no per-message methods).
@@ -143,7 +143,12 @@ export class GGHttpServer {
                         // must never land on the runtime's root, where every later request would inherit it.
                         await new GGContext("REQ", parentContext, true).run(() => {
                             GG_TRACE.init();
-                            GG_HTTP_REQUEST.set(httpRequestContext(req, this._port ?? 0));
+                            GG_HTTP_REQUEST.set({
+                                port: this._port ?? 0,
+                                method: req.method ?? "",
+                                path: req.url ?? "",
+                                ...requestPeer(req),
+                            });
                             return (resolved.handler as unknown as GGHttpRequestCallback)(req, res);
                         });
                     } else {

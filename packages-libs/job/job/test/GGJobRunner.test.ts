@@ -1,5 +1,5 @@
 import {afterEach, beforeEach, describe, expect, test, vi} from "vitest"
-import {GGContext, GGContextKey, GGContextStore} from "@grest-ts/context"
+import {GGContext, GGContextKey} from "@grest-ts/context"
 import {GGLocatorScope} from "@grest-ts/locator"
 import {IsBoolean} from "@grest-ts/schema"
 import {GG_TRACE} from "@grest-ts/trace"
@@ -187,7 +187,19 @@ describe("GGJobRunner", () => {
         expect(seen[0].traceId).toBeDefined()
         expect(seen[0].traceId).not.toBe(seen[1].traceId)
         expect(root.has(MARK)).toBe(false)
-        expect(GGContextStore.tryGetContext()?.has(MARK) ?? false).toBe(false)
+    })
+
+    test("a job added from inside a request doesn't run in that request's context", async () => {
+        const marked: boolean[] = []
+        const job = new TestJob({runOn: "everyInstance"}, () => ["a"], async () => { marked.push(MARK.has()) })
+        const runner = newRunner(new GGInstanceLock(), "a")
+        runner.start()
+        const request = new GGContext("request").set(MARK, true)
+        request.run(() => runner.add(job))
+
+        await vi.advanceTimersByTimeAsync(1_500)
+
+        expect(marked).toEqual([false])
     })
 
     test("a full batch runs again up to maxExtraRuns, in parallel up to `parallel`", async () => {

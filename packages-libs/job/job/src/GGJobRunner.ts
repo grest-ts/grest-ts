@@ -35,6 +35,7 @@ export class GGJobRunner {
     private readonly owner: string
     private readonly lock: GGLock
     private readonly scope: GGLocatorScope
+    private readonly parentContext = GGContextStore.tryGetContext()
     private readonly loops: JobLoop[] = []
     private started = false
     private stopped = false
@@ -53,7 +54,7 @@ export class GGJobRunner {
     add(...jobs: GGJob<any>[]): this {
         for (const job of jobs) {
             if (this.loops.some(l => l.job.config.name === job.config.name)) throw new Error(`Job ${job.config.name} added twice`)
-            const loop = new JobLoop(job, this.scope, this.lock, this.owner)
+            const loop = new JobLoop(job, this.scope, this.parentContext, this.lock, this.owner)
             this.loops.push(loop)
             if (this.started && !this.stopped) loop.start()
         }
@@ -97,7 +98,7 @@ class JobLoop {
 
     readonly job: GGJob<unknown>
     private readonly scope: GGLocatorScope
-    private readonly parentContext = GGContextStore.tryGetContext()
+    private readonly parentContext: GGContext | undefined
     private readonly lock: GGLock
     private readonly owner: string
     private timer?: NodeJS.Timeout
@@ -105,9 +106,10 @@ class JobLoop {
     private lastConfig?: RunConfig
     private readonly stopped = new AbortController()
 
-    constructor(job: GGJob<unknown>, scope: GGLocatorScope, lock: GGLock, owner: string) {
+    constructor(job: GGJob<unknown>, scope: GGLocatorScope, parentContext: GGContext | undefined, lock: GGLock, owner: string) {
         this.job = job
         this.scope = scope
+        this.parentContext = parentContext
         this.lock = lock
         this.owner = owner
     }
@@ -184,8 +186,7 @@ class JobLoop {
         return run
     }
 
-    // Like a request, a run and each of its rows get their own context: what one sets must not land on the runtime's
-    // root, where every later request and run would inherit it.
+    // What a run or a row sets must not land on the runtime's root, where every later request and run would inherit it.
     private runOnce(config: RunConfig, hold: boolean): Promise<GGJobRunResult> {
         return new GGContext("JOB", this.parentContext).run(() => {
             GG_TRACE.init()
@@ -266,10 +267,7 @@ class JobLoop {
         const job = this.job.config.name
         metric(() => GGJobMetrics.rowsInFlight.inc(1, {job}))
         try {
-            await GGContextStore.branch("JOB-ROW").run(() => {
-                GG_TRACE.init()
-                return this.job.processRow(row, signal)
-            })
+            await processJobRow(this.job, row, signal)
             metric(() => GGJobMetrics.rows.inc(1, {job, result: "OK"}))
             return true
         } catch (err) {
@@ -288,6 +286,14 @@ class JobLoop {
             return "<describeRow failed>"
         }
     }
+}
+
+/** @internal A row runs in its own context and trace, in the runner and in `runJobOnce` alike. */
+export function processJobRow<Row>(job: GGJob<Row>, row: Row, signal: AbortSignal): Promise<void> {
+    return new GGContext("JOB-ROW", GGContextStore.tryGetContext()).run(() => {
+        GG_TRACE.init()
+        return job.processRow(row, signal)
+    })
 }
 
 function metric(record: () => void): void {
