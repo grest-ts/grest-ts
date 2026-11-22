@@ -12,7 +12,7 @@ import {checkPermissionsAtStart} from "./checkers/checkPermissionsAtStart";
 import {checkWireConflicts} from "./checkers/checkWireConflicts";
 import "../schema/GGWireContextKey.node.js";
 import {GGContractMethod} from "@grest-ts/schema";
-import {GGContext, GGContextStore, type GGTransportMiddleware} from "@grest-ts/context";
+import {GGContext, type GGTransportMiddleware} from "@grest-ts/context";
 import {GG_TRACE} from "@grest-ts/trace";
 import {GG_HTTP_REQUEST, requestPeer} from "./GG_HTTP_REQUEST";
 // Forward declaration — actual type lives in @grest-ts/websocket to avoid circular dep.
@@ -121,7 +121,6 @@ export class GGHttpServer {
             teardown: this.teardown.bind(this)
         });
 
-        const parentContext = GGContextStore.tryGetContext();
         const handler = async (req: http.IncomingMessage, res: http.ServerResponse) => {
             if (this.teardownPromise) {
                 res.statusCode = HttpStatusCode.ServerTemporarilyNotAvailable503;
@@ -139,9 +138,8 @@ export class GGHttpServer {
                     const resolved = this.router.find(req.method as HTTPMethod, req.url ?? "")
                     if (resolved) {
                         this.scope.ensureEntered();
-                        // Every route, raw ones included, runs in its own context: a value set while handling it
-                        // must never land on the runtime's root, where every later request would inherit it.
-                        await new GGContext("REQ", parentContext, true).run(() => {
+                        // No parent, as websocket and IPC: a request inherits nothing another request or the runtime set.
+                        await new GGContext("REQ", undefined, true).run(() => {
                             GG_TRACE.init();
                             GG_HTTP_REQUEST.set({
                                 port: this._port ?? 0,
@@ -250,6 +248,7 @@ export class GGHttpServer {
         return this._registeredWebSocketSchemas;
     }
 
+    /** The handler runs in a fresh strict request context with `GG_TRACE` and `GG_HTTP_REQUEST` already set. */
     public registerRoute(method: HttpMethod, path: string, handler: GGHttpRequestCallback, owner?: string): void {
         const route = `${method} ${path}`;
         const existing = this._routeOwners.get(route);

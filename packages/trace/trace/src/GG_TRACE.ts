@@ -16,6 +16,14 @@ export class GGContextTraceKey extends GGContextKey<TraceContext> {
         this.set(this.getNew());
     }
 
+    /** A child span of the current trace (a new trace when there is none): same trace, new span, parented on it. */
+    public startSpan() {
+        const parent = this.get();
+        if (!parent) return this.init();
+        const spanId = GGContextTraceKey.generateTraceId();
+        this.set(Object.freeze({...parent, parentSpanId: parent.spanId, spanId, spanTimestamp: Date.now()}));
+    }
+
     public getNew(): TraceContext {
         const traceId = GGContextTraceKey.generateTraceId();
         const startTs = Date.now()
