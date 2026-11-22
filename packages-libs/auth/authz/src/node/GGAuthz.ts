@@ -1,11 +1,10 @@
-import {FORBIDDEN, NOT_AUTHORIZED} from "@grest-ts/schema"
+import {FORBIDDEN} from "@grest-ts/schema"
 import {applyPlan} from "./applyPlan"
 import {expandActions, expandRoles, MAX_DEPTH, type OnUnknownAction} from "../shared/chain"
 import {type AttributeLookup, evalCondition, evalConditional, evalConditions, isResourceKey} from "./conditions"
-import {actionName, assertWorkloadTypes, type GGAuthzActionRef, validatedModels} from "../shared/defineAuthz"
-import {APPROVAL_REQUIRED, INSUFFICIENT_SCOPE, STEP_UP_REQUIRED} from "../shared/authzErrors"
+import {assertWorkloadTypes, validatedModels} from "../shared/defineAuthz"
+import {INSUFFICIENT_SCOPE, STEP_UP_REQUIRED} from "../shared/authzErrors"
 import {explain} from "./explain"
-import {GG_AUTHZ_SUBJECT} from "./GG_AUTHZ_SUBJECT"
 import {GGAuthzRn} from "../shared/GGAuthzRn"
 import {
     type GGAuthzApprovalLevel,
@@ -28,7 +27,6 @@ import {
     type GGAuthzRemedy,
     type GGAuthzRequest,
     type GGAuthzRestrictionSet,
-    type GGAuthzResourceProperties,
     type GGAuthzRule,
     type GGAuthzSubject,
     IsGGAuthzApprovalLevel,
@@ -51,16 +49,28 @@ export interface GGAuthzResolver {
 /** Caller-computed facts; `undefined` = unknown, which makes a deny apply and an allow not grant. */
 export type GGAuthzFacts = (name: string, request: GGAuthzRequest) => boolean | undefined
 
-/** Obtains approval for an `allow-with-approval` decision, or throws. */
-export type GGAuthzApprovals = (request: GGAuthzRequest, decision: GGAuthzDecision) => Promise<void>
+/** The error a refusal throws. */
+export type GGAuthzRefusal = "FORBIDDEN" | "STEP_UP_REQUIRED" | "INSUFFICIENT_SCOPE"
+
+/** What a decision means for the caller (`GGAuthz.verdict`); a refusal's `error` carries the explanation. */
+export type GGAuthzVerdict =
+    | {outcome: "allowed"}
+    | {outcome: "approval-required", level: GGAuthzApprovalLevel}
+    | {outcome: "denied", refusal: GGAuthzRefusal, error: InstanceType<typeof FORBIDDEN | typeof STEP_UP_REQUIRED | typeof INSUFFICIENT_SCOPE>}
+
+/** May `subject` hand out `actions` on `on`: does it hold each through its own bindings. */
+export interface GGAuthzHoldRequest {
+    subject: GGAuthzSubject
+    actions: readonly string[]
+    on: string
+    context?: Record<string, unknown>
+}
 
 export interface GGAuthzConfig {
     model: GGAuthzModel
     policies: GGAuthzPolicies
     resolver: GGAuthzResolver
     facts?: GGAuthzFacts
-    /** Without it, `authorize` throws APPROVAL_REQUIRED for decisions that need approval. */
-    approvals?: GGAuthzApprovals
     /** A resource attribute holding an approval level that raises a workload's (e.g. a critical secret). */
     approvalLevelAttribute?: string
     /**
@@ -198,7 +208,6 @@ export class GGAuthz {
     private readonly model: GGAuthzModel
     private readonly resolver: GGAuthzResolver
     private readonly facts: GGAuthzFacts
-    private readonly approvals?: GGAuthzApprovals
     private readonly stepUpFacts: readonly string[]
     private readonly actions = new Map<string, Set<string>>()
     private readonly roles: Map<string, Set<string>>
@@ -224,7 +233,6 @@ export class GGAuthz {
         assertWorkloadTypes(this.model)
         const policies = IsGGAuthzPolicies.parse(config.policies)
         this.resolver = config.resolver
-        this.approvals = config.approvals
         this.stepUpFacts = this.model.stepUpFacts ?? []
         this.facts = config.facts ?? ((name, request) => {
             const value = request.context?.[name]
@@ -293,31 +301,22 @@ export class GGAuthz {
         }
     }
 
-    /** Authorizes the subject in GG_AUTHZ_SUBJECT; throws on denial. */
-    public async authorize(action: GGAuthzActionRef, resource: string, context?: Record<string, unknown>, properties?: GGAuthzResourceProperties): Promise<GGAuthzDecision> {
-        const request = GGAuthz.request(action, resource, context, properties)
-        return this.enforce(request, await this.evaluate(request))
+    /** The request `canGrant` decides for `binding`: the model's `grantAction` on its scope, or `grant` when the model
+     *  has none (then no-escalation alone decides). */
+    public grantRequest(subject: GGAuthzSubject, binding: GGAuthzBinding, context?: Record<string, unknown>): GGAuthzRequest {
+        return {subject, action: {name: this.model.grantAction ?? "grant"}, resource: {type: GGAuthzRn.type(binding.on) ?? "", id: binding.on}, context}
     }
 
-    /** The request `authorize` decides for the subject in GG_AUTHZ_SUBJECT. */
-    public static request(action: GGAuthzActionRef, resource: string, context?: Record<string, unknown>, properties?: GGAuthzResourceProperties): GGAuthzRequest {
-        return {subject: contextSubject(), action: {name: actionName(action)}, resource: {type: GGAuthzRn.type(resource) ?? "", id: resource, properties}, context}
-    }
-
-    /** `canGrant` for the subject in GG_AUTHZ_SUBJECT, throwing like `authorize`. */
-    public async authorizeGrant(binding: GGAuthzBinding, context?: Record<string, unknown>): Promise<GGAuthzDecision> {
-        const subject = contextSubject()
-        const action = this.model.grantAction ?? "grant"
-        const request: GGAuthzRequest = {subject, action: {name: action}, resource: {type: GGAuthzRn.type(binding.on) ?? "", id: binding.on}, context}
-        const decision = await this.canGrant({subject, binding, context})
-        try {
-            const allowed = await this.enforce(request, decision)
-            grantDecisions.set(allowed, {action, decision})
-            return allowed
-        } catch (e) {
-            if (e instanceof Object) grantDecisions.set(e, {action, decision})
-            throw e
+    /** What `decision` (of `request`) means for the caller: allowed, allowed once approved, or the error a refusal throws. */
+    public static verdict(request: GGAuthzRequest, decision: GGAuthzDecision): GGAuthzVerdict {
+        if (decision.decision) {
+            return decision.context.outcome === "allow-with-approval" ? {outcome: "approval-required", level: decision.context.approval!} : {outcome: "allowed"}
         }
+        const debug = {debugMessage: explain(request, decision)}
+        const remedy = decision.context.remedy
+        if (remedy?.scopes) return {outcome: "denied", refusal: "INSUFFICIENT_SCOPE", error: new INSUFFICIENT_SCOPE({scopes: remedy.scopes}, debug)}
+        if (remedy?.stepUp) return {outcome: "denied", refusal: "STEP_UP_REQUIRED", error: new STEP_UP_REQUIRED({facts: remedy.stepUp}, debug)}
+        return {outcome: "denied", refusal: "FORBIDDEN", error: new FORBIDDEN(debug)}
     }
 
     /** The AuthZEN evaluation: never throws for a denial. */
@@ -361,10 +360,16 @@ export class GGAuthz {
         return {...granted, context: {...granted.context, reasons: [...granted.context.reasons, held]}}
     }
 
-    /** Which of `actions` the subject doesn't hold on `on`, as `canGrant` asks of a grantor; unknown actions are skipped. */
-    public async missingActions(request: {subject: GGAuthzSubject, actions: readonly string[], on: string, context?: Record<string, unknown>}): Promise<string[] | undefined> {
-        if (!this.inPartition(request.on)) return undefined
-        return this.missingWith(request.subject, request.actions.filter(a => this.actions.has(a)), request.on, request.context, this.loader())
+    /** May the subject hand out `actions` on `on`: it holds each through its own bindings (no-escalation, as `canGrant`
+     *  asks of a role's actions). A denial's `escalation` reason lists the missing ones; unknown actions are skipped. */
+    public async canHold(request: GGAuthzHoldRequest): Promise<GGAuthzDecision> {
+        const {subject, on, context} = request
+        if (!this.inPartition(on)) return invalid(`Invalid resource name ${on}`)
+        const actions = request.actions.filter(a => this.actions.has(a))
+        const missing = await this.missingWith(subject, actions, on, context, this.loader())
+        if (!missing) return invalid(`Scope chain of ${on} is cyclic or deeper than ${MAX_DEPTH}`)
+        if (missing.length) return deny([{layer: "grant", kind: "escalation", on, actions: missing, message: `${missing.join(", ")} not held on ${on}`}])
+        return {decision: true, context: {outcome: "allow", reasons: [{layer: "grant", kind: "binding", on, actions, message: `holds ${actions.join(", ")} on ${on}`}]}}
     }
 
     private async missingWith(subject: GGAuthzSubject, actions: readonly string[], on: string, context: Record<string, unknown> | undefined, loader: Loader): Promise<string[] | undefined> {
@@ -423,22 +428,6 @@ export class GGAuthz {
         // isn't a level fails the row's decision, so it's left out too.
         if (p.workload && this.levelKey) exclude.push({conditions: [{key: this.levelKey, op: "present", value: true}, {key: this.levelKey, op: "notIn", value: GG_AUTHZ_APPROVAL_LEVELS.slice(0, HUMANS_ONLY)}]})
         return Object.keys(values).length ? {action, resourceType, include, exclude, require, values} : {action, resourceType, include, exclude, require}
-    }
-
-    /** Throws for `decision` (of `request`) as `authorize` does. */
-    public async enforce(request: GGAuthzRequest, decision: GGAuthzDecision): Promise<GGAuthzDecision> {
-        if (!decision.decision) {
-            const debug = {debugMessage: explain(request, decision)}
-            const remedy = decision.context.remedy
-            if (remedy?.scopes) throw new INSUFFICIENT_SCOPE({scopes: remedy.scopes}, debug)
-            if (remedy?.stepUp) throw new STEP_UP_REQUIRED({facts: remedy.stepUp}, debug)
-            throw new FORBIDDEN(debug)
-        }
-        if (decision.context.outcome === "allow-with-approval") {
-            if (!this.approvals) throw new APPROVAL_REQUIRED({action: request.action.name, resource: request.resource.id, level: decision.context.approval!}, {debugMessage: explain(request, decision)})
-            await this.approvals(request, decision)
-        }
-        return decision
     }
 
     private inPartition(rn: string): boolean {
@@ -772,21 +761,6 @@ function matchers(resources: string[] | undefined): Matcher[] | undefined {
 
 function checkedChain(chain: string[]): string[] | undefined {
     return chain.length > MAX_DEPTH || new Set(chain).size !== chain.length ? undefined : chain
-}
-
-// Keyed by the decision `authorizeGrant` returned or the error it threw: fresh objects, read right after the await.
-const grantDecisions = new WeakMap<object, {action: string, decision: GGAuthzDecision}>()
-
-/** The grant action and the engine's decision behind what `authorizeGrant` returned or threw. For
- *  `GGAuthzAuthority`'s `decided`; not exported from the package. */
-export function grantDecided(outcome: unknown): {action: string, decision: GGAuthzDecision} | undefined {
-    return outcome instanceof Object ? grantDecisions.get(outcome) : undefined
-}
-
-function contextSubject(): GGAuthzSubject {
-    const subject = GG_AUTHZ_SUBJECT.get()
-    if (!subject) throw new NOT_AUTHORIZED({debugMessage: "No GG_AUTHZ_SUBJECT in context"})
-    return subject
 }
 
 function invalid(message: string): GGAuthzDecision {
