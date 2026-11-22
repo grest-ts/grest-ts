@@ -221,10 +221,10 @@ describe("GGAuthzAuthority", () => {
     test("a list requirement passes; the handler filters with allowed()", async () => {
         await as(ann, () => authority.authorize(Vm.ReadWorkspace.list(), {}))
         const refs = ["ann-1", "dan-1", "nope"].map(id => ({type: Vm.types.workspace, id}))
-        expect(await as(ann, () => authority.allowed(refs.map(resource => ({action: Vm.ReadWorkspace, resource}))))).toEqual([true, false, false])
+        expect(await as(ann, () => authority.allowed(Vm.ReadWorkspace, refs))).toEqual([true, false, false])
         expect(await as(ann, () => authority.can(Vm.ReadWorkspace, {type: Vm.types.workspace, id: "cleo-1", properties: {ancestors: [rn.web, rn.org]}}))).toBe(true)
         const ws = (id: string) => ({type: Vm.types.workspace, id})
-        expect(await as(ann, () => authority.allowed([{action: Vm.ReadWorkspace, resource: ws("ann-1")}, {action: Vm.StopWorkspace, resource: ws("cleo-1")}, {action: Vm.StopWorkspace, resource: ws("nope")}])))
+        expect(await as(ann, () => authority.allowedEach([{action: Vm.ReadWorkspace, resource: ws("ann-1")}, {action: Vm.StopWorkspace, resource: ws("cleo-1")}, {action: Vm.StopWorkspace, resource: ws("nope")}])))
             .toEqual([true, false, false])
     })
 
@@ -309,7 +309,7 @@ describe("GGAuthzAuthority", () => {
             const ref = {type: Vm.types.workspace, id: "ann-1"}
             expect(await as(ann, () => authority.can(Vm.StopWorkspace, ref))).toBe(true)
             expect(await as(agent, () => authority.can(Vm.StopWorkspace, ref))).toBe(false)
-            expect(await as(agent, () => authority.allowed([{action: Vm.StopWorkspace, resource: ref}]))).toEqual([false])
+            expect(await as(agent, () => authority.allowed(Vm.StopWorkspace, [ref]))).toEqual([false])
             expect(needs).toEqual([])
         })
 
@@ -356,7 +356,7 @@ describe("GGAuthzAuthority", () => {
             await guarded.authorize(stop, {workspaceId: "ann-1"})
             await guarded.assert(Vm.StopWorkspace, ws)
             await guarded.can(Vm.StartWorkspace, ws)
-            await guarded.allowed([{action: Vm.ReadWorkspace, resource: ws}])
+            await guarded.allowed(Vm.ReadWorkspace, [ws])
         })
         await inCall(ann, {api: "VmApi", method: "status"}, [], () => guarded.can(Vm.ReadWorkspace, ws))
         // Outside a contract call there is nothing to compare with.

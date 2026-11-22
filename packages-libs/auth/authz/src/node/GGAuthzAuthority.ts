@@ -161,12 +161,17 @@ export class GGAuthzAuthority {
     }
 
     public async can(action: GGAuthzActionRef, resource: GGAuthzResourceRef): Promise<boolean> {
-        return (await this.allowed([{action, resource}]))[0]!
+        return (await this.allowedEach([{action, resource}]))[0]!
     }
 
-    /** One decision per check, e.g. to filter a listing. A resource that doesn't resolve is not allowed, and neither is
-     *  one a workload may act on only once approved: only `assert` asks for approvals. */
-    public async allowed(checks: readonly {action: GGAuthzActionRef, resource: GGAuthzResourceRef}[]): Promise<boolean[]> {
+    /** One decision per resource, e.g. to filter a listing. A resource that doesn't resolve is not allowed, and neither
+     *  is one a workload may act on only once approved: only `assert` asks for approvals. */
+    public allowed(action: GGAuthzActionRef, resources: readonly GGAuthzResourceRef[]): Promise<boolean[]> {
+        return this.allowedEach(resources.map(resource => ({action, resource})))
+    }
+
+    /** `allowed` for checks of different actions, in one batch. */
+    public async allowedEach(checks: readonly {action: GGAuthzActionRef, resource: GGAuthzResourceRef}[]): Promise<boolean[]> {
         const subject = this.subject()
         const names = checks.map(c => this.checked(c.action))
         const engine = await this.config.engine(this.config.tenant())

@@ -328,7 +328,7 @@ In handlers, for checks that depend on the row's state:
 | | |
 |---|---|
 | `assert(action, {type, id}, {hidden?, key?})` | throws like a requirement |
-| `can(action, ref)`, `allowed([{action, resource}])` | booleans; for a workload, an allow that needs approval is `false` |
+| `can(action, ref)`, `allowed(action, refs)`, `allowedEach([{action, resource}])` | booleans; for a workload, an allow that needs approval is `false` |
 | `authorizeGrant(role, principal, ref)` | `canGrant` for the caller (§6), throwing like `assert` |
 | `assertHolds(actions, ref, {context?, displayMessage?})` | `FORBIDDEN` unless the caller holds every one of `actions` there, e.g. before handing them out |
 
