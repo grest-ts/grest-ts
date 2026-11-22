@@ -1,5 +1,8 @@
 import {afterEach, beforeEach, describe, expect, test, vi} from "vitest"
+import {GGContext, GGContextKey} from "@grest-ts/context"
 import {GGLocatorScope} from "@grest-ts/locator"
+import {IsBoolean} from "@grest-ts/schema"
+import {GG_TRACE} from "@grest-ts/trace"
 import {GGLog} from "@grest-ts/logger"
 import {sleep} from "@grest-ts/common"
 import {GGMetricsLoader, GG_METRICS} from "@grest-ts/metrics"
@@ -25,6 +28,8 @@ function newRunner(lock: GGLock, owner: string): GGJobRunner {
 function stubLock(overrides: Partial<GGLock> = {}): GGLock {
     return {acquire: async () => true, renew: async () => true, release: async () => {}, ...overrides}
 }
+
+const MARK = new GGContextKey<boolean>("job-test-mark", IsBoolean)
 
 const untilAborted = (_row: string, signal: AbortSignal) => new Promise<void>(r => signal.addEventListener("abort", () => r()))
 
@@ -165,6 +170,36 @@ describe("GGJobRunner", () => {
         await vi.advanceTimersByTimeAsync(1_500)
 
         expect(job.processed).toEqual(["good"])
+    })
+
+    test("each row runs in its own context and trace, so what one sets reaches neither the next row nor the runtime's root", async () => {
+        const seen: {marked: boolean, traceId?: string}[] = []
+        const job = new TestJob({runOn: "everyInstance"}, () => ["a", "b"], async () => {
+            seen.push({marked: MARK.has(), traceId: GG_TRACE.get()?.traceId})
+            MARK.set(true)
+        })
+        const root = new GGContext("root")
+        root.run(() => newRunner(new GGInstanceLock(), "a").add(job).start())
+
+        await vi.advanceTimersByTimeAsync(1_500)
+
+        expect(seen.map(s => s.marked)).toEqual([false, false])
+        expect(seen[0].traceId).toBeDefined()
+        expect(seen[0].traceId).not.toBe(seen[1].traceId)
+        expect(root.has(MARK)).toBe(false)
+    })
+
+    test("a job added from inside a request doesn't run in that request's context", async () => {
+        const marked: boolean[] = []
+        const job = new TestJob({runOn: "everyInstance"}, () => ["a"], async () => { marked.push(MARK.has()) })
+        const runner = newRunner(new GGInstanceLock(), "a")
+        runner.start()
+        const request = new GGContext("request").set(MARK, true)
+        request.run(() => runner.add(job))
+
+        await vi.advanceTimersByTimeAsync(1_500)
+
+        expect(marked).toEqual([false])
     })
 
     test("a full batch runs again up to maxExtraRuns, in parallel up to `parallel`", async () => {

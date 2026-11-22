@@ -12,7 +12,9 @@ import {checkPermissionsAtStart} from "./checkers/checkPermissionsAtStart";
 import {checkWireConflicts} from "./checkers/checkWireConflicts";
 import "../schema/GGWireContextKey.node.js";
 import {GGContractMethod} from "@grest-ts/schema";
-import type {GGTransportMiddleware} from "@grest-ts/context";
+import {GGContext, GGContextStore, type GGTransportMiddleware} from "@grest-ts/context";
+import {GG_TRACE} from "@grest-ts/trace";
+import {GG_HTTP_REQUEST, requestPeer} from "./GG_HTTP_REQUEST";
 // Forward declaration — actual type lives in @grest-ts/websocket to avoid circular dep.
 // GGHttpServer only stores the array; callers cast as needed. `contract` is absent for
 // byte-stream schemas (they carry no per-message methods).
@@ -119,6 +121,7 @@ export class GGHttpServer {
             teardown: this.teardown.bind(this)
         });
 
+        const parentContext = GGContextStore.tryGetContext();
         const handler = async (req: http.IncomingMessage, res: http.ServerResponse) => {
             if (this.teardownPromise) {
                 res.statusCode = HttpStatusCode.ServerTemporarilyNotAvailable503;
@@ -135,7 +138,19 @@ export class GGHttpServer {
                 } else {
                     const resolved = this.router.find(req.method as HTTPMethod, req.url ?? "")
                     if (resolved) {
-                        await (resolved.handler as unknown as GGHttpRequestCallback)(req, res);
+                        this.scope.ensureEntered();
+                        // Every route, raw ones included, runs in its own context: a value set while handling it
+                        // must never land on the runtime's root, where every later request would inherit it.
+                        await new GGContext("REQ", parentContext, true).run(() => {
+                            GG_TRACE.init();
+                            GG_HTTP_REQUEST.set({
+                                port: this._port ?? 0,
+                                method: req.method ?? "",
+                                path: req.url ?? "",
+                                ...requestPeer(req),
+                            });
+                            return (resolved.handler as unknown as GGHttpRequestCallback)(req, res);
+                        });
                     } else {
                         res.writeHead(404);
                         res.end();
