@@ -1,6 +1,8 @@
+import {GGContext, GGContextStore} from "@grest-ts/context"
 import {GGLocator, GGLocatorKey, GGLocatorServiceType, type GGLocatorScope} from "@grest-ts/locator"
 import {GGLog} from "@grest-ts/logger"
 import {GG_METRICS} from "@grest-ts/metrics"
+import {GG_TRACE} from "@grest-ts/trace"
 import {type GGLock, newLockOwner, withLock} from "@grest-ts/lock"
 import type {GGJob} from "./GGJob"
 import {GGJobMetrics} from "./GGJobMetrics"
@@ -95,6 +97,7 @@ class JobLoop {
 
     readonly job: GGJob<unknown>
     private readonly scope: GGLocatorScope
+    private readonly parentContext = GGContextStore.tryGetContext()
     private readonly lock: GGLock
     private readonly owner: string
     private timer?: NodeJS.Timeout
@@ -181,7 +184,16 @@ class JobLoop {
         return run
     }
 
-    private async runOnce(config: RunConfig, hold: boolean): Promise<GGJobRunResult> {
+    // Like a request, a run and each of its rows get their own context: what one sets must not land on the runtime's
+    // root, where every later request and run would inherit it.
+    private runOnce(config: RunConfig, hold: boolean): Promise<GGJobRunResult> {
+        return new GGContext("JOB", this.parentContext).run(() => {
+            GG_TRACE.init()
+            return this.runInContext(config, hold)
+        })
+    }
+
+    private async runInContext(config: RunConfig, hold: boolean): Promise<GGJobRunResult> {
         const name = this.job.config.name
         const signal = this.stopped.signal
         const startedAt = Date.now()
@@ -254,7 +266,10 @@ class JobLoop {
         const job = this.job.config.name
         metric(() => GGJobMetrics.rowsInFlight.inc(1, {job}))
         try {
-            await this.job.processRow(row, signal)
+            await GGContextStore.branch("JOB-ROW").run(() => {
+                GG_TRACE.init()
+                return this.job.processRow(row, signal)
+            })
             metric(() => GGJobMetrics.rows.inc(1, {job, result: "OK"}))
             return true
         } catch (err) {
