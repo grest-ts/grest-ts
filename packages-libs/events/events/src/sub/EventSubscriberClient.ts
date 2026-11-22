@@ -188,7 +188,7 @@ export class EventSubscriberClient<TEventMap> {
                     source: `events:${queue}`
                 });
                 return this.handler(validatedMessage, receivedMessage);
-            }, {trace: validatedMessage.trace});
+            }, validatedMessage.trace);
             if (success) {
                 await this.adapter.deleteMessage(receivedMessage.receiptHandle)
             }

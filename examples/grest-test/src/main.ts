@@ -56,6 +56,8 @@ import {GGIssueKey} from "@grest-ts/schema";
 
 GGIssueKey.setLocalizer(GGIntlTypeLocalizer)
 
+export const RAW_METRICS_PROBE_PATH = "/raw/metrics-probe"
+
 export class MainRuntime extends GGRuntime {
 
     public static readonly NAME = "configTest"
@@ -130,6 +132,14 @@ export class MainRuntime extends GGRuntime {
             .ws(WsFeaturePermissionsApi, new WsFeaturePermissionsService().handleConnection)
             .ws(MessagingSocket, new ChatMessagingService().handle)
             .ws(PresenceSocket, new ChatPresenceService().handle)
+
+        httpServer.registerRoute("GET", RAW_METRICS_PROBE_PATH + "/:status", async (req, res) => {
+            const status = req.url!.split("/").pop()!
+            if (status === "throw") throw new Error("raw metrics probe failed")
+            res.writeHead(Number(status))
+            res.end()
+        }, "RawProbe")
+        httpServer.announce(RAW_METRICS_PROBE_PATH, "RawProbe")
 
         GGOpenApiDocs.register({http: httpServer, title: "Grest Test API", version: "1.0.0", specPath: "/openapi.json", docsPath: "/docs"});
 

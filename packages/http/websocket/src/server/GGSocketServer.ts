@@ -348,7 +348,7 @@ export class GGSocketServer<Query, TSocket extends ServerSocket = GGSocket> {
                     ws.close(4001, "Connection rejected");
                 }
             }
-        }, {strict: true});
+        });
     }
 
     /**

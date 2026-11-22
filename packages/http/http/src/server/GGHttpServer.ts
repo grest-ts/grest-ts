@@ -15,6 +15,8 @@ import {GGContractMethod} from "@grest-ts/schema";
 import type {GGTransportMiddleware} from "@grest-ts/context";
 import {runInFreshContext} from "@grest-ts/trace";
 import {GG_HTTP_REQUEST, requestPeer} from "./GG_HTTP_REQUEST";
+import {GG_METRICS} from "@grest-ts/metrics";
+import {GGHttpMetrics} from "./GGHttpMetrics";
 // Forward declaration — actual type lives in @grest-ts/websocket to avoid circular dep.
 // GGHttpServer only stores the array; callers cast as needed. `contract` is absent for
 // byte-stream schemas (they carry no per-message methods).
@@ -128,6 +130,9 @@ export class GGHttpServer {
                 return;
             }
             this.activeRequests++;
+            const startTime = performance.now();
+            let route: RouteStore | undefined;
+            let result: string | void = undefined;
             try {
                 const cors = corsResponseHeaders(req.headers.origin, this.cors, this._corsHeadersCache, this._corsExposeHeadersCache);
                 for (const name in cors) res.setHeader(name, cors[name]);
@@ -137,17 +142,18 @@ export class GGHttpServer {
                 } else {
                     const resolved = this.router.find(req.method as HTTPMethod, req.url ?? "")
                     if (resolved) {
+                        const matched = route = resolved.store as RouteStore;
                         this.scope.ensureEntered();
-                        await runInFreshContext("REQ", () => {
+                        result = await runInFreshContext("REQ", () => {
                             GG_HTTP_REQUEST.set({
                                 port: this._port ?? 0,
                                 method: req.method ?? "",
                                 path: req.url ?? "",
-                                pathTemplate: (resolved.store as RouteStore).path,
+                                pathTemplate: matched.path,
                                 ...requestPeer(req),
                             });
-                            return (resolved.handler as unknown as GGHttpRequestCallback)(req, res);
-                        }, {strict: true});
+                            return (resolved.handler as unknown as GGHttpRouteHandler)(req, res);
+                        });
                     } else {
                         res.writeHead(404);
                         res.end();
@@ -159,6 +165,7 @@ export class GGHttpServer {
                 res.end();
             } finally {
                 this.activeRequests--;
+                if (route) recordRequest(route, result ?? String(res.statusCode), startTime);
             }
         };
 
@@ -247,8 +254,13 @@ export class GGHttpServer {
         return this._registeredWebSocketSchemas;
     }
 
-    /** The handler runs in a fresh strict request context with `GG_TRACE` and `GG_HTTP_REQUEST` already set. */
+    /** The handler runs in a fresh request context with `GG_TRACE` and `GG_HTTP_REQUEST` already set. */
     public registerRoute(method: HttpMethod, path: string, handler: GGHttpRequestCallback, owner?: string): void {
+        this._registerRoute(method, path, handler, owner, {api: owner ?? "raw", method: path});
+    }
+
+    /** @internal Called by setupRoutes(): a contract route labels its metrics with its api and method, and returns its RPC result type. */
+    public _registerRoute(method: HttpMethod, path: string, handler: GGHttpRouteHandler, owner: string | undefined, labels: {api: string, method: string}): void {
         const route = `${method} ${path}`;
         const existing = this._routeOwners.get(route);
         if (existing !== undefined) {
@@ -258,7 +270,7 @@ export class GGHttpServer {
             );
         }
         this._routeOwners.set(route, owner ?? path);
-        const store: RouteStore = {path}
+        const store: RouteStore = {path, metricPath: route, ...labels}
         this.router.on(method as HTTPMethod, path, handler as unknown as findMyWay.Handler<findMyWay.HTTPVersion.V1>, store);
     }
 
@@ -322,9 +334,20 @@ export class GGHttpServer {
 
 interface RouteStore {
     path: string
+    metricPath: string
+    api: string
+    method: string
 }
 
 export type GGHttpRequestCallback = (req: http.IncomingMessage, res: http.ServerResponse) => Promise<void>;
+/** A route handler that returns the `result` label of its request metric; the response status code when it returns nothing. */
+type GGHttpRouteHandler = (req: http.IncomingMessage, res: http.ServerResponse) => Promise<string | void>;
+
+function recordRequest(route: RouteStore, result: string, startTime: number): void {
+    if (!GG_METRICS.has()) return;
+    GGHttpMetrics.requests.inc(1, {api: route.api, method: route.method, path: route.metricPath, result});
+    GGHttpMetrics.requestDuration.observe(performance.now() - startTime, {api: route.api, method: route.method, path: route.metricPath});
+}
 
 /**
  * How long a browser may reuse a preflight result. Without it browsers fall back to their

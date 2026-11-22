@@ -6,12 +6,9 @@ import http from "http";
 import {GGLocator} from "@grest-ts/locator";
 import {ClientHttpRouteToRpcTransformServerCodec, GGHttpCodec, GGHttpSchema} from "../schema/GGHttpSchema";
 import {ERROR, GGContractApiDefinition, GGContractImplementation, GGContractMethod, GGPermissionChecker, OK, SERVER_ERROR} from "@grest-ts/schema";
-import {HttpMethod} from "@grest-ts/common";
 import {GG_DISCOVERY} from "@grest-ts/discovery";
 import type {GGTransportMiddleware} from "@grest-ts/context";
 import {GG_COOKIE_WRITES} from "../schema/GGCookie";
-import {GG_METRICS} from "@grest-ts/metrics";
-import {GGHttpMetrics} from "./GGHttpMetrics";
 import {GGHttpServer} from "./GGHttpServer";
 import {GGLog} from "@grest-ts/logger";
 import {GGHttpPermissionsChecker} from "../schema/GGHttpPermissionsChecker";
@@ -99,10 +96,9 @@ function setupRoutes<TContract extends GGContractApiDefinition>(
             middlewares: [...apiMiddlewares, ...(config.middlewares ?? [])]
         })
         const cookieWriteNames = new Set((codec.updatesCookies ?? []).map(k => k.name))
-        server.registerRoute(codec.method, pathPrefix + codec.path, async (req: http.IncomingMessage, res: http.ServerResponse): Promise<void> => {
+        server._registerRoute(codec.method, pathPrefix + codec.path, async (req: http.IncomingMessage, res: http.ServerResponse): Promise<string> => {
             GG_COOKIE_WRITES.set(cookieWriteNames);
-            const startTime = performance.now()
-            let rpcResult: ERROR<string, unknown> | OK<unknown> | undefined
+            let rpcResult: ERROR<string, unknown> | OK<unknown>
             try {
                 const rawInput = await requestParser.readRequest(req)
                 await permissionsChecker.assert(httpSchema.name, methodName, scopes)
@@ -123,33 +119,8 @@ function setupRoutes<TContract extends GGContractApiDefinition>(
                 rpcResult = ERROR.fromUnknown(error)
                 await requestParser.sendResponse(res, rpcResult) // Does not throw
                 GGLog.error(httpSchema, rpcResult)
-            } finally {
-                metrics(rpcResult?.type, httpSchema.name, codec.method, pathPrefix, codec.path, startTime)
             }
-        }, `${httpSchema.name}.${methodName}`)
-    }
-}
-
-function metrics(
-    resultType: string | undefined,
-    apiName: string,
-    method: HttpMethod,
-    pathPrefix: string,
-    pathSuffix: string,
-    startTime: number
-) {
-    if (GG_METRICS.has()) {
-        const path = method + " " + pathPrefix + pathSuffix;
-        GGHttpMetrics.requests.inc(1, {
-            api: apiName,
-            method: pathSuffix,
-            path: path,
-            result: resultType ?? "unknown"
-        });
-        GGHttpMetrics.requestDuration.observe(performance.now() - startTime, {
-            api: apiName,
-            method: pathSuffix,
-            path: path
-        });
+            return rpcResult.type
+        }, `${httpSchema.name}.${methodName}`, {api: httpSchema.name, method: codec.path})
     }
 }
