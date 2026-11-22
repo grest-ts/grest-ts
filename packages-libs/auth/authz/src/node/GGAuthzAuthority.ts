@@ -118,7 +118,7 @@ export class GGAuthzAuthority {
         this.resources.assertLoaders(contracts)
     }
 
-    /** The row a requirement of this call was decided on (else a fresh read); NOT_FOUND when it doesn't exist. */
+    /** The row as this call read it, e.g. when its requirement was decided; NOT_FOUND when it doesn't exist. */
     public row<T>(type: string, id: string): Promise<T> {
         return this.resources.row<T>(type, id)
     }
@@ -205,6 +205,7 @@ export class GGAuthzAuthority {
     public async assertHolds(actions: readonly GGAuthzActionRef[], resource: GGAuthzResourceRef, options?: {context?: Record<string, unknown>, displayMessage?: string}): Promise<void> {
         const subject = this.subject()
         const tenant = this.config.tenant()
+        if (resource.type === this.config.tenantType && resource.id !== tenant) throw new NOT_FOUND({displayMessage: "Not found", debugMessage: `${resource.type} ${resource.id} not found`})
         const engine = await this.config.engine(tenant)
         // A scope, not a row: decided on its RN, so it holds also where the row is gone (e.g. undoing a stale assignment).
         const resolved = {type: resource.type, id: resource.id, rn: this.resources.rnOf(resource.type, resource.id), tenant, properties: resource.properties ?? {ancestors: []}}

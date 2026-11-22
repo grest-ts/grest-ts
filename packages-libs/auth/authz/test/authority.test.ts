@@ -212,6 +212,20 @@ describe("GGAuthzAuthority", () => {
         expect(calls).toBe(2)
     })
 
+    test("a miss isn't kept: a handler that creates the row then decides on it reads it again", async () => {
+        workspaceLoads.length = 0
+        await inCall(authority, ann, {api: "VmApi", method: "create"}, [], undefined, async () => {
+            expect(await authority.properties(Vm.types.workspace, "new-1")).toBeUndefined()
+            workspaces["new-1"] = rn.web
+            try {
+                await authority.assert(Vm.StopWorkspace, {type: Vm.types.workspace, id: "new-1"})
+            } finally {
+                delete workspaces["new-1"]
+            }
+        })
+        expect(workspaceLoads).toEqual(["new-1", "new-1"])
+    })
+
     test("a context source names the resource", async () => {
         await as({type: "user", id: "dan"}, () => check(authority, Vm.StopWorkspace.onContext("callingWorkspace"), {}))
         expect(FORBIDDEN.is(await fail(as(ann, () => check(authority, Vm.StopWorkspace.onContext("callingWorkspace"), {}))))).toBe(true)

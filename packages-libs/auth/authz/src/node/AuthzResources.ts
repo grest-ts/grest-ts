@@ -136,7 +136,8 @@ export class AuthzResources {
         return {type: resource.type, id: resource.id, rn, tenant, properties}
     }
 
-    // Within a call, one read of each row: its requirements, the handler's checks and `row` see the same one.
+    // Within a call, one read of each row: its requirements, the handler's checks and `row` see the same one. A miss isn't
+    // kept: the handler may create the row and then decide on it.
     private read(tenant: string, type: string, id: string): Promise<GGAuthzLoaded | undefined> {
         const loader = this.loaders.get(type)
         if (!loader) throw new Error(`No loader registered for ${type}`)
@@ -146,7 +147,10 @@ export class AuthzResources {
         const key = `${tenant} ${type} ${id}`
         let row = rows.get(key)
         if (!row) {
-            rows.set(key, row = Promise.resolve(loader(tenant, id)).catch(e => {
+            rows.set(key, row = Promise.resolve(loader(tenant, id)).then(loaded => {
+                if (!loaded) rows.delete(key)
+                return loaded
+            }, e => {
                 rows.delete(key)
                 throw e
             }))
