@@ -12,12 +12,12 @@ import {GGLog} from "@grest-ts/logger";
 import {GG_WS_CONNECTION} from "./GG_WS_CONNECTION";
 import {GGWebSocketMetrics} from "./GGWebSocketMetrics";
 import {Message, MessageType} from "../socket/SocketMessage";
-import {GG_TRACE} from "@grest-ts/trace";
+import {runInFreshContext} from "@grest-ts/trace";
 import {GGSocket, GGSocketLogger, GGSocketMetrics, type GGHeartbeatConfig} from "../socket/GGSocket";
 import {GGLocator, GGLocatorScope} from "@grest-ts/locator";
 import {GG_METRICS} from "@grest-ts/metrics";
 import {withTimeout} from "@grest-ts/common";
-import {GGContext, type GGInbound, type GGTransportMiddleware} from "@grest-ts/context";
+import {GGContext, GGContextStore, type GGInbound, type GGTransportMiddleware} from "@grest-ts/context";
 import {GG_DISCOVERY} from "@grest-ts/discovery";
 import {GGHttpServer, requestPeer} from "@grest-ts/http";
 import {GGRawSocket} from "../socket/GGRawSocket";
@@ -237,9 +237,8 @@ export class GGSocketServer<Query, TSocket extends ServerSocket = GGSocket> {
     private _onConnection = async (ws: WebSocket, req: http.IncomingMessage) => {
         const connectionLabels = {api: this.apiName, path: this.path};
 
-        const context = new GGContext("ws-connection", undefined, true);
-        await context.run(async () => {
-            GG_TRACE.init()
+        await runInFreshContext("ws-connection", async () => {
+            const context = GGContextStore.getContext();
             GG_WS_CONNECTION.set({port: this.http.port, path: this.path, ...requestPeer(req)})
             try {
                 // Parse and validate query parameters
@@ -349,7 +348,7 @@ export class GGSocketServer<Query, TSocket extends ServerSocket = GGSocket> {
                     ws.close(4001, "Connection rejected");
                 }
             }
-        });
+        }, {strict: true});
     }
 
     /**

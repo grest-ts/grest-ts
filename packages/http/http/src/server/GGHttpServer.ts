@@ -12,8 +12,8 @@ import {checkPermissionsAtStart} from "./checkers/checkPermissionsAtStart";
 import {checkWireConflicts} from "./checkers/checkWireConflicts";
 import "../schema/GGWireContextKey.node.js";
 import {GGContractMethod} from "@grest-ts/schema";
-import {GGContext, type GGTransportMiddleware} from "@grest-ts/context";
-import {GG_TRACE} from "@grest-ts/trace";
+import type {GGTransportMiddleware} from "@grest-ts/context";
+import {runInFreshContext} from "@grest-ts/trace";
 import {GG_HTTP_REQUEST, requestPeer} from "./GG_HTTP_REQUEST";
 // Forward declaration — actual type lives in @grest-ts/websocket to avoid circular dep.
 // GGHttpServer only stores the array; callers cast as needed. `contract` is absent for
@@ -138,17 +138,16 @@ export class GGHttpServer {
                     const resolved = this.router.find(req.method as HTTPMethod, req.url ?? "")
                     if (resolved) {
                         this.scope.ensureEntered();
-                        // No parent, as websocket and IPC: a request inherits nothing another request or the runtime set.
-                        await new GGContext("REQ", undefined, true).run(() => {
-                            GG_TRACE.init();
+                        await runInFreshContext("REQ", () => {
                             GG_HTTP_REQUEST.set({
                                 port: this._port ?? 0,
                                 method: req.method ?? "",
                                 path: req.url ?? "",
+                                pathTemplate: (resolved.store as RouteStore).path,
                                 ...requestPeer(req),
                             });
                             return (resolved.handler as unknown as GGHttpRequestCallback)(req, res);
-                        });
+                        }, {strict: true});
                     } else {
                         res.writeHead(404);
                         res.end();
@@ -259,7 +258,8 @@ export class GGHttpServer {
             );
         }
         this._routeOwners.set(route, owner ?? path);
-        this.router.on(method as HTTPMethod, path, handler as unknown as findMyWay.Handler<findMyWay.HTTPVersion.V1>);
+        const store: RouteStore = {path}
+        this.router.on(method as HTTPMethod, path, handler as unknown as findMyWay.Handler<findMyWay.HTTPVersion.V1>, store);
     }
 
     public async start(): Promise<void> {
@@ -318,6 +318,10 @@ export class GGHttpServer {
         this._onTeardown.push(callback);
         return this;
     }
+}
+
+interface RouteStore {
+    path: string
 }
 
 export type GGHttpRequestCallback = (req: http.IncomingMessage, res: http.ServerResponse) => Promise<void>;

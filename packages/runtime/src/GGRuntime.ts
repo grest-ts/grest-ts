@@ -1,8 +1,8 @@
 import {withTimeout, enumOf, type Values} from "@grest-ts/common";
 import {GGLog} from "@grest-ts/logger";
 import {GGLocator, GGLocatorLifecycleCallbacks, GGLocatorScope} from "@grest-ts/locator";
-import {GGContext} from "@grest-ts/context";
-import {GG_TRACE} from "@grest-ts/trace";
+import {GGContext, GGContextStore} from "@grest-ts/context";
+import {GG_TRACE, runInFreshContext} from "@grest-ts/trace";
 import {GG_DISCOVERY} from "@grest-ts/discovery";
 
 export interface GGRuntimeConfig {
@@ -94,7 +94,10 @@ export abstract class GGRuntime {
                 throw new Error("Runtime already started!");
             }
             this.state = GGRuntimeState.BOOTSTRAPPING;
-            await new GGContext("Runtime").run(async () => {
+            const root = new GGContext("Runtime");
+            // A timer set from the root (in compose or start) runs as a unit of work: its root is sealed by then.
+            this.scope.setTimerRunner(fn => GGContextStore.tryGetContext() === root ? runInFreshContext("TIMER", fn) : fn());
+            await root.run(async () => {
                 GG_TRACE.init();
                 // GGLog.info(this, "Runtime starting");
                 try {
@@ -135,6 +138,7 @@ export abstract class GGRuntime {
                     this.state = GGRuntimeState.STARTING;
                     await this.callStartHandlers();
                     this.state = GGRuntimeState.RUNNING;
+                    root.seal();
                     GGLog.info(this, "Runtime running");
                 } catch (err) {
                     this.scope.setLifecycleOwner(undefined);
