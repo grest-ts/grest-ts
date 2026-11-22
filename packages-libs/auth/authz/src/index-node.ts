@@ -8,8 +8,10 @@ export type {
     GGAuthzApprovalNeed,
     GGAuthzAuthorityConfig,
     GGAuthzCall,
+    GGAuthzDecided,
     GGAuthzLoaded,
     GGAuthzLoader,
+    GGAuthzRefusal,
     GGAuthzResolvedResource,
     GGAuthzResourceRef,
 } from "./node/GGAuthzAuthority"

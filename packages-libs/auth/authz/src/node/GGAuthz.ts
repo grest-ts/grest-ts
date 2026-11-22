@@ -309,7 +309,15 @@ export class GGAuthz {
         const subject = contextSubject()
         const action = this.model.grantAction ?? "grant"
         const request: GGAuthzRequest = {subject, action: {name: action}, resource: {type: GGAuthzRn.type(binding.on) ?? "", id: binding.on}, context}
-        return this.enforce(request, await this.canGrant({subject, binding, context}))
+        const decision = await this.canGrant({subject, binding, context})
+        try {
+            const allowed = await this.enforce(request, decision)
+            grantDecisions.set(allowed, {action, decision})
+            return allowed
+        } catch (e) {
+            if (e instanceof Object) grantDecisions.set(e, {action, decision})
+            throw e
+        }
     }
 
     /** The AuthZEN evaluation: never throws for a denial. */
@@ -764,6 +772,15 @@ function matchers(resources: string[] | undefined): Matcher[] | undefined {
 
 function checkedChain(chain: string[]): string[] | undefined {
     return chain.length > MAX_DEPTH || new Set(chain).size !== chain.length ? undefined : chain
+}
+
+// Keyed by the decision `authorizeGrant` returned or the error it threw: fresh objects, read right after the await.
+const grantDecisions = new WeakMap<object, {action: string, decision: GGAuthzDecision}>()
+
+/** The grant action and the engine's decision behind what `authorizeGrant` returned or threw. For
+ *  `GGAuthzAuthority`'s `decided`; not exported from the package. */
+export function grantDecided(outcome: unknown): {action: string, decision: GGAuthzDecision} | undefined {
+    return outcome instanceof Object ? grantDecisions.get(outcome) : undefined
 }
 
 function contextSubject(): GGAuthzSubject {

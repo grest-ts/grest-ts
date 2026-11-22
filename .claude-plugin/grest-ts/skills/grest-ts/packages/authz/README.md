@@ -334,7 +334,9 @@ In handlers, for checks that depend on the row's state:
 Pass `properties` when the handler already holds the row. Optional config: `approvals(need)`
 obtains an approval or throws; `hidden(resource, action)` answers `NOT_FOUND` per resource;
 `explainForbidden` replaces a bare `FORBIDDEN` with one that says why; `undeclared(call, action)`
-reports a handler deciding an action its method's requirements don't name. When an approval is for another
+reports a handler deciding an action its method's requirements don't name; `decided(event)` hears each
+decision `assert`, `authorize`, `approvalNeed` and `authorizeGrant` make (`outcome` `allowed`, `approval-needed`
+or `denied` with its `refusal` and `hidden`), for audit, and never changes the answer. When an approval is for another
 resource than the one decided (a create's new row), `registerApprovalKey(action, (input, resource)
 => ({type, id}))` names it; `APPROVAL_REQUIRED` then carries it as `key`.
 

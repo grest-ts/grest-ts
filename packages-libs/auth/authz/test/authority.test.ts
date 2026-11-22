@@ -2,7 +2,18 @@ import type {GGAuthorityHandler} from "@grest-ts/http"
 import {GGContractClass, GGPermissionChecker, IsObject, IsString} from "@grest-ts/schema"
 import {FORBIDDEN, NOT_AUTHORIZED, NOT_FOUND} from "@grest-ts/schema"
 import {describe, expect, test} from "vitest"
-import {APPROVAL_REQUIRED, GGAuthz, GGAuthzAuthority, GGAuthzMemoryResolver, type GGAuthzApprovalNeed, type GGAuthzAuthorityConfig, type GGAuthzSubject} from "../src/index-node"
+import {
+    APPROVAL_REQUIRED,
+    GGAuthz,
+    GGAuthzAuthority,
+    GGAuthzMemoryResolver,
+    type GGAuthzApprovalNeed,
+    type GGAuthzAuthorityConfig,
+    type GGAuthzDecided,
+    type GGAuthzSubject,
+    INSUFFICIENT_SCOPE,
+    STEP_UP_REQUIRED,
+} from "../src/index-node"
 import {as} from "./util"
 import {data, Git, model, Org, policies, rn, Secrets, Vm} from "./world"
 
@@ -109,23 +120,54 @@ describe("GGAuthzAuthority", () => {
         expect(FORBIDDEN.is(await fail(as(ann, () => explaining.authorize(Vm.StopWorkspace.on("workspaceId"), {workspaceId: "dan-1"}))))).toBe(true)
     })
 
-    test("denied hears every refusal, hidden or not, before it is explained; can/allowed and allows never reach it", async () => {
-        const heard: string[] = []
+    test("decided hears each decision once, with its outcome and refusal, before a refusal is explained; can/allowed never reach it", async () => {
+        const heard: GGAuthzDecided[] = []
         const auditing = new GGAuthzAuthority({
             partition: "acme", tenantType: Org.types.org, tenant: () => "acme", engine: async () => engine,
             hidden: r => r.id === "cleo-1",
             explainForbidden: async () => new FORBIDDEN({displayMessage: "why"}),
-            denied: (action, r, hidden, decision) => {
-                heard.push(`${action} ${r.id} ${hidden} ${decision.decision}`)
+            decided: event => {
+                heard.push(event)
                 throw new Error("audit down")
             },
         })
         auditing.register(Vm.types.workspace, (_tenant, id) => workspaces[id] ? {properties: {ancestors: [workspaces[id]!, rn.org]}} : undefined)
-        expect(FORBIDDEN.is(await fail(as(ann, () => auditing.authorize(Vm.StopWorkspace.on("workspaceId"), {workspaceId: "dan-1"}))))).toBe(true)
+        const call = {api: "VmApi", method: "stop"}
+        const secret = {type: Secrets.types.secret, id: "env", properties: {ancestors: [rn.ws("ann-1"), rn.web, rn.org]}}
+        const scoped: GGAuthzSubject = {type: "client", id: "ci-tool", properties: {onBehalfOf: {type: "user", id: "ann"}, scopes: ["workspaces:read"]}}
+        // A wire sets a new subject per request, and the call is that request's.
+        const err = await fail(as({...ann}, () => auditing.authorize(Vm.StopWorkspace.on("workspaceId"), {workspaceId: "dan-1"}, call)))
+        expect(FORBIDDEN.is(err) && err.context?.displayMessage).toBe("why")
         expect(NOT_FOUND.is(await fail(as(ann, () => auditing.authorize(Vm.StopWorkspace.on("workspaceId"), {workspaceId: "cleo-1"}))))).toBe(true)
         await as(ann, () => auditing.authorize(Vm.StopWorkspace.on("workspaceId"), {workspaceId: "ann-1"}))
+        expect(STEP_UP_REQUIRED.is(await fail(as(ann, () => auditing.assert(Secrets.Write, secret))))).toBe(true)
+        expect(INSUFFICIENT_SCOPE.is(await fail(as(scoped, () => auditing.assert(Vm.StopWorkspace, {type: Vm.types.workspace, id: "ann-1"}))))).toBe(true)
         expect(await as(ann, () => auditing.can(Vm.StopWorkspace, {type: Vm.types.workspace, id: "dan-1"}))).toBe(false)
-        expect(heard).toEqual([`${Vm.StopWorkspace.name} dan-1 false false`, `${Vm.StopWorkspace.name} cleo-1 true false`])
+        expect(heard.map(e => [e.action, e.resource.id, e.call?.method, e.outcome, e.outcome === "denied" && e.refusal, e.outcome === "denied" && e.hidden, e.decision.decision])).toEqual([
+            [Vm.StopWorkspace.name, "dan-1", "stop", "denied", "FORBIDDEN", false, false],
+            [Vm.StopWorkspace.name, "cleo-1", undefined, "denied", "FORBIDDEN", true, false],
+            [Vm.StopWorkspace.name, "ann-1", undefined, "allowed", false, false, true],
+            [Secrets.Write.name, "env", undefined, "denied", "STEP_UP_REQUIRED", false, false],
+            [Vm.StopWorkspace.name, "ann-1", undefined, "denied", "INSUFFICIENT_SCOPE", false, false],
+        ])
+    })
+
+    test("decided hears authorizeGrant: the grant action, role and principal; an async listener's rejection is ignored", async () => {
+        const heard: GGAuthzDecided[] = []
+        const auditing = new GGAuthzAuthority({
+            partition: "acme", tenantType: Org.types.org, tenant: () => "acme", engine: async () => engine,
+            decided: async event => {
+                heard.push(event)
+                throw new Error("audit down")
+            },
+        })
+        auditing.register(Org.types.project, (_tenant, id) => id === "web" ? {properties: {ancestors: [rn.org]}} : undefined)
+        await as(ann, () => auditing.authorizeGrant("viewer", "user:ben", {type: Org.types.project, id: "web"}))
+        expect(FORBIDDEN.is(await fail(as(ann, () => auditing.authorizeGrant("admin", "user:ben", {type: Org.types.project, id: "web"}))))).toBe(true)
+        expect(heard.map(e => [e.action, e.resource.rn, e.grant, e.outcome, e.outcome === "denied" && e.refusal, e.decision.decision])).toEqual([
+            [model.grantAction ?? "grant", rn.web, {role: "viewer", principal: "user:ben"}, "allowed", false, true],
+            [model.grantAction ?? "grant", rn.web, {role: "admin", principal: "user:ben"}, "denied", "FORBIDDEN", false],
+        ])
     })
 
     test("a row is loaded once per request: every requirement part and the handler's row() share it", async () => {
@@ -249,6 +291,14 @@ describe("GGAuthzAuthority", () => {
             expect(await as(agent, () => authority.can(Vm.StopWorkspace, ref))).toBe(false)
             expect(await as(agent, () => authority.allowed(Vm.StopWorkspace, [ref]))).toEqual([false])
             expect(needs).toEqual([])
+        })
+
+        test("decided hears an allow that needs an approval as approval-needed, with its level", async () => {
+            const heard: GGAuthzDecided[] = []
+            const a = new GGAuthzAuthority({partition: "acme", tenantType: Org.types.org, tenant: () => "acme", engine: async () => raising, decided: e => { heard.push(e) }})
+            a.register(Vm.types.workspace, () => ({properties: {ancestors: [rn.web, rn.org]}}))
+            expect(APPROVAL_REQUIRED.is(await fail(as(agent, () => a.authorize(Vm.StopWorkspace.on("workspaceId"), {workspaceId: "ann-1"}))))).toBe(true)
+            expect(heard.map(e => [e.outcome, e.outcome === "approval-needed" && e.level])).toEqual([["approval-needed", "ask-once"]])
         })
 
         test("approvalNeed: undefined when allowed outright, the need otherwise", async () => {

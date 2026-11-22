@@ -2,7 +2,7 @@ import {FORBIDDEN, type GGPermission, GGPermissionChecker, type GGRequirement, t
 import {actionName, type GGAuthzActionRef} from "../shared/defineAuthz"
 import {APPROVAL_REQUIRED, INSUFFICIENT_SCOPE, STEP_UP_REQUIRED} from "../shared/authzErrors"
 import {GG_AUTHZ_SUBJECT} from "./GG_AUTHZ_SUBJECT"
-import {GGAuthz} from "./GGAuthz"
+import {GGAuthz, grantDecided} from "./GGAuthz"
 import {GGAuthzRn} from "../shared/GGAuthzRn"
 import {type GGAuthzApprovalLevel, type GGAuthzDecision, type GGAuthzRequest, type GGAuthzResourceProperties} from "../shared/authzSchemas"
 
@@ -48,6 +48,23 @@ export interface GGAuthzCall {
     method: string
 }
 
+/** The error a refusal throws; `hidden` on the event says the caller got NOT_FOUND instead. */
+export type GGAuthzRefusal = "FORBIDDEN" | "STEP_UP_REQUIRED" | "INSUFFICIENT_SCOPE"
+
+/** One decision `assert`, `authorize`, `approvalNeed` or `authorizeGrant` made. `call`: the method whose requirements
+ *  ran in this request; `grant`: set by `authorizeGrant`, whose `action` is the engine's grant action. */
+export type GGAuthzDecided = {
+    action: string
+    resource: GGAuthzResolvedResource
+    call?: GGAuthzCall
+    decision: GGAuthzDecision
+    grant?: {role: string, principal: string}
+} & (
+    | {outcome: "allowed"}
+    | {outcome: "approval-needed", level: GGAuthzApprovalLevel}
+    | {outcome: "denied", refusal: GGAuthzRefusal, hidden: boolean}
+)
+
 export interface GGAuthzAuthorityConfig {
     partition: string
     /** The tenant's own resource type (e.g. `org:org`): a requirement naming it without an id is the caller's tenant. */
@@ -66,10 +83,10 @@ export interface GGAuthzAuthorityConfig {
     /** A FORBIDDEN that says why, in place of a decided, unhidden denial of `action` on this resource (`decision`: the
      *  engine's); undefined, or a throw, keeps the denial. Only `assert`/`authorize` ask: listings filter instead. */
     explainForbidden?(action: string, resource: GGAuthzResolvedResource, decision: GGAuthzDecision): Promise<InstanceType<typeof FORBIDDEN> | undefined>
-    /** Every refusal `assert`/`authorize`/`approvalNeed` decided (`decision`: the engine's), before it's explained or
-     *  hidden (`hidden`: it answers NOT_FOUND). For audit and alerting; a throw or an async hook's rejection is ignored.
-     *  Listings filter instead, so they never get here. */
-    denied?(action: string, resource: GGAuthzResolvedResource, hidden: boolean, decision: GGAuthzDecision): void
+    /** Every decision `assert`/`authorize`/`approvalNeed`/`authorizeGrant` made, allows included; a refusal before it's
+     *  explained. For audit and alerting; a throw or an async listener's rejection is ignored. Listings filter instead,
+     *  so they never get here. */
+    decided?(event: GGAuthzDecided): void
     /** A handler decided an action its method's requirements don't name (`assert`, `can` or `approvalNeed`, in a
      *  request that ran requirements; `allowed` filters, so it's free). Throw to refuse it. */
     undeclared?(call: GGAuthzCall, action: string): void
@@ -193,17 +210,27 @@ export class GGAuthzAuthority {
     }
 
     private async denial(e: unknown, action: string, resource: GGAuthzResolvedResource, decision: GGAuthzDecision, hidden?: boolean): Promise<unknown> {
-        if (!FORBIDDEN.is(e) && !INSUFFICIENT_SCOPE.is(e) && !STEP_UP_REQUIRED.is(e)) return e
+        const refusal = refusalOf(e)
+        if (!refusal) return e
         const hide = !!(hidden || this.config.hidden?.(resource, action))
-        try {
-            const heard: unknown = this.config.denied?.(action, resource, hide, decision)
-            if (heard instanceof Promise) heard.catch(() => undefined)
-        } catch { /* a notification: never changes the answer */ }
+        if (this.config.decided) this.heard({action, resource, call: this.call(), decision, outcome: "denied", refusal, hidden: hide})
         if (hide) {
             return new NOT_FOUND({displayMessage: "Not found", debugMessage: (e as {context?: {debugMessage?: string}}).context?.debugMessage})
         }
         if (FORBIDDEN.is(e)) return await this.config.explainForbidden?.(action, resource, decision).catch(() => undefined) ?? e
         return e
+    }
+
+    private heard(event: GGAuthzDecided): void {
+        try {
+            const heard: unknown = this.config.decided!(event)
+            if (heard instanceof Promise) heard.catch(() => undefined)
+        } catch { /* a notification: never changes the answer */ }
+    }
+
+    private call(): GGAuthzCall | undefined {
+        const subject = GG_AUTHZ_SUBJECT.get()
+        return subject && this.declaredBy.get(subject)?.call
     }
 
     /** What an approval for `action` on `resource` would need, or undefined when it's allowed without one. Throws like
@@ -219,6 +246,7 @@ export class GGAuthzAuthority {
         const [engine, facts] = await Promise.all([this.config.engine(resolved.tenant), this.config.facts?.(name, resolved)])
         const request = GGAuthz.request(name, resolved.rn, facts, resolved.properties)
         const decision = await engine.evaluate(request)
+        if (this.config.decided && decision.decision) this.heard({action: name, resource: resolved, call: this.call(), decision, ...allowOf(decision)})
         try {
             await engine.enforce(request, decision)
             return undefined
@@ -251,7 +279,24 @@ export class GGAuthzAuthority {
     /** `canGrant` of `role` to `principal` on `resource`, throwing like `GGAuthz.authorizeGrant`. */
     public async authorizeGrant(role: string, principal: string, resource: GGAuthzResourceRef): Promise<void> {
         const resolved = await this.resolve(resource)
-        await (await this.config.engine(resolved.tenant)).authorizeGrant({principal, role, on: resolved.rn})
+        const engine = await this.config.engine(resolved.tenant)
+        try {
+            const decision = await engine.authorizeGrant({principal, role, on: resolved.rn})
+            if (this.config.decided) this.grantHeard(decision, resolved, {role, principal})
+        } catch (e) {
+            if (this.config.decided) this.grantHeard(e, resolved, {role, principal})
+            throw e
+        }
+    }
+
+    // `outcome`: what the engine's authorizeGrant returned or threw.
+    private grantHeard(outcome: unknown, resource: GGAuthzResolvedResource, grant: {role: string, principal: string}): void {
+        const decided = grantDecided(outcome)
+        if (!decided) return
+        const {action, decision} = decided
+        const refusal = refusalOf(outcome)
+        if (refusal) this.heard({action, resource, call: this.call(), decision, grant, outcome: "denied", refusal, hidden: false})
+        else if (decision.decision) this.heard({action, resource, call: this.call(), decision, grant, ...allowOf(decision)})
     }
 
     /** One decision per resource, e.g. to filter a listing. A resource that doesn't resolve is not allowed, and
@@ -335,4 +380,15 @@ export class GGAuthzAuthority {
         }
         return {type: resource.type, id: resource.id, rn, tenant, properties}
     }
+}
+
+function refusalOf(e: unknown): GGAuthzRefusal | undefined {
+    if (FORBIDDEN.is(e)) return "FORBIDDEN"
+    if (STEP_UP_REQUIRED.is(e)) return "STEP_UP_REQUIRED"
+    if (INSUFFICIENT_SCOPE.is(e)) return "INSUFFICIENT_SCOPE"
+    return undefined
+}
+
+function allowOf(decision: GGAuthzDecision): {outcome: "allowed"} | {outcome: "approval-needed", level: GGAuthzApprovalLevel} {
+    return decision.context.outcome === "allow-with-approval" ? {outcome: "approval-needed", level: decision.context.approval!} : {outcome: "allowed"}
 }
