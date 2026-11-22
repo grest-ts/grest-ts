@@ -42,8 +42,9 @@ interface CallState {
     rows?: Map<string, Promise<GGAuthzLoaded | undefined>>
 }
 
-// Mutable: one request may run more than one call (e.g. a batch of tool calls).
-const GG_AUTHZ_CALL = new GGContextKey<CallState>("authzCall", IsAny as unknown as GGSchema<CallState>, {mutable: true})
+// Set once per call: a pipeline that runs several calls in one request runs each in a context of its own, so one call's
+// declared actions and rows never reach another.
+const GG_AUTHZ_CALL = new GGContextKey<CallState>("authzCall", IsAny as unknown as GGSchema<CallState>)
 
 export function openCall(call: GGAuthzCall, actions: Iterable<string>): void {
     GG_AUTHZ_CALL.set({call, actions: new Set(actions)})

@@ -315,8 +315,10 @@ DOCS_AUTHORITY_HANDLER.create(authority)                // in compose()
 - **Loaders** are registered per resource type by whoever owns the rows, and are tenant-scoped: a
   missing row, one from another tenant, or an id that can't form an RN is `NOT_FOUND`. A call
   reads each row once: its requirements, the handler's checks and `authority.row(type, id)` share
-  it, so the handler acts on the row it was authorized on. `authority.properties(type, id)` gives a
-  resource's properties, e.g. for a loader whose row hangs off another's.
+  it, so the handler acts on the row it was authorized on. A handler that changes a row and then
+  decides on it again in the same call sees it as first read (a missing row isn't kept, so a create
+  can decide on what it made). `authority.properties(type, id)` gives a resource's properties, e.g.
+  for a loader whose row hangs off another's.
 - `assertLoaders(contracts)` throws for each method whose requirement needs a type with no loader;
   run it at startup.
 - **Authorize before loading.** A missing resource and a forbidden one both get `FORBIDDEN` (or
@@ -337,14 +339,15 @@ whole decision:
 | Hook | |
 |---|---|
 | `approvals(need)` | an allow that needs approval: returns when one covers it, else throws. `need.grant` names a grant's role and principal. Without it, `APPROVAL_REQUIRED` |
-| `refused(refusal)` | a refusal a requirement didn't `.hide()`, with the request's `facts`: `"hide"` answers `NOT_FOUND`, a `FORBIDDEN` replaces a `FORBIDDEN` (to say why). A throw fails the call |
-| `decided(event)` | every decision once its answer is final: `allowed`, `approved`, `unapproved` (with the error) or `denied` (`refusal`, `hidden`, the error the caller got), with the subject and the call. For audit: it never changes the answer, and a throw is ignored |
+| `refused(refusal)` | an action's refusal a requirement didn't `.hide()`, with the request's `facts`: `"hide"` answers `NOT_FOUND`, a `FORBIDDEN` replaces a `FORBIDDEN` (to say why). A throw fails the call. Grants and holds checks are answered as they are |
+| `decided(event)` | every decision once its answer is final. `check` says what was decided: an `action` on a `resource`, a `grant` (`role`, `principal`) on it, or `holds` (`actions`, `missing`) on a `scope`. `outcome`: `allowed`, `approved`, `unapproved` (with the error) or `denied` (`refusal`, `hidden`, the error the caller got); with the subject and the call. For audit: it never changes the answer, and a throw is ignored |
 | `undeclared(call, action)` | a handler decided (`assert`, `can`) an action its call's requirements don't declare; throw to refuse it. `allowed` filters, so it's free |
 
 The framework hands the authority each contract call once, `authorize(call, requirements, input)`
 (the `GGAuthorityHandler` method, also with no requirements): that opens the call the row reads and
-`undeclared` are scoped to. Outside a call (a job, startup) every read is fresh and nothing is
-compared. When an approval is for another resource than the one
+`undeclared` are scoped to, once per request context: a pipeline that runs several calls in one
+request (e.g. a batch of tool calls) runs each in a context of its own. Outside a call (a job,
+startup) every read is fresh and nothing is compared. When an approval is for another resource than the one
 decided (a create's new row), `registerApprovalKey(action, (input, resource) => ({type, id}))` names
 it; `APPROVAL_REQUIRED` then carries it as `key`.
 

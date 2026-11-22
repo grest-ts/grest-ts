@@ -299,8 +299,8 @@ export class GGAuthz {
         }
     }
 
-    /** The request `canGrant` decides for `binding`: the model's `grantAction` on its scope, or `grant` when the model
-     *  has none (then no-escalation alone decides). */
+    /** The request `canGrant` decides for `binding`: the model's `grantAction` on its scope. Without one, no-escalation
+     *  alone decides, and `grant` names the request only for `explain` and events: it isn't an action. */
     public grantRequest(subject: GGAuthzSubject, binding: GGAuthzBinding, context?: Record<string, unknown>): GGAuthzRequest {
         return {subject, action: {name: this.model.grantAction ?? "grant"}, resource: {type: GGAuthzRn.type(binding.on) ?? "", id: binding.on}, context}
     }
