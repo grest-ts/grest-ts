@@ -533,8 +533,9 @@ export const IsSearchRequest = IsObject({
 
 Use `GGContextKey` for data that must be accessible anywhere in the call stack without parameter threading.
 
-Every request, job run, event and scope timer runs in a fresh context of its own. A running runtime's root context is
-sealed: `set()` there throws. Work you start outside a request (a raw `setTimeout`, an emitter listener from
+Every request, job run, event and scope timer runs in a fresh, strict context of its own: a key can be set once there
+(a second `set()` throws unless the key is `{mutable: true}`). A running runtime's root context is sealed: `set()`
+there throws. Work you start outside a request (a raw `setTimeout`, an emitter listener from
 compose) runs in that root, so wrap it in `runInFreshContext(name, fn)` from `@grest-ts/trace`, or use
 `GGLocator.setTimeout`.
 
