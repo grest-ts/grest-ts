@@ -329,7 +329,7 @@ In handlers, for checks that depend on the row's state:
 | `assert(action, {type, id}, {hidden?, key?})` | throws like a requirement |
 | `can(action, ref)`, `allowed(action, refs)`, `allowedEach([{action, resource}])` | booleans; for a workload, an allow that needs approval is `false` |
 | `authorizeGrant(role, principal, ref)` | `canGrant` for the caller (§6), throwing like `assert` |
-| `assertHolds(actions, ref, {context?, displayMessage?})` | `FORBIDDEN` unless the caller holds every one of `actions` there, e.g. before handing them out |
+| `assertHolds(actions, ref, {context?, displayMessage?})` | `FORBIDDEN` unless the caller holds every one of `actions` there, e.g. before handing them out; decided on the RN, without loading the row |
 
 Pass `properties` when the handler already holds the row. Optional config, every hook seeing the
 whole decision:
@@ -339,7 +339,7 @@ whole decision:
 | `approvals(need)` | an allow that needs approval: returns when one covers it, else throws. `need.grant` names a grant's role and principal. Without it, `APPROVAL_REQUIRED` |
 | `refused(refusal)` | a refusal a requirement didn't `.hide()`, with the request's `facts`: `"hide"` answers `NOT_FOUND`, a `FORBIDDEN` replaces a `FORBIDDEN` (to say why). A throw fails the call |
 | `decided(event)` | every decision once its answer is final: `allowed`, `approved`, `unapproved` (with the error) or `denied` (`refusal`, `hidden`, the error the caller got), with the subject and the call. For audit: it never changes the answer, and a throw is ignored |
-| `undeclared(call, action)` | a handler decided an action its call's requirements don't declare; throw to refuse it |
+| `undeclared(call, action)` | a handler decided (`assert`, `can`) an action its call's requirements don't declare; throw to refuse it. `allowed` filters, so it's free |
 
 The framework hands the authority each contract call once, `authorize(call, requirements, input)`
 (the `GGAuthorityHandler` method, also with no requirements): that opens the call the row reads and

@@ -260,6 +260,9 @@ describe("GGAuthzAuthority", () => {
         await as(ann, () => authority.assertHolds([Vm.ReadWorkspace, Vm.StopWorkspace], ws))
         const err = await fail(as(ann, () => authority.assertHolds([Vm.ReadWorkspace, Vm.TakeOverWorkspace], ws)))
         expect(FORBIDDEN.is(err) && err.getDebugContext()?.debugMessage).toContain(`doesn't hold ${Vm.TakeOverWorkspace.name}`)
+        workspaceLoads.length = 0
+        await as(ann, () => authority.assertHolds([Vm.ReadWorkspace], ws))
+        expect(workspaceLoads).toEqual([])
     })
 
     test("no subject in context is NOT_AUTHORIZED", async () => {
@@ -342,7 +345,7 @@ describe("GGAuthzAuthority", () => {
         })
     })
 
-    test("undeclared: a handler deciding an action its call's requirements don't declare is reported, also with no requirements", async () => {
+    test("undeclared: a handler deciding an action its call's requirements don't declare is reported, also with no requirements; a filter isn't", async () => {
         const reported: string[] = []
         const guarded = new GGAuthzAuthority({
             partition: "acme", tenantType: Org.types.org, tenant: () => "acme", engine: async () => engine,
@@ -359,6 +362,6 @@ describe("GGAuthzAuthority", () => {
         await inCall(guarded, ann, {api: "VmApi", method: "status"}, [], undefined, () => guarded.can(Vm.ReadWorkspace, ws))
         // Outside a contract call there is nothing to compare with.
         await as(ann, () => guarded.can(Vm.StartWorkspace, ws))
-        expect(reported).toEqual([`VmApi.stop ${Vm.StartWorkspace.name}`, `VmApi.stop ${Vm.ReadWorkspace.name}`, `VmApi.status ${Vm.ReadWorkspace.name}`])
+        expect(reported).toEqual([`VmApi.stop ${Vm.StartWorkspace.name}`, `VmApi.status ${Vm.ReadWorkspace.name}`])
     })
 })

@@ -83,7 +83,8 @@ export interface GGAuthzAuthorityConfig {
     /** Every decision, once its answer is final. For audit and alerting: a throw or an async listener's rejection is
      *  ignored. Listings filter instead, so they never get here. */
     decided?(event: GGAuthzDecided): void
-    /** A handler decided an action its call's requirements don't declare (`assert`, `can`, `allowed`). Throw to refuse it. */
+    /** A handler decided an action its call's requirements don't declare (`assert`, `can`; `allowed` filters, so it's
+     *  free). Throw to refuse it. */
     undeclared?(call: GGAuthzCall, action: string): void
 }
 
@@ -155,6 +156,7 @@ export class GGAuthzAuthority {
     }
 
     public async can(action: GGAuthzActionRef, resource: GGAuthzResourceRef): Promise<boolean> {
+        this.checked(action)
         return (await this.allowedEach([{action, resource}]))[0]!
     }
 
@@ -167,7 +169,8 @@ export class GGAuthzAuthority {
     /** `allowed` for checks of different actions, in one batch. */
     public async allowedEach(checks: readonly {action: GGAuthzActionRef, resource: GGAuthzResourceRef}[]): Promise<boolean[]> {
         const subject = this.subject()
-        const names = checks.map(c => this.checked(c.action))
+        // A filter decides nothing a caller acts on, so `undeclared` doesn't ask about it.
+        const names = checks.map(c => actionName(c.action))
         const engine = await this.config.engine(this.config.tenant())
         const evaluations = await Promise.all(checks.map(async ({resource}, i): Promise<GGAuthzRequest | undefined> => {
             const resolved = await this.resources.resolve(resource).catch(e => {
@@ -197,10 +200,14 @@ export class GGAuthzAuthority {
     }
 
     /** Throws FORBIDDEN unless the caller holds every one of `actions` on `resource` through its own roles, e.g. before
-     *  handing them out (no-escalation, as `authorizeGrant`). `context`: the facts that hold there. */
+     *  handing them out (no-escalation, as `authorizeGrant`). Decided on the resource's RN, without loading it.
+     *  `context`: the facts that hold there. */
     public async assertHolds(actions: readonly GGAuthzActionRef[], resource: GGAuthzResourceRef, options?: {context?: Record<string, unknown>, displayMessage?: string}): Promise<void> {
         const subject = this.subject()
-        const [resolved, engine] = await Promise.all([this.resources.resolve(resource), this.config.engine(this.config.tenant())])
+        const tenant = this.config.tenant()
+        const engine = await this.config.engine(tenant)
+        // A scope, not a row: decided on its RN, so it holds also where the row is gone (e.g. undoing a stale assignment).
+        const resolved = {type: resource.type, id: resource.id, rn: this.resources.rnOf(resource.type, resource.id), tenant, properties: resource.properties ?? {ancestors: []}}
         const names = actions.map(actionName)
         const decision = await engine.canHold({subject, actions: names, on: resolved.rn, context: options?.context})
         const missing = GGAuthz.notHeld(decision, names)
