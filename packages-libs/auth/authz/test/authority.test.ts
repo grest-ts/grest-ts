@@ -113,13 +113,17 @@ describe("GGAuthzAuthority", () => {
         expect(asked).toEqual([`${Vm.StopWorkspace.name} dan-1 FORBIDDEN true true`, `${Vm.StopWorkspace.name} cleo-1 FORBIDDEN true true`])
     })
 
-    test("a throw in refused fails the call instead of answering an unhidden refusal", async () => {
+    test("a throw in refused fails closed: NOT_FOUND, still heard as a hidden refusal", async () => {
+        const heard: GGAuthzDecided[] = []
         const broken = new GGAuthzAuthority({
             partition: "acme", tenantType: Org.types.org, tenant: () => "acme", engine: async () => engine,
             refused: async () => { throw new Error("GitHub down") },
+            decided: e => { heard.push(e) },
         })
         broken.register(Vm.types.workspace, (_tenant, id) => workspaces[id] ? {properties: {ancestors: [workspaces[id]!, rn.org]}} : undefined)
-        await expect(as(ann, () => broken.assert(Vm.StopWorkspace, {type: Vm.types.workspace, id: "dan-1"}))).rejects.toThrow("GitHub down")
+        const err = await fail(as(ann, () => broken.assert(Vm.StopWorkspace, {type: Vm.types.workspace, id: "dan-1"})))
+        expect(NOT_FOUND.is(err) && err.getDebugContext()?.debugMessage).toContain("refused failed: GitHub down")
+        expect(heard.map(e => e.outcome === "denied" && [e.refusal, e.hidden])).toEqual([["FORBIDDEN", true]])
     })
 
     test("decided hears each decision once its answer is final, with the error the caller got; can/allowed never reach it", async () => {
@@ -226,6 +230,15 @@ describe("GGAuthzAuthority", () => {
             expect(await flaky.row(Vm.types.workspace, "ann-1")).toEqual({id: "ann-1"})
         })
         expect(calls).toBe(2)
+    })
+
+    test("two authorities in one call read through their own loaders", async () => {
+        const other = new GGAuthzAuthority({partition: "acme", tenantType: Org.types.org, tenant: () => "acme", engine: async () => engine})
+        other.register(Vm.types.workspace, () => ({properties: {ancestors: [rn.ml, rn.org]}, row: {id: "other's"}}))
+        await inCall(authority, ann, {api: "VmApi", method: "status"}, [], undefined, async () => {
+            expect(await authority.row(Vm.types.workspace, "ann-1")).toEqual({id: "ann-1"})
+            expect(await other.row(Vm.types.workspace, "ann-1")).toEqual({id: "other's"})
+        })
     })
 
     test("a miss isn't kept: a handler that creates the row then decides on it reads it again", async () => {

@@ -94,12 +94,13 @@ export interface GGAuthzAuthorityConfig {
     /** `onContext` sources: the resource id this request implies. */
     contexts?: Record<string, () => string | undefined>
     /** An allow that needs approval: return when a live approval covers it, else throw (`APPROVAL_REQUIRED` with the
-     *  key, for the caller to ask and retry). Without it the authority throws APPROVAL_REQUIRED itself. */
+     *  key, for the caller to ask and retry). Without it the authority throws APPROVAL_REQUIRED itself. A grant's key is
+     *  its scope: match `need.grant` (role and principal) too, or one approval covers any grant there. */
     approvals?(need: GGAuthzApprovalNeed): Promise<void>
     /** Shapes an action's refusal a requirement didn't `.hide()`: `"hide"` answers NOT_FOUND; a FORBIDDEN replaces a
      *  FORBIDDEN refusal (e.g. to say why), never a step-up or scope one, whose remedy the caller needs; undefined keeps
-     *  it. A throw fails the call. Grants and holds checks are about what the caller holds, so they're answered as they
-     *  are; listings filter instead. */
+     *  it. A throw answers NOT_FOUND: it fails closed. Grants and holds checks are about what the caller holds, so they're
+     *  answered as they are; listings filter instead. */
     refused?(refusal: GGAuthzRefused): Awaitable<"hide" | InstanceType<typeof FORBIDDEN> | undefined>
     /** Every decision, once its answer is final. For audit and alerting: a throw or an async listener's rejection is
      *  ignored. Listings filter instead, so they never get here. */
@@ -280,10 +281,18 @@ export class GGAuthzAuthority {
             if (this.config.decided) this.heard({...event(), outcome: "approved", level})
             return
         }
-        const shaped = options.hidden ? "hide"
-            : check.check === "action" ? await this.config.refused?.({...event(), action: check.action, facts, refusal: verdict.refusal}) : undefined
+        let shaped: Awaited<ReturnType<NonNullable<GGAuthzAuthorityConfig["refused"]>>>
+        let debugMessage = verdict.error.getDebugContext()?.debugMessage
+        try {
+            shaped = options.hidden ? "hide"
+                : check.check === "action" ? await this.config.refused?.({...event(), action: check.action, facts, refusal: verdict.refusal}) : undefined
+        } catch (e) {
+            // Fail closed: a refusal that couldn't be shaped might have been one to hide, so it is.
+            shaped = "hide"
+            debugMessage = `${debugMessage} (refused failed: ${(e as Error).message})`
+        }
         const explained = verdict.refusal === "FORBIDDEN" && shaped !== "hide" ? shaped : undefined
-        const error = shaped === "hide" ? new NOT_FOUND({displayMessage: "Not found", debugMessage: verdict.error.getDebugContext()?.debugMessage}) : explained ?? verdict.error
+        const error = shaped === "hide" ? new NOT_FOUND({displayMessage: "Not found", debugMessage}) : explained ?? verdict.error
         if (this.config.decided) this.heard({...event(), outcome: "denied", refusal: verdict.refusal, hidden: shaped === "hide", error})
         throw error
     }

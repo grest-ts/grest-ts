@@ -338,8 +338,8 @@ whole decision:
 
 | Hook | |
 |---|---|
-| `approvals(need)` | an allow that needs approval: returns when one covers it, else throws. `need.grant` names a grant's role and principal. Without it, `APPROVAL_REQUIRED` |
-| `refused(refusal)` | an action's refusal a requirement didn't `.hide()`, with the request's `facts`: `"hide"` answers `NOT_FOUND`, a `FORBIDDEN` replaces a `FORBIDDEN` (to say why). A throw fails the call. Grants and holds checks are answered as they are |
+| `approvals(need)` | an allow that needs approval: returns when one covers it, else throws. `need.grant` names a grant's role and principal; match it too, as a grant's `key` is only its scope. Without it, `APPROVAL_REQUIRED` |
+| `refused(refusal)` | an action's refusal a requirement didn't `.hide()`, with the request's `facts`: `"hide"` answers `NOT_FOUND`, a `FORBIDDEN` replaces a `FORBIDDEN` (to say why). A throw answers `NOT_FOUND`: it fails closed. Grants and holds checks are answered as they are |
 | `decided(event)` | every decision once its answer is final. `check` says what was decided: an `action` on a `resource`, a `grant` (`role`, `principal`) on it, or `holds` (`actions`, `missing`) on a `scope`. `outcome`: `allowed`, `approved`, `unapproved` (with the error) or `denied` (`refusal`, `hidden`, the error the caller got); with the subject and the call. For audit: it never changes the answer, and a throw is ignored |
 | `undeclared(call, action)` | a handler decided (`assert`, `can`) an action its call's requirements don't declare; throw to refuse it. `allowed` filters, so it's free |
 
@@ -347,7 +347,8 @@ The framework hands the authority each contract call once, `authorize(call, requ
 (the `GGAuthorityHandler` method, also with no requirements): that opens the call the row reads and
 `undeclared` are scoped to, once per request context: a pipeline that runs several calls in one
 request (e.g. a batch of tool calls) runs each in a context of its own. Outside a call (a job,
-startup) every read is fresh and nothing is compared. When an approval is for another resource than the one
+startup) every read is fresh and nothing is compared; work a handler starts in a child context (a
+timer, a branch) still sees its call. When an approval is for another resource than the one
 decided (a create's new row), `registerApprovalKey(action, (input, resource) => ({type, id}))` names
 it; `APPROVAL_REQUIRED` then carries it as `key`.
 

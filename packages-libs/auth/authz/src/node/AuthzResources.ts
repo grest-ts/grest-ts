@@ -39,7 +39,8 @@ export interface GGAuthzCall {
 interface CallState {
     call: GGAuthzCall
     actions: ReadonlySet<string>
-    rows?: Map<string, Promise<GGAuthzLoaded | undefined>>
+    // Per authority: two authorities' loaders never serve each other's rows.
+    rows: WeakMap<AuthzResources, Map<string, Promise<GGAuthzLoaded | undefined>>>
 }
 
 // Set once per call: a pipeline that runs several calls in one request runs each in a context of its own, so one call's
@@ -47,7 +48,7 @@ interface CallState {
 const GG_AUTHZ_CALL = new GGContextKey<CallState>("authzCall", IsAny as unknown as GGSchema<CallState>)
 
 export function openCall(call: GGAuthzCall, actions: Iterable<string>): void {
-    GG_AUTHZ_CALL.set({call, actions: new Set(actions)})
+    GG_AUTHZ_CALL.set({call, actions: new Set(actions), rows: new WeakMap()})
 }
 
 export function currentCall(): {call: GGAuthzCall, actions: ReadonlySet<string>} | undefined {
@@ -144,7 +145,8 @@ export class AuthzResources {
         if (!loader) throw new Error(`No loader registered for ${type}`)
         const state = GG_AUTHZ_CALL.get()
         if (!state) return Promise.resolve(loader(tenant, id))
-        const rows = state.rows ??= new Map()
+        let rows = state.rows.get(this)
+        if (!rows) state.rows.set(this, rows = new Map())
         const key = `${tenant} ${type} ${id}`
         let row = rows.get(key)
         if (!row) {
