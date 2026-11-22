@@ -34,18 +34,19 @@ export interface GGAuthzCall {
     method: string
 }
 
-/** The contract call in progress, opened by the framework (`begin`): the actions its requirements declare and the rows
- *  they were decided on. Every authority reads the same one. */
+/** The contract call in progress, opened by the authority's `authorize`: the actions its requirements declare and one
+ *  read of each row it loads. Every authority reads the same one. */
 interface CallState {
     call: GGAuthzCall
     actions: ReadonlySet<string>
-    authorized: Map<string, Promise<GGAuthzLoaded | undefined>>
+    rows?: Map<string, Promise<GGAuthzLoaded | undefined>>
 }
 
-const GG_AUTHZ_CALL = new GGContextKey<CallState>("authzCall", IsAny as unknown as GGSchema<CallState>)
+// Mutable: one request may run more than one call (e.g. a batch of tool calls).
+const GG_AUTHZ_CALL = new GGContextKey<CallState>("authzCall", IsAny as unknown as GGSchema<CallState>, {mutable: true})
 
 export function openCall(call: GGAuthzCall, actions: Iterable<string>): void {
-    GG_AUTHZ_CALL.set({call: {api: call.api, method: call.method}, actions: new Set(actions), authorized: new Map()})
+    GG_AUTHZ_CALL.set({call, actions: new Set(actions)})
 }
 
 export function currentCall(): {call: GGAuthzCall, actions: ReadonlySet<string>} | undefined {
@@ -93,11 +94,10 @@ export class AuthzResources {
         if (problems.length) throw new Error(`Requirements the authority can't resolve:\n  ${problems.join("\n  ")}`)
     }
 
-    /** The row a requirement of this call was decided on; else a fresh read. */
+    /** The row as this call read it, e.g. when its requirement was decided. */
     public async row<T>(type: string, id: string): Promise<T> {
         this.rnOf(type, id)
-        const tenant = this.tenant()
-        const loaded = await (GG_AUTHZ_CALL.get()?.authorized.get(rowKey(tenant, type, id)) ?? this.read(tenant, type, id))
+        const loaded = await this.read(this.tenant(), type, id)
         if (!loaded) throw new NOT_FOUND({displayMessage: "Not found", debugMessage: `${type} ${id} not found`})
         if (loaded.row === undefined) throw new Error(`The ${type} loader gives no row`)
         return loaded.row as T
@@ -105,8 +105,7 @@ export class AuthzResources {
 
     /** A resource's properties, e.g. for a loader whose row hangs off another; undefined when it doesn't exist. */
     public async properties(type: string, id: string): Promise<GGAuthzResourceProperties | undefined> {
-        const tenant = this.tenant()
-        return (await (GG_AUTHZ_CALL.get()?.authorized.get(rowKey(tenant, type, id)) ?? this.read(tenant, type, id)))?.properties
+        return (await this.read(this.tenant(), type, id))?.properties
     }
 
     /** The resource a requirement names, from the call's input. */
@@ -119,9 +118,8 @@ export class AuthzResources {
         return {type: parent.type, id: parent.id}
     }
 
-    /** NOT_FOUND when it doesn't exist in the caller's tenant. `authorizing`: a requirement's read, which the handler's
-     *  `row` then shares; any other read is fresh. */
-    public async resolve(resource: GGAuthzResourceRef, authorizing = false): Promise<GGAuthzResolvedResource> {
+    /** NOT_FOUND when it doesn't exist in the caller's tenant. */
+    public async resolve(resource: GGAuthzResourceRef): Promise<GGAuthzResolvedResource> {
         const tenant = this.tenant()
         const notFound = () => new NOT_FOUND({displayMessage: "Not found", debugMessage: `${resource.type} ${resource.id} not found`})
         const rn = this.rnOf(resource.type, resource.id)
@@ -131,26 +129,25 @@ export class AuthzResources {
                 if (resource.id !== tenant) throw notFound()
                 properties = {ancestors: []}
             } else {
-                const state = authorizing ? GG_AUTHZ_CALL.get() : undefined
-                properties = (await (state ? this.authorizedRead(state, tenant, resource.type, resource.id) : this.read(tenant, resource.type, resource.id)))?.properties
+                properties = (await this.read(tenant, resource.type, resource.id))?.properties
                 if (!properties) throw notFound()
             }
         }
         return {type: resource.type, id: resource.id, rn, tenant, properties}
     }
 
+    // Within a call, one read of each row: its requirements, the handler's checks and `row` see the same one.
     private read(tenant: string, type: string, id: string): Promise<GGAuthzLoaded | undefined> {
         const loader = this.loaders.get(type)
         if (!loader) throw new Error(`No loader registered for ${type}`)
-        return Promise.resolve(loader(tenant, id))
-    }
-
-    private authorizedRead(state: CallState, tenant: string, type: string, id: string): Promise<GGAuthzLoaded | undefined> {
-        const key = rowKey(tenant, type, id)
-        let row = state.authorized.get(key)
+        const state = GG_AUTHZ_CALL.get()
+        if (!state) return Promise.resolve(loader(tenant, id))
+        const rows = state.rows ??= new Map()
+        const key = `${tenant} ${type} ${id}`
+        let row = rows.get(key)
         if (!row) {
-            state.authorized.set(key, row = this.read(tenant, type, id).catch(e => {
-                state.authorized.delete(key)
+            rows.set(key, row = Promise.resolve(loader(tenant, id)).catch(e => {
+                rows.delete(key)
                 throw e
             }))
         }
@@ -182,8 +179,4 @@ export class AuthzResources {
         if (!GGAuthzRn.REGEX.test(rn)) throw new NOT_FOUND({displayMessage: "Not found", debugMessage: `${type} ${id} is not a valid resource`})
         return rn
     }
-}
-
-function rowKey(tenant: string, type: string, id: string): string {
-    return `${tenant} ${type} ${id}`
 }

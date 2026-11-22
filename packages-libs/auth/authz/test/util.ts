@@ -1,5 +1,6 @@
 import {GGContext} from "@grest-ts/context"
-import {GG_AUTHZ_SUBJECT, GGAuthz, type GGAuthzDecision, type GGAuthzRequest, GGAuthzRn, type GGAuthzSubject, type GGAuthzVerdict} from "../src/index-node"
+import type {GGRequirement} from "@grest-ts/schema"
+import {GG_AUTHZ_SUBJECT, GGAuthz, type GGAuthzAuthority, type GGAuthzDecision, type GGAuthzRequest, GGAuthzRn, type GGAuthzSubject, type GGAuthzVerdict} from "../src/index-node"
 
 export async function filterAsync<T>(items: readonly T[], keep: (item: T) => Promise<boolean>): Promise<T[]> {
     const kept = await Promise.all(items.map(keep))
@@ -31,7 +32,12 @@ export async function verdict(authz: GGAuthz, subject: GGAuthzSubject, action: s
 
 /** The actions a `canHold` decision says aren't held. */
 export function notHeld(decision: GGAuthzDecision): readonly string[] {
-    return decision.decision ? [] : decision.context.reasons.find(r => r.kind === "escalation")?.actions ?? []
+    return GGAuthz.notHeld(decision, [])
+}
+
+/** One requirement, as the only one of its call. */
+export function check(authority: GGAuthzAuthority, requirement: GGRequirement, input: unknown): Promise<void> {
+    return authority.authorize({api: "TestApi", method: "test"}, [requirement], input)
 }
 
 export function as<T>(subject: GGAuthzSubject | undefined, fn: () => Promise<T>): Promise<T> {

@@ -24,6 +24,7 @@ import {
     type GGAuthzPolicies,
     type GGAuthzCeilingLayer,
     type GGAuthzReason,
+    type GGAuthzRefusal,
     type GGAuthzRemedy,
     type GGAuthzRequest,
     type GGAuthzRestrictionSet,
@@ -48,9 +49,6 @@ export interface GGAuthzResolver {
 
 /** Caller-computed facts; `undefined` = unknown, which makes a deny apply and an allow not grant. */
 export type GGAuthzFacts = (name: string, request: GGAuthzRequest) => boolean | undefined
-
-/** The error a refusal throws. */
-export type GGAuthzRefusal = "FORBIDDEN" | "STEP_UP_REQUIRED" | "INSUFFICIENT_SCOPE"
 
 /** What a decision means for the caller (`GGAuthz.verdict`); a refusal's `error` carries the explanation. */
 export type GGAuthzVerdict =
@@ -348,28 +346,41 @@ export class GGAuthz {
         const loader = this.loader()
         let granted: GGAuthzDecision = {decision: true, context: {outcome: "allow", reasons: []}}
         if (this.model.grantAction) {
-            granted = await this.evaluateWith({subject, action: {name: this.model.grantAction}, resource: {type: GGAuthzRn.type(on)!, id: on}, context}, loader)
+            granted = await this.evaluateWith(this.grantRequest(subject, binding, context), loader)
             if (!granted.decision) return granted
         }
-        const missing = await this.missingWith(subject, [...actions], on, context, loader)
-        if (!missing) return invalid(`Scope chain of ${on} is cyclic or deeper than ${MAX_DEPTH}`)
-        if (missing.length) {
-            return deny([{layer: "grant", kind: "escalation", role: binding.role, on, actions: missing, ref: binding.ref, message: `granting role ${binding.role} on ${on} needs ${missing.join(", ")}, which the grantor doesn't hold there`}])
-        }
-        const held: GGAuthzReason = {layer: "grant", kind: "binding", role: binding.role, on, ref: binding.ref, message: `the grantor holds every action of role ${binding.role} on ${on}`}
-        return {...granted, context: {...granted.context, reasons: [...granted.context.reasons, held]}}
+        const held = await this.holding(subject, [...actions], on, context, loader, binding)
+        if (!held.decision) return held
+        return {...granted, context: {...granted.context, reasons: [...granted.context.reasons, ...held.context.reasons]}}
     }
 
     /** May the subject hand out `actions` on `on`: it holds each through its own bindings (no-escalation, as `canGrant`
-     *  asks of a role's actions). A denial's `escalation` reason lists the missing ones; unknown actions are skipped. */
+     *  asks of a role's actions). A denial's `escalation` reason lists the missing ones (`notHeld`); unknown actions are
+     *  skipped. */
     public async canHold(request: GGAuthzHoldRequest): Promise<GGAuthzDecision> {
         const {subject, on, context} = request
         if (!this.inPartition(on)) return invalid(`Invalid resource name ${on}`)
-        const actions = request.actions.filter(a => this.actions.has(a))
-        const missing = await this.missingWith(subject, actions, on, context, this.loader())
+        return this.holding(subject, request.actions.filter(a => this.actions.has(a)), on, context, this.loader())
+    }
+
+    /** The actions a `canHold` or `canGrant` denial says the subject doesn't hold; every one of `asked` for an invalid
+     *  request. */
+    public static notHeld(decision: GGAuthzDecision, asked: readonly string[]): readonly string[] {
+        if (decision.decision) return []
+        return decision.context.reasons.find(r => r.kind === "escalation")?.actions ?? asked
+    }
+
+    // No-escalation: `role` (and its `ref`) when it's a grant's.
+    private async holding(subject: GGAuthzSubject, actions: readonly string[], on: string, context: Record<string, unknown> | undefined, loader: Loader, role?: {role: string, ref?: string}): Promise<GGAuthzDecision> {
+        const missing = await this.missingWith(subject, actions, on, context, loader)
         if (!missing) return invalid(`Scope chain of ${on} is cyclic or deeper than ${MAX_DEPTH}`)
-        if (missing.length) return deny([{layer: "grant", kind: "escalation", on, actions: missing, message: `${missing.join(", ")} not held on ${on}`}])
-        return {decision: true, context: {outcome: "allow", reasons: [{layer: "grant", kind: "binding", on, actions, message: `holds ${actions.join(", ")} on ${on}`}]}}
+        const grant = role && {role: role.role, ref: role.ref}
+        if (missing.length) {
+            const message = role ? `granting role ${role.role} on ${on} needs ${missing.join(", ")}, which the grantor doesn't hold there` : `${missing.join(", ")} not held on ${on}`
+            return deny([{layer: "grant", kind: "escalation", ...grant, on, actions: missing, message}])
+        }
+        const message = role ? `the grantor holds every action of role ${role.role} on ${on}` : `holds ${actions.join(", ")} on ${on}`
+        return {decision: true, context: {outcome: "allow", reasons: [{layer: "grant", kind: "binding", ...grant, on, ...role ? {} : {actions: [...actions]}, message}]}}
     }
 
     private async missingWith(subject: GGAuthzSubject, actions: readonly string[], on: string, context: Record<string, unknown> | undefined, loader: Loader): Promise<string[] | undefined> {

@@ -313,11 +313,10 @@ DOCS_AUTHORITY_HANDLER.create(authority)                // in compose()
 ```
 
 - **Loaders** are registered per resource type by whoever owns the rows, and are tenant-scoped: a
-  missing row, one from another tenant, or an id that can't form an RN is `NOT_FOUND`. The
-  requirements of a call share one read of each row, and the handler takes that row with
-  `authority.row(type, id)`: it acts on the row it was authorized on. Any other read is fresh.
-  `authority.properties(type, id)` gives a resource's properties, e.g. for a loader whose row hangs
-  off another's.
+  missing row, one from another tenant, or an id that can't form an RN is `NOT_FOUND`. A call
+  reads each row once: its requirements, the handler's checks and `authority.row(type, id)` share
+  it, so the handler acts on the row it was authorized on. `authority.properties(type, id)` gives a
+  resource's properties, e.g. for a loader whose row hangs off another's.
 - `assertLoaders(contracts)` throws for each method whose requirement needs a type with no loader;
   run it at startup.
 - **Authorize before loading.** A missing resource and a forbidden one both get `FORBIDDEN` (or
@@ -342,9 +341,10 @@ whole decision:
 | `decided(event)` | every decision once its answer is final: `allowed`, `approved`, `unapproved` (with the error) or `denied` (`refusal`, `hidden`, the error the caller got), with the subject and the call. For audit: it never changes the answer, and a throw is ignored |
 | `undeclared(call, action)` | a handler decided an action its call's requirements don't declare; throw to refuse it |
 
-A contract call opens with the framework's `begin(call, requirements)` (the `GGAuthorityHandler`
-hook): that is what scopes the shared row reads and `undeclared`. Outside a call (a job, startup)
-every read is fresh and nothing is compared. When an approval is for another resource than the one
+The framework hands the authority each contract call once, `authorize(call, requirements, input)`
+(the `GGAuthorityHandler` method, also with no requirements): that opens the call the row reads and
+`undeclared` are scoped to. Outside a call (a job, startup) every read is fresh and nothing is
+compared. When an approval is for another resource than the one
 decided (a create's new row), `registerApprovalKey(action, (input, resource) => ({type, id}))` names
 it; `APPROVAL_REQUIRED` then carries it as `key`.
 

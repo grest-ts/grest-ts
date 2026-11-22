@@ -14,7 +14,7 @@ import {
     INSUFFICIENT_SCOPE,
     STEP_UP_REQUIRED,
 } from "../src/index-node"
-import {as} from "./util"
+import {as, check} from "./util"
 import {data, Git, model, Org, policies, rn, Secrets, Vm} from "./world"
 
 const engine = new GGAuthz({model, policies, resolver: new GGAuthzMemoryResolver(data)})
@@ -44,11 +44,11 @@ const ann: GGAuthzSubject = {type: "user", id: "ann"}
 
 const fail = (p: Promise<unknown>) => p.then(() => undefined, e => e)
 
-// What the HTTP pipeline does for a contract call: opens it with its requirements, then runs it.
-const inCall = <T>(subject: GGAuthzSubject, call: {api: string, method: string}, requirements: readonly GGRequirement[], fn: () => Promise<T>) =>
-    as(subject, () => {
-        authority.begin(call, requirements)
-        return fn()
+// What the HTTP pipeline does for a contract call: authorizes it with its requirements, then runs the handler (`fn`).
+const inCall = <T>(on: GGAuthzAuthority, subject: GGAuthzSubject, call: {api: string, method: string}, requirements: readonly GGRequirement[], input: unknown, fn?: () => Promise<T>) =>
+    as(subject, async () => {
+        await on.authorize(call, requirements, input)
+        return fn?.()
     })
 
 // GGAuthzAuthority matches @grest-ts/http's handler by shape (src may not depend on http); this keeps the two in step.
@@ -56,38 +56,38 @@ void (authority satisfies GGAuthorityHandler)
 
 describe("GGAuthzAuthority", () => {
     test("reads the id from the input, loads the row and decides", async () => {
-        await as(ann, () => authority.authorize(Vm.StopWorkspace.on("workspaceId"), {workspaceId: "ann-1"}))
-        expect(FORBIDDEN.is(await fail(as(ann, () => authority.authorize(Vm.StopWorkspace.on("workspaceId"), {workspaceId: "cleo-1"}))))).toBe(true)
+        await as(ann, () => check(authority, Vm.StopWorkspace.on("workspaceId"), {workspaceId: "ann-1"}))
+        expect(FORBIDDEN.is(await fail(as(ann, () => check(authority, Vm.StopWorkspace.on("workspaceId"), {workspaceId: "cleo-1"}))))).toBe(true)
     })
 
     test("a field may be a path into the input", async () => {
-        await as(ann, () => authority.authorize(Vm.StopWorkspace.on("target.workspaceId"), {target: {workspaceId: "ann-1"}}))
-        expect(FORBIDDEN.is(await fail(as(ann, () => authority.authorize(Vm.StopWorkspace.on("target.workspaceId"), {target: {workspaceId: "cleo-1"}}))))).toBe(true)
+        await as(ann, () => check(authority, Vm.StopWorkspace.on("target.workspaceId"), {target: {workspaceId: "ann-1"}}))
+        expect(FORBIDDEN.is(await fail(as(ann, () => check(authority, Vm.StopWorkspace.on("target.workspaceId"), {target: {workspaceId: "cleo-1"}}))))).toBe(true)
         const save = Org.ManageMembers.on(Org.types.project, "at.projectId").orCreateOn(Org.types.org)
-        expect((await fail(as(ann, () => authority.authorize(save, {at: {}})))).getDebugContext().debugMessage).toContain("on rn:acme:org:acme:org/acme")
+        expect((await fail(as(ann, () => check(authority, save, {at: {}})))).getDebugContext().debugMessage).toContain("on rn:acme:org:acme:org/acme")
     })
 
     test("a missing row is NOT_FOUND, and so is a hidden denial", async () => {
-        expect(NOT_FOUND.is(await fail(as(ann, () => authority.authorize(Vm.StopWorkspace.on("workspaceId"), {workspaceId: "nope"}))))).toBe(true)
-        expect(NOT_FOUND.is(await fail(as(ann, () => authority.authorize(Vm.StopWorkspace.on("workspaceId"), {workspaceId: "bad/id"}))))).toBe(true)
-        expect(NOT_FOUND.is(await fail(as(ann, () => authority.authorize(Vm.StopWorkspace.on("workspaceId").hide(), {workspaceId: "cleo-1"}))))).toBe(true)
+        expect(NOT_FOUND.is(await fail(as(ann, () => check(authority, Vm.StopWorkspace.on("workspaceId"), {workspaceId: "nope"}))))).toBe(true)
+        expect(NOT_FOUND.is(await fail(as(ann, () => check(authority, Vm.StopWorkspace.on("workspaceId"), {workspaceId: "bad/id"}))))).toBe(true)
+        expect(NOT_FOUND.is(await fail(as(ann, () => check(authority, Vm.StopWorkspace.on("workspaceId").hide(), {workspaceId: "cleo-1"}))))).toBe(true)
     })
 
     test("the tenant type without an id is the caller's tenant; another tenant's id is NOT_FOUND", async () => {
-        expect(FORBIDDEN.is(await fail(as(ann, () => authority.authorize(Org.ManageMembers.on(Org.types.org), {}))))).toBe(true)
-        expect(NOT_FOUND.is(await fail(as(ann, () => authority.authorize(Org.ManageMembers.on(Org.types.org, "orgId"), {orgId: "other"}))))).toBe(true)
-        await expect(as(ann, () => authority.authorize(Vm.StopWorkspace.on(Vm.types.workspace), {}))).rejects.toThrow("only org:org")
+        expect(FORBIDDEN.is(await fail(as(ann, () => check(authority, Org.ManageMembers.on(Org.types.org), {}))))).toBe(true)
+        expect(NOT_FOUND.is(await fail(as(ann, () => check(authority, Org.ManageMembers.on(Org.types.org, "orgId"), {orgId: "other"}))))).toBe(true)
+        await expect(as(ann, () => check(authority, Vm.StopWorkspace.on(Vm.types.workspace), {}))).rejects.toThrow("only org:org")
     })
 
     test("an upsert checks the existing resource, or the parent when creating", async () => {
         const save = Org.ManageMembers.on(Org.types.project, "projectId").orCreateOn(Org.types.org, "orgId")
-        const creating = await fail(as(ann, () => authority.authorize(save, {orgId: "acme"})))
+        const creating = await fail(as(ann, () => check(authority, save, {orgId: "acme"})))
         expect(creating.getDebugContext().debugMessage).toContain("on rn:acme:org:acme:org/acme")
-        const updating = await fail(as(ann, () => authority.authorize(save, {projectId: "web", orgId: "acme"})))
+        const updating = await fail(as(ann, () => check(authority, save, {projectId: "web", orgId: "acme"})))
         expect(updating.getDebugContext().debugMessage).toContain("on rn:acme:org:acme:project/web")
-        await as({type: "user", id: "cleo"}, () => authority.authorize(save, {projectId: "web", orgId: "acme"}))
+        await as({type: "user", id: "cleo"}, () => check(authority, save, {projectId: "web", orgId: "acme"}))
         const onTenant = Org.ManageMembers.on(Org.types.project, "projectId").orCreateOn(Org.types.org)
-        expect((await fail(as(ann, () => authority.authorize(onTenant, {})))).getDebugContext().debugMessage).toContain("on rn:acme:org:acme:org/acme")
+        expect((await fail(as(ann, () => check(authority, onTenant, {})))).getDebugContext().debugMessage).toContain("on rn:acme:org:acme:org/acme")
         await expect(as(ann, () => authority.assert(Secrets.Read, {type: Secrets.types.secret, id: "x"}))).rejects.toThrow("No loader registered for secrets:secret")
     })
 
@@ -103,10 +103,10 @@ describe("GGAuthzAuthority", () => {
             },
         })
         shaping.register(Vm.types.workspace, (_tenant, id) => workspaces[id] ? {properties: {ancestors: [workspaces[id]!, rn.org]}} : undefined)
-        const err = await fail(as(ann, () => shaping.authorize(Vm.StopWorkspace.on("workspaceId"), {workspaceId: "dan-1"})))
+        const err = await fail(as(ann, () => check(shaping, Vm.StopWorkspace.on("workspaceId"), {workspaceId: "dan-1"})))
         expect(FORBIDDEN.is(err) && err.context?.displayMessage).toBe("why dan-1")
-        expect(NOT_FOUND.is(await fail(as(ann, () => shaping.authorize(Vm.StopWorkspace.on("workspaceId"), {workspaceId: "cleo-1"}))))).toBe(true)
-        expect(NOT_FOUND.is(await fail(as(ann, () => shaping.authorize(Vm.StopWorkspace.on("workspaceId").hide(), {workspaceId: "dan-1"}))))).toBe(true)
+        expect(NOT_FOUND.is(await fail(as(ann, () => check(shaping, Vm.StopWorkspace.on("workspaceId"), {workspaceId: "cleo-1"}))))).toBe(true)
+        expect(NOT_FOUND.is(await fail(as(ann, () => check(shaping, Vm.StopWorkspace.on("workspaceId").hide(), {workspaceId: "dan-1"}))))).toBe(true)
         expect(await as(ann, () => shaping.can(Vm.StopWorkspace, {type: Vm.types.workspace, id: "dan-1"}))).toBe(false)
         expect(asked).toEqual([`${Vm.StopWorkspace.name} dan-1 FORBIDDEN true true`, `${Vm.StopWorkspace.name} cleo-1 FORBIDDEN true true`])
     })
@@ -134,18 +134,18 @@ describe("GGAuthzAuthority", () => {
         const secret = {type: Secrets.types.secret, id: "env", properties: {ancestors: [rn.ws("ann-1"), rn.web, rn.org]}}
         const scoped: GGAuthzSubject = {type: "client", id: "ci-tool", properties: {onBehalfOf: {type: "user", id: "ann"}, scopes: ["workspaces:read"]}}
         const stop = Vm.StopWorkspace.on("workspaceId")
-        const err = await fail(inCall(ann, {api: "VmApi", method: "stop"}, [stop], () => auditing.authorize(stop, {workspaceId: "dan-1"})))
+        const err = await fail(inCall(auditing, ann, {api: "VmApi", method: "stop"}, [stop], {workspaceId: "dan-1"}))
         expect(FORBIDDEN.is(err) && err.context?.displayMessage).toBe("why")
-        expect(NOT_FOUND.is(await fail(as(ann, () => auditing.authorize(stop, {workspaceId: "cleo-1"}))))).toBe(true)
-        await as(ann, () => auditing.authorize(stop, {workspaceId: "ann-1"}))
+        expect(NOT_FOUND.is(await fail(as(ann, () => check(auditing, stop, {workspaceId: "cleo-1"}))))).toBe(true)
+        await as(ann, () => check(auditing, stop, {workspaceId: "ann-1"}))
         expect(STEP_UP_REQUIRED.is(await fail(as(ann, () => auditing.assert(Secrets.Write, secret))))).toBe(true)
         expect(INSUFFICIENT_SCOPE.is(await fail(as(scoped, () => auditing.assert(Vm.StopWorkspace, {type: Vm.types.workspace, id: "ann-1"}))))).toBe(true)
         expect(await as(ann, () => auditing.can(Vm.StopWorkspace, {type: Vm.types.workspace, id: "dan-1"}))).toBe(false)
         const denied = (e: GGAuthzDecided) => e.outcome === "denied" ? [e.refusal, e.hidden, e.error.type] : []
         expect(heard.map(e => [e.action, e.resource.id, e.subject.id, e.call?.method, e.outcome, ...denied(e)])).toEqual([
             [Vm.StopWorkspace.name, "dan-1", "ann", "stop", "denied", "FORBIDDEN", false, "FORBIDDEN"],
-            [Vm.StopWorkspace.name, "cleo-1", "ann", undefined, "denied", "FORBIDDEN", true, "NOT_FOUND"],
-            [Vm.StopWorkspace.name, "ann-1", "ann", undefined, "allowed"],
+            [Vm.StopWorkspace.name, "cleo-1", "ann", "test", "denied", "FORBIDDEN", true, "NOT_FOUND"],
+            [Vm.StopWorkspace.name, "ann-1", "ann", "test", "allowed"],
             [Secrets.Write.name, "env", "ann", undefined, "denied", "STEP_UP_REQUIRED", false, "STEP_UP_REQUIRED"],
             [Vm.StopWorkspace.name, "ann-1", "ci-tool", undefined, "denied", "INSUFFICIENT_SCOPE", false, "INSUFFICIENT_SCOPE"],
         ])
@@ -177,18 +177,18 @@ describe("GGAuthzAuthority", () => {
         ])
     })
 
-    test("a requirement's row is the handler's: every requirement of the call and row() share one read; later decisions read fresh", async () => {
+    test("a call reads each row once: its requirements, the handler's checks and row() share it; another call reads again", async () => {
         workspaceLoads.length = 0
         const requirements = GGPermissionChecker.requirementsOf({allOf: [Vm.ReadWorkspace.on("workspaceId").hide(), Vm.StopWorkspace.on("workspaceId")]})
-        const row = await inCall(ann, {api: "VmApi", method: "stop"}, requirements, async () => {
-            for (const r of requirements) await authority.authorize(r, {workspaceId: "ann-1"})
-            const authorized = await authority.row(Vm.types.workspace, "ann-1")
+        const row = await inCall(authority, ann, {api: "VmApi", method: "stop"}, requirements, {workspaceId: "ann-1"}, async () => {
             await authority.assert(Vm.StopWorkspace, {type: Vm.types.workspace, id: "ann-1"})
-            return authorized
+            expect(await authority.properties(Vm.types.workspace, "ann-1")).toEqual({ancestors: [rn.web, rn.org]})
+            return authority.row(Vm.types.workspace, "ann-1")
         })
         expect(row).toEqual({id: "ann-1"})
-        expect(workspaceLoads).toEqual(["ann-1", "ann-1"])
-        await as(ann, () => authority.authorize(Vm.StopWorkspace.on("workspaceId"), {workspaceId: "ann-1"}))
+        expect(workspaceLoads).toEqual(["ann-1"])
+        await inCall(authority, ann, {api: "VmApi", method: "stop"}, requirements, {workspaceId: "ann-1"})
+        await as(ann, () => authority.row(Vm.types.workspace, "ann-1"))
         await as(ann, () => authority.row(Vm.types.workspace, "ann-1"))
         expect(workspaceLoads).toEqual(["ann-1", "ann-1", "ann-1", "ann-1"])
         expect(NOT_FOUND.is(await fail(as(ann, () => authority.row(Vm.types.workspace, "nope"))))).toBe(true)
@@ -197,29 +197,28 @@ describe("GGAuthzAuthority", () => {
         expect(await as(ann, () => authority.properties(Vm.types.workspace, "nope"))).toBeUndefined()
     })
 
-    test("a failed requirement read isn't kept: the next one in the call reads again", async () => {
+    test("a failed read isn't kept: the next one in the call reads again", async () => {
         let calls = 0
         const flaky = new GGAuthzAuthority({partition: "acme", tenantType: Org.types.org, tenant: () => "acme", engine: async () => engine})
         flaky.register(Vm.types.workspace, async () => {
             if (calls++ === 0) throw new Error("throttled")
             return {properties: {ancestors: [rn.web, rn.org]}, row: {id: "ann-1"}}
         })
-        const stop = Vm.StopWorkspace.on("workspaceId")
-        await inCall(ann, {api: "VmApi", method: "stop"}, [stop], async () => {
-            await expect(flaky.authorize(stop, {workspaceId: "ann-1"})).rejects.toThrow("throttled")
-            await flaky.authorize(stop, {workspaceId: "ann-1"})
+        await inCall(flaky, ann, {api: "VmApi", method: "status"}, [], undefined, async () => {
+            await expect(flaky.row(Vm.types.workspace, "ann-1")).rejects.toThrow("throttled")
+            expect(await flaky.row(Vm.types.workspace, "ann-1")).toEqual({id: "ann-1"})
             expect(await flaky.row(Vm.types.workspace, "ann-1")).toEqual({id: "ann-1"})
         })
         expect(calls).toBe(2)
     })
 
     test("a context source names the resource", async () => {
-        await as({type: "user", id: "dan"}, () => authority.authorize(Vm.StopWorkspace.onContext("callingWorkspace"), {}))
-        expect(FORBIDDEN.is(await fail(as(ann, () => authority.authorize(Vm.StopWorkspace.onContext("callingWorkspace"), {}))))).toBe(true)
+        await as({type: "user", id: "dan"}, () => check(authority, Vm.StopWorkspace.onContext("callingWorkspace"), {}))
+        expect(FORBIDDEN.is(await fail(as(ann, () => check(authority, Vm.StopWorkspace.onContext("callingWorkspace"), {}))))).toBe(true)
     })
 
     test("a list requirement passes; the handler filters with allowed()", async () => {
-        await as(ann, () => authority.authorize(Vm.ReadWorkspace.list(), {}))
+        await as(ann, () => check(authority, Vm.ReadWorkspace.list(), {}))
         const refs = ["ann-1", "dan-1", "nope"].map(id => ({type: Vm.types.workspace, id}))
         expect(await as(ann, () => authority.allowed(Vm.ReadWorkspace, refs))).toEqual([true, false, false])
         expect(await as(ann, () => authority.can(Vm.ReadWorkspace, {type: Vm.types.workspace, id: "cleo-1", properties: {ancestors: [rn.web, rn.org]}}))).toBe(true)
@@ -238,7 +237,7 @@ describe("GGAuthzAuthority", () => {
 
     test("approval stays APPROVAL_REQUIRED, also when hidden", async () => {
         const agent: GGAuthzSubject = {type: "agent", id: "ws-ann", properties: {onBehalfOf: {type: "user", id: "ann"}}}
-        expect(APPROVAL_REQUIRED.is(await fail(as(agent, () => authority.authorize(Vm.StopWorkspace.on("workspaceId").hide(), {workspaceId: "ann-1"}))))).toBe(true)
+        expect(APPROVAL_REQUIRED.is(await fail(as(agent, () => check(authority, Vm.StopWorkspace.on("workspaceId").hide(), {workspaceId: "ann-1"}))))).toBe(true)
     })
 
     test("assertLoaders lists methods whose types need a row but have no loader", () => {
@@ -274,7 +273,7 @@ describe("GGAuthzAuthority", () => {
 
     test("a list requirement still needs the caller's tenant", async () => {
         const tenantless = new GGAuthzAuthority({partition: "acme", tenantType: Org.types.org, tenant: () => { throw new NOT_AUTHORIZED() }, engine: async () => engine})
-        expect(NOT_AUTHORIZED.is(await fail(as(ann, () => tenantless.authorize(Vm.ReadWorkspace.list(), {}))))).toBe(true)
+        expect(NOT_AUTHORIZED.is(await fail(as(ann, () => check(tenantless, Vm.ReadWorkspace.list(), {}))))).toBe(true)
     })
 
     describe("approvals", () => {
@@ -287,7 +286,7 @@ describe("GGAuthzAuthority", () => {
         }
 
         test("without `approvals`, an allow that needs one is APPROVAL_REQUIRED with its level", async () => {
-            const e = await fail(as(agent, () => make().authorize(Vm.StopWorkspace.on("workspaceId"), {workspaceId: "ann-1"})))
+            const e = await fail(as(agent, () => check(make(), Vm.StopWorkspace.on("workspaceId"), {workspaceId: "ann-1"})))
             expect(APPROVAL_REQUIRED.is(e) && e.data).toEqual({action: Vm.StopWorkspace.name, resource: "rn:acme:vm:acme:workspace/ann-1", level: "ask-once", key: undefined})
         })
 
@@ -295,7 +294,7 @@ describe("GGAuthzAuthority", () => {
             const needs: GGAuthzApprovalNeed[] = []
             const authority = make(async need => { needs.push(need) })
             authority.registerApprovalKey(Vm.StopWorkspace, input => ({type: Org.types.project, id: String(input.why)}))
-            await as(agent, () => authority.authorize(Vm.StopWorkspace.on("workspaceId"), {workspaceId: "ann-1", why: "web"}))
+            await as(agent, () => check(authority, Vm.StopWorkspace.on("workspaceId"), {workspaceId: "ann-1", why: "web"}))
             await as(agent, () => authority.assert(Vm.StopWorkspace, {type: Vm.types.workspace, id: "ann-2"}))
             expect(needs.map(n => [n.action, n.resource.rn, n.key.rn, n.level])).toEqual([
                 [Vm.StopWorkspace.name, "rn:acme:vm:acme:workspace/ann-1", "rn:acme:org:acme:project/web", "ask-once"],
@@ -319,8 +318,8 @@ describe("GGAuthzAuthority", () => {
             const approving = new GGAuthzAuthority({partition: "acme", tenantType: Org.types.org, tenant: () => "acme", engine: async () => raising, decided, approvals: async () => undefined})
             const asking = new GGAuthzAuthority({partition: "acme", tenantType: Org.types.org, tenant: () => "acme", engine: async () => raising, decided})
             for (const a of [approving, asking]) a.register(Vm.types.workspace, () => ({properties: {ancestors: [rn.web, rn.org]}}))
-            await as(agent, () => approving.authorize(Vm.StopWorkspace.on("workspaceId"), {workspaceId: "ann-1"}))
-            const err = await fail(as(agent, () => asking.authorize(Vm.StopWorkspace.on("workspaceId"), {workspaceId: "ann-1"})))
+            await as(agent, () => check(approving, Vm.StopWorkspace.on("workspaceId"), {workspaceId: "ann-1"}))
+            const err = await fail(as(agent, () => check(asking, Vm.StopWorkspace.on("workspaceId"), {workspaceId: "ann-1"})))
             expect(APPROVAL_REQUIRED.is(err)).toBe(true)
             expect(heard.map(e => [e.outcome, e.outcome === "approved" || e.outcome === "unapproved" ? e.level : undefined, e.outcome === "unapproved" && e.error === err])).toEqual([
                 ["approved", "ask-once", false],
@@ -352,13 +351,12 @@ describe("GGAuthzAuthority", () => {
         guarded.register(Vm.types.workspace, (_tenant, id) => workspaces[id] ? {properties: {ancestors: [workspaces[id]!, rn.org]}} : undefined)
         const ws = {type: Vm.types.workspace, id: "ann-1"}
         const stop = Vm.StopWorkspace.on("workspaceId")
-        await inCall(ann, {api: "VmApi", method: "stop"}, [stop], async () => {
-            await guarded.authorize(stop, {workspaceId: "ann-1"})
+        await inCall(guarded, ann, {api: "VmApi", method: "stop"}, [stop], {workspaceId: "ann-1"}, async () => {
             await guarded.assert(Vm.StopWorkspace, ws)
             await guarded.can(Vm.StartWorkspace, ws)
             await guarded.allowed(Vm.ReadWorkspace, [ws])
         })
-        await inCall(ann, {api: "VmApi", method: "status"}, [], () => guarded.can(Vm.ReadWorkspace, ws))
+        await inCall(guarded, ann, {api: "VmApi", method: "status"}, [], undefined, () => guarded.can(Vm.ReadWorkspace, ws))
         // Outside a contract call there is nothing to compare with.
         await as(ann, () => guarded.can(Vm.StartWorkspace, ws))
         expect(reported).toEqual([`VmApi.stop ${Vm.StartWorkspace.name}`, `VmApi.stop ${Vm.ReadWorkspace.name}`, `VmApi.status ${Vm.ReadWorkspace.name}`])

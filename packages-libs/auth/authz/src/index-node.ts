@@ -1,7 +1,7 @@
 import "./_dedupCheck";
 export * from "./index-browser"
 export {GGAuthz} from "./node/GGAuthz"
-export type {GGAuthzConfig, GGAuthzFacts, GGAuthzHoldRequest, GGAuthzInactiveAction, GGAuthzRefusal, GGAuthzResolver, GGAuthzVerdict} from "./node/GGAuthz"
+export type {GGAuthzConfig, GGAuthzFacts, GGAuthzHoldRequest, GGAuthzInactiveAction, GGAuthzResolver, GGAuthzVerdict} from "./node/GGAuthz"
 export {GGAuthzAuthority} from "./node/GGAuthzAuthority"
 export type {
     GGAuthzApprovalKey,

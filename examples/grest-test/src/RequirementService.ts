@@ -15,16 +15,18 @@ const ALLOWED = new Set([
 export const AUTHORITY_SEEN: string[] = []
 
 export const DOCS_AUTHORITY_HANDLER = DOCS_AUTHORITY.define((seen: string[]) => ({
-    authorize: async (r: GGRequirement, input: unknown) => {
-        seen.push(`${r.action} ${JSON.stringify(input ?? null)}`)
-        if (r.list) return
-        const fromInput = r.resource?.id && "field" in r.resource.id ? requirementField(input, r.resource.id.field) : undefined
-        const resource = fromInput === undefined && r.createOn ? r.createOn : r.resource!
-        const parent = resource.in && requirementField(input, resource.in.field) as {type: string, id: string}
-        const id = resource.id && "field" in resource.id ? requirementField(input, resource.id.field) : undefined
-        const target = parent ? `${parent.type}/${parent.id}` : `${resource.type}/${id}`
-        if (ALLOWED.has(`${USER_DATA.get()!.username} ${r.action} ${target}`)) return
-        throw r.hidden ? new NOT_FOUND() : new FORBIDDEN()
+    authorize: async (_call: unknown, requirements: readonly GGRequirement[], input: unknown) => {
+        for (const r of requirements) {
+            seen.push(`${r.action} ${JSON.stringify(input ?? null)}`)
+            if (r.list) continue
+            const fromInput = r.resource?.id && "field" in r.resource.id ? requirementField(input, r.resource.id.field) : undefined
+            const resource = fromInput === undefined && r.createOn ? r.createOn : r.resource!
+            const parent = resource.in && requirementField(input, resource.in.field) as {type: string, id: string}
+            const id = resource.id && "field" in resource.id ? requirementField(input, resource.id.field) : undefined
+            const target = parent ? `${parent.type}/${parent.id}` : `${resource.type}/${id}`
+            if (ALLOWED.has(`${USER_DATA.get()!.username} ${r.action} ${target}`)) continue
+            throw r.hidden ? new NOT_FOUND() : new FORBIDDEN()
+        }
     },
 }))
 

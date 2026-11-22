@@ -243,14 +243,14 @@ A requirement is decided by the schema's **authority**, which is listed in `use:
 export const DOCS_AUTHORITY = new GGAuthority("docs")                    // shared api/
 export const DocsApi = new GGHttpSchema({contract, pathPrefix: "api/docs", use: [USER_TOKEN_WIRE, DOCS_AUTHORITY], routes})
 
-// server: throw one of the requirement's errors to refuse
+// server: once per call, throw one of a requirement's errors to refuse
 export const DOCS_AUTHORITY_HANDLER = DOCS_AUTHORITY.define((engine: Engine) => ({
-    authorize: async (requirement, input, call) => { /* decide; throw FORBIDDEN / NOT_FOUND */ },
+    authorize: async (call, requirements, input) => { /* decide each; throw FORBIDDEN / NOT_FOUND */ },
 }))
 DOCS_AUTHORITY_HANDLER.create(engine)                                     // in compose()
 ```
 
-- **Order:** wires authenticate → scope strings are checked (before the input is read) → the input is validated → each requirement goes to the authority → the handler runs. Invalid input never reaches the authority.
+- **Order:** wires authenticate → scope strings are checked (before the input is read) → the input is validated → the call and its requirements (none, too) go to the authority → the handler runs. Invalid input never reaches the authority.
 - **Mixing:** `{allOf: ["admin", requirement]}` needs both. A requirement can't sit inside `anyOf`.
 - **Inside a parent:** a requirement whose resource has `in: {field, types}` reads a `{type, id}` from that input
   field and is decided on that parent (e.g. a create or a list in a project). Contract construction checks the field is

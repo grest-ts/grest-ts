@@ -2,7 +2,7 @@ import {FORBIDDEN, type GGPermission, type GGRequirement, NOT_AUTHORIZED, NOT_FO
 import {actionName, type GGAuthzActionRef} from "../shared/defineAuthz"
 import {APPROVAL_REQUIRED} from "../shared/authzErrors"
 import {GG_AUTHZ_SUBJECT} from "./GG_AUTHZ_SUBJECT"
-import {GGAuthz, type GGAuthzRefusal, type GGAuthzVerdict} from "./GGAuthz"
+import {GGAuthz, type GGAuthzVerdict} from "./GGAuthz"
 import {
     AuthzResources,
     currentCall,
@@ -15,6 +15,7 @@ import {
 import {
     type GGAuthzApprovalLevel,
     type GGAuthzDecision,
+    type GGAuthzRefusal,
     type GGAuthzRequest,
     type GGAuthzResourceProperties,
     type GGAuthzSubject,
@@ -42,17 +43,6 @@ export interface GGAuthzGrant {
     principal: string
 }
 
-/** A refusal before it's answered: `refused` may hide it or explain it. */
-export interface GGAuthzRefused {
-    action: string
-    resource: GGAuthzResolvedResource
-    subject: GGAuthzSubject
-    facts: Facts
-    decision: GGAuthzDecision
-    refusal: GGAuthzRefusal
-    call?: GGAuthzCall
-}
-
 /** One decision, once its answer is final. `call`: the contract call it was made in; `grant`: from `authorizeGrant`,
  *  whose `action` is the engine's grant action; `holds`: one of the actions `assertHolds` checked. */
 export type GGAuthzDecided = {
@@ -69,6 +59,9 @@ export type GGAuthzDecided = {
     | {outcome: "unapproved", level: GGAuthzApprovalLevel, error: unknown}
     | {outcome: "denied", refusal: GGAuthzRefusal, hidden: boolean, error: RefusalError | InstanceType<typeof NOT_FOUND>}
 )
+
+/** A refusal before it's answered, with the request's facts: `refused` may hide it or explain it. */
+export type GGAuthzRefused = Pick<GGAuthzDecided, "action" | "resource" | "subject" | "call" | "decision"> & {refusal: GGAuthzRefusal, facts: Facts}
 
 export interface GGAuthzAuthorityConfig {
     partition: string
@@ -134,13 +127,14 @@ export class GGAuthzAuthority {
         return this.resources.properties(type, id)
     }
 
-    /** The grest-ts `GGAuthorityHandler` hook: a contract call starts, declaring its requirements. */
-    public readonly begin = (call: GGAuthzCall, requirements: readonly GGRequirement[]): void => {
+    /** The grest-ts `GGAuthorityHandler` method: a contract call, before its handler runs. Opens the call (what the
+     *  handler's checks are compared with, and one read of each row) and decides each of its requirements. */
+    public readonly authorize = async (call: GGAuthzCall, requirements: readonly GGRequirement[], input: unknown): Promise<void> => {
         openCall(call, requirements.map(r => r.action))
+        for (const requirement of requirements) await this.requirement(requirement, input)
     }
 
-    /** The grest-ts `GGAuthorityHandler` method. */
-    public readonly authorize = async (requirement: GGRequirement, input: unknown): Promise<void> => {
+    private async requirement(requirement: GGRequirement, input: unknown): Promise<void> {
         // A listing filters itself, but only within the caller's tenant: no tenant, no listing.
         if (requirement.list) return void this.config.tenant()
         const fields = (input ?? {}) as Record<string, unknown>
@@ -148,7 +142,7 @@ export class GGAuthzAuthority {
         const creating = requirement.createOn && (id && "field" in id ? requirementField(fields, id.field) : undefined) === undefined
         const target = this.resources.refOf(creating ? requirement.createOn! : requirement.resource!, fields)
         const keyOf = this.approvalKeys.get(requirement.action)
-        const resource = await this.resources.resolve(target, true)
+        const resource = await this.resources.resolve(target)
         await this.decide(requirement.action, resource, {hidden: requirement.hidden, key: keyOf && (r => keyOf(fields, r))})
     }
 
@@ -196,8 +190,7 @@ export class GGAuthzAuthority {
     /** `canGrant` of `role` to `principal` on `resource` for the caller: throws like `assert`. */
     public async authorizeGrant(role: string, principal: string, resource: GGAuthzResourceRef): Promise<void> {
         const subject = this.subject()
-        const resolved = await this.resources.resolve(resource)
-        const engine = await this.config.engine(resolved.tenant)
+        const [resolved, engine] = await Promise.all([this.resources.resolve(resource), this.config.engine(this.config.tenant())])
         const binding = {principal, role, on: resolved.rn}
         const request = engine.grantRequest(subject, binding)
         await this.answer(request, await engine.canGrant({subject, binding}), resolved, undefined, {grant: {role, principal}})
@@ -207,10 +200,10 @@ export class GGAuthzAuthority {
      *  handing them out (no-escalation, as `authorizeGrant`). `context`: the facts that hold there. */
     public async assertHolds(actions: readonly GGAuthzActionRef[], resource: GGAuthzResourceRef, options?: {context?: Record<string, unknown>, displayMessage?: string}): Promise<void> {
         const subject = this.subject()
-        const resolved = await this.resources.resolve(resource)
+        const [resolved, engine] = await Promise.all([this.resources.resolve(resource), this.config.engine(this.config.tenant())])
         const names = actions.map(actionName)
-        const decision = await (await this.config.engine(resolved.tenant)).canHold({subject, actions: names, on: resolved.rn, context: options?.context})
-        const missing = decision.decision ? [] : decision.context.reasons.find(r => r.kind === "escalation")?.actions ?? names
+        const decision = await engine.canHold({subject, actions: names, on: resolved.rn, context: options?.context})
+        const missing = GGAuthz.notHeld(decision, names)
         const error = missing.length ? new FORBIDDEN({displayMessage: options?.displayMessage, debugMessage: `${subject.type}:${subject.id} doesn't hold ${missing.join(", ")} on ${resolved.rn}`}) : undefined
         if (this.config.decided) {
             const call = currentCall()?.call
@@ -231,17 +224,16 @@ export class GGAuthzAuthority {
     // The one place a decision becomes an answer: allowed, approved or not, or refused (hidden or explained).
     private async answer(request: GGAuthzRequest, decision: GGAuthzDecision, resource: GGAuthzResolvedResource, facts: Facts, options: {hidden?: boolean, key?: (resource: GGAuthzResolvedResource) => {type: string, id: string}, grant?: GGAuthzGrant}): Promise<void> {
         const verdict = GGAuthz.verdict(request, decision)
-        const call = currentCall()?.call
-        const base = {action: request.action.name, resource, subject: request.subject, call, decision, grant: options.grant}
+        const event = () => ({action: request.action.name, resource, subject: request.subject, call: currentCall()?.call, decision, grant: options.grant})
         if (verdict.outcome === "allowed") {
-            if (this.config.decided) this.heard({...base, outcome: "allowed"})
+            if (this.config.decided) this.heard({...event(), outcome: "allowed"})
             return
         }
         if (verdict.outcome === "approval-required") {
             const {level} = verdict
             const key = options.key?.(resource)
             const need: GGAuthzApprovalNeed = {
-                action: base.action,
+                action: request.action.name,
                 resource,
                 level,
                 key: key ? {...key, rn: this.resources.rnOf(key.type, key.id)} : {type: resource.type, id: resource.id, rn: resource.rn},
@@ -253,16 +245,16 @@ export class GGAuthzAuthority {
                 }
                 await this.config.approvals(need)
             } catch (error) {
-                if (this.config.decided) this.heard({...base, outcome: "unapproved", level, error})
+                if (this.config.decided) this.heard({...event(), outcome: "unapproved", level, error})
                 throw error
             }
-            if (this.config.decided) this.heard({...base, outcome: "approved", level})
+            if (this.config.decided) this.heard({...event(), outcome: "approved", level})
             return
         }
-        const shaped = options.hidden ? "hide" : await this.config.refused?.({action: base.action, resource, subject: base.subject, facts, decision, refusal: verdict.refusal, call})
+        const shaped = options.hidden ? "hide" : await this.config.refused?.({...event(), facts, refusal: verdict.refusal})
         const explained = verdict.refusal === "FORBIDDEN" && shaped !== "hide" ? shaped : undefined
         const error = shaped === "hide" ? new NOT_FOUND({displayMessage: "Not found", debugMessage: verdict.error.getDebugContext()?.debugMessage}) : explained ?? verdict.error
-        if (this.config.decided) this.heard({...base, outcome: "denied", refusal: verdict.refusal, hidden: shaped === "hide", error})
+        if (this.config.decided) this.heard({...event(), outcome: "denied", refusal: verdict.refusal, hidden: shaped === "hide", error})
         throw error
     }
 
