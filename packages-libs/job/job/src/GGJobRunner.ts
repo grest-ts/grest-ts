@@ -5,6 +5,7 @@ import {type GGLock, newLockOwner, withLock} from "@grest-ts/lock"
 import type {GGJob} from "./GGJob"
 import {GGJobMetrics} from "./GGJobMetrics"
 import {inJobRowContext, inJobRunContext} from "./jobContext"
+import {GG_TRACE, type TraceContext} from "@grest-ts/trace"
 
 export const GG_JOB_RUNNER = new GGLocatorKey<GGJobRunner>("GGJobRunner")
 
@@ -174,7 +175,7 @@ class JobLoop {
         const config = this.runConfig()
         if (!config.enabled) return {result: "DISABLED", ...NO_RUN}
         if (this.running) return {result: "BUSY", ...NO_RUN}
-        return this.track(this.runOnce(config, false))
+        return this.track(this.runOnce(config, false, GG_TRACE.get()))
     }
 
     private track<T>(run: Promise<T>): Promise<T> {
@@ -182,8 +183,8 @@ class JobLoop {
         return run
     }
 
-    private runOnce(config: RunConfig, hold: boolean): Promise<GGJobRunResult> {
-        return inJobRunContext(() => this.runInContext(config, hold))
+    private runOnce(config: RunConfig, hold: boolean, caller?: TraceContext): Promise<GGJobRunResult> {
+        return inJobRunContext(() => this.runInContext(config, hold), caller)
     }
 
     private async runInContext(config: RunConfig, hold: boolean): Promise<GGJobRunResult> {

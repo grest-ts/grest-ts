@@ -1,11 +1,11 @@
 import {GGContext, GGContextStore} from "@grest-ts/context"
-import {GG_TRACE} from "@grest-ts/trace"
+import {GG_TRACE, type TraceContext} from "@grest-ts/trace"
 
-/** A run gets a fresh context and trace with no parent, so it inherits nothing and what it sets reaches nothing else.
- *  What `getDataSet` sets there, its rows see. */
-export function inJobRunContext<T>(fn: () => Promise<T>): Promise<T> {
+/** A run gets a fresh context with no parent, so it inherits nothing and what it sets reaches nothing else; what
+ *  `getDataSet` sets there, its rows see. Its trace is new, or a span of `caller`'s for a run someone asked for. */
+export function inJobRunContext<T>(fn: () => Promise<T>, caller?: TraceContext): Promise<T> {
     return new GGContext("JOB").run(() => {
-        GG_TRACE.init()
+        GG_TRACE.startSpan(caller)
         return fn()
     })
 }

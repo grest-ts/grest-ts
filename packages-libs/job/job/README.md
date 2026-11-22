@@ -69,7 +69,8 @@ The runner starts with the runtime. On teardown it stops new rows, waits for run
 
 `runner.run(name)` runs a job now and leaves the schedule as it was. A `oneInstance` job answers `BUSY` until its last scheduled run's cooldown ends: the lock is what keeps it to one run per interval.
 
-Every run, scheduled or `run()`, gets a fresh context and trace with no parent: it never runs in its caller's context.
+Every run, scheduled or `run()`, gets a fresh context with no parent: it never runs in its caller's context. A
+`run()` continues its caller's trace as a span; a scheduled run starts a new one.
 What `getDataSet` sets in that context, its rows see. Each row runs in its own child context, as a span of the run's
 trace, so what one row sets the next one never sees.
 

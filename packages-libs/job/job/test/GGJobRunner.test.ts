@@ -252,6 +252,23 @@ describe("GGJobRunner", () => {
         expect(job.processed).toEqual(["good"])
     })
 
+    test("run() doesn't run in its caller's context but continues its trace as a span", async () => {
+        const seen: {marked: boolean, trace?: TraceContext}[] = []
+        const job = new TestJob({}, () => ["a"], async () => { seen.push({marked: MARK.has(), trace: GG_TRACE.get()}) })
+        const runner = newRunner(new GGInstanceLock(), "a").add(job)
+        const caller = new GGContext("caller").set(MARK, true)
+
+        const callerTrace = caller.run(() => {
+            GG_TRACE.init()
+            return GG_TRACE.get()!
+        })
+        await caller.run(() => scopes.get(runner)!.run(() => runner.run("test")))
+
+        expect(seen[0].marked).toBe(false)
+        expect(seen[0].trace!.traceId).toBe(callerTrace.traceId)
+        expect(seen[0].trace!.spanId).not.toBe(callerTrace.spanId)
+    })
+
     test("runJobOnce runs rows in their own contexts, as the runner does", async () => {
         const marked: boolean[] = []
         const job = new TestJob({runOn: "everyInstance"}, () => ["a", "b"], async () => {
