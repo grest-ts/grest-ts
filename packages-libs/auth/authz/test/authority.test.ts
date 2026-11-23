@@ -238,7 +238,7 @@ describe("GGAuthzAuthority", () => {
         expect(calls).toBe(2)
     })
 
-    test("once keeps a result for the call, not a failure, and keeps nothing outside a call", async () => {
+    test("once keeps a result for the call and subject, not a failure, and keeps nothing outside a call", async () => {
         let runs = 0
         const count = () => authority.once("k", async () => {
             if (runs++ === 0) throw new Error("throttled")
@@ -247,8 +247,9 @@ describe("GGAuthzAuthority", () => {
         await inCall(authority, ann, {api: "VmApi", method: "status"}, [], undefined, async () => {
             await expect(count()).rejects.toThrow("throttled")
             expect([await count(), await count()]).toEqual([2, 2])
+            expect(await as({type: "user", id: "ben"}, count)).toBe(3)
         })
-        expect([await count(), await count()]).toEqual([3, 4])
+        expect(await as(ann, async () => [await count(), await count()])).toEqual([4, 5])
     })
 
     test("two authorities in one call read through their own loaders", async () => {

@@ -333,7 +333,7 @@ In handlers, for checks that depend on the row's state:
 | `peek(action, refs)`, `peekEach([{action, resource}])` | whether each would be allowed, without it counting as a decision (not declared, not heard, never asks for approval): for filtering a listing or hinting a UI |
 | `authorizeGrant(role, principal, ref)` | `canGrant` for the caller (§6), throwing like `assert` |
 | `assertHolds(actions, ref, {context?, displayMessage?})` | `FORBIDDEN` unless the caller holds every one of `actions` there, e.g. before handing them out; decided on the RN, without loading the row |
-| `once(key, fn)` | `fn`'s promise once per `key` in the call, as rows are read once: e.g. a fact the hooks compute. A failure or an `undefined` isn't kept; outside a call it just runs |
+| `once(key, fn)` | `fn`'s promise once per `key` and subject in the call, as rows are read once: e.g. a fact the hooks compute. A failure or an `undefined` isn't kept; outside a call it just runs |
 
 Pass `properties` when the handler already holds the row. Optional config, every hook seeing the
 whole decision. A hook's error is passed on as the call's answer, so no hook needs a try/catch;

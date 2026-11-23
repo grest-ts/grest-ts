@@ -152,10 +152,12 @@ export class GGAuthzAuthority {
         return this.resources.properties(type, id)
     }
 
-    /** `fn`'s promise, once per `key` within this call, as rows are read once: e.g. a fact the hooks compute. A failure
-     *  or an `undefined` isn't kept; outside a call it just runs. */
+    /** `fn`'s promise, once per `key` and subject within this call, as rows are read once: e.g. a fact the hooks compute
+     *  for the caller, so code acting as another subject in the call gets its own. A failure or an `undefined` isn't
+     *  kept; outside a call it just runs. */
     public once<T>(key: string, fn: () => Promise<T>): Promise<T> {
-        return once(this, key, fn)
+        const {type, id} = this.subject()
+        return once(this, `${type}:${id} ${key}`, fn)
     }
 
     /** The grest-ts `GGAuthorityHandler` method: a contract call, before its handler runs. Opens the call (what the
