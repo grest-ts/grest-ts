@@ -19,9 +19,8 @@ concurrency:
 
 jobs:
   ci:
-    # Defense-in-depth: skip the bot's own version-bump commits if they ever
-    # re-enter (GITHUB_TOKEN-driven pushes don't trigger workflows by default,
-    # but keep the guard).
+    # Skip the bot's own version-bump commits if they ever re-enter: they are pushed with the deploy key,
+    # and deploy-key pushes do trigger workflows (only `push: release` is listened to today).
     if: ${{ github.event.head_commit.author.email != 'github-actions[bot]@users.noreply.github.com' }}
     runs-on: ubuntu-latest
     environment: ${{ github.event_name == 'push' && 'release' || '' }}
@@ -54,9 +53,8 @@ jobs:
           # Need full history so the bump commit can be pushed cleanly to
           # master (FF requires master's tip to be reachable).
           fetch-depth: 0
-          # Empty outside the release environment, so a PR checks out over HTTPS and keeps no credential.
-          ssh-key: ${{ secrets.RELEASE_DEPLOY_KEY }}
-          persist-credentials: ${{ github.event_name == 'push' }}
+          # The checked-out code (npm install scripts included) must never find a credential in .git/config.
+          persist-credentials: false
 
       - name: Setup Node 26
         uses: actions/setup-node@v4
@@ -105,9 +103,20 @@ jobs:
 
       - name: Commit, tag, and fast-forward master + backmerge dev
         if: github.event_name == 'push' && github.ref == 'refs/heads/release'
+        # Only this step sees the key; it exists only in the `release` environment.
+        env:
+          RELEASE_DEPLOY_KEY: ${{ secrets.RELEASE_DEPLOY_KEY }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          key="$RUNNER_TEMP/release_deploy_key"
+          install -m 600 /dev/null "$key"
+          printf '%s\n' "$RELEASE_DEPLOY_KEY" > "$key"
+          # GitHub's published ed25519 host key.
+          echo "github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl" > "$RUNNER_TEMP/known_hosts"
+          export GIT_SSH_COMMAND="ssh -i $key -o IdentitiesOnly=yes -o UserKnownHostsFile=$RUNNER_TEMP/known_hosts -o StrictHostKeyChecking=yes"
+          git remote set-url origin "git@github.com:${{ github.repository }}.git"
 
           # Permissive mode: capture every file the regen step touched, not
           # just package.json bumps. Anything check / generate produces
