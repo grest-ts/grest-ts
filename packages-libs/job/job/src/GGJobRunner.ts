@@ -4,6 +4,8 @@ import {GG_METRICS} from "@grest-ts/metrics"
 import {type GGLock, newLockOwner, withLock} from "@grest-ts/lock"
 import type {GGJob} from "./GGJob"
 import {GGJobMetrics} from "./GGJobMetrics"
+import {inJobRowContext, inJobRunContext} from "./jobContext"
+import {GG_TRACE, type TraceContext} from "@grest-ts/trace"
 
 export const GG_JOB_RUNNER = new GGLocatorKey<GGJobRunner>("GGJobRunner")
 
@@ -173,7 +175,7 @@ class JobLoop {
         const config = this.runConfig()
         if (!config.enabled) return {result: "DISABLED", ...NO_RUN}
         if (this.running) return {result: "BUSY", ...NO_RUN}
-        return this.track(this.runOnce(config, false))
+        return this.track(this.runOnce(config, false, GG_TRACE.get()))
     }
 
     private track<T>(run: Promise<T>): Promise<T> {
@@ -181,7 +183,11 @@ class JobLoop {
         return run
     }
 
-    private async runOnce(config: RunConfig, hold: boolean): Promise<GGJobRunResult> {
+    private runOnce(config: RunConfig, hold: boolean, caller?: TraceContext): Promise<GGJobRunResult> {
+        return inJobRunContext(() => this.runInContext(config, hold), caller)
+    }
+
+    private async runInContext(config: RunConfig, hold: boolean): Promise<GGJobRunResult> {
         const name = this.job.config.name
         const signal = this.stopped.signal
         const startedAt = Date.now()
@@ -250,7 +256,11 @@ class JobLoop {
         }
     }
 
-    private async runRow(row: unknown, signal: AbortSignal): Promise<boolean> {
+    private runRow(row: unknown, signal: AbortSignal): Promise<boolean> {
+        return inJobRowContext(() => this.runRowInContext(row, signal))
+    }
+
+    private async runRowInContext(row: unknown, signal: AbortSignal): Promise<boolean> {
         const job = this.job.config.name
         metric(() => GGJobMetrics.rowsInFlight.inc(1, {job}))
         try {

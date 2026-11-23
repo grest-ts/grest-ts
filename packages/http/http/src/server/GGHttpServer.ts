@@ -12,7 +12,9 @@ import {checkPermissionsAtStart} from "./checkers/checkPermissionsAtStart";
 import {checkWireConflicts} from "./checkers/checkWireConflicts";
 import "../schema/GGWireContextKey.node.js";
 import {GGContractMethod} from "@grest-ts/schema";
-import type {GGTransportMiddleware} from "@grest-ts/context";
+import {GGContext, type GGTransportMiddleware} from "@grest-ts/context";
+import {GG_TRACE} from "@grest-ts/trace";
+import {GG_HTTP_REQUEST, requestPeer} from "./GG_HTTP_REQUEST";
 // Forward declaration — actual type lives in @grest-ts/websocket to avoid circular dep.
 // GGHttpServer only stores the array; callers cast as needed. `contract` is absent for
 // byte-stream schemas (they carry no per-message methods).
@@ -135,7 +137,18 @@ export class GGHttpServer {
                 } else {
                     const resolved = this.router.find(req.method as HTTPMethod, req.url ?? "")
                     if (resolved) {
-                        await (resolved.handler as unknown as GGHttpRequestCallback)(req, res);
+                        this.scope.ensureEntered();
+                        // No parent, as websocket and IPC: a request inherits nothing another request or the runtime set.
+                        await new GGContext("REQ", undefined, true).run(() => {
+                            GG_TRACE.init();
+                            GG_HTTP_REQUEST.set({
+                                port: this._port ?? 0,
+                                method: req.method ?? "",
+                                path: req.url ?? "",
+                                ...requestPeer(req),
+                            });
+                            return (resolved.handler as unknown as GGHttpRequestCallback)(req, res);
+                        });
                     } else {
                         res.writeHead(404);
                         res.end();
@@ -235,6 +248,7 @@ export class GGHttpServer {
         return this._registeredWebSocketSchemas;
     }
 
+    /** The handler runs in a fresh strict request context with `GG_TRACE` and `GG_HTTP_REQUEST` already set. */
     public registerRoute(method: HttpMethod, path: string, handler: GGHttpRequestCallback, owner?: string): void {
         const route = `${method} ${path}`;
         const existing = this._routeOwners.get(route);

@@ -1,5 +1,8 @@
 import {afterEach, beforeEach, describe, expect, test, vi} from "vitest"
+import {GGContext, GGContextKey} from "@grest-ts/context"
 import {GGLocatorScope} from "@grest-ts/locator"
+import {IsBoolean} from "@grest-ts/schema"
+import {GG_TRACE, type TraceContext} from "@grest-ts/trace"
 import {GGLog} from "@grest-ts/logger"
 import {sleep} from "@grest-ts/common"
 import {GGMetricsLoader, GG_METRICS} from "@grest-ts/metrics"
@@ -25,6 +28,8 @@ function newRunner(lock: GGLock, owner: string): GGJobRunner {
 function stubLock(overrides: Partial<GGLock> = {}): GGLock {
     return {acquire: async () => true, renew: async () => true, release: async () => {}, ...overrides}
 }
+
+const MARK = new GGContextKey<boolean>("job-test-mark", IsBoolean)
 
 const untilAborted = (_row: string, signal: AbortSignal) => new Promise<void>(r => signal.addEventListener("abort", () => r()))
 
@@ -167,6 +172,38 @@ describe("GGJobRunner", () => {
         expect(job.processed).toEqual(["good"])
     })
 
+    test("each row runs in its own context, a span of its run's trace, so what one sets reaches neither the next row nor the runtime's root", async () => {
+        const seen: {marked: boolean, trace?: TraceContext}[] = []
+        const job = new TestJob({runOn: "everyInstance"}, () => ["a", "b"], async () => {
+            seen.push({marked: MARK.has(), trace: GG_TRACE.get()})
+            MARK.set(true)
+        })
+        const root = new GGContext("root")
+        root.run(() => newRunner(new GGInstanceLock(), "a").add(job).start())
+
+        await vi.advanceTimersByTimeAsync(1_500)
+
+        expect(seen.map(s => s.marked)).toEqual([false, false])
+        const [a, b] = seen.map(s => s.trace!)
+        expect(a.traceId).toBe(b.traceId)
+        expect(a.spanId).not.toBe(b.spanId)
+        expect(a.parentSpanId).toBe(a.traceId)
+        expect(root.has(MARK)).toBe(false)
+    })
+
+    test("a job added from inside a request doesn't run in that request's context", async () => {
+        const marked: boolean[] = []
+        const job = new TestJob({runOn: "everyInstance"}, () => ["a"], async () => { marked.push(MARK.has()) })
+        const runner = newRunner(new GGInstanceLock(), "a")
+        runner.start()
+        const request = new GGContext("request").set(MARK, true)
+        request.run(() => runner.add(job))
+
+        await vi.advanceTimersByTimeAsync(1_500)
+
+        expect(marked).toEqual([false])
+    })
+
     test("a full batch runs again up to maxExtraRuns, in parallel up to `parallel`", async () => {
         const pending = Array.from({length: 10}, (_, i) => `r${i}`)
         const job = new TestJob({runOn: "everyInstance", limit: 3, maxExtraRuns: 2, parallel: 3}, () => pending, async row => {
@@ -213,6 +250,35 @@ describe("GGJobRunner", () => {
         expect(rows).toEqual(["bad", "good"])
         expect(errors).toHaveLength(1)
         expect(job.processed).toEqual(["good"])
+    })
+
+    test("run() doesn't run in its caller's context but continues its trace as a span", async () => {
+        const seen: {marked: boolean, trace?: TraceContext}[] = []
+        const job = new TestJob({}, () => ["a"], async () => { seen.push({marked: MARK.has(), trace: GG_TRACE.get()}) })
+        const runner = newRunner(new GGInstanceLock(), "a").add(job)
+        const caller = new GGContext("caller").set(MARK, true)
+
+        const callerTrace = caller.run(() => {
+            GG_TRACE.init()
+            return GG_TRACE.get()!
+        })
+        await caller.run(() => scopes.get(runner)!.run(() => runner.run("test")))
+
+        expect(seen[0].marked).toBe(false)
+        expect(seen[0].trace!.traceId).toBe(callerTrace.traceId)
+        expect(seen[0].trace!.spanId).not.toBe(callerTrace.spanId)
+    })
+
+    test("runJobOnce runs rows in their own contexts, as the runner does", async () => {
+        const marked: boolean[] = []
+        const job = new TestJob({runOn: "everyInstance"}, () => ["a", "b"], async () => {
+            marked.push(MARK.has())
+            MARK.set(true)
+        })
+
+        await runJobOnce(job)
+
+        expect(marked).toEqual([false, false])
     })
 
     test("oneInstance: a short interval checked once per interval still runs at most once per interval", async () => {
