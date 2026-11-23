@@ -874,7 +874,7 @@ async function fetchAsPublicClient(url: string | URL | Request, options?: Reques
     const headers = new Headers(response.headers)
     headers.delete("content-length")
     headers.delete("content-encoding")
-    return new Response(asPublicClient(text, String(url)), {status: 200, headers})
+    return new Response(asPublicClient(text, url instanceof Request ? url.url : String(url)), {status: 200, headers})
 }
 
 export function asPublicClient(text: string, url: string): string {
