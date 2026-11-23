@@ -13,7 +13,7 @@ describe('auth-freshness HTTP gate', () => {
 
     it('recover runs before the outbound read, so the header carries the fresh value', async () => {
         await inContext(async () => {
-            const tokenWire = new GGHeader('x-token')
+            const tokenWire = new GGHeader('x-token', {key: 'gateTest.stale'})
             tokenWire.set('stale-token')
             const recover = vi.fn(async () => { tokenWire.set('fresh-token') })
             tokenWire.defineClient({
@@ -36,7 +36,7 @@ describe('auth-freshness HTTP gate', () => {
 
     it('no controller — update reads whatever the wire holds', async () => {
         await inContext(async () => {
-            const tokenWire = new GGHeader('x-token')
+            const tokenWire = new GGHeader('x-token', {key: 'gateTest.noController'})
             tokenWire.set('current-token')
 
             const builder = new GGRpcRequestBuilder('GET', '/test', {
@@ -54,7 +54,7 @@ describe('auth-freshness HTTP gate', () => {
         await inContext(async () => {
             const recover = vi.fn().mockResolvedValue(undefined)
 
-            const tokenWire = new GGHeader('x-token')
+            const tokenWire = new GGHeader('x-token', {key: 'gateTest.fresh'})
             tokenWire.set('good-token')
             tokenWire.defineClient({isStale: () => false, recover})
 

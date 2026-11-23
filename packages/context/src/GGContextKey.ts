@@ -7,6 +7,10 @@ export interface GGContextMeta<T> {
     mutable?: boolean
 }
 
+/** Where each key name was defined. A context stores values by name, and so does the testkit when it carries a
+ *  context to a runtime worker: two keys with one name would share a value. */
+const definedKeys = new Map<string, string | undefined>()
+
 export class GGContextKey<Type> {
 
     public readonly name: string
@@ -16,6 +20,7 @@ export class GGContextKey<Type> {
     public readonly mutable: boolean
 
     constructor(name: string, schema: GGSchema<Type>, meta?: GGContextMeta<Type>) {
+        registerName(name)
         this.name = name
         this.schema = schema;
         this.description = meta?.description
@@ -48,4 +53,26 @@ export class GGContextKey<Type> {
         }
         return this.get() as Type
     }
+}
+
+// The same name from the same place is the module evaluated again (HMR, vitest projects), not a second key. Compared
+// without the query an HMR reload adds (`?t=…`).
+function registerName(name: string): void {
+    const at = definitionSite()
+    if (definedKeys.has(name) && placeOf(definedKeys.get(name)) !== placeOf(at)) {
+        throw new Error(`Context key '${name}' is defined twice: at ${definedKeys.get(name) ?? "?"} and at ${at ?? "?"}. `
+            + `Context values are stored by key name, so the two would share one value: give each its own name `
+            + `(a GGHeader takes it as {key: "…"}).`)
+    }
+    definedKeys.set(name, at)
+}
+
+function placeOf(at: string | undefined): string | undefined {
+    return at?.replace(/\?[^:]*(?=:\d+:\d+$)/, "")
+}
+
+/** The first stack frame past the key constructors (this one and its subclasses'): where the key is defined. */
+function definitionSite(): string | undefined {
+    const frame = new Error().stack?.split("\n").slice(1).find(line => !/^\s*at (new |registerName |definitionSite )/.test(line))
+    return frame?.trim().replace(/^at\s+/, "").replace(/^.*\((.*)\)$/, "$1")
 }

@@ -89,7 +89,7 @@ describe('WS auth-freshness gate', () => {
 
     it('recover runs before the outbound read, so the handshake carries the fresh token', async () => {
         await inContext(async () => {
-            const tokenWire = new GGHeader('x-ws-token')
+            const tokenWire = new GGHeader('x-ws-token', {key: 'wsGateTest.stale'})
             tokenWire.set('stale-ws-token')
             const recover = vi.fn(async () => { tokenWire.set('fresh-ws-token') })
             tokenWire.defineClient({
@@ -110,7 +110,7 @@ describe('WS auth-freshness gate', () => {
 
     it('no controller — update reads whatever the wire holds', async () => {
         await inContext(async () => {
-            const tokenWire = new GGHeader('x-ws-token')
+            const tokenWire = new GGHeader('x-ws-token', {key: 'wsGateTest.noController'})
             tokenWire.set('current-ws-token')
 
             const headers = await connectAndGetHandshakeHeaders({
@@ -127,7 +127,7 @@ describe('WS auth-freshness gate', () => {
         await inContext(async () => {
             const recover = vi.fn().mockResolvedValue(undefined)
 
-            const tokenWire = new GGHeader('x-ws-token')
+            const tokenWire = new GGHeader('x-ws-token', {key: 'wsGateTest.fresh'})
             tokenWire.set('good-ws-token')
             tokenWire.defineClient({isStale: () => false, recover})
 

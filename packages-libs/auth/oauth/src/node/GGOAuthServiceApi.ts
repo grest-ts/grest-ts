@@ -3,7 +3,7 @@ import {ERROR, FORBIDDEN, GG_NO_PERMISSIONS, GGContractClass, IsObject, IsRecord
 import {IsGGAccessTokenData} from "@grest-ts/auth"
 
 // `Basic base64(clientId:secret)`, each part URI-encoded.
-export const GG_OAUTH_SERVICE_CLIENT = new GGHeader("authorization")
+export const GG_OAUTH_SERVICE_CLIENT = new GGHeader("authorization", {key: "oauthServiceClient"})
 
 // The subject token given to exchange is invalid or expired: get a fresh one, it's not a refusal.
 export const SUBJECT_TOKEN_INVALID = ERROR.define("SUBJECT_TOKEN_INVALID", 401)

@@ -28,7 +28,7 @@ describe("GGHttpPermissionsChecker", () => {
         it("ignores non-wire middlewares and wires without permissions", async () => {
             const checker = new GGHttpPermissionsChecker([
                 plainMiddleware,
-                new TestWire("ambient", null),
+                new TestWire("ambient-ignored", null),
             ]);
             expect(await checker.assert("Api", "method", GG_NO_PERMISSIONS)).toEqual([]);
             await expect(checker.assert("Api", "method", "anything")).rejects.toBeInstanceOf(FORBIDDEN);
@@ -37,9 +37,9 @@ describe("GGHttpPermissionsChecker", () => {
         it("collects scopes only from permission-bearing wires", async () => {
             const checker = new GGHttpPermissionsChecker([
                 plainMiddleware,
-                new TestWire("ambient", null),
-                new TestWire("header", ["a", "b"]),
-                new TestWire("cookie", ["c"]),
+                new TestWire("ambient-collected", null),
+                new TestWire("header-collected", ["a", "b"]),
+                new TestWire("cookie-collected", ["c"]),
             ]);
             expect(await checker.assert("Api", "method", GG_NO_PERMISSIONS)).toEqual([["a", "b"], ["c"]]);
         });
@@ -79,8 +79,8 @@ describe("GGHttpPermissionsChecker", () => {
 
         it("unions grants across wires when checking a requirement", async () => {
             const twoWires = new GGHttpPermissionsChecker([
-                new TestWire("header", ["a"]),
-                new TestWire("cookie", ["b"]),
+                new TestWire("header-union", ["a"]),
+                new TestWire("cookie-union", ["b"]),
             ]);
             expect(await twoWires.assert("Api", "method", {allOf: ["a", "b"]})).toEqual([["a"], ["b"]]);
             expect(await twoWires.assert("Api", "method", {anyOf: ["a", "z"]})).toEqual([["a"], ["b"]]);

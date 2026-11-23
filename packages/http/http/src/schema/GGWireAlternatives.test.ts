@@ -22,7 +22,7 @@ describe("GGWireAlternatives", () => {
     })
 
     it("conflicts when two groups read the same header", () => {
-        const other = new GGHeader("authorization")
+        const other = new GGHeader("authorization", {key: "otherToken"})
         const schema = {name: "Clash", apiMiddlewares: [new GGWireAlternatives([USER], [other])]}
         expect(() => checkWireConflicts([schema], [])).toThrow(/same header "authorization"/)
     })
@@ -38,8 +38,8 @@ describe("GGWireAlternatives", () => {
 
     it("refreshes and sends only the group the client holds a value for", async () => {
         await new GGContext("wire-alternatives-client").run(async () => {
-            const user = new GGHeader("authorization", {scheme: "bearer"})
-            const agent = new GGHeader("x-agent-token")
+            const user = new GGHeader("authorization", {scheme: "bearer", key: "clientUserToken"})
+            const agent = new GGHeader("x-agent-token", {key: "clientAgentToken"})
             const userRecover = vi.fn(async () => {
                 throw new Error("refresh failed")
             })

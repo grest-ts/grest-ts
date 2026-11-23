@@ -10,14 +10,14 @@ const Contract = new GGContractClass("WhoAmI", {
 const CookieApi = new GGHttpSchema({
     contract: Contract,
     pathPrefix: "c",
-    use: [new GGCookie("access")],
+    use: [new GGCookie("access", {key: "openApiTest.access"})],
     routes: {whoami: GGRpc.GET("whoami")},
 });
 
 const HeaderApi = new GGHttpSchema({
     contract: Contract,
     pathPrefix: "h",
-    use: [new GGHeader("authorization", {scheme: "bearer"})],
+    use: [new GGHeader("authorization", {scheme: "bearer", key: "openApiTest.bearer"})],
     routes: {whoami: GGRpc.GET("whoami")},
 });
 

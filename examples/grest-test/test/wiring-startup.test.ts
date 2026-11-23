@@ -35,12 +35,12 @@ describe("startup wiring checks", () => {
         expect(msg).toContain("Unsatisfiable.needsScope")
     })
 
-    test("two wires sharing a context-key name / header on one schema — start throws", async () => {
+    test("two wires reading one header on one schema — start throws", async () => {
         const e = await expectStartToThrow(WireConflictRuntime)
         const msg = e.message ?? String(e)
         expect(msg).toMatch(/conflicting wires/i)
         expect(msg).toContain("WireConflict")
-        expect(msg).toMatch(/context-key name "x-token"|header "x-token"/)
+        expect(msg).toMatch(/header "x-token"/)
     })
 
     test("non-public permission on a WS serverToClient method — start throws as dead config", async () => {

@@ -54,30 +54,33 @@ interface PendingCookie {
 export class GGCookie extends GGWireContextKey {
 
     public readonly cookieParams: Record<string, GGSchema<string | undefined>>
+    private readonly cookieName: string
 
-    constructor(name: string) {
+    /** `key` names the context key when it isn't the cookie's name: a second wire on one cookie needs its own. */
+    constructor(cookie: string, options?: { key?: string }) {
         const WIRE_SCHEMA = IsString.orUndefined
-        super(name, WIRE_SCHEMA)
-        _assertCookieSafe("name", this.name)
-        this.cookieParams = {[this.name]: WIRE_SCHEMA}
+        super(options?.key ?? cookie, WIRE_SCHEMA)
+        _assertCookieSafe("name", cookie)
+        this.cookieName = cookie
+        this.cookieParams = {[cookie]: WIRE_SCHEMA}
     }
 
     public parse(inbound: GGInbound): void {
-        const value = _readCookie(inbound.cookie, this.name)
+        const value = _readCookie(inbound.cookie, this.cookieName)
         if (value !== undefined) this.set(value)
     }
 
     public update(outbound: GGOutbound): void {
         const value = this.get()
         if (value === undefined) return
-        const pair = `${this.name}=${encodeURIComponent(value)}`
+        const pair = `${this.cookieName}=${encodeURIComponent(value)}`
         outbound.headers["cookie"] = outbound.headers["cookie"] ? `${outbound.headers["cookie"]}; ${pair}` : pair
     }
 
     public respond(res: GGResponse): void {
         const pending = GG_COOKIE_PENDING.get()?.get(this.name)
         if (pending === undefined) return
-        const line = _serializeSetCookie(this.name, pending.value, pending.options)
+        const line = _serializeSetCookie(this.cookieName, pending.value, pending.options)
         const existing = res.headers["set-cookie"]
         const arr = existing === undefined ? [] : Array.isArray(existing) ? existing : [existing]
         arr.push(line)
