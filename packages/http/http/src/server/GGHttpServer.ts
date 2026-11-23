@@ -131,38 +131,46 @@ export class GGHttpServer {
             }
             this.activeRequests++;
             const startTime = performance.now();
-            let result: string | void;
-            const resolved = req.method === 'OPTIONS' ? null : this.router.find(req.method as HTTPMethod, req.url ?? "");
-            const route = resolved?.store as RouteStore | undefined;
+            let labels: RouteStore["labels"] | undefined;
+            let result: string | void = undefined;
             try {
                 const cors = corsResponseHeaders(req.headers.origin, this.cors, this._corsHeadersCache, this._corsExposeHeadersCache);
                 for (const name in cors) res.setHeader(name, cors[name]);
                 if (req.method === 'OPTIONS') {
                     res.writeHead(204);
                     res.end();
-                } else if (resolved && route) {
-                    this.scope.ensureEntered();
-                    result = await runInFreshContext("REQ", () => {
-                        GG_HTTP_REQUEST.set({
-                            port: this._port ?? 0,
-                            method: req.method ?? "",
-                            path: req.url ?? "",
-                            pathTemplate: route.path,
-                            ...requestPeer(req),
-                        });
-                        return (resolved.handler as unknown as GGHttpRouteHandler)(req, res);
-                    });
                 } else {
-                    res.writeHead(404);
-                    res.end();
+                    const resolved = this.router.find(req.method as HTTPMethod, req.url ?? "")
+                    if (resolved) {
+                        const route = resolved.store as RouteStore;
+                        labels = route.labels;
+                        this.scope.ensureEntered();
+                        result = await runInFreshContext("REQ", () => {
+                            GG_HTTP_REQUEST.set({
+                                port: this._port ?? 0,
+                                method: req.method ?? "",
+                                path: req.url ?? "",
+                                pathTemplate: route.path,
+                                ...requestPeer(req),
+                            });
+                            return (resolved.handler as unknown as GGHttpRouteHandler)(req, res);
+                        });
+                    } else {
+                        res.writeHead(404);
+                        res.end();
+                    }
                 }
             } catch (error) {
                 GGLog.error(this, error instanceof Error ? error : new Error(String(error)));
-                res.writeHead(500);
-                res.end();
+                if (!res.headersSent) {
+                    res.writeHead(500).end();
+                } else if (!res.writableEnded) {
+                    result = "500";
+                    res.destroy();
+                }
             } finally {
                 this.activeRequests--;
-                if (route) recordRequest(route.labels, result ?? String(res.statusCode), startTime);
+                if (labels) recordRequest(labels, result ?? String(res.statusCode), startTime);
             }
         };
 

@@ -111,8 +111,8 @@ export class GGLocatorScope {
         return this.trackTimer(setInterval(() => this.run(() => this.runTimer(fn)), timeout))
     }
 
-    /** How this scope and its branches run a timer's callback. GGRuntime sets it (the locator can't see contexts) so a
-     *  timer set outside any request runs as a unit of work of its own instead of in the runtime's root context. */
+    /** How this scope and its branches run a timer's callback. GGRuntime sets it (the locator can't see contexts) so
+     *  each fire runs as a unit of work of its own. */
     public setTimerRunner(runner: <R>(fn: () => R) => R): void {
         this.timerRunner = runner
     }

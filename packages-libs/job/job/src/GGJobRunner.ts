@@ -4,7 +4,7 @@ import {GG_METRICS} from "@grest-ts/metrics"
 import {type GGLock, newLockOwner, withLock} from "@grest-ts/lock"
 import type {GGJob} from "./GGJob"
 import {GGJobMetrics} from "./GGJobMetrics"
-import {inJobRowContext, inJobRunContext} from "./jobContext"
+import {inJobBatchContext, inJobRowContext, inJobRunContext} from "./jobContext"
 import {GG_TRACE, type TraceContext} from "@grest-ts/trace"
 
 export const GG_JOB_RUNNER = new GGLocatorKey<GGJobRunner>("GGJobRunner")
@@ -228,32 +228,37 @@ class JobLoop {
     }
 
     private async runBatches({limit, parallel, maxExtraRuns}: RunConfig, signal: AbortSignal): Promise<{rows: number, failed: number, batches: number}> {
-        const name = this.job.config.name
         const totals = {rows: 0, failed: 0, batches: 0}
         for (let extra = 0; ; extra++) {
-            const startedAt = performance.now()
-            const rows = await this.job.getDataSet(limit)
-            if (rows.length > limit) GGLog.warn(this.job, "Job data set exceeds its limit", {job: name, rows: rows.length, limit})
-            else if (rows.length > Math.ceil(limit * WARN_RATIO)) GGLog.warn(this.job, "Job data set is near its limit", {job: name, rows: rows.length, limit})
-
-            let next = 0
-            let failed = 0
-            const worker = async () => {
-                while (next < rows.length && !signal.aborted) {
-                    if (!await this.runRow(rows[next++], signal)) failed++
-                }
-            }
-            await Promise.all(Array.from({length: Math.min(parallel, rows.length)}, worker))
-
-            totals.rows += next
-            totals.failed += failed
+            const batch = await inJobBatchContext(() => this.runBatch(limit, parallel, signal))
+            totals.rows += batch.rows
+            totals.failed += batch.failed
             totals.batches++
-            const report = {rows: next, failed, durationMs: Math.round(performance.now() - startedAt)}
-            if (rows.length > 0) GGLog.info(this.job, "Job batch done", {job: name, ...report})
-            await this.job.dataSetFinished?.(report)
-                .catch(err => GGLog.warn(this.job, "Job dataSetFinished failed", {job: name, err: (err as Error).message}))
-            if (signal.aborted || failed > 0 || rows.length < limit || extra >= maxExtraRuns) return totals
+            if (signal.aborted || batch.failed > 0 || batch.fetched < limit || extra >= maxExtraRuns) return totals
         }
+    }
+
+    private async runBatch(limit: number, parallel: number, signal: AbortSignal): Promise<{fetched: number, rows: number, failed: number}> {
+        const name = this.job.config.name
+        const startedAt = performance.now()
+        const rows = await this.job.getDataSet(limit)
+        if (rows.length > limit) GGLog.warn(this.job, "Job data set exceeds its limit", {job: name, rows: rows.length, limit})
+        else if (rows.length > Math.ceil(limit * WARN_RATIO)) GGLog.warn(this.job, "Job data set is near its limit", {job: name, rows: rows.length, limit})
+
+        let next = 0
+        let failed = 0
+        const worker = async () => {
+            while (next < rows.length && !signal.aborted) {
+                if (!await this.runRow(rows[next++], signal)) failed++
+            }
+        }
+        await Promise.all(Array.from({length: Math.min(parallel, rows.length)}, worker))
+
+        const report = {rows: next, failed, durationMs: Math.round(performance.now() - startedAt)}
+        if (rows.length > 0) GGLog.info(this.job, "Job batch done", {job: name, ...report})
+        await this.job.dataSetFinished?.(report)
+            .catch(err => GGLog.warn(this.job, "Job dataSetFinished failed", {job: name, err: (err as Error).message}))
+        return {fetched: rows.length, ...report}
     }
 
     private runRow(row: unknown, signal: AbortSignal): Promise<boolean> {
