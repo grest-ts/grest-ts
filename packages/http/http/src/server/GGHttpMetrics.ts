@@ -2,7 +2,7 @@ import {GGCounterKey, GGHistogramKey, GGMetrics} from "@grest-ts/metrics";
 import {EXISTS, FORBIDDEN, NOT_AUTHORIZED, NOT_FOUND, OK, ROUTE_NOT_FOUND, SERVER_ERROR, VALIDATION_ERROR} from "@grest-ts/schema";
 
 /**
- * Result type for HTTP operations.
+ * A contract route's RPC result type, or a raw route's response status code.
  * Known types listed for documentation, but accepts any string for custom error types.
  */
 type ResultType =
@@ -18,7 +18,7 @@ type ResultType =
 
 export const GGHttpMetrics = GGMetrics.define('/http/', () => ({
     requests: new GGCounterKey<{ api: string, method: string, path: string, result: ResultType }>('requests_total', {
-        help: 'Total HTTP requests after contract validation',
+        help: 'Total HTTP requests per route. result is the RPC result type for a contract route, the response status code for a raw one',
         labelNames: ['api', 'method', 'path', 'result'],
         groupBy: {labels: ["api", "method"], template: "{api}.{method}"}
     }),

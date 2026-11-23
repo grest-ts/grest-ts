@@ -15,7 +15,8 @@ export class RequestPeerRuntime extends GGRuntime {
         const httpServer = new GGHttpServer()
         new GGHttp(httpServer).http(RequestPeerApi, new RequestPeerApiImpl())
         httpServer.registerRoute("GET", RAW_ROUTE_PATH, async (_req, res) => {
-            const seen = {userAgent: GG_HTTP_REQUEST.get()?.userAgent, traceId: GG_TRACE.get()?.traceId, marked: RAW_MARK.has()}
+            const request = GG_HTTP_REQUEST.get()
+            const seen = {userAgent: request?.userAgent, pathTemplate: request?.pathTemplate, traceId: GG_TRACE.get()?.traceId, marked: RAW_MARK.has()}
             RAW_MARK.set(true)
             res.writeHead(200, {"content-type": "application/json"})
             res.end(JSON.stringify(seen))

@@ -32,10 +32,13 @@ describe("GGSocketBroadcast", () => {
         const a = await connect()
         const b = await connect()
 
+        // Messages are one-way: wait for a's snapshot (after its publish on the same connection) before b joins, or
+        // b's join can be handled first and b gets value 1 live on top of its snapshot.
         await a.client.outgoing.publish({value: 1})
         await a.client.outgoing.requestSnapshot({})
+        await vi.waitFor(() => expect(a.received).toHaveLength(1))
         await b.client.outgoing.requestSnapshot({})
-        await vi.waitFor(() => expect([a.received.length, b.received.length]).toEqual([1, 1]))
+        await vi.waitFor(() => expect(b.received).toHaveLength(1))
 
         await a.client.outgoing.publish({value: 2})
         await vi.waitFor(() => expect([a.received.length, b.received.length]).toEqual([2, 2]))

@@ -4,7 +4,7 @@ import {SERVER_ERROR} from "@grest-ts/schema"
 
 // `writes` = the cookie names this "route" declared via .updatesCookie(...). The
 // scope is strict, mirroring the real server REQ context (set-once inbound).
-const inRequest = (writes: string[], fn: () => void) => new GGContext("test", undefined, true).run(() => {
+const inRequest = (writes: string[], fn: () => void) => new GGContext("test", undefined, {strict: true}).run(() => {
     GG_COOKIE_WRITES.set(new Set(writes))
     fn()
 })

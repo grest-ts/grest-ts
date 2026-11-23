@@ -1,11 +1,11 @@
-import {GGContext, GGContextStore} from "@grest-ts/context"
 import {GGLocator, GGLocatorKey, GGLocatorServiceType, type GGLocatorScope} from "@grest-ts/locator"
 import {GGLog} from "@grest-ts/logger"
 import {GG_METRICS} from "@grest-ts/metrics"
-import {GG_TRACE} from "@grest-ts/trace"
 import {type GGLock, newLockOwner, withLock} from "@grest-ts/lock"
 import type {GGJob} from "./GGJob"
 import {GGJobMetrics} from "./GGJobMetrics"
+import {inJobBatchContext, inJobRowContext, inJobRunContext} from "./jobContext"
+import {GG_TRACE, type TraceContext} from "@grest-ts/trace"
 
 export const GG_JOB_RUNNER = new GGLocatorKey<GGJobRunner>("GGJobRunner")
 
@@ -35,7 +35,6 @@ export class GGJobRunner {
     private readonly owner: string
     private readonly lock: GGLock
     private readonly scope: GGLocatorScope
-    private readonly parentContext = GGContextStore.tryGetContext()
     private readonly loops: JobLoop[] = []
     private started = false
     private stopped = false
@@ -54,7 +53,7 @@ export class GGJobRunner {
     add(...jobs: GGJob<any>[]): this {
         for (const job of jobs) {
             if (this.loops.some(l => l.job.config.name === job.config.name)) throw new Error(`Job ${job.config.name} added twice`)
-            const loop = new JobLoop(job, this.scope, this.parentContext, this.lock, this.owner)
+            const loop = new JobLoop(job, this.scope, this.lock, this.owner)
             this.loops.push(loop)
             if (this.started && !this.stopped) loop.start()
         }
@@ -98,7 +97,6 @@ class JobLoop {
 
     readonly job: GGJob<unknown>
     private readonly scope: GGLocatorScope
-    private readonly parentContext: GGContext | undefined
     private readonly lock: GGLock
     private readonly owner: string
     private timer?: NodeJS.Timeout
@@ -106,10 +104,9 @@ class JobLoop {
     private lastConfig?: RunConfig
     private readonly stopped = new AbortController()
 
-    constructor(job: GGJob<unknown>, scope: GGLocatorScope, parentContext: GGContext | undefined, lock: GGLock, owner: string) {
+    constructor(job: GGJob<unknown>, scope: GGLocatorScope, lock: GGLock, owner: string) {
         this.job = job
         this.scope = scope
-        this.parentContext = parentContext
         this.lock = lock
         this.owner = owner
     }
@@ -178,7 +175,7 @@ class JobLoop {
         const config = this.runConfig()
         if (!config.enabled) return {result: "DISABLED", ...NO_RUN}
         if (this.running) return {result: "BUSY", ...NO_RUN}
-        return this.track(this.runOnce(config, false))
+        return this.track(this.runOnce(config, false, GG_TRACE.get()))
     }
 
     private track<T>(run: Promise<T>): Promise<T> {
@@ -186,12 +183,8 @@ class JobLoop {
         return run
     }
 
-    // What a run or a row sets must not land on the runtime's root, where every later request and run would inherit it.
-    private runOnce(config: RunConfig, hold: boolean): Promise<GGJobRunResult> {
-        return new GGContext("JOB", this.parentContext).run(() => {
-            GG_TRACE.init()
-            return this.runInContext(config, hold)
-        })
+    private runOnce(config: RunConfig, hold: boolean, caller?: TraceContext): Promise<GGJobRunResult> {
+        return inJobRunContext(() => this.runInContext(config, hold), caller)
     }
 
     private async runInContext(config: RunConfig, hold: boolean): Promise<GGJobRunResult> {
@@ -235,39 +228,48 @@ class JobLoop {
     }
 
     private async runBatches({limit, parallel, maxExtraRuns}: RunConfig, signal: AbortSignal): Promise<{rows: number, failed: number, batches: number}> {
-        const name = this.job.config.name
         const totals = {rows: 0, failed: 0, batches: 0}
         for (let extra = 0; ; extra++) {
-            const startedAt = performance.now()
-            const rows = await this.job.getDataSet(limit)
-            if (rows.length > limit) GGLog.warn(this.job, "Job data set exceeds its limit", {job: name, rows: rows.length, limit})
-            else if (rows.length > Math.ceil(limit * WARN_RATIO)) GGLog.warn(this.job, "Job data set is near its limit", {job: name, rows: rows.length, limit})
-
-            let next = 0
-            let failed = 0
-            const worker = async () => {
-                while (next < rows.length && !signal.aborted) {
-                    if (!await this.runRow(rows[next++], signal)) failed++
-                }
-            }
-            await Promise.all(Array.from({length: Math.min(parallel, rows.length)}, worker))
-
-            totals.rows += next
-            totals.failed += failed
+            const batch = await inJobBatchContext(() => this.runBatch(limit, parallel, signal))
+            totals.rows += batch.rows
+            totals.failed += batch.failed
             totals.batches++
-            const report = {rows: next, failed, durationMs: Math.round(performance.now() - startedAt)}
-            if (rows.length > 0) GGLog.info(this.job, "Job batch done", {job: name, ...report})
-            await this.job.dataSetFinished?.(report)
-                .catch(err => GGLog.warn(this.job, "Job dataSetFinished failed", {job: name, err: (err as Error).message}))
-            if (signal.aborted || failed > 0 || rows.length < limit || extra >= maxExtraRuns) return totals
+            if (signal.aborted || batch.failed > 0 || batch.fetched < limit || extra >= maxExtraRuns) return totals
         }
     }
 
-    private async runRow(row: unknown, signal: AbortSignal): Promise<boolean> {
+    private async runBatch(limit: number, parallel: number, signal: AbortSignal): Promise<{fetched: number, rows: number, failed: number}> {
+        const name = this.job.config.name
+        const startedAt = performance.now()
+        const rows = await this.job.getDataSet(limit)
+        if (rows.length > limit) GGLog.warn(this.job, "Job data set exceeds its limit", {job: name, rows: rows.length, limit})
+        else if (rows.length > Math.ceil(limit * WARN_RATIO)) GGLog.warn(this.job, "Job data set is near its limit", {job: name, rows: rows.length, limit})
+
+        let next = 0
+        let failed = 0
+        const worker = async () => {
+            while (next < rows.length && !signal.aborted) {
+                if (!await this.runRow(rows[next++], signal)) failed++
+            }
+        }
+        await Promise.all(Array.from({length: Math.min(parallel, rows.length)}, worker))
+
+        const report = {rows: next, failed, durationMs: Math.round(performance.now() - startedAt)}
+        if (rows.length > 0) GGLog.info(this.job, "Job batch done", {job: name, ...report})
+        await this.job.dataSetFinished?.(report)
+            .catch(err => GGLog.warn(this.job, "Job dataSetFinished failed", {job: name, err: (err as Error).message}))
+        return {fetched: rows.length, ...report}
+    }
+
+    private runRow(row: unknown, signal: AbortSignal): Promise<boolean> {
+        return inJobRowContext(() => this.runRowInContext(row, signal))
+    }
+
+    private async runRowInContext(row: unknown, signal: AbortSignal): Promise<boolean> {
         const job = this.job.config.name
         metric(() => GGJobMetrics.rowsInFlight.inc(1, {job}))
         try {
-            await processJobRow(this.job, row, signal)
+            await this.job.processRow(row, signal)
             metric(() => GGJobMetrics.rows.inc(1, {job, result: "OK"}))
             return true
         } catch (err) {
@@ -286,14 +288,6 @@ class JobLoop {
             return "<describeRow failed>"
         }
     }
-}
-
-/** @internal A row runs in its own context and trace, in the runner and in `runJobOnce` alike. */
-export function processJobRow<Row>(job: GGJob<Row>, row: Row, signal: AbortSignal): Promise<void> {
-    return new GGContext("JOB-ROW", GGContextStore.tryGetContext()).run(() => {
-        GG_TRACE.init()
-        return job.processRow(row, signal)
-    })
 }
 
 function metric(record: () => void): void {

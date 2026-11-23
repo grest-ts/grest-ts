@@ -1,8 +1,7 @@
 import {GGLocator, GGLocatorKey, GGLocatorServiceType} from "@grest-ts/locator"
 import {GGLog} from "@grest-ts/logger"
 import {sleep} from "@grest-ts/common"
-import {GGContext} from "@grest-ts/context"
-import {GG_TRACE} from "@grest-ts/trace"
+import {runInFreshContext} from "@grest-ts/trace"
 import {GG_ASYNC_EVENT} from "../GGAsyncEventKey"
 import {GG_DISCOVERY} from "@grest-ts/discovery"
 import {EventSubscriberConfig, MessageHandler} from "./EventSubscriberConfig"
@@ -182,20 +181,14 @@ export class EventSubscriberClient<TEventMap> {
         }
 
         try {
-            const context = new GGContext("EVT");
-            const success = await context.run(async () => {
-                // Restore trace context from message if present
-                if (validatedMessage.trace) {
-                    GG_TRACE.set(validatedMessage.trace);
-                } else {
-                    GG_TRACE.init();
-                }
+            // A handler is a span of the sender's trace when the message carries one.
+            const success = await runInFreshContext("EVT", () => {
                 GG_ASYNC_EVENT.set({
                     eventType: String(validatedMessage.type),
                     source: `events:${queue}`
                 });
                 return this.handler(validatedMessage, receivedMessage);
-            });
+            }, validatedMessage.trace);
             if (success) {
                 await this.adapter.deleteMessage(receivedMessage.receiptHandle)
             }

@@ -6,8 +6,7 @@ import {HttpHandler, HttpResolver} from "./HttpHandler";
 import {ClientDisconnectListener, SocketHandler, SocketMessage} from "./SocketHandler";
 import {IPCClientRequest, IPCServerRequest} from "../common/IPCTypes";
 import {GGLocator, GGLocatorScope} from "@grest-ts/locator";
-import {GGContext} from "@grest-ts/context";
-import {GG_TRACE} from "@grest-ts/trace";
+import {runInFreshContext} from "@grest-ts/trace";
 
 export type {HttpRoute, HttpResolver} from "./HttpHandler";
 
@@ -37,20 +36,14 @@ export class IPCServer {
         // The http testkit carries a call's connection settings (CA and client certificate PEMs) in a request header.
         this.httpServer = http.createServer({maxHeaderSize: 1024 * 1024}, async (req, res) => {
             this.scope.ensureEntered();
-            await new GGContext("LocalRouter").run(async () => {
-                GG_TRACE.init();
-                await this.httpHandler.handleRequest(req, res);
-            });
+            await runInFreshContext("LocalRouter", () => this.httpHandler.handleRequest(req, res));
         });
 
         // Handle WebSocket upgrades
         // Note: Incoming TCP connections start with no async context (they originate from libuv/OS layer).
         this.httpServer.on('upgrade', async (req, socket, head) => {
             this.scope.ensureEntered();
-            await new GGContext("LocalRouter").run(async () => {
-                GG_TRACE.init();
-                await this.socketHandler.handleUpgrade(req, socket as Duplex, head);
-            });
+            await runInFreshContext("LocalRouter", () => this.socketHandler.handleUpgrade(req, socket as Duplex, head));
         });
 
         // Track connections for cleanup
