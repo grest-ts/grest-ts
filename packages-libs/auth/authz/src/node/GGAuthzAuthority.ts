@@ -1,5 +1,5 @@
 import {FORBIDDEN, type GGPermission, type GGRequirement, NOT_AUTHORIZED, NOT_FOUND, requirementField} from "@grest-ts/schema"
-import {actionName, type GGAuthzActionRef} from "../shared/defineAuthz"
+import {actionName, type GGAuthzActionRef} from "../shared/definitions"
 import {APPROVAL_REQUIRED} from "../shared/authzErrors"
 import {GG_AUTHZ_SUBJECT} from "./GG_AUTHZ_SUBJECT"
 import {GGAuthz} from "./GGAuthz"
@@ -11,6 +11,7 @@ import {
     type GGAuthzLoader,
     type GGAuthzResolvedResource,
     type GGAuthzResourceRef,
+    once,
     openCall,
 } from "./AuthzResources"
 import {
@@ -154,6 +155,14 @@ export class GGAuthzAuthority {
     /** A resource's properties, e.g. for a loader whose row hangs off another's; undefined when it doesn't exist. */
     public properties(type: string, id: string): Promise<GGAuthzResourceProperties | undefined> {
         return this.resources.properties(type, id)
+    }
+
+    /** `fn`'s promise, once per `key` and subject within this call, as rows are read once: e.g. a fact the hooks compute
+     *  for the caller, so code acting as another subject in the call gets its own. A failure or an `undefined` isn't
+     *  kept; outside a call it just runs. */
+    public once<T>(key: string, fn: () => Promise<T>): Promise<T> {
+        const subject = GG_AUTHZ_SUBJECT.get()
+        return once(this, JSON.stringify([subject?.type, subject?.id, key]), fn)
     }
 
     /** The grest-ts `GGAuthorityHandler` method: a contract call, before its handler runs. Opens the call (what the

@@ -3,20 +3,14 @@ export * from "./shared/authzSchemas"
 export {APPROVAL_REQUIRED, INSUFFICIENT_SCOPE, STEP_UP_REQUIRED} from "./shared/authzErrors"
 export {GGAuthzRn} from "./shared/GGAuthzRn"
 export type {GGAuthzRnParts, GGAuthzRnSegment} from "./shared/GGAuthzRn"
-export {defineAuthzModel, defineAuthzRole, defineAuthzService, defineAuthzTokenScope} from "./shared/defineAuthz"
-export type {
-    GGAuthzActionRef,
-    GGAuthzActionSpec,
-    GGAuthzDefinedAction,
-    GGAuthzDefinedRole,
-    GGAuthzDefinedTokenScope,
-    GGAuthzModelSpec,
-    GGAuthzRuleSpec,
-    GGAuthzService,
-    GGAuthzServiceSpec,
-    GGAuthzTypeSpec,
-} from "./shared/defineAuthz"
-export {describeAuthzModel, documentAuthzModel} from "./shared/describeAuthz"
-export type {GGAuthzActionInfo, GGAuthzCatalog, GGAuthzDescribeOptions, GGAuthzRoleInfo} from "./shared/describeAuthz"
+export type {GGAuthzActionRef} from "./shared/definitions"
+export {GGAuthzService} from "./shared/GGAuthzService"
+export type {GGAuthzActionSpec, GGAuthzDefinedAction, GGAuthzDefinedService, GGAuthzServiceSpec, GGAuthzTypeSpec} from "./shared/GGAuthzService"
+export {GGAuthzRole} from "./shared/GGAuthzRole"
+export {GGAuthzTokenScope} from "./shared/GGAuthzTokenScope"
+export type {GGAuthzRuleSpec} from "./shared/GGAuthzTokenScope"
+export {GGAuthzModel} from "./shared/GGAuthzModel"
+export type {GGAuthzModelSpec} from "./shared/GGAuthzModel"
+export type {GGAuthzActionInfo, GGAuthzCatalog, GGAuthzDescribeOptions, GGAuthzRoleInfo} from "./shared/GGAuthzModel"
 export {GG_AUTHZ_ERRORS} from "./shared/requirement"
 export type {GGAuthzActionBuilders, GGAuthzError, GGAuthzRequirement} from "./shared/requirement"

@@ -1,5 +1,5 @@
 import {describe, expect, test, vi} from "vitest"
-import {defineAuthzModel, defineAuthzService, GGAuthz, GGAuthzMemoryResolver, type GGAuthzAsk, type GGAuthzFloorRule, type GGAuthzPolicies, type GGAuthzSubject, IsGGAuthzAsk, IsGGAuthzModel} from "../src/index-node"
+import {GGAuthzModel, GGAuthzService, GGAuthz, GGAuthzMemoryResolver, type GGAuthzAsk, type GGAuthzFloorRule, type GGAuthzPolicies, type GGAuthzSubject, IsGGAuthzAsk, IsGGAuthzModel} from "../src/index-node"
 
 const org = "rn:acme:org:acme:org/acme"
 const repo = (id: string) => `rn:acme:git:acme:repo/${id}`
@@ -158,9 +158,9 @@ describe("conditional floors", () => {
         expect((await decide(authz, agent([]), "git:Push", repo("site"), {foreign: false})).context.approval).toBe("auto")
     })
 
-    test("a conditional floor through defineAuthzModel", async () => {
-        const Repo = defineAuthzService("floorgit", {types: {repo: ""}, actions: {Push: {on: ["repo"]}}})
-        const defined = defineAuthzModel({partition: "acme", services: [Repo], roles: [], workloadTypes: ["agent"], approvalFloor: [{actions: [Repo.Push], when: ["foreign"], level: "ask"}]})
+    test("a conditional floor through GGAuthzModel", async () => {
+        const Repo = GGAuthzService.define("floorgit", {types: {repo: ""}, actions: {Push: {on: ["repo"]}}})
+        const defined = GGAuthzModel.define({partition: "acme", services: [Repo], roles: [], workloadTypes: ["agent"], approvalFloor: [{actions: [Repo.Push], when: ["foreign"], level: "ask"}]})
         const authz = new GGAuthz({model: defined, policies: {bindings: [{principal: "user:ann", role: "pusher", on: "rn:acme:floorgit:acme:repo/r"}], roles: [{name: "pusher", actions: [Repo.Push.name]}]}, resolver: new GGAuthzMemoryResolver({})})
         const push = (foreign: boolean) => authz.evaluate({subject: agent([]), action: {name: Repo.Push.name}, resource: {type: Repo.types.repo, id: "rn:acme:floorgit:acme:repo/r"}, context: {foreign}})
         expect((await push(true)).context.approval).toBe("ask")
