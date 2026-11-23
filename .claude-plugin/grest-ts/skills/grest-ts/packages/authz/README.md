@@ -333,7 +333,7 @@ In handlers, for checks that depend on the row's state:
 | `peek(action, refs)`, `peekEach([{action, resource}])` | whether each would be allowed, without it counting as a decision (not declared, not heard, never asks for approval): for filtering a listing or hinting a UI |
 | `authorizeGrant(role, principal, ref)` | `canGrant` for the caller (§6), throwing like `assert` |
 | `assertHolds(actions, ref, {context?, displayMessage?})` | `FORBIDDEN` unless the caller holds every one of `actions` there, e.g. before handing them out; decided on the RN, without loading the row |
-| `assertMayApprove(action, ref, {displayMessage?})` | throws unless the caller could do `action` there themselves, decided as `can`: before they approve someone else's. The action isn't the method's own, so it isn't declared |
+| `assertMayApprove(action, ref, {displayMessage?})` | throws unless the caller could do `action` there themselves, decided as `can`: before they approve someone else's. The action isn't the method's own, so it isn't declared; once allowed, it counts as declared for the rest of the call |
 
 Pass `properties` when the handler already holds the row. Optional config, every hook seeing the
 whole decision. A hook's error is passed on as the call's answer, so no hook needs a try/catch;
