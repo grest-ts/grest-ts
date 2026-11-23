@@ -45,18 +45,6 @@ export interface GGPackage {
     extendsTestKit?: boolean;
 
     /**
-     * If this package contains extensions for @grest-ts/code-generator.
-     * Adds ./codegen export pointing to codegen/src/index-codegen.ts
-     */
-    extendsCodeGen?: boolean;
-
-    /**
-     * If the codegen folder has a test subfolder with tests.
-     * Only used when extendsCodeGen is true.
-     */
-    hasCodegenTests?: boolean;
-
-    /**
      * If this package literally implements a strategy for some main package. This value is used for documentation building.
      */
     implementationFor?: string

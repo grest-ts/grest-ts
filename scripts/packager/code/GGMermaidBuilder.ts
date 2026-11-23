@@ -47,7 +47,7 @@ export class GGMermaidBuilder {
 
     /**
      * Convert package name to human-readable format
-     * e.g., "code-generator" → "Code Generator"
+     * e.g., "service-auth" → "Service Auth"
      */
     private humanize(name: string): string {
         return name

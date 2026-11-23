@@ -51,7 +51,7 @@ This is an npm workspaces monorepo:
 
 - `packages/` - Core framework packages (`@grest-ts/runtime`, `@grest-ts/http`, `@grest-ts/config`, etc.)
 - `packages-libs/` - Standalone libraries (`@grest-ts/sql`, `@grest-ts/struct`, etc.)
-- `packages-tooling/` - Developer tooling (`@grest-ts/testkit`, `@grest-ts/code-generator`)
+- `packages-tooling/` - Developer tooling (`@grest-ts/testkit`, `@grest-ts/cli`)
 - `examples/` - Example projects demonstrating framework usage
 - `x-packager/` - Internal package build tooling
 

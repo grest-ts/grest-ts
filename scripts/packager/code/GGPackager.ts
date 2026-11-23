@@ -326,13 +326,6 @@ export class GGPackager {
             if (pkg.config.extendsTestKit) {
                 packageIncludes.add(`${pkg.relativePath}/testkit/**/*`)
             }
-            // Add codegen folders if package extends code-generator
-            if (pkg.config.extendsCodeGen) {
-                packageIncludes.add(`${pkg.relativePath}/codegen/**/*`)
-                if (pkg.config.hasCodegenTests) {
-                    packageIncludes.add(`${pkg.relativePath}/codegen-test/**/*`)
-                }
-            }
         }
 
         const includes = [
@@ -360,9 +353,9 @@ export class GGPackager {
     private buildVitestConfig(packages: GGPackageInfo[], rootConfig: GGPackageRoot): PackagerFile {
         const { rootDir } = this.options
 
-        // Filter packages that have tests (regular or codegen), use relativePath for correct nesting
+        // Filter packages that have tests, use relativePath for correct nesting
         const packagesWithTests = packages
-            .filter(pkg => pkg.config.hasTests || pkg.config.hasCodegenTests)
+            .filter(pkg => pkg.config.hasTests)
             .map(pkg => pkg.relativePath)
             .sort()
 

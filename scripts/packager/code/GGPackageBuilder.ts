@@ -228,14 +228,6 @@ export class GGPackageBuilder {
             }
         }
 
-        // CodeGen extension -> "./codegen" export
-        if (pkg.config.extendsCodeGen) {
-            exports["./codegen"] = {
-                types: "./codegen/index-codegen.ts",
-                import: "./codegen/index-codegen.ts"
-            }
-        }
-
         return exports
     }
 
@@ -336,11 +328,6 @@ export class GGPackageBuilder {
     private buildDevDependencies(pkg: GGPackageInfo): Record<string, string> {
         const devDeps: Record<string, string> = {}
 
-        // Add @grest-ts/code-generator when package extends codegen
-        if (pkg.config.extendsCodeGen) {
-            devDeps["@grest-ts/code-generator"] = this.rootMeta.version
-        }
-
         // Add @grest-ts/testkit when package extends testkit (for testing, not runtime)
         if (pkg.config.extendsTestKit) {
             devDeps["@grest-ts/testkit"] = this.rootMeta.version
@@ -368,10 +355,6 @@ export class GGPackageBuilder {
 
         if (pkg.config.extendsTestKit) {
             files.push("testkit")
-        }
-
-        if (pkg.config.extendsCodeGen) {
-            files.push("codegen")
         }
 
         return files

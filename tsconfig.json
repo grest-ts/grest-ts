@@ -49,7 +49,6 @@
     "packages-libs/sql/test/**/*",
     "packages-libs/struct/src/**/*",
     "packages-libs/struct/test/**/*",
-    "packages-tooling/code-generator/src/**/*",
     "packages-tooling/testkit/testkit-runtime/src/**/*",
     "packages-tooling/testkit/testkit-vitest/src/**/*",
     "packages-tooling/testkit/testkit/src/**/*",
