@@ -216,7 +216,7 @@ describe("GGJobRunner", () => {
             }
         }
         const job = new BatchJob({runOn: "everyInstance", limit: 2, maxExtraRuns: 1}, () => pending, async row => {
-            seen.push(BATCH.get())
+            seen.push(BATCH.assert())
             pending.splice(pending.indexOf(row), 1)
         })
         newRunner(new GGInstanceLock(), "a").add(job).start()

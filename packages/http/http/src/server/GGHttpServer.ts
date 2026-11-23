@@ -132,7 +132,7 @@ export class GGHttpServer {
             this.activeRequests++;
             const startTime = performance.now();
             let labels: RouteStore["labels"] | undefined;
-            let result: string | void;
+            let result: string | void = undefined;
             try {
                 const cors = corsResponseHeaders(req.headers.origin, this.cors, this._corsHeadersCache, this._corsExposeHeadersCache);
                 for (const name in cors) res.setHeader(name, cors[name]);

@@ -121,15 +121,17 @@ parentCtx.run(() => {
 ## Units of work and the sealed root
 
 Each unit of work runs in a fresh context with no parent, so it inherits nothing another unit set:
-an HTTP request (raw routes included), a websocket connection, a job run, an event, and a scope timer
-(`GGLocator.setTimeout`/`setInterval`) set outside any request. Start your own with `runInFreshContext(name, fn)`
-from `@grest-ts/trace`.
+an HTTP request (raw routes included), a websocket connection, a job run, an event, and each fire of a scope timer
+(`GGLocator.setTimeout`/`setInterval`), wherever it was set. A timer set inside a request doesn't see that request's
+values: read what the callback needs before scheduling it. Start your own unit with `runInFreshContext(name, fn)` from
+`@grest-ts/trace`.
 
-A unit of work's context is strict: a key can be set once in it, and a second `set()` throws, so two parts of one
-request can't silently overwrite each other's value. A key that must change mid-unit, like the trace, is declared
-`new GGContextKey(name, schema, {mutable: true})`. To scope a different value to part of the work, run that part in a
-child context instead. A scope timer set inside a unit of work runs in that unit's context, so a repeating one that
-sets a key runs its body in a child context.
+A unit of work's context is strict: a key can be set once in it, and a second `set()` throws, even after a
+`delete()`, so two parts of one request can't silently overwrite each other's value. A key that must change mid-unit,
+like the trace, is declared `new GGContextKey(name, schema, {mutable: true})`. To scope a different value to part of
+the work, run that part in a child context instead. Strictness is chosen by a root context
+(`new GGContext(name, undefined, {strict: true})`) and every child of it follows. A long-lived client context that
+updates its values (a refreshed token, a switched locale) is a non-strict root.
 
 A runtime runs compose and start in its root context, and **seals** it once running: `set()` on it throws. Code that
 still runs there later, such as a raw `setTimeout` or an emitter listener set up in compose, would otherwise leak what
