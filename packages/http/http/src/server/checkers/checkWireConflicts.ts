@@ -2,8 +2,7 @@
  * Run at GGHttpServer.start() over the frozen schema graph: the wires a single schema .use()s
  * must not read the same inbound header / cookie: both would read (and a client write) the same
  * transport field, and one silently overwrites the other in parse()/update(). Per-schema: the
- * same wire reused across different schemas is fine. (Two wires can't share a context key:
- * GGContextKey refuses a second key of one name.)
+ * same wire reused across different schemas is fine.
  */
 import type {GGTransportMiddleware} from "@grest-ts/context"
 import {expandWireAlternatives} from "../../schema/GGWireAlternatives"
@@ -31,14 +30,14 @@ export function checkWireConflicts(
 
     const conflicts: string[] = []
     for (const schema of schemas) {
-        const fields = new Map<string, GGTransportMiddleware>()
+        const fields = new Set<string>()
 
         for (const mw of schema.wires) {
             for (const field of transportKeys(mw)) {
                 if (fields.has(field)) {
                     conflicts.push(`  ${schema.name}: two wires bind the same ${field}`)
                 } else {
-                    fields.set(field, mw)
+                    fields.add(field)
                 }
             }
         }
