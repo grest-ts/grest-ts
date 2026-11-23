@@ -21,6 +21,12 @@ describe("a strict context", () => {
         expect(() => ctx.set(LOCALE, "de")).toThrow(/already set/)
     })
 
+    test("reset starts it over", () => {
+        const ctx = new GGContext("unit", undefined, {strict: true}).set(LOCALE, "en")
+        ctx.reset()
+        expect(ctx.set(LOCALE, "de").get(LOCALE)).toBe("de")
+    })
+
     test("a mutable key changes freely", () => {
         const ctx = new GGContext("unit", undefined, {strict: true})
         ctx.set(SPAN, "a").set(SPAN, "b")

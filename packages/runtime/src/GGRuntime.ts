@@ -95,7 +95,7 @@ export abstract class GGRuntime {
             }
             this.state = GGRuntimeState.BOOTSTRAPPING;
             const root = new GGContext("Runtime");
-            // Each fire is a unit of work of its own, wherever the timer was set: run in the context it was set from, a
+            // Each fire is a unit of work of its own, wherever the timer was set. Run in the context it was set from, a
             // timer that reschedules itself would stay in its first fire's context for good.
             this.scope.setTimerRunner(fn => runInFreshContext("TIMER", fn));
             await root.run(async () => {

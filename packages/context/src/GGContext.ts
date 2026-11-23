@@ -85,6 +85,7 @@ export class GGContext {
 
     public reset(): void {
         this.values.clear();
+        this.setOnce.clear();
     }
 
 }
