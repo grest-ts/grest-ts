@@ -249,7 +249,7 @@ describe("GGAuthzAuthority", () => {
             expect([await count(), await count()]).toEqual([2, 2])
             expect(await as({type: "user", id: "ben"}, count)).toBe(3)
         })
-        expect(await as(ann, async () => [await count(), await count()])).toEqual([4, 5])
+        expect([await count(), await count()]).toEqual([4, 5])
     })
 
     test("two authorities in one call read through their own loaders", async () => {

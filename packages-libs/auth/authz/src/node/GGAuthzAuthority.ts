@@ -156,8 +156,8 @@ export class GGAuthzAuthority {
      *  for the caller, so code acting as another subject in the call gets its own. A failure or an `undefined` isn't
      *  kept; outside a call it just runs. */
     public once<T>(key: string, fn: () => Promise<T>): Promise<T> {
-        const {type, id} = this.subject()
-        return once(this, `${type}:${id} ${key}`, fn)
+        const subject = GG_AUTHZ_SUBJECT.get()
+        return once(this, JSON.stringify([subject?.type, subject?.id, key]), fn)
     }
 
     /** The grest-ts `GGAuthorityHandler` method: a contract call, before its handler runs. Opens the call (what the
