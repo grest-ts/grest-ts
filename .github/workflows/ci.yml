@@ -51,8 +51,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          # Need full history so the bump commit can be pushed cleanly to
-          # master (FF requires master's tip to be reachable).
+          # Full history: the version bump resolves tags and the authz step diffs against the PR base.
           fetch-depth: 0
           # The checked-out code (npm install scripts included) must never find a credential in .git/config.
           persist-credentials: false
@@ -124,7 +123,7 @@ jobs:
         with:
           name: release-bundle
           path: ${{ runner.temp }}/release.bundle
-          retention-days: 1
+          overwrite: true
 
   # The deploy key lives only in the `release` environment, and only this job uses it. It runs no
   # project or npm code, so nothing the build installed can be around to read the key.
@@ -162,6 +161,8 @@ jobs:
           export GIT_SSH_COMMAND="ssh -i $key -o IdentitiesOnly=yes -o UserKnownHostsFile=$RUNNER_TEMP/known_hosts -o StrictHostKeyChecking=yes"
 
           git fetch "$RUNNER_TEMP/release.bundle" "refs/tags/$TAG:refs/tags/$TAG"
+          # The bundle comes from the job that ran npm code: push only a single commit on top of what CI built.
+          [ "$(git rev-parse "$TAG^{commit}^@")" = "${{ github.sha }}" ] || { echo "::error::$TAG is not a single commit on ${{ github.sha }}"; exit 1; }
           git remote set-url origin "git@github.com:${{ github.repository }}.git"
 
           # Fast-forward master to the bump commit. release was built from a
