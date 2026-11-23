@@ -170,7 +170,7 @@ export abstract class ERROR<Type extends string, Data> extends Error {
         return cls;
     }
 
-    public static badRequest<Type extends string, Data = never>(type: Type): ERR_CLASS<Type>
+    public static badRequest<Type extends string>(type: Type): ERR_CLASS<Type>
     public static badRequest<Type extends string, Data>(type: Type, schema: GGSchema<Data>): ERR_CLASS_DATA<Type, Data>
     public static badRequest(type: string, schema?: GGSchema<any>): any {
         return schema ? ERROR.define(type, 400, schema) : ERROR.define(type, 400)
