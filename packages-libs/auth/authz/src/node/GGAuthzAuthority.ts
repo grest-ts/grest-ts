@@ -10,6 +10,7 @@ import {
     type GGAuthzLoader,
     type GGAuthzResolvedResource,
     type GGAuthzResourceRef,
+    once,
     openCall,
 } from "./AuthzResources"
 import {
@@ -149,6 +150,12 @@ export class GGAuthzAuthority {
     /** A resource's properties, e.g. for a loader whose row hangs off another's; undefined when it doesn't exist. */
     public properties(type: string, id: string): Promise<GGAuthzResourceProperties | undefined> {
         return this.resources.properties(type, id)
+    }
+
+    /** `fn`'s promise, once per `key` within this call, as rows are read once: e.g. a fact the hooks compute. A failure
+     *  or an `undefined` isn't kept; outside a call it just runs. */
+    public once<T>(key: string, fn: () => Promise<T>): Promise<T> {
+        return once(this, key, fn)
     }
 
     /** The grest-ts `GGAuthorityHandler` method: a contract call, before its handler runs. Opens the call (what the

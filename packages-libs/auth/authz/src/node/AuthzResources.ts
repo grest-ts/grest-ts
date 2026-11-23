@@ -34,13 +34,13 @@ export interface GGAuthzCall {
     method: string
 }
 
-/** The contract call in progress, opened by the authority's `authorize`: the actions its requirements declare and one
- *  read of each row it loads. Every authority reads the same one. */
+/** The contract call in progress, opened by the authority's `authorize`: the actions its requirements declare and what
+ *  `once` keeps for it, such as one read of each row. Every authority reads the same one. */
 interface CallState {
     call: GGAuthzCall
     actions: ReadonlySet<string>
-    // Per authority: two authorities' loaders never serve each other's rows.
-    rows: WeakMap<AuthzResources, Map<string, Promise<GGAuthzLoaded | undefined>>>
+    // Per owner: two authorities never serve each other's rows.
+    kept: WeakMap<object, Map<string, Promise<unknown>>>
 }
 
 // Set once per call: a pipeline that runs several calls in one request runs each in a context of its own, so one call's
@@ -48,11 +48,31 @@ interface CallState {
 const GG_AUTHZ_CALL = new GGContextKey<CallState>("authzCall", IsAny as unknown as GGSchema<CallState>)
 
 export function openCall(call: GGAuthzCall, actions: Iterable<string>): void {
-    GG_AUTHZ_CALL.set({call, actions: new Set(actions), rows: new WeakMap()})
+    GG_AUTHZ_CALL.set({call, actions: new Set(actions), kept: new WeakMap()})
 }
 
 export function currentCall(): {call: GGAuthzCall, actions: ReadonlySet<string>} | undefined {
     return GG_AUTHZ_CALL.get()
+}
+
+/** `fn`'s promise, run once per `owner` and `key` within the call; outside a call it just runs. A failure or an
+ *  `undefined` isn't kept, so the next one runs again. */
+export function once<T>(owner: object, key: string, fn: () => Promise<T>): Promise<T> {
+    const state = GG_AUTHZ_CALL.get()
+    if (!state) return fn()
+    let kept = state.kept.get(owner)
+    if (!kept) state.kept.set(owner, kept = new Map())
+    let made = kept.get(key) as Promise<T> | undefined
+    if (!made) {
+        kept.set(key, made = fn().then(value => {
+            if (value === undefined) kept.delete(key)
+            return value
+        }, e => {
+            kept.delete(key)
+            throw e
+        }))
+    }
+    return made
 }
 
 /** Resolves what requirements and handlers name to resources in the caller's tenant, through the registered loaders. */
@@ -143,22 +163,7 @@ export class AuthzResources {
     private read(tenant: string, type: string, id: string): Promise<GGAuthzLoaded | undefined> {
         const loader = this.loaders.get(type)
         if (!loader) throw new Error(`No loader registered for ${type}`)
-        const state = GG_AUTHZ_CALL.get()
-        if (!state) return Promise.resolve(loader(tenant, id))
-        let rows = state.rows.get(this)
-        if (!rows) state.rows.set(this, rows = new Map())
-        const key = `${tenant} ${type} ${id}`
-        let row = rows.get(key)
-        if (!row) {
-            rows.set(key, row = Promise.resolve(loader(tenant, id)).then(loaded => {
-                if (!loaded) rows.delete(key)
-                return loaded
-            }, e => {
-                rows.delete(key)
-                throw e
-            }))
-        }
-        return row
+        return once(this, `${tenant} ${type} ${id}`, async () => loader(tenant, id))
     }
 
     private idOf(resource: GGRequirementResource, fields: Record<string, unknown>): string {
