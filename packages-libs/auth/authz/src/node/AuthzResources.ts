@@ -55,8 +55,7 @@ export function currentCall(): {call: GGAuthzCall, actions: ReadonlySet<string>}
     return GG_AUTHZ_CALL.get()
 }
 
-/** `fn`'s promise, run once per `owner` and `key` within the call; outside a call it just runs. A failure or an
- *  `undefined` isn't kept, so the next one runs again. */
+/** `GGAuthzAuthority.once`, per `owner`. */
 export function once<T>(owner: object, key: string, fn: () => Promise<T>): Promise<T> {
     const state = GG_AUTHZ_CALL.get()
     if (!state) return fn()
