@@ -55,6 +55,11 @@ const DebugModeKey = new GGContextKey("debugMode", t.boolean(), {
 })
 ```
 
+A key's name is its identity: a context stores values by name, and the testkit carries a test's context to a runtime
+worker by name. So a name can be defined once per process; a second key of the same name defined anywhere else
+throws, naming both places. Defining the same key again from the same place (a module evaluated again by HMR or
+vitest projects) is fine.
+
 ### Setting and Accessing Context
 
 ```typescript

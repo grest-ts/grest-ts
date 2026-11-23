@@ -20,8 +20,7 @@ export function isLoopbackAddress(address: string | undefined): boolean {
  * doesn't need a token" that otherwise rests on an unenforced assumption. Peer address comes from
  * the connection (`GGInbound.peerAddress`), never a client header, so it can't be spoofed.
  *
- *   export const GG_LOOPBACK = new GGLoopbackGuard("loopback")
- *   // schema: use: [GG_LOOPBACK]
+ *   use: [GG_LOOPBACK]   // the guard this file exports
  *
  * It is not a credential wire: there is nothing to verify or mint, no `.define()`/`.create()`.
  * Browser-safe — the gate only runs server-side (parse/process); the client contributes nothing.

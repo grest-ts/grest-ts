@@ -55,21 +55,24 @@ export class GGContextKey<Type> {
     }
 }
 
-// The same name from the same file is that module evaluated again (HMR, vitest projects), not a second key.
+// The same name from the same place is that module evaluated again (HMR, vitest projects), not a second key. An HMR
+// edit above a key before a reload still reads as a second one.
 function registerName(name: string): void {
-    const file = definingFile()
+    const place = definitionPlace()
     const known = definedKeys.get(name)
-    if (definedKeys.has(name) && known !== file) {
-        throw new Error(`Context key '${name}' is defined twice: in ${known ?? "?"} and in ${file ?? "?"}. `
+    if (definedKeys.has(name) && known !== place) {
+        throw new Error(`Context key '${name}' is defined twice: at ${known ?? "?"} and at ${place ?? "?"}. `
             + `Context values are stored by key name, so the two would share one value: give each its own name `
             + `(a GGHeader or GGCookie takes it as {key: "…"}).`)
     }
-    definedKeys.set(name, file)
+    definedKeys.set(name, place)
 }
 
-/** The file of the first stack frame past the key constructors (this one and its subclasses'), without the query an
- *  HMR reload adds. Reads V8's stack format: elsewhere every key reads as defined here, so nothing is refused. */
-function definingFile(): string | undefined {
-    const frame = new Error().stack?.split("\n").slice(1).find(line => !/^\s*at (new |registerName |definingFile )/.test(line))
-    return frame?.trim().replace(/^at\s+/, "").replace(/^.*\((.*)\)$/, "$1").replace(/(\?[^:]*)?:\d+:\d+$/, "")
+/** `file:line:col` of the first stack frame past the key constructors (this one and its subclasses'), without the
+ *  `file://` scheme or the query an HMR reload adds. Reads V8's stack format: elsewhere every key reads as defined
+ *  here, so nothing is refused. */
+function definitionPlace(): string | undefined {
+    const frame = new Error().stack?.split("\n").slice(1).find(line => !/^\s*at (new |registerName |definitionPlace )/.test(line))
+    const location = frame?.trim().match(/^at (?:.*? \()?(.*?)\)?$/)?.[1]
+    return location?.replace(/^file:\/\//, "").replace(/\?[^:]*(?=:\d+:\d+$)/, "")
 }
