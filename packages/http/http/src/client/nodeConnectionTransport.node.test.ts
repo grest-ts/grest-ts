@@ -45,6 +45,8 @@ interface TestServer {
     fingerprint256: string
     reqCount: () => number
     connCount: () => number
+    resumedCount: () => number
+    setCert: (cert: string, key: string) => void
     close: () => Promise<void>
 }
 
@@ -83,15 +85,18 @@ function genSignedCert(dir: string, name: string, ca: TestCa, sanIp?: string): {
     return {cert: readFileSync(crtPath, "utf8"), key: readFileSync(keyPath, "utf8")}
 }
 
-async function startServer(cert: string, key: string, replyMsg: string, extra: https.ServerOptions = {}): Promise<TestServer> {
+async function startServer(cert: string, key: string, replyMsg: string, extra: https.ServerOptions = {}, {closeEachConnection = false} = {}): Promise<TestServer> {
     let reqCount = 0
     let connCount = 0
+    let resumedCount = 0
     const server = https.createServer({cert, key, ...extra}, (_req, res) => {
         reqCount++
+        if (closeEachConnection) res.setHeader("connection", "close")
         res.writeHead(200, {"content-type": "application/json"})
         res.end(JSON.stringify({success: true, type: "OK", data: {msg: replyMsg}}))
     })
     server.on("connection", () => { connCount++ })
+    server.on("secureConnection", socket => { if (socket.isSessionReused()) resumedCount++ })
     await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve))
     const port = (server.address() as {port: number}).port
     return {
@@ -99,6 +104,8 @@ async function startServer(cert: string, key: string, replyMsg: string, extra: h
         fingerprint256: new X509Certificate(cert).fingerprint256,
         reqCount: () => reqCount,
         connCount: () => connCount,
+        resumedCount: () => resumedCount,
+        setCert: (cert, key) => server.setSecureContext({cert, key, ...extra}),
         close: () => new Promise<void>(resolve => server.close(() => resolve())),
     }
 }
@@ -254,6 +261,84 @@ describe('pinned-TLS node transport', () => {
         const ok = await plainClient.ping({msg: "hi"})
         expect(ok.msg).toBe("fetched")
     })
+})
+
+describe('pinned-TLS node transport — every connection presents the pinned certificate', () => {
+
+    let dir: string
+    let pinned: {cert: string; key: string}
+    let other: {cert: string; key: string}
+    let pinnedFingerprint: string
+
+    beforeAll(() => {
+        dir = mkdtempSync(join(tmpdir(), "gg-pin-resume-"))
+        pinned = genCert(dir, "pinned")
+        other = genCert(dir, "other")
+        pinnedFingerprint = new X509Certificate(pinned.cert).fingerprint256
+    })
+
+    afterAll(() => {
+        if (dir) rmSync(dir, {recursive: true, force: true})
+    })
+
+    afterEach(() => {
+        invalidateTlsPinAgent(pinnedFingerprint)
+    })
+
+    async function attempt(server: TestServer, msg: string) {
+        const client = createClient(PingApi, {url: ""})
+        return inScope(
+            {host: "127.0.0.1", port: server.port, tlsPin: {fingerprint256: pinnedFingerprint}},
+            () => client.ping({msg}).asResult(),
+        )
+    }
+
+    for (const maxVersion of ["TLSv1.2", "TLSv1.3"] as const) {
+
+        it(`${maxVersion}: the pinned server keeps working across requests and reconnects`, async () => {
+            const server = await startServer(pinned.cert, pinned.key, "pinned", {maxVersion}, {closeEachConnection: true})
+            try {
+                for (let i = 0; i < 4; i++) {
+                    const res = await attempt(server, `${i}`)
+                    expect(res.success).toBe(true)
+                }
+                expect(server.reqCount()).toBe(4)
+                expect(server.connCount()).toBe(4)
+                expect(server.resumedCount()).toBe(0)
+            } finally {
+                await server.close()
+            }
+        })
+
+        it(`${maxVersion}: a server with another certificate is refused on every connection`, async () => {
+            const server = await startServer(other.cert, other.key, "other", {maxVersion})
+            try {
+                for (let i = 0; i < 4; i++) {
+                    const res = await attempt(server, `${i}`)
+                    expect(res.success).toBe(false)
+                }
+                expect(server.connCount()).toBe(4)
+                expect(server.reqCount()).toBe(0)
+            } finally {
+                await server.close()
+            }
+        })
+
+        it(`${maxVersion}: a server that switches to another certificate is refused on the next connection`, async () => {
+            const server = await startServer(pinned.cert, pinned.key, "pinned", {maxVersion}, {closeEachConnection: true})
+            try {
+                expect((await attempt(server, "before")).success).toBe(true)
+                server.setCert(other.cert, other.key)
+                for (let i = 0; i < 3; i++) {
+                    const res = await attempt(server, `after-${i}`)
+                    expect(res.success).toBe(false)
+                }
+                expect(server.reqCount()).toBe(1)
+            } finally {
+                await server.close()
+            }
+        })
+    }
 })
 
 describe('connection settings — custom CA & mTLS', () => {

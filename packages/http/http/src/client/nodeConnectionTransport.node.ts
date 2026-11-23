@@ -40,8 +40,9 @@ function connectOptions(s: GGConnectionSettings) {
  * Build the undici Agent for a set of TLS settings.
  *  - tlsPin → self-signed pinning: `rejectUnauthorized: false` (skip the CA chain — the fingerprint
  *    replaces it) + verify the peer cert's fingerprint once connected, destroying the socket on
- *    mismatch before any request bytes flow. A resumed TLS session doesn't re-send the cert and
- *    proves knowledge of the original master secret, so the re-check is safely skipped.
+ *    mismatch before any request bytes flow. TLS session caching is off (`maxCachedSessions: 0`):
+ *    a resumed session carries no peer cert to check, and the connector would cache the session
+ *    of a handshake the pin refused. A reused session is therefore refused as well.
  *    `rejectUnauthorized: false` WITHOUT the fingerprint check is a full MITM hole.
  *  - otherwise → standard verification, optionally against a custom `ca` and presenting a
  *    `clientCert` for mTLS.
@@ -56,7 +57,7 @@ function buildAgent(s: GGConnectionSettings): Agent {
     if (!/^[0-9a-f]{64}$/.test(expected)) {
         throw new Error(`pinned TLS: fingerprint must be 64 hex chars (got "${pin.fingerprint256}")`)
     }
-    const baseConnector = buildConnector({...connect, rejectUnauthorized: false, servername: pin.servername})
+    const baseConnector = buildConnector({...connect, rejectUnauthorized: false, servername: pin.servername, maxCachedSessions: 0})
     return new Agent({
         ...AGENT_TIMEOUTS,
         connect(opts, cb) {
@@ -67,13 +68,15 @@ function buildAgent(s: GGConnectionSettings): Agent {
                     socket.destroy()
                     return cb(new Error("pinned TLS requires an https target"), null)
                 }
-                if (!tls.isSessionReused()) {
-                    const raw = tls.getPeerX509Certificate()?.fingerprint256
-                    const actual = raw ? normalizeFingerprint(raw) : undefined
-                    if (actual !== expected) {
-                        tls.destroy()
-                        return cb(new Error(`pinned TLS: cert fingerprint mismatch — expected ${expected}, got ${actual ?? "<none>"}`), null)
-                    }
+                if (tls.isSessionReused()) {
+                    tls.destroy()
+                    return cb(new Error("pinned TLS: resumed session has no peer certificate to check"), null)
+                }
+                const raw = tls.getPeerX509Certificate()?.fingerprint256
+                const actual = raw ? normalizeFingerprint(raw) : undefined
+                if (actual !== expected) {
+                    tls.destroy()
+                    return cb(new Error(`pinned TLS: cert fingerprint mismatch — expected ${expected}, got ${actual ?? "<none>"}`), null)
                 }
                 cb(null, socket)
             })
