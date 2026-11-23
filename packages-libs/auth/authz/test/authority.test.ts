@@ -216,7 +216,7 @@ describe("GGAuthzAuthority", () => {
 
     test("a second call in one strict request context throws: each call runs in a context of its own", async () => {
         const stop = Vm.StopWorkspace.on("workspaceId")
-        await new GGContext("REQ", undefined, true).run(async () => {
+        await new GGContext("REQ", undefined, {strict: true}).run(async () => {
             GG_AUTHZ_SUBJECT.set(ann)
             await authority.authorize({api: "VmApi", method: "stop"}, [stop], {workspaceId: "ann-1"})
             await expect(authority.authorize({api: "VmApi", method: "stop"}, [stop], {workspaceId: "ann-1"})).rejects.toThrow("already set")
