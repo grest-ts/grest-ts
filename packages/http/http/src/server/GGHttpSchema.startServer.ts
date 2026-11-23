@@ -6,14 +6,9 @@ import http from "http";
 import {GGLocator} from "@grest-ts/locator";
 import {ClientHttpRouteToRpcTransformServerCodec, GGHttpCodec, GGHttpSchema} from "../schema/GGHttpSchema";
 import {ERROR, GGContractApiDefinition, GGContractImplementation, GGContractMethod, GGPermissionChecker, OK, SERVER_ERROR} from "@grest-ts/schema";
-import {HttpMethod} from "@grest-ts/common";
 import {GG_DISCOVERY} from "@grest-ts/discovery";
-import {GGContext, GGContextStore, type GGTransportMiddleware} from "@grest-ts/context";
-import {GG_TRACE} from "@grest-ts/trace";
-import {GG_HTTP_REQUEST, httpRequestContext} from "./GG_HTTP_REQUEST";
+import type {GGTransportMiddleware} from "@grest-ts/context";
 import {GG_COOKIE_WRITES} from "../schema/GGCookie";
-import {GG_METRICS} from "@grest-ts/metrics";
-import {GGHttpMetrics} from "./GGHttpMetrics";
 import {GGHttpServer} from "./GGHttpServer";
 import {GGLog} from "@grest-ts/logger";
 import {GGHttpPermissionsChecker} from "../schema/GGHttpPermissionsChecker";
@@ -46,7 +41,6 @@ function setupRoutes<TContract extends GGContractApiDefinition>(
     const pathPrefix = "/" + httpSchema.pathPrefix + "/"
     const apiMiddlewares = httpSchema.apiMiddlewares;
     const scope = GGLocator.getScope();
-    const parentContext = GGContextStore.tryGetContext();
 
     const permissionsChecker = new GGHttpPermissionsChecker(apiMiddlewares);
     const authority = apiMiddlewares.find((mw): mw is GGAuthority => mw instanceof GGAuthority);
@@ -102,62 +96,32 @@ function setupRoutes<TContract extends GGContractApiDefinition>(
             middlewares: [...apiMiddlewares, ...(config.middlewares ?? [])]
         })
         const cookieWriteNames = new Set((codec.updatesCookies ?? []).map(k => k.name))
-        server.registerRoute(codec.method, pathPrefix + codec.path, async (req: http.IncomingMessage, res: http.ServerResponse): Promise<void> => {
-            scope.ensureEntered();
-            return new GGContext("REQ", parentContext, true).run(async () => {
-                GG_TRACE.init();
-                GG_HTTP_REQUEST.set(httpRequestContext(req, server.port ?? 0));
-                GG_COOKIE_WRITES.set(cookieWriteNames);
-                const startTime = performance.now()
-                let rpcResult: ERROR<string, unknown> | OK<unknown> | undefined
+        server._registerRoute(codec.method, pathPrefix + codec.path, async (req: http.IncomingMessage, res: http.ServerResponse): Promise<string> => {
+            GG_COOKIE_WRITES.set(cookieWriteNames);
+            let rpcResult: ERROR<string, unknown> | OK<unknown>
+            try {
+                const rawInput = await requestParser.readRequest(req)
+                await permissionsChecker.assert(httpSchema.name, methodName, scopes)
                 try {
-                    const rawInput = await requestParser.readRequest(req)
-                    await permissionsChecker.assert(httpSchema.name, methodName, scopes)
-                    try {
-                        const input = requestParser.validateInput(rawInput)
-                        // checkPermissionsAtStart guarantees an authority when there are requirements.
-                        for (const requirement of requirements) await authority!.authorize(requirement, input, call)
-                        rpcResult = {success: true, type: "OK", data: await implFn(input)}
-                        // GGLog.debug(httpSchema, "Response", rpcResult) // This is very slow to log this (like 3x performance loss)
-                    } catch (error: unknown) {
-                        rpcResult = ERROR.fromUnknown(error);
-                        if (rpcResult instanceof SERVER_ERROR || (rpcResult as ERROR<string, unknown>).hasDebugContext()) {
-                            GGLog.error(httpSchema, rpcResult)
-                        }
-                    }
-                    await requestParser.sendResponse(res, rpcResult) // can throw
+                    const input = requestParser.validateInput(rawInput)
+                    if (authority) await authority.authorize(call, requirements, input)
+                    // checkPermissionsAtStart guarantees an authority when there are requirements; fail closed if it was bypassed.
+                    else if (requirements.length) throw new Error(`${httpSchema.name}.${methodName} has requirements but no authority`)
+                    rpcResult = {success: true, type: "OK", data: await implFn(input)}
+                    // GGLog.debug(httpSchema, "Response", rpcResult) // This is very slow to log this (like 3x performance loss)
                 } catch (error: unknown) {
-                    rpcResult = ERROR.fromUnknown(error)
-                    await requestParser.sendResponse(res, rpcResult) // Does not throw
-                    GGLog.error(httpSchema, rpcResult)
-                } finally {
-                    metrics(rpcResult?.type, httpSchema.name, codec.method, pathPrefix, codec.path, startTime)
+                    rpcResult = ERROR.fromUnknown(error);
+                    if (rpcResult instanceof SERVER_ERROR || (rpcResult as ERROR<string, unknown>).hasDebugContext()) {
+                        GGLog.error(httpSchema, rpcResult)
+                    }
                 }
-            });
-        }, `${httpSchema.name}.${methodName}`)
-    }
-}
-
-function metrics(
-    resultType: string | undefined,
-    apiName: string,
-    method: HttpMethod,
-    pathPrefix: string,
-    pathSuffix: string,
-    startTime: number
-) {
-    if (GG_METRICS.has()) {
-        const path = method + " " + pathPrefix + pathSuffix;
-        GGHttpMetrics.requests.inc(1, {
-            api: apiName,
-            method: pathSuffix,
-            path: path,
-            result: resultType ?? "unknown"
-        });
-        GGHttpMetrics.requestDuration.observe(performance.now() - startTime, {
-            api: apiName,
-            method: pathSuffix,
-            path: path
-        });
+                await requestParser.sendResponse(res, rpcResult) // can throw
+            } catch (error: unknown) {
+                rpcResult = ERROR.fromUnknown(error)
+                await requestParser.sendResponse(res, rpcResult) // Does not throw
+                GGLog.error(httpSchema, rpcResult)
+            }
+            return rpcResult.type
+        }, `${httpSchema.name}.${methodName}`, {api: httpSchema.name, method: codec.path})
     }
 }

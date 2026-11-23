@@ -15,12 +15,6 @@ export type HttpRequestContext = typeof IsHttpRequestContext.infer;
 
 export const GG_HTTP_REQUEST = new GGContextKey<HttpRequestContext>('http-request', IsHttpRequestContext);
 
-/** What a handler sees of the request it serves: for a route registered on the server directly (not through a
- *  schema) to set too. */
-export function httpRequestContext(req: http.IncomingMessage, port: number): HttpRequestContext {
-    return {port, method: req.method ?? "", path: req.url ?? "", pathTemplate: undefined, ...requestPeer(req)};
-}
-
 /** Who sent the request: shared by GG_HTTP_REQUEST and a websocket upgrade's connection context. */
 export function requestPeer(req: http.IncomingMessage): Pick<HttpRequestContext, "peerAddress" | "userAgent" | "forwardedFor"> {
     const header = (name: string) => {

@@ -1,11 +1,16 @@
 import {GG_TEST_RUNNER, GGTest} from "@grest-ts/testkit"
-import {RequestPeerRuntime} from "../src/RequestPeerRuntime"
+import {RAW_ROUTE_PATH, RequestPeerRuntime} from "../src/RequestPeerRuntime"
 
 type Seen = {peerAddress?: string, userAgent?: string, forwardedFor?: string}
 
 async function whoAmI(headers: Record<string, string>): Promise<Seen> {
     const res = await fetch(`${GG_TEST_RUNNER.get().discoveryServer.getRoutingUrl("RequestPeer")}/api/request-peer/who-am-i`, {headers})
     return ((await res.json()) as {data: Seen}).data
+}
+
+async function rawWhoAmI(): Promise<{userAgent?: string, pathTemplate?: string, traceId?: string, marked: boolean}> {
+    const res = await fetch(`${GG_TEST_RUNNER.get().discoveryServer.getRoutingUrl("RequestPeer")}${RAW_ROUTE_PATH}`, {headers: {"user-agent": "raw/1.0"}})
+    return await res.json() as {userAgent?: string, pathTemplate?: string, traceId?: string, marked: boolean}
 }
 
 describe("GG_HTTP_REQUEST connection facts", () => {
@@ -23,5 +28,13 @@ describe("GG_HTTP_REQUEST connection facts", () => {
         expect(seen.userAgent).toBeUndefined()
         expect(seen.forwardedFor).toBeUndefined()
         expect(seen.peerAddress).toMatch(/.+/)
+    })
+
+    test("a raw route runs in its own context: what one request sets doesn't reach the next", async () => {
+        const first = await rawWhoAmI()
+        const second = await rawWhoAmI()
+        expect(first).toMatchObject({userAgent: "raw/1.0", pathTemplate: RAW_ROUTE_PATH})
+        expect(second.marked).toBe(false)
+        expect(second.traceId).not.toBe(first.traceId)
     })
 })

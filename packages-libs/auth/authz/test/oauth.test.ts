@@ -1,7 +1,6 @@
-import {FORBIDDEN} from "@grest-ts/schema"
 import {describe, expect, test} from "vitest"
 import {GGAuthz, GGAuthzMemoryResolver, type GGAuthzRequest, type GGAuthzSubject, INSUFFICIENT_SCOPE, STEP_UP_REQUIRED} from "../src/index-node"
-import {as} from "./util"
+import {verdict} from "./util"
 import {data, model, policies, rn, Secrets, Vm} from "./world"
 
 const authz = new GGAuthz({model, policies, resolver: new GGAuthzMemoryResolver(data)})
@@ -18,11 +17,11 @@ describe("insufficient_scope: the token's scopes are the only thing in the way",
         expect(decision.context.remedy).toEqual({scopes: ["workspaces:operate"]})
     })
 
-    test("authorize throws INSUFFICIENT_SCOPE carrying them", async () => {
-        const error = await as(client(["workspaces:read"]), () => authz.authorize(Vm.StopWorkspace, rn.ws("ann-1"))).catch(e => e)
-        expect(INSUFFICIENT_SCOPE.is(error)).toBe(true)
-        expect(error.data).toEqual({scopes: ["workspaces:operate"]})
-        expect(error.getDebugContext().debugMessage).toContain("A token with scope workspaces:operate would be allowed.")
+    test("the verdict is INSUFFICIENT_SCOPE carrying them", async () => {
+        const v = await verdict(authz, client(["workspaces:read"]), Vm.StopWorkspace, rn.ws("ann-1"))
+        const error = v.outcome === "denied" ? v.error : undefined
+        expect(INSUFFICIENT_SCOPE.is(error) && error.data).toEqual({scopes: ["workspaces:operate"]})
+        expect(error?.getDebugContext()?.debugMessage).toContain("A token with scope workspaces:operate would be allowed.")
     })
 
     test("no remedy when the user couldn't do it with any scope", async () => {
@@ -48,17 +47,18 @@ describe("step-up: re-authenticating would make the request allowed", () => {
         expect((await authz.evaluate(request(user("ann"), Secrets.Write, secret, {mfa: true}))).decision).toBe(true)
     })
 
-    test("authorize throws STEP_UP_REQUIRED (401) carrying them", async () => {
-        const error = await as(user("ann"), () => authz.authorize(Secrets.Write, secret)).catch(e => e)
-        expect(STEP_UP_REQUIRED.is(error)).toBe(true)
+    test("the verdict is STEP_UP_REQUIRED (401) carrying them", async () => {
+        const v = await verdict(authz, user("ann"), Secrets.Write, secret)
+        const error = v.outcome === "denied" ? v.error : undefined
+        expect(STEP_UP_REQUIRED.is(error) && error.data).toEqual({facts: ["mfa"]})
         expect(STEP_UP_REQUIRED.STATUS_CODE).toBe(401)
-        expect(error.data).toEqual({facts: ["mfa"]})
-        expect(error.getDebugContext().debugMessage).toContain("Allowed after step-up authentication (mfa).")
+        expect(error?.getDebugContext()?.debugMessage).toContain("Allowed after step-up authentication (mfa).")
     })
 
     test("no step-up when re-authenticating wouldn't help", async () => {
         expect((await authz.evaluate(request(user("eve"), Secrets.Write, secret))).context.remedy).toBeUndefined()
-        await expect(as(user("eve"), () => authz.authorize(Secrets.Write, secret))).rejects.toBeInstanceOf(FORBIDDEN)
+        const v = await verdict(authz, user("eve"), Secrets.Write, secret)
+        expect(v.outcome === "denied" && v.refusal).toBe("FORBIDDEN")
     })
 
     test("no step-up unless the model declares the fact as one", async () => {

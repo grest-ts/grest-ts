@@ -1,7 +1,6 @@
-import {FORBIDDEN} from "@grest-ts/schema"
 import {describe, expect, test} from "vitest"
 import {defineAuthzModel, defineAuthzRole, defineAuthzService, describeAuthzModel, GGAuthz, type GGAuthzBinding, GGAuthzMemoryResolver, type GGAuthzPolicies, type GGAuthzSubject} from "../src/index-node"
-import {as} from "./util"
+import {notHeld} from "./util"
 
 const org = "rn:acme:org:acme:org/acme"
 const project = "rn:acme:org:acme:project/web"
@@ -113,7 +112,7 @@ describe("canGrant: the grant action, and no escalation", () => {
         const guarded = (deny: GGAuthzPolicies["guardrails"]) => new GGAuthz({model, policies: {...policies, guardrails: deny}, resolver})
         const clearance = guarded([{id: "clearance", on: org, deny: [{actions: ["docs:Write"], conditions: [{key: "principal.clearance", op: "lt", value: 3}]}]}])
         expect((await clearance.canGrant({subject: user("root"), binding: grant("editor")})).decision).toBe(false)
-        expect(await clearance.missingActions({subject: user("root"), actions: ["docs:Write"], on: project})).toEqual(["docs:Write"])
+        expect(notHeld(await clearance.canHold({subject: user("root"), actions: ["docs:Write"], on: project}))).toEqual(["docs:Write"])
         const cleared = new GGAuthz({model, policies: {...policies, guardrails: [{id: "clearance", on: org, deny: [{actions: ["docs:Write"], conditions: [{key: "principal.clearance", op: "lt", value: 3}]}]}]},
             resolver: new GGAuthzMemoryResolver({parents: {[project]: org, [doc]: project}, attributes: {"user:root": {clearance: 5}}})})
         expect((await cleared.canGrant({subject: user("root"), binding: grant("editor")})).decision).toBe(true)
@@ -123,10 +122,10 @@ describe("canGrant: the grant action, and no escalation", () => {
         expect((await mfa.canGrant({subject: user("root"), binding: grant("editor"), context: {mfa: true}})).decision).toBe(true)
     })
 
-    test("missingActions: what the subject doesn't hold on a scope, skipping unknown actions", async () => {
-        expect(await authz.missingActions({subject: user("lead"), actions: ["docs:Read", "docs:Write", "ghost:Fly"], on: project})).toEqual(["docs:Write"])
-        expect(await authz.missingActions({subject: user("root"), actions: ["docs:Write"], on: project})).toEqual([])
-        expect(await authz.missingActions({subject: user("root"), actions: ["docs:Write"], on: "rn:other:org:x:project/p"})).toBeUndefined()
+    test("canHold: a denial lists what the subject doesn't hold on a scope, skipping unknown actions", async () => {
+        expect(notHeld(await authz.canHold({subject: user("lead"), actions: ["docs:Read", "docs:Write", "ghost:Fly"], on: project}))).toEqual(["docs:Write"])
+        expect((await authz.canHold({subject: user("root"), actions: ["docs:Write"], on: project})).decision).toBe(true)
+        expect((await authz.canHold({subject: user("root"), actions: ["docs:Write"], on: "rn:other:org:x:project/p"})).context.reasons).toEqual([expect.objectContaining({kind: "invalid"})])
     })
 
     test("unknown roles and foreign scopes are denials, not errors", async () => {
@@ -134,11 +133,9 @@ describe("canGrant: the grant action, and no escalation", () => {
         expect((await authz.canGrant({subject: user("root"), binding: grant("viewer", "rn:other:org:x:project/p")})).context.reasons).toEqual([expect.objectContaining({kind: "invalid"})])
     })
 
-    test("authorizeGrant throws FORBIDDEN for the subject in context", async () => {
-        const grantAs = (id: string) => as(user(id), () => authz.authorizeGrant(grant("editor")))
-        expect((await grantAs("root")).decision).toBe(true)
-        const error = await grantAs("lead").catch(e => e)
-        expect(FORBIDDEN.is(error)).toBe(true)
-        expect(error.getDebugContext().debugMessage).toContain("granting role editor on rn:acme:org:acme:project/web needs docs:Write")
+    test("grantRequest: the grant action on the binding's scope, which explains a canGrant denial", async () => {
+        const request = authz.grantRequest(user("lead"), grant("editor"))
+        expect(request.resource.id).toBe(grant("editor").on)
+        expect(GGAuthz.explain(request, await authz.canGrant({subject: user("lead"), binding: grant("editor")}))).toContain("granting role editor on rn:acme:org:acme:project/web needs docs:Write")
     })
 })
