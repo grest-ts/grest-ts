@@ -34,14 +34,14 @@ export const UnsatisfiableApi = new GGHttpSchema({
     routes: {needsScope: GGRpc.GET("read")},
 })
 
-// --- #3/#4 wire conflict: two wires on one schema share a context-key name + header ------------
+// --- #3/#4 wire conflict: two wires on one schema read the same header ------------------------
 const WireConflictContract = new GGContractClass("WireConflict", {
     hello: {success: IsString, errors: [SERVER_ERROR]},
 })
 export const WireConflictApi = new GGHttpSchema({
     contract: WireConflictContract,
     pathPrefix: "api/wire-conflict",
-    use: [new GGHeader("x-token"), new GGHeader("x-token")],
+    use: [new GGHeader("x-token"), new GGHeader("x-token", {key: "wireConflict.secondToken"})],
     routes: {hello: GGRpc.GET("hello")},
 })
 

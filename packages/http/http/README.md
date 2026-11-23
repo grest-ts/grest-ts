@@ -303,6 +303,10 @@ export type User = typeof IsUser.infer
 // SMART wire: parses `Authorization: Bearer <jwt>`. The raw token is ephemeral — readable
 // only inside the server handler's process(), then cleared before the route handler runs.
 export const USER_TOKEN_WIRE = new GGHeader("authorization", { scheme: "bearer" })
+
+// A wire is a context key named after its header, and a key name can be defined once. A second
+// wire on the same header (a service's token, also `authorization`) names its own key.
+export const SERVICE_TOKEN_WIRE = new GGHeader("authorization", { scheme: "bearer", key: "serviceToken" })
 ```
 
 ```typescript

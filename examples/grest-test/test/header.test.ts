@@ -5,80 +5,76 @@ const inContext = (fn: () => void) => new GGContext("test").run(fn)
 const inbound = (headers: Record<string, string | undefined> = {}) => ({headers, query: {}})
 const outbound = () => ({headers: {} as Record<string, string>})
 
+const X_TOKEN = new GGHeader("x-token", {key: "headerTest.xToken"})
+const LOCALE = new GGHeader("X-Locale", {key: "headerTest.locale"})
+const BEARER = new GGHeader("authorization", {scheme: "bearer", key: "headerTest.bearer"})
+
 describe("header binding", () => {
 
     test("parse reads the named header (verbatim) into the wire", () => {
         inContext(() => {
-            const mw = new GGHeader("x-token")
-            mw.parse(inbound({"x-token": "abc123"}))
-            expect(mw.get()).toBe("abc123")
+            X_TOKEN.parse(inbound({"x-token": "abc123"}))
+            expect(X_TOKEN.get()).toBe("abc123")
         })
     })
 
-    test("the wire name is the header name, lowercased", () => {
+    test("the header name is matched lowercased", () => {
         inContext(() => {
-            const mw = new GGHeader("X-Locale")
-            mw.parse(inbound({"x-locale": "en-US"}))
-            expect(mw.get()).toBe("en-US")
+            LOCALE.parse(inbound({"x-locale": "en-US"}))
+            expect(LOCALE.get()).toBe("en-US")
         })
     })
 
     test("scheme:bearer strips the Bearer prefix on read", () => {
         inContext(() => {
-            const mw = new GGHeader("authorization", {scheme: "bearer"})
-            mw.parse(inbound({authorization: "Bearer tok-42"}))
-            expect(mw.get()).toBe("tok-42")
+            BEARER.parse(inbound({authorization: "Bearer tok-42"}))
+            expect(BEARER.get()).toBe("tok-42")
         })
     })
 
     test("scheme:bearer adds the Bearer prefix on write (client)", () => {
         inContext(() => {
-            const mw = new GGHeader("authorization", {scheme: "bearer"})
-            mw.set("tok-42")
+            BEARER.set("tok-42")
             const out = outbound()
-            mw.update(out)
+            BEARER.update(out)
             expect(out.headers["authorization"]).toBe("Bearer tok-42")
         })
     })
 
     test("verbatim (no scheme) round-trips the value unchanged", () => {
         inContext(() => {
-            const mw = new GGHeader("x-token")
-            mw.set("plain")
+            X_TOKEN.set("plain")
             const out = outbound()
-            mw.update(out)
+            X_TOKEN.update(out)
             expect(out.headers["x-token"]).toBe("plain")
-            mw.delete()
-            mw.parse(inbound(out.headers))
-            expect(mw.get()).toBe("plain")
+            X_TOKEN.delete()
+            X_TOKEN.parse(inbound(out.headers))
+            expect(X_TOKEN.get()).toBe("plain")
         })
     })
 
     test("update writes nothing when the wire is unset", () => {
         inContext(() => {
-            const mw = new GGHeader("x-token")
             const out = outbound()
-            mw.update(out)
+            X_TOKEN.update(out)
             expect(out.headers["x-token"]).toBeUndefined()
         })
     })
 
     test("a missing header leaves the wire unset", () => {
         inContext(() => {
-            const mw = new GGHeader("x-token")
-            mw.parse(inbound({}))
-            expect(mw.get()).toBeUndefined()
+            X_TOKEN.parse(inbound({}))
+            expect(X_TOKEN.get()).toBeUndefined()
         })
     })
 
     test("WS: parse reads the handshake header; update writes it", () => {
         inContext(() => {
-            const mw = new GGHeader("authorization", {scheme: "bearer"})
-            mw.parse(inbound({authorization: "Bearer ws-tok"}))
-            expect(mw.get()).toBe("ws-tok")
+            BEARER.parse(inbound({authorization: "Bearer ws-tok"}))
+            expect(BEARER.get()).toBe("ws-tok")
 
             const out = outbound()
-            mw.update(out)
+            BEARER.update(out)
             expect(out.headers["authorization"]).toBe("Bearer ws-tok")
         })
     })

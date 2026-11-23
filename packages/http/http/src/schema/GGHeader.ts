@@ -13,6 +13,11 @@ const BEARER = "Bearer "
  *
  *   // ambient: parsed value lands in the wire and persists, no implementation needed.
  *   const CLIENT_VERSION_WIRE = new GGHeader("x-client-version")
+ *
+ * The context key is named after the header unless `key` names it: two headers of one name (a user's token and a
+ * service's, both `authorization`) each need their own.
+ *
+ *   const SERVICE_TOKEN_WIRE = new GGHeader("authorization", {scheme: "bearer", key: "serviceToken"})
  */
 export class GGHeader extends GGWireContextKey {
 
@@ -20,11 +25,11 @@ export class GGHeader extends GGWireContextKey {
     private readonly scheme?: "bearer"
     private readonly wireName: string
 
-    constructor(name: string, options?: { scheme?: "bearer" }) {
+    constructor(header: string, options?: { scheme?: "bearer", key?: string }) {
         const WIRE_SCHEMA = IsString.orUndefined
-        super(name, WIRE_SCHEMA)
+        super(options?.key ?? header, WIRE_SCHEMA)
         this.scheme = options?.scheme
-        this.wireName = name.toLowerCase()
+        this.wireName = header.toLowerCase()
         this.headers = {[this.wireName]: WIRE_SCHEMA}
     }
 

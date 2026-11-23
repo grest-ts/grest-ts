@@ -1,7 +1,7 @@
 import {GGHeader, GGHttpSchema, GGRpc} from "@grest-ts/http"
 import {GG_NO_PERMISSIONS, GGContractClass, IsString, NOT_AUTHORIZED, SERVER_ERROR} from "@grest-ts/schema"
 
-export const SERVICE_TOKEN_WIRE = new GGHeader("authorization", {scheme: "bearer"})
+export const SERVICE_TOKEN_WIRE = new GGHeader("authorization", {scheme: "bearer", key: "serviceToken"})
 
 export const ServiceTokenApiContract = new GGContractClass("ServiceTokenApi", {
     whoami: {
