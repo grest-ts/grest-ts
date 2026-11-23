@@ -51,9 +51,11 @@ export interface GGAuthzScope {
 }
 
 /** What was decided: an `action` on a resource (`assert`, a requirement), a role `grant` on it (`authorizeGrant`; `action`
- *  is the engine's grant action), or whether the caller `holds` actions on a scope (`assertHolds`). */
+ *  is the engine's grant action), whether the caller `holds` actions on a scope (`assertHolds`), or whether they may
+ *  `approve` someone else's action (`assertMayApprove`). */
 export type GGAuthzCheck =
     | {check: "action", action: string, resource: GGAuthzResolvedResource}
+    | {check: "approve", action: string, resource: GGAuthzResolvedResource}
     | {check: "grant", action: string, role: string, principal: string, resource: GGAuthzResolvedResource}
     | {check: "holds", actions: readonly string[], missing: readonly string[], scope: GGAuthzScope}
 
@@ -294,6 +296,27 @@ export class GGAuthzAuthority {
             error = e
         }
         if (this.config.decided) this.heard({...event(), outcome: "denied", refusal, hidden, error})
+        throw error
+    }
+
+    /** Throws unless the caller could do `action` on `resource` themselves, decided as `can` decides it: before they
+     *  approve someone else's (no-escalation, as `authorizeGrant`). The action is the approved one, not the method's own,
+     *  so it isn't declared; heard as `check: "approve"`. An allow the caller would need approval for is refused. */
+    public async assertMayApprove(action: GGAuthzActionRef, resource: GGAuthzResourceRef, options?: {displayMessage?: string}): Promise<void> {
+        const name = actionName(action)
+        const resolved = await this.resources.resolve(resource)
+        const [engine, facts] = await Promise.all([this.config.engine(resolved.tenant), this.config.facts?.(name, resolved)])
+        const request = this.request(this.subject(), name, resolved, facts)
+        const decision = await engine.evaluate(request)
+        const verdict = GGAuthz.verdict(request, decision)
+        const event = {check: "approve" as const, action: name, resource: resolved, subject: request.subject, call: currentCall()?.call, decision}
+        if (verdict.outcome === "allowed") {
+            if (this.config.decided) this.heard({...event, outcome: "allowed"})
+            return
+        }
+        const refusal = verdict.outcome === "denied" ? verdict.refusal : "FORBIDDEN"
+        const error = verdict.outcome === "denied" && refusal !== "FORBIDDEN" ? verdict.error : new FORBIDDEN({displayMessage: options?.displayMessage, debugMessage: GGAuthz.explain(request, decision)})
+        if (this.config.decided) this.heard({...event, outcome: "denied", refusal, hidden: false, error})
         throw error
     }
 
