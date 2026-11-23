@@ -19,6 +19,7 @@ export class GGLocatorScope {
     private readonly registrationStacks: Map<string, string[]>
     private readonly creationStack: string[]
     private timers?: Set<WeakRef<NodeJS.Timeout>>
+    private timerRunner?: <R>(fn: () => R) => R
 
     constructor(name: string, parent?: GGLocatorScope, serviceName?: string) {
         this.name = name
@@ -103,11 +104,23 @@ export class GGLocatorScope {
     }
 
     public setTimeout<R>(fn: () => R, timeout: number): NodeJS.Timeout {
-        return this.trackTimer(setTimeout(() => this.run(fn), timeout))
+        return this.trackTimer(setTimeout(() => this.run(() => this.runTimer(fn)), timeout))
     }
 
     public setInterval<R>(fn: () => R, timeout: number): NodeJS.Timeout {
-        return this.trackTimer(setInterval(() => this.run(fn), timeout))
+        return this.trackTimer(setInterval(() => this.run(() => this.runTimer(fn)), timeout))
+    }
+
+    /** How this scope and its branches run a timer's callback. GGRuntime sets it (the locator can't see contexts) so a
+     *  timer set outside any request runs as a unit of work of its own instead of in the runtime's root context. */
+    public setTimerRunner(runner: <R>(fn: () => R) => R): void {
+        this.timerRunner = runner
+    }
+
+    private runTimer<R>(fn: () => R): R {
+        let owner: GGLocatorScope | undefined = this
+        while (owner && !owner.timerRunner) owner = owner.parent
+        return owner?.timerRunner ? owner.timerRunner(fn) : fn()
     }
 
     /**

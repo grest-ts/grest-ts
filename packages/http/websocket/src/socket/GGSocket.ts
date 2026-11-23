@@ -110,7 +110,7 @@ export class GGSocket {
 
         this.socket.onMessage(async (data: string) => {
             scope?.ensureEntered();
-            const context = new GGContext("ws-message", this.connectionContext);
+            const context = new GGContext("ws-message", this.connectionContext, {strict: true});
             await context.run(async () => {
                 GG_TRACE.init();
 

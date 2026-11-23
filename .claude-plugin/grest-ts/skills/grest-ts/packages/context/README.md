@@ -118,6 +118,22 @@ parentCtx.run(() => {
 })
 ```
 
+## Units of work and the sealed root
+
+Each unit of work runs in a fresh context with no parent, so it inherits nothing another unit set:
+an HTTP request (raw routes included), a websocket connection, a job run, an event, and a scope timer
+(`GGLocator.setTimeout`/`setInterval`) set outside any request. Start your own with `runInFreshContext(name, fn)`
+from `@grest-ts/trace`.
+
+A unit of work's context is strict: a key can be set once in it, and a second `set()` throws, so two parts of one
+request can't silently overwrite each other's value. A key that must change mid-unit, like the trace, is declared
+`new GGContextKey(name, schema, {mutable: true})`. To scope a different value to part of the work, run that part in a
+child context instead.
+
+A runtime runs compose and start in its root context, and **seals** it once running: `set()` on it throws. Code that
+still runs there later, such as a raw `setTimeout` or an emitter listener set up in compose, would otherwise leak what
+it sets into the runtime itself. Run that code with `runInFreshContext`, or use a scope timer.
+
 ## Async Context Helpers
 
 Preserve context across async boundaries:

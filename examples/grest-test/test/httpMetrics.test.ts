@@ -1,5 +1,5 @@
-import {callOn, GGTest} from "@grest-ts/testkit";
-import {MainRuntime} from "../src/main";
+import {callOn, GG_TEST_RUNNER, GGTest} from "@grest-ts/testkit";
+import {MainRuntime, RAW_METRICS_PROBE_PATH} from "../src/main";
 import {HttpMetricsTestApi} from "../src/api/HttpMetricsTestApi";
 import {ConfigTestApi} from "../src/api/ConfigTestApi";
 import {JsonHistogramValue, JsonMetric} from "@grest-ts/metrics";
@@ -167,6 +167,31 @@ describe.shuffle("GGHttp metrics", () => {
                 v.labels.method === 'log'
             );
             expect(durationValue).toBeUndefined();
+        });
+
+    });
+
+    describe("raw route metrics", () => {
+
+        beforeEach(async () => {
+            await httpMetricsClient.resetHttpMetrics();
+        });
+
+        test('a raw route is counted under its owner and path template, with its status code as the result', async () => {
+            const probe = (status: string) => fetch(`${GG_TEST_RUNNER.get().discoveryServer.getRoutingUrl("HttpMetricsTestApi")}${RAW_METRICS_PROBE_PATH}/${status}`)
+            expect((await probe("204")).status).toBe(204);
+            expect((await probe("204")).status).toBe(204);
+            expect((await probe("throw")).status).toBe(500);
+
+            const metrics = parseMetrics((await httpMetricsClient.getHttpMetrics()).metricsJson);
+            const raw = metrics['/http/requests_total'].values.filter(v => v.labels.api === 'RawProbe');
+            const path = `GET ${RAW_METRICS_PROBE_PATH}/:status`;
+            expect(raw.map(v => ({labels: v.labels, value: v.value}))).toEqual(expect.arrayContaining([
+                {labels: {api: 'RawProbe', method: `${RAW_METRICS_PROBE_PATH}/:status`, path, result: '204'}, value: 2},
+                {labels: {api: 'RawProbe', method: `${RAW_METRICS_PROBE_PATH}/:status`, path, result: '500'}, value: 1},
+            ]));
+            const duration = metrics['/http/request_duration_ms'].values.find(v => v.labels.api === 'RawProbe');
+            expect((duration!.value as JsonHistogramValue).count).toBe(3);
         });
 
     });
