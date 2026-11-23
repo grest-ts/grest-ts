@@ -21,7 +21,6 @@ export default defineConfig({
       'packages-libs/lock/lock-dynamodb',
       'packages-libs/plugins',
       'packages-libs/struct',
-      'packages-tooling/code-generator',
       'packages-tooling/testkit/testkit',
       'packages-tooling/testkit/testkit-vitest',
       'packages/common',

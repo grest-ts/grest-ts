@@ -5,7 +5,7 @@ import type { ViteUserConfig } from "vitest/config"
 
 /**
  * Builds vitest.config.ts files for Grest packages.
- * Generates for packages with hasTests or hasCodegenTests.
+ * Generates for packages with hasTests.
  */
 export class GGVitestConfigBuilder {
     private readonly packages: GGPackageInfo[]
@@ -17,7 +17,7 @@ export class GGVitestConfigBuilder {
      * Check if package needs a vitest config
      */
     private needsVitestConfig(pkg: GGPackageInfo): boolean {
-        return !!pkg.config.hasTests || !!pkg.config.hasCodegenTests
+        return !!pkg.config.hasTests
     }
 
     /**

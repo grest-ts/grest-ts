@@ -230,7 +230,7 @@ function assembleStaging(name: string, dir: string): void {
     // Copy compiled dist/ folder
     cpSync(join(dir, "dist"), join(stagingDir, "dist"), {recursive: true, filter: isPublished})
 
-    // Copy source folders listed in files array (src/, codegen/, bin/)
+    // Copy source folders listed in files array (src/, bin/)
     // Skip directories that match export subpaths (e.g. "testkit") — the compiled
     // version in dist/ handles those, and raw .ts source dirs would shadow the
     // exports map and cause Node ESM to resolve to .ts files instead.

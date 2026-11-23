@@ -7,8 +7,7 @@ import {pathToFileURL} from 'url';
  * Discovers extension packages by scanning node_modules + monorepo packages
  * for a {name}/index-{name}.ts (or compiled .js) entry. Each discovered file
  * is dynamically imported once per process, triggering its side-effect
- * registrations (selector extensions, IPC handlers, test components, codegen
- * builders, …).
+ * registrations (selector extensions, IPC handlers, test components, …).
  *
  * Type-level discovery (so consumers' TS sees `declare module` augmentations)
  * is handled separately by scripts/packager/generate-testkit-extensions.ts —

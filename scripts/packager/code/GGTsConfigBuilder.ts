@@ -86,16 +86,6 @@ export class GGTsConfigBuilder {
             files.push(this.buildTestkitConfig(pkg))
         }
 
-        // codegen/tsconfig.json (if package extends @grest-ts/code-generator)
-        if (pkg.config.extendsCodeGen) {
-            files.push(this.buildCodegenConfig(pkg))
-        }
-
-        // codegen-test/tsconfig.json (if package has codegen tests)
-        if (pkg.config.extendsCodeGen && pkg.config.hasCodegenTests) {
-            files.push(this.buildCodegenTestConfig(pkg))
-        }
-
         // tsconfig.publish.json (for building compiled output)
         files.push(this.buildPublishConfig(pkg))
 
@@ -181,42 +171,8 @@ export class GGTsConfigBuilder {
     }
 
     /**
-     * Build codegen/tsconfig.json for code generation source files.
-     * These are utilities that extend @grest-ts/code-generator and are exported via ./codegen
-     * Note: No rootDir - codegen files import from other packages
-     */
-    private buildCodegenConfig(pkg: GGPackageInfo): PackagerFile {
-        const config: TsConfig = {
-            extends: this.buildExtendsPath(pkg.depth, 1), // +1 for codegen/ subfolder
-            compilerOptions: {
-                lib: ["ES2022"],
-                types: ["node"]
-            },
-            include: ["**/*"]
-        }
-
-        return PackagerFile.json(join(pkg.path, "codegen", "tsconfig.json"), config)
-    }
-
-    /**
-     * Build codegen-test/tsconfig.json for code generation test files.
-     * Note: No rootDir - test files import from ../codegen which requires rootDir at package level or higher
-     */
-    private buildCodegenTestConfig(pkg: GGPackageInfo): PackagerFile {
-        const config: TsConfig = {
-            extends: this.buildExtendsPath(pkg.depth, 1), // +1 for codegen-test/ subfolder
-            compilerOptions: {
-                types: ["node", "vitest/globals"]
-            },
-            include: ["**/*"]
-        }
-
-        return PackagerFile.json(join(pkg.path, "codegen-test", "tsconfig.json"), config)
-    }
-
-    /**
      * Build tsconfig.publish.json for npm publishing.
-     * Compiles src/ (and optionally testkit/, codegen/) to dist/ with declarations + declaration maps.
+     * Compiles src/ (and optionally testkit/) to dist/ with declarations + declaration maps.
      * The declarationMap + shipped source files enable ctrl+click to .ts in consumers' IDEs.
      * This file sits at the package root (no extra level for extends path).
      */
@@ -226,7 +182,6 @@ export class GGTsConfigBuilder {
 
         const include = ["src/**/*"]
         if (pkg.config.extendsTestKit) include.push("testkit/**/*")
-        if (pkg.config.extendsCodeGen) include.push("codegen/**/*")
 
         // Testkit code transitively imports @grest-ts/testkit source which uses vitest globals,
         // so we need vitest/globals in types for compilation to succeed in the monorepo.
