@@ -16,6 +16,8 @@ jobs:
       github.event.workflow_run.conclusion == 'success'
       && github.event.workflow_run.event == 'push'
       && github.event.workflow_run.head_branch == 'release'
+    # NPM_TOKEN lives in this environment, not the repo, so a PR's workflow run can't read it.
+    environment: npm-publish
     runs-on: ubuntu-latest
 
     steps:

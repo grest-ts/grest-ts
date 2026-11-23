@@ -6,8 +6,9 @@ on:
   pull_request:
     branches: [master, dev, release]
 
+# A PR runs code its author wrote, so it gets a read-only token; only the release push may write.
 permissions:
-  contents: write
+  contents: read
 
 # On release: serialize releases, never cancel an in-flight one (a publish
 # may be partway through). On every other ref: cancel-in-progress is fine.
@@ -16,111 +17,19 @@ concurrency:
   cancel-in-progress: ${{ github.ref != 'refs/heads/release' }}
 
 jobs:
-  ci:
+  pr:
+    if: github.event_name == 'pull_request'
+    uses: ./.github/workflows/build.yml
+    with:
+      release: false
+
+  release:
     # Defense-in-depth: skip the bot's own version-bump commits if they ever
     # re-enter (GITHUB_TOKEN-driven pushes don't trigger workflows by default,
     # but keep the guard).
-    if: ${{ github.event.head_commit.author.email != 'github-actions[bot]@users.noreply.github.com' }}
-    runs-on: ubuntu-latest
-
-    services:
-      postgres:
-        image: postgres:16
-        ports:
-          - 5432:5432
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: postgres
-        options: >-
-          --health-cmd "pg_isready -U postgres"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 10
-          --health-start-period 30s
-      # In-memory without -sharedDb: each access key gets its own tables (the DynamoDB tests rely on it).
-      dynamodb:
-        image: amazon/dynamodb-local
-        ports:
-          - 8002:8000
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          # Need full history so the bump commit can be pushed cleanly to
-          # master (FF requires master's tip to be reachable).
-          fetch-depth: 0
-
-      - name: Setup Node 26
-        uses: actions/setup-node@v4
-        with:
-          node-version: 26
-
-      - name: Install dependencies
-        run: npm install
-
-      - name: Install PostgreSQL client
-        run: sudo apt-get update && sudo apt-get install -y postgresql-client
-
-      - name: Init databases
-        run: |
-          PGPASSWORD=postgres psql -h localhost -U postgres -c "CREATE DATABASE checklist;"
-          PGPASSWORD=postgres psql -h localhost -U postgres -c "CREATE DATABASE blocker;"
-          PGPASSWORD=postgres psql -h localhost -U postgres -d checklist -f examples/checklist/checklist/schema/checklist.postgres.sql
-          PGPASSWORD=postgres psql -h localhost -U postgres -d blocker -f examples/checklist/blocker/schema/blocker.postgres.sql
-
-      - name: Check
-        run: npx tsx grest.1.check.ts
-
-      - name: Test
-        run: npx tsx grest.2.vitest.ts
-
-      - name: Authz Cedar differential test
-        run: |
-          if [ "${{ github.event_name }}" = "pull_request" ] && git diff --quiet "origin/${{ github.base_ref }}...HEAD" -- packages-libs/auth/authz; then
-            echo "packages-libs/auth/authz unchanged, skipping"
-            exit 0
-          fi
-          npm run test:cedar -w @grest-ts/authz
-
-      # We want to make sure build also works.
-      - name: Build
-        run: npx tsx grest.4.build.ts
-        
-      - name: Version bump
-        if: github.event_name == 'push' && github.ref == 'refs/heads/release'
-        run: npx tsx grest.3.ver.patch.ts
-
-      - name: Read version
-        if: github.event_name == 'push' && github.ref == 'refs/heads/release'
-        id: version
-        run: echo "version=$(node -p "require('./package.json').version")" >> $GITHUB_OUTPUT
-
-      - name: Commit, tag, and fast-forward master + backmerge dev
-        if: github.event_name == 'push' && github.ref == 'refs/heads/release'
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-
-          # Permissive mode: capture every file the regen step touched, not
-          # just package.json bumps. Anything check / generate produces
-          # (subpackage.jsons, dependency graph, AI rules, _dedupCheck files,
-          # etc.) gets bundled into the release commit so the released state
-          # is internally consistent.
-          git add -A
-          git commit -m "v${{ steps.version.outputs.version }}"
-          git tag -a "v${{ steps.version.outputs.version }}" -m "v${{ steps.version.outputs.version }}"
-
-          # Fast-forward master to the bump commit. release was built from a
-          # descendant of master in the normal flow (dev → release after dev
-          # was based on master), so this is a clean FF. If it isn't, the
-          # push fails and the action fails — release stays in a failed
-          # state, master is untouched, and a human resolves it.
-          git push origin HEAD:refs/heads/master --follow-tags
-
-          # Silent backmerge to dev. If dev moved during validation, the
-          # non-FF push is rejected and we move on — version-resolution on
-          # the next release uses max(package.json, npm-registry) so we
-          # never republish the same version.
-          git push origin HEAD:refs/heads/dev || echo "::warning::Could not push bump to dev (likely moved during release). Manual sync may be needed."
+    if: github.event_name == 'push' && github.event.head_commit.author.email != 'github-actions[bot]@users.noreply.github.com'
+    permissions:
+      contents: write
+    uses: ./.github/workflows/build.yml
+    with:
+      release: true
