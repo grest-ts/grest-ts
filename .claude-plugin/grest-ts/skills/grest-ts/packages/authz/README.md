@@ -223,7 +223,7 @@ standard methods.
 | `.on(tenantType)` | no id: the caller's tenant itself |
 | `.in([type,] field)` | inside the parent that input field names, as `{type, id}` from `parentRef(type)`: decided on the parent. The type must have `in`. Contract construction checks the field can only name its parents |
 | `.onContext([type,] source)` | the authority resolves the id from the request |
-| `.hide()` | a denial answers `NOT_FOUND`; the authority's `hidden(resource, action)` config does it per resource |
+| `.hide()` | a denial answers `NOT_FOUND`; the authority's `hides` hook does it per caller |
 | `.orCreateOn(type, field)` | an upsert: without the id field, check the parent `type` from `field` |
 | `.list()` | no check before the handler; it filters what it returns with `peek` or a list plan |
 
