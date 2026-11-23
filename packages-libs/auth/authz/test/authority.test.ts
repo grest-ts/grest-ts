@@ -414,7 +414,7 @@ describe("GGAuthzAuthority", () => {
         expect(reported).toEqual([`VmApi.stop ${Vm.StartWorkspace.name}`, `VmApi.status ${Vm.ReadWorkspace.name}`])
     })
 
-    test("assertMayApprove decides as can, isn't undeclared, and is heard as an approve check", async () => {
+    test("assertMayApprove decides as can, isn't undeclared, is heard as an approve check, and declares what it allowed", async () => {
         const reported: string[] = []
         const heard: GGAuthzDecided[] = []
         const approving = new GGAuthzAuthority({
@@ -425,10 +425,11 @@ describe("GGAuthzAuthority", () => {
         approving.register(Vm.types.workspace, (_tenant, id) => workspaces[id] ? {properties: {ancestors: [workspaces[id]!, rn.org]}} : undefined)
         await inCall(approving, ann, {api: "ApprovalsApi", method: "resolve"}, [], undefined, async () => {
             await approving.assertMayApprove(Vm.StopWorkspace, {type: Vm.types.workspace, id: "ann-1"})
+            await approving.assert(Vm.StopWorkspace, {type: Vm.types.workspace, id: "ann-1"})
             const err = await fail(approving.assertMayApprove(Vm.StopWorkspace, {type: Vm.types.workspace, id: "dan-1"}, {displayMessage: "not yours to approve"}))
             expect(FORBIDDEN.is(err) && err.context?.displayMessage).toBe("not yours to approve")
         })
         expect(reported).toEqual([])
-        expect(heard.map(e => [e.check, e.outcome])).toEqual([["approve", "allowed"], ["approve", "denied"]])
+        expect(heard.map(e => [e.check, e.outcome])).toEqual([["approve", "allowed"], ["action", "allowed"], ["approve", "denied"]])
     })
 })

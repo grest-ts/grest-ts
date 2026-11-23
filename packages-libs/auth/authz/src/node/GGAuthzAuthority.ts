@@ -6,6 +6,7 @@ import {GGAuthz} from "./GGAuthz"
 import {
     AuthzResources,
     currentCall,
+    declareInCall,
     type GGAuthzCall,
     type GGAuthzLoader,
     type GGAuthzResolvedResource,
@@ -307,9 +308,12 @@ export class GGAuthzAuthority {
     /** Throws unless the caller could do `action` on `resource` themselves, decided as `can` decides it: before they
      *  approve someone else's, or what a way of approving does (no-escalation, as `authorizeGrant`). The action comes
      *  with the approval, not the method, so it isn't declared; heard as `check: "approve"`. An allow the caller would
-     *  need approval for is refused. */
+     *  need approval for is refused. Once allowed, the action counts as declared for the rest of the call, so what
+     *  approving does with it is decided as usual. */
     public async assertMayApprove(action: GGAuthzActionRef, resource: GGAuthzResourceRef, options?: {displayMessage?: string}): Promise<void> {
-        await this.decide(actionName(action), await this.resources.resolve(resource), options ?? {}, "approve")
+        const name = actionName(action)
+        await this.decide(name, await this.resources.resolve(resource), options ?? {}, "approve")
+        declareInCall(name)
     }
 
     private heard(event: GGAuthzDecided): void {
