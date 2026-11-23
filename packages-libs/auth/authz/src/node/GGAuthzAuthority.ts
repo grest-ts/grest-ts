@@ -100,7 +100,8 @@ export interface GGAuthzAuthorityConfig {
      *  its scope: match `need.grant` (role and principal) too, or one approval covers any grant there. */
     approvals?(need: GGAuthzApprovalNeed): Promise<void>
     /** True answers an action's refusal a requirement didn't `.hide()` with NOT_FOUND: the caller isn't told it exists.
-     *  Grants and holds checks are about what the caller holds, so they're answered as they are; listings filter instead.
+     *  Grant, holds and approve checks are about what the caller holds, so they're answered as they are; listings filter
+     *  instead.
      *  A throw is the answer, as from `explains`. */
     hides?(refusal: GGAuthzRefused): Awaitable<boolean>
     /** A FORBIDDEN to answer a FORBIDDEN refusal that isn't hidden with, e.g. saying why; undefined keeps it. Never asked
@@ -304,8 +305,9 @@ export class GGAuthzAuthority {
     }
 
     /** Throws unless the caller could do `action` on `resource` themselves, decided as `can` decides it: before they
-     *  approve someone else's (no-escalation, as `authorizeGrant`). The action is the approved one, not the method's own,
-     *  so it isn't declared; heard as `check: "approve"`. An allow the caller would need approval for is refused. */
+     *  approve someone else's, or what a way of approving does (no-escalation, as `authorizeGrant`). The action comes
+     *  with the approval, not the method, so it isn't declared; heard as `check: "approve"`. An allow the caller would
+     *  need approval for is refused. */
     public async assertMayApprove(action: GGAuthzActionRef, resource: GGAuthzResourceRef, options?: {displayMessage?: string}): Promise<void> {
         await this.decide(actionName(action), await this.resources.resolve(resource), options ?? {}, "approve")
     }
