@@ -6,8 +6,10 @@ on:
   pull_request:
     branches: [master, dev, release]
 
+# A PR runs code its author wrote. The release push uses the `release` environment's deploy key,
+# so GITHUB_TOKEN never needs write and rulesets on master/dev/release/tags can refuse it.
 permissions:
-  contents: write
+  contents: read
 
 # On release: serialize releases, never cancel an in-flight one (a publish
 # may be partway through). On every other ref: cancel-in-progress is fine.
@@ -22,6 +24,7 @@ jobs:
     # but keep the guard).
     if: ${{ github.event.head_commit.author.email != 'github-actions[bot]@users.noreply.github.com' }}
     runs-on: ubuntu-latest
+    environment: ${{ github.event_name == 'push' && 'release' || '' }}
 
     services:
       postgres:
@@ -51,6 +54,9 @@ jobs:
           # Need full history so the bump commit can be pushed cleanly to
           # master (FF requires master's tip to be reachable).
           fetch-depth: 0
+          # Empty outside the release environment, so a PR checks out over HTTPS and keeps no credential.
+          ssh-key: ${{ secrets.RELEASE_DEPLOY_KEY }}
+          persist-credentials: ${{ github.event_name == 'push' }}
 
       - name: Setup Node 26
         uses: actions/setup-node@v4
