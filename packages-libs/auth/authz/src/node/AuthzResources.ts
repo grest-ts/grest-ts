@@ -38,7 +38,7 @@ export interface GGAuthzCall {
  *  `once` keeps for it, such as one read of each row. Every authority reads the same one. */
 interface CallState {
     call: GGAuthzCall
-    actions: ReadonlySet<string>
+    actions: Set<string>
     // Per owner: two authorities never serve each other's rows.
     kept: WeakMap<object, Map<string, Promise<unknown>>>
 }
@@ -53,6 +53,11 @@ export function openCall(call: GGAuthzCall, actions: Iterable<string>): void {
 
 export function currentCall(): {call: GGAuthzCall, actions: ReadonlySet<string>} | undefined {
     return GG_AUTHZ_CALL.get()
+}
+
+/** From here on in the call, `action` counts as declared. */
+export function declareInCall(action: string): void {
+    GG_AUTHZ_CALL.get()?.actions.add(action)
 }
 
 /** `GGAuthzAuthority.once`, per `owner`. */

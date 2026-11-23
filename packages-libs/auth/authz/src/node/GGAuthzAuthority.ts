@@ -6,6 +6,7 @@ import {GGAuthz} from "./GGAuthz"
 import {
     AuthzResources,
     currentCall,
+    declareInCall,
     type GGAuthzCall,
     type GGAuthzLoader,
     type GGAuthzResolvedResource,
@@ -52,9 +53,11 @@ export interface GGAuthzScope {
 }
 
 /** What was decided: an `action` on a resource (`assert`, a requirement), a role `grant` on it (`authorizeGrant`; `action`
- *  is the engine's grant action), or whether the caller `holds` actions on a scope (`assertHolds`). */
+ *  is the engine's grant action), whether the caller `holds` actions on a scope (`assertHolds`), or whether they may
+ *  `approve` someone else's action (`assertMayApprove`). */
 export type GGAuthzCheck =
     | {check: "action", action: string, resource: GGAuthzResolvedResource}
+    | {check: "approve", action: string, resource: GGAuthzResolvedResource}
     | {check: "grant", action: string, role: string, principal: string, resource: GGAuthzResolvedResource}
     | {check: "holds", actions: readonly string[], missing: readonly string[], scope: GGAuthzScope}
 
@@ -81,7 +84,8 @@ export interface GGAuthzRefused {
     facts: Facts
 }
 
-type ResourceCheck = Extract<GGAuthzCheck, {check: "action" | "grant"}>
+type ResourceCheck = Extract<GGAuthzCheck, {check: "action" | "grant" | "approve"}>
+type AnswerOptions = {hidden?: boolean, key?: (resource: GGAuthzResolvedResource) => {type: string, id: string}, displayMessage?: string}
 
 export interface GGAuthzAuthorityConfig {
     partition: string
@@ -98,7 +102,8 @@ export interface GGAuthzAuthorityConfig {
      *  its scope: match `need.grant` (role and principal) too, or one approval covers any grant there. */
     approvals?(need: GGAuthzApprovalNeed): Promise<void>
     /** True answers an action's refusal a requirement didn't `.hide()` with NOT_FOUND: the caller isn't told it exists.
-     *  Grants and holds checks are about what the caller holds, so they're answered as they are; listings filter instead.
+     *  Grant, holds and approve checks are about what the caller holds, so they're answered as they are; listings filter
+     *  instead.
      *  A throw is the answer, as from `explains`. */
     hides?(refusal: GGAuthzRefused): Awaitable<boolean>
     /** A FORBIDDEN to answer a FORBIDDEN refusal that isn't hidden with, e.g. saying why; undefined keeps it. Never asked
@@ -253,15 +258,15 @@ export class GGAuthzAuthority {
         if (error) throw error
     }
 
-    private async decide(action: string, resource: GGAuthzResolvedResource, options: {hidden?: boolean, key?: (resource: GGAuthzResolvedResource) => {type: string, id: string}}): Promise<void> {
+    private async decide(action: string, resource: GGAuthzResolvedResource, options: AnswerOptions, check: "action" | "approve" = "action"): Promise<void> {
         const [engine, facts] = await Promise.all([this.config.engine(resource.tenant), this.config.facts?.(action, resource)])
         const request = this.request(this.subject(), action, resource, facts)
-        await this.answer({check: "action", action, resource}, request, await engine.evaluate(request), facts, options)
+        await this.answer({check, action, resource}, request, await engine.evaluate(request), facts, options)
     }
 
     // The one place a decision on a resource becomes an answer: allowed, approved or not, or refused (an action's hidden or
     // explained). A hook's throw is the answer, and is heard as the refusal's.
-    private async answer(check: ResourceCheck, request: GGAuthzRequest, decision: GGAuthzDecision, facts: Facts, options: {hidden?: boolean, key?: (resource: GGAuthzResolvedResource) => {type: string, id: string}}): Promise<void> {
+    private async answer(check: ResourceCheck, request: GGAuthzRequest, decision: GGAuthzDecision, facts: Facts, options: AnswerOptions): Promise<void> {
         const {resource} = check
         const verdict = GGAuthz.verdict(request, decision)
         const event = () => ({...check, subject: request.subject, call: currentCall()?.call, decision})
@@ -269,7 +274,8 @@ export class GGAuthzAuthority {
             if (this.config.decided) this.heard({...event(), outcome: "allowed"})
             return
         }
-        if (verdict.outcome === "approval-required") {
+        // An approver who'd need approval themselves may not approve.
+        if (verdict.outcome === "approval-required" && check.check !== "approve") {
             const {level} = verdict
             const key = options.key?.(resource)
             const need: GGAuthzApprovalNeed = {
@@ -291,19 +297,32 @@ export class GGAuthzAuthority {
             if (this.config.decided) this.heard({...event(), outcome: "approved", level})
             return
         }
-        const {refusal} = verdict
+        const refusal = verdict.outcome === "denied" ? verdict.refusal : "FORBIDDEN"
         let hidden = options.hidden === true
         let error: unknown
         try {
             const refused = check.check === "action" ? {...event(), action: check.action, facts, refusal} : undefined
             if (!hidden && refused) hidden = await this.config.hides?.(refused) ?? false
             const explained = !hidden && refused && refusal === "FORBIDDEN" ? await this.config.explains?.(refused) : undefined
-            error = hidden ? new NOT_FOUND({displayMessage: "Not found", debugMessage: verdict.error.getDebugContext()?.debugMessage}) : explained ?? verdict.error
+            const plain = verdict.outcome === "denied" && !(refusal === "FORBIDDEN" && options.displayMessage) ? verdict.error
+                : new FORBIDDEN({displayMessage: options.displayMessage, debugMessage: GGAuthz.explain(request, decision)})
+            error = hidden ? new NOT_FOUND({displayMessage: "Not found", debugMessage: plain.getDebugContext()?.debugMessage}) : explained ?? plain
         } catch (e) {
             error = e
         }
         if (this.config.decided) this.heard({...event(), outcome: "denied", refusal, hidden, error})
         throw error
+    }
+
+    /** Throws unless the caller could do `action` on `resource` themselves, decided as `can` decides it: before they
+     *  approve someone else's, or what a way of approving does (no-escalation, as `authorizeGrant`). The action comes
+     *  with the approval, not the method, so it isn't declared; heard as `check: "approve"`. An allow the caller would
+     *  need approval for is refused. Once allowed, the action counts as declared for the rest of the call, so what
+     *  approving does with it is decided as usual. */
+    public async assertMayApprove(action: GGAuthzActionRef, resource: GGAuthzResourceRef, options?: {displayMessage?: string}): Promise<void> {
+        const name = actionName(action)
+        await this.decide(name, await this.resources.resolve(resource), options ?? {}, "approve")
+        declareInCall(name)
     }
 
     private heard(event: GGAuthzDecided): void {

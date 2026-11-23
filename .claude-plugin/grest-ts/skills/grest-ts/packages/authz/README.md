@@ -333,6 +333,7 @@ In handlers, for checks that depend on the row's state:
 | `peek(action, refs)`, `peekEach([{action, resource}])` | whether each would be allowed, without it counting as a decision (not declared, not heard, never asks for approval): for filtering a listing or hinting a UI |
 | `authorizeGrant(role, principal, ref)` | `canGrant` for the caller (§6), throwing like `assert` |
 | `assertHolds(actions, ref, {context?, displayMessage?})` | `FORBIDDEN` unless the caller holds every one of `actions` there, e.g. before handing them out; decided on the RN, without loading the row |
+| `assertMayApprove(action, ref, {displayMessage?})` | throws unless the caller could do `action` there themselves, decided as `can`: before they approve someone else's. The action isn't the method's own, so it isn't declared; once allowed, it counts as declared for the rest of the call |
 | `once(key, fn)` | `fn`'s promise once per `key` and subject in the call, as rows are read once: e.g. a fact the hooks compute. A failure or an `undefined` isn't kept; outside a call it just runs |
 
 Pass `properties` when the handler already holds the row. Optional config, every hook seeing the
@@ -342,9 +343,9 @@ only `decided` is a notification whose errors are dropped:
 | Hook | |
 |---|---|
 | `approvals(need)` | an allow that needs approval: returns when one covers it, else throws. `need.grant` names a grant's role and principal; match it too, as a grant's `key` is only its scope. Without it, `APPROVAL_REQUIRED` |
-| `hides(refusal)` | an action's refusal a requirement didn't `.hide()`, with the request's `facts`: `true` answers `NOT_FOUND`, so the caller isn't told it exists. Grants and holds checks are answered as they are |
+| `hides(refusal)` | an action's refusal a requirement didn't `.hide()`, with the request's `facts`: `true` answers `NOT_FOUND`, so the caller isn't told it exists. Grant, holds and approve checks are answered as they are |
 | `explains(refusal)` | a `FORBIDDEN` refusal that isn't hidden: a `FORBIDDEN` to answer instead (to say why), or `undefined` to keep it. Never asked for a step-up or scope refusal, whose remedy the caller needs |
-| `decided(event)` | every decision once its answer is final. `check` says what was decided: an `action` on a `resource`, a `grant` (`role`, `principal`) on it, or `holds` (`actions`, `missing`) on a `scope`. `outcome`: `allowed`, `approved`, `unapproved` (with the error) or `denied` (`refusal`, `hidden`, the error the caller got); with the subject and the call. For audit: it never changes the answer, and a throw is ignored |
+| `decided(event)` | every decision once its answer is final. `check` says what was decided: an `action` on a `resource`, a `grant` (`role`, `principal`) on it, `holds` (`actions`, `missing`) on a `scope`, or `approve` (`action`) on a `resource`. `outcome`: `allowed`, `approved`, `unapproved` (with the error) or `denied` (`refusal`, `hidden`, the error the caller got); with the subject and the call. For audit: it never changes the answer, and a throw is ignored |
 | `undeclared(call, action)` | a handler decided (`assert`, `can`) an action its call's requirements don't declare; throw to refuse it. A `peek` decides nothing, so it's free |
 
 The framework hands the authority each contract call once, `authorize(call, requirements, input)`
