@@ -2,7 +2,7 @@ import {FORBIDDEN, type GGPermission, type GGRequirement, NOT_AUTHORIZED, NOT_FO
 import {actionName, type GGAuthzActionRef} from "../shared/defineAuthz"
 import {APPROVAL_REQUIRED} from "../shared/authzErrors"
 import {GG_AUTHZ_SUBJECT} from "./GG_AUTHZ_SUBJECT"
-import {GGAuthz, type GGAuthzVerdict} from "./GGAuthz"
+import {GGAuthz} from "./GGAuthz"
 import {
     AuthzResources,
     currentCall,
