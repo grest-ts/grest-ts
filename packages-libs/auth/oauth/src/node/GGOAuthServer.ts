@@ -860,7 +860,7 @@ const DOCUMENT_LIMIT = 5 * 1024
 // A metadata document may prefer a key and still list `none` as supported (ChatGPT's does): that client connects as
 // a public one, so its document is read as one. The provider's `fetch` is its only hook before validating a document;
 // with public clients only it fetches nothing else, and a feature that fetches more must not go through this cap.
-async function fetchAsPublicClient(url: string | URL, options?: RequestInit): Promise<Response> {
+async function fetchAsPublicClient(url: string | URL | Request, options?: RequestInit): Promise<Response> {
     const response = await fetch(url, options)
     if (response.status !== 200 || !response.body) return response
     const chunks: Uint8Array[] = []
