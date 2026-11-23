@@ -104,8 +104,9 @@ function setupRoutes<TContract extends GGContractApiDefinition>(
                 await permissionsChecker.assert(httpSchema.name, methodName, scopes)
                 try {
                     const input = requestParser.validateInput(rawInput)
-                    // checkPermissionsAtStart guarantees an authority when there are requirements.
-                    for (const requirement of requirements) await authority!.authorize(requirement, input, call)
+                    if (authority) await authority.authorize(call, requirements, input)
+                    // checkPermissionsAtStart guarantees an authority when there are requirements; fail closed if it was bypassed.
+                    else if (requirements.length) throw new Error(`${httpSchema.name}.${methodName} has requirements but no authority`)
                     rpcResult = {success: true, type: "OK", data: await implFn(input)}
                     // GGLog.debug(httpSchema, "Response", rpcResult) // This is very slow to log this (like 3x performance loss)
                 } catch (error: unknown) {

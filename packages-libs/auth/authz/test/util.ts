@@ -1,5 +1,6 @@
 import {GGContext} from "@grest-ts/context"
-import {GG_AUTHZ_SUBJECT, type GGAuthzRequest, GGAuthzRn, type GGAuthzSubject} from "../src/index-node"
+import type {GGRequirement} from "@grest-ts/schema"
+import {GG_AUTHZ_SUBJECT, GGAuthz, type GGAuthzAuthority, type GGAuthzDecision, type GGAuthzRequest, GGAuthzRn, type GGAuthzSubject, type GGAuthzVerdict} from "../src/index-node"
 
 export async function filterAsync<T>(items: readonly T[], keep: (item: T) => Promise<boolean>): Promise<T[]> {
     const kept = await Promise.all(items.map(keep))
@@ -21,6 +22,22 @@ export function req(key: string, action: string, resource: string, extra: {for?:
         resource: {type: GGAuthzRn.type(resource) ?? "unknown:unknown", id: resource},
         context: extra.context,
     }
+}
+
+/** What `authz` answers `subject` asking `action` on `resource`. */
+export async function verdict(authz: GGAuthz, subject: GGAuthzSubject, action: string | {name: string}, resource: string, context?: Record<string, unknown>): Promise<GGAuthzVerdict> {
+    const request: GGAuthzRequest = {subject, action: {name: typeof action === "string" ? action : action.name}, resource: {type: GGAuthzRn.type(resource) ?? "", id: resource}, context}
+    return GGAuthz.verdict(request, await authz.evaluate(request))
+}
+
+/** The actions a `canHold` decision says aren't held. */
+export function notHeld(decision: GGAuthzDecision): readonly string[] {
+    return GGAuthz.notHeld(decision, [])
+}
+
+/** One requirement, as the only one of its call. */
+export function check(authority: GGAuthzAuthority, requirement: GGRequirement, input: unknown): Promise<void> {
+    return authority.authorize({api: "TestApi", method: "test"}, [requirement], input)
 }
 
 export function as<T>(subject: GGAuthzSubject | undefined, fn: () => Promise<T>): Promise<T> {
