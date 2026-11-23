@@ -12,8 +12,9 @@ export interface GGAuthorityCall {
 }
 
 export interface GGAuthorityHandler {
-    /** Throw one of the requirement's `errors` to refuse; return to allow. `input` is already validated. */
-    authorize(requirement: GGRequirement, input: unknown, call: GGAuthorityCall): Promise<void>
+    /** Once per contract call, in its request context, before its handler runs: throw one of a requirement's `errors` to
+     *  refuse, return to allow. `requirements` may be empty; `input` is already validated. */
+    authorize(call: GGAuthorityCall, requirements: readonly GGRequirement[], input: unknown): Promise<void>
 }
 
 const HANDLER_KEYS = new WeakMap<GGAuthority, GGLocatorKey<GGAuthorityHandler>>()
@@ -54,7 +55,7 @@ declare module "./GGAuthority" {
         define<Deps>(factory: (deps: Deps) => GGAuthorityHandler): GGAuthorityRegistration<Deps>
 
         /** @internal server pipeline hook. */
-        authorize(requirement: GGRequirement, input: unknown, call: GGAuthorityCall): Promise<void>
+        authorize(call: GGAuthorityCall, requirements: readonly GGRequirement[], input: unknown): Promise<void>
 
         /** @internal startup validation — true once .create() has run on the current runtime scope. */
         hasHandler(): boolean
@@ -67,10 +68,12 @@ GGAuthority.prototype.define = function (factory) {
     return new GGAuthorityRegistration(this, factory as any)
 }
 
-GGAuthority.prototype.authorize = async function (requirement, input, call) {
+GGAuthority.prototype.authorize = async function (call, requirements, input) {
     const handler = handlerKeyFor(this).tryGet()
+    // Only requirements need the handler (checkPermissionsAtStart): a call without any may run before .create().
+    if (!handler && !requirements.length) return
     if (!handler) throw new Error(`Authority "${this.name}" is used but not implemented - call ${this.name}.define(...).create(deps) in compose().`)
-    await handler.authorize(requirement, input, call)
+    await handler.authorize(call, requirements, input)
 }
 
 GGAuthority.prototype.hasHandler = function () {

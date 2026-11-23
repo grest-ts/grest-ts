@@ -1,7 +1,7 @@
 import {FORBIDDEN, GGContractClass, IsObject, IsString, NOT_FOUND, SERVER_ERROR} from "@grest-ts/schema"
 import {describe, expect, test} from "vitest"
 import {defineAuthzModel, defineAuthzRole, defineAuthzService, GG_AUTHZ_ERRORS, GGAuthz, GGAuthzAuthority, GGAuthzMemoryResolver, type GGAuthzSubject} from "../src/index-node"
-import {as} from "./util"
+import {as, check} from "./util"
 
 const Places = defineAuthzService("places", {
     types: {org: "The tenant", project: "A project", member: "A member's own space"},
@@ -94,16 +94,16 @@ const create = Clouds.Write.in("parent")
 
 describe("GGAuthzAuthority deciding inside a parent", () => {
     test("decides the action on the parent the input names", async () => {
-        await as(ann, () => authority.authorize(create, {parent: {type: Places.types.project, id: "web"}}))
-        expect(FORBIDDEN.is(await fail(as(ann, () => authority.authorize(create, {parent: {type: Places.types.project, id: "ml"}}))))).toBe(true)
-        expect(FORBIDDEN.is(await fail(as(ann, () => authority.authorize(create, {parent: {type: Places.types.org, id: "acme"}}))))).toBe(true)
-        await as({type: "user", id: "cleo"}, () => authority.authorize(create, {parent: {type: Places.types.org, id: "acme"}}))
+        await as(ann, () => check(authority, create, {parent: {type: Places.types.project, id: "web"}}))
+        expect(FORBIDDEN.is(await fail(as(ann, () => check(authority, create, {parent: {type: Places.types.project, id: "ml"}}))))).toBe(true)
+        expect(FORBIDDEN.is(await fail(as(ann, () => check(authority, create, {parent: {type: Places.types.org, id: "acme"}}))))).toBe(true)
+        await as({type: "user", id: "cleo"}, () => check(authority, create, {parent: {type: Places.types.org, id: "acme"}}))
     })
 
     test("a parent that doesn't resolve is NOT_FOUND; one of another type is a programming error", async () => {
-        expect(NOT_FOUND.is(await fail(as(ann, () => authority.authorize(create, {parent: {type: Places.types.project, id: "nope"}}))))).toBe(true)
-        expect(NOT_FOUND.is(await fail(as(ann, () => authority.authorize(create, {parent: {type: Places.types.org, id: "other"}}))))).toBe(true)
-        await expect(as(ann, () => authority.authorize(create, {parent: {type: Clouds.types.image, id: "x"}}))).rejects.toThrow("not a parent of clouds:cloud")
+        expect(NOT_FOUND.is(await fail(as(ann, () => check(authority, create, {parent: {type: Places.types.project, id: "nope"}}))))).toBe(true)
+        expect(NOT_FOUND.is(await fail(as(ann, () => check(authority, create, {parent: {type: Places.types.org, id: "other"}}))))).toBe(true)
+        await expect(as(ann, () => check(authority, create, {parent: {type: Clouds.types.image, id: "x"}}))).rejects.toThrow("not a parent of clouds:cloud")
     })
 
     test("assertLoaders needs a loader for every parent type but the tenant's", () => {

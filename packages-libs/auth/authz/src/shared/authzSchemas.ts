@@ -333,3 +333,7 @@ export const IsGGAuthzPlan = IsObject({
     values: IsRecord(IsString, IsUnknown).orUndefined.docs({description: "Principal, actor and context values the residual conditions reference, by key"}),
 })
 export type GGAuthzPlan = typeof IsGGAuthzPlan.infer
+
+/** The error a refusal throws: FORBIDDEN, or STEP_UP_REQUIRED / INSUFFICIENT_SCOPE when the caller can remedy it. */
+export const IsGGAuthzRefusal = IsLiteral("FORBIDDEN", "STEP_UP_REQUIRED", "INSUFFICIENT_SCOPE")
+export type GGAuthzRefusal = typeof IsGGAuthzRefusal.infer

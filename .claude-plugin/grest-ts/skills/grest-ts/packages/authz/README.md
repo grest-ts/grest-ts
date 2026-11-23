@@ -223,9 +223,9 @@ standard methods.
 | `.on(tenantType)` | no id: the caller's tenant itself |
 | `.in([type,] field)` | inside the parent that input field names, as `{type, id}` from `parentRef(type)`: decided on the parent. The type must have `in`. Contract construction checks the field can only name its parents |
 | `.onContext([type,] source)` | the authority resolves the id from the request |
-| `.hide()` | a denial answers `NOT_FOUND`; the authority's `hidden(resource, action)` config does it per resource |
+| `.hide()` | a denial answers `NOT_FOUND`; the authority's `hides` hook does it per caller |
 | `.orCreateOn(type, field)` | an upsert: without the id field, check the parent `type` from `field` |
-| `.list()` | no check before the handler; it filters what it returns with `allowed` or a list plan |
+| `.list()` | no check before the handler; it filters what it returns with `peek` or a list plan |
 
 Every requirement carries `GG_AUTHZ_ERRORS` (`NOT_AUTHORIZED`, `FORBIDDEN`, `NOT_FOUND`,
 `APPROVAL_REQUIRED`, `INSUFFICIENT_SCOPE`, `STEP_UP_REQUIRED`), which grest-ts merges into the
@@ -239,7 +239,7 @@ method's errors. List the authority in the schema's `use:` next to its credentia
 ### The engine
 
 ```ts
-const authz = new GGAuthz({model: AppAuthz, policies, resolver, facts, approvals})
+const authz = new GGAuthz({model: AppAuthz, policies, resolver, facts})
 ```
 
 The constructor validates `policies` with `IsGGAuthzPolicies` (throwing `GGParseError`), resolves
@@ -253,7 +253,6 @@ attributes are read on every request, so changes to them need no rebuild.
 | `policies` | the tenant's `GGAuthzPolicies` (§4) |
 | `resolver` | the scope tree, groups and attributes, below |
 | `facts?` | `(name, request) => boolean \| undefined`; default: boolean values from `request.context` |
-| `approvals?` | `(request, decision) => Promise<void>`: obtains approval or throws |
 | `approvalLevelAttribute?` | a resource attribute holding an approval level that raises a workload's (§5) |
 | `unknownActions?` | `"throw"` (default) or `"ignore"` |
 
@@ -314,8 +313,12 @@ DOCS_AUTHORITY_HANDLER.create(authority)                // in compose()
 ```
 
 - **Loaders** are registered per resource type by whoever owns the rows, and are tenant-scoped: a
-  missing row, one from another tenant, or an id that can't form an RN is `NOT_FOUND`. A row is
-  loaded once per request; the handler takes it with `authority.row(type, id)`.
+  missing row, one from another tenant, or an id that can't form an RN is `NOT_FOUND`. A call
+  reads each row once: its requirements, the handler's checks and `authority.row(type, id)` share
+  it, so the handler acts on the row it was authorized on. A handler that changes a row and then
+  decides on it again in the same call sees it as first read (a missing row isn't kept, so a create
+  can decide on what it made). `authority.properties(type, id)` gives a resource's properties, e.g.
+  for a loader whose row hangs off another's.
 - `assertLoaders(contracts)` throws for each method whose requirement needs a type with no loader;
   run it at startup.
 - **Authorize before loading.** A missing resource and a forbidden one both get `FORBIDDEN` (or
@@ -325,18 +328,32 @@ In handlers, for checks that depend on the row's state:
 
 | | |
 |---|---|
-| `assert(action, {type, id})` | throws like a requirement |
-| `can(action, ref)`, `allowed(action, refs)` | booleans; for a workload, an allow that needs approval is `false` |
-| `authorizeGrant(role, principal, ref)` | `canGrant` for the caller (§6) |
-| `missingActions(actions, ref)` | which of `actions` the caller can't hand out |
-| `approvalNeed(action, ref)` | what an approval would need, for asking it |
+| `assert(action, {type, id}, {hidden?, key?})` | throws like a requirement |
+| `can(action, ref)` | a boolean the handler acts on: declared like `assert`; for a workload, an allow that needs approval is `false` |
+| `peek(action, refs)`, `peekEach([{action, resource}])` | whether each would be allowed, without it counting as a decision (not declared, not heard, never asks for approval): for filtering a listing or hinting a UI |
+| `authorizeGrant(role, principal, ref)` | `canGrant` for the caller (§6), throwing like `assert` |
+| `assertHolds(actions, ref, {context?, displayMessage?})` | `FORBIDDEN` unless the caller holds every one of `actions` there, e.g. before handing them out; decided on the RN, without loading the row |
 
-Pass `properties` when the handler already holds the row. Optional config: `approvals(need)`
-obtains an approval or throws; `hidden(resource, action)` answers `NOT_FOUND` per resource;
-`explainForbidden` replaces a bare `FORBIDDEN` with one that says why; `undeclared(call, action)`
-reports a handler deciding an action its method's requirements don't name. When an approval is for another
-resource than the one decided (a create's new row), `registerApprovalKey(action, (input, resource)
-=> ({type, id}))` names it; `APPROVAL_REQUIRED` then carries it as `key`.
+Pass `properties` when the handler already holds the row. Optional config, every hook seeing the
+whole decision. A hook's error is passed on as the call's answer, so no hook needs a try/catch;
+only `decided` is a notification whose errors are dropped:
+
+| Hook | |
+|---|---|
+| `approvals(need)` | an allow that needs approval: returns when one covers it, else throws. `need.grant` names a grant's role and principal; match it too, as a grant's `key` is only its scope. Without it, `APPROVAL_REQUIRED` |
+| `hides(refusal)` | an action's refusal a requirement didn't `.hide()`, with the request's `facts`: `true` answers `NOT_FOUND`, so the caller isn't told it exists. Grants and holds checks are answered as they are |
+| `explains(refusal)` | a `FORBIDDEN` refusal that isn't hidden: a `FORBIDDEN` to answer instead (to say why), or `undefined` to keep it. Never asked for a step-up or scope refusal, whose remedy the caller needs |
+| `decided(event)` | every decision once its answer is final. `check` says what was decided: an `action` on a `resource`, a `grant` (`role`, `principal`) on it, or `holds` (`actions`, `missing`) on a `scope`. `outcome`: `allowed`, `approved`, `unapproved` (with the error) or `denied` (`refusal`, `hidden`, the error the caller got); with the subject and the call. For audit: it never changes the answer, and a throw is ignored |
+| `undeclared(call, action)` | a handler decided (`assert`, `can`) an action its call's requirements don't declare; throw to refuse it. A `peek` decides nothing, so it's free |
+
+The framework hands the authority each contract call once, `authorize(call, requirements, input)`
+(the `GGAuthorityHandler` method, also with no requirements): that opens the call the row reads and
+`undeclared` are scoped to, once per request context: a pipeline that runs several calls in one
+request (e.g. a batch of tool calls) runs each in a context of its own. Outside a call (a job,
+startup) every read is fresh and nothing is compared; work a handler starts in a child context (a
+timer, a branch) still sees its call. When an approval is for another resource than the one
+decided (a create's new row), `registerApprovalKey(action, (input, resource) => ({type, id}))` names
+it; `APPROVAL_REQUIRED` then carries it as `key`.
 
 What a denial throws:
 
@@ -350,10 +367,10 @@ What a denial throws:
 | `APPROVAL_REQUIRED` (403, `{action, resource, level, key?}`) | the decision needs approval and no `approvals` is configured |
 | `Error` | a programming error: an action the model doesn't know, or one that doesn't apply to the RN's type |
 
-Without an authority, `authz.authorize(action, rn, context?, properties?)` does the same for an RN,
-reading the subject from `GG_AUTHZ_SUBJECT`; `context` carries request-time facts. A method whose
-handler decides with `authorize` or `authority.assert` and has no requirement of its own lists
-`...GG_AUTHZ_ERRORS` in its `errors`. Step-up facts are declared in the model and set from
+The engine only decides: `GGAuthz.verdict(request, decision)` says what a decision means (allowed,
+`approval-required` with its level, or `denied` with the error above), and the authority is the one
+place that turns it into an answer. A method whose handler decides with `authority.assert` and has
+no requirement of its own lists `...GG_AUTHZ_ERRORS` in its `errors`. Step-up facts are declared in the model and set from
 the token's `acr`/`amr` claims; mapping them to `acr_values` is yours.
 
 ---
@@ -592,7 +609,8 @@ const plan = await authz.listAllowed({
 
 ```ts
 const decision = await authz.canGrant({subject, binding: {principal: "user:new", role: "editor", on: projectRn}})
-await authz.authorizeGrant(binding)   // the same for GG_AUTHZ_SUBJECT, throwing like authorize
+GGAuthz.explain(authz.grantRequest(subject, binding), decision)   // the request a grant is decided as
+await authority.authorizeGrant("editor", "user:new", {type: Org.types.project, id: "web"})   // for the caller, throwing
 ```
 
 It allows only when both hold:
@@ -605,8 +623,8 @@ It allows only when both hold:
 A deny undecided at the scope only because a `resource.*` attribute is missing (e.g. owner-only)
 doesn't count: there is no resource at a grant's scope, and the deny binds the grantee anyway.
 Every other unknown still denies. Pass the facts that hold at the scope in `context`.
-`missingActions({subject, actions, on, context})` answers the same for a list of actions (e.g.
-editing a role). A refusal names what's missing:
+`canHold({subject, actions, on, context})` answers the same for a list of actions (e.g. editing a
+role; `authority.assertHolds` for the caller). A refusal names what's missing:
 `{layer: "grant", kind: "escalation", role: "editor", actions: ["docs:Write"]}`.
 
 ### `explain`, `describeAuthzModel`, `documentAuthzModel`
@@ -649,7 +667,7 @@ catches it. Both are in the browser entry, e.g. to show what a role grants.
 (`APPROVAL_REQUIRED`, `INSUFFICIENT_SCOPE`, `STEP_UP_REQUIRED`, `GG_AUTHZ_ERRORS`), and every
 `IsGGAuthz*` schema with its `GGAuthz*` type. The engine is not in it.
 
-**Node entry (`@grest-ts/authz`)** — all of the above plus `GGAuthz` (`authorize`, `authorizeGrant`,
-`evaluate`, `evaluateBatch`, `listAllowed`, `canGrant`, `missingActions`, `inactive`; statics
-`explain`, `applyPlan`), `GGAuthzAuthority`, `GGAuthzMemoryResolver` and
+**Node entry (`@grest-ts/authz`)** — all of the above plus `GGAuthz` (`evaluate`, `evaluateBatch`,
+`listAllowed`, `canGrant`, `canHold`, `grantRequest`, `inactive`; statics `verdict`, `explain`,
+`applyPlan`), `GGAuthzAuthority`, `GGAuthzMemoryResolver` and
 `GG_AUTHZ_SUBJECT`.
