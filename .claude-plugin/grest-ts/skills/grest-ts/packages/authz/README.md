@@ -225,7 +225,7 @@ standard methods.
 | `.onContext([type,] source)` | the authority resolves the id from the request |
 | `.hide()` | a denial answers `NOT_FOUND`; the authority's `hidden(resource, action)` config does it per resource |
 | `.orCreateOn(type, field)` | an upsert: without the id field, check the parent `type` from `field` |
-| `.list()` | no check before the handler; it filters what it returns with `allowed` or a list plan |
+| `.list()` | no check before the handler; it filters what it returns with `peek` or a list plan |
 
 Every requirement carries `GG_AUTHZ_ERRORS` (`NOT_AUTHORIZED`, `FORBIDDEN`, `NOT_FOUND`,
 `APPROVAL_REQUIRED`, `INSUFFICIENT_SCOPE`, `STEP_UP_REQUIRED`), which grest-ts merges into the
@@ -329,19 +329,22 @@ In handlers, for checks that depend on the row's state:
 | | |
 |---|---|
 | `assert(action, {type, id}, {hidden?, key?})` | throws like a requirement |
-| `can(action, ref)`, `allowed(action, refs)`, `allowedEach([{action, resource}])` | booleans; for a workload, an allow that needs approval is `false` |
+| `can(action, ref)` | a boolean the handler acts on: declared like `assert`; for a workload, an allow that needs approval is `false` |
+| `peek(action, refs)`, `peekEach([{action, resource}])` | whether each would be allowed, without it counting as a decision (not declared, not heard, never asks for approval): for filtering a listing or hinting a UI |
 | `authorizeGrant(role, principal, ref)` | `canGrant` for the caller (§6), throwing like `assert` |
 | `assertHolds(actions, ref, {context?, displayMessage?})` | `FORBIDDEN` unless the caller holds every one of `actions` there, e.g. before handing them out; decided on the RN, without loading the row |
 
 Pass `properties` when the handler already holds the row. Optional config, every hook seeing the
-whole decision:
+whole decision. A hook's error is passed on as the call's answer, so no hook needs a try/catch;
+only `decided` is a notification whose errors are dropped:
 
 | Hook | |
 |---|---|
 | `approvals(need)` | an allow that needs approval: returns when one covers it, else throws. `need.grant` names a grant's role and principal; match it too, as a grant's `key` is only its scope. Without it, `APPROVAL_REQUIRED` |
-| `refused(refusal)` | an action's refusal a requirement didn't `.hide()`, with the request's `facts`: `"hide"` answers `NOT_FOUND`, a `FORBIDDEN` replaces a `FORBIDDEN` (to say why). A throw answers `NOT_FOUND`: it fails closed. Grants and holds checks are answered as they are |
+| `hides(refusal)` | an action's refusal a requirement didn't `.hide()`, with the request's `facts`: `true` answers `NOT_FOUND`, so the caller isn't told it exists. Grants and holds checks are answered as they are |
+| `explains(refusal)` | a `FORBIDDEN` refusal that isn't hidden: a `FORBIDDEN` to answer instead (to say why), or `undefined` to keep it. Never asked for a step-up or scope refusal, whose remedy the caller needs |
 | `decided(event)` | every decision once its answer is final. `check` says what was decided: an `action` on a `resource`, a `grant` (`role`, `principal`) on it, or `holds` (`actions`, `missing`) on a `scope`. `outcome`: `allowed`, `approved`, `unapproved` (with the error) or `denied` (`refusal`, `hidden`, the error the caller got); with the subject and the call. For audit: it never changes the answer, and a throw is ignored |
-| `undeclared(call, action)` | a handler decided (`assert`, `can`) an action its call's requirements don't declare; throw to refuse it. `allowed` filters, so it's free |
+| `undeclared(call, action)` | a handler decided (`assert`, `can`) an action its call's requirements don't declare; throw to refuse it. A `peek` decides nothing, so it's free |
 
 The framework hands the authority each contract call once, `authorize(call, requirements, input)`
 (the `GGAuthorityHandler` method, also with no requirements): that opens the call the row reads and

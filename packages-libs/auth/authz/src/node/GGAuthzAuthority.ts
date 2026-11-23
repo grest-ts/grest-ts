@@ -23,7 +23,6 @@ import {
 
 type Awaitable<T> = T | Promise<T>
 type Facts = Record<string, boolean> | undefined
-type RefusalError = Extract<GGAuthzVerdict, {outcome: "denied"}>["error"]
 
 /** An allow that needs the approval of `level` for `key` (by default the decided resource itself); `grant`: the role
  *  grant it is for, from `authorizeGrant`. */
@@ -67,10 +66,10 @@ export type GGAuthzDecided = GGAuthzCheck & {
     | {outcome: "allowed"}
     | {outcome: "approved", level: GGAuthzApprovalLevel}
     | {outcome: "unapproved", level: GGAuthzApprovalLevel, error: unknown}
-    | {outcome: "denied", refusal: GGAuthzRefusal, hidden: boolean, error: RefusalError | InstanceType<typeof NOT_FOUND>}
+    | {outcome: "denied", refusal: GGAuthzRefusal, hidden: boolean, error: unknown}
 )
 
-/** An action refused on a resource, before it's answered, with the request's facts: `refused` may hide or explain it. */
+/** An action refused on a resource, before it's answered, with the request's facts: `hides` and `explains` shape it. */
 export interface GGAuthzRefused {
     action: string
     resource: GGAuthzResolvedResource
@@ -97,16 +96,18 @@ export interface GGAuthzAuthorityConfig {
      *  key, for the caller to ask and retry). Without it the authority throws APPROVAL_REQUIRED itself. A grant's key is
      *  its scope: match `need.grant` (role and principal) too, or one approval covers any grant there. */
     approvals?(need: GGAuthzApprovalNeed): Promise<void>
-    /** Shapes an action's refusal a requirement didn't `.hide()`: `"hide"` answers NOT_FOUND; a FORBIDDEN replaces a
-     *  FORBIDDEN refusal (e.g. to say why), never a step-up or scope one, whose remedy the caller needs; undefined keeps
-     *  it. A throw answers NOT_FOUND: it fails closed. Grants and holds checks are about what the caller holds, so they're
-     *  answered as they are; listings filter instead. */
-    refused?(refusal: GGAuthzRefused): Awaitable<"hide" | InstanceType<typeof FORBIDDEN> | undefined>
+    /** True answers an action's refusal a requirement didn't `.hide()` with NOT_FOUND: the caller isn't told it exists.
+     *  Grants and holds checks are about what the caller holds, so they're answered as they are; listings filter instead.
+     *  A throw is the answer, as from `explains`. */
+    hides?(refusal: GGAuthzRefused): Awaitable<boolean>
+    /** A FORBIDDEN to answer a FORBIDDEN refusal that isn't hidden with, e.g. saying why; undefined keeps it. Never asked
+     *  for a step-up or scope refusal, whose remedy the caller needs. */
+    explains?(refusal: GGAuthzRefused): Awaitable<InstanceType<typeof FORBIDDEN> | undefined>
     /** Every decision, once its answer is final. For audit and alerting: a throw or an async listener's rejection is
      *  ignored. Listings filter instead, so they never get here. */
     decided?(event: GGAuthzDecided): void
-    /** A handler decided an action its call's requirements don't declare (`assert`, `can`; `allowed` filters, so it's
-     *  free). Throw to refuse it. */
+    /** A handler decided an action its call's requirements don't declare (`assert`, `can`; a `peek` decides nothing, so
+     *  it's free). Throw to refuse it. */
     undeclared?(call: GGAuthzCall, action: string): void
 }
 
@@ -170,7 +171,7 @@ export class GGAuthzAuthority {
     }
 
     /** Throws like a requirement: FORBIDDEN, STEP_UP_REQUIRED or INSUFFICIENT_SCOPE, NOT_FOUND when `hidden` (or
-     *  `refused`) hides it. An allow that needs approval goes to `approvals`, for `key` when the approval is for another
+     *  `hides`) hides it. An allow that needs approval goes to `approvals`, for `key` when the approval is for another
      *  resource than the one decided. */
     public async assert(action: GGAuthzActionRef, resource: GGAuthzResourceRef, options?: {hidden?: boolean, key?: (resource: GGAuthzResolvedResource) => {type: string, id: string}}): Promise<void> {
         const name = this.checked(action)
@@ -179,19 +180,19 @@ export class GGAuthzAuthority {
 
     public async can(action: GGAuthzActionRef, resource: GGAuthzResourceRef): Promise<boolean> {
         this.checked(action)
-        return (await this.allowedEach([{action, resource}]))[0]!
+        return (await this.peekEach([{action, resource}]))[0]!
     }
 
-    /** One decision per resource, e.g. to filter a listing. A resource that doesn't resolve is not allowed, and neither
-     *  is one a workload may act on only once approved: only `assert` asks for approvals. */
-    public allowed(action: GGAuthzActionRef, resources: readonly GGAuthzResourceRef[]): Promise<boolean[]> {
-        return this.allowedEach(resources.map(resource => ({action, resource})))
+    /** Whether each resource would be allowed, without it counting as a decision: not declared, not audited, never asks
+     *  for approval. For filtering a listing or hinting a UI; a handler acting on the answer uses `can`. A resource that
+     *  doesn't resolve is not allowed, and neither is one a workload may act on only once approved. */
+    public peek(action: GGAuthzActionRef, resources: readonly GGAuthzResourceRef[]): Promise<boolean[]> {
+        return this.peekEach(resources.map(resource => ({action, resource})))
     }
 
-    /** `allowed` for checks of different actions, in one batch. */
-    public async allowedEach(checks: readonly {action: GGAuthzActionRef, resource: GGAuthzResourceRef}[]): Promise<boolean[]> {
+    /** `peek` for checks of different actions, in one batch. */
+    public async peekEach(checks: readonly {action: GGAuthzActionRef, resource: GGAuthzResourceRef}[]): Promise<boolean[]> {
         const subject = this.subject()
-        // A filter decides nothing a caller acts on, so `undeclared` doesn't ask about it.
         const names = checks.map(c => actionName(c.action))
         const engine = await this.config.engine(this.config.tenant())
         const evaluations = await Promise.all(checks.map(async ({resource}, i): Promise<GGAuthzRequest | undefined> => {
@@ -250,7 +251,7 @@ export class GGAuthzAuthority {
     }
 
     // The one place a decision on a resource becomes an answer: allowed, approved or not, or refused (an action's hidden or
-    // explained).
+    // explained). A hook's throw is the answer, and is heard as the refusal's.
     private async answer(check: ResourceCheck, request: GGAuthzRequest, decision: GGAuthzDecision, facts: Facts, options: {hidden?: boolean, key?: (resource: GGAuthzResolvedResource) => {type: string, id: string}}): Promise<void> {
         const {resource} = check
         const verdict = GGAuthz.verdict(request, decision)
@@ -281,19 +282,18 @@ export class GGAuthzAuthority {
             if (this.config.decided) this.heard({...event(), outcome: "approved", level})
             return
         }
-        let shaped: Awaited<ReturnType<NonNullable<GGAuthzAuthorityConfig["refused"]>>>
-        let debugMessage = verdict.error.getDebugContext()?.debugMessage
+        const {refusal} = verdict
+        let hidden = options.hidden === true
+        let error: unknown
         try {
-            shaped = options.hidden ? "hide"
-                : check.check === "action" ? await this.config.refused?.({...event(), action: check.action, facts, refusal: verdict.refusal}) : undefined
+            const refused = check.check === "action" ? {...event(), action: check.action, facts, refusal} : undefined
+            if (!hidden && refused) hidden = await this.config.hides?.(refused) ?? false
+            const explained = !hidden && refused && refusal === "FORBIDDEN" ? await this.config.explains?.(refused) : undefined
+            error = hidden ? new NOT_FOUND({displayMessage: "Not found", debugMessage: verdict.error.getDebugContext()?.debugMessage}) : explained ?? verdict.error
         } catch (e) {
-            // Fail closed: a refusal that couldn't be shaped might have been one to hide, so it is.
-            shaped = "hide"
-            debugMessage = `${debugMessage} (refused failed: ${(e as Error).message})`
+            error = e
         }
-        const explained = verdict.refusal === "FORBIDDEN" && shaped !== "hide" ? shaped : undefined
-        const error = shaped === "hide" ? new NOT_FOUND({displayMessage: "Not found", debugMessage}) : explained ?? verdict.error
-        if (this.config.decided) this.heard({...event(), outcome: "denied", refusal: verdict.refusal, hidden: shaped === "hide", error})
+        if (this.config.decided) this.heard({...event(), outcome: "denied", refusal, hidden, error})
         throw error
     }
 
