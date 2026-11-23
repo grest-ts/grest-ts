@@ -17,8 +17,8 @@ with a resolver for the scope tree and group memberships, and get decisions back
 ```
   api package (shared, browser-safe)              per tenant (data)
   ┌──────────────────────────────────────┐        ┌───────────────────────────────────┐
-  │ defineAuthzService("docs", {...})    │        │ bindings, resource policies,      │
-  │ defineAuthzRole / defineAuthzModel   │        │ boundaries, guardrails            │
+  │ GGAuthzService.define("docs", {...}) │        │ bindings, resource policies,      │
+  │ GGAuthzModel.define({roles, ...})    │        │ boundaries, guardrails            │
   │ permission: Docs.Write.on("docId")   │        │ resolver: ancestors, groups, attrs│
   └──────────────────┬───────────────────┘        └─────────────────┬─────────────────┘
                      └──────▶ new GGAuthz({model, policies, resolver}) ◀┘
@@ -115,14 +115,14 @@ acting for users, and OAuth clients.
 
 ```ts
 // api/authz/model.ts
-import {defineAuthzModel, defineAuthzRole, defineAuthzService, defineAuthzTokenScope} from "@grest-ts/authz"
+import {GGAuthzModel, GGAuthzRole, GGAuthzService, GGAuthzTokenScope} from "@grest-ts/authz"
 
-export const Org = defineAuthzService("org", {
+export const Org = GGAuthzService.define("org", {
     types: {org: "The tenant", project: "A group of folders"},
     actions: {ManageAccess: {on: ["org", "project"], description: "Grant and revoke roles"}},
 })
 
-export const Docs = defineAuthzService("docs", {
+export const Docs = GGAuthzService.define("docs", {
     types: {folder: "A folder of documents", doc: "A document"},
     actions: {
         Read: {on: ["doc"], description: "Open a document"},
@@ -136,17 +136,17 @@ Docs.Delete         // {name: "docs:Delete", resourceTypes: ["docs:doc"]}
 Docs.types.folder   // "docs:folder"
 Docs.all            // "docs:*"
 
-const viewer = defineAuthzRole("viewer", {actions: [Docs.Read], description: "Read-only"})
+const viewer = GGAuthzRole.define("viewer", {actions: [Docs.Read], description: "Read-only"})
 
-export const AppAuthz = defineAuthzModel({
+export const AppAuthz = GGAuthzModel.define({
     partition: "acme",
     services: [Org, Docs],
     roles: [
         viewer,
-        defineAuthzRole("editor", {actions: [Docs.Write, Docs.Delete], includes: [viewer]}),
-        defineAuthzRole("admin", {actions: [Org.all, Docs.all]}),
+        GGAuthzRole.define("editor", {actions: [Docs.Write, Docs.Delete], includes: [viewer]}),
+        GGAuthzRole.define("admin", {actions: [Org.all, Docs.all]}),
     ],
-    tokenScopes: [defineAuthzTokenScope("docs:read", {allow: [{actions: [Docs.Read]}]})],
+    tokenScopes: [GGAuthzTokenScope.define("docs:read", {allow: [{actions: [Docs.Read]}]})],
     workloadTypes: ["agent", "client"],
     approvalFloor: [{actions: [Docs.Export], level: "ask"}],
     stepUpFacts: ["mfa"],
@@ -160,7 +160,7 @@ export const AppAuthz = defineAuthzModel({
   projects, remove it from that list.
 - An action's `on` may also name another service's type as `service:type`; the model fails if no
   service declares it.
-- **Fail at load.** `defineAuthzModel` validates the model and every action it names, then
+- **Fail at load.** `GGAuthzModel.define` validates the model and every action it names, then
   deep-freezes it.
 - **Registry.** Services, roles and token scopes register globally with where they were defined.
   The same name defined in two places throws and names both; re-evaluating the same definition
@@ -249,7 +249,7 @@ attributes are read on every request, so changes to them need no rebuild.
 
 | Config | |
 |---|---|
-| `model` | from `defineAuthzModel`, or a plain `GGAuthzModel` |
+| `model` | from `GGAuthzModel.define`, or plain data that `IsGGAuthzModel` accepts |
 | `policies` | the tenant's `GGAuthzPolicies` (§4) |
 | `resolver` | the scope tree, groups and attributes, below |
 | `facts?` | `(name, request) => boolean \| undefined`; default: boolean values from `request.context` |
@@ -627,13 +627,13 @@ Every other unknown still denies. Pass the facts that hold at the scope in `cont
 role; `authority.assertHolds` for the caller). A refusal names what's missing:
 `{layer: "grant", kind: "escalation", role: "editor", actions: ["docs:Write"]}`.
 
-### `explain`, `describeAuthzModel`, `documentAuthzModel`
+### `explain`, `GGAuthzModel.describe`, `GGAuthzModel.document`
 
 ```ts
 GGAuthz.explain(request, decision)
 // "user:dan may not docs:Export on rn:…/doc/salaries: guardrail contractors-no-export on rn:…/org/acme denies docs:Export."
-describeAuthzModel(AppAuthz, {contracts: [DocsApiContract]})  // structured catalog
-documentAuthzModel(AppAuthz, {contracts: [DocsApiContract]})  // the same as markdown
+GGAuthzModel.describe(AppAuthz, {contracts: [DocsApiContract]})  // structured catalog
+GGAuthzModel.document(AppAuthz, {contracts: [DocsApiContract]})  // the same as markdown
 ```
 
 The catalog lists every action with its resource types, description, roles and token scopes that
@@ -662,8 +662,8 @@ catches it. Both are in the browser entry, e.g. to show what a role grants.
 ## Reference
 
 **Browser entry (`@grest-ts/authz`, browser condition)** — the model and contract side:
-`defineAuthzService`, `defineAuthzRole`, `defineAuthzTokenScope`, `defineAuthzModel`,
-`describeAuthzModel`, `documentAuthzModel`, the action builders (`.on`, `.onContext`, `.list`, `.hide`, `.orCreateOn`), `GGAuthzRn`, the errors
+`GGAuthzService.define`, `GGAuthzRole.define`, `GGAuthzTokenScope.define`, `GGAuthzModel.define`,
+`GGAuthzModel.describe`, `GGAuthzModel.document`, the action builders (`.on`, `.onContext`, `.list`, `.hide`, `.orCreateOn`), `GGAuthzRn`, the errors
 (`APPROVAL_REQUIRED`, `INSUFFICIENT_SCOPE`, `STEP_UP_REQUIRED`, `GG_AUTHZ_ERRORS`), and every
 `IsGGAuthz*` schema with its `GGAuthz*` type. The engine is not in it.
 

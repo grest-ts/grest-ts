@@ -1,5 +1,5 @@
 import {describe, expect, test} from "vitest"
-import {defineAuthzModel, defineAuthzRole, defineAuthzService, describeAuthzModel, GGAuthz, type GGAuthzBinding, GGAuthzMemoryResolver, type GGAuthzPolicies, type GGAuthzSubject} from "../src/index-node"
+import {GGAuthzRole, GGAuthzService, GGAuthzModel, GGAuthz, type GGAuthzBinding, GGAuthzMemoryResolver, type GGAuthzPolicies, type GGAuthzSubject} from "../src/index-node"
 import {notHeld} from "./util"
 
 const org = "rn:acme:org:acme:org/acme"
@@ -64,10 +64,10 @@ describe("roles: inheritance and tenant-defined roles", () => {
     })
 
     test("define functions accept includes", () => {
-        const roles = [defineAuthzRole("t-viewer", {actions: ["docs:Read"]})]
-        roles.push(defineAuthzRole("t-editor", {actions: ["docs:Write"], includes: [roles[0]!]}))
-        const defined = defineAuthzModel({partition: "acme", services: [defineAuthzService("docs", {types: {doc: ""}, actions: {Read: {on: ["doc"]}, Write: {on: ["doc"]}}})], roles})
-        expect(describeAuthzModel(defined).roles.find(r => r.name === "t-editor")!.actions).toEqual(["docs:Write", "docs:Read"])
+        const roles = [GGAuthzRole.define("t-viewer", {actions: ["docs:Read"]})]
+        roles.push(GGAuthzRole.define("t-editor", {actions: ["docs:Write"], includes: [roles[0]!]}))
+        const defined = GGAuthzModel.define({partition: "acme", services: [GGAuthzService.define("docs", {types: {doc: ""}, actions: {Read: {on: ["doc"]}, Write: {on: ["doc"]}}})], roles})
+        expect(GGAuthzModel.describe(defined).roles.find(r => r.name === "t-editor")!.actions).toEqual(["docs:Write", "docs:Read"])
     })
 })
 

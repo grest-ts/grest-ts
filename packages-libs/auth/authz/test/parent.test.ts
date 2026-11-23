@@ -1,13 +1,13 @@
 import {FORBIDDEN, GGContractClass, IsObject, IsString, NOT_FOUND, SERVER_ERROR} from "@grest-ts/schema"
 import {describe, expect, test} from "vitest"
-import {defineAuthzModel, defineAuthzRole, defineAuthzService, GG_AUTHZ_ERRORS, GGAuthz, GGAuthzAuthority, GGAuthzMemoryResolver, type GGAuthzSubject} from "../src/index-node"
+import {GGAuthzModel, GGAuthzRole, GGAuthzService, GG_AUTHZ_ERRORS, GGAuthz, GGAuthzAuthority, GGAuthzMemoryResolver, type GGAuthzSubject} from "../src/index-node"
 import {as, check} from "./util"
 
-const Places = defineAuthzService("places", {
+const Places = GGAuthzService.define("places", {
     types: {org: "The tenant", project: "A project", member: "A member's own space"},
     actions: {ReadProject: {on: ["project"]}},
 })
-const Clouds = defineAuthzService("clouds", {
+const Clouds = GGAuthzService.define("clouds", {
     types: {
         cloud: {description: "A cloud account", in: [Places.types.org, Places.types.project, Places.types.member]},
         image: "An image built on a cloud",
@@ -29,7 +29,7 @@ describe("types with parents", () => {
         expect(Clouds.Write.resourceTypes).toEqual(["clouds:cloud", "places:org", "places:project", "places:member"])
         expect(Clouds.Read.resourceTypes).toEqual(["clouds:cloud", "clouds:image", "places:org", "places:project", "places:member"])
         expect(Clouds.resourceTypes[0]).toEqual({name: "clouds:cloud", description: "A cloud account", in: ["places:org", "places:project", "places:member"]})
-        expect(() => defineAuthzService("typos-in", {types: {thing: {description: "", in: ["nowhere"]}}, actions: {}})).toThrow("Type typos-in:thing is on unknown type nowhere")
+        expect(() => GGAuthzService.define("typos-in", {types: {thing: {description: "", in: ["nowhere"]}}, actions: {}})).toThrow("Type typos-in:thing is on unknown type nowhere")
     })
 
     test("parentRef is the input schema of a parent", () => {
@@ -66,12 +66,12 @@ describe("types with parents", () => {
     })
 })
 
-const model = defineAuthzModel({
+const model = GGAuthzModel.define({
     partition: "acme",
     services: [Places, Clouds],
     roles: [
-        defineAuthzRole("cloud-editor", {actions: [Clouds.Read, Clouds.Write]}),
-        defineAuthzRole("admin", {actions: [Places.all, Clouds.all]}),
+        GGAuthzRole.define("cloud-editor", {actions: [Clouds.Read, Clouds.Write]}),
+        GGAuthzRole.define("admin", {actions: [Places.all, Clouds.all]}),
     ],
 })
 const engine = new GGAuthz({

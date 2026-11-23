@@ -1,4 +1,4 @@
-import type {GGAuthzRole} from "./authzSchemas"
+import type {GGAuthzRole} from "./GGAuthzRole"
 
 export const MAX_DEPTH = 64
 
