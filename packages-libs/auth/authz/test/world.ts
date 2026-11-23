@@ -1,4 +1,4 @@
-import {defineAuthzModel, defineAuthzRole, defineAuthzService, defineAuthzTokenScope, type GGAuthzMemoryData, type GGAuthzPolicies} from "../src/index-node"
+import {GGAuthzModel, GGAuthzRole, GGAuthzService, GGAuthzTokenScope, type GGAuthzMemoryData, type GGAuthzPolicies} from "../src/index-node"
 import type {World} from "./random"
 
 export const rn = {
@@ -12,7 +12,7 @@ export const rn = {
     cloud: (id: string) => `rn:acme:cloud:acme:provider/${id}`,
 }
 
-export const Vm = defineAuthzService("vm", {
+export const Vm = GGAuthzService.define("vm", {
     description: "Developer VMs",
     types: {workspace: "A developer's VM"},
     actions: {
@@ -22,39 +22,39 @@ export const Vm = defineAuthzService("vm", {
         TakeOverWorkspace: {on: ["workspace"], description: "Attach to someone else's session"},
     },
 })
-export const Secrets = defineAuthzService("secrets", {
+export const Secrets = GGAuthzService.define("secrets", {
     types: {secret: "A secret value, project- or workspace-level"},
     actions: {Read: {on: ["secret"]}, Write: {on: ["secret"]}},
 })
-export const Git = defineAuthzService("git", {
+export const Git = GGAuthzService.define("git", {
     types: {repo: "A repository"},
     actions: {Read: {on: ["repo"]}, Push: {on: ["repo"]}},
 })
-export const Cloud = defineAuthzService("cloud", {
+export const Cloud = GGAuthzService.define("cloud", {
     types: {provider: "A compute provider"},
     actions: {Launch: {on: ["provider"], description: "Start a machine on the provider"}},
 })
-export const Org = defineAuthzService("org", {
+export const Org = GGAuthzService.define("org", {
     types: {org: "The organization", project: "A project"},
     actions: {ManageMembers: {on: ["org", "project"]}},
 })
 
-export const model = defineAuthzModel({
+export const model = GGAuthzModel.define({
     partition: "acme",
     services: [Vm, Secrets, Git, Cloud, Org],
     roles: [
-        defineAuthzRole("viewer", {actions: [Vm.ReadWorkspace, Git.Read], description: "Read-only"}),
-        defineAuthzRole("member", {actions: [Vm.ReadWorkspace, Vm.StartWorkspace, Vm.StopWorkspace, Git.all]}),
-        defineAuthzRole("owner", {actions: [Vm.ReadWorkspace, Vm.StartWorkspace, Vm.StopWorkspace, Secrets.all]}),
-        defineAuthzRole("admin", {actions: [Vm.all, Secrets.all, Git.all, Cloud.all, Org.all]}),
-        defineAuthzRole("gpu-launcher", {actions: [Cloud.Launch]}),
-        defineAuthzRole("launcher", {actions: [Cloud.Launch]}),
-        defineAuthzRole("secret-reader", {actions: [Secrets.Read]}),
+        GGAuthzRole.define("viewer", {actions: [Vm.ReadWorkspace, Git.Read], description: "Read-only"}),
+        GGAuthzRole.define("member", {actions: [Vm.ReadWorkspace, Vm.StartWorkspace, Vm.StopWorkspace, Git.all]}),
+        GGAuthzRole.define("owner", {actions: [Vm.ReadWorkspace, Vm.StartWorkspace, Vm.StopWorkspace, Secrets.all]}),
+        GGAuthzRole.define("admin", {actions: [Vm.all, Secrets.all, Git.all, Cloud.all, Org.all]}),
+        GGAuthzRole.define("gpu-launcher", {actions: [Cloud.Launch]}),
+        GGAuthzRole.define("launcher", {actions: [Cloud.Launch]}),
+        GGAuthzRole.define("secret-reader", {actions: [Secrets.Read]}),
     ],
     tokenScopes: [
-        defineAuthzTokenScope("workspaces:read", {allow: [{actions: [Vm.ReadWorkspace]}]}),
-        defineAuthzTokenScope("workspaces:operate", {allow: [{actions: [Vm.StartWorkspace, Vm.StopWorkspace], resources: ["rn:acme:vm:acme:workspace/*"]}]}),
-        defineAuthzTokenScope("repos", {allow: [{actions: [Git.Read], when: ["repoVisible"]}]}),
+        GGAuthzTokenScope.define("workspaces:read", {allow: [{actions: [Vm.ReadWorkspace]}]}),
+        GGAuthzTokenScope.define("workspaces:operate", {allow: [{actions: [Vm.StartWorkspace, Vm.StopWorkspace], resources: ["rn:acme:vm:acme:workspace/*"]}]}),
+        GGAuthzTokenScope.define("repos", {allow: [{actions: [Git.Read], when: ["repoVisible"]}]}),
     ],
     workloadTypes: ["agent"],
     approvalFloor: [{actions: [Secrets.Write], level: "ask"}],

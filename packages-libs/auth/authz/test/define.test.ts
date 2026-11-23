@@ -1,6 +1,6 @@
 import {GGContractClass, IsObject, IsString, NOT_FOUND} from "@grest-ts/schema"
 import {describe, expect, test} from "vitest"
-import {APPROVAL_REQUIRED, defineAuthzModel, defineAuthzRole, defineAuthzService, describeAuthzModel, documentAuthzModel} from "../src/index-node"
+import {APPROVAL_REQUIRED, GGAuthzRole, GGAuthzService, GGAuthzModel} from "../src/index-node"
 import {Cloud, model, Secrets, Vm} from "./world"
 
 describe("define functions", () => {
@@ -15,36 +15,36 @@ describe("define functions", () => {
 
     test("the model is validated and deep-frozen", () => {
         expect(Object.isFrozen(model.roles[0]!.actions)).toBe(true)
-        expect(() => defineAuthzModel({partition: "acme", services: [Vm], roles: [defineAuthzRole("needs-cloud", {actions: [Cloud.Launch]})]})).toThrow("Unknown action cloud:Launch")
-        expect(() => defineAuthzModel({partition: "acme", services: [Vm, Vm], roles: []})).toThrow("Duplicate action")
+        expect(() => GGAuthzModel.define({partition: "acme", services: [Vm], roles: [GGAuthzRole.define("needs-cloud", {actions: [Cloud.Launch]})]})).toThrow("Unknown action cloud:Launch")
+        expect(() => GGAuthzModel.define({partition: "acme", services: [Vm, Vm], roles: []})).toThrow("Duplicate action")
     })
 
     test("a name defined in two places throws; re-evaluating the same definition does not", () => {
-        for (let i = 0; i < 2; i++) defineAuthzService("loop", {types: {thing: ""}, actions: {Use: {on: ["thing"]}}})
-        defineAuthzService("twice", {types: {thing: ""}, actions: {}})
-        expect(() => defineAuthzService("twice", {types: {thing: ""}, actions: {}})).toThrow("Duplicate authz service twice")
-        expect(() => defineAuthzService("vm", {types: {thing: ""}, actions: {}})).toThrow(/Duplicate authz service vm: defined at .*world\.ts.* and .*define\.test\.ts/)
-        defineAuthzRole("twice", {actions: []})
-        expect(() => defineAuthzRole("twice", {actions: []})).toThrow("Duplicate authz role twice")
+        for (let i = 0; i < 2; i++) GGAuthzService.define("loop", {types: {thing: ""}, actions: {Use: {on: ["thing"]}}})
+        GGAuthzService.define("twice", {types: {thing: ""}, actions: {}})
+        expect(() => GGAuthzService.define("twice", {types: {thing: ""}, actions: {}})).toThrow("Duplicate authz service twice")
+        expect(() => GGAuthzService.define("vm", {types: {thing: ""}, actions: {}})).toThrow(/Duplicate authz service vm: defined at .*world\.ts.* and .*define\.test\.ts/)
+        GGAuthzRole.define("twice", {actions: []})
+        expect(() => GGAuthzRole.define("twice", {actions: []})).toThrow("Duplicate authz role twice")
     })
 
     test("an approval floor without workload types fails at load", () => {
-        const Floor = defineAuthzService("floor", {types: {thing: ""}, actions: {Use: {on: ["thing"]}}})
-        expect(() => defineAuthzModel({partition: "p", services: [Floor], roles: [], approvalFloor: [{actions: [Floor.Use], level: "ask"}]})).toThrow("workloadTypes")
+        const Floor = GGAuthzService.define("floor", {types: {thing: ""}, actions: {Use: {on: ["thing"]}}})
+        expect(() => GGAuthzModel.define({partition: "p", services: [Floor], roles: [], approvalFloor: [{actions: [Floor.Use], level: "ask"}]})).toThrow("workloadTypes")
     })
 
     test("bad names fail at definition", () => {
-        expect(() => defineAuthzService("bad", {types: {thing: ""}, actions: {use: {on: ["thing"]}}})).toThrow("upper-case")
-        expect(() => defineAuthzService("bad2", {types: {thing: ""}, actions: {Use: {on: ["other" as "thing"]}}})).toThrow("unknown type other")
-        expect(() => defineAuthzService("Bad3", {types: {thing: ""}, actions: {}})).toThrow()
+        expect(() => GGAuthzService.define("bad", {types: {thing: ""}, actions: {use: {on: ["thing"]}}})).toThrow("upper-case")
+        expect(() => GGAuthzService.define("bad2", {types: {thing: ""}, actions: {Use: {on: ["other" as "thing"]}}})).toThrow("unknown type other")
+        expect(() => GGAuthzService.define("Bad3", {types: {thing: ""}, actions: {}})).toThrow()
     })
 
     test("an action may be on another service's type, which the model must declare", () => {
-        const Folders = defineAuthzService("folders", {types: {folder: ""}, actions: {Read: {on: ["folder"]}}})
-        const Files = defineAuthzService("files", {types: {file: ""}, actions: {Create: {on: ["folders:folder"]}, Read: {on: ["file"]}}})
+        const Folders = GGAuthzService.define("folders", {types: {folder: ""}, actions: {Read: {on: ["folder"]}}})
+        const Files = GGAuthzService.define("files", {types: {file: ""}, actions: {Create: {on: ["folders:folder"]}, Read: {on: ["file"]}}})
         expect(Files.Create.resourceTypes).toEqual(["folders:folder"])
-        expect(defineAuthzModel({partition: "p", services: [Folders, Files], roles: []}).actions.map(a => a.name)).toContain("files:Create")
-        expect(() => defineAuthzModel({partition: "p", services: [Files], roles: []})).toThrow("files:Create is on folders:folder, which no service in the model declares")
+        expect(GGAuthzModel.define({partition: "p", services: [Folders, Files], roles: []}).actions.map(a => a.name)).toContain("files:Create")
+        expect(() => GGAuthzModel.define({partition: "p", services: [Files], roles: []})).toThrow("files:Create is on folders:folder, which no service in the model declares")
     })
 })
 
@@ -59,7 +59,7 @@ describe("contract methods", () => {
     })
 
     test("describe lists roles, scopes, floors and declaring methods per action", () => {
-        const catalog = describeAuthzModel(model, {contracts: [WorkspaceApi]})
+        const catalog = GGAuthzModel.describe(model, {contracts: [WorkspaceApi]})
         expect(catalog.actions.find(a => a.name === "vm:StopWorkspace")).toMatchObject({
             roles: ["member", "owner", "admin"],
             tokenScopes: ["workspaces:operate"],
@@ -71,13 +71,13 @@ describe("contract methods", () => {
     })
 
     test("describe rejects a contract that declares an unknown action", () => {
-        const Nope = defineAuthzService("nope", {types: {thing: "Not in the model"}, actions: {Do: {on: ["thing"]}}})
+        const Nope = GGAuthzService.define("nope", {types: {thing: "Not in the model"}, actions: {Do: {on: ["thing"]}}})
         const Other = new GGContractClass("OtherApi", {x: {permission: Nope.Do.on(Nope.types.thing)}})
-        expect(() => describeAuthzModel(model, {contracts: [Other]})).toThrow("OtherApi.x declares unknown action nope:Do")
+        expect(() => GGAuthzModel.describe(model, {contracts: [Other]})).toThrow("OtherApi.x declares unknown action nope:Do")
     })
 
     test("document renders the catalog as markdown", () => {
-        const md = documentAuthzModel(model, {contracts: [WorkspaceApi]})
+        const md = GGAuthzModel.document(model, {contracts: [WorkspaceApi]})
         expect(md).toContain("| `vm:StopWorkspace` | `vm:workspace` |  | member, owner, admin | workspaces:operate |  | `WorkspaceApi.stop` |")
         expect(md).toContain(`| \`${Secrets.Write.name}\` | \`secrets:secret\` |  | owner, admin |  | ask |  |`)
         expect(md).toContain("| viewer | Read-only | `vm:ReadWorkspace`, `git:Read` |")

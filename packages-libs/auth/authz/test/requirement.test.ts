@@ -1,6 +1,6 @@
 import {FORBIDDEN, GGContractClass, IsObject, IsString, NOT_AUTHORIZED, NOT_FOUND, SERVER_ERROR} from "@grest-ts/schema"
 import {describe, expect, test} from "vitest"
-import {APPROVAL_REQUIRED, defineAuthzService, GG_AUTHZ_ERRORS, INSUFFICIENT_SCOPE, STEP_UP_REQUIRED} from "../src/index-node"
+import {APPROVAL_REQUIRED, GGAuthzService, GG_AUTHZ_ERRORS, INSUFFICIENT_SCOPE, STEP_UP_REQUIRED} from "../src/index-node"
 import {Git, Org, Secrets, Vm} from "./world"
 
 describe("requirement builders", () => {
@@ -52,6 +52,6 @@ describe("requirement builders", () => {
 
     test("service definitions stay strict about action types", () => {
         // @ts-expect-error a typo in `on`
-        expect(() => defineAuthzService("typos", {types: {thing: ""}, actions: {Use: {on: ["thingg"]}}})).toThrow("unknown type thingg")
+        expect(() => GGAuthzService.define("typos", {types: {thing: ""}, actions: {Use: {on: ["thingg"]}}})).toThrow("unknown type thingg")
     })
 })

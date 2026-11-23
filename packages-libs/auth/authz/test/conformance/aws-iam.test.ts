@@ -1,5 +1,5 @@
 import {describe, expect, test} from "vitest"
-import {defineAuthzModel, defineAuthzService, defineAuthzTokenScope, GGAuthz, GGAuthzMemoryResolver, type GGAuthzPolicies, type GGAuthzStatement} from "../../src/index-node"
+import {GGAuthzModel, GGAuthzService, GGAuthzTokenScope, GGAuthz, GGAuthzMemoryResolver, type GGAuthzPolicies, type GGAuthzStatement} from "../../src/index-node"
 import {req} from "../util"
 
 // Mapping: partition root above every organization (so SCPs and identity policies follow the principal anywhere)
@@ -7,7 +7,7 @@ import {req} from "../util"
 // principal; SCPs are guardrails selected by account/OU group membership; RCPs are guardrails on the account/OU
 // scope; permission boundaries are boundaries; session policies are token scopes.
 
-const S3 = defineAuthzService("s3", {
+const S3 = GGAuthzService.define("s3", {
     types: {bucket: "Bucket", object: "Object"},
     actions: {
         ListBucket: {on: ["bucket"]},
@@ -17,30 +17,30 @@ const S3 = defineAuthzService("s3", {
         DeleteObject: {on: ["object"]},
     },
 })
-const Ec2 = defineAuthzService("ec2", {
+const Ec2 = GGAuthzService.define("ec2", {
     types: {instance: "Instance"},
     actions: {StartInstances: {on: ["instance"]}, TerminateInstances: {on: ["instance"]}},
 })
-const Iam = defineAuthzService("iam", {
+const Iam = GGAuthzService.define("iam", {
     types: {user: "User"},
     actions: {CreateUser: {on: ["user"]}, ChangePassword: {on: ["user"]}},
 })
-const Cloudwatch = defineAuthzService("cloudwatch", {
+const Cloudwatch = GGAuthzService.define("cloudwatch", {
     types: {dashboard: "Dashboard"},
     actions: {GetDashboard: {on: ["dashboard"]}, DeleteDashboards: {on: ["dashboard"]}},
 })
-const SecretsManager = defineAuthzService("secretsmanager", {
+const SecretsManager = GGAuthzService.define("secretsmanager", {
     types: {secret: "Secret"},
     actions: {GetSecretValue: {on: ["secret"]}},
 })
 
-const model = defineAuthzModel({
+const model = GGAuthzModel.define({
     partition: "aws",
     services: [S3, Ec2, Iam, Cloudwatch, SecretsManager],
     roles: [],
     tokenScopes: [
-        defineAuthzTokenScope("session-s3-read", {allow: [{actions: [S3.GetObject]}]}),
-        defineAuthzTokenScope("session-ec2", {allow: [{actions: [Ec2.all]}]}),
+        GGAuthzTokenScope.define("session-s3-read", {allow: [{actions: [S3.GetObject]}]}),
+        GGAuthzTokenScope.define("session-ec2", {allow: [{actions: [Ec2.all]}]}),
     ],
 })
 

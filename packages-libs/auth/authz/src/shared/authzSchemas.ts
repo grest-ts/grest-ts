@@ -71,7 +71,6 @@ export const IsGGAuthzRole = IsObject({
     includes: IsArray(IsString.nonEmpty).orUndefined.docs({description: "Roles whose actions this role also has"}),
     description: IsString.orUndefined,
 })
-export type GGAuthzRole = typeof IsGGAuthzRole.infer
 
 const IsRef = IsString.orUndefined.docs({description: "Opaque to the engine: returned as `ref` on the reasons this decides, e.g. the caller's own record id"})
 
@@ -125,7 +124,6 @@ export const IsGGAuthzTokenScope = IsObject({
     allow: IsArray(IsGGAuthzRule),
     description: IsString.orUndefined,
 })
-export type GGAuthzTokenScope = typeof IsGGAuthzTokenScope.infer
 
 export const IsGGAuthzModel = IsObject({
     partition: IsString.regex(/^[a-z][a-z0-9-]*$/),
@@ -137,7 +135,6 @@ export const IsGGAuthzModel = IsObject({
     stepUpFacts: IsArray(IsGGAuthzFactName).orUndefined.docs({description: "Facts a caller can make true by re-authenticating, e.g. `mfa` from the token's `acr`/`amr`"}),
     grantAction: IsGGAuthzActionName.orUndefined.docs({description: "Needed on a scope to create bindings there (`canGrant`)"}),
 })
-export type GGAuthzModel = typeof IsGGAuthzModel.infer
 
 export const IsGGAuthzBinding = IsObject({
     principal: IsGGAuthzPrincipalSelector,

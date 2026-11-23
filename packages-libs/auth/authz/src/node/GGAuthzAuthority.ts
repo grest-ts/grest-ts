@@ -1,5 +1,5 @@
 import {FORBIDDEN, type GGPermission, type GGRequirement, NOT_AUTHORIZED, NOT_FOUND, requirementField} from "@grest-ts/schema"
-import {actionName, type GGAuthzActionRef} from "../shared/defineAuthz"
+import {actionName, type GGAuthzActionRef} from "../shared/definitions"
 import {APPROVAL_REQUIRED} from "../shared/authzErrors"
 import {GG_AUTHZ_SUBJECT} from "./GG_AUTHZ_SUBJECT"
 import {GGAuthz} from "./GGAuthz"

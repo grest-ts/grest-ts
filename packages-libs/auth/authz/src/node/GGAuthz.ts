@@ -2,7 +2,7 @@ import {FORBIDDEN} from "@grest-ts/schema"
 import {applyPlan} from "./applyPlan"
 import {expandActions, expandRoles, MAX_DEPTH, type OnUnknownAction} from "../shared/chain"
 import {type AttributeLookup, evalCondition, evalConditional, evalConditions, isResourceKey} from "./conditions"
-import {assertWorkloadTypes, validatedModels} from "../shared/defineAuthz"
+import {assertWorkloadTypes, type GGAuthzModel, validatedModels} from "../shared/GGAuthzModel"
 import {INSUFFICIENT_SCOPE, STEP_UP_REQUIRED} from "../shared/authzErrors"
 import {explain} from "./explain"
 import {GGAuthzRn} from "../shared/GGAuthzRn"
@@ -18,7 +18,6 @@ import {
     type GGAuthzEvaluationsResponse,
     type GGAuthzGrantRequest,
     type GGAuthzListRequest,
-    type GGAuthzModel,
     type GGAuthzPlan,
     type GGAuthzPlanFilter,
     type GGAuthzPolicies,

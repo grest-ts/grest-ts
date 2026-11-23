@@ -26,7 +26,7 @@ financial reports (where a report's content must not change with who asks). It m
 | `permission:` on contract methods, strict mode | `@grest-ts/schema` `contract/permission/`, `@grest-ts/http` | Every route must declare once any does; checked at server start |
 | `GGRequirement`, `byField` | `GGRequirement.ts` | A requirement as plain data: action + where the resource id comes from. `byField(union, field, cases)` picks a requirement per union case |
 | `GGAuthority` | `@grest-ts/http` `schema/GGAuthority*.ts` | Runs requirements after input validation, before the handler |
-| Engine + builders | `@grest-ts/authz` | `Action.on(field)`, `.onContext(source)`, `.list()`, `.hide()`, `.orCreateOn(type)`; `GGAuthzAuthority`; `allowed` (batch), `listAllowed` (query plan), `canGrant`/`missingActions`, `explain`, `describeAuthzModel`/`documentAuthzModel` |
+| Engine + builders | `@grest-ts/authz` | `Action.on(field)`, `.onContext(source)`, `.list()`, `.hide()`, `.orCreateOn(type)`; `GGAuthzAuthority`; `allowed` (batch), `listAllowed` (query plan), `canGrant`/`missingActions`, `explain`, `GGAuthzModel.describe`/`.document` |
 | Kratt's authority | `kratt/src/hub/hub-api-server-vm-manager/src/access/krattAuthority.ts` | Per-type row loaders, facts (`repoVisible`), and the "undeclared action" guard (throws outside production when a handler asserts an action its method didn't declare) |
 
 Facts worth knowing:
@@ -89,7 +89,7 @@ itself); every case of a `.in` union is a type the authority can resolve.
 decision) to the handler through context avoids a second read. Kratt lists it as out of scope for now.
 
 **E. Documentation from the definitions.** A generated "who can call what" table, from contracts + model (+ the
-roles that grant each action). `documentAuthzModel` covers the model half.
+roles that grant each action). `GGAuthzModel.document` covers the model half.
 
 **F. WebSockets.** `clientToServer` messages can carry requirements. Kratt's decision 11 leaves open whether a
 grest-ts "topics" feature (ticket endpoint + subscribe + snapshot + version filter) belongs in the framework or
