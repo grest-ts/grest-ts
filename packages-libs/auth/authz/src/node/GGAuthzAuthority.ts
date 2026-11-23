@@ -82,7 +82,8 @@ export interface GGAuthzRefused {
     facts: Facts
 }
 
-type ResourceCheck = Extract<GGAuthzCheck, {check: "action" | "grant"}>
+type ResourceCheck = Extract<GGAuthzCheck, {check: "action" | "grant" | "approve"}>
+type AnswerOptions = {hidden?: boolean, key?: (resource: GGAuthzResolvedResource) => {type: string, id: string}, displayMessage?: string}
 
 export interface GGAuthzAuthorityConfig {
     partition: string
@@ -246,15 +247,15 @@ export class GGAuthzAuthority {
         if (error) throw error
     }
 
-    private async decide(action: string, resource: GGAuthzResolvedResource, options: {hidden?: boolean, key?: (resource: GGAuthzResolvedResource) => {type: string, id: string}}): Promise<void> {
+    private async decide(action: string, resource: GGAuthzResolvedResource, options: AnswerOptions, check: "action" | "approve" = "action"): Promise<void> {
         const [engine, facts] = await Promise.all([this.config.engine(resource.tenant), this.config.facts?.(action, resource)])
         const request = this.request(this.subject(), action, resource, facts)
-        await this.answer({check: "action", action, resource}, request, await engine.evaluate(request), facts, options)
+        await this.answer({check, action, resource}, request, await engine.evaluate(request), facts, options)
     }
 
     // The one place a decision on a resource becomes an answer: allowed, approved or not, or refused (an action's hidden or
     // explained). A hook's throw is the answer, and is heard as the refusal's.
-    private async answer(check: ResourceCheck, request: GGAuthzRequest, decision: GGAuthzDecision, facts: Facts, options: {hidden?: boolean, key?: (resource: GGAuthzResolvedResource) => {type: string, id: string}}): Promise<void> {
+    private async answer(check: ResourceCheck, request: GGAuthzRequest, decision: GGAuthzDecision, facts: Facts, options: AnswerOptions): Promise<void> {
         const {resource} = check
         const verdict = GGAuthz.verdict(request, decision)
         const event = () => ({...check, subject: request.subject, call: currentCall()?.call, decision})
@@ -262,7 +263,8 @@ export class GGAuthzAuthority {
             if (this.config.decided) this.heard({...event(), outcome: "allowed"})
             return
         }
-        if (verdict.outcome === "approval-required") {
+        // An approver who'd need approval themselves may not approve.
+        if (verdict.outcome === "approval-required" && check.check !== "approve") {
             const {level} = verdict
             const key = options.key?.(resource)
             const need: GGAuthzApprovalNeed = {
@@ -284,14 +286,16 @@ export class GGAuthzAuthority {
             if (this.config.decided) this.heard({...event(), outcome: "approved", level})
             return
         }
-        const {refusal} = verdict
+        const refusal = verdict.outcome === "denied" ? verdict.refusal : "FORBIDDEN"
         let hidden = options.hidden === true
         let error: unknown
         try {
             const refused = check.check === "action" ? {...event(), action: check.action, facts, refusal} : undefined
             if (!hidden && refused) hidden = await this.config.hides?.(refused) ?? false
             const explained = !hidden && refused && refusal === "FORBIDDEN" ? await this.config.explains?.(refused) : undefined
-            error = hidden ? new NOT_FOUND({displayMessage: "Not found", debugMessage: verdict.error.getDebugContext()?.debugMessage}) : explained ?? verdict.error
+            const plain = verdict.outcome === "denied" && !(refusal === "FORBIDDEN" && options.displayMessage) ? verdict.error
+                : new FORBIDDEN({displayMessage: options.displayMessage, debugMessage: GGAuthz.explain(request, decision)})
+            error = hidden ? new NOT_FOUND({displayMessage: "Not found", debugMessage: plain.getDebugContext()?.debugMessage}) : explained ?? plain
         } catch (e) {
             error = e
         }
@@ -303,21 +307,7 @@ export class GGAuthzAuthority {
      *  approve someone else's (no-escalation, as `authorizeGrant`). The action is the approved one, not the method's own,
      *  so it isn't declared; heard as `check: "approve"`. An allow the caller would need approval for is refused. */
     public async assertMayApprove(action: GGAuthzActionRef, resource: GGAuthzResourceRef, options?: {displayMessage?: string}): Promise<void> {
-        const name = actionName(action)
-        const resolved = await this.resources.resolve(resource)
-        const [engine, facts] = await Promise.all([this.config.engine(resolved.tenant), this.config.facts?.(name, resolved)])
-        const request = this.request(this.subject(), name, resolved, facts)
-        const decision = await engine.evaluate(request)
-        const verdict = GGAuthz.verdict(request, decision)
-        const event = {check: "approve" as const, action: name, resource: resolved, subject: request.subject, call: currentCall()?.call, decision}
-        if (verdict.outcome === "allowed") {
-            if (this.config.decided) this.heard({...event, outcome: "allowed"})
-            return
-        }
-        const refusal = verdict.outcome === "denied" ? verdict.refusal : "FORBIDDEN"
-        const error = verdict.outcome === "denied" && refusal !== "FORBIDDEN" ? verdict.error : new FORBIDDEN({displayMessage: options?.displayMessage, debugMessage: GGAuthz.explain(request, decision)})
-        if (this.config.decided) this.heard({...event, outcome: "denied", refusal, hidden: false, error})
-        throw error
+        await this.decide(actionName(action), await this.resources.resolve(resource), options ?? {}, "approve")
     }
 
     private heard(event: GGAuthzDecided): void {
