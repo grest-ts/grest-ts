@@ -146,8 +146,8 @@ export interface GGOAuthServerOptions {
     dynamicRegistration?: boolean
     // Accept clients identified by a metadata document URL (CIMD, what MCP clients prefer), fetched
     // only from https URLs on the default port under one of these prefixes (end each with "/"),
-    // e.g. a vendor's hosted client documents: "https://claude.ai/oauth/".
-    clientIdMetadataDocument?: {allowedUrlPrefixes: () => string[]}
+    // e.g. a vendor's hosted client documents: "https://claude.ai/oauth/". Read on every fetch.
+    clientIdMetadataDocument?: {allowedUrlPrefixes: () => string[] | Promise<string[]>}
     // Absolute refresh lifetime: rotation never extends it (OAuth for browser apps, RFC 10017).
     refreshTtlSec?: number
     sessionTtlSec?: number
@@ -643,7 +643,7 @@ export class GGOAuthServer {
                 ...(o.clientIdMetadataDocument ? {clientIdMetadataDocument: {
                     enabled: true,
                     ack: "draft-02",
-                    allowFetch: async (_ctx: unknown, clientId: string) => isAllowedDocumentUrl(clientId, o.clientIdMetadataDocument!.allowedUrlPrefixes()),
+                    allowFetch: async (_ctx: unknown, clientId: string) => isAllowedDocumentUrl(clientId, await o.clientIdMetadataDocument!.allowedUrlPrefixes()),
                 }} : {}),
                 rpInitiatedLogout: {
                     enabled: true,

@@ -198,7 +198,7 @@ class OAuthTestRuntime extends GGRuntime {
             ],
             dynamicRegistration: true,
             grantBound: ["AppNote"],
-            clientIdMetadataDocument: {allowedUrlPrefixes: () => ["https://clients.example/oauth/"]},
+            clientIdMetadataDocument: {allowedUrlPrefixes: async () => ["https://clients.example/oauth/"]},
             proxy: true,
         })
         oauth.mount(server)
