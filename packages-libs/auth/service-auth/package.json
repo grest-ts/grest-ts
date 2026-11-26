@@ -7,8 +7,14 @@
   "description": "Service-to-service authentication for grest-ts: a shared-secret header wire, verified fail-closed and in constant time",
   "exports": {
     ".": {
-      "types": "./src/index-node.ts",
-      "import": "./src/index-node.ts"
+      "browser": {
+        "types": "./src/index-browser.ts",
+        "import": "./src/index-browser.ts"
+      },
+      "default": {
+        "types": "./src/index-node.ts",
+        "import": "./src/index-node.ts"
+      }
     }
   },
   "files": [
@@ -49,6 +55,7 @@
   },
   "peerDependencies": {
     "@grest-ts/config": "0.0.101",
+    "@grest-ts/context": "0.0.101",
     "@grest-ts/http": "0.0.101",
     "@grest-ts/logger": "0.0.101",
     "@grest-ts/schema": "0.0.101"
