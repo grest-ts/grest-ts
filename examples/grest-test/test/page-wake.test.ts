@@ -1,7 +1,7 @@
 /**
- * Page wake in a browser drives every reconnecting client: the tab coming back, the network coming back or
- * a clock jump probe the link; resume and a back/forward-cache restore reconnect at once. The page is
- * stubbed with EventTargets before the first client installs the detector.
+ * Page wake in a browser drives every reconnecting client: the tab or the network coming back, a resume or
+ * a clock jump probe the link; a back/forward-cache restore reconnects at once. The page is stubbed with
+ * EventTargets before the first client installs the detector.
  */
 
 import {GG_TEST_RUNNER, GGTest} from "@grest-ts/testkit"
@@ -28,11 +28,14 @@ describe("page wake", () => {
 
     GGTest.startWorker(MainRuntime)
 
-    test("resume reconnects every client and re-runs its setup", async () => {
+    test("a back/forward-cache restore reconnects every client and re-runs its setup; a fresh page load doesn't", async () => {
         const a = await connected()
         const b = await connected()
         try {
-            page.dispatchEvent(new Event("resume"))
+            win.dispatchEvent(Object.assign(new Event("pageshow"), {persisted: false}))
+            await wait(100)
+            expect([a.setupRuns(), b.setupRuns()]).toEqual([1, 1])
+            win.dispatchEvent(Object.assign(new Event("pageshow"), {persisted: true}))
             await vi.waitFor(() => expect([a.setupRuns(), b.setupRuns()]).toEqual([2, 2]))
             expect(await a.client.outgoing.echo({message: "awake"})).toEqual({message: "awake", echoedBy: "server"})
         } finally {
@@ -41,25 +44,12 @@ describe("page wake", () => {
         }
     })
 
-    test("a back/forward-cache restore reconnects; a fresh page load doesn't", async () => {
-        await pastDebounce()
-        const c = await connected()
-        try {
-            win.dispatchEvent(Object.assign(new Event("pageshow"), {persisted: false}))
-            await wait(100)
-            expect(c.setupRuns()).toBe(1)
-            win.dispatchEvent(Object.assign(new Event("pageshow"), {persisted: true}))
-            await vi.waitFor(() => expect(c.setupRuns()).toBe(2))
-        } finally {
-            await c.client.disconnect()
-        }
-    }, 10_000)
-
-    test("the tab or the network coming back keeps a live link (probe answered)", async () => {
+    test("the tab or the network coming back, or a resume, keeps a live link (probe answered)", async () => {
         const c = await connected()
         try {
             page.dispatchEvent(new Event("visibilitychange"))
             win.dispatchEvent(new Event("online"))
+            page.dispatchEvent(new Event("resume"))
             await wait(3_300)
             expect(c.setupRuns()).toBe(1)
             expect(c.client.isConnected).toBe(true)
@@ -74,7 +64,7 @@ describe("page wake", () => {
         const closed = await connected()
         await closed.client.disconnect()
         try {
-            page.dispatchEvent(new Event("resume"))
+            win.dispatchEvent(Object.assign(new Event("pageshow"), {persisted: true}))
             await wait(200)
             expect(off.setupRuns()).toBe(1)
             expect(closed.setupRuns()).toBe(1)

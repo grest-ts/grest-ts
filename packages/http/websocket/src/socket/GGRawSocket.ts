@@ -113,13 +113,11 @@ export class GGRawSocket {
             });
         });
 
-        this.adapter.onClose(() => {
-            this.scope?.ensureEntered();
-            this.finishClose();
-        });
+        this.adapter.onClose(() => this.finishClose());
     }
 
     private finishClose(): void {
+        this.scope?.ensureEntered();
         this.connectionContext.run(() => {
             this.isActive = false;
             if (this.isClosed) return;

@@ -331,19 +331,23 @@ export function createConnector<TSocket extends GGLiveSocket>(hooks: GGConnector
             reconnect.maxDelayMs,
         ) * (0.5 + Math.random() * 0.5)
         logMode === GGWsLogMode.ALL && log.info(schemaName, `ws reconnect-attempt ${schemaName}`, {kind: "reconnect-attempt", attempt: attempt + 1, delayMs: delay})
-        reconnectTimer = setTimeout(async () => {
+        reconnectTimer = setTimeout(() => {
             reconnectTimer = undefined
-            if (finallyClosed || socket) return
-            try {
-                await openShared()
-            } catch (err) {
-                const error = err as Error
-                for (const cb of onErrorCallbacks) {
-                    try { cb(error) } catch (_) {}
-                }
-                retryOrGiveUp(error)
-            }
+            void retryOpen()
         }, delay)
+    }
+
+    const retryOpen = async (): Promise<void> => {
+        if (finallyClosed || socket) return
+        try {
+            await openShared()
+        } catch (err) {
+            const error = err as Error
+            for (const cb of onErrorCallbacks) {
+                try { cb(error) } catch (_) {}
+            }
+            retryOrGiveUp(error)
+        }
     }
 
     // One open at a time: a manual connect() and a retry that overlap share the attempt, so they
@@ -382,10 +386,9 @@ export function createConnector<TSocket extends GGLiveSocket>(hooks: GGConnector
             // close() runs the close handlers now, and they reconnect: every client of a pooled socket.
             void s.probe(WAKE_PROBE_TIMEOUT_MS).then(alive => { if (!alive && socket === s) s.close() })
         } else if (reconnectTimer) {
-            // Waiting out a long backoff: start over from the shortest delay.
+            // Waiting out a long backoff: try once now. The attempt count (backoff, maxAttempts) carries on.
             cancelRetry()
-            reconnectAttempt = 0
-            scheduleReconnect()
+            void retryOpen()
         }
     }
 

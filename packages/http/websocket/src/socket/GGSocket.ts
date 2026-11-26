@@ -96,6 +96,7 @@ export class GGSocket {
     private readonly connectionContext: GGContext;
     private readonly metrics?: GGSocketMetrics;
     private readonly log: GGSocketLogger;
+    private readonly scope?: {ensureEntered(): void};
 
     constructor(socket: SocketAdapter, config?: GGSocketConfig) {
         this.socket = socket;
@@ -107,7 +108,7 @@ export class GGSocket {
         this.log = config?.log ?? consoleLogger;
 
         // Scope is provided by server for re-entering async context in event callbacks
-        const scope = config?.scope;
+        const scope = this.scope = config?.scope;
 
         this.socket.onMessage(async (data: string) => {
             scope?.ensureEntered();
@@ -135,10 +136,7 @@ export class GGSocket {
             })
         });
 
-        this.socket.onClose(() => {
-            scope?.ensureEntered();
-            this.finishClose();
-        });
+        this.socket.onClose(() => this.finishClose());
 
         this.socket.onError((error: Error) => {
             scope?.ensureEntered();
@@ -466,6 +464,7 @@ export class GGSocket {
     }
 
     private finishClose(): void {
+        this.scope?.ensureEntered();
         this.connectionContext.run(() => {
             this.isActive = false;
             if (this.isCleanedUp) return;
