@@ -5,7 +5,7 @@ import {request} from "node:http"
 import {GGRuntime} from "@grest-ts/runtime"
 import {GG_HTTP_REQUEST, GGHttpServer} from "@grest-ts/http"
 import {GG_TRACE} from "@grest-ts/trace"
-import {FORBIDDEN, IsArray, IsObject, IsString, NOT_AUTHORIZED} from "@grest-ts/schema"
+import {FORBIDDEN, IsArray, IsObject, IsString, NOT_AUTHORIZED, NOT_FOUND} from "@grest-ts/schema"
 import {GGAuthAccessToken, HmacSigner, JwksVerifier, JwsSigningStrategy, type JwsSigner} from "@grest-ts/auth"
 import {ACCESS_TOKEN_JWKS_PATH, asPublicClient, deriveEs256Jwk, GGOAuthServer, type GGOAuthInteraction, type GGOAuthResource, type GGOAuthTokenClient} from "./GGOAuthServer"
 import type {GGDynamoDb} from "@grest-ts/db-dynamodb"
@@ -947,13 +947,16 @@ describe("GGOAuthServer", () => {
             const start = await browser.get(`/ext/start?uid=${login.uid}`)
             const upstream = new URL(start.headers.get("location")!)
             expect(upstream.origin).toBe(UPSTREAM)
-            return {uid: login.uid, finish, state: upstream.searchParams.get("state")!, setCookie: start.headers.get("set-cookie")!}
+            return {uid: login.uid, finish, state: upstream.searchParams.get("state")!, setCookies: start.headers.getSetCookie()}
         }
 
         test("a state cookie for the round trip, then a login ticket for the account the app resolved", async () => {
             const browser = new Browser()
-            const {uid, finish, state, setCookie} = await startExternal(browser)
-            expect(setCookie).toMatch(new RegExp(`^gg_signin_${state}=[^;]+; Path=/ext/callback; Max-Age=600; HttpOnly; Secure; SameSite=Lax$`))
+            const {uid, finish, state, setCookies} = await startExternal(browser)
+            expect(setCookies).toEqual([
+                expect.stringMatching(new RegExp(`^gg_signin_${state}=[^;]+; Path=/ext/callback; Max-Age=600; HttpOnly; Secure; SameSite=Lax$`)),
+                expect.stringMatching(new RegExp(`^gg_signin_bind_${uid}=[^;]+; Path=/; Max-Age=600; HttpOnly; Secure; SameSite=Lax$`)),
+            ])
 
             const back = await browser.get(`/ext/callback?code=alice&state=${state}`)
             expect(back.status).toBe(302)
@@ -964,6 +967,37 @@ describe("GGOAuthServer", () => {
 
             const tokens = await finish(await browser.done(ticket.href))
             expect((await userToken.verify(tokens.accessToken)).sub).toBe("alice")
+            expect(browser.cookies.has(`gg_signin_bind_${uid}`)).toBe(false)
+        })
+
+        test("a login ticket completes only in the browser that started the round trip, not one it is handed to", async () => {
+            const victim = new Browser()
+            const {step} = await victim.authorize(APP)
+            const {uid} = await victim.page(Promise.resolve(step))
+            // The attacker runs the round trip for the victim's uid as themselves and hands over the ticket.
+            const attacker = new Browser()
+            const start = await attacker.get(`/ext/start?uid=${uid}`)
+            const state = new URL(start.headers.get("location")!).searchParams.get("state")!
+            const ticket = (await attacker.get(`/ext/callback?code=mallory&state=${state}`)).headers.get("location")!
+            bearers.add(new URL(ticket).searchParams.get("ticket")!)
+            const handed = await victim.get(ticket)
+            expect(handed.status).toBe(400)
+            expect(await handed.text()).toContain("This sign-in was started in another browser")
+
+            // The starting browser with its binding cookie changed is another browser too.
+            const starter = new Browser()
+            const started = await startExternal(starter)
+            const name = `gg_signin_bind_${started.uid}`
+            const raw = starter.cookies.get(name)!
+            starter.cookies.set(name, raw.slice(0, -2) + (raw.endsWith("AA") ? "BB" : "AA"))
+            const tampered = (await starter.get(`/ext/callback?code=alice&state=${started.state}`)).headers.get("location")!
+            bearers.add(new URL(tampered).searchParams.get("ticket")!)
+            expect((await starter.get(tampered)).status).toBe(400)
+            expect(starter.cookies.has(name)).toBe(true)
+        })
+
+        test("start refuses a uid that can't name a cookie", async () => {
+            await expect(external.start("a;b", async () => ({url: UPSTREAM}))).rejects.toThrow(NOT_FOUND)
         })
 
         test("the upstream's error goes back to the flow's page as the app's code; a forged one is not this flow's", async () => {
