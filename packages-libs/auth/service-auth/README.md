@@ -6,7 +6,8 @@
 # @grest-ts/service-auth
 
 Authentication between your own services. Two services share a secret; the caller sends it in a
-header and the callee checks it before any handler runs. It is a smart wire like the ones in
+header and the callee checks it before any handler runs. `GGInternalOnly` keeps those APIs off your
+public host names ([§5](#5-keep-internal-apis-off-public-hosts)). It is a smart wire like the ones in
 [`@grest-ts/auth`](../auth/README.md): declared once as a `GGHeader`, listed in a schema's `use`,
 given its server half with `GGSharedSecret.verify` and its client half with `GGSharedSecret.attach`.
 
@@ -18,13 +19,14 @@ machine-to-machine calls inside one deployment.
 ```ts
 // api package
 import {GGHeader, GGHttpSchema, GGRpc} from "@grest-ts/http"
+import {GGInternalOnly} from "@grest-ts/service-auth"
 
 export const INTERNAL_SECRET_WIRE = new GGHeader("x-internal-secret")
 
 export const NotifyApi = new GGHttpSchema({
     contract: NotifyApiContract,
     pathPrefix: "internal/notify",
-    use: [INTERNAL_SECRET_WIRE],      // every route needs the secret
+    use: [GGInternalOnly, INTERNAL_SECRET_WIRE],   // internal hosts only, and every route needs the secret
     routes: {publish: GGRpc.POST("publish")},
 })
 ```
@@ -80,7 +82,29 @@ Both sides read the same value from their own config, typically a `GGSecret` in 
 internalSecret: new GGSecret("internal_secret", IsString, "Shared with the socket service's internal_secret"),
 ```
 
-## 5. Testing
+## 5. Keep internal APIs off public hosts
+
+`GGInternalOnly` refuses a request with `NOT_AUTHORIZED` unless its `Host` is loopback (`localhost`,
+`127.0.0.1`, `[::1]`) or an internal name, `<service>.internal.<domain>`. Put it first in every
+internal schema's `use`, before the secret wire.
+
+It relies on your load balancer:
+- route internal traffic on `*.internal.*` host names, from the private network only;
+- answer a host no rule matches itself (e.g. a fixed 404) rather than forwarding it, so a public
+  request can't reach a service with `Host: localhost`.
+
+It is defence in depth, not authentication: the secret is still what proves the caller.
+
+It checks the host's first label and the `internal` label after it, not your domain: any
+`<label>.internal.<anything>` passes, so the load balancer must not forward host names outside your
+own domain. It is for HTTP schemas: on a `GGWebSocketSchema` the headers come from the client's
+handshake message, not the upgrade request, so the host can't be trusted there.
+
+For an endpoint only processes on the same machine may call, use `GG_LOOPBACK` from `@grest-ts/http`
+instead: it checks the connection's peer address. `GGInternalOnly` checks the host name, so it also
+works behind a load balancer or a local reverse proxy.
+
+## 6. Testing
 
 Boot the runtime with `@grest-ts/testkit` and present the header through a context:
 
@@ -105,6 +129,8 @@ test("refuses a wrong secret", async () => {
 covers both halves end to end.
 
 ## Reference
+
+`GGInternalOnly` (node only): a transport middleware for a schema's `use`; see §5.
 
 `GGSharedSecret` (node only):
 - `verify(wire)` → the wire's server registration; `.create(secret: GGSecret<string>)` once per runtime.

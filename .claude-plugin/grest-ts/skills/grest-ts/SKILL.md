@@ -226,6 +226,12 @@ protected compose(): void {
 }
 ```
 
+### Internal APIs (service to service only)
+
+A schema only your own services call starts its `use` with `GGInternalOnly` (`@grest-ts/service-auth`), which refuses
+requests that didn't come to loopback or a `<service>.internal.<domain>` host, then its credential wire:
+`use: [GGInternalOnly, INTERNAL_SECRET_WIRE]`. See the service-auth README.
+
 ### Service-to-service client
 
 ```typescript
@@ -632,6 +638,7 @@ const item = await client.get({id: 1}).orDefault(() => defaultItem)
 | Periodic jobs, locks | `@grest-ts/job`, `@grest-ts/lock` | `GGJob`, `GGJobRunner`, `IsGGJobSettings`, `withLock` |
 | MySQL | `@grest-ts/db-mysql` | `GGMysql`, `GGMysqlConfig` |
 | PostgreSQL | `@grest-ts/db-postgre` | `GGPostgre` |
+| Internal APIs between your services | `@grest-ts/service-auth` | `GGInternalOnly`, `GGSharedSecret` |
 
 ---
 
