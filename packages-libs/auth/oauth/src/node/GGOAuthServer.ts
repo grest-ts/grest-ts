@@ -10,7 +10,8 @@ import type {GGAccessPayload, GGAccessTokenData, GGAuthAccessToken, TokenVerifie
 import {GGOAuthResourceServer, type GGOAuthProtectedResource} from "./GGOAuthResourceServer"
 import {GRANT_BOUND, GRANT_KEY, GRANT_USAGE, toOidcAdapter, type GGOAuthStore} from "./store/GGOAuthStore"
 import {GG_OAUTH_SERVICE_CLIENT, GGOAuthServiceApi, SUBJECT_TOKEN_INVALID} from "./GGOAuthServiceApi"
-import {GGOAuthExternalSignIn, type GGOAuthExternalSignInOptions} from "./GGOAuthExternalSignIn"
+import {GGOAuthExternalSignIn, readCookie, type GGOAuthExternalSignInOptions} from "./GGOAuthExternalSignIn"
+import {signState, verifyState} from "./signedState"
 
 export interface GGOAuthFirstPartyClient {
     clientId: string
@@ -176,6 +177,8 @@ const MAX_FORM_BYTES = 16 * 1024
 // no-referrer would make browsers post `Origin: null`, which the interaction pages refuse.
 const PAGE_HEADERS = {"content-type": "text/html; charset=utf-8", "referrer-policy": "same-origin", "cache-control": "no-store"}
 const TICKET = "GGOAuthTicket"
+const BINDING_TTL_SEC = 600
+const BINDING_UID = /^[\w-]{1,64}$/
 // Claims resolved during a refresh before the presented token was consumed (see rotateRefreshToken).
 const prefetchedClaims = new WeakMap<object, {resource: string, claims: object}>()
 // Comparing fixed-length HMAC digests keeps timingSafeEqual from leaking the secret's length.
@@ -188,7 +191,8 @@ const SERVICE_CLIENT_HANDLER = GG_OAUTH_SERVICE_CLIENT.define((authenticate: (au
     },
 }))
 
-type Ticket = {uid: string, result: InteractionResults}
+// binding: SHA-256 of the starting browser's binding cookie value (see bindBrowser).
+type Ticket = {uid: string, result: InteractionResults, binding?: string}
 type Grant = InstanceType<Provider["Grant"]> & {appData?: GGOAuthGrantData}
 
 // OAuth 2.1 authorization server on a GGHttpServer. Protocol (PKCE, DCR, CIMD, resource indicators,
@@ -275,9 +279,10 @@ export class GGOAuthServer {
     }
 
     // Signs `accountId` in to the flow from outside it (e.g. a callback on another host): the browser that
-    // started the flow must follow the returned URL.
-    public loginTicketUrl = async (uid: string, accountId: string, amr?: string[]): Promise<string> =>
-        this.ticket(await this.findInteraction(uid), {login: {accountId, amr, ts: Math.floor(Date.now() / 1000)}})
+    // started the flow must follow the returned URL. With `binding` (an external sign-in's) it must also
+    // present the binding cookie its start set; without, holding the flow's interaction cookie is enough.
+    public loginTicketUrl = async (uid: string, accountId: string, amr?: string[], binding?: string): Promise<string> =>
+        this.ticket(await this.findInteraction(uid), {login: {accountId, amr, ts: Math.floor(Date.now() / 1000)}}, binding)
 
     // The flow's sign-in page, on the origin it started on: where a sign-in that failed on another host returns
     // to, with `error` (the app's own code) as ?error=.
@@ -287,7 +292,11 @@ export class GGOAuthServer {
     // A sign-in that completes on an upstream whose callback is on another host (see GGOAuthExternalSignIn).
     // Its state cookie is signed with a key derived from `secret`.
     public externalSignIn = <D = undefined>(options: GGOAuthExternalSignInOptions): GGOAuthExternalSignIn<D> =>
-        new GGOAuthExternalSignIn<D>(this, () => hkdf(this.options.secret(), "@grest-ts/oauth external sign-in"), options)
+        new GGOAuthExternalSignIn<D>({
+            loginTicketUrl: this.loginTicketUrl,
+            interactionUrl: this.interactionUrl,
+            bindBrowser: uid => this.bindBrowser(uid),
+        }, () => hkdf(this.options.secret(), "@grest-ts/oauth external sign-in"), options)
 
     public listGrants = async (subject: string): Promise<Array<{grantId: string, clientId: string, clientName: string, firstParty: boolean, data: GGOAuthGrantData, createdAt: number, lastUsedAt?: number}>> => {
         const p = this.provider()
@@ -435,10 +444,10 @@ export class GGOAuthServer {
 
     // The result is applied only when the browser that started the flow (it holds the interaction
     // cookie) follows the redirect: a user approving someone else's flow can't hand them a code.
-    private async ticket(interaction: InstanceType<Provider["Interaction"]>, result: InteractionResults): Promise<string> {
+    private async ticket(interaction: InstanceType<Provider["Interaction"]>, result: InteractionResults, binding?: string): Promise<string> {
         const uid = interaction.uid
         const id = randomBytes(24).toString("base64url")
-        await this.options.store.upsert(TICKET, id, {uid, result} satisfies Ticket, 120)
+        await this.options.store.upsert(TICKET, id, {uid, result, binding} satisfies Ticket, 120)
         return `${this.origin()}${BASE}/interaction/${uid}/complete?ticket=${id}`
     }
 
@@ -446,12 +455,42 @@ export class GGOAuthServer {
         const id = new URL(req.url ?? "/", "http://x").searchParams.get("ticket") ?? ""
         const ticket = id ? await this.takeTicket(id) : undefined
         if (!ticket || ticket.uid !== uid) return this.fail(res, 400, "Invalid or expired sign-in link")
+        if (ticket.binding !== undefined) {
+            res.setHeader("set-cookie", this.bindingCookie(uid, "", 0))
+            const bound = verifyState<{uid: string, binding: string}>(this.bindingKey(), readCookie(req, this.bindingCookieName(uid)) ?? "")
+            if (bound?.uid !== uid || !equalSecrets(sha256(bound.binding), ticket.binding)) {
+                return this.fail(res, 400, "This sign-in was started in another browser")
+            }
+        }
         try {
             await this.provider().interactionFinished(req, res, ticket.result, {mergeWithLastSubmission: false})
         } catch (err) {
             if (!(err instanceof oidcErrors.SessionNotFound)) throw err
             this.fail(res, 400, "This sign-in was started in another browser")
         }
+    }
+
+    // An external sign-in's start: a cookie on the issuer (where /complete is) naming the browser it started in,
+    // so its login ticket can't be completed in a browser it was handed to. One per uid: tabs don't clash.
+    private bindBrowser(uid: string): {binding: string, setCookie: string} {
+        if (!BINDING_UID.test(uid)) throw new NOT_FOUND({debugMessage: "Unknown OAuth interaction"})
+        const binding = randomBytes(24).toString("base64url")
+        const value = signState(this.bindingKey(), {uid, binding}, BINDING_TTL_SEC * 1000)
+        return {binding: sha256(binding), setCookie: this.bindingCookie(uid, value, BINDING_TTL_SEC)}
+    }
+
+    // SameSite=Lax: /complete is reached by redirects that start on the upstream's site.
+    private bindingCookie(uid: string, value: string, maxAgeSec: number): string {
+        return `${this.bindingCookieName(uid)}=${value}; Path=/; Max-Age=${maxAgeSec}; HttpOnly; Secure; SameSite=Lax`
+    }
+
+    // Plain http (local dev) can't keep a __Host- cookie.
+    private bindingCookieName(uid: string): string {
+        return `${new URL(this.options.issuer()).protocol === "https:" ? "__Host-" : ""}gg_signin_bind_${uid}`
+    }
+
+    private bindingKey(): Buffer {
+        return hkdf(this.options.secret(), "@grest-ts/oauth sign-in binding")
     }
 
     // consume is the store's atomic once-only mark: of two concurrent redemptions only one gets past it.
@@ -919,6 +958,10 @@ function safeDecode(value: string): string | undefined {
 
 function equalSecrets(a: string, b: string): boolean {
     return timingSafeEqual(createHmac("sha256", COMPARE_KEY).update(a).digest(), createHmac("sha256", COMPARE_KEY).update(b).digest())
+}
+
+function sha256(value: string): string {
+    return createHash("sha256").update(value).digest("base64url")
 }
 
 function hkdf(secret: string, info: string): Buffer {
