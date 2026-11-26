@@ -110,7 +110,8 @@ Asymmetric signers (`JwsSigningStrategy`) publish their public keys at `ACCESS_T
 tokens against it, or whoever holds `secret` can mint them.
 
 **Service clients** (`serviceClients`) are your own backends. `mount` also serves them a grest
-contract, `GGOAuthServiceApi`, which they call with their secret:
+contract, `GGOAuthServiceApi`, which they call with their secret on an internal host only
+(`GGInternalOnly`: loopback or `<label>.internal.<domain>`; a public host is `NOT_AUTHORIZED`):
 - `token({resource})`, for resources with `clients: "service"`. The token's subject is the client id.
 - `exchange({subjectToken, resource, params})`, for a resource with `exchange: {from, params, claims}`.
   The service sends a subject's valid `from` token plus your extra `params`, and gets a token for this

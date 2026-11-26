@@ -1,6 +1,7 @@
 import {GGHeader, GGHttpSchema, GGRpc} from "@grest-ts/http"
 import {ERROR, FORBIDDEN, GG_NO_PERMISSIONS, GGContractClass, IsObject, IsRecord, IsString, NOT_AUTHORIZED, SERVER_ERROR} from "@grest-ts/schema"
 import {IsGGAccessTokenData} from "@grest-ts/auth"
+import {GGInternalOnly} from "@grest-ts/service-auth"
 
 // `Basic base64(clientId:secret)`, each part URI-encoded.
 export const GG_OAUTH_SERVICE_CLIENT = new GGHeader("authorization", {key: "oauthServiceClient"})
@@ -26,7 +27,8 @@ export const GGOAuthServiceApiContract = new GGContractClass("GGOAuthServiceApi"
 export const GGOAuthServiceApi = new GGHttpSchema({
     contract: GGOAuthServiceApiContract,
     pathPrefix: "oauth-service",
-    use: [GG_OAUTH_SERVICE_CLIENT],
+    // A service client's secret alone mints its token: only on an internal host, never the public one.
+    use: [GGInternalOnly, GG_OAUTH_SERVICE_CLIENT],
     routes: {
         token: GGRpc.POST("token"),
         exchange: GGRpc.POST("exchange"),

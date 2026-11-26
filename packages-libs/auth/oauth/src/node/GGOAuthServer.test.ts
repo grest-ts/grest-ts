@@ -1,6 +1,7 @@
 import {createHash, generateKeyPairSync, randomBytes, sign as cryptoSign} from "node:crypto"
 import {decodeJwt, importJWK, SignJWT} from "jose"
 import {createServer} from "node:net"
+import {request} from "node:http"
 import {GGRuntime} from "@grest-ts/runtime"
 import {GG_HTTP_REQUEST, GGHttpServer} from "@grest-ts/http"
 import {GG_TRACE} from "@grest-ts/trace"
@@ -1191,6 +1192,32 @@ describe("GGOAuthServer", () => {
         for (const authorization of [`Basic ${Buffer.from("backend:%E0%A4%A").toString("base64")}`, "Basic !!!", "Bearer x", ""]) {
             expect((await call(authorization)).type).toBe("NOT_AUTHORIZED")
         }
+    })
+
+    test("the service API answers only on an internal host", async () => {
+        const at = (host: string, path: string) => new Promise<number>((resolve, reject) => {
+            const req = request({
+                host: "localhost",
+                port,
+                path,
+                method: "POST",
+                headers: {
+                    host,
+                    authorization: basic("backend", "backend-secret"),
+                    "content-type": "application/json",
+                },
+            }, res => {
+                res.resume()
+                resolve(res.statusCode ?? 0)
+            })
+            req.on("error", reject)
+            req.end(JSON.stringify({resource: INTERNAL, subjectToken: "x", params: {}}))
+        })
+        for (const path of ["/oauth-service/token", "/oauth-service/exchange"]) {
+            expect(await at("auth.example.com", path), path).toBe(401)
+        }
+        expect(await at("auth.internal.example.com", "/oauth-service/token")).toBe(200)
+        expect(await at(`localhost:${port}`, "/oauth-service/token")).toBe(200)
     })
 
     test("a registered client can't use client_credentials", async () => {
