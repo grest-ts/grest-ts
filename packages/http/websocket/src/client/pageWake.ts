@@ -9,11 +9,9 @@ export type GGPageWake = "check" | "reconnect"
 
 const CLOCK_TICK_MS = 10_000
 const CLOCK_JUMP_MS = 30_000
-// One wake often fires several events (visibilitychange + online + resume).
-const DEBOUNCE_MS = 5_000
 
+// No debounce: one wake often fires several events, but a socket shares one in-flight probe and one open.
 const listeners = new Set<(wake: GGPageWake) => void>()
-const lastFired: Record<GGPageWake, number> = {check: -Infinity, reconnect: -Infinity}
 let installed = false
 
 /** Browser only; a no-op elsewhere. */
@@ -25,10 +23,8 @@ export function onPageWake(listener: (wake: GGPageWake) => void): () => void {
 }
 
 function fire(wake: GGPageWake): void {
-    const now = Date.now()
-    if (now - lastFired[wake] < DEBOUNCE_MS) return
-    lastFired[wake] = now
-    for (const listener of listeners) {
+    // A snapshot: a close handler run by a listener may create a client, which registers here.
+    for (const listener of [...listeners]) {
         try {
             listener(wake)
         } catch (err) {
@@ -51,9 +47,11 @@ function install(): void {
     window.addEventListener("online", () => fire("check"))
     document.addEventListener("resume", () => fire("check"))
     // A machine that sleeps with the tab in front fires no event; its timers just stop.
-    setInterval(() => {
+    const clock = setInterval(() => {
         const now = Date.now()
         if (!document.hidden && now - lastTick >= CLOCK_TICK_MS + CLOCK_JUMP_MS) fire("check")
         lastTick = now
     }, CLOCK_TICK_MS)
+    // Outside a real browser (a stubbed page under Node), it mustn't keep the process alive.
+    ;(clock as {unref?: () => void}).unref?.()
 }

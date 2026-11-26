@@ -1,12 +1,13 @@
 /**
- * Page wake in a browser drives every reconnecting client: the tab or the network coming back, a resume or
- * a clock jump probe the link; a back/forward-cache restore reconnects at once. The page is stubbed with
- * EventTargets before the first client installs the detector.
+ * Page wake in a browser drives every reconnecting client: the tab or the network coming back or a resume
+ * probe the link and reconnect a dead one; a back/forward-cache restore reconnects at once. The page is
+ * stubbed with EventTargets before the first client installs the detector.
  */
 
 import {GG_TEST_RUNNER, GGTest} from "@grest-ts/testkit"
 import {MainRuntime} from "../src/main"
 import {ClientTestSocketApi} from "../src/api/ClientTestSocketApi"
+import {freezableProxy} from "./freezableProxy"
 
 const page = Object.assign(new EventTarget(), {hidden: false})
 const win = new EventTarget()
@@ -14,12 +15,13 @@ Object.assign(globalThis, {document: page, window: win})
 
 const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 const clientUrl = () => GG_TEST_RUNNER.get().discoveryServer.getRoutingUrl("ClientTestSocketApi")
-/** Past the detector's debounce, so the next event of the same kind fires. */
-const pastDebounce = () => wait(5_100)
 
-async function connected(opts: {pageWake?: boolean} = {}) {
+async function connected(opts: {url?: string, pageWake?: boolean} = {}) {
     let setupRuns = 0
-    const client = ClientTestSocketApi.createClient({url: clientUrl(), reconnect: {initialDelayMs: 10, ...opts}})
+    const client = ClientTestSocketApi.createClient({
+        url: opts.url ?? clientUrl(),
+        reconnect: {initialDelayMs: 10, pageWake: opts.pageWake},
+    })
     await client.connect(() => { setupRuns++ })
     return {client, setupRuns: () => setupRuns}
 }
@@ -44,12 +46,30 @@ describe("page wake", () => {
         }
     })
 
-    test("the tab or the network coming back, or a resume, keeps a live link (probe answered)", async () => {
+    const checks: [string, () => void][] = [
+        ["the tab coming back", () => page.dispatchEvent(new Event("visibilitychange"))],
+        ["the network coming back", () => win.dispatchEvent(new Event("online"))],
+        ["a resume", () => page.dispatchEvent(new Event("resume"))],
+    ]
+    for (const [name, wake] of checks) {
+        test(`${name} probes: a dead link reconnects`, async () => {
+            const proxy = await freezableProxy(clientUrl())
+            const c = await connected({url: proxy.url})
+            try {
+                proxy.freeze()
+                wake()
+                await vi.waitFor(() => expect(c.setupRuns()).toBe(2), {timeout: 5_000})
+            } finally {
+                await c.client.disconnect()
+                await proxy.close()
+            }
+        }, 10_000)
+    }
+
+    test("a probe keeps a live link, however many wake events fire", async () => {
         const c = await connected()
         try {
-            page.dispatchEvent(new Event("visibilitychange"))
-            win.dispatchEvent(new Event("online"))
-            page.dispatchEvent(new Event("resume"))
+            for (const [, wake] of checks) wake()
             await wait(3_300)
             expect(c.setupRuns()).toBe(1)
             expect(c.client.isConnected).toBe(true)
@@ -59,7 +79,6 @@ describe("page wake", () => {
     }, 10_000)
 
     test("pageWake: false opts out; a closed client stops listening", async () => {
-        await pastDebounce()
         const off = await connected({pageWake: false})
         const closed = await connected()
         await closed.client.disconnect()
@@ -71,5 +90,5 @@ describe("page wake", () => {
         } finally {
             await off.client.disconnect()
         }
-    }, 10_000)
+    })
 })

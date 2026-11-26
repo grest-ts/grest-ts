@@ -113,11 +113,13 @@ export class GGRawSocket {
             });
         });
 
-        this.adapter.onClose(() => this.finishClose());
+        this.adapter.onClose(() => {
+            this.scope?.ensureEntered();
+            this.finishClose();
+        });
     }
 
     private finishClose(): void {
-        this.scope?.ensureEntered();
         this.connectionContext.run(() => {
             this.isActive = false;
             if (this.isClosed) return;
@@ -204,8 +206,8 @@ export class GGRawSocket {
     private readonly sendKeepalive = (): void => this.send(RAW_PING);
     private probing?: Promise<boolean>;
 
-    /** One keepalive ping now (shared by concurrent callers): false if nothing comes back within `timeoutMs`.
-     *  Without the framework keepalive (a foreign peer) the link can't be probed and reads as alive. */
+    /** One keepalive ping now: false if nothing comes back within `timeoutMs`. Concurrent callers share the first
+     *  caller's probe. Without the framework keepalive (a foreign peer) the link can't be probed and reads as alive. */
     public probe(timeoutMs: number): Promise<boolean> {
         if (!this.isActive) return Promise.resolve(false);
         if (!this.appKeepalive) return Promise.resolve(true);
