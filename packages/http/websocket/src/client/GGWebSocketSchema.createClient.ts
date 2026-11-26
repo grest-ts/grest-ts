@@ -144,9 +144,9 @@ export interface GGWebSocketClient<TClientToServer, TServerToClientImpl> {
     /**
      * Drop the current socket as if it had been lost and reconnect now, without waiting for its close
      * event (unlike `close()`/`disconnect()`, which disable reconnect); while waiting out a backoff,
-     * retry now instead. Use when the app knows the connection is stale. No-op if reconnect is disabled,
-     * the client is closed or a connect is in flight. In a browser, page wake does this itself
-     * (`reconnect.pageWake`).
+     * retry now instead. A pooled (extendable-schema) socket is shared, so it is probed instead and dropped
+     * only if dead. Use when the app knows the connection is stale. No-op if reconnect is disabled, the
+     * client is closed or a connect is in flight. In a browser, page wake does this itself (`reconnect.pageWake`).
      */
     forceReconnect(): void
 
@@ -251,6 +251,10 @@ GGWebSocketSchema.prototype.createClient = function (
         setup: async (s) => {
             if (savedSetup) await savedSetup(buildSetupTools(s))
         },
+        forgetSocket: isPooled ? (s) => {
+            GGSocketPool.forget(s)
+            currentRelease = undefined
+        } : undefined,
         disposeSocket: isPooled ? async (s) => {
             s.unregisterHandlersByPrefix(schemaName + '.')
             if (currentRelease) {

@@ -12,6 +12,7 @@ import {MainRuntime} from "../src/main"
 import {MessagingSocket} from "../src/api/ChatMessagingApi"
 import {PresenceSocket} from "../src/api/ChatPresenceApi"
 import {GGSocketPool} from "@grest-ts/websocket/internal"
+import {freezableProxy} from "./freezableProxy"
 
 const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 
@@ -80,4 +81,29 @@ describe("WebSocket extendable schemas (pooled path)", () => {
         // After both disconnect the pool is empty.
         expect(GGSocketPool.size).toBe(0)
     })
+    test("a half-open shared socket: each client's probe finds it dead and they reconnect onto one fresh socket", async () => {
+        GGSocketPool.__clearForTesting()
+        const proxy = await freezableProxy(chatUrl())
+        const messaging = MessagingSocket.createClient({url: proxy.url, reconnect: {initialDelayMs: 10}})
+        const presence = PresenceSocket.createClient({url: proxy.url, reconnect: {initialDelayMs: 10}})
+        let setups = 0
+        await messaging.connect(({incoming}) => { setups++; incoming.on({message: async () => {}}) })
+        await presence.connect(({incoming}) => { setups++; incoming.on({presenceChanged: async () => {}}) })
+
+        try {
+            proxy.freeze()
+            messaging.forceReconnect()   // pooled: probes rather than dropping a socket others share
+            presence.checkConnection()
+            for (let i = 0; i < 500 && setups < 4; i++) await wait(10)
+
+            expect(setups).toBe(4)
+            expect(GGSocketPool.size).toBe(1)
+            expect(await messaging.outgoing.send({text: "back"})).toEqual({echoed: "back"})
+        } finally {
+            await messaging.disconnect()
+            await presence.disconnect()
+            await proxy.close()
+        }
+        expect(GGSocketPool.size).toBe(0)
+    }, 10_000)
 })

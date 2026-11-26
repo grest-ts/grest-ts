@@ -127,6 +127,9 @@ export interface GGConnectorHooks<TSocket extends GGLiveSocket> {
      * the socket's onClose event — use for pooled connections that must not close the shared socket.
      */
     disposeSocket?: (socket: TSocket) => void | Promise<void>
+    /** A socket the connector found dead and is about to drop: a pooled one must leave the pool first, or the
+     *  reconnect would get it back. */
+    forgetSocket?: (socket: TSocket) => void
 }
 
 export interface GGConnector<TSocket extends GGLiveSocket> {
@@ -379,10 +382,11 @@ export function createConnector<TSocket extends GGLiveSocket>(hooks: GGConnector
         }
     }
 
-    // A pooled socket is shared, so it is never dropped for one client; nor mid-open, which owns its own retry.
-    const canHeal = (): boolean => !finallyClosed && !!reconnect && !hooks.disposeSocket && !opening
+    // Not mid-open: an open in flight owns its own retry.
+    const canHeal = (): boolean => !finallyClosed && !!reconnect && !opening
 
     const dropAndReconnect = (s: TSocket): void => {
+        hooks.forgetSocket?.(s)
         abandoned.add(s)
         if (socket === s) socket = undefined
         try { s.close() } catch (_) {}
@@ -402,8 +406,10 @@ export function createConnector<TSocket extends GGLiveSocket>(hooks: GGConnector
 
     const forceReconnect = (): void => {
         if (!canHeal()) return
-        if (socket) dropAndReconnect(socket)
-        else retrySoon()
+        if (!socket) retrySoon()
+        // A pooled socket is shared: drop it only once a probe shows it dead for everyone on it.
+        else if (hooks.disposeSocket) checkConnection()
+        else dropAndReconnect(socket)
     }
 
     const checkConnection = (): void => {
