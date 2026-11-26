@@ -14,8 +14,6 @@
   "include": [
     "grest.package.ts",
     "packages-libs/auth/auth/src/**/*",
-    "packages-libs/auth/authz/src/**/*",
-    "packages-libs/auth/authz/test/**/*",
     "packages-libs/auth/oauth/src/**/*",
     "packages-libs/auth/oauth/testkit/**/*",
     "packages-libs/auth/service-auth/src/**/*",
