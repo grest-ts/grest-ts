@@ -284,7 +284,8 @@ idpSignIn.send(res, redirect ?? {location: appUrl})
   A second cookie binds the browser: `__Host-gg_signin_bind_<uid>` (`gg_signin_bind_<uid>` on an http
   issuer; HttpOnly, Secure, SameSite=Lax, `Path=/`, 10 minutes, signed). The login ticket completes only
   where it comes back, so someone who runs the round trip for another browser's uid can't hand that
-  browser a ticket that signs it in as them. `/complete` clears it.
+  browser a ticket that signs it in as them. A completed sign-in clears it. It is host-only, so serve the
+  start on the issuer's host.
 - `callback(req, resolve)` is `undefined` when this browser holds no state cookie for the callback's
   `state`: it isn't this flow's, so a callback URL shared with something else (e.g. linking a GitHub
   account) falls through to your other handling. Otherwise the cookie is cleared, and:

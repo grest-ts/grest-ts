@@ -993,7 +993,7 @@ describe("GGOAuthServer", () => {
             const tampered = (await starter.get(`/ext/callback?code=alice&state=${started.state}`)).headers.get("location")!
             bearers.add(new URL(tampered).searchParams.get("ticket")!)
             expect((await starter.get(tampered)).status).toBe(400)
-            expect(starter.cookies.has(name)).toBe(false)
+            expect(starter.cookies.has(name)).toBe(true)
         })
 
         test("start refuses a uid that can't name a cookie", async () => {

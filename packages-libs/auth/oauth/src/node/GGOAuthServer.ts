@@ -460,11 +460,12 @@ export class GGOAuthServer {
         const ticket = id ? await this.takeTicket(id) : undefined
         if (!ticket || ticket.uid !== uid) return this.fail(res, 400, "Invalid or expired sign-in link")
         if (ticket.binding !== undefined) {
-            res.setHeader("set-cookie", this.bindingCookie(uid, "", 0))
             const bound = verifyState<{uid: string, binding: string}>(this.bindingKey(), readCookie(req, this.bindingCookieName(uid)) ?? "")
+            // Left in place on a refusal: a ticket someone else got this browser to open mustn't end its own sign-in.
             if (bound?.uid !== uid || !equalSecrets(sha256(bound.binding), ticket.binding)) {
                 return this.fail(res, 400, "This sign-in was started in another browser")
             }
+            res.setHeader("set-cookie", this.bindingCookie(uid, "", 0))
         }
         try {
             await this.provider().interactionFinished(req, res, ticket.result, {mergeWithLastSubmission: false})
@@ -474,8 +475,8 @@ export class GGOAuthServer {
         }
     }
 
-    // An external sign-in's start: a cookie on the issuer (where /complete is) naming the browser it started in,
-    // so its login ticket can't be completed in a browser it was handed to. One per uid: tabs don't clash.
+    // An external sign-in's start: a cookie naming the browser it started in, so its login ticket can't be completed
+    // in a browser it was handed to. Host-only: the start must be served on the issuer's host. One per uid: tabs don't clash.
     private bindBrowser(uid: string): {binding: string, setCookie: string} {
         if (!BINDING_UID.test(uid)) throw new NOT_FOUND({debugMessage: "Unknown OAuth interaction"})
         const binding = randomBytes(24).toString("base64url")

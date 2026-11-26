@@ -54,7 +54,12 @@ export class GGOAuthExternalSignIn<D = undefined> {
         const bound = this.server.bindBrowser(uid)
         const state = randomBytes(24).toString("base64url")
         const {url, data} = await authorize(state)
-        const pending = {state, uid, binding: bound.binding, data} satisfies Pending<D>
+        const pending = {
+            state,
+            uid,
+            binding: bound.binding,
+            data,
+        } satisfies Pending<D>
         const setCookie = this.cookie(state, signState(this.key(), pending, TTL_SEC * 1000), TTL_SEC)
         if (setCookie.length > MAX_COOKIE_BYTES) throw new Error("GGOAuthExternalSignIn: the state cookie is too large; keep `data` small")
         return {location: url, setCookie: [setCookie, bound.setCookie]}
