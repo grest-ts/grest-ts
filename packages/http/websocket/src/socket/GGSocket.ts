@@ -11,6 +11,7 @@ import {ERROR, GGPromise, ROUTE_NOT_FOUND, SERVER_ERROR} from "@grest-ts/schema"
 import {GGContext} from "@grest-ts/context";
 import {GG_TRACE} from "@grest-ts/trace";
 import {startSocketHeartbeat} from "../liveness/socketHeartbeat";
+import {probeLink} from "../liveness/probeLink";
 
 /**
  * Handler configuration for socket messages.
@@ -366,6 +367,16 @@ export class GGSocket {
             close: () => this.close(),
             registerCleanup: (fn) => this.onCloseCallbacks.push(fn),
             appPing: () => { this.socket.send(Message.createControl(MessageType.PING)); },
+        });
+    }
+
+    /** One ping now: resolves false if nothing comes back within `timeoutMs` (a half-open link). */
+    public probe(timeoutMs: number): Promise<boolean> {
+        if (!this.isActive) return Promise.resolve(false);
+        return probeLink({
+            sendPing: () => this.socket.send(Message.createControl(MessageType.PING)),
+            lastActivityAt: () => this.lastActivity,
+            timeoutMs,
         });
     }
 

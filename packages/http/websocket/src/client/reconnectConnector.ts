@@ -14,6 +14,7 @@ import type {GGTransportMiddleware} from "@grest-ts/context"
 import type {GGHeartbeatConfig} from "../socket/GGSocket"
 import {GGWsLogMode} from "./GGWsLogMode"
 import {log} from "./wsLog"
+import {onPageWake} from "./pageWake"
 
 /**
  * The connection inputs for one attempt — either the static config fields or the return of
@@ -83,6 +84,12 @@ export interface GGReconnectConfig {
      * `maxAttempts` rules as a dropped connection.
      */
     retryInitialConnect?: boolean
+    /**
+     * In a browser, heal on page wake instead of waiting out the heartbeat or a long backoff. Default true.
+     * A return to the tab probes the link (one ping, reconnect if no reply within ~3 s); online, resume,
+     * a back/forward-cache restore or a clock jump reconnect at once. Every reconnect re-runs setup.
+     */
+    pageWake?: boolean
 }
 
 /**
@@ -101,6 +108,7 @@ export interface GGLiveSocket {
     onClose(handler: () => void): unknown
     onError(handler: (error: Error) => void): unknown
     startHeartbeat(config: GGHeartbeatConfig): unknown
+    probe(timeoutMs: number): Promise<boolean>
     close(): void
     teardown(): Promise<void>
 }
@@ -131,6 +139,7 @@ export interface GGConnector<TSocket extends GGLiveSocket> {
     onDisconnect(cb: (reason: "manual" | "drop") => void): void
     onError(cb: (error: Error) => void): void
     forceReconnect(): void
+    checkConnection(): void
 }
 
 export interface NormalizedReconnect {
@@ -141,7 +150,11 @@ export interface NormalizedReconnect {
     shouldRetry: (error: Error) => boolean
     heartbeat?: GGHeartbeatConfig
     retryInitialConnect: boolean
+    pageWake: boolean
 }
+
+/** A live link answers a ping in a round trip; this is how long a wake probe waits for one. */
+const WAKE_PROBE_TIMEOUT_MS = 3_000
 
 /**
  * Default: don't retry on errors a retry can't fix. Auth failures (NOT_AUTHORIZED / FORBIDDEN)
@@ -170,6 +183,7 @@ export function normalizeReconnect(r: boolean | GGReconnectConfig | undefined): 
         shouldRetry: cfg.shouldRetry ?? defaultShouldRetry,
         heartbeat: cfg.heartbeat === false ? undefined : (cfg.heartbeat ?? {}),
         retryInitialConnect: cfg.retryInitialConnect ?? false,
+        pageWake: cfg.pageWake ?? true,
     }
 }
 
@@ -182,6 +196,10 @@ export function createConnector<TSocket extends GGLiveSocket>(hooks: GGConnector
     let reconnectTimer: ReturnType<typeof setTimeout> | undefined
     let finallyClosed = false
     let finalCloseFired = false
+    // Dropped by the connector itself: a dead link's close event can lag by seconds, so it reconnects at
+    // once and ignores the late event.
+    const abandoned = new WeakSet<TSocket>()
+    let stopPageWake: (() => void) | undefined
 
     const onCloseCallbacks: Array<(reason: GGWebSocketCloseReason, error?: Error) => void> = []
     const onDisconnectCallbacks: Array<(reason: "manual" | "drop") => void> = []
@@ -204,6 +222,7 @@ export function createConnector<TSocket extends GGLiveSocket>(hooks: GGConnector
     const fireFinalClose = (reason: GGWebSocketCloseReason, error?: Error) => {
         if (finalCloseFired) return
         finalCloseFired = true
+        stopPageWake?.()
         if (logMode) {
             const message = `ws final-close ${schemaName} (${reason})`
             const data = {kind: "final-close", reason}
@@ -252,6 +271,7 @@ export function createConnector<TSocket extends GGLiveSocket>(hooks: GGConnector
         let setupPhase = true
 
         newSocket.onClose(() => {
+            if (abandoned.has(newSocket)) return
             if (socket === newSocket) {
                 socket = undefined
             }
@@ -312,10 +332,11 @@ export function createConnector<TSocket extends GGLiveSocket>(hooks: GGConnector
     const scheduleReconnect = () => {
         if (!reconnect) return
         const attempt = reconnectAttempt++
+        // Jittered so the clients a server restart dropped together don't all come back in lockstep.
         const delay = Math.min(
             reconnect.initialDelayMs * Math.pow(reconnect.multiplier, attempt),
             reconnect.maxDelayMs,
-        )
+        ) * (0.5 + Math.random() * 0.5)
         logMode === GGWsLogMode.ALL && log.info(schemaName, `ws reconnect-attempt ${schemaName}`, {kind: "reconnect-attempt", attempt: attempt + 1, delayMs: delay})
         reconnectTimer = setTimeout(async () => {
             reconnectTimer = undefined
@@ -356,6 +377,49 @@ export function createConnector<TSocket extends GGLiveSocket>(hooks: GGConnector
         } else {
             fireFinalClose("retries-exhausted", error)
         }
+    }
+
+    // A pooled socket is shared, so it is never dropped for one client; nor mid-open, which owns its own retry.
+    const canHeal = (): boolean => !finallyClosed && !!reconnect && !hooks.disposeSocket && !opening
+
+    const dropAndReconnect = (s: TSocket): void => {
+        abandoned.add(s)
+        if (socket === s) socket = undefined
+        try { s.close() } catch (_) {}
+        logMode && log.warn(schemaName, `ws drop ${schemaName}`, {kind: "drop", reason: "forced"})
+        fireOnDisconnect("drop")
+        reconnectAttempt = 0
+        scheduleReconnect()
+    }
+
+    // Waiting out a long backoff: start over from the shortest delay.
+    const retrySoon = (): void => {
+        if (!reconnectTimer) return
+        cancelRetry()
+        reconnectAttempt = 0
+        scheduleReconnect()
+    }
+
+    const forceReconnect = (): void => {
+        if (!canHeal()) return
+        if (socket) dropAndReconnect(socket)
+        else retrySoon()
+    }
+
+    const checkConnection = (): void => {
+        if (!canHeal()) return
+        const s = socket
+        if (!s) {
+            retrySoon()
+            return
+        }
+        void s.probe(WAKE_PROBE_TIMEOUT_MS).then(alive => {
+            if (!alive && socket === s && canHeal()) dropAndReconnect(s)
+        })
+    }
+
+    if (reconnect?.pageWake) {
+        stopPageWake = onPageWake(wake => wake === "reconnect" ? forceReconnect() : checkConnection())
     }
 
     return {
@@ -429,13 +493,7 @@ export function createConnector<TSocket extends GGLiveSocket>(hooks: GGConnector
             if (socket) socket.onError(cb)
         },
 
-        forceReconnect(): void {
-            // No-op without reconnect — dropping the socket would just terminally close it.
-            // Also no-op for pooled sockets — closing a shared socket would drop all other
-            // pooled clients using it, which is not what the caller expects.
-            if (finallyClosed || !reconnect || !socket || hooks.disposeSocket) return
-            // finallyClosed is false, so the onClose handler treats this as a "drop" and reconnects.
-            socket.close()
-        },
+        forceReconnect,
+        checkConnection,
     }
 }

@@ -13,6 +13,7 @@ import type {GGContext} from "@grest-ts/context";
 import {GGSocketLogger, GGSocketMetrics, type GGHeartbeatConfig} from "./GGSocket";
 import {SocketAdapter} from "./SocketAdapter";
 import {startSocketHeartbeat} from "../liveness/socketHeartbeat";
+import {probeLink} from "../liveness/probeLink";
 
 const consoleLogger: GGSocketLogger = {
     debug(_source, message, ...args) { console.debug("[GGRawSocket]", message, ...args) },
@@ -196,6 +197,14 @@ export class GGRawSocket {
             // preferred and this is ignored; a customClient passthrough opts out entirely.
             appPing: this.appKeepalive ? () => this.send(RAW_PING) : undefined,
         });
+    }
+
+    /** One keepalive ping now: resolves false if nothing comes back within `timeoutMs`. Without the
+     *  framework keepalive (a foreign peer) the link can't be probed and reads as alive. */
+    public probe(timeoutMs: number): Promise<boolean> {
+        if (!this.isActive) return Promise.resolve(false);
+        if (!this.appKeepalive) return Promise.resolve(true);
+        return probeLink({sendPing: () => this.send(RAW_PING), lastActivityAt: () => this.lastActivity, timeoutMs});
     }
 
     public close(): void {

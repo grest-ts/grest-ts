@@ -142,12 +142,16 @@ export interface GGWebSocketClient<TClientToServer, TServerToClientImpl> {
     onError(cb: (error: Error) => void): this
 
     /**
-     * Drop the current socket as if it had been lost, triggering the auto-reconnect
-     * loop (unlike `close()`/`disconnect()`, which disable reconnect). Use when the
-     * app knows the connection is stale — e.g. on `visibilitychange`/`online`, or
-     * from a liveness watchdog. No-op if reconnect is disabled or already closed.
+     * Drop the current socket as if it had been lost and reconnect now, without waiting for its close
+     * event (unlike `close()`/`disconnect()`, which disable reconnect); while waiting out a backoff,
+     * retry now instead. Use when the app knows the connection is stale. No-op if reconnect is disabled,
+     * the client is closed or a connect is in flight. In a browser, page wake does this itself
+     * (`reconnect.pageWake`).
      */
     forceReconnect(): void
+
+    /** Probe the link with one ping and reconnect if it doesn't answer; while waiting out a backoff, retry now. */
+    checkConnection(): void
 }
 
 declare module "../schema/GGWebSocketSchema" {
@@ -270,6 +274,7 @@ GGWebSocketSchema.prototype.createClient = function (
         onDisconnect(cb): any { connector.onDisconnect(cb); return this },
         onError(cb): any { connector.onError(cb); return this },
         forceReconnect: () => connector.forceReconnect(),
+        checkConnection: () => connector.checkConnection(),
     }
 
     return client
