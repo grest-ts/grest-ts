@@ -537,12 +537,15 @@ describe("GGOAuthServer", () => {
     // Signs `browser` in to `clientId` for `resource`, consenting with `org` as the grant's data when asked.
     const connect = (browser: Browser, clientId: string, resource: string, org?: string, params: Record<string, string> = {}) => {
         const prompts: string[] = []
+        let consented: GGOAuthInteraction | undefined
         const tokens = browser.signIn({clientId, redirectUri: THIRD_PARTY_REDIRECT, resource, scope: resource.startsWith(HUB) ? "hub" : "mcp", params}, (page): GGOAuthPageAnswer => {
-            const {prompt} = JSON.parse(page.html).interaction as GGOAuthInteraction
-            prompts.push(prompt)
-            return prompt === "login" ? {action: "login", form: {sub: "alice"}} : {action: "consent", form: org ? {org} : {}}
+            const interaction = JSON.parse(page.html).interaction as GGOAuthInteraction
+            prompts.push(interaction.prompt)
+            if (interaction.prompt === "login") return {action: "login", form: {sub: "alice"}}
+            consented = interaction
+            return {action: "consent", form: org ? {org} : {}}
         })
-        return tokens.then(t => ({tokens: t, prompts}))
+        return tokens.then(t => ({tokens: t, prompts, consented}))
     }
     const grantsOf = async (clientId: string) => (await oauth.listGrants("alice")).filter(g => g.clientId === clientId)
 
@@ -558,10 +561,12 @@ describe("GGOAuthServer", () => {
         // The data is fixed when the grant is made: a consent with other data doesn't change it.
         const reconsent = await connect(new Browser(), clientId, `${MCP}/work`, "o9", {prompt: "consent"})
         expect(reconsent.prompts).toEqual(["login", "consent"])
+        expect(reconsent.consented?.grant).toEqual({grantId: work.grantId, data: {org: "o1"}})
         expect(mcpClient!.grant).toEqual({grantId: work.grantId, data: {org: "o1"}})
 
         const home = await connect(new Browser(), clientId, `${MCP}/home`, "o2")
         expect(home.prompts).toEqual(["login", "consent"])
+        expect(home.consented?.grant).toBeUndefined()
         expect((await grantsOf(clientId)).map(g => g.grantId)).toEqual(expect.arrayContaining([work.grantId, mcpClient!.grant!.grantId]))
         expect(await grantsOf(clientId)).toHaveLength(2)
         expect(mcpClient!.grant!.data).toEqual({org: "o2"})
