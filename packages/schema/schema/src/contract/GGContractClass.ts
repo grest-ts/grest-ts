@@ -20,6 +20,8 @@ export interface GGContractMethod<Request = any, Response = any, ErrorsUnion ext
     errors?: ErrorsUnion[];
     permission?: GGPermission;
     maxBodyBytes?: number;
+    /** What the method does, for a reader who sees only the contract at runtime: API docs, a tool catalog. */
+    description?: string;
     meta?: GGContractMethodMeta;
 }
 

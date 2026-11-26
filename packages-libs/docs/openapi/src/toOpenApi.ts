@@ -240,6 +240,7 @@ function buildOperation(
         ...codecResult,
         operationId: `${apiName}_${methodName}`,
         summary: camelToSummary(methodName),
+        ...(contract.description ? {description: contract.description} : {}),
         tags: [apiName],
         responses: responsesWithHeaders,
         ...(codec.deprecated ? {deprecated: true} : {}),

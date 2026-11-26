@@ -29,7 +29,8 @@ const ItemContract = new GGContractClass("ItemApi", {
         input: IsObject({id: IsNumber}),
         success: ItemSchema,
         errors: [NOT_FOUND],
-        permission: GG_NO_PERMISSIONS
+        permission: GG_NO_PERMISSIONS,
+        description: "One item by its id."
     },
     create: {
         input: CreateItemInput,
@@ -106,6 +107,7 @@ describe("toOpenApi", () => {
             expect(pathParam.schema.type).toBe("number");
         });
         it("has summary 'Get'", () => expect(op.summary).toBe("Get"));
+        it("carries the method's description", () => expect(op.description).toBe("One item by its id."));
     });
 
     describe("POST create", () => {
