@@ -1,7 +1,7 @@
 import type {JWK} from "jose"
 
 // One asymmetric signing key behind a narrow surface, so the private key can live where it can't be
-// read (KMS, HSM). Implementations: SecretJwsSigner here; a KMS one in the app.
+// read (KMS, HSM). Implementations: SecretJwsSigner, KmsJwsSigner.
 export interface JwsSigner {
     readonly alg: string
     kid(): Promise<string>

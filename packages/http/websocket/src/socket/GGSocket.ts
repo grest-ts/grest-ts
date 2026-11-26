@@ -11,6 +11,7 @@ import {ERROR, GGPromise, ROUTE_NOT_FOUND, SERVER_ERROR} from "@grest-ts/schema"
 import {GGContext} from "@grest-ts/context";
 import {GG_TRACE} from "@grest-ts/trace";
 import {startSocketHeartbeat} from "../liveness/socketHeartbeat";
+import {probeLink} from "../liveness/probeLink";
 
 /**
  * Handler configuration for socket messages.
@@ -136,21 +137,7 @@ export class GGSocket {
 
         this.socket.onClose(() => {
             scope?.ensureEntered();
-            this.connectionContext.run(() => {
-                this.isActive = false;
-                if (!this.isCleanedUp) {
-                    this.isCleanedUp = true;
-                    this.pendingRequests.rejectAll(new SERVER_ERROR({displayMessage: "Socket connection closed!"}));
-                    this.onCloseCallbacks.forEach((onClose) => {
-                        try {
-                            onClose?.();
-                        } catch (e) {
-                            const err = e instanceof Error ? e : new Error(String(e));
-                            this.onErrorCallbacks.forEach(cb => cb(err));
-                        }
-                    });
-                }
-            });
+            this.finishClose();
         });
 
         this.socket.onError((error: Error) => {
@@ -365,8 +352,19 @@ export class GGSocket {
             logSource: this,
             close: () => this.close(),
             registerCleanup: (fn) => this.onCloseCallbacks.push(fn),
-            appPing: () => { this.socket.send(Message.createControl(MessageType.PING)); },
+            appPing: this.sendKeepalive,
         });
+    }
+
+    private readonly sendKeepalive = (): void => this.socket.send(Message.createControl(MessageType.PING));
+    private probing?: Promise<boolean>;
+
+    /** One ping now: false if nothing comes back within `timeoutMs` (a half-open link). Concurrent callers share
+     *  the first caller's probe and its timeout. */
+    public probe(timeoutMs: number): Promise<boolean> {
+        if (!this.isActive) return Promise.resolve(false);
+        return this.probing ??= probeLink({sendPing: this.sendKeepalive, lastActivityAt: () => this.lastActivity, timeoutMs})
+            .finally(() => { this.probing = undefined; });
     }
 
     // --------------------------------------------------------------------------------------
@@ -453,7 +451,8 @@ export class GGSocket {
     }
 
     /**
-     * Immediately closes the socket.
+     * Immediately closes the socket. Close callbacks run now, not when the transport's close event
+     * arrives: on a half-open link that event can lag by seconds or never come.
      */
     public close(): void {
         if (this.isActive) {
@@ -464,6 +463,24 @@ export class GGSocket {
                 // Ignore close errors
             }
         }
+        this.finishClose();
+    }
+
+    private finishClose(): void {
+        this.connectionContext.run(() => {
+            this.isActive = false;
+            if (this.isCleanedUp) return;
+            this.isCleanedUp = true;
+            this.pendingRequests.rejectAll(new SERVER_ERROR({displayMessage: "Socket connection closed!"}));
+            this.onCloseCallbacks.forEach((onClose) => {
+                try {
+                    onClose?.();
+                } catch (e) {
+                    const err = e instanceof Error ? e : new Error(String(e));
+                    this.onErrorCallbacks.forEach(cb => cb(err));
+                }
+            });
+        });
     }
 
 }
