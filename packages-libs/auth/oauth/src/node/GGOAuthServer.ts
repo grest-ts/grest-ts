@@ -279,10 +279,9 @@ export class GGOAuthServer {
     }
 
     // Signs `accountId` in to the flow from outside it (e.g. a callback on another host): the browser that
-    // started the flow must follow the returned URL. With `binding` (an external sign-in's) it must also
-    // present the binding cookie its start set; without, holding the flow's interaction cookie is enough.
-    public loginTicketUrl = async (uid: string, accountId: string, amr?: string[], binding?: string): Promise<string> =>
-        this.ticket(await this.findInteraction(uid), {login: {accountId, amr, ts: Math.floor(Date.now() / 1000)}}, binding)
+    // started the flow must follow the returned URL.
+    public loginTicketUrl = async (uid: string, accountId: string, amr?: string[]): Promise<string> =>
+        this.loginTicket(uid, accountId, amr)
 
     // The flow's sign-in page, on the origin it started on: where a sign-in that failed on another host returns
     // to, with `error` (the app's own code) as ?error=.
@@ -293,7 +292,7 @@ export class GGOAuthServer {
     // Its state cookie is signed with a key derived from `secret`.
     public externalSignIn = <D = undefined>(options: GGOAuthExternalSignInOptions): GGOAuthExternalSignIn<D> =>
         new GGOAuthExternalSignIn<D>({
-            loginTicketUrl: this.loginTicketUrl,
+            loginTicketUrl: (uid, accountId, amr, binding) => this.loginTicket(uid, accountId, amr, binding),
             interactionUrl: this.interactionUrl,
             bindBrowser: uid => this.bindBrowser(uid),
         }, () => hkdf(this.options.secret(), "@grest-ts/oauth external sign-in"), options)
@@ -444,6 +443,11 @@ export class GGOAuthServer {
 
     // The result is applied only when the browser that started the flow (it holds the interaction
     // cookie) follows the redirect: a user approving someone else's flow can't hand them a code.
+    // With `binding` (an external sign-in's) the browser must also present the binding cookie its start set.
+    private async loginTicket(uid: string, accountId: string, amr: string[] | undefined, binding?: string): Promise<string> {
+        return this.ticket(await this.findInteraction(uid), {login: {accountId, amr, ts: Math.floor(Date.now() / 1000)}}, binding)
+    }
+
     private async ticket(interaction: InstanceType<Provider["Interaction"]>, result: InteractionResults, binding?: string): Promise<string> {
         const uid = interaction.uid
         const id = randomBytes(24).toString("base64url")
