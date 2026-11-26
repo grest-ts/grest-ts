@@ -5,9 +5,8 @@ const LOOPBACK = new Set(["localhost", "127.0.0.1", "[::1]"])
 const INTERNAL = /^[a-z0-9-]+\.internal\./
 
 /**
- * First in an internal schema's `use`: refuses a request unless it came to loopback or to an internal host name
- * (`<service>.internal.<domain>`), the names only the load balancer's internal rules forward. Defence in depth; the
- * schema's own credential stays the real gate.
+ * First in an internal schema's `use`: refuses a request unless its `Host` is loopback or `<label>.internal.<anything>`.
+ * The `Host`, not the peer address (`GG_LOOPBACK`): behind a local reverse proxy every peer is loopback.
  */
 export const GGInternalOnly: GGTransportMiddleware = {
     parse: (inbound) => {

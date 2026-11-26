@@ -95,6 +95,15 @@ It relies on your load balancer:
 
 It is defence in depth, not authentication: the secret is still what proves the caller.
 
+It checks the host's first label and the `internal` label after it, not your domain: any
+`<label>.internal.<anything>` passes, so the load balancer must not forward host names outside your
+own domain. It is for HTTP schemas: on a `GGWebSocketSchema` the headers come from the client's
+handshake message, not the upgrade request, so the host can't be trusted there.
+
+For an endpoint only processes on the same machine may call, use `GG_LOOPBACK` from `@grest-ts/http`
+instead: it checks the connection's peer address. `GGInternalOnly` checks the host name, so it also
+works behind a load balancer or a local reverse proxy.
+
 ## 6. Testing
 
 Boot the runtime with `@grest-ts/testkit` and present the header through a context:
