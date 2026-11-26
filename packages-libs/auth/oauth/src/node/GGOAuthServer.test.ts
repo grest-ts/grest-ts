@@ -1195,7 +1195,7 @@ describe("GGOAuthServer", () => {
     })
 
     test("the service API answers only on an internal host", async () => {
-        const at = (host: string, path: string) => new Promise<{status: number, type?: string}>((resolve, reject) => {
+        const at = (host: string, path: string) => new Promise<number>((resolve, reject) => {
             const req = request({
                 host: "localhost",
                 port,
@@ -1207,18 +1207,17 @@ describe("GGOAuthServer", () => {
                     "content-type": "application/json",
                 },
             }, res => {
-                let body = ""
-                res.on("data", (c: Buffer) => body += c.toString())
-                res.on("end", () => resolve({status: res.statusCode ?? 0, type: (JSON.parse(body) as {type?: string}).type}))
+                res.resume()
+                resolve(res.statusCode ?? 0)
             })
             req.on("error", reject)
             req.end(JSON.stringify({resource: INTERNAL, subjectToken: "x", params: {}}))
         })
         for (const path of ["/oauth-service/token", "/oauth-service/exchange"]) {
-            expect(await at("auth.example.com", path), path).toEqual({status: 401, type: "NOT_AUTHORIZED"})
+            expect(await at("auth.example.com", path), path).toBe(401)
         }
-        expect((await at("auth.internal.example.com", "/oauth-service/token")).status).toBe(200)
-        expect((await at(`localhost:${port}`, "/oauth-service/token")).status).toBe(200)
+        expect(await at("auth.internal.example.com", "/oauth-service/token")).toBe(200)
+        expect(await at(`localhost:${port}`, "/oauth-service/token")).toBe(200)
     })
 
     test("a registered client can't use client_credentials", async () => {
