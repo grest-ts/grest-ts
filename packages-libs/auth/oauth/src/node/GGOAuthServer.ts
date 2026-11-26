@@ -93,6 +93,8 @@ export interface GGOAuthInteraction {
     scopes: string[]
     // The resource (API) the client asks for access to.
     resource: string
+    // The user's grant to the client for this resource, while prompt is "consent": consenting keeps its data.
+    grant?: {grantId: string, data: GGOAuthGrantData}
     // The authorization request's `extraParams`.
     params: Record<string, string>
 }
@@ -369,6 +371,10 @@ export class GGOAuthServer {
             form = body
         }
         const finish = (result: InteractionResults) => p.interactionFinished(req, res, result, {mergeWithLastSubmission: false})
+        const accountId = found.session?.accountId
+        const clientId = String(found.params.client_id)
+        const indicator = this.requestedIndicator(found.params, clientId)
+        const existing = found.prompt.name === "consent" && accountId ? await this.connectionGrant(accountId, clientId, indicator) : undefined
         await this.options.interactionPage({
             req, res, action, method, form,
             html: (status, body) => {
@@ -379,14 +385,11 @@ export class GGOAuthServer {
                 res.writeHead(303, {...PAGE_HEADERS, location: url})
                 res.end()
             },
-            interaction: await this.describeInteraction(found),
+            interaction: await this.describeInteraction(found, existing),
             login: ({accountId, amr}) => finish({login: {accountId, amr}}),
             consent: async (data = {}) => {
-                const accountId = found.session?.accountId
                 if (found.prompt.name !== "consent" || !accountId) return this.fail(res, 400, "Sign in first")
-                const clientId = String(found.params.client_id)
-                const indicator = this.requestedIndicator(found.params, clientId)
-                const grant = await this.connectionGrant(accountId, clientId, indicator) ?? await this.newConnectionGrant(accountId, clientId, indicator, data)
+                const grant = existing ?? await this.newConnectionGrant(accountId, clientId, indicator, data)
                 this.grantRequested(grant, found.params)
                 await p.interactionFinished(req, res, {consent: {grantId: await grant.save()}}, {mergeWithLastSubmission: true})
             },
@@ -394,7 +397,7 @@ export class GGOAuthServer {
         })
     }
 
-    private async describeInteraction(interaction: InstanceType<Provider["Interaction"]>): Promise<GGOAuthInteraction> {
+    private async describeInteraction(interaction: InstanceType<Provider["Interaction"]>, grant: Grant | undefined): Promise<GGOAuthInteraction> {
         const clientId = String(interaction.params.client_id)
         const client = await this.provider().Client.find(clientId)
         if (!client) throw new NOT_FOUND({debugMessage: "Unknown OAuth client"})
@@ -413,6 +416,7 @@ export class GGOAuthServer {
             },
             scopes: requestedScopes(interaction.params),
             resource: this.requestedIndicator(interaction.params, clientId),
+            ...grant && {grant: {grantId: grant.jti, data: grant.appData ?? {}}},
             params: Object.fromEntries(extra.filter(k => typeof interaction.params[k] === "string").map(k => [k, String(interaction.params[k])])),
         }
     }
