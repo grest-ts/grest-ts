@@ -130,7 +130,7 @@ covers both halves end to end.
 
 ## Reference
 
-`GGInternalOnly` (node only): a transport middleware for a schema's `use`; see §5.
+`GGInternalOnly` (node and browser, so an api package shared with a browser client can use it): a transport middleware for a schema's `use`; see §5.
 
 `GGSharedSecret` (node only):
 - `verify(wire)` → the wire's server registration; `.create(secret: GGSecret<string>)` once per runtime.
