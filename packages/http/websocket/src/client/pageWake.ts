@@ -1,7 +1,7 @@
 /**
- * `check`: the tab came back into view — a socket may have died while hidden, so probe it.
- * `reconnect`: the page certainly slept or lost the network (online, resume, back/forward cache,
- * a clock jump under a visible tab) — reconnect without waiting for a probe or a pending backoff.
+ * `check`: a socket may have died (the tab came back into view, the network came back, the clock jumped
+ * under a visible tab), so probe it. `reconnect`: the page was frozen or restored from the back/forward
+ * cache, so its sockets are gone.
  */
 export type GGPageWake = "check" | "reconnect"
 
@@ -25,7 +25,7 @@ function fire(wake: GGPageWake): void {
     const now = Date.now()
     if (now - lastFired[wake] < DEBOUNCE_MS) return
     lastFired[wake] = now
-    for (const listener of [...listeners]) {
+    for (const listener of listeners) {
         try { listener(wake) } catch (_) {}
     }
 }
@@ -41,12 +41,12 @@ function install(): void {
         if (!document.hidden) fire("check")
     })
     window.addEventListener("pageshow", e => { if (e.persisted) fire("reconnect") })
-    window.addEventListener("online", () => fire("reconnect"))
+    window.addEventListener("online", () => fire("check"))
     document.addEventListener("resume", () => fire("reconnect"))
     // A machine that sleeps with the tab in front fires no event; its timers just stop.
     setInterval(() => {
         const now = Date.now()
-        if (!document.hidden && now - lastTick >= CLOCK_TICK_MS + CLOCK_JUMP_MS) fire("reconnect")
+        if (!document.hidden && now - lastTick >= CLOCK_TICK_MS + CLOCK_JUMP_MS) fire("check")
         lastTick = now
     }, CLOCK_TICK_MS)
 }

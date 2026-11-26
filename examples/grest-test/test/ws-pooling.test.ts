@@ -94,9 +94,7 @@ describe("WebSocket extendable schemas (pooled path)", () => {
             proxy.freeze()
             messaging.forceReconnect()   // pooled: probes rather than dropping a socket others share
             presence.checkConnection()
-            for (let i = 0; i < 500 && setups < 4; i++) await wait(10)
-
-            expect(setups).toBe(4)
+            await vi.waitFor(() => expect(setups).toBe(4), {timeout: 5_000})
             expect(GGSocketPool.size).toBe(1)
             expect(await messaging.outgoing.send({text: "back"})).toEqual({echoed: "back"})
         } finally {

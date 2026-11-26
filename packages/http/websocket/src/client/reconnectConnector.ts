@@ -84,11 +84,8 @@ export interface GGReconnectConfig {
      * `maxAttempts` rules as a dropped connection.
      */
     retryInitialConnect?: boolean
-    /**
-     * In a browser, heal on page wake instead of waiting out the heartbeat or a long backoff. Default true.
-     * A return to the tab probes the link (one ping, reconnect if no reply within ~3 s); online, resume,
-     * a back/forward-cache restore or a clock jump reconnect at once. Every reconnect re-runs setup.
-     */
+    /** In a browser, heal on page wake instead of waiting out the heartbeat or a long backoff. Default true.
+     *  See the README's "Page wake". */
     pageWake?: boolean
 }
 
@@ -127,9 +124,6 @@ export interface GGConnectorHooks<TSocket extends GGLiveSocket> {
      * the socket's onClose event — use for pooled connections that must not close the shared socket.
      */
     disposeSocket?: (socket: TSocket) => void | Promise<void>
-    /** A socket the connector found dead and is about to drop: a pooled one must leave the pool first, or the
-     *  reconnect would get it back. */
-    forgetSocket?: (socket: TSocket) => void
 }
 
 export interface GGConnector<TSocket extends GGLiveSocket> {
@@ -199,9 +193,6 @@ export function createConnector<TSocket extends GGLiveSocket>(hooks: GGConnector
     let reconnectTimer: ReturnType<typeof setTimeout> | undefined
     let finallyClosed = false
     let finalCloseFired = false
-    // Dropped by the connector itself: a dead link's close event can lag by seconds, so it reconnects at
-    // once and ignores the late event.
-    const abandoned = new WeakSet<TSocket>()
     let stopPageWake: (() => void) | undefined
 
     const onCloseCallbacks: Array<(reason: GGWebSocketCloseReason, error?: Error) => void> = []
@@ -274,7 +265,6 @@ export function createConnector<TSocket extends GGLiveSocket>(hooks: GGConnector
         let setupPhase = true
 
         newSocket.onClose(() => {
-            if (abandoned.has(newSocket)) return
             if (socket === newSocket) {
                 socket = undefined
             }
@@ -385,43 +375,24 @@ export function createConnector<TSocket extends GGLiveSocket>(hooks: GGConnector
     // Not mid-open: an open in flight owns its own retry.
     const canHeal = (): boolean => !finallyClosed && !!reconnect && !opening
 
-    const dropAndReconnect = (s: TSocket): void => {
-        hooks.forgetSocket?.(s)
-        abandoned.add(s)
-        if (socket === s) socket = undefined
-        try { s.close() } catch (_) {}
-        logMode && log.warn(schemaName, `ws drop ${schemaName}`, {kind: "drop", reason: "forced"})
-        fireOnDisconnect("drop")
-        reconnectAttempt = 0
-        scheduleReconnect()
-    }
-
-    // Waiting out a long backoff: start over from the shortest delay.
-    const retrySoon = (): void => {
-        if (!reconnectTimer) return
-        cancelRetry()
-        reconnectAttempt = 0
-        scheduleReconnect()
-    }
-
-    const forceReconnect = (): void => {
-        if (!canHeal()) return
-        if (!socket) retrySoon()
-        // A pooled socket is shared: drop it only once a probe shows it dead for everyone on it.
-        else if (hooks.disposeSocket) checkConnection()
-        else dropAndReconnect(socket)
-    }
-
     const checkConnection = (): void => {
         if (!canHeal()) return
         const s = socket
-        if (!s) {
-            retrySoon()
-            return
+        if (s) {
+            // close() runs the close handlers now, and they reconnect: every client of a pooled socket.
+            void s.probe(WAKE_PROBE_TIMEOUT_MS).then(alive => { if (!alive && socket === s) s.close() })
+        } else if (reconnectTimer) {
+            // Waiting out a long backoff: start over from the shortest delay.
+            cancelRetry()
+            reconnectAttempt = 0
+            scheduleReconnect()
         }
-        void s.probe(WAKE_PROBE_TIMEOUT_MS).then(alive => {
-            if (!alive && socket === s && canHeal()) dropAndReconnect(s)
-        })
+    }
+
+    const forceReconnect = (): void => {
+        // A pooled socket is shared: it is closed only once a probe shows it dead for everyone on it.
+        if (canHeal() && socket && !hooks.disposeSocket) socket.close()
+        else checkConnection()
     }
 
     if (reconnect?.pageWake) {

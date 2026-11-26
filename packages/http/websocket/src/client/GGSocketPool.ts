@@ -88,18 +88,6 @@ export class GGSocketPool {
     }
 
     /**
-     * Drop a socket found dead (a half-open link whose close event hasn't arrived) from the pool, so the
-     * next acquire opens a fresh one. Its holders' `release()` become no-ops. Does NOT close it.
-     */
-    public static forget(socket: GGSocket): void {
-        for (const [key, s] of this.sockets) {
-            if (s !== socket) continue;
-            this.sockets.delete(key);
-            this.poolRefCounts.delete(key);
-        }
-    }
-
-    /**
      * Get all connection keys currently in the pool (for debugging/monitoring)
      */
     public static getConnectionKeys(): string[] {
@@ -153,8 +141,6 @@ export class GGSocketPool {
             this.sockets.set(key, socket);
             this.pendingSockets.delete(key);
             socket.onClose(() => {
-                // A forgotten socket's close can arrive after a fresh one took its key.
-                if (this.sockets.get(key) !== socket) return;
                 this.sockets.delete(key);
                 this.poolRefCounts.delete(key);
             });
@@ -190,8 +176,6 @@ export class GGSocketPool {
         const release = async () => {
             if (released) return;
             released = true;
-            // Forgotten (found dead) or closed meanwhile: there is nothing left to count down.
-            if (this.sockets.get(key) !== socket) return;
             const newCount = (this.poolRefCounts.get(key) ?? 1) - 1;
             if (newCount <= 0) {
                 this.poolRefCounts.delete(key);

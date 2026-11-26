@@ -615,8 +615,7 @@ describe("WebSocket createClient (production client)", () => {
             try {
                 proxy.freeze()
                 client.checkConnection()
-                for (let i = 0; i < 500 && setupRuns < 2; i++) await wait(10)
-                expect(setupRuns).toBe(2)
+                await vi.waitFor(() => expect(setupRuns).toBe(2), {timeout: 5_000})
                 expect(disconnects).toEqual(["drop"])
                 expect(await client.outgoing.echo({message: "healed"})).toEqual({message: "healed", echoedBy: "server"})
             } finally {
@@ -633,8 +632,7 @@ describe("WebSocket createClient (production client)", () => {
             try {
                 proxy.freeze()
                 client.forceReconnect()
-                for (let i = 0; i < 100 && setupRuns < 2; i++) await wait(10)
-                expect(setupRuns).toBe(2)
+                await vi.waitFor(() => expect(setupRuns).toBe(2))
             } finally {
                 await client.disconnect()
                 await proxy.close()
@@ -653,12 +651,10 @@ describe("WebSocket createClient (production client)", () => {
             })
             try {
                 await expect(client.connect()).rejects.toThrow("transient mint failure")
-                for (let i = 0; i < 100 && calls < 2; i++) await wait(10)
-                expect(calls).toBe(2)   // the next retry now waits minutes
+                await vi.waitFor(() => expect(calls).toBe(2))   // the next retry now waits minutes
 
                 client.forceReconnect()
-                for (let i = 0; i < 100 && !client.isConnected; i++) await wait(10)
-                expect(client.isConnected).toBe(true)
+                await vi.waitFor(() => expect(client.isConnected).toBe(true))
                 expect(calls).toBe(3)
             } finally {
                 await client.disconnect()

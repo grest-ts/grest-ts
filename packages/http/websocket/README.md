@@ -791,11 +791,12 @@ nothing to wire up.
 
 **Page wake (browser).** A sleeping laptop or a frozen tab would otherwise wait out the heartbeat or a
 long backoff. Every reconnecting client listens for the page waking (`reconnect.pageWake`, default on):
-the tab coming back into view probes the link with one ping and reconnects if it gets no reply within
-~3 s; `online`, `resume`, a back/forward-cache restore or a clock jump reconnect at once. Either way a
-pending backoff is cut short. Setup re-runs on every reconnect, so state a client re-requests there
-(a snapshot, its subscriptions) heals too. From app code, `client.checkConnection()` probes and
-`client.forceReconnect()` drops and reconnects without waiting for the dead socket's close event.
+the tab coming back into view, the network coming back or a clock jump (the machine slept) probes the
+link with one ping and reconnects if it gets no reply within ~3 s; `resume` or a back/forward-cache
+restore reconnects at once. Either way a pending backoff is cut short. Setup re-runs on every reconnect,
+so state a client re-requests there (a snapshot, its subscriptions) heals too. From app code, `client.checkConnection()` probes and
+`client.forceReconnect()` drops and reconnects. `close()` runs a socket's close handlers at once rather
+than when a dead link's close event finally arrives.
 Retry delays are jittered so clients a restart dropped together don't return in lockstep.
 
 ## Testing

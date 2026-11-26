@@ -115,14 +115,18 @@ export class GGRawSocket {
 
         this.adapter.onClose(() => {
             this.scope?.ensureEntered();
-            this.connectionContext.run(() => {
-                this.isActive = false;
-                if (this.isClosed) return;
-                this.isClosed = true;
-                for (const cb of this.onCloseCallbacks) {
-                    try { cb(); } catch (e) { this.log.error(this, e); }
-                }
-            });
+            this.finishClose();
+        });
+    }
+
+    private finishClose(): void {
+        this.connectionContext.run(() => {
+            this.isActive = false;
+            if (this.isClosed) return;
+            this.isClosed = true;
+            for (const cb of this.onCloseCallbacks) {
+                try { cb(); } catch (e) { this.log.error(this, e); }
+            }
         });
     }
 
@@ -195,24 +199,31 @@ export class GGRawSocket {
             // A raw stream has no protocol ping in the browser; probe with the framework's reserved
             // keepalive frame (the peer auto-pongs in the dispatch above). On Node, protocol ping is
             // preferred and this is ignored; a customClient passthrough opts out entirely.
-            appPing: this.appKeepalive ? () => this.send(RAW_PING) : undefined,
+            appPing: this.appKeepalive ? this.sendKeepalive : undefined,
         });
     }
 
-    /** One keepalive ping now: resolves false if nothing comes back within `timeoutMs`. Without the
-     *  framework keepalive (a foreign peer) the link can't be probed and reads as alive. */
+    private readonly sendKeepalive = (): void => this.send(RAW_PING);
+    private probing?: Promise<boolean>;
+
+    /** One keepalive ping now (shared by concurrent callers): false if nothing comes back within `timeoutMs`.
+     *  Without the framework keepalive (a foreign peer) the link can't be probed and reads as alive. */
     public probe(timeoutMs: number): Promise<boolean> {
         if (!this.isActive) return Promise.resolve(false);
         if (!this.appKeepalive) return Promise.resolve(true);
-        return probeLink({sendPing: () => this.send(RAW_PING), lastActivityAt: () => this.lastActivity, timeoutMs});
+        return this.probing ??= probeLink({sendPing: this.sendKeepalive, lastActivityAt: () => this.lastActivity, timeoutMs})
+            .finally(() => { this.probing = undefined; });
     }
 
+    /** Close callbacks run now, not when the transport's close event arrives (late, or never, on a half-open link). */
     public close(): void {
-        if (!this.isActive) return;
-        this.isActive = false;
-        try {
-            this.adapter.close();
-        } catch (_) { /* ignore */ }
+        if (this.isActive) {
+            this.isActive = false;
+            try {
+                this.adapter.close();
+            } catch (_) { /* ignore */ }
+        }
+        this.finishClose();
     }
 
     /** Server-side teardown hook (matches GGSocket.teardown so both share activeSockets). */
