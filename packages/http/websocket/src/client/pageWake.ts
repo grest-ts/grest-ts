@@ -7,6 +7,10 @@ import {log} from "./wsLog"
  */
 export type GGPageWake = "check" | "reconnect"
 
+// Not the DOM lib's: an app type-checking this source for Node has no "dom" lib.
+declare const document: {hidden: boolean, addEventListener(type: string, listener: () => void): void}
+declare const window: {addEventListener(type: string, listener: (e: {persisted: boolean}) => void): void}
+
 const CLOCK_TICK_MS = 10_000
 const CLOCK_JUMP_MS = 30_000
 
