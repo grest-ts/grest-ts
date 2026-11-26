@@ -12,6 +12,7 @@ import {MainRuntime} from "../src/main"
 import {ClientTestSocketApi} from "../src/api/ClientTestSocketApi"
 import {AuthedSocketApi} from "../src/api/AuthedSocketApi"
 import {QuerySocketApi} from "../src/api/QuerySocketApi"
+import {freezableProxy} from "./freezableProxy"
 
 function clientUrl(apiName: string = "ClientTestSocketApi"): string {
     return GG_TEST_RUNNER.get().discoveryServer.getRoutingUrl(apiName)
@@ -584,4 +585,80 @@ describe("WebSocket createClient (production client)", () => {
         })
     })
 
+    // ----------------------------------------------------------------------
+    // Healing a stale link — what page wake drives in a browser.
+    // ----------------------------------------------------------------------
+
+    describe("checkConnection / forceReconnect healing", () => {
+
+        test("checkConnection leaves a live link alone", async () => {
+            let setupRuns = 0
+            const client = ClientTestSocketApi.createClient({url: clientUrl(), reconnect: {initialDelayMs: 10}})
+            await client.connect(() => { setupRuns++ })
+            try {
+                client.checkConnection()
+                await wait(3_300)
+                expect(setupRuns).toBe(1)
+                expect(client.isConnected).toBe(true)
+            } finally {
+                await client.disconnect()
+            }
+        }, 10_000)
+
+        test("checkConnection reconnects a half-open link and re-runs setup", async () => {
+            const proxy = await freezableProxy(clientUrl())
+            let setupRuns = 0
+            const disconnects: string[] = []
+            const client = ClientTestSocketApi.createClient({url: proxy.url, reconnect: {initialDelayMs: 10}})
+            client.onDisconnect(reason => { disconnects.push(reason) })
+            await client.connect(() => { setupRuns++ })
+            try {
+                proxy.freeze()
+                client.checkConnection()
+                await vi.waitFor(() => expect(setupRuns).toBe(2), {timeout: 5_000})
+                expect(disconnects).toEqual(["drop"])
+                expect(await client.outgoing.echo({message: "healed"})).toEqual({message: "healed", echoedBy: "server"})
+            } finally {
+                await client.disconnect()
+                await proxy.close()
+            }
+        }, 10_000)
+
+        test("forceReconnect doesn't wait for a dead link's close event", async () => {
+            const proxy = await freezableProxy(clientUrl())
+            let setupRuns = 0
+            const client = ClientTestSocketApi.createClient({url: proxy.url, reconnect: {initialDelayMs: 10}})
+            await client.connect(() => { setupRuns++ })
+            try {
+                proxy.freeze()
+                client.forceReconnect()
+                await vi.waitFor(() => expect(setupRuns).toBe(2))
+            } finally {
+                await client.disconnect()
+                await proxy.close()
+            }
+        })
+
+        test("forceReconnect while waiting out a long backoff retries now", async () => {
+            let calls = 0
+            const client = QuerySocketApi.createClient({
+                reconnect: {initialDelayMs: 20, multiplier: 10_000, maxDelayMs: 600_000, retryInitialConnect: true},
+                beforeConnect: () => {
+                    calls++
+                    if (calls <= 2) throw new Error("transient mint failure")
+                    return {url: clientUrl("QuerySocketApi"), query: {room: "r" + calls, version: calls}}
+                },
+            })
+            try {
+                await expect(client.connect()).rejects.toThrow("transient mint failure")
+                await vi.waitFor(() => expect(calls).toBe(2))   // the next retry now waits minutes
+
+                client.forceReconnect()
+                await vi.waitFor(() => expect(client.isConnected).toBe(true))
+                expect(calls).toBe(3)
+            } finally {
+                await client.disconnect()
+            }
+        })
+    })
 })

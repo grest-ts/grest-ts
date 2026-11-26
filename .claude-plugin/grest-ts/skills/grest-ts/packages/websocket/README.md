@@ -626,7 +626,7 @@ The handler's `socket` is a `GGRawSocket` (import the type from `@grest-ts/webso
 - `client.onMessage((bytes, isBinary) => …)` — inbound-frame handler; persists across reconnects
 - `client.onClose(cb)` / `client.disconnect()` / `client.close()` — lifecycle
 - `client.onDisconnect(cb)` — fires on every socket drop, before any reconnect attempt
-- `client.onError(cb)`, `client.forceReconnect()`, `client.isConnected`
+- `client.onError(cb)`, `client.forceReconnect()`, `client.checkConnection()`, `client.isConnected`
 - `client.pause()` / `client.resume()` / `client.bufferedAmount` — flow control (also on the server's `GGRawSocket`)
 
 A reconnected byte stream is a **fresh** stream — bytes sent while it was down are not replayed.
@@ -786,9 +786,18 @@ but looks open until a manual refresh.
 **Schema clients get this for free.** Reconnect defaults **on** (backoff + half-open heartbeat
 detection), and liveness rides with it: a missed heartbeat drops the socket and the reconnect loop
 self-heals. Pass `reconnect: false` to disable it, or a `GGReconnectConfig` object to tune (e.g.
-`reconnect: {heartbeat: ...}`), and force a drop from app code (e.g. on `visibilitychange`) with
-`client.forceReconnect()`. Both the typed and raw clients share this machinery — there is nothing
-to wire up.
+`reconnect: {heartbeat: ...}`). Both the typed and raw clients share this machinery — there is
+nothing to wire up.
+
+**Page wake (browser).** A sleeping laptop or a frozen tab would otherwise wait out the heartbeat or a
+long backoff. Every reconnecting client listens for the page waking (`reconnect.pageWake`, default on):
+the tab coming back into view, the network coming back, a frozen page resuming or a clock jump (the
+machine slept) probes the link with one ping and reconnects if it gets no reply within ~3 s; a
+back/forward-cache restore reconnects at once. Either way a pending backoff gets one attempt now. Setup re-runs on every reconnect,
+so state a client re-requests there (a snapshot, its subscriptions) heals too. From app code, `client.checkConnection()` probes and
+`client.forceReconnect()` drops and reconnects. `close()` runs a socket's close handlers at once rather
+than when a dead link's close event finally arrives.
+Retry delays are jittered so clients a restart dropped together don't return in lockstep.
 
 ## Testing
 

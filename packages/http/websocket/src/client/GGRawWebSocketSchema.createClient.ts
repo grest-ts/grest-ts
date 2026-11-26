@@ -83,8 +83,11 @@ export interface GGRawWebSocketClient {
     /** Fires on socket errors. */
     onError(cb: (error: Error) => void): this
 
-    /** Drop the current socket to trigger the reconnect loop (no-op if reconnect is off). */
+    /** Drop the current socket and reconnect now, or retry now while waiting out a backoff (no-op if reconnect is off). */
     forceReconnect(): void
+
+    /** Probe the link with one keepalive ping and reconnect if it doesn't answer. */
+    checkConnection(): void
 }
 
 declare module "../schema/GGRawWebSocketSchema" {
@@ -164,6 +167,7 @@ GGRawWebSocketSchema.prototype.createClient = function (
         onDisconnect(cb): any { connector.onDisconnect(cb); return this },
         onError(cb): any { connector.onError(cb); return this },
         forceReconnect: () => connector.forceReconnect(),
+        checkConnection: () => connector.checkConnection(),
     }
 
     return client
