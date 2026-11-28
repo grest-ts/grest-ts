@@ -36,7 +36,7 @@ function setupRoutes<TContract extends GGContractApiDefinition>(
     if (!httpSchema.contract) throw new Error(`HttpApiSchema "${httpSchema.name}" has no contract.`);
 
     const server = config.http;
-    server._registerSchema(httpSchema as GGHttpSchema<any>);
+    server._registerSchema(httpSchema, implementation);
 
     const pathPrefix = "/" + httpSchema.pathPrefix + "/"
     const apiMiddlewares = httpSchema.apiMiddlewares;

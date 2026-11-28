@@ -11,7 +11,7 @@ import {checkWiresImplemented} from "./checkers/checkWiresImplemented";
 import {checkPermissionsAtStart} from "./checkers/checkPermissionsAtStart";
 import {checkWireConflicts} from "./checkers/checkWireConflicts";
 import "../schema/GGWireContextKey.node.js";
-import {GGContractMethod} from "@grest-ts/schema";
+import type {GGContractApiDefinition, GGContractImplementation, GGContractMethod} from "@grest-ts/schema";
 import type {GGTransportMiddleware} from "@grest-ts/context";
 import {runInFreshContext} from "@grest-ts/trace";
 import {GG_HTTP_REQUEST, requestPeer} from "./GG_HTTP_REQUEST";
@@ -92,6 +92,7 @@ export class GGHttpServer {
      * Framework-internal — only setupRoutes() (in GGHttpSchema.startServer.ts) should push here.
      */
     private readonly _registeredSchemas: GGHttpSchema<any>[] = [];
+    private readonly _implementations = new Map<GGHttpSchema<any>, object>();
     private readonly _registeredWebSocketSchemas: AnyWebSocketSchema[] = [];
 
     public readonly httpServer: http.Server;
@@ -234,8 +235,17 @@ export class GGHttpServer {
     // =========================================================================
 
     /** @internal Called by setupRoutes() during compose(). Do not call directly. */
-    public _registerSchema(schema: GGHttpSchema<any>): void {
+    public _registerSchema<T extends GGContractApiDefinition>(schema: GGHttpSchema<T>, implementation: GGContractImplementation<T>): void {
         this._registeredSchemas.push(schema);
+        this._implementations.set(schema, implementation);
+    }
+
+    /**
+     * The implementation a registered schema's routes call, for running its methods in-process (a tool catalog, a
+     * dispatcher). Undefined for a schema this server doesn't serve.
+     */
+    public implementationOf<T extends GGContractApiDefinition>(schema: GGHttpSchema<T>): GGContractImplementation<T> | undefined {
+        return this._implementations.get(schema) as GGContractImplementation<T> | undefined;
     }
 
     /**
